@@ -115,10 +115,10 @@ def rotate_P_(blob, verbose=False):  # rotate each P to align it with direction 
     P_, der__t, mask__ = blob.P_, blob.der__t, blob.mask__; if verbose: i = 0
 
     for P in P_:
-        G = P.ptuple[5]; if verbose: i += 1
+        G = P.ptuple[5]
         daxis = P.ptuple[3][0] / G  # dy: deviation from horizontal axis
         _daxis = 0
-
+        if verbose: i += 1
         while abs(daxis) * G > ave_rotate:  # recursive reform P in blob.der__t along new G angle:
             if verbose: print(f"\rRotating... {i}/{len(P_)}: {round(np.degrees(np.arctan2(*P.axis)))}°", end=" " * 79); sys.stdout.flush()
 
@@ -136,7 +136,7 @@ def rotate_P_(blob, verbose=False):  # rotate each P to align it with direction 
 
 def rotate_P(P, der__t, mask__, ave_a, pivot):
 
-    ypivot, xpivot, dert = pivot
+    y,x,dert = pivot
     if dert:  # rotate to dert G angle
         sin,cos = dert[3]/dert[9], dert[4]/dert[9]  # dy,dx / G
         P = CP()
@@ -146,20 +146,18 @@ def rotate_P(P, der__t, mask__, ave_a, pivot):
         if cos < 0: sin,cos = -sin,-cos
         # dx always >= 0, dy can be < 0
     new_axis = sin, cos
-    dert_ext_ = [[P, ypivot, xpivot]]  # not used in rotation?
-    # right now we use int to round down, so is there a better way to get a more accurate x and y pivot?
-    rdert_ = [[par__[int(ypivot)][int(xpivot)] for par__ in der__t[1:]]]
-    # scan left:
-    rx=ypivot-cos; ry=xpivot-sin
+    rdert_, dert_ext_ = [],[]
+    # scan left, inclide pivot y,x:
+    rx=y; ry=x
     while True:  # terminating condition is in form_rdert()
         rdert = form_rdert(rx,ry, der__t, mask__)
         if rdert is None: break  # dert is not in blob: masked or out of bound
         rdert_ = [rdert] + rdert_  # append left
         rx-=cos; ry-=sin  # next rx,ry
-        dert_ext_.insert(0, [[[P],ry,rx]])  # append left external params: roots and coords per dert
+        dert_ext_.insert(0,[[P],ry,rx])  # append left external params: roots and coords per dert
     x0=rx; yleft=ry
     # scan right:
-    rx=xpivot+cos; ry=ypivot+sin  # center dert was included in scan left
+    rx=x+cos; ry=y+sin  # center dert was included in scan left
     while True:
         rdert = form_rdert(rx,ry, der__t, mask__)
         if rdert is None: break  # dert is not in blob: masked or out of bound
@@ -180,48 +178,47 @@ def rotate_P(P, der__t, mask__, ave_a, pivot):
     P.ptuple = [I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L]
     P.dert_ = dert_
     P.dert_ext_ = dert_ext_
-    P.y = (yleft+ry)//2; P.x = (x0+rx)//2  # central coords, P may go up-right or down-right
+    P.y = yleft + ry*(L//2); P.x = x0 + rx*(L//2)  # central coords, P may go up-right or down-right
     P.axis = new_axis
 
     return P
 
 def form_rdert(rx,ry, der__t, mask__):
 
-    Y, X = mask__.shape
     # coord, distance of four int-coord derts, overlaid by float-coord rdert in der__t, int for indexing
     # always in der__t for intermediate float rx,ry:
-    x1 = int(np.floor(rx)); dx1 = abs(rx - x1)
-    x2 = int(np.ceil(rx));  dx2 = abs(rx - x2)
-    y1 = int(np.floor(ry)); dy1 = abs(ry - y1)
-    y2 = int(np.ceil(ry));  dy2 = abs(ry - y2)
-    # terminate scan_left | scan_right:
-    if (x1 < 0 or x1 >= X or x2 < 0 or x2 >= X) or (y1 < 0 or y1 >= Y or y2 < 0 or y2 >= Y):
-        return None
-    # scale all dert params in proportion to inverted distance from rdert, sum(distances) = 1
-    # approximation, square of rpixel is rotated, won't fully match not-rotated derts
-    k0 = 2 - dx1*dx1 - dy1*dy1
-    k1 = 2 - dx1*dx1 - dy2*dy2
-    k2 = 2 - dx2*dx2 - dy1*dy1
-    k3 = 2 - dx2*dx2 - dy2*dy2
-    K = k0 + k1 + k2 + k3
-    mask = (
-        mask__[y1, x1] * k0 +
-        mask__[y2, x1] * k1 +
-        mask__[y1, x2] * k2 +
-        mask__[y2, x2] * k3
-           ) / K
-    if round(mask):  # summed mask is fractional, round to 1|0
-        return None  # return rdert if inside the blob
-    ptuple = tuple(
-        (
-            par__[y1, x1] * k0 +
-            par__[y2, x1] * k1 +
-            par__[y1, x2] * k2 +
-            par__[y2, x2] * k3
-        ) / K
-        for par__ in der__t[1:])    # exclude i
+    x0 = int(np.floor(rx)); dx0 = abs(rx - x0)
+    x1 = int(np.ceil(rx));  dx1 = abs(rx - x1)
+    y0 = int(np.floor(ry)); dy0 = abs(ry - y0)
+    y1 = int(np.ceil(ry));  dy1 = abs(ry - y1)
 
-    return ptuple
+    if not mask__[y0][x0] or not mask__[y1][x0] or not mask__[y0][x1] or not mask__[y1][x1]:
+        # scale all dert params in proportion to inverted distance from rdert, sum(distances) = 1
+        # approximation, square of rpixel is rotated, won't fully match not-rotated derts
+
+        k0 = 2 - dx0*dx0 - dy0*dy0
+        k1 = 2 - dx0*dx0 - dy1*dy1
+        k2 = 2 - dx1*dx1 - dy0*dy0
+        k3 = 2 - dx1*dx1 - dy1*dy1
+        K = k0 + k1 + k2 + k3
+        mask = (
+            mask__[y0, x0] * k0 +
+            mask__[y1, x0] * k1 +
+            mask__[y0, x1] * k2 +
+            mask__[y1, x1] * k3
+                ) / K
+        ptuple = tuple(
+            (
+                par__[y0, x0] * k0 +
+                par__[y1, x0] * k1 +
+                par__[y0, x1] * k2 +
+                par__[y1, x1] * k3
+            ) / K
+            for par__ in der__t[1:])    # exclude i
+
+        return ptuple
+    else: return None
+
 
 # draft
 def form_link_(P, cP_, blob):  # trace adj Ps up and down by adj dert roots, fill|prune if missing or redundant, add to P.link_ if >ave*rdn

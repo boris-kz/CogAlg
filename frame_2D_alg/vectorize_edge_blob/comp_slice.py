@@ -121,7 +121,7 @@ def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
     # init:
     P = (P_[0])
     Ptuple, DerT,ValT,RdnT, Link_,Link_m,Link_d, y,x = \
-    deepcopy(P.ptuple),deepcopy(P.derT),deepcopy(P.valT),deepcopy(P.rdnT), copy(P.link_),copy(P.link_t[0]),copy(P.link_t[1], P.y,P.x)
+    deepcopy(P.ptuple),deepcopy(P.derT),deepcopy(P.valT),deepcopy(P.rdnT), copy(P.link_),copy(P.link_t[0]),copy(P.link_t[1]), P.y,P.x
     L = Ptuple[7]; Dy = P.axis[0]*L/2; Dx = P.axis[1]*L/2  # side-accumulated sin,cos
     Y0 = y-Dy; Yn = y+Dy; X0 = x-Dx; Xn = x+Dx
     PP = CPP(fd=fd, P_=P_)
@@ -131,7 +131,7 @@ def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
         if i:  # exclude init P
             sum_ptuple(Ptuple, P.ptuple)
             Link_+=P.link_; Link_m+=P.link_t[0]; Link_d+=P.link_t[1]
-            L=P.tuple[7]; Dy = P.axis[0]*L/2; Dx = P.axis[1]*L/2; y=P.y; x=P.x
+            L=P.ptuple[7]; Dy=P.axis[0]*L/2; Dx=P.axis[1]*L/2; y=P.y; x=P.x
             Y0=min(Y0,(y-Dy)); Yn=max(Yn,(y+Dy)); X0=min(X0,(x-Dx)); Xn=max(Xn,(x-Dx))
             if P.derT[0]:
                 for j in 0,1:
@@ -191,8 +191,7 @@ def comp_P(_P,P, link_,link_m,link_d, LayT,ValT,RdnT, fd=0, derP=None):  #  derP
         mtuple,dtuple = comp_ptuple(_P.ptuple, P.ptuple, rn)
         mval = sum(mtuple); dval = sum(dtuple)
         mrdn = 1+(dval>mval); drdn = 1+(1-(dval>mval))  # or greyscale rdn = Dval/Mval?
-        derP = CderP(derT=[mtuple,dtuple],valT=[mval,dval],rdnT=[mrdn,drdn], P=P,_P=_P, box=copy(_P.box), # or box of means?
-                     L=len(_P.dert_))
+        derP = CderP(derT=[mtuple,dtuple],valT=[mval,dval],rdnT=[mrdn,drdn], P=P,_P=_P, L=len(_P.dert_))
     link_ += [derP]  # all links
     if mval > aveP*mrdn:
         link_m+=[derP]  # +ve links, fork selection in form_PP_t
