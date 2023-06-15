@@ -27,7 +27,10 @@ class ClusterStructure:
     def __init_subclass__(cls, **kwargs):
         """Save the need to use dataclass decorator on subclasses."""
         super().__init_subclass__(**kwargs)
-        dataclass(repr=False)(cls)
+        dataclass(repr=False, eq=False)(cls)
+
+    def __hash__(self):
+        return self.id
 
     @classmethod
     def get_instance(cls, id : int):
