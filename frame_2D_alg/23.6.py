@@ -508,3 +508,82 @@ def nest(P, ddepth=3):  # default ddepth is nest 3 times: tuple->fork->layer->H
                 derP.derT[0]=[derP.derT[0]]; derP.valT[0]=[derP.valT[0]]; derP.rdnT[0]=[derP.rdnT[0]]
                 derP.derT[1]=[derP.derT[1]]; derP.valT[1]=[derP.valT[1]]; derP.rdnT[1]=[derP.rdnT[1]]
                 curr_depth += 1
+
+def rotate_P(der__t, mask__, ave_a, pivot):
+
+    y,x,dert = pivot
+    P = CP()
+    if dert and not ave_a:  # rotate to central dert G angle
+        sin,cos = dert[3]/dert[9], dert[4]/dert[9]  # dy,dx / G
+    else:  # rotate P to
+        if ave_a is None: sin,cos = np.divide(P.ptuple[3], P.ptuple[5])
+        else:             sin,cos = np.divide(ave_a, np.hypot(*ave_a))
+        if cos < 0: sin,cos = -sin,-cos
+        # dx always >= 0, dy can be < 0
+    new_axis = sin, cos
+    rdert_, dert_ext_ = [],[]
+    # scan left, inclide pivot y,x:
+    ry=y; rx=x
+    while True:  # terminating condition is in form_rdert()
+        rdert = form_rdert(rx,ry, der__t, mask__)
+        if rdert is None: break  # dert is not in blob: masked or out of bound
+        rdert_ = [rdert] + rdert_  # append left
+        rx-=cos; ry-=sin  # next rx,ry
+        dert_ext_.insert(0,[[P],ry,rx])  # append left external params: roots and coords per dert
+    x0=rx; yleft=ry
+    # scan right:
+    rx=x+cos; ry=y+sin  # center dert was included in scan left
+    while True:
+        rdert = form_rdert(rx,ry, der__t, mask__)
+        if rdert is None: break  # dert is not in blob: masked or out of bound
+        rdert_ += [rdert]  # append right
+        rx+=cos; ry+=sin  # next rx,ry
+        dert_ext_ += [[[P],ry,rx]]
+    # form rP:
+    rdert = rdert_[0]  # initialization:
+    G, Ga, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 = rdert; M=ave_g-G; Ma=ave_ga-Ga; dert_=[rdert]
+    # accumulation:
+    for rdert in rdert_[1:]:
+        g, ga, i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = rdert
+        I+=i; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx; Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1
+        dert_ += [rdert]
+    # re-form gradients:
+    G = np.hypot(Dy,Dx);  Ga = (Cos_da0 + 1) + (Cos_da1 + 1); L = len(rdert_)
+    P.ptuple = [I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L]
+    P.dert_ = dert_
+    P.dert_ext_ = dert_ext_
+    P.y = yleft + ry*(L//2); P.x = x0 + rx*(L//2)  # central coords, P may go up-right or down-right
+    P.axis = new_axis
+
+    return P
+
+def form_rdert(rx,ry, der__t, imask__):
+
+    # coord, distance of four int-coord derts, overlaid by float-coord rdert in der__t, int for indexing
+    x0 = int(np.floor(rx)); dx0 = abs(rx - x0)
+    x1 = int(np.ceil(rx));  dx1 = abs(rx - x1)
+    y0 = int(np.floor(ry)); dy0 = abs(ry - y0)
+    y1 = int(np.ceil(ry));  dy1 = abs(ry - y1)
+
+    mask__= []  # imask__ padded with rim of 1s:
+    mask__ += [[mask_+[True] for mask_ in imask__]]
+    mask__ += [True for mask in imask__[0]]
+    if not mask__[y0][x0] or not mask__[y1][x0] or not mask__[y0][x1] or not mask__[y1][x1]:
+        # scale all dert params in proportion to inverted distance from rdert, sum(distances) = 1
+        # approximation, square of rpixel is rotated, won't fully match not-rotated derts
+        k0 = 2 - dx0*dx0 - dy0*dy0
+        k1 = 2 - dx0*dx0 - dy1*dy1
+        k2 = 2 - dx1*dx1 - dy0*dy0
+        k3 = 2 - dx1*dx1 - dy1*dy1
+        K = k0 + k1 + k2 + k3
+        ptuple = tuple(
+            (
+                par__[y0, x0] * k0 +
+                par__[y1, x0] * k1 +
+                par__[y0, x1] * k2 +
+                par__[y1, x1] * k3
+            ) / K
+            for par__ in der__t[1:])    # exclude i
+        return ptuple
+
+    else: return None
