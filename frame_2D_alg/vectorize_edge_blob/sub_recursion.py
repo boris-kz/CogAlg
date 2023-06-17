@@ -10,14 +10,11 @@ def sub_recursion_eval(root, PP_, fd):  # fork PP_ in PP or blob, no derT,valT,r
 
     term = 1
     for PP in PP_:
-        if isinstance(PP.valT[0], list):  Val = np.sum(PP.valT[fd][-1]); Rdn = np.sum(PP.rdnT[fd][-1])
-        else:                             Val = PP.valT[fd]; Rdn = PP.rdnT[fd]
-
-        if Val > PP_aves[fd] * Rdn and len(PP.P_) > ave_nsub:
+        if np.sum(PP.valT[fd]) > PP_aves[fd] * np.sum(PP.rdnT[fd]) and len(PP.P_) > ave_nsub:
             term = 0
             sub_recursion(PP, fd)  # comp_der|rng in PP -> parLayer, sub_PPs
         elif isinstance(root, CPP):
-            root.fback_ += [[[PP.derT[fd][-1]], PP.valT[fd][-1],PP.rdnT[fd][-1]]]  # [derT,valT,rdnT]
+            root.fback_ += [[[PP.derT[fd][-1]], PP.valT[fd][-1], PP.rdnT[fd][-1]]]  # [derT,valT,rdnT]
             # feedback last layer, added in sum2PP
     if term and isinstance(root, CPP):
         feedback(root, fd)  # upward recursive extend root.derT, forward eval only
@@ -41,7 +38,6 @@ def feedback(root, fd):  # append new der layers to root
 
 def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
 
-    for P in PP.P_:  P.dert_ext_, P.roott =[], [None, None]  # reset them in new sub+
     if fd:
         if not isinstance(PP.valT[0], list): nest(PP)  # PP created from 1st rng+ is not nested too
         [nest(P) for P in PP.P_]  # add layers and forks?
@@ -53,23 +49,15 @@ def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to selec
         PP.rdnT[fd] += PP.valT[fd] > PP.valT[1 - fd]
         base_rdn = PP.rdnT[fd]
 
-    cP_ = [replace(P, roott=[None, None]) for P in P_]
-    PP.P_ = form_PP_t(cP_, base_rdn=base_rdn)  # P__ = sub_PPm_, sub_PPd_
+    cP_ = [replace(P, roott=[None, None]) for P in P_]  # reassign roots to sub_PPs
+    PP.P_ = form_PP_t(cP_, base_rdn=base_rdn)  # replace P_ with sub_PPm_, sub_PPd_
 
     for fd, sub_PP_ in enumerate(PP.P_):
-        if sub_PP_:  # der+ | rng+
+        if sub_PP_:
             for sub_PP in sub_PP_: sub_PP.roott[fd] = PP
             sub_recursion_eval(PP, sub_PP_, fd=fd)
-        '''
-        if PP.valt[fd] > ave * PP.rdnt[fd]:  # adjusted by sub+, ave*agg_coef?
-            agg_recursion_eval(PP, copy(sub_PP_), fd=fd)  # comp sub_PPs, form intermediate PPs
-        else:
-            feedback(PP, fd)  # add aggH, if any: 
-        implicit nesting: rngH(derT / sub+fb, aggH(subH / agg+fb: subH is new order of rngH(derT?
-        '''
 
-# mderP * (ave_olp_L / olp_L)? or olp(_derP._P.L, derP.P.L)? gap: neg_olp, ave = olp-neg_olp?
-# __Ps: above PP.rng layers of _Ps:
+
 def comp_rng(iP_, rng):  # form new Ps and links in rng+ PP.P__, switch to rng+n to skip clustering?
 
     P_ = []
@@ -80,14 +68,14 @@ def comp_rng(iP_, rng):  # form new Ps and links in rng+ PP.P__, switch to rng+n
             _P = iderP._P
             for _derP in _P.link_t[0]:  # next layer of mlinks
                 __P = _derP._P  # next layer of Ps
-                distance = (((__P.x-P.x)**2) + ((__P.y-P.y)**2)) ** (1/2)  # distance between mid point
-                if distance >rng:
+                distance = np.hypot(__P.x-P.x, __P.y-P.y)  # distance between mid points
+                if distance > rng:
                     comp_P(P,__P, link_,link_m,link_d, derT,valT,rdnT, fd=0)
+                # distance is mostly lateral?
         if np.sum(valT[0]) > P_aves[0] * np.sum(rdnT[0]):
             # add new P in rng+ PP:
             P_ += [CP(ptuple=deepcopy(P.ptuple), dert_=copy(P.dert_),
                       derT=derT, valT=valT, rdnT=rdnT, link_=link_, link_t=[link_m,link_d])]
-
     return P_
 
 def comp_der(iP_):  # form new Ps and links in rng+ PP.P__, extend their link.derT, P.derT, _P.derT
@@ -110,7 +98,6 @@ def comp_der(iP_):  # form new Ps and links in rng+ PP.P__, extend their link.de
             P_ += [CP(ptuple=deepcopy(P.ptuple), dert_=copy(P.dert_), box=copy(P.box),
                       derT=DerT, valT=ValT, rdnT=RdnT, link_=link_, link_t=[link_m,link_d])]
     return P_
-
 
 def nest(P, ddepth=3):  # default ddepth is nest 3 times: tuple->fork->layer->H
     # agg+ adds depth: number brackets before the tested bracket: P.valT[0], P.valT[0][0], etc?
