@@ -36,7 +36,7 @@ def agg_recursion(root):  # compositional recursion in root.PP_
 
     mgraph_, dgraph_ = form_graph_(root, fsub=0)  # node.H cross-comp and graph clustering, comp frng pplayers
 
-    Rdnt = [np.sum(root.rdnT[i]) for i in [0,1]]  # Valt = [np.sum(root.valT[i]) for i in [0,1]]
+    Rdnt = [np.sum(root.rdnT[i]) for i in [0,1]]  # no Valt?
     # eval graphs for sub+, ~sub_recursion_eval?:
     for fd, graph_ in enumerate([mgraph_,dgraph_]):
         val = sum([np.sum(graph.valT[fd]) for graph in graph_])

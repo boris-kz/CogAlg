@@ -70,8 +70,8 @@ def comp_rng(iP_, rng):  # form new Ps and links in rng+ PP.P__, switch to rng+n
                 __P = _derP._P  # next layer of Ps
                 distance = np.hypot(__P.x-P.x, __P.y-P.y)  # distance between mid points
                 if distance > rng:
-                    comp_P(P,__P, link_,link_m,link_d, derT,valT,rdnT, fd=0)
-                # distance is mostly lateral?
+                    comp_P(P,__P, link_,link_m,link_d, derT,valT,rdnT, fd=0, derP=distance)
+                    # distance=S, mostly lateral, relative to L for eval?
         if np.sum(valT[0]) > P_aves[0] * np.sum(rdnT[0]):
             # add new P in rng+ PP:
             P_ += [CP(ptuple=deepcopy(P.ptuple), dert_=copy(P.dert_),

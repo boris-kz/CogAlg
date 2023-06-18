@@ -11,7 +11,6 @@ from .comp_slice import comp_slice, comp_angle
 from .agg_convert import agg_recursion_eval
 from .sub_recursion import sub_recursion_eval
 from class_cluster import ClusterStructure, init_param as z
-from copy import copy
 
 '''
 Vectorize is a terminal fork of intra_blob.
@@ -111,7 +110,7 @@ def term_P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, y,x, Pdert_):
     return CP(ptuple=[I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L], dert_=Pdert_, y=y, x=x-L/2)
 
 def pad1(mask__):  # pad blob.mask__ with rim of 1s:
-    return np.pad(mask__,pad_width=[(1,1),(1,1)], mode='constant',constant_values=True)  
+    return np.pad(mask__,pad_width=[(1,1),(1,1)], mode='constant',constant_values=True)
 
 def rotate_P_(blob, verbose=False):  # rotate each P to align it with direction of P or dert gradient
 
@@ -126,7 +125,7 @@ def rotate_P_(blob, verbose=False):  # rotate each P to align it with direction 
         while abs(daxis) * G > ave_rotate:  # recursive reform P in blob.der__t along new G angle:
             if verbose: print(f"\rRotating... {i}/{len(P_)}: {round(np.degrees(np.arctan2(*P.axis)))}°", end=" " * 79); sys.stdout.flush()
             _axis = P.axis
-            P = form_P(der__t, mask__, axis=(P.ptuple[3]/G, P.ptuple[4]/G), y=P.y, x=P.x)  # pivot to P angle
+            P = form_P(der__t, mask__, axis=(P.ptuple[3][0]/G, P.ptuple[3][1]/G), y=P.y, x=P.x)  # pivot to P angle
             maxis, daxis = comp_angle(_axis, P.axis)
             ddaxis = daxis +_daxis  # cancel-out if opposite-sign
             _daxis = daxis
@@ -142,7 +141,7 @@ def rotate_P_(blob, verbose=False):  # rotate each P to align it with direction 
             if not mask__[y1+1][x0+1]: kernel += [[[y1,x0], np.hypot((y-y1),(x-x0))]]
             if not mask__[y1+1][x1+1]: kernel += [[[y1,x1], np.hypot((y-y1),(x-x1))]]
 
-            y,x = sorted(kernel, key=lambda x:x[1], reverse=True)[0][0]  # nearest unmasked cell
+            y,x = sorted(kernel, key=lambda x: x[1])[0][0]  # nearest cell y,x
             blob.dert_roots__[y][x] += [P]  # final rotated P
 
         P_ += [P]
@@ -155,7 +154,7 @@ def form_P(der__t, mask__, axis, y,x):
     rdert_,dert_ext_ = [],[]
     P = CP()
     rdert_,dert_ext_, ry,rx = scan_direction(P, rdert_,dert_ext_, y,x, axis, der__t,mask__, fleft=1)  # scan left, include pivot
-    x0=rx; yleft=ry
+    x0=rx; yleft=ry  # up-right or down-right
     rdert_,dert_ext_, ry,rx = scan_direction(P, rdert_,dert_ext_, ry,rx, axis, der__t,mask__, fleft=0)  # scan right:
     # initialization:
     rdert = rdert_[0]
@@ -165,13 +164,12 @@ def form_P(der__t, mask__, axis, y,x):
         g, ga, i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = rdert
         I+=i; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx; Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1
         dert_ += [rdert]
-    # re-form gradients:
-    G = np.hypot(Dy,Dx);  Ga = (Cos_da0 + 1) + (Cos_da1 + 1); L = len(rdert_)
-    P.ptuple = [I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L]
-    P.axis = np.divide(P.ptuple[3], P.ptuple[5])  # new axis
     P.dert_ = dert_
     P.dert_ext_ = dert_ext_
-    P.y = (yleft+ry)/2; P.x = (x0+rx)/2  # central coords, P may go up-right or down-right
+    P.y = (yleft+ry)/2; P.x = (x0+rx)/2
+    P.axis = np.divide(P.ptuple[3], P.ptuple[5])  # new axis
+    G = np.hypot(Dy,Dx);  Ga = (Cos_da0+1) + (Cos_da1+1); L = len(rdert_)
+    P.ptuple = [I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L]
 
     return P
 
@@ -179,38 +177,28 @@ def scan_direction(P, rdert_,dert_ext_, y,x, axis, der__t,mask__, fleft):  # lef
 
     sin,cos = axis
     while True:
-        # coord, distance of four int-coord derts, overlaid by float-coord rdert in der__t, int for indexing
-        x0 = int(np.floor(x)); dx0 = abs(x-x0)
-        x1 = int(np.ceil(x));  dx1 = abs(x-x1)
-        y0 = int(np.floor(y)); dy0 = abs(y-y0)
-        y1 = int(np.ceil(y));  dy1 = abs(y-y1)
-        kernel = []
-        if not mask__[y0+1][x0+1]: kernel += [[[y0,x0], np.hypot((y-y0),(x-x0))]]
-        if not mask__[y0+1][x0+1]: kernel += [[[y0,x1], np.hypot((y-y0),(x-x1))]]
-        if not mask__[y1+1][x0+1]: kernel += [[[y1,x0], np.hypot((y-y1),(x-x0))]]
-        if not mask__[y1+1][x1+1]: kernel += [[[y1,x1], np.hypot((y-y1),(x-x1))]]
-        K = 0
-        ktuples = []  # scale params by inverted distance, approx: square of rpixel is rotated, won't fully match init derts:
-        for [ky,kx], dist in kernel:  # kernel excludes masked derts
-            K += 2 - dist
-            ptuple = [par__[ky,kx] * dist for par__ in der__t[1:]]  # exclude i
-            ktuples += [ptuple]
-        Ptuple = ktuples[0]  # init with 1st not masked quadrant
-        for _ptuple in ktuples[1:]:
-            for i,par in enumerate(_ptuple):
-                Ptuple[i] += par
-        ptuple = [Par/K for Par in Ptuple]  # normalize with K
+        x0, y0 = int(x), int(y)  # floor
+        x1, y1 = x0+1, y0+1  # ceiling
+        kernel = [  # cell weighing by inverse distance from float y,x:
+            # https://www.researchgate.net/publication/241293868_A_study_of_sub-pixel_interpolation_algorithm_in_digital_speckle_correlation_method
+            (y0,x0, (y1-y) * (x1-x)),
+            (y0,x1, (y1-y) * (x-x0)),
+            (y1,x0, (y-y0) * (x1-x)),
+            (y1,x1, (y-y0) * (x-x0))]
+        mask = sum((mask__[cy,cx] * weight for cy,cx, weight in kernel))  # weighted average of four kernel cells
+        if mask > 0:
+            break  # terminate direction in P
+        ptuple = [
+            sum((par__[cy,cx] * weight for cy,cx, weight in kernel))
+            for par__ in der__t[1:]]
         if fleft:
             y -= sin; x -= cos  # next y,x
-            rdert_.insert(0, ptuple)  # append left
-            dert_ext_.insert(0, [[P],y,x])  # append left external params: roots and coords per dert
+            rdert_ = [ptuple] + rdert_ # append left
+            dert_ext_ = [[[P],y,x]] + dert_ext_  # append left external params: roots and coords per dert
         else:
-            y += sin; x += cos   # next ry,rx
-            rdert_ += [ptuple]  # append right
-            dert_ext_ += [[[P],y,x]]
-
-        if mask__[y0][x0] and mask__[y1][x0] and mask__[y0][x1] and mask__[y1][x1]:
-            break
+            y += sin; x += cos  # next y,x
+            rdert_ = rdert_ + [ptuple]  # append right
+            dert_ext_ = dert_ext_ + [[[P],y,x]]
 
     return rdert_,dert_ext_, y,x
 

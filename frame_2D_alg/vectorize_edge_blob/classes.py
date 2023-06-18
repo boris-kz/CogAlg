@@ -8,9 +8,8 @@ from class_cluster import ClusterStructure, init_param as z
     1-3 letter names are normally scalars, except for P and similar classes, 
     capitalized variables are normally summed small-case variables,
     longer names are normally classes
-'''
 
-# not needed?
+not needed:
 class CQ(ClusterStructure):  # generic links
 
     Q : list = z([])  # generic sequence or index increments in ptuple, derH, etc
@@ -36,7 +35,7 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
     G : float = 0.0  # for comparison, not summation:
     Ga : float = 0.0
     L : int = 0  # replaces n, still redundant to len dert_ in P, nlinks in PP or graph
-
+'''
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
@@ -50,9 +49,11 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     link_ : list = z([])  # all links
     link_t: list = z([[],[]])  # +ve rlink_, dlink_
     roott : list = z([None, None])  # mPP,dPP that contain this P
-    y : int = 0
-    x : int = 0
-    ''' optional:
+    y : float = 0.0
+    x : float = 0.0
+    ''' 
+    add L,S,A from links?
+    optional:
     dxdert_ : list = z([])  # only in Pd
     Pd_ : list = z([])  # only in Pm
     Mdx : int = 0  # if comp_dx
@@ -68,7 +69,7 @@ class CderP(ClusterStructure):  # tuple of derivatives in P link: binary tree wi
     P : object = None  # lower comparand
     roott : list = z([None, None])  # for der++
     box : list = z([0,0,0,0])  # y0,yn, x0,xn: P.box+_P.box, or center+_center?
-    L : int = 0
+    S : float = 0.0  # sparsity: distance between centers
     fdx : object = None  # if comp_dx
 
 '''
@@ -107,9 +108,9 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     id_T : list = z([[],[]])  # indices in the list of all possible layers | forks, for sparse representation
     valT : list = z([[],[]])
     rdnT : list = z([[],[]])
-    node_: list = z([])  # same-fork: wH[0], variable nesting? concat sub-node_s in ex.H levs
-    wH :   list = z([])  # down-forking tree of node Levs, forks in id_T?
-    root_: list = z([])  # agg+|sub+ forks: msets?
+    node_: list = z([])  # wH[0]: same-fork, variable nesting? concat sub-node_s in ex.H levs
+    wH :   list = z([])  # down-forking tree of node Levs, forks represented in id_T?
+    root_: list = z([])  # uH[0]: agg+|sub+ mset forks?
     uH :   list = z([])  # up-forking tree of root Levs, if multiple roots, separate id_T?
     link_: list = z([])  # temporary holder for der+ node_, then unique links within graph?
     link_t: list = z([[],[]])  # +ve rlink_, dlink_

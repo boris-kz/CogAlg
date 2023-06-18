@@ -173,7 +173,7 @@ def sum_ptuple(Ptuple, ptuple, fneg=0):
                 Ptuple += [copy(par)]
 
 
-def comp_P(_P,P, link_,link_m,link_d, LayT,ValT,RdnT, fd=0, derP=None):  #  derP if fd==1
+def comp_P(_P,P, link_,link_m,link_d, LayT,ValT,RdnT, fd=0, derP=None):  #  derP if der+, S if rng+
 
     aveP = P_aves[fd]
     rn = len(_P.dert_)/ len(P.dert_)
@@ -190,8 +190,8 @@ def comp_P(_P,P, link_,link_m,link_d, LayT,ValT,RdnT, fd=0, derP=None):  #  derP
         # rng+: add new link
         mtuple,dtuple = comp_ptuple(_P.ptuple, P.ptuple, rn)
         mval = sum(mtuple); dval = sum(dtuple)
-        mrdn = 1+(dval>mval); drdn = 1+(1-(dval>mval))  # or greyscale rdn = Dval/Mval?
-        derP = CderP(derT=[mtuple,dtuple],valT=[mval,dval],rdnT=[mrdn,drdn], P=P,_P=_P, L=len(_P.dert_))
+        mrdn = 1+(dval>mval); drdn = 1+(1-(dval>mval))  # rdn = Dval/Mval?
+        derP = CderP(derT=[mtuple,dtuple],valT=[mval,dval],rdnT=[mrdn,drdn], P=P,_P=_P, S=derP)
     link_ += [derP]  # all links
     if mval > aveP*mrdn:
         link_m+=[derP]  # +ve links, fork selection in form_PP_t
