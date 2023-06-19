@@ -109,15 +109,15 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     valT : list = z([[],[]])
     rdnT : list = z([[],[]])
     node_: list = z([])  # wH[0]: same-fork, variable nesting? concat sub-node_s in ex.H levs
-    wH :   list = z([])  # down-forking tree of node Levs, forks represented in id_T?
-    root_: list = z([])  # uH[0]: agg+|sub+ mset forks?
-    uH :   list = z([])  # up-forking tree of root Levs, if multiple roots, separate id_T?
-    link_: list = z([])  # temporary holder for der+ node_, then unique links within graph?
+    # wH : list = z([])  # down-forking tree of node Levs, forks represented in id_T?
+    root_: list = z([])  # uH[0]: agg+|sub+ mset forks, for feedback?
+    # uH : list = z([])  # up-forking tree of root Levs, if multiple roots, separate id_T?
+    link_ : list = z([])  # temporary store of der+ node_, then unique links within graph?
     link_t: list = z([[],[]])  # +ve rlink_, dlink_
     rng : int = 1
     box : list = z([0,0,0,0,0,0])  # y,x, y0,yn, x0,xn
     nval : int = 0  # of open links: base alt rep
-    alt_graph_ : list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
+    alt_graph_: list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
     alt_Graph : object = None  # conditional, summed and concatenated params of alt_graph_
     # temporary:
     fback_ : list = z([])  # [feedback derT,valT,rdnT per node]

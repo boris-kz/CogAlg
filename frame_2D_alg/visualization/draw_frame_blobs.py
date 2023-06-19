@@ -41,7 +41,7 @@ def visualize_blobs(frame, layer='r'):
     """
     print("Preparing for visualization ...", end="")
 
-    height, width = frame.dert__[0].shape
+    height, width = frame.der__t[0].shape
 
     # Prepare state object
     state = SimpleNamespace(
@@ -78,9 +78,9 @@ def visualize_blobs(frame, layer='r'):
         box_slice = slice(y0, yn), slice(x0, xn)
         dy_slice = dy__[state.img_slice][box_slice][~blob.mask__]
         dx_slice = dx__[state.img_slice][box_slice][~blob.mask__]
-        dy_index = 4 if len(blob.dert__) > 5 else 1
-        dy_slice[:] = blob.dert__[dy_index][~blob.mask__]
-        dx_slice[:] = blob.dert__[dy_index + 1][~blob.mask__]
+        dy_index = 4 if len(blob.der__t) > 5 else 1
+        dy_slice[:] = blob.der__t[dy_index][~blob.mask__]
+        dx_slice[:] = blob.der__t[dy_index + 1][~blob.mask__]
         state.gradient_mask[state.img_slice][box_slice] = ~blob.mask__
         iy, ix = state.gradient_mask.nonzero()
 
@@ -104,8 +104,8 @@ def visualize_blobs(frame, layer='r'):
 
         state.blob_cls = blob_[0].__class__
         y0, yn, x0, xn = frame.box
-        if frame.root_dert__:
-            rY, rX = frame.root_dert__[0].shape
+        if frame.root_der__t:
+            rY, rX = frame.root_der__t[0].shape
             y0e = max(0, y0 - 1)
             yne = min(rY, yn + 1)
             x0e = max(0, x0 - 1)

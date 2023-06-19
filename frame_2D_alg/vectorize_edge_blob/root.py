@@ -114,7 +114,7 @@ def pad1(mask__):  # pad blob.mask__ with rim of 1s:
 
 def rotate_P_(blob, verbose=False):  # rotate each P to align it with direction of P or dert gradient
 
-    iP_ = copy(blob.P_); der__t = blob.der__t; mask__= pad1(blob.mask__)
+    iP_ = copy(blob.P_); der__t = blob.der__t; mask__= blob.mask__
     if verbose: i = 0
     P_ = []
     for P in iP_:
@@ -167,9 +167,9 @@ def form_P(der__t, mask__, axis, y,x):
     P.dert_ = dert_
     P.dert_ext_ = dert_ext_
     P.y = (yleft+ry)/2; P.x = (x0+rx)/2
-    P.axis = np.divide(P.ptuple[3], P.ptuple[5])  # new axis
     G = np.hypot(Dy,Dx);  Ga = (Cos_da0+1) + (Cos_da1+1); L = len(rdert_)
     P.ptuple = [I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L]
+    P.axis = np.divide(P.ptuple[3], P.ptuple[5])  # new axis
 
     return P
 
@@ -252,7 +252,7 @@ def scan_P_rim(P, blob, rim_, cP_, fup):  # scan rim roots up and down from curr
     if not link_ and new_link_:  # add not-redundant new P:
         dert,y,x = sorted(new_link_, key=lambda x:x[0][9], reverse=True)[0]
         # form new _P from max-G rim dert along P.axis:
-        _P = form_P(blob.der__t, pad1(blob.mask__), axis=P.axis, y=y, x=x)
+        _P = form_P(blob.der__t, blob.mask__, axis=P.axis, y=y, x=x)
         if fup: P.link_ += [_P]  # represent uplinks only
         else:  _P.link_ += [P]
         blob.P_ += [_P]
