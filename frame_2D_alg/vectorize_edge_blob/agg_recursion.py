@@ -31,39 +31,90 @@ There are concepts that include same matching vars: size, density, color, stabil
 Weak value vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
 '''
 
-
 def agg_recursion(root):  # compositional recursion in root.PP_
 
-    mgraph_, dgraph_ = form_graph_(root, fsub=0)  # node.H cross-comp and graph clustering, comp frng pplayers
+    comp_G_(root, pri_G_=None, f1Q=1, fsub=0)  # cross-comp all Gs within rng, in node.H?
+    mgraph_, dgraph_ = form_graph_(root, fsub=0)  # clustering via link_t, comp frng pplayers?
 
-    Rdnt = [np.sum(root.rdnT[i]) for i in [0,1]]  # no Valt?
-    # eval graphs for sub+, ~sub_recursion_eval?:
+    # sub+:
+    Rdnt = [np.sum(root.rdnT[i]) for i in [0,1]]  # no Valt for sub+,
     for fd, graph_ in enumerate([mgraph_,dgraph_]):
         val = sum([np.sum(graph.valT[fd]) for graph in graph_])
         rdn = sum([np.sum(graph.rdnT[fd]) for graph in graph_]) + Rdnt[fd]
-        # intra-graph sub+:
-        if val > ave_sub * rdn:  # same in blob, same base cost for both forks
-            for graph in graph_: graph.rdnT[-1][fd] += 1  # estimate, assign to the weaker in feedback
-            sub_recursion(graph_, fd)  # divide graph_ in der+|rng+ sub_graphs
-        else:
-            feedback(root)  # update root.root..H, breadth-first
-    # eval graph_ for agg+: ~agg_recursion_eval?:
-    Rdnt = [np.sum(root.rdnT[i]) for i in [0,1]]; Valt = [np.sum(root.valT[i]) for i in [0,1]]  # updated in sub+
 
-    for fd, graph_ in enumerate([mgraph_, dgraph_]):  # eval graphs for sub+ and agg+:
+        if val > ave_sub * rdn:  # fixed costs, same per fork
+            for graph in graph_: graph.rdnT[-1][fd] += 1  # estimate, assign to the weaker in feedback
+            # eval to divide each graph into der+|rng+ sub_graphs:
+            sub_recursion_eval(graph_, fd)
+        else: feedback(root)  # update root.root..H, breadth-first
+    # agg+:
+    Rdnt = [np.sum(root.rdnT[i]) for i in [0,1]]; Valt = [np.sum(root.valT[i]) for i in [0,1]]  # updated in sub+
+    for fd, graph_ in enumerate([mgraph_, dgraph_]):
         if Valt[fd] > G_aves[fd] * ave_agg * Rdnt[fd] and len(graph_) > ave_nsub:
             for graph in graph_: graph.rdnT[-1][fd] += 1  # estimate
-            agg_recursion(root)  # replaces root.H
-        else:
-            feedback(root)  # update root.root..H, breadth-first
+            # replace root.H with new graphs
+            agg_recursion(root)
+        else: feedback(root)  # update root.root..H, breadth-first
 
+
+def comp_G_(G_, pri_G_=None, f1Q=1, fd = 0, fsub=0):  # cross-comp Graphs if f1Q, else G_s in comp_node_
+
+    if not f1Q: dpH_ = []
+    '''
+    comp_slice:
+    link_,link_m,link_d = [],[],[]  # empty in converted PPs or new Gs
+    derT=[[],[]]; valT=[0,0]; rdnT=[1,1]  # to sum links in comp_G
+    for _P in P.link_:
+        comp_P(_P,P, link_,link_m,link_d, derT,valT,rdnT, fd=0)
+            P.link_ = link_  # convert links from Ps to derPs
+    if P.link_:
+        P.link_t=[link_m,link_d]
+        P.derT=derT; P.valT=valT; P.rdnT=rdnT  # single Mtuple, Dtuple
+    '''
+    for i, _iG in enumerate(G_ if f1Q else pri_G_):  # G_ is node_ of root graph, initially converted PPs
+        if fd:
+            for iG in _iG.link_:
+                pass  #
+      # else: # rng+, no following links?
+        for iG in G_[i+1:] if f1Q else G_:  # compare each G to other Gs in rng, bilateral link assign, val accum:
+            # no new G per sub+, just compare corresponding layers?
+            # if the pair was compared in prior rng+:
+            if iG in [node for link in _iG.link_ for node in link.node_]:  # if f1Q? add frng to skip?
+                continue
+            dy = _iG.box[0]-iG.box[0]; dx = _iG.box[1]-iG.box[1]  # between center x0,y0
+            distance = np.hypot(dy, dx)  # Euclidean distance between centers, sum in sparsity, proximity = ave-distance
+            if distance < ave_distance * ((sum(_iG.pH.valt) + sum(iG.pH.valt)) / (2*sum(G_aves))):
+                # same for cis and alt Gs:
+                for _G, G in ((_iG, iG), (_iG.alt_Graph, iG.alt_Graph)):
+                    if not _G or not G:  # or G.val
+                        continue
+                    dpH = op_parH(_G.pH, G.pH, fcomp=1)  # comp layers while lower match?
+                    dpH.ext[1] = [1,distance,[dy,dx]]  # pack in ds
+                    mval, dval = dpH.valt
+                    derG = Cgraph(valt=[mval,dval], G=[_G,G], pH=dpH, box=[])  # box is redundant to G
+                    # add links:
+                    _G.link_.Q += [derG]; G.link_.Q += [derG]  # no didx, no ext_valt accum?
+                    if mval > ave_Gm:
+                        _G.link_.Qm += [derG]; _G.link_.valt[0] += mval
+                        G.link_.Qm += [derG]; G.link_.valt[0] += mval
+                    if dval > ave_Gd:
+                        _G.link_.Qd += [derG]; _G.link_.valt[1] += dval
+                        G.link_.Qd += [derG]; G.link_.valt[1] += dval
+
+                    if not f1Q: dpH_+= dpH  # comp G_s
+                # implicit cis, alt pair nesting in mderH, dderH
+    if not f1Q:
+        return dpH_  # else no return, packed in links
+
+    '''
+    comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D?
+    '''
 
 def form_graph_(root, fsub): # form derH in agg+ or sub-pplayer in sub+, G is node in GG graph
 
     G_ = root.node_
-    comp_G_(G_, fsub=fsub)  # cross-comp all graph nodes in rng, graphs may be segs | fderGs, root G += link, link.node
+    mnode_, dnode_ = [],[]  # Gs with >0 +ve fork links:
 
-    mnode_,dnode_ = [],[]  # Gs with >0 +ve fork links:
     for G in G_:
         if G.link_t[0]: mnode_ += [G]  # all nodes with +ve links, not clustered in graphs yet
         if G.link_t[1]: dnode_ += [G]
@@ -72,8 +123,8 @@ def form_graph_(root, fsub): # form derH in agg+ or sub-pplayer in sub+, G is no
         graph_ = []  # init graphs by link val:
         while node_:  # all Gs not removed in add_node_layer
             G = node_.pop(); gnode_ = [G]
-            val = init_graph(gnode_, node_, G, fd, val=0)  # recursive depth-first gnode_+=[_G]
-            graph_+=[gnode_,val]
+            val = init_graph(gnode_, node_, G, fd, val=0)  # recursive depth-first gnode_ += [_G]
+            graph_ += [gnode_,val]
         # prune graphs by node val:
         regraph_ = graph_reval_(graph_, [G_aves[fd] for graph in graph_], fd)  # init reval_ to start
         if regraph_:
@@ -167,44 +218,6 @@ In rng+, graph may be extended with out-linked nodes, merged with their graphs a
 Clusters of different forks / param sets may overlap, else no use of redundant inclusion?
 No centroid clustering, but cluster may have core subset.
 '''
-
-def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q, else G_s in comp_node_, or segs inside PP?
-
-    if not f1Q: dpH_ = []
-
-    for i, _iG in enumerate(G_ if f1Q else pri_G_):  # G_ is node_ of root graph
-        for iG in G_[i+1:] if f1Q else G_:  # compare each G to other Gs in rng, bilateral link assign, val accum:
-            # if the pair was compared in prior rng+:
-            if iG in [node for link in _iG.link_.Q for node in link.node_]:  # if f1Q? add frng to skip?
-                continue
-            dy = _iG.box[0]-iG.box[0]; dx = _iG.box[1]-iG.box[1]  # between center x0,y0
-            distance = np.hypot(dy, dx)  # Euclidean distance between centers, sum in sparsity, proximity = ave-distance
-            if distance < ave_distance * ((sum(_iG.pH.valt) + sum(iG.pH.valt)) / (2*sum(G_aves))):
-                # same for cis and alt Gs:
-                for _G, G in ((_iG, iG), (_iG.alt_Graph, iG.alt_Graph)):
-                    if not _G or not G:  # or G.val
-                        continue
-                    dpH = op_parH(_G.pH, G.pH, fcomp=1)  # comp layers while lower match?
-                    dpH.ext[1] = [1,distance,[dy,dx]]  # pack in ds
-                    mval, dval = dpH.valt
-                    derG = Cgraph(valt=[mval,dval], G=[_G,G], pH=dpH, box=[])  # box is redundant to G
-                    # add links:
-                    _G.link_.Q += [derG]; G.link_.Q += [derG]  # no didx, no ext_valt accum?
-                    if mval > ave_Gm:
-                        _G.link_.Qm += [derG]; _G.link_.valt[0] += mval
-                        G.link_.Qm += [derG]; G.link_.valt[0] += mval
-                    if dval > ave_Gd:
-                        _G.link_.Qd += [derG]; _G.link_.valt[1] += dval
-                        G.link_.Qd += [derG]; G.link_.valt[1] += dval
-
-                    if not f1Q: dpH_+= dpH  # comp G_s
-                # implicit cis, alt pair nesting in mderH, dderH
-    if not f1Q:
-        return dpH_  # else no return, packed in links
-
-    '''
-    comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D?
-    '''
 
 def op_parH(_parH, parH, fcomp, fneg=0):  # unpack aggH( subH( derH -> ptuples
 

@@ -5,7 +5,7 @@ import sys
 import numpy as np
 from copy import copy, deepcopy
 from itertools import product
-from .classes import Cptuple, CP, CPP, CderP
+from .classes import CP, CPP, CderP
 from .filters import ave, ave_g, ave_ga, ave_rotate
 from .comp_slice import comp_slice, comp_angle
 from .agg_convert import agg_recursion_eval
@@ -73,11 +73,11 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
     P_ = []
     height, width = blob.mask__.shape
 
-    for y in range(height):  # iterate through lines, each may have multiple slices -> Ps:
+    for y in range(1, height, 1):  # iterate through lines, each may have multiple slices -> Ps, y0 and yn are extended mask
         if verbose: print(f"\rConverting to image... Processing line {y + 1}/{height}", end=""); sys.stdout.flush()
         _mask = True  # mask -1st dert
-        x = 0
-        while x < width:  # iterate through pixels in a line
+        x = 1  # 0 is extended mask
+        while x < width-1:  # iterate through pixels in a line (last index is extended mask)
             mask = blob.mask__[y, x]
             dert = [par__[y, x] for par__ in blob.der__t[1:]]   # exclude i
             g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert
@@ -136,10 +136,10 @@ def rotate_P_(blob, verbose=False):  # rotate each P to align it with direction 
         for _,y,x in P.dert_ext_:
             x0 = int(np.floor(x)); x1 = int(np.ceil(x)); y0 = int(np.floor(y)); y1 = int(np.ceil(y))
             kernel = []
-            if not mask__[y0+1][x0+1]: kernel += [[[y0,x0], np.hypot((y-y0),(x-x0))]]
-            if not mask__[y0+1][x1+1]: kernel += [[[y0,x1], np.hypot((y-y0),(x-x1))]]
-            if not mask__[y1+1][x0+1]: kernel += [[[y1,x0], np.hypot((y-y1),(x-x0))]]
-            if not mask__[y1+1][x1+1]: kernel += [[[y1,x1], np.hypot((y-y1),(x-x1))]]
+            if not mask__[y0][x0]: kernel += [[[y0,x0], np.hypot((y-y0),(x-x0))]]
+            if not mask__[y0][x1]: kernel += [[[y0,x1], np.hypot((y-y0),(x-x1))]]
+            if not mask__[y1][x0]: kernel += [[[y1,x0], np.hypot((y-y1),(x-x0))]]
+            if not mask__[y1][x1]: kernel += [[[y1,x1], np.hypot((y-y1),(x-x1))]]
 
             y,x = sorted(kernel, key=lambda x: x[1])[0][0]  # nearest cell y,x
             blob.dert_roots__[y][x] += [P]  # final rotated P
@@ -185,11 +185,11 @@ def scan_direction(P, rdert_,dert_ext_, y,x, axis, der__t,mask__, fleft):  # lef
             (y0,x1, (y1-y) * (x-x0)),
             (y1,x0, (y-y0) * (x1-x)),
             (y1,x1, (y-y0) * (x-x0))]
-        mask = sum((mask__[cy,cx] * weight for cy,cx, weight in kernel))  # weighted average of four kernel cells
-        if mask > 0:
+        mask = sum((mask__[cy,cx] * dist for cy,cx, dist in kernel))  # weighted average of four kernel cells
+        if mask >.75:  # need at least one unmasked cell
             break  # terminate direction in P
         ptuple = [
-            sum((par__[cy,cx] * weight for cy,cx, weight in kernel))
+            sum((par__[cy,cx] * dist for cy,cx, dist in kernel))
             for par__ in der__t[1:]]
         if fleft:
             y -= sin; x -= cos  # next y,x
