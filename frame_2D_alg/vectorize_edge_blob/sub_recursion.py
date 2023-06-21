@@ -49,6 +49,7 @@ def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to selec
         PP.rdnT[fd] += PP.valT[fd] > PP.valT[1 - fd]
         base_rdn = PP.rdnT[fd]
 
+    cP_ = [replace(P, roott=[None, None], link_t=[[], []]) for P in P_]  # reassign roots to sub_PPs
     cP_ = [replace(P, roott=[None, None]) for P in P_]  # reassign roots to sub_PPs
     PP.P_ = form_PP_t(cP_, base_rdn=base_rdn)  # replace P_ with sub_PPm_, sub_PPd_
 
@@ -95,7 +96,7 @@ def comp_der(iP_):  # form new Ps and links in rng+ PP.P__, extend their link.de
             for i in 0,1:
                 DerT[i]+=[derT[i]]; ValT[i]+=[valT[i]]; RdnT[i]+=[rdnT[i]]  # append layer
 
-            P_ += [CP(ptuple=deepcopy(P.ptuple), dert_=copy(P.dert_), box=copy(P.box),
+            P_ += [CP(ptuple=deepcopy(P.ptuple), dert_=copy(P.dert_),
                       derT=DerT, valT=ValT, rdnT=RdnT, link_=link_, link_t=[link_m,link_d])]
     return P_
 

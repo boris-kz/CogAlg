@@ -37,7 +37,7 @@ def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps'val
     PP_t = []
     for fd in 0,1:
         qPP_ = []  # initial sequence-PPs
-        for P in copy(P_):
+        for P in P_:
             if not P.roott[fd]:  # else already packed in qPP
                 qPP = [[[P]]]  # init PP is 2D queue of Ps, + valt of all layers?
                 P.roott[fd]=qPP; valt = [0,0]
@@ -77,11 +77,11 @@ def reval_PP_(PP_, fd):  # recursive eval / prune Ps for rePP
             if reval < Ave:  # same graph, skip re-evaluation:
                 rePP_ += [[P_,valt,0]]  # reval=0
             else:
-                rePP = reval_P_(P_, fd)  # recursive node and link revaluation by med val
+                rePP = reval_P_(P_,fd)  # recursive node and link revaluation by med val
                 if valt[fd] > Ave:  # min adjusted val
                     rePP_ += [rePP]
     if rePP_ and max([rePP[2] for rePP in rePP_]) > ave:  # recursion if any min reval:
-        rePP_ = reval_PP_(rePP_, fd)
+        rePP_ = reval_PP_(rePP_,fd)
 
     return rePP_
 

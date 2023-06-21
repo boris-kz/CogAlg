@@ -1,20 +1,20 @@
 '''
 Agg_recursion eval and PP->graph conversion
 '''
-from .comp_slice import sum_derH
-from .agg_recursion import Cgraph, agg_recursion, op_parH
+
+from .agg_recursion import Cgraph, agg_recursion, op_parT
 from copy import copy, deepcopy
-from .classes import CQ, Cptuple, CP, CderP, CPP
-from .filters import PP_vars, PP_aves, ave_nsub, ave_agg
+from .classes import CP, CderP, CPP
+from .filters import PP_vars, PP_aves, ave_nsub, ave_agg, med_decay
 
 # move here temporary, for debug purpose
 # not fully updated
 def agg_recursion_eval(blob, PP_, fd):
 
     for i, PP in enumerate(PP_):
-        converted_graph  = PP2graph(PP, fd=fd)  # convert PP to graph
+        converted_graph  = PP2graph(PP, fd)  # convert PP to graph
         PP_[i] = converted_graph
-        converted_blob = blob2graph(blob, fd=fd)  # convert root to graph
+        converted_blob = blob2graph(blob, fd)  # convert root to graph
 
     Val = converted_blob.valt[fd]
     fork_rdnt = [1+(converted_blob.valt[fd] > converted_blob.valt[1-fd]), 1+(converted_blob.valt[1-fd] > converted_blob.valt[fd])]
@@ -51,7 +51,7 @@ def blob2graph(blob, fseg, fd):
 
     for i, PP in enumerate(PP_):
         graph = PP2graph(PP, fseg, fd)
-        sum_derH(Graph.pH, graph.pH)
+        op_G(Graph, graph, fcomp=0)
         graph.root = Graph
         Graph.node_ += [graph]
 
@@ -62,9 +62,8 @@ def blob2graph(blob, fseg, fd):
 # tentative, will be finalized when structure in agg+ is finalized
 def PP2graph(PP, fseg, ifd=1):
 
-
-    box = [(PP.box[0]+PP.box[1]) /2, (PP.box[2]+PP.box[3]) /2] + PP.box
-    graph = Cgraph(pH=deepcopy(PP.derH), valt=copy(PP.valt), rndt=copy(PP.rdnt), box=box)
+    box = [(PP.box[0]+PP.box[1]) /2, (PP.box[2]+PP.box[3]) /2] + list(PP.box)
+    graph = Cgraph(parT=deepcopy(PP.derT), valT=copy(PP.valT), rndT=copy(PP.rdnT), box=box)
 
     return graph
 
@@ -114,4 +113,3 @@ def med_eval(last_link_, old_link_, med_valH, fd):  # recursive eval of mediated
         curr_link_, old_link_, med_valH = med_eval(curr_link_, old_link_, med_valH, fd)  # eval next med layer
 
     return curr_link_, old_link_, med_valH
-

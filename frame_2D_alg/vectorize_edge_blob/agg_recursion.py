@@ -1,6 +1,6 @@
 import numpy as np
 from copy import deepcopy, copy
-from .classes import CQ, Cgraph
+from .classes import Cgraph
 from .filters import aves, ave, ave_nsub, ave_sub, ave_agg, G_aves, med_decay, ave_distance, ave_Gm, ave_Gd
 from .comp_slice import comp_angle, comp_aangle
 
@@ -88,7 +88,7 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fd = 0, fsub=0):  # cross-comp Graphs if f1Q
                 for _G, G in ((_iG, iG), (_iG.alt_Graph, iG.alt_Graph)):
                     if not _G or not G:  # or G.val
                         continue
-                    dpH = op_parH(_G.pH, G.pH, fcomp=1)  # comp layers while lower match?
+                    dpH = op_parT(_G.pH, G.pH, fcomp=1)  # comp layers while lower match?
                     dpH.ext[1] = [1,distance,[dy,dx]]  # pack in ds
                     mval, dval = dpH.valt
                     derG = Cgraph(valt=[mval,dval], G=[_G,G], pH=dpH, box=[])  # box is redundant to G
@@ -219,8 +219,9 @@ Clusters of different forks / param sets may overlap, else no use of redundant i
 No centroid clustering, but cluster may have core subset.
 '''
 
-def op_parH(_parH, parH, fcomp, fneg=0):  # unpack aggH( subH( derH -> ptuples
+def op_parT(_parT, parT, fcomp, fneg=0):  # unpack aggH( subH( derH -> ptuples
 
+    # not updated below:
     if fcomp: dparH = CQ()
     elev, _idx, d_didx, last_i, last_idx = 0,0,0,-1,-1
 
