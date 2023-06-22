@@ -39,7 +39,7 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
-    ptuple : list = z([])  # latuple: I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1)
+    ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # latuple: I,G,Ga,M,Ma, angle(Dy,Dx), aangle(Sin_da0,Cos_da0,Sin_da1,Cos_da1),L
     derT : list = z([[],[]])  # ptuple) fork) layer) H)T; 1ptuple,1fork,1layer in comp_slice, extend in der+ and fback
     valT : list = z([0,0])
     rdnT : list = z([1,1])
@@ -82,7 +82,7 @@ lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays:
 class CPP(CderP):
 
     fd : int = 0  # PP is defined by combined-fork value per link: derP mtuple | dtuple
-    ptuple : list = z([])  # summed P__ ptuples, = 0th derLay
+    ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # summed P__ ptuples, = 0th derLay
     derT : list = z([[],[]])  # ptuple) fork) layer) H)T: 1ptuple, 1fork, 1layer in comp_slice, extend in sub+ and fb
     valT : list = z([[],[]])  # nesting parallel to derT
     rdnT : list = z([[],[]])

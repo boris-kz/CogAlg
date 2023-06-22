@@ -61,7 +61,7 @@ class CBlob(ClusterStructure):
     box : tuple = (0,0,0,0)  # y0, yn, x0, xn
     mask__ : object = None
     der__t : object = None
-    dert_roots__ : object = None  # map to der__t
+    der__t_roots : object = None  # map to der__t
     adj_blobs : list = z([])  # adjacent blobs
     fopen : bool = False
     # intra_blob params: # or pack in intra = lambda: Cintra
@@ -235,7 +235,7 @@ def flood_fill(der__t, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
                 yn += 1; xn += 1
                 blob.box = y0, yn, x0, xn
                 blob.der__t = tuple([par__[y0:yn, x0:xn] for par__ in blob.root_der__t])  # add None__ for m__?
-                blob.dert_roots__ = [[[] for dert in dert_[x0:xn]] for dert_ in der__t[0][y0:yn]]
+                blob.der__t_roots = [[[] for dert in dert_[x0:xn]] for dert_ in der__t[0][y0:yn]]
                 blob.mask__ = (idmap[y0:yn, x0:xn] != blob.id)
                 blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses
                 blob.G = np.hypot(blob.Dy, blob.Dx)  # recompute G

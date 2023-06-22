@@ -38,27 +38,30 @@ def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps'val
     for fd in 0,1:
         qPP_ = []  # initial sequence-PPs
         for P in P_:
+            # below is still buggy
             if not P.roott[fd]:  # else already packed in qPP
-                qPP = [[[P]]]  # init PP is 2D queue of Ps, + valt of all layers?
+                # we only need 2 brackets here because this qPP will be packed to qPP_?
+                qPP = [[P]]  # init PP is 2D queue of Ps, + valt of all layers?
                 P.roott[fd]=qPP; valt = [0,0]
-                uplink_ = P.link_t[fd]; uuplink_ = []
-                # next-line links for recursive search
+                uplink_ = P.link_t[fd]
+                uuplink_ = []  # next layer of links
                 while uplink_:
                     for derP in uplink_:
                         _P = derP._P; _qPP = _P.roott[fd]
                         if _qPP:  # merge _qPP in qPP:
                             for i in 0, 1: valt[i] += _qPP[1][i]
-                            for qP in _qPP.P_:
+                            for qP in _qPP[0]:
                                 qP.roott[fd] = qPP; qPP[0] += [qP]  # append qP_
                             qPP_.remove(_qPP)
                         else:
                             qPP[0].insert(0,_P)  # pack top down
-                            _P.root[fd] = qPP
+                            _P.roott[fd] = qPP
                             for i in 0,1: valt[i] += np.sum(derP.valT[i])
                             uuplink_ += derP._P.link_t[fd]
                     uplink_ = uuplink_
                     uuplink_ = []
-                qPP_ += [qPP + [valt,ave+1]]  # ini reval=ave+1
+                qPP += [valt,ave+1]  # ini reval=ave+1, keep qPP same object for ref in P.roott
+                qPP_ += [qPP]
         # prune qPPs by med links val:
         rePP_= reval_PP_(qPP_, fd)  # PP = [qPP,valt,reval]
         CPP_ = [sum2PP(qPP, base_rdn, fd) for qPP in rePP_]
@@ -122,7 +125,7 @@ def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
     P = (P_[0])
     Ptuple, DerT,ValT,RdnT, Link_,Link_m,Link_d, y,x = \
     deepcopy(P.ptuple),deepcopy(P.derT),deepcopy(P.valT),deepcopy(P.rdnT), copy(P.link_),copy(P.link_t[0]),copy(P.link_t[1]), P.y,P.x
-    L = Ptuple[7]; Dy = P.axis[0]*L/2; Dx = P.axis[1]*L/2  # side-accumulated sin,cos
+    L = Ptuple[-1]; Dy = P.axis[0]*L/2; Dx = P.axis[1]*L/2  # side-accumulated sin,cos
     Y0 = y-Dy; Yn = y+Dy; X0 = x-Dx; Xn = x+Dx
     PP = CPP(fd=fd, P_=P_)
     # accum:
@@ -131,7 +134,7 @@ def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
         if i:  # exclude init P
             sum_ptuple(Ptuple, P.ptuple)
             Link_+=P.link_; Link_m+=P.link_t[0]; Link_d+=P.link_t[1]
-            L=P.ptuple[7]; Dy=P.axis[0]*L/2; Dx=P.axis[1]*L/2; y=P.y; x=P.x
+            L=P.ptuple[-1]; Dy=P.axis[0]*L/2; Dx=P.axis[1]*L/2; y=P.y; x=P.x
             Y0=min(Y0,(y-Dy)); Yn=max(Yn,(y+Dy)); X0=min(X0,(x-Dx)); Xn=max(Xn,(x-Dx))
             if P.derT[0]:
                 for j in 0,1:
