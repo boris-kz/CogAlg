@@ -662,3 +662,44 @@ def op_parT(_parT, parT, fcomp, fneg=0):  # unpack aggH( subH( derH -> ptuples
         _parH.rdnt[0] += parH.rdnt[0];
         _parH.rdnt[1] += parH.rdnt[1]
 
+def comp_G_(G_, pri_G_=None, f1Q=1, fd = 0, fsub=0):  # cross-comp Graphs if f1Q, else comp G_s in comp_node_
+
+    if not f1Q: dpH_=[]  # not sure needed
+
+    for i, _iG in enumerate(G_ if f1Q else pri_G_):  # G_ is node_ of root graph, initially converted PPs
+        # follow links in der+, loop all Gs in rng+:
+        for iG in _iG.link_ if fd \
+            else G_[i+1:] if f1Q else G_:  # compare each G to other Gs in rng+, bilateral link assign, val accum:
+            # no new G per sub+, just compare corresponding layers?
+            # if the pair was compared in prior rng+:
+            if iG in [node for link in _iG.link_ for node in link.node_]:  # if f1Q? add frng to skip?
+                continue
+            dy = _iG.box[0]-iG.box[0]; dx = _iG.box[1]-iG.box[1]  # between center x0,y0
+            distance = np.hypot(dy, dx)  # Euclidean distance between centers, sum in sparsity, proximity = ave-distance
+            if distance < ave_distance * ((sum(_iG.pH.valt) + sum(iG.pH.valt)) / (2*sum(G_aves))):
+                # same for cis and alt Gs:
+                for _G, G in ((_iG, iG), (_iG.alt_Graph, iG.alt_Graph)):
+                    if not _G or not G:  # or G.val
+                        continue
+                    # pass parT, valT, rdnT?
+                    dparT,valT,rdnT = comp_unpack(_G.parT, G.parT, rn=1)  # comp layers while lower match?
+                    dpH.ext[1] = [1,distance,[dy,dx]]  # pack in ds
+                    mval, dval = dpH.valt
+                    derG = Cgraph(valt=[mval,dval], G=[_G,G], pH=dpH, box=[])  # box is redundant to G
+                    # add links:
+                    _G.link_ += [derG]; G.link_ += [derG]  # no didx, no ext_valt accum?
+                    if mval > ave_Gm:
+                        _G.link_t[0] += [derG]; _G.link_.valt[0] += mval
+                        G.link_t[0] += [derG]; G.link_.valt[0] += mval
+                    if dval > ave_Gd:
+                        _G.link_t[1] += [derG]; _G.link_.valt[1] += dval
+                        G.link_t[1] += [derG]; G.link_.valt[1] += dval
+
+                    if not f1Q: dpH_+= dpH  # comp G_s
+                # implicit cis, alt pair nesting in mderH, dderH
+    if not f1Q:
+        return dpH_  # else no return, packed in links
+
+    '''
+    comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D?
+    '''
