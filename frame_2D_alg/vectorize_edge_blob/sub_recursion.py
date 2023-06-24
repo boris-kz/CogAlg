@@ -50,7 +50,6 @@ def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to selec
         base_rdn = PP.rdnT[fd]
 
     cP_ = [replace(P, roott=[None, None], link_t=[[], []]) for P in P_]  # reassign roots to sub_PPs
-    cP_ = [replace(P, roott=[None, None]) for P in P_]  # reassign roots to sub_PPs
     PP.P_ = form_PP_t(cP_, base_rdn=base_rdn)  # replace P_ with sub_PPm_, sub_PPd_
 
     for fd, sub_PP_ in enumerate(PP.P_):

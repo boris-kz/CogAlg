@@ -125,7 +125,7 @@ def rotate_P_(blob, verbose=False):  # rotate each P to align it with direction 
         while abs(daxis) * G > ave_rotate:  # recursive reform P in blob.der__t along new G angle:
             if verbose: print(f"\rRotating... {i}/{len(P_)}: {round(np.degrees(np.arctan2(*P.axis)))}°", end=" " * 79); sys.stdout.flush()
             _axis = P.axis
-            P = form_P(der__t, mask__, axis=(P.ptuple[5][0]/G, P.ptuple[5][1]/G), y=P.y, x=P.x)  # pivot to P angle
+            P = form_P(der__t, mask__, axis=np.divide(P.ptuple[5], np.hypot(*P.ptuple[5])), y=P.y, x=P.x)  # pivot to P angle
             maxis, daxis = comp_angle(_axis, P.axis)
             ddaxis = daxis +_daxis  # cancel-out if opposite-sign
             _daxis = daxis
@@ -176,14 +176,11 @@ def form_P(der__t, mask__, axis, y,x):
 
 def scan_direction(P, rdert_,dert_ext_, y,x, axis, der__t,mask__, fleft):  # leftward or rightward from y,x
 
-    # getting a very large number of axis here
-    # their G is 46 but dy and dx = -1328, -480, so axis = -28, -10
-    # axis should be 0 -1?
     sin,cos = axis
     while True:
         x0, y0 = int(x), int(y)  # floor
         x1, y1 = x0+1, y0+1  # ceiling
-        if mask__[y0,x0] and mask__[y0,x1] and mask__[y1,x0] and mask__[y1,x1]:
+        if all([mask__[y0,x0], mask__[y0,x1], mask__[y1,x0], mask__[y1,x1]]):
             break  # need at least one unmasked cell to continue direction
         kernel = [  # cell weighing by inverse distance from float y,x:
             # https://www.researchgate.net/publication/241293868_A_study_of_sub-pixel_interpolation_algorithm_in_digital_speckle_correlation_method

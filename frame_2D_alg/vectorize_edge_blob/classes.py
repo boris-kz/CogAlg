@@ -40,6 +40,7 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # latuple: I,G,Ga,M,Ma, angle(Dy,Dx), aangle(Sin_da0,Cos_da0,Sin_da1,Cos_da1),L
+    # vertical derivatives, summed from P links:
     derT : list = z([[],[]])  # ptuple) fork) layer) H)T; 1ptuple,1fork,1layer in comp_slice, extend in der+ and fback
     valT : list = z([0,0])
     rdnT : list = z([1,1])
@@ -70,6 +71,7 @@ class CderP(ClusterStructure):  # tuple of derivatives in P link: binary tree wi
     roott : list = z([None, None])  # for der++
     box : list = z([0,0,0,0])  # y0,yn, x0,xn: P.box+_P.box, or center+_center?
     S : float = 0.0  # sparsity: distance between centers
+    A : list = z([0,0])  # angle: dy,dx between centers
     fdx : object = None  # if comp_dx
 
 '''
@@ -114,6 +116,9 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     # uH : list = z([])  # up-forking tree of root Levs, if multiple roots, separate id_T?
     link_ : list = z([])  # temporary store of der+ node_, then unique links within graph?
     link_t: list = z([[],[]])  # +ve rlink_, dlink_
+    # external params, summed from links:
+    S : float = 0.0  # sparsity: average distance to link centers
+    A : list = z([0,0])  # angle: average dy,dx to link centers
     rng : int = 1
     box : list = z([0,0,0,0,0,0])  # y,x, y0,yn, x0,xn
     nval : int = 0  # of open links: base alt rep

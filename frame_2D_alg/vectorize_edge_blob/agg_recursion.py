@@ -61,39 +61,30 @@ def agg_recursion(root):  # compositional recursion in root.PP_
 # very tentative:
 def comp_G_(G_, pri_G_=None, f1Q=1, fd = 0, fsub=0):  # cross-comp Graphs if f1Q, else comp G_s in comp_node_
 
-    if not f1Q: dpars_=[]
-    # this was for nested node, we need single node with link-specific partial-parT access now
+    if not f1Q: dpars_=[]  # this was for nested node, we need single node with link-specific partial-parT access now
 
     for i, _iG in enumerate(G_ if f1Q else pri_G_):  # G_ is node_ of root graph, initially converted PPs
         # follow links in der+, loop all Gs in rng+:
         for iG in _iG.link_ if fd \
             else G_[i+1:] if f1Q else G_:  # compare each G to other Gs in rng+, bilateral link assign, val accum:
-            # no new G per sub+, just compare corresponding layers?
-            # if the pair was compared in prior rng+:
-            if iG in [node for link in _iG.link_ for node in link.node_]:  # if f1Q? add frng to skip?
-                continue
+            if not fd:   # not fd if f1Q?
+                if iG in [node for link in _iG.link_ for node in link.node_]:  # the pair compared in prior rng+
+                    continue
             dy = _iG.box[0]-iG.box[0]; dx = _iG.box[1]-iG.box[1]  # between center x0,y0
-            distance = np.hypot(dy, dx)  # Euclidean distance between centers, sum in sparsity, proximity = ave-distance
-            if distance < ave_distance * ((sum(_iG.valT) + sum(iG.valT)) / (2*sum(G_aves))):
+            distance = np.hypot(dy,dx) # Euclidean distance between centers, sum in sparsity, proximity = ave-distance
+            if distance < ave_distance * ((np.sum(_iG.valT) + np.sum(iG.valT)) / (2*sum(G_aves))):
                 # same for cis and alt Gs:
                 for _G, G in ((_iG, iG), (_iG.alt_Graph, iG.alt_Graph)):
                     if not _G or not G:  # or G.val
                         continue
-                    # pass parT, valT, rdnT?
                     dparT,valT,rdnT = comp_unpack(_G.parT, G.parT, rn=1)  # comp layers while lower match?
-                    # tentative:
-                    bottom_layer = unpack(dparT[1])
-                    bottom_layer += [1,distance,[dy,dx]]  # pack in ds
-                    derG = Cgraph(G=[_G,G], dparT=dparT,valT=valT,rdnT=rdnT, box=[])  # box is redundant to G
+                    derG = Cgraph(G=[_G,G], parT=dparT,valT=valT,rdnT=rdnT, S=distance, A=[dy,dx], box=[])  # box is redundant to G
                     # add links:
-                    mval, dval = valT
                     _G.link_ += [derG]; G.link_ += [derG]  # no didx, no ext_valt accum?
-                    if mval > ave_Gm:
-                        _G.link_t[0] += [derG]; add_unpack(_G.valT[0],mval)  # also add rdnT?
-                        G.link_t[0] += [derG];  add_unpack(G.valT[0],mval)
-                    if dval > ave_Gd:
-                        _G.link_t[1] += [derG]; add_unpack(_G.valT[1],dval)
-                        G.link_t[1] += [derG];  add_unpack(G.valT[1],dval)
+                    if unpack(valT[0])[-1] > ave_Gm:
+                        _G.link_t[0] += [derG]; G.link_t[0] += [derG]  # bi-directional
+                    if unpack(valT[1])[-1] > ave_Gd:
+                        _G.link_t[1] += [derG]; G.link_t[1] += [derG]
 
                     if not f1Q: dpars_ += [[dparT,valT,rdnT]]  # comp G_s? not sure
                 # implicit cis, alt pair nesting in mderH, dderH
@@ -244,8 +235,7 @@ def op_parT(_graph, graph, fcomp, fneg=0):  # unpack aggH( subH( derH -> ptuples
         for i in 0,1:
             sum_unpack([_parT[i], _valT[i], _rdnT[i]], [parT[i], valT[i],rdnT[i]])
 
-
-
+# same as comp|sum unpack?:
 def op_ptuple(_ptuple, ptuple, fcomp, fd=0, fneg=0):  # may be ptuple, vertuple, or ext
 
     aveG = G_aves[fd]
@@ -321,25 +311,25 @@ sum_H(Graph.uH[1:], root.uH)  # root of Graph, init if empty
 # draft:
 def sum2graph_(graph_, fd):  # sum node and link params into graph, derH in agg+ or player in sub+
 
-    Graph_ = []  # Cgraphs
-    for graph in graph_:  # CQs
+    Graph_ = []
+    for graph in graph_:  # seq Gs
         if graph.valt[fd] < G_aves[fd]:  # form graph if val>min only
             continue
         Graph = Cgraph(pH=deepcopy(graph.Q[0].pH))
         Link_ = []
         for i, iG in enumerate(graph.Q):  # form G, keep iG as local subset of lower Gs
-            if i: op_parH(Graph.pH, iG.pH, fcomp=0)
+            if i: comp_unpack(Graph.pH, iG.pH, rn=1)  # rn needs to be specified?
             # if g.uH: sum_H(G.uH, g.uH[1:])  # sum g->G
             # if g.H: sum_H(G.H[1:], g.H)  # not used yet
             for i in 0, 1:
-                Graph.pH.valt[i] += iG.pH.valt[i]; Graph.pH.rdnt[i] += iG.pH.rdnt[i]
+                np.sum(Graph.valT[i],iG.valT[i]); np.sum(Graph.rdnT[i],iG.rdnT[i])
             sum_box(Graph.box, iG.box)
-            link_ = [iG.link_.Qm, iG.link_.Qd][fd]  # mlink_|dlink_
+            link_ = iG.link_t[fd]  # mlink_|dlink_; not sure
             Link_[:] = list(set(Link_ + link_))
             subH = deepcopy(link_[0].pH)  # init, fd = new Cgraph.aggH fd
             G = Cgraph(pH=subH, root=Graph, node_=link_, box=copy(iG.box))
-            for i, derG in enumerate(link_):
-                if i: op_parH(G.pH, derG.pH, fcomp=0)
+            for j, derG in enumerate(link_):
+                if j: comp_unpack(G.parT, derG.parT, rn=1)  # rn needs to be specified?
                 sum_box(G.box, derG.G[0].box if derG.G[1] is iG else derG.G[1].box)
                 Graph.nval += iG.nval
             Graph.node_ += [G]
@@ -356,6 +346,9 @@ def sum2graph_(graph_, fd):  # sum node and link params into graph, derH in agg+
         Graph_ += [Graph]
 
     return Graph_
+
+def sum_derG(G):
+    pass  # sum links: add_unpack(G.valT[0],mval)
 
 def sum_box(Box, box):
     Y, X, Y0, Yn, X0, Xn = Box;  y, x, y0, yn, x0, xn = box
