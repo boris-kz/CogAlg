@@ -170,6 +170,7 @@ def form_P(der__t, mask__, axis, y,x):
     P.dert_ = dert_
     P.dert_ext_ = dert_ext_
     P.y = yleft+axis[0]*((L+1)//2); P.x = x0+axis[1]*((L+1)//2)
+    G = np.hypot(Dy,Dx); Ga =(Cos_da0+1)+(Cos_da1+1) # recompute G,Ga
     P.ptuple = [I,G,Ga,M,Ma, [Dy,Dx], [Sin_da0,Cos_da0,Sin_da1,Cos_da1], L]
     P.axis = axis
     return P
