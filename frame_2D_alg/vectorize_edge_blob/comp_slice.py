@@ -24,7 +24,7 @@ def comp_slice(blob, verbose=False):  # high-G, smooth-angle blob, composite der
         for _P in link_:
             comp_P(_P,P)  # replaces P.link_ Ps with derPs
 
-    PPm_,PPd_ = form_PP_t(P_, base_rdn=2)
+    PPm_,PPd_ = form_PP_t([Pt[0] for Pt in P_], base_rdn=2)
     blob.PPm_, blob.PPd_  = PPm_, PPd_
 
 def comp_P(_P,P, fd=0, derP=None):  #  derP if der+, S if rng+
@@ -34,8 +34,8 @@ def comp_P(_P,P, fd=0, derP=None):  #  derP if der+, S if rng+
 
     if fd:  # der+: extend old link
         rn *= len(_P.link_t[1]) / len(P.link_t[1])  # derT is summed from links
-        # comp last layer:
-        layT,valT,rdnT = comp_unpack(_P.derT[1][-1], P.derT[1][-1], rn)  # comp lower lays formed derP.derT
+        # comp derH (all are der+ layers)?
+        layT,valT,rdnT = comp_unpack(_P.derT[1], P.derT[1], rn)
         mval = valT[0][-1][-1]; dval = valT[1][-1][-1]  # should be scalars here
         mrdn = 1+(dval>mval); drdn = 1+(1-(dval>mval))
         for i in 0,1:  # append new layer
@@ -52,13 +52,12 @@ def comp_P(_P,P, fd=0, derP=None):  #  derP if der+, S if rng+
     if dval > aveP*drdn: P.link_t[1] += [derP]
 
 
-def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps'val
+def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
 
     PP_t = []
     for fd in 0,1:
         qPP_ = []  # initial sequence-PPs
         for P in P_:
-            # below is still buggy
             if not P.roott[fd]:  # else already packed in qPP
                 qPP = [[P]]  # init PP is 2D queue of Ps, + valt of all layers?
                 P.roott[fd]=qPP; valt = [0,0]
@@ -142,9 +141,12 @@ def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
     P_,_,_ = qPP  # proto-PP is a list
     # init:
     P = P_[0]
-    VAlt, RDnt = [0,0], [base_rdn,base_rdn]
-    LAyt = deepcopy(P.link_t[fd][0].derT[-1] if fd else P.link_t[fd][0].derT)
-    sum_links(P, LAyt,VAlt,RDnt, fd, first=1)  # P.link_t[fd] can't be empty
+    link = P.link_t[fd][0]
+    Dert = deepcopy(link.derT)  # first P.link_t[fd] can't be empty
+    Valt = [link.valT]; Rdnt = [link.rdnT[0]+base_rdn, link.rdnT[1]+base_rdn]
+    if len(P.link_t[fd]) > 1:
+        sum_links(P.link_t[fd][1:], Dert,Valt,Rdnt)
+    P.derT, P.valT, P.rdnT = deepcopy(Dert), deepcopy(Valt), deepcopy(Rdnt)
 
     Ptuple, Link_,Link_m,Link_d, y,x = deepcopy(P.ptuple), copy(P.link_),copy(P.link_t[0]),copy(P.link_t[1]), P.y,P.x
     L = Ptuple[-1]; Dy = P.axis[0]*L/2; Dx = P.axis[1]*L/2  # side-accumulated sin,cos
@@ -159,43 +161,27 @@ def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
             Y0=min(Y0,(y-Dy)); Yn=max(Yn,(y+Dy)); X0=min(X0,(x-Dx)); Xn=max(Xn,(x-Dx))
             # if not top P:
             if P.link_t[fd]:
-                sum_links(P, LAyt,VAlt,RDnt, fd, first=0)
-                Link_+=P.link_; Link_m+=P.link_t[0]; Link_d+=P.link_t[1]  # or internal links representation is redundant?
-
+                sum_links(P.link_t[fd], Dert,Valt,Rdnt, P)
+                Link_+=P.link_; Link_m+=P.link_t[0]; Link_d+=P.link_t[1]
+                # links inside PP, redundant?
     PP.ptuple, PP.derT, PP.valT, PP.rdnT, PP.box, PP.link_, PP.link_t \
-    = Ptuple, LAyt, VAlt, RDnt, (Y0,Yn,X0,Xn), Link_, (Link_m,Link_d)
+    = Ptuple, Dert, Valt, Rdnt, (Y0,Yn,X0,Xn), Link_, (Link_m,Link_d)
     return PP
 
-def sum_links(P, Layt,Valt,Rdnt, fd, first):  # called from sum2PP, args per PP
+def sum_links(link_, Dert,Valt,Rdnt, P=None):  # called from sum2PP, args per PP
 
-    link_ = P.link_t[fd]
     # if fd: link_ = [link for link in link_ if link not in P.link_t[0]]  # if P sums from both forks, prevent redundancy
-    derP = link_[0]  # not empty
     # init:
-    if not first:  # Layt,Valt,Rdnt was initialised with first P
-        sum_link(Layt,Valt,Rdnt, derP)  # accum PP ders
-    layt,valt,rdnt = deepcopy(derP.derT),deepcopy(derP.valT),deepcopy(derP.rdnT),
+    derP = link_[0]  # not empty
+    sum_unpack([Dert,Valt,Rdnt], derP)  # accum PP dert
+    dert,valt,rdnt = deepcopy(derP.derT),deepcopy(derP.valT),deepcopy(derP.rdnT),
     # accum:
     for derP in link_[1:]:
-        sum_link(layt,valt,rdnt, derP)
-
-    sum_link(Layt,Valt,Rdnt, [layt,valt,rdnt])  # sum P ders into PP ders
-    P.derT=layt; P.valT=valt; P.rdnT=rdnt
-
-def sum_link(Layt,Valt,Rdnt, derP):
-
-    if isinstance(derP, list):  # derP is actually P ders
-        layt,valt,rdnt = derP
-    elif isinstance(Valt[0], list):
-        # der+: last layer, or 1fork) 1layer before feedback?:
-        layt,valt,rdnt = derP.derT[0,1][-1], derP.valT[0,1][-1], derP.rdnT[0,1][-1]
-    else:  # rng+: single-layer, 1 vertuple:
-        layt,valt,rdnt = derP.derT, derP.valT, derP.rdnT
-    for i in 0,1:
-        for Ptuple, ptuple in zip(Layt[i], layt[i]):  # or single ptuple?
-            sum_ptuple(Ptuple, ptuple)
-            Valt[i] += valt[i]  # scalar per layer
-            Rdnt[i] += rdnt[i]
+        sum_unpack([dert,valt,rdnt], derP)
+    # term:
+    sum_unpack([Dert,Valt,Rdnt], [dert,valt,rdnt])  # sum P lay into PP lay
+    if P:  # not 1st P
+        P.derT=dert; P.valT=valt; P.rdnT=rdnt
 
 
 def sum_unpack(Q,q):  # recursive unpack two pairs of nested sequences to sum final ptuples

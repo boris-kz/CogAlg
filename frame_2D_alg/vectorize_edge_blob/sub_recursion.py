@@ -35,7 +35,7 @@ def feedback(root, fd):  # append new der layers to root
         if len(root.fback_) == len(root.P__[fd]):  # all nodes term, fed back to root.fback_
             feedback(root, fd)  # derT=[1st layer] in sum2PP, deeper layers(forks appended by recursive feedback
 
-
+# not revised
 def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
 
     if fd:
@@ -58,46 +58,30 @@ def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to selec
             sub_recursion_eval(PP, sub_PP_, fd=fd)
 
 
-def comp_rng(iP_, rng):  # form new Ps and links in rng+ PP.P__, switch to rng+n to skip clustering?
+def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip clustering?
 
     P_ = []
     for P in iP_:
-        link_, link_m, link_d = [],[],[]  # for new P
-        derT,valT,rdnT = [[],[]],[0,0],[1,1]
-        for iderP in P.link_t[0]:  # mlinks
-            _P = iderP._P
+        cP = CP(ptuple=deepcopy(P.ptuple), dert_=copy(P.dert_))  # replace links, then derT in sum2PP
+        # trace mlinks:
+        for derP in P.link_t[0]:
+            _P = derP._P
             for _derP in _P.link_t[0]:  # next layer of mlinks
                 __P = _derP._P  # next layer of Ps
                 distance = np.hypot(__P.x-P.x, __P.y-P.y)  # distance between mid points
                 if distance > rng:
-                    comp_P(P,__P, link_,link_m,link_d, derT,valT,rdnT, fd=0, derP=distance)
-                    # distance=S, mostly lateral, relative to L for eval?
-        if np.sum(valT[0]) > P_aves[0] * np.sum(rdnT[0]):
-            # add new P in rng+ PP:
-            P_ += [CP(ptuple=deepcopy(P.ptuple), dert_=copy(P.dert_),
-                      derT=derT, valT=valT, rdnT=rdnT, link_=link_, link_t=[link_m,link_d])]
+                    comp_P(cP,__P, fd=0, derP=distance)  # distance=S, mostly lateral, relative to L for eval?
+        P_ += [cP]
     return P_
 
-def comp_der(iP_):  # form new Ps and links in rng+ PP.P__, extend their link.derT, P.derT, _P.derT
+def comp_der(P_):  # keep same Ps and links, increment link derTs, then P derTs in sum2PP
 
-    P_ = []
-    for P in iP_:
-        link_, link_m, link_d = [],[],[]  # for new P
-        derT,valT,rdnT = [[],[]],[[],[]],[[],[]]
-        # trace dlinks:
-        for iderP in P.link_t[1]:
-            if iderP._P.link_t[1]:  # else no _P links and derT to compare
-                _P = iderP._P
-                comp_P(_P,P, link_,link_m,link_d, derT,valT,rdnT, fd=1, derP=iderP)
-        if np.sum(valT[1]) > P_aves[1] * np.sum(rdnT[1]):
-            # add new P in der+ PP:
-            DerT = deepcopy(P.derT); ValT = deepcopy(P.valT); RdnT = deepcopy(P.rdnT)
-            for i in 0,1:
-                DerT[i]+=[derT[i]]; ValT[i]+=[valT[i]]; RdnT[i]+=[rdnT[i]]  # append layer
+    for P in P_:
+        for derP in P.link_t[1]:  # trace dlinks
+            if derP._P.link_t[1]:  # else no _P.derT to compare
+                _P = derP._P
+                comp_P(_P,P, fd=1, derP=derP)
 
-            P_ += [CP(ptuple=deepcopy(P.ptuple), dert_=copy(P.dert_),
-                      derT=DerT, valT=ValT, rdnT=RdnT, link_=link_, link_t=[link_m,link_d])]
-    return P_
 
 def nest(P, ddepth=3):  # default ddepth is nest 3 times: tuple->fork->layer->H
     # agg+ adds depth: number brackets before the tested bracket: P.valT[0], P.valT[0][0], etc?

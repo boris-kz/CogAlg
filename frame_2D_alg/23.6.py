@@ -703,3 +703,20 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fd = 0, fsub=0):  # cross-comp Graphs if f1Q
     '''
     comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D?
     '''
+
+def sum_dert(Dert,Valt,Rdnt, derP):
+
+    if isinstance(derP, list):  # derP is actually P ders
+        dert,valt,rdnt = derP
+    else:
+        dert,valt,rdnt = derP.derT, derP.valT, derP.rdnT
+    for i in 0,1:
+        for Ptuple, ptuple in zip(Dert[i], dert[i]):  # may be single ptuple per layer, nest anyway?
+            sum_ptuple(Ptuple, ptuple)
+            Valt[i] += valt[i]  # scalar per layer
+            Rdnt[i] += rdnt[i]
+
+    for i, (Ptuple, ptuple) in enumerate(zip(Dert, dert)):  # single ptuple per layer?
+        sum_ptuple(Ptuple, ptuple)
+        Valt[i] += valt[i]  # scalar per layer
+        Rdnt[i] += rdnt[i]
