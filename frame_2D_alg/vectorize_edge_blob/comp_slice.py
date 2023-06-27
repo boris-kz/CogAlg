@@ -36,7 +36,7 @@ def comp_P(_P,P, fd=0, derP=None):  #  derP if der+, S if rng+
         rn *= len(_P.link_t[1]) / len(P.link_t[1])  # derT is summed from links
         # comp derH (all are der+ layers)?
         layT,valT,rdnT = comp_unpack(_P.derT[1], P.derT[1], rn)
-        mval = valT[0][-1][-1]; dval = valT[1][-1][-1]  # should be scalars here
+        mval = sum(valT[0][-1]); dval = sum(valT[1][-1])  # last layer val
         mrdn = 1+(dval>mval); drdn = 1+(1-(dval>mval))
         for i in 0,1:  # append new layer
             derP.derT[i]+=[layT[i]]; derP.valT[i] += [valT[i]]; derP.rdnT[i] += [rdnT[i]]
@@ -72,7 +72,7 @@ def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
                                 qP.roott[fd] = qPP; qPP[0] += [qP]  # append qP_
                             qPP_.remove(_qPP)
                         else:
-                            qPP[0].insert(0,_P)  # pack top down
+                            qPP[0] += [_P]  # pack bottom up
                             _P.roott[fd] = qPP
                             for i in 0,1: valt[i] += np.sum(derP.valT[i])
                             uuplink_ += derP._P.link_t[fd]
@@ -105,7 +105,6 @@ def reval_PP_(PP_, fd):  # recursive eval / prune Ps for rePP
         rePP_ = reval_PP_(rePP_,fd)
 
     return rePP_
-
 
 def reval_P_(P_, fd):  # prune qPP by link_val + mediated link__val
 
@@ -141,9 +140,9 @@ def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
     P_,_,_ = qPP  # proto-PP is a list
     # init:
     P = P_[0]
-    link = P.link_t[fd][0]
-    Dert = deepcopy(link.derT)  # first P.link_t[fd] can't be empty
-    Valt = [link.valT]; Rdnt = [link.rdnT[0]+base_rdn, link.rdnT[1]+base_rdn]
+    link = P.link_t[fd][0]  # can't be empty
+    Dert, Valt, Rdnt = deepcopy(link.derT), deepcopy(link.valT), deepcopy(link.rdnT)
+    for i in 0,1: add_unpack(Rdnt[i], base_rdn)
     if len(P.link_t[fd]) > 1:
         sum_links(P.link_t[fd][1:], Dert,Valt,Rdnt)
     P.derT, P.valT, P.rdnT = deepcopy(Dert), deepcopy(Valt), deepcopy(Rdnt)
@@ -168,16 +167,27 @@ def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
     = Ptuple, Dert, Valt, Rdnt, (Y0,Yn,X0,Xn), Link_, (Link_m,Link_d)
     return PP
 
+def add_unpack(H, i):  # recursive unpack hierarchy of unknown nesting to add input
+    while isinstance(H,list):
+        H=H[-1]
+    H+=i
+
+def unpack(H):  # recursive unpack hierarchy of unknown nesting
+    while isinstance(H,list):
+        last_H = H
+        H=H[-1]
+    return last_H
+
 def sum_links(link_, Dert,Valt,Rdnt, P=None):  # called from sum2PP, args per PP
 
     # if fd: link_ = [link for link in link_ if link not in P.link_t[0]]  # if P sums from both forks, prevent redundancy
     # init:
     derP = link_[0]  # not empty
-    sum_unpack([Dert,Valt,Rdnt], derP)  # accum PP dert
+    sum_unpack([Dert,Valt,Rdnt], [derP.derT, derP.valT, derP.rdnT])  # accum PP dert
     dert,valt,rdnt = deepcopy(derP.derT),deepcopy(derP.valT),deepcopy(derP.rdnT),
     # accum:
     for derP in link_[1:]:
-        sum_unpack([dert,valt,rdnt], derP)
+        sum_unpack([dert,valt,rdnt], [derP.derT, derP.valT, derP.rdnT])
     # term:
     sum_unpack([Dert,Valt,Rdnt], [dert,valt,rdnt])  # sum P lay into PP lay
     if P:  # not 1st P
@@ -213,7 +223,7 @@ def sum_ptuple(Ptuple, ptuple, fneg=0):
 
 def comp_unpack(Que,que, rn):  # recursive unpack nested sequence to compare final ptuples
 
-    DerT,ValT,RdnT = [],[],[]  # max nesting: T(H( layer( fork( ptuple|scalar))
+    DerT,ValT,RdnT = [[],[]],[[],[]],[[],[]]  # max nesting: T(H( layer( fork( ptuple|scalar))
 
     for Ele,ele in zip_longest(Que,que, fillvalue=[]):
         if Ele and ele:
@@ -226,7 +236,8 @@ def comp_unpack(Que,que, rn):  # recursive unpack nested sequence to compare fin
                 derT = [mtuple, dtuple]
                 valT = [mval, dval]
                 rdnT = [int(mval<dval),int(mval>=dval)]  # to use np.sum
-            if DerT:  # accum
+
+            if DerT:  # accum, or both if fixed nesting?
                 for i in 0,1:
                     DerT[i]+=[derT[i]]; ValT[i]+=[valT[i]]; RdnT[i]+=[rdnT[i]]
             else:  # init

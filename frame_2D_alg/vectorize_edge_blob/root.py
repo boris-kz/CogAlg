@@ -142,7 +142,13 @@ def rotate_P_(blob, verbose=False):  # rotate each P to align it with direction 
             if not mask__[y0][x1]: kernel += [[[y0,x1], np.hypot((y-y0),(x-x1))]]
             if not mask__[y1][x0]: kernel += [[[y1,x0], np.hypot((y-y1),(x-x0))]]
             if not mask__[y1][x1]: kernel += [[[y1,x1], np.hypot((y-y1),(x-x1))]]
-
+            '''
+            or, add mask checking:
+            x0 = int(x); y0 = int(y)
+            x1 = x0 + 1; y1 = y0 + 1
+            y = y0 if y1 - y > y - y0 else y1  # nearest cell y
+            x = x0 if x1 - x > x - x0 else x1  # nearest cell x
+            '''
             y,x = sorted(kernel, key=lambda x: x[1])[0][0]  # nearest cell y,x
             blob.der__t_roots[y][x] += [P]  # final rotated P
 

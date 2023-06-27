@@ -3,7 +3,7 @@ import numpy as np
 from copy import copy, deepcopy
 from .filters import PP_aves, ave_nsub, P_aves, G_aves
 from .classes import CP, CPP
-from .comp_slice import comp_P, form_PP_t, sum_unpack
+from .comp_slice import comp_P, form_PP_t, sum_unpack, add_unpack, unpack
 from dataclasses import replace
 
 def sub_recursion_eval(root, PP_, fd):  # fork PP_ in PP or blob, no derT,valT,rdnT in blob
@@ -40,10 +40,11 @@ def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to selec
 
     if fd:
         if not isinstance(PP.valT[0], list): nest(PP)  # PP created from 1st rng+ is not nested too
-        [nest(P) for P in PP.P_]  # add layers and forks?
-        P_ = comp_der(PP.P_)  # returns top-down
-        PP.rdnT[fd][-1][-1][-1] += np.sum(PP.valT[fd][-1]) > np.sum(PP.valT[1 - fd][-1])
-        base_rdn = PP.rdnT[fd][-1][-1][-1]  # link Rdn += PP rdn?
+        [nest(P) for P in PP.P_]  # add layer)H to ptuple
+        P_ = comp_der(PP.P_)  # P_ doesn't change
+        rdn = np.sum(PP.valT[fd][-1]) > np.sum(PP.valT[1-fd][-1])
+        add_unpack(PP.rdnT[fd],rdn)
+        base_rdn = unpack(PP.rdnT[fd])[-1]  # link Rdn += PP rdn?
     else:
         P_ = comp_rng(PP.P_, PP.rng + 1)
         PP.rdnT[fd] += PP.valT[fd] > PP.valT[1 - fd]
@@ -81,9 +82,11 @@ def comp_der(P_):  # keep same Ps and links, increment link derTs, then P derTs 
             if derP._P.link_t[1]:  # else no _P.derT to compare
                 _P = derP._P
                 comp_P(_P,P, fd=1, derP=derP)
+    return P_
 
+def nest(P, ddepth=2):  # default ddepth is nest 2 times: tuple->layer->H, rng+H is ptuple, der+H is 1,2,4.. ptuples'layers?
 
-def nest(P, ddepth=3):  # default ddepth is nest 3 times: tuple->fork->layer->H
+    # fback adds alt fork per layer, may be empty?
     # agg+ adds depth: number brackets before the tested bracket: P.valT[0], P.valT[0][0], etc?
 
     if not isinstance(P.valT[0],list):

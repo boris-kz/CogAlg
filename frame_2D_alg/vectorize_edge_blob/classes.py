@@ -41,7 +41,8 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
 
     ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # latuple: I,G,Ga,M,Ma, angle(Dy,Dx), aangle(Sin_da0,Cos_da0,Sin_da1,Cos_da1),L
     # vertical derivatives, summed from P links:
-    derT : list = z([[],[]])  # ptuple) fork) layer) H)T; 1ptuple,1fork,1layer in comp_slice, extend in der+ and fback
+    derT : list = z([[],[]])  # ptuple) fork) layer) H)T, or fork=layer: ptuple if rng+, [ptuple] if der+?
+    # 1ptuple,1fork,1layer in comp_slice, extend in der+ and fback
     valT : list = z([0,0])
     rdnT : list = z([1,1])
     axis : list = z([0,1])  # prior slice angle, init sin=0,cos=1
