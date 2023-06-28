@@ -64,9 +64,9 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
 
 class CderP(ClusterStructure):  # tuple of derivatives in P link: binary tree with latuple root and vertuple forks
 
-    derT : list = z([])  # vertuple_ per layer, unless implicit? sum links / rng+, layers / der+?
-    valT : list = z([0,0])  # also of derH
-    rdnT : list = z([1,1])  # mrdn + uprdn if branch overlap?
+    derH : list = z([])  # vertuple_ per layer, unless implicit? sum links / rng+, layers / der+?
+    valH : list = z([0])
+    rdnH : list = z([1])  # mrdn + uprdn if branch overlap?
     _P : object = None  # higher comparand
     P : object = None  # lower comparand
     roott : list = z([None, None])  # for der++

@@ -141,11 +141,11 @@ def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
     # init:
     P = P_[0]
     link = P.link_t[fd][0]  # can't be empty
-    Dert, Valt, Rdnt = deepcopy(link.derT), deepcopy(link.valT), deepcopy(link.rdnT)
-    for i in 0,1: add_unpack(Rdnt[i], base_rdn)
+    DerH, ValH = deepcopy(link.derH), deepcopy(link.valH),
+    RdnH = [[rdn+base_rdn for rdn in rdnLay] for rdnLay in link.rdnH]
     if len(P.link_t[fd]) > 1:
-        sum_links(P.link_t[fd][1:], Dert,Valt,Rdnt)
-    P.derT, P.valT, P.rdnT = deepcopy(Dert), deepcopy(Valt), deepcopy(Rdnt)
+        sum_links(P.link_t[fd][1:], DerH,ValH,RdnH)
+    P.derH, P.valH, P.rdnH = deepcopy(DerH), deepcopy(ValH), deepcopy(RdnH)
 
     Ptuple, Link_,Link_m,Link_d, y,x = deepcopy(P.ptuple), copy(P.link_),copy(P.link_t[0]),copy(P.link_t[1]), P.y,P.x
     L = Ptuple[-1]; Dy = P.axis[0]*L/2; Dx = P.axis[1]*L/2  # side-accumulated sin,cos
@@ -160,23 +160,17 @@ def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
             Y0=min(Y0,(y-Dy)); Yn=max(Yn,(y+Dy)); X0=min(X0,(x-Dx)); Xn=max(Xn,(x-Dx))
             # if not top P:
             if P.link_t[fd]:
-                sum_links(P.link_t[fd], Dert,Valt,Rdnt, P)
+                sum_links(P.link_t[fd], DerH,ValH,RdnH, P)
                 Link_+=P.link_; Link_m+=P.link_t[0]; Link_d+=P.link_t[1]
                 # links inside PP, redundant?
+    if fd:  # nest single-fork links:
+        Dert=[[],DerH]; Valt=[[],ValH]; Rdnt=[[],RdnH]
+    else:
+        Dert=[DerH,[]]; Valt=[ValH,[]]; Rdnt=[RdnH,[]]
+
     PP.ptuple, PP.derT, PP.valT, PP.rdnT, PP.box, PP.link_, PP.link_t \
     = Ptuple, Dert, Valt, Rdnt, (Y0,Yn,X0,Xn), Link_, (Link_m,Link_d)
     return PP
-
-def add_unpack(H, i):  # recursive unpack hierarchy of unknown nesting to add input
-    while isinstance(H,list):
-        H=H[-1]
-    H+=i
-
-def unpack(H):  # recursive unpack hierarchy of unknown nesting
-    while isinstance(H,list):
-        last_H = H
-        H=H[-1]
-    return last_H
 
 def sum_links(link_, Dert,Valt,Rdnt, P=None):  # called from sum2PP, args per PP
 
@@ -221,9 +215,21 @@ def sum_ptuple(Ptuple, ptuple, fneg=0):
             elif not fneg:
                 Ptuple += [copy(par)]
 
+def add_unpack(H, i):  # recursive unpack hierarchy of unknown nesting to add input
+    while isinstance(H,list):
+        H=H[-1]
+    H+=i
+
+def unpack(H):  # recursive unpack hierarchy of unknown nesting
+    while isinstance(H,list):
+        last_H = H
+        H=H[-1]
+    return last_H
+
+
 def comp_unpack(Que,que, rn):  # recursive unpack nested sequence to compare final ptuples
 
-    DerT,ValT,RdnT = [[],[]],[[],[]],[[],[]]  # max nesting: T(H( layer( fork( ptuple|scalar))
+    DerT,ValT,RdnT = [[],[]],[[],[]],[[],[]]  # max nesting: T(H( layer( ptuple|val|rdn)))
 
     for Ele,ele in zip_longest(Que,que, fillvalue=[]):
         if Ele and ele:
@@ -237,13 +243,11 @@ def comp_unpack(Que,que, rn):  # recursive unpack nested sequence to compare fin
                 valT = [mval, dval]
                 rdnT = [int(mval<dval),int(mval>=dval)]  # to use np.sum
 
-            if DerT:  # accum, or both if fixed nesting?
-                for i in 0,1:
-                    DerT[i]+=[derT[i]]; ValT[i]+=[valT[i]]; RdnT[i]+=[rdnT[i]]
-            else:  # init
-                DerT = deepcopy(derT); ValT = deepcopy(valT); RdnT = deepcopy(rdnT)
+            for i in 0,1:  # adds nesting per recursion
+                DerT[i]+=[derT[i]]; ValT[i]+=[valT[i]]; RdnT[i]+=[rdnT[i]]
 
     return DerT,ValT,RdnT
+
 
 def comp_ptuple(_ptuple, ptuple, rn):  # 0der
 
