@@ -21,29 +21,24 @@ def sub_recursion_eval(root, PP_, fd):  # fork PP_ in PP or blob, no derT,valT,r
 
 def feedback(root, fd):  # append new der layers to root
 
-    Fback = root.fback_.pop()  # init with 1st fback derT,valT,rdnT
+    Fback = root.fback_.pop()  # init with 1st fback: [derT,valT,rdnT]
     while root.fback_:
-        sum_unpack(Fback, root.fback_.pop())  # sum | append fback in Fback
-    derT,valT,rdnT = Fback
-    for i in 0,1:
-        # concat Fback layers to root layers
-        root.derT[i]+=derT[i]; root.valT[i]+=valT[i]; root.rdnT[i]+=rdnT[i]
-    # or:
-    sum_unpack([root.derT,root.valT,root.rdnT], [derT,valT,rdnT])
+        sum_unpack(Fback, root.fback_.pop())  # Fback += fback, both = [derT,valT,rdnT]
+    sum_unpack([root.derT,root.valT,root.rdnT], Fback)  # root += Fback, fixed nesting?
 
     if isinstance(root.roott[fd], CPP):  # not blob
         root = root.roott[fd]
         root.fback_ += [Fback]
         if len(root.fback_) == len(root.P__[fd]):  # all nodes term, fed back to root.fback_
-            feedback(root, fd)  # derT=[1st layer] in sum2PP, deeper layers(forks appended by recursive feedback
+            feedback(root, fd)  # derT/ rng layer in sum2PP, deeper rng layers are appended by feedback
 
 # not revised
 def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
 
     if fd:
         if not isinstance(PP.valT[0], list): nest(PP)  # PP created from 1st rng+ is not nested too
-        [nest(P) for P in PP.P_]  # add layer)H to ptuple
-        P_ = comp_der(PP.P_)  # P_ doesn't change
+        [nest(P) for P in PP.P_]  # add layer)H)T to ptuple
+        P_ = comp_der(PP.P_)  # same P_
         rdn = np.sum(PP.valT[fd][-1]) > np.sum(PP.valT[1-fd][-1])
         add_unpack(PP.rdnT[fd],rdn)
         base_rdn = unpack(PP.rdnT[fd])[-1]  # link Rdn += PP rdn?

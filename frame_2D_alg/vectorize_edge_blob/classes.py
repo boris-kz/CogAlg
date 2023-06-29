@@ -41,8 +41,7 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
 
     ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # latuple: I,G,Ga,M,Ma, angle(Dy,Dx), aangle(Sin_da0,Cos_da0,Sin_da1,Cos_da1),L
     # vertical derivatives, summed from P links:
-    derT : list = z([[],[]])  # ptuple) fork) layer) H)T, or fork=layer: ptuple if rng+, [ptuple] if der+?
-    # 1ptuple,1fork,1layer in comp_slice, extend in der+ and fback
+    derT : list = z([[],[]])  # mtuple,dtuple in comp_slice, ptuple) layer) derH)T in der+, rngH += [derH] in feedback
     valT : list = z([0,0])
     rdnT : list = z([1,1])
     axis : list = z([0,1])  # prior slice angle, init sin=0,cos=1
@@ -64,9 +63,9 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
 
 class CderP(ClusterStructure):  # tuple of derivatives in P link: binary tree with latuple root and vertuple forks
 
-    derH : list = z([])  # vertuple_ per layer, unless implicit? sum links / rng+, layers / der+?
-    valH : list = z([0])
-    rdnH : list = z([1])  # mrdn + uprdn if branch overlap?
+    derT : list = z([[],[]])  # vertuple_ per layer, unless implicit? sum links / rng+, layers / der+?
+    valT : list = z([0,0])
+    rdnT : list = z([1,1])  # mrdn + uprdn if branch overlap?
     _P : object = None  # higher comparand
     P : object = None  # lower comparand
     roott : list = z([None, None])  # for der++
@@ -86,8 +85,9 @@ class CPP(CderP):
 
     fd : int = 0  # PP is defined by combined-fork value per link: derP mtuple | dtuple
     ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # summed P__ ptuples, = 0th derLay
-    derT : list = z([[],[]])  # ptuple) fork) layer) H)T: 1ptuple, 1fork, 1layer in comp_slice, extend in sub+ and fb
-    valT : list = z([[],[]])  # nesting parallel to derT
+    # vertical derivatives:
+    derT : list = z([[],[]])  # alternating rngH( derH( rngH...-> ptuple|val|rdn
+    valT : list = z([[],[]])  # 1-shallower nesting than in derT
     rdnT : list = z([[],[]])
     mask__ : object = None
     P_ : list = z([])  # array of nodes: Ps or sub-PPs
@@ -111,9 +111,9 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     id_T : list = z([[],[]])  # indices in the list of all possible layers | forks, for sparse representation
     valT : list = z([[],[]])
     rdnT : list = z([[],[]])
-    node_: list = z([])  # wH[0]: same-fork, variable nesting? concat sub-node_s in ex.H levs
+    node_: list = z([])  # incrementally nested if wH, same-fork? concat sub-node_s in ex.H levs
     # wH : list = z([])  # down-forking tree of node Levs, forks represented in id_T?
-    root_: list = z([])  # uH[0]: agg+|sub+ mset forks, for feedback?
+    root_: list = z([])  # incrementally nested if uH, agg+|sub+ mset forks, for feedback?
     # uH : list = z([])  # up-forking tree of root Levs, if multiple roots, separate id_T?
     link_ : list = z([])  # temporary store of der+ node_, then unique links within graph?
     link_t: list = z([[],[]])  # +ve rlink_, dlink_

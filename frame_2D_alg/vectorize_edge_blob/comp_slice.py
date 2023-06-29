@@ -134,18 +134,17 @@ def reval_P_(P_, fd):  # prune qPP by link_val + mediated link__val
         P_, Valt, reval = reval_P_(P_, fd)  # recursion
     return [P_, Valt, reval]
 
-# redraft:
-def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
+
+def sum2PP(qPP, base_rdn, fd):  # sum links in Ps and Ps in PP
 
     P_,_,_ = qPP  # proto-PP is a list
     # init:
     P = P_[0]
-    link = P.link_t[fd][0]  # can't be empty
-    DerH, ValH = deepcopy(link.derH), deepcopy(link.valH),
-    RdnH = [[rdn+base_rdn for rdn in rdnLay] for rdnLay in link.rdnH]
+    link = P.link_t[fd][0]  # not empty
+    Dert = deepcopy(link.dert); Valt = deepcopy(link.valt); Rdnt = add_unpack(link.rdnT, base_rdn)
     if len(P.link_t[fd]) > 1:
-        sum_links(P.link_t[fd][1:], DerH,ValH,RdnH)
-    P.derH, P.valH, P.rdnH = deepcopy(DerH), deepcopy(ValH), deepcopy(RdnH)
+        sum_links(P.link_t[fd][1:], Dert,Valt,Rdnt)
+    P.dert, P.valt, P.rdnt = deepcopy(Dert), deepcopy(Valt), deepcopy(Rdnt)
 
     Ptuple, Link_,Link_m,Link_d, y,x = deepcopy(P.ptuple), copy(P.link_),copy(P.link_t[0]),copy(P.link_t[1]), P.y,P.x
     L = Ptuple[-1]; Dy = P.axis[0]*L/2; Dx = P.axis[1]*L/2  # side-accumulated sin,cos
@@ -160,16 +159,11 @@ def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
             Y0=min(Y0,(y-Dy)); Yn=max(Yn,(y+Dy)); X0=min(X0,(x-Dx)); Xn=max(Xn,(x-Dx))
             # if not top P:
             if P.link_t[fd]:
-                sum_links(P.link_t[fd], DerH,ValH,RdnH, P)
+                sum_links(P.link_t[fd], Dert,Valt,Rdnt, P)
                 Link_+=P.link_; Link_m+=P.link_t[0]; Link_d+=P.link_t[1]
-                # links inside PP, redundant?
-    if fd:  # nest single-fork links:
-        Dert=[[],DerH]; Valt=[[],ValH]; Rdnt=[[],RdnH]
-    else:
-        Dert=[DerH,[]]; Valt=[ValH,[]]; Rdnt=[RdnH,[]]
+                # PP-wide links?
+    PP.ptuple, PP.derT, PP.valT, PP.rdnT, PP.box, PP.link_, PP.link_t = Ptuple, Dert, Valt, Rdnt, (Y0,Yn,X0,Xn), Link_, (Link_m,Link_d)
 
-    PP.ptuple, PP.derT, PP.valT, PP.rdnT, PP.box, PP.link_, PP.link_t \
-    = Ptuple, Dert, Valt, Rdnt, (Y0,Yn,X0,Xn), Link_, (Link_m,Link_d)
     return PP
 
 def sum_links(link_, Dert,Valt,Rdnt, P=None):  # called from sum2PP, args per PP
@@ -188,9 +182,9 @@ def sum_links(link_, Dert,Valt,Rdnt, P=None):  # called from sum2PP, args per PP
         P.derT=dert; P.valT=valt; P.rdnT=rdnt
 
 
-def sum_unpack(Q,q):  # recursive unpack two pairs of nested sequences to sum final ptuples
+def sum_unpack(Q,q):  # recursive unpack of two pairs of nested sequences, to sum final ptuples
 
-    Que,Val_,Rdn_ = Q; que,val_,rdn_ = q  # max nesting: H( layer( fork( ptuple|scalar)))
+    Que,Val_,Rdn_ = Q; que,val_,rdn_ = q  # alternating rngH( derH( rngH... nesting, down to ptuple|val|rdn
     for i, (Ele,Val,Rdn, ele,val,rdn) in enumerate(zip_longest(Que,Val_,Rdn_, que,val_,rdn_, fillvalue=[])):
         if ele:
             if Ele:
@@ -229,7 +223,7 @@ def unpack(H):  # recursive unpack hierarchy of unknown nesting
 
 def comp_unpack(Que,que, rn):  # recursive unpack nested sequence to compare final ptuples
 
-    DerT,ValT,RdnT = [[],[]],[[],[]],[[],[]]  # max nesting: T(H( layer( ptuple|val|rdn)))
+    DerT,ValT,RdnT = [[],[]],[[],[]],[[],[]]  # alternating rngH( derH( rngH.. nesting,-> ptuple|val|rdn
 
     for Ele,ele in zip_longest(Que,que, fillvalue=[]):
         if Ele and ele:

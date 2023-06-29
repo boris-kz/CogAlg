@@ -720,3 +720,6 @@ def sum_dert(Dert,Valt,Rdnt, derP):
         sum_ptuple(Ptuple, ptuple)
         Valt[i] += valt[i]  # scalar per layer
         Rdnt[i] += rdnt[i]
+
+    # if fd: Rdnt = [[[rdn+base_rdn for rdn in rdnL] for rdnL in link.rdnH] for rdnH in link.rdnT]
+    # else:  Rdnt = [rdn+base_rdn for rdn in link.rdnT]  # single mtuple rdn, dptuple rdn
