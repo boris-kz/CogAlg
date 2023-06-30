@@ -85,8 +85,9 @@ class CPP(CderP):
 
     fd : int = 0  # PP is defined by combined-fork value per link: derP mtuple | dtuple
     ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # summed P__ ptuples, = 0th derLay
-    # vertical derivatives:
-    derT : list = z([[],[]])  # alternating rngH( derH( rngH...-> ptuple|val|rdn
+    derH : list = z([])  # [mtuple,dtuple, mval,dval, mrdn,drdn] per layer
+    # or:
+    derT : list = z([[],[]])  # T( H:xfork composition( ptuple|val|rdn, ?n ptuples per layer?
     valT : list = z([[],[]])  # 1-shallower nesting than in derT
     rdnT : list = z([[],[]])
     mask__ : object = None

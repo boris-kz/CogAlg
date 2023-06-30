@@ -141,10 +141,11 @@ def sum2PP(qPP, base_rdn, fd):  # sum links in Ps and Ps in PP
     # init:
     P = P_[0]
     link = P.link_t[fd][0]  # not empty
-    Dert = deepcopy(link.dert); Valt = deepcopy(link.valt); Rdnt = add_unpack(link.rdnT, base_rdn)
+    Dert = deepcopy(link.dert); Valt = deepcopy(link.valt)
+    Rdnt = add_unpack(deepcopy(link.rdnT), base_rdn)
     if len(P.link_t[fd]) > 1:
         sum_links(P.link_t[fd][1:], Dert,Valt,Rdnt)
-    P.dert, P.valt, P.rdnt = deepcopy(Dert), deepcopy(Valt), deepcopy(Rdnt)
+    P.dert,P.valt,P.rdnt = deepcopy(Dert),deepcopy(Valt),deepcopy(Rdnt)
 
     Ptuple, Link_,Link_m,Link_d, y,x = deepcopy(P.ptuple), copy(P.link_),copy(P.link_t[0]),copy(P.link_t[1]), P.y,P.x
     L = Ptuple[-1]; Dy = P.axis[0]*L/2; Dx = P.axis[1]*L/2  # side-accumulated sin,cos
@@ -170,12 +171,17 @@ def sum_links(link_, Dert,Valt,Rdnt, P=None):  # called from sum2PP, args per PP
 
     # if fd: link_ = [link for link in link_ if link not in P.link_t[0]]  # if P sums from both forks, prevent redundancy
     # init:
-    derP = link_[0]  # not empty
-    sum_unpack([Dert,Valt,Rdnt], [derP.derT, derP.valT, derP.rdnT])  # accum PP dert
-    dert,valt,rdnt = deepcopy(derP.derT),deepcopy(derP.valT),deepcopy(derP.rdnT),
+    derP = link_[0]; _P=derP._P  # not empty
+    derT,valT,rdnT = derP.derT,derP.valT,derP.rdnT
+    sum_unpack([Dert,Valt,Rdnt], [derT,valT,rdnT])  # accum PP dert
+    sum_unpack([_P.derT,_P.valT,_P.rdnT], [derP.derT,derP.valT,derP.rdnT])
+    dert,valt,rdnt = deepcopy(derP.derT),deepcopy(derP.valT),deepcopy(derP.rdnT)
     # accum:
     for derP in link_[1:]:
-        sum_unpack([dert,valt,rdnt], [derP.derT, derP.valT, derP.rdnT])
+        _P = derP._P
+        derT,valT,rdnT = derP.derT,derP.valT,derP.rdnT
+        sum_unpack([dert,valt,rdnt], [derT,valT,rdnT])
+        sum_unpack([_P.derT,_P.valT,_P.rdnT], [derT,valT,rdnT])
     # term:
     sum_unpack([Dert,Valt,Rdnt], [dert,valt,rdnt])  # sum P lay into PP lay
     if P:  # not 1st P
@@ -209,7 +215,15 @@ def sum_ptuple(Ptuple, ptuple, fneg=0):
             elif not fneg:
                 Ptuple += [copy(par)]
 
-def add_unpack(H, i):  # recursive unpack hierarchy of unknown nesting to add input
+def add_unpack(H, incr):  # recursive unpack hierarchy of unknown nesting to add input
+    # new_H = []
+    for i, e in enumerate(H):
+        if isinstance(e,list):
+            add_unpack(e,incr)
+        else: H[i] += incr
+    return H
+
+def last_add(H, i):  # recursive unpack hierarchy of unknown nesting to add input
     while isinstance(H,list):
         H=H[-1]
     H+=i

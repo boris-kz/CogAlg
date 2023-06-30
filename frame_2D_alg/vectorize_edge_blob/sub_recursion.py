@@ -3,7 +3,7 @@ import numpy as np
 from copy import copy, deepcopy
 from .filters import PP_aves, ave_nsub, P_aves, G_aves
 from .classes import CP, CPP
-from .comp_slice import comp_P, form_PP_t, sum_unpack, add_unpack, unpack
+from .comp_slice import comp_P, form_PP_t, sum_ptuple, sum_unpack, last_add, add_unpack, unpack
 from dataclasses import replace
 
 def sub_recursion_eval(root, PP_, fd):  # fork PP_ in PP or blob, no derT,valT,rdnT in blob
@@ -23,8 +23,14 @@ def feedback(root, fd):  # append new der layers to root
 
     Fback = root.fback_.pop()  # init with 1st fback: [derT,valT,rdnT]
     while root.fback_:
-        sum_unpack(Fback, root.fback_.pop())  # Fback += fback, both = [derT,valT,rdnT]
-    sum_unpack([root.derT,root.valT,root.rdnT], Fback)  # root += Fback, fixed nesting?
+        for Layer,layer in zip(Fback,root.fback_.pop()):  # combined layer is [mtuple,dtuple, mval,dval, mrdn, drdn]
+            for i in 0,1,2,3,4,5:
+                if i in (0,1): sum_ptuple(Layer[i],layer[i])
+                else: Layer[i]+=layer[i]  # val or rdn
+    for Layer,layer in zip(root.derH,root.fback_.pop()):
+        for i in 0,1,2,3,4,5:
+            if i in (0,1): sum_ptuple(Layer[i], layer[i])
+            else: Layer[i]+=layer[i]  # val or rdn
 
     if isinstance(root.roott[fd], CPP):  # not blob
         root = root.roott[fd]
@@ -40,11 +46,11 @@ def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to selec
         [nest(P) for P in PP.P_]  # add layer)H)T to ptuple
         P_ = comp_der(PP.P_)  # same P_
         rdn = np.sum(PP.valT[fd][-1]) > np.sum(PP.valT[1-fd][-1])
-        add_unpack(PP.rdnT[fd],rdn)
+        last_add(PP.rdnT[fd],rdn)
         base_rdn = unpack(PP.rdnT[fd])[-1]  # link Rdn += PP rdn?
     else:
         P_ = comp_rng(PP.P_, PP.rng + 1)
-        PP.rdnT[fd] += PP.valT[fd] > PP.valT[1 - fd]
+        PP.rdnT[fd] += PP.valT[fd] > PP.valT[1-fd]  # scalars here
         base_rdn = PP.rdnT[fd]
 
     cP_ = [replace(P, roott=[None, None], link_t=[[], []]) for P in P_]  # reassign roots to sub_PPs
@@ -81,7 +87,7 @@ def comp_der(P_):  # keep same Ps and links, increment link derTs, then P derTs 
                 comp_P(_P,P, fd=1, derP=derP)
     return P_
 
-def nest(P, ddepth=2):  # default ddepth is nest 2 times: tuple->layer->H, rng+H is ptuple, der+H is 1,2,4.. ptuples'layers?
+def nest(P, ddepth=2):  # default ddepth is nest 2 times: tuple->layer->H, rngH is ptuple, derH is 1,2,4.. ptuples'layers?
 
     # fback adds alt fork per layer, may be empty?
     # agg+ adds depth: number brackets before the tested bracket: P.valT[0], P.valT[0][0], etc?
