@@ -40,10 +40,9 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # latuple: I,G,Ga,M,Ma, angle(Dy,Dx), aangle(Sin_da0,Cos_da0,Sin_da1,Cos_da1),L
-    # vertical derivatives, summed from P links:
-    derT : list = z([[],[]])  # mtuple,dtuple in comp_slice, ptuple) layer) derH)T in der+, rngH += [derH] in feedback
-    valT : list = z([0,0])
-    rdnT : list = z([1,1])
+    derH : list = z([])  # [[mtuple,dtuple,mval,dval,mrdn,drdn]]: vertical derivatives summed from P links
+    valt : list = z([0,0])
+    rdnt : list = z([1,1])
     axis : list = z([0,1])  # prior slice angle, init sin=0,cos=1
     dert_ : list = z([])  # array of pixel-level derts, redundant to uplink_, only per blob?
     dert_ext_: list = z([])  # external params: roots and coords per dert
@@ -63,9 +62,9 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
 
 class CderP(ClusterStructure):  # tuple of derivatives in P link: binary tree with latuple root and vertuple forks
 
-    derT : list = z([[],[]])  # vertuple_ per layer, unless implicit? sum links / rng+, layers / der+?
-    valT : list = z([0,0])
-    rdnT : list = z([1,1])  # mrdn + uprdn if branch overlap?
+    derH : list = z([])  # [[mtuple,dtuple,mval,dval,mrdn,drdn]], single in rng+
+    valt : list = z([0,0])
+    rdnt : list = z([1,1])  # mrdn + uprdn if branch overlap?
     _P : object = None  # higher comparand
     P : object = None  # lower comparand
     roott : list = z([None, None])  # for der++
@@ -85,15 +84,12 @@ class CPP(CderP):
 
     fd : int = 0  # PP is defined by combined-fork value per link: derP mtuple | dtuple
     ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # summed P__ ptuples, = 0th derLay
-    derH : list = z([])  # [mtuple,dtuple, mval,dval, mrdn,drdn] per layer
-    # or:
-    derT : list = z([[],[]])  # T( H:xfork composition( ptuple|val|rdn, ?n ptuples per layer?
-    valT : list = z([[],[]])  # 1-shallower nesting than in derT
-    rdnT : list = z([[],[]])
+    derH : list = z([])  # [[mtuple,dtuple, mval,dval, mrdn,drdn]]: layers or sub-layers
+    valt : list = z([0,0])
+    rdnt : list = z([1,1])
     mask__ : object = None
     P_ : list = z([])  # array of nodes: Ps or sub-PPs
-    link_ : list = z([])  # all links summed from Ps
-    link_t: list = z([[],[]])  # +ve rlink_, dlink_
+    # link_ : list = z([])  # all links summed from Ps  # link_t: list = z([[],[]])  # +ve rlink_, dlink_
     roott : list = z([None, None])  # PPPm | PPPd containing this PP, for sub+ only
     rng : int = 1  # sum of rng+: odd forks in last layer?
     box : list = z([0,0,0,0])  # y0,yn,x0,xn

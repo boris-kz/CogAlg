@@ -3,58 +3,46 @@ import numpy as np
 from copy import copy, deepcopy
 from .filters import PP_aves, ave_nsub, P_aves, G_aves
 from .classes import CP, CPP
-from .comp_slice import comp_P, form_PP_t, sum_ptuple, sum_unpack, last_add, add_unpack, unpack
+from .comp_slice import comp_P, form_PP_t, sum_derH  # sum_ptuple, sum_unpack, last_add, add_unpack, unpack
 from dataclasses import replace
 
 def sub_recursion_eval(root, PP_, fd):  # fork PP_ in PP or blob, no derT,valT,rdnT in blob
 
     term = 1
     for PP in PP_:
-        if np.sum(PP.valT[fd]) > PP_aves[fd] * np.sum(PP.rdnT[fd]) and len(PP.P_) > ave_nsub:
+        if PP.valt[fd] > PP_aves[fd] * PP.rdnt[fd] and len(PP.P_) > ave_nsub:
             term = 0
             sub_recursion(PP, fd)  # comp_der|rng in PP -> parLayer, sub_PPs
         elif isinstance(root, CPP):
-            root.fback_ += [[PP.derT, PP.valT, PP.rdnT]]
+            root.fback_ += [[PP.derH, PP.valt, PP.rdnt]]
     if term and isinstance(root, CPP):
         feedback(root, fd)  # upward recursive extend root.derT, forward eval only
 
 
 def feedback(root, fd):  # append new der layers to root
 
-    Fback = root.fback_.pop()  # init with 1st fback: [derT,valT,rdnT]
+    Fback = root.fback_.pop()  # init with 1st fback: [derH,valt,rdnt]
     while root.fback_:
-        for Layer,layer in zip(Fback,root.fback_.pop()):  # combined layer is [mtuple,dtuple, mval,dval, mrdn, drdn]
-            for i in 0,1,2,3,4,5:
-                if i in (0,1): sum_ptuple(Layer[i],layer[i])
-                else: Layer[i]+=layer[i]  # val or rdn
-    for Layer,layer in zip(root.derH,root.fback_.pop()):
-        for i in 0,1,2,3,4,5:
-            if i in (0,1): sum_ptuple(Layer[i], layer[i])
-            else: Layer[i]+=layer[i]  # val or rdn
+        sum_derH(Fback,root.fback_.pop(), base_rdn=0)
+    sum_derH([root.derH, root.valt,root.rdnt], Fback, base_rdn=0)  # derH = [[mtuple,dtuple, mval,dval, mrdn, drdn]]
 
     if isinstance(root.roott[fd], CPP):  # not blob
         root = root.roott[fd]
         root.fback_ += [Fback]
-        if len(root.fback_) == len(root.P__[fd]):  # all nodes term, fed back to root.fback_
+        if len(root.fback_) == len(root.P_[fd]):  # all nodes term, fed back to root.fback_
             feedback(root, fd)  # derT/ rng layer in sum2PP, deeper rng layers are appended by feedback
 
-# not revised
+
 def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
 
-    if fd:
-        if not isinstance(PP.valT[0], list): nest(PP)  # PP created from 1st rng+ is not nested too
-        [nest(P) for P in PP.P_]  # add layer)H)T to ptuple
-        P_ = comp_der(PP.P_)  # same P_
-        rdn = np.sum(PP.valT[fd][-1]) > np.sum(PP.valT[1-fd][-1])
-        last_add(PP.rdnT[fd],rdn)
-        base_rdn = unpack(PP.rdnT[fd])[-1]  # link Rdn += PP rdn?
-    else:
-        P_ = comp_rng(PP.P_, PP.rng + 1)
-        PP.rdnT[fd] += PP.valT[fd] > PP.valT[1-fd]  # scalars here
-        base_rdn = PP.rdnT[fd]
+    if fd: P_ = comp_der(PP.P_)  # same P_
+    else:  P_ = comp_rng(PP.P_, PP.rng + 1)
+
+    PP.rdnt[fd] += \
+        PP.valt[fd] - PP_aves[fd]*PP.rdnt[fd] > PP.valt[1-fd] - PP_aves[1-fd]*PP.rdnt[1-fd]  # not only last layer val?
 
     cP_ = [replace(P, roott=[None, None], link_t=[[], []]) for P in P_]  # reassign roots to sub_PPs
-    PP.P_ = form_PP_t(cP_, base_rdn=base_rdn)  # replace P_ with sub_PPm_, sub_PPd_
+    PP.P_ = form_PP_t(cP_, base_rdn=PP.rdnt[fd])  # replace P_ with sub_PPm_, sub_PPd_
 
     for fd, sub_PP_ in enumerate(PP.P_):
         if sub_PP_:
@@ -86,6 +74,8 @@ def comp_der(P_):  # keep same Ps and links, increment link derTs, then P derTs 
                 _P = derP._P
                 comp_P(_P,P, fd=1, derP=derP)
     return P_
+
+# not sure it's needed:
 
 def nest(P, ddepth=2):  # default ddepth is nest 2 times: tuple->layer->H, rngH is ptuple, derH is 1,2,4.. ptuples'layers?
 

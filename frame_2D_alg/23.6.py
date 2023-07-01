@@ -740,3 +740,17 @@ def feedback(root, fd):  # append new der layers to root
         root.fback_ += [Fback]
         if len(root.fback_) == len(root.P__[fd]):  # all nodes term, fed back to root.fback_
             feedback(root, fd)  # derT/ rng layer in sum2PP, deeper rng layers are appended by feedback
+
+def sum_unpack(Q,q):  # recursive unpack of two pairs of nested sequences, to sum final ptuples
+
+    Que,Val_,Rdn_ = Q; que,val_,rdn_ = q  # alternating rngH( derH( rngH... nesting, down to ptuple|val|rdn
+    for i, (Ele,Val,Rdn, ele,val,rdn) in enumerate(zip_longest(Que,Val_,Rdn_, que,val_,rdn_, fillvalue=[])):
+        if ele:
+            if Ele:
+                if isinstance(val,list):  # element is layer or fork
+                    sum_unpack([Ele,Val,Rdn], [ele,val,rdn])
+                else:  # ptuple
+                    Val_[i] += val; Rdn_[i] += rdn
+                    sum_ptuple(Ele, ele)
+            else:
+                Que += [deepcopy(ele)]; Val_+= [deepcopy(val)]; Rdn_+= [deepcopy(rdn)]

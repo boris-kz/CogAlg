@@ -114,3 +114,60 @@ def med_eval(last_link_, old_link_, med_valH, fd):  # recursive eval of mediated
         curr_link_, old_link_, med_valH = med_eval(curr_link_, old_link_, med_valH, fd)  # eval next med layer
 
     return curr_link_, old_link_, med_valH
+
+# currently not used:
+
+def sum_unpack(Q,q):  # recursive unpack of two pairs of nested sequences, to sum final ptuples
+
+    Que,Val_,Rdn_ = Q; que,val_,rdn_ = q  # alternating rngH( derH( rngH... nesting, down to ptuple|val|rdn
+    for i, (Ele,Val,Rdn, ele,val,rdn) in enumerate(zip_longest(Que,Val_,Rdn_, que,val_,rdn_, fillvalue=[])):
+        if ele:
+            if Ele:
+                if isinstance(val,list):  # element is layer or fork
+                    sum_unpack([Ele,Val,Rdn], [ele,val,rdn])
+                else:  # ptuple
+                    Val_[i] += val; Rdn_[i] += rdn
+                    sum_ptuple(Ele, ele)
+            else:
+                Que += [deepcopy(ele)]; Val_+= [deepcopy(val)]; Rdn_+= [deepcopy(rdn)]
+
+def comp_unpack(Que,que, rn):  # recursive unpack nested sequence to compare final ptuples
+
+    DerT,ValT,RdnT = [[],[]],[[],[]],[[],[]]  # alternating rngH( derH( rngH.. nesting,-> ptuple|val|rdn
+
+    for Ele,ele in zip_longest(Que,que, fillvalue=[]):
+        if Ele and ele:
+            if isinstance(Ele[0],list):
+                derT,valT,rdnT = comp_unpack(Ele, ele, rn)
+            else:
+                # elements are ptuples
+                mtuple, dtuple = comp_dtuple(Ele, ele, rn)  # accum rn across higher composition orders
+                mval=sum(mtuple); dval=sum(dtuple)
+                derT = [mtuple, dtuple]
+                valT = [mval, dval]
+                rdnT = [int(mval<dval),int(mval>=dval)]  # to use np.sum
+
+            for i in 0,1:  # adds nesting per recursion
+                DerT[i]+=[derT[i]]; ValT[i]+=[valT[i]]; RdnT[i]+=[rdnT[i]]
+
+    return DerT,ValT,RdnT
+
+def add_unpack(H, incr):  # recursive unpack hierarchy of unknown nesting to add input
+    # new_H = []
+    for i, e in enumerate(H):
+        if isinstance(e,list):
+            add_unpack(e,incr)
+        else: H[i] += incr
+    return H
+
+def last_add(H, i):  # recursive unpack hierarchy of unknown nesting to add input
+    while isinstance(H,list):
+        H=H[-1]
+    H+=i
+
+def unpack(H):  # recursive unpack hierarchy of unknown nesting
+    while isinstance(H,list):
+        last_H = H
+        H=H[-1]
+    return last_H
+
