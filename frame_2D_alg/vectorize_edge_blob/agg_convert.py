@@ -171,3 +171,22 @@ def unpack(H):  # recursive unpack hierarchy of unknown nesting
         H=H[-1]
     return last_H
 
+def nest(P, ddepth=2):  # default ddepth is nest 2 times: tuple->layer->H, rngH is ptuple, derH is 1,2,4.. ptuples'layers?
+
+    # fback adds alt fork per layer, may be empty?
+    # agg+ adds depth: number brackets before the tested bracket: P.valT[0], P.valT[0][0], etc?
+
+    if not isinstance(P.valT[0],list):
+        curr_depth = 0
+        while curr_depth < ddepth:
+            P.derT[0]=[P.derT[0]]; P.valT[0]=[P.valT[0]]; P.rdnT[0]=[P.rdnT[0]]
+            P.derT[1]=[P.derT[1]]; P.valT[1]=[P.valT[1]]; P.rdnT[1]=[P.rdnT[1]]
+            curr_depth += 1
+
+        if isinstance(P, CP):
+            for derP in P.link_t[1]:
+                curr_depth = 0
+                while curr_depth < ddepth:
+                    derP.derT[0]=[derP.derT[0]]; derP.valT[0]=[derP.valT[0]]; derP.rdnT[0]=[derP.rdnT[0]]
+                    derP.derT[1]=[derP.derT[1]]; derP.valT[1]=[derP.valT[1]]; derP.rdnT[1]=[derP.rdnT[1]]
+                    curr_depth += 1
