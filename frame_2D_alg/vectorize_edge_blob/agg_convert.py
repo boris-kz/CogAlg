@@ -7,6 +7,8 @@ from .agg_recursion import Cgraph, agg_recursion, op_parT
 from copy import copy, deepcopy
 from .classes import CP, CderP, CPP
 from .filters import PP_vars, PP_aves, ave_nsub, ave_agg, med_decay
+from .comp_slice import sum_derH
+
 # move here temporary, for debug purpose
 # not fully updated
 def agg_recursion_eval(blob, PP_, fd):
@@ -14,17 +16,12 @@ def agg_recursion_eval(blob, PP_, fd):
     for i, PP in enumerate(PP_):
         converted_graph  = PP2graph(PP, 0, fd)  # convert PP to graph
         PP_[i] = converted_graph
-        converted_blob = blob2graph(blob, 0, fd)  # convert root to graph
+    converted_blob = blob2graph(blob, 0, fd)  # convert root to graph
 
-    Valt = [np.sum(converted_blob.valT[0]), np.sum(converted_blob.valT[1])]
-    Rdnt = [np.sum(converted_blob.rdnT[0]), np.sum(converted_blob.rdnT[1])]
-    fork_rdnt = [1+(Valt[fd] > Valt[1-fd]), 1+(Valt[1-fd] > Valt[fd])]
-
-    if (Valt[fd] > PP_aves[fd] * ave_agg * (Rdnt[fd]+1) * fork_rdnt[fd]) \
+    fork_rdnt = [1+(converted_blob.valt[fd] > converted_blob.valt[1-fd]), 1+(converted_blob.valt[1-fd] > converted_blob.valt[fd])]
+    if (converted_blob.valt[fd] > PP_aves[fd] * ave_agg * (converted_blob.rdnt[fd]+1) * fork_rdnt[fd]) \
         and len(PP_) > ave_nsub : # and converted_blob[0].alt_rdn < ave_overlap:
-        rdn = converted_blob.rdnT[fd]
-        while isinstance(rdn,list): rdn = rdn[0]
-        rdn += 1
+        converted_blob.rdnt[fd] += 1
         agg_recursion(converted_blob)
 
 # old
@@ -53,7 +50,7 @@ def blob2graph(blob, fseg, fd):
 
     for i, PP in enumerate(PP_):
         graph = PP2graph(PP, fseg, fd)
-        op_parT(Graph, graph, fcomp=0)
+        sum_derH([Graph.derH, Graph.valt, Graph.rdnt], [graph.derH, graph.valt, graph.rdnt], 0)
         graph.root = Graph
         Graph.node_ += [graph]
 
@@ -63,9 +60,7 @@ def blob2graph(blob, fseg, fd):
 def PP2graph(PP, fseg, ifd=1):
 
     box = [(PP.box[0]+PP.box[1]) /2, (PP.box[2]+PP.box[3]) /2] + list(PP.box)
-    # add nesting for subH and aggH:
-    graph = Cgraph( parT=[[[copy(PP.derT[0])]],[[copy(PP.derT[1])]]],
-                    valT=[[[copy(PP.valT[0])]],[[copy(PP.valT[1])]]], rdnT=[[[copy(PP.rdnT[0])]],[[copy(PP.rdnT[1])]]], box=box)
+    graph = Cgraph(derH = deepcopy(PP.derH),valt=copy(PP.valt),rdnt=copy(PP.rdnt), box=box)
     return graph
 
 # drafts:

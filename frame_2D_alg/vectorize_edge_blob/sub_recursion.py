@@ -6,50 +6,39 @@ from .classes import CP, CPP
 from .comp_slice import comp_P, form_PP_t, sum_derH
 from dataclasses import replace
 
-def sub_recursion_eval(root, PP_, fd):  # fork PP_ in PP or blob, no derH in blob
 
-    # add RVal=0, DVal=0 to return?
-    term = 1
-    for PP in PP_:
-        if PP.valt[fd] > PP_aves[fd] * PP.rdnt[fd] and len(PP.P_) > ave_nsub:
-            term = 0
-            sub_recursion(PP)  # comp_der|rng in PP -> parLayer, sub_PPs
-        elif isinstance(root, CPP):
-            root.fback_ += [[PP.derH, PP.valt, PP.rdnt]]
-    if term and isinstance(root, CPP):
-        feedback(root, fd)  # upward recursive extend root.derT, forward eval only
-
-
-def feedback(root, fd):  # append new der layers to root
-
-    Fback = root.fback_.pop()  # init with 1st fback: [derH,valt,rdnt], derH: [[mtuple,dtuple, mval,dval, mrdn, drdn]]
-    while root.fback_:
-        sum_derH(Fback,root.fback_.pop(), base_rdn=0)
-    sum_derH([root.derH, root.valt,root.rdnt], Fback, base_rdn=0)
-
-    if isinstance(root.roott[fd], CPP):  # not blob
-        root = root.roott[fd]
-        root.fback_ += [Fback]
-        if len(root.fback_) == len(root.P_[fd]):  # all nodes term, fed back to root.fback_
-            feedback(root, fd)  # derT/ rng layer in sum2PP, deeper rng layers are appended by feedback
-
-
-def sub_recursion(PP):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
+def sub_recursion_eval(root, PP_):  # fork PP_ in PP or blob, no derH in blob
 
     for fd in 0,1:
-        # same else new P_:
-        P_ = comp_der(PP.P_) if fd else comp_rng(PP.P_, PP.rng+1)
-        PP.rdnt[fd] += PP.valt[fd] - PP_aves[fd]*PP.rdnt[fd] > PP.valt[1-fd] - PP_aves[1-fd]*PP.rdnt[1-fd]  # not last layer val?
+        term = 1
+        for PP in PP_:
+            if PP.valt[fd] > PP_aves[fd] * PP.rdnt[fd] and len(PP.P_) > ave_nsub:
+               term = 0
+               PP.P_ = sub_recursion(PP, fd=fd)  # comp_der|rng in PP -> parLayer, sub_PP_t
+            elif isinstance(root, CPP):
+                root.fback_ += [[PP.derH, PP.valt, PP.rdnt]]
+                # or root.fback_t[fd]?
+        if term and isinstance(root, CPP):
+            feedback(root, fd)  # upward recursive extend root.derT, forward eval only
 
-        cP_ = [replace(P, roott=[None,None], link_t=[[],[]]) for P in P_]  # reassign roots to sub_PPs
-        PP.P_ = form_PP_t(cP_, base_rdn=PP.rdnt[fd])  # replace P_ with sub_PPm_, sub_PPd_
+def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
 
-        for i, sub_PP_ in enumerate(PP.P_):
-            if sub_PP_:
-                for sPP in sub_PP_: sPP.roott[i] = PP
-                sub_recursion_eval(PP, sub_PP_, fd=1)
-            else:
-                feedback(PP, fd=i)  # not sure
+    P_ = PP.P_  # same else new P_:
+    P_ = comp_der(P_) if fd else comp_rng(P_, PP.rng+1)
+
+    PP.rdnt[fd] += PP.valt[fd] - PP_aves[fd]*PP.rdnt[fd] > PP.valt[1-fd] - PP_aves[1-fd]*PP.rdnt[1-fd]  # not last layer val?
+
+    cP_ = [replace(P, roott=[None,None], link_t=[[],[]]) for P in P_]  # reassign roots to sub_PPs
+    sub_PP_t = form_PP_t(cP_, base_rdn=PP.rdnt[fd])  # replace P_ with sub_PPm_, sub_PPd_
+
+    for i, sub_PP_ in enumerate(sub_PP_t):
+        if sub_PP_:  # add eval
+            for sPP in sub_PP_: sPP.roott[i] = PP
+            sub_recursion_eval(PP, sub_PP_)
+        else:
+            feedback(PP, fd=i)  # not sure
+
+    return sub_PP_t  # for 4 nested forks in replaced P_?
 
 
 def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip clustering?
@@ -76,3 +65,18 @@ def comp_der(P_):  # keep same Ps and links, increment link derTs, then P derTs 
                 _P = derP._P
                 comp_P(_P,P, fd=1, derP=derP)
     return P_
+
+def feedback(root, fd):  # append new der layers to root
+
+    Fback = root.fback_.pop()  # init with 1st fback: [derH,valt,rdnt], derH: [[mtuple,dtuple, mval,dval, mrdn, drdn]]
+    while root.fback_:
+        sum_derH(Fback,root.fback_.pop(), base_rdn=0)
+    sum_derH([root.derH, root.valt,root.rdnt], Fback, base_rdn=0)
+
+    if isinstance(root.roott[fd], CPP):  # not blob
+        root = root.roott[fd]
+        root.fback_ += [Fback]
+        if len(root.fback_) == len(root.P_[fd]):  # all nodes term, fed back to root.fback_
+            feedback(root, fd)  # derT/ rng layer in sum2PP, deeper rng layers are appended by feedback
+
+

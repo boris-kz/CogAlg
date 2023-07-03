@@ -84,10 +84,10 @@ class CPP(CderP):
 
     fd : int = 0  # PP is defined by combined-fork value per link: derP mtuple | dtuple
     ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # summed P__ ptuples, = 0th derLay
-    derH : list = z([])  # [[mtuple,dtuple, mval,dval, mrdn,drdn]]: layers or sub-layers
+    derH : list = z([])  # [[mtuple,dtuple, mval,dval, mrdn,drdn]]: cross-fork composition layers
     valt : list = z([0,0])
     rdnt : list = z([1,1])
-    mask__ : object = None
+    mask__: object = None
     P_ : list = z([])  # array of nodes: Ps or sub-PPs
     # link_ : list = z([])  # all links summed from Ps  # link_t: list = z([[],[]])  # +ve rlink_, dlink_
     roott : list = z([None, None])  # PPPm | PPPd containing this PP, for sub+ only
@@ -101,13 +101,13 @@ class CPP(CderP):
 
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
-    G : object = None  # same-scope lower-der|rng G.G.G., or [G0,G1] in derG, None in PP
+    # G: object = None  # same-scope lower-der|rng G.G.G., or [G0,G1] in derG, None in PP
+    # implicit: aggH(subH(derH: Lev+= node tree slice/fb, Lev/agg+,lev/sub+? subH if derG
     fd: int = 0
-    # T is m,d of pset: params selected in G, for separate eval:
-    parT : list = z([[],[]])  # aggH( subH( derH H: Lev+= node tree slice/fb, Lev/agg+,lev/sub+? subH if derG
-    id_T : list = z([[],[]])  # indices in the list of all possible layers | forks, for sparse representation
-    valT : list = z([[],[]])
-    rdnT : list = z([[],[]])
+    derH : list = z([])  # [[mtuple,dtuple, mval,dval, mrdn,drdn]]: cross-fork composition layers
+    id_H : list = z([])  # indices in the list of all possible layers | forks, for sparse representation?
+    valt : list = z(0,0)
+    rdnt : list = z(1,1)
     node_: list = z([])  # incrementally nested if wH, same-fork? concat sub-node_s in ex.H levs
     # wH : list = z([])  # down-forking tree of node Levs, forks represented in id_T?
     root_: list = z([])  # incrementally nested if uH, agg+|sub+ mset forks, for feedback?

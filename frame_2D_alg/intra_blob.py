@@ -42,7 +42,7 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
                     blob.fBa = 0; blob.rdn = root_blob.rdn+1
                     blob.prior_forks += 'v'
                     if verbose: print('fork: v')  # if render and blob.A < 100: deep_blobs += [blob]
-#                    vectorize_root(blob, verbose=verbose)
+                    vectorize_root(blob, verbose=verbose)
             else:
                 if blob.G < aveR * blob.rdn and blob.sign:  # below-average G, eval for comp_r
                     blob.fBa = 0; blob.rng = root_blob.rng + 1; blob.rdn = root_blob.rdn + 1.5  # sub_blob root values
@@ -135,6 +135,7 @@ def extend_der__t(blob):  # extend dert borders (+1 dert to boundaries)
                         constant_values=True, mode='constant')
     blob.der__t = ext_der__t
     blob.mask__ = ext_mask__
+    blob.der__t_roots = [[[] for _ in range(x0e, xne)] for _ in range(y0e, yne)]
     if y0e != y0: blob.box = (y0+1, yn+1, x0, xn)
     if x0e != x0: blob.box = (y0, yn, x0+1, xn+1)
 

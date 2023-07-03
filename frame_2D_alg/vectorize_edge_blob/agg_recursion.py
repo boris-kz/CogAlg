@@ -2,7 +2,7 @@ import numpy as np
 from copy import deepcopy, copy
 from .classes import Cgraph
 from .filters import aves, ave, ave_nsub, ave_sub, ave_agg, G_aves, med_decay, ave_distance, ave_Gm, ave_Gd
-from .comp_slice import comp_angle, comp_aangle  # comp_unpack, sum_unpack
+from .comp_slice import comp_angle, comp_aangle, comp_derH, sum_derH
 from .sub_recursion import feedback  # temporary
 
 '''
@@ -32,28 +32,28 @@ There are concepts that include same matching vars: size, density, color, stabil
 Weak value vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
 '''
 
+# not fully updated
 def agg_recursion(root):  # compositional recursion in root.PP_
 
     for i in 0,1: root.rdnt[i] += 1  # estimate, no node.rdnt[fd] += 1?
 
     comp_G_(root.node_, pri_G_=None, f1Q=1, fsub=0)  # cross-comp all Gs within rng
-    mgraph_, dgraph_ = form_graph_(root)  # clustering via link_t
+    graph_t = form_graph_(root)  # clustering via link_t
     # sub+:
-    for fd, graph_ in enumerate([mgraph_,dgraph_]):
+    for fd, graph_ in enumerate(graph_t):
         if root.valt[fd] > ave_sub * root.rdnt[fd]:  # fixed costs, same per fork
             sub_recursion_eval(root, graph_, fd)
         else: feedback(root, fd)  # not sure; update root.root..H, breadth-first
     # agg+:
-    for fd, graph_ in enumerate([mgraph_, dgraph_]):
+    for fd, graph_ in enumerate(graph_t):
         if root.valt[fd] > G_aves[fd] * ave_agg * root.rdnt[fd] and len(graph_) > ave_nsub:
             agg_recursion(root)  # replace root.node_ with new graphs
         else: feedback(root, fd)  # update root.root..H, breadth-first
 
 # draft:
-def comp_G_(G_, pri_G_=None, f1Q=1, fd = 0, fsub=0):  # cross-comp Graphs if f1Q, else comp G_s in comp_node_
+def comp_G_(G_, pri_G_=None, f1Q=1, fd=0, fsub=0):  # cross-comp Graphs if f1Q, else comp G_s in comp_node_
 
     if not f1Q: dpars_=[]  # this was for nested node, we need single node with link-specific partial-parT access now
-    aveM, aveD = G_aves
 
     for i, _iG in enumerate(G_ if f1Q else pri_G_):  # G_ is node_ of root graph, initially converted PPs
         # follow links in der+, loop all Gs in rng+:
@@ -64,12 +64,12 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fd = 0, fsub=0):  # cross-comp Graphs if f1Q
                     continue
             dy = _iG.box[0]-iG.box[0]; dx = _iG.box[1]-iG.box[1]  # between center x0,y0
             distance = np.hypot(dy,dx) # Euclidean distance between centers, sum in sparsity, proximity = ave-distance
-            if distance < ave_distance * ((np.sum(_iG.valT) + np.sum(iG.valT)) / (2*sum(G_aves))):
+            if distance < ave_distance * ((sum(_iG.valt) + sum(iG.valt)) / (2*sum(G_aves))):
                 # same for cis and alt Gs:
                 for _G, G in ((_iG, iG), (_iG.alt_Graph, iG.alt_Graph)):
                     if not _G or not G:  # or G.val
                         continue
-                    derH,valt,rdnt = comp_derH([_G.derH,_G.valt,_G.rdnt], [G.derH,G.valt,G.rdnt], rn=1)  # comp layers while lower match?
+                    derH,valt,rdnt = comp_derH(_G.derH, G.derH, rn=1)  # comp layers while lower match?
                     derG = Cgraph(G=[_G,G], derH=derH,valt=valt,rdnt=rdnt, S=distance, A=[dy,dx], box=[])  # box is redundant to G
                     # add links:
                     _G.link_ += [derG]; G.link_ += [derG]  # no didx, no ext_valt accum?
@@ -352,39 +352,32 @@ def add_alt_graph_(graph_t):  # mgraph_, dgraph_
                     sum_pH(graph.alt_derHs, alt_graph.derHs)  # accum alt_graph_ params
                     graph.alt_rdn += len(set(graph.derHs.H[-1].node_).intersection(alt_graph.derHs.H[-1].node_))  # overlap
 
-
-# updated
-def sub_recursion_eval(root, graph_, fd):   # same as in comp_slice, add RVal = 0, DVal = 0 to return?
-
-    term = 1
-    for graph in graph_:
-        if graph.valt[fd] > G_aves[fd] * graph.rdnt[fd] and len(graph.node_) > ave_nsub:
-            graph.rdnt[fd] += 1  # estimate, no node.rdnt[fd] += 1?
-            term = 0  # revise sub_recursion:
-            sub_recursion(graph, fd)  # comp_der|rng in graph -> parLayer, sub_Gs
-        elif isinstance(root, Cgraph):
-            root.fback_ += [[graph.derH, graph.valt, graph.rdnt]]
-    if term and isinstance(root, Cgraph):
-        feedback(root, fd)  # upward recursive extend root.derH, forward eval only
-
 # draft:
-def sub_recursion(graph, Valt=[0,0]):  # rng+: extend G_ per graph, der+: replace G_ with derG_
+def sub_recursion_eval(root, graph_):  # eval per fork, same as in comp_slice, still flat derH, add Valt to return?
 
     for fd in 0,1:
-        # cross-comp all Gs in rng:
-        comp_G_(graph.node_, pri_G_=None, f1Q=1, fsub=0)
-        sub_mgraph_, sub_dgraph_ = form_graph_(graph)
-        # clustering via link_t
-        Val = Valt[fd] + sum([sum(sub_mgraph.valt) for sub_mgraph in sub_mgraph_])
-        # same for rdn?
-        for i, sub_G_ in enumerate(sub_mgraph_, sub_dgraph_):
-            if sub_G_ and Val > ave_sub * graph.rdn:  # Val>cost of call:
-                for sG in sub_G_: sG.roott[i] = graph
-                valt = sub_recursion_eval(graph, sub_G_, fd=i)  # RVal=Rval, DVal=DVal
-                Val += sum(valt)
-            else:
-                feedback(graph, fd=i)  # not sure
-        Valt[fd] = Val  # not sure
+        term = 1
+        for graph in graph_:
+            if graph.valt[fd] > G_aves[fd] * graph.rdnt[fd] and len(graph.node_) > ave_nsub:
+                graph.rdnt[fd] += 1  # estimate, no node.rdnt[fd] += 1?
+                term = 0
+                graph.node_ = sub_recursion(graph, fd)  # comp_der|rng in graph -> parLayer, sub_Gs
+            elif isinstance(root, Cgraph):
+                root.fback_ += [[graph.derH, graph.valt, graph.rdnt]]
 
+        if term:  # no lower layers in any graph
+            feedback(root, fd)
 
-    return Valt  # or SVal= RVal+DVal, separate for each fork of sub+?
+def sub_recursion(graph, fd):  # rng+: extend G_ per graph, der+: replace G_ with derG_, Valt=[0,0]?
+
+    comp_G_(graph.node_, pri_G_=None, f1Q=1, fd=fd)  # cross-comp all Gs in rng
+    sub_G_t = form_graph_(graph)  # cluster sub_graphs via link_t
+
+    for i, sub_G_ in enumerate(sub_G_t):
+        if sub_G_:  # and graph.rdn > ave_sub * graph.rdn:  # from sum2graph, not last-layer valt,rdnt?
+            for sub_G in sub_G_: sub_G.roott[i] = graph
+            sub_recursion_eval(graph, sub_G_)
+        else:
+            feedback(graph, fd=i)  # not sure
+
+    return sub_G_t  # for 4 nested forks in replaced P_?
