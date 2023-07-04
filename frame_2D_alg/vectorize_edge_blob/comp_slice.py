@@ -20,12 +20,37 @@ def comp_slice(blob, verbose=False):  # high-G, smooth-angle blob, composite der
     for P in blob.P_:  # must be contiguous, gaps filled in scan_P_rim
         link_ = copy(P.link_); P.link_=[]
         P_ += [[P,link_]]
+
     for P, link_ in P_:
-        for _P in link_:
+        ''' 
+        lateral splicing, draft:
+        spliced_link_ = []
+        __P = link_.pop()
+        for _P in link_.pop():
+            spliced_link_ += lat_comp_P(__P, _P)  # comp uplinks, merge if close and similar, return merged __P
+            __P = _P
+        '''
+        for _P in link_:  # or spliced_link_ if active
             comp_P(_P,P)  # replaces P.link_ Ps with derPs
 
     PPm_,PPd_ = form_PP_t([Pt[0] for Pt in P_], base_rdn=2)
     blob.PPm_, blob.PPd_  = PPm_, PPd_
+
+# draft, ignore for now:
+def lat_comp_P(_P,P):  # to splice, no der+
+
+    ave = P_aves[0]
+    rn = len(_P.dert_)/ len(P.dert_)
+
+    mtuple,dtuple = comp_ptuple(_P.ptuple[:-1], P.ptuple[:-1], rn)
+
+    _L, L = _P.ptuple[-1], P.ptuple[-1]
+    gap = np.hypot((_P.y - P.y), (_P.x, P.x))
+    rL = _L - L
+    mM = min(_L, L) - ave
+    mval = sum(mtuple); dval = sum(dtuple)
+    mrdn = 1+(dval>mval); drdn = 1+(1-(dval>mval))  # rdn = Dval/Mval?
+
 
 def comp_P(_P,P, fd=0, derP=None):  #  derP if der+, S if rng+
 

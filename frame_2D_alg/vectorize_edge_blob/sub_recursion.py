@@ -9,23 +9,28 @@ from dataclasses import replace
 
 def sub_recursion_eval(root, PP_):  # fork PP_ in PP or blob, no derH in blob
 
-    for fd in 0,1:
-        term = 1
-        for PP in PP_:
+    termt = [1,1]
+    for PP in PP_:
+        P_ = copy(PP.P_); sub_PP_t = []
+        fr = 0
+        for fd in 0,1:
             if PP.valt[fd] > PP_aves[fd] * PP.rdnt[fd] and len(PP.P_) > ave_nsub:
-               term = 0
-               PP.P_ = sub_recursion(PP, fd=fd)  # comp_der|rng in PP -> parLayer, sub_PP_t
-            elif isinstance(root, CPP):
-                root.fback_ += [[PP.derH, PP.valt, PP.rdnt]]
-                # or root.fback_t[fd]?
-        if term and isinstance(root, CPP):
+                termt[fd] = 0; fr = 1
+                sub_PP_t += [sub_recursion(PP, P_, fd=fd)]  # comp_der|rng in PP -> parLayer
+            else:
+                sub_PP_t += [P_]
+                if isinstance(root, CPP):  # separate feedback per fork?:
+                    root.fback_t[fd] += [[PP.derH, PP.valt, PP.rdnt]]
+        if fr: PP.P_ = sub_PP_t
+    for fd in 0,1:
+        if termt[fd] and isinstance(root, CPP):
             feedback(root, fd)  # upward recursive extend root.derT, forward eval only
 
-def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
 
-    P_ = PP.P_  # same else new P_:
+def sub_recursion(PP, P_, fd):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
+
+    # same else new P_:
     P_ = comp_der(P_) if fd else comp_rng(P_, PP.rng+1)
-
     PP.rdnt[fd] += PP.valt[fd] - PP_aves[fd]*PP.rdnt[fd] > PP.valt[1-fd] - PP_aves[1-fd]*PP.rdnt[1-fd]  # not last layer val?
 
     cP_ = [replace(P, roott=[None,None], link_t=[[],[]]) for P in P_]  # reassign roots to sub_PPs

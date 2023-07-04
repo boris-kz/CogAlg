@@ -106,8 +106,8 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     fd: int = 0
     derH : list = z([])  # [[mtuple,dtuple, mval,dval, mrdn,drdn]]: cross-fork composition layers
     id_H : list = z([])  # indices in the list of all possible layers | forks, for sparse representation?
-    valt : list = z(0,0)
-    rdnt : list = z(1,1)
+    valt : list = z([0,0])
+    rdnt : list = z([1,1])
     node_: list = z([])  # incrementally nested if wH, same-fork? concat sub-node_s in ex.H levs
     # wH : list = z([])  # down-forking tree of node Levs, forks represented in id_T?
     root_: list = z([])  # incrementally nested if uH, agg+|sub+ mset forks, for feedback?
