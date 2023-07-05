@@ -108,11 +108,9 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     id_H : list = z([])  # indices in the list of all possible layers | forks, for sparse representation?
     valt : list = z([0,0])
     rdnt : list = z([1,1])
-    node_: list = z([])  # incrementally nested if wH, same-fork? concat sub-node_s in ex.H levs
-    # wH : list = z([])  # down-forking tree of node Levs, forks represented in id_T?
-    root_: list = z([])  # incrementally nested if uH, agg+|sub+ mset forks, for feedback?
-    # uH : list = z([])  # up-forking tree of root Levs, if multiple roots, separate id_T?
-    link_ : list = z([])  # temporary store of der+ node_, then unique links within graph?
+    node_: list = z([])  # same-fork, incremental nesting if wH: down-forking tree of node Levs, forks in id_T?
+    root_: list = z([])  # agg|sub+ mset forks, incr.nest if uH: up-forking tree of root Levs, separate id_T for feedback?
+    link_ : list = z([])  # unique internal links, or temporary store of der+ node_
     link_t: list = z([[],[]])  # +ve rlink_, dlink_
     # external params, summed from links:
     S : float = 0.0  # sparsity: average distance to link centers

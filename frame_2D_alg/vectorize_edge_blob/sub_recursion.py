@@ -23,7 +23,7 @@ def sub_recursion_eval(root, PP_):  # fork PP_ in PP or blob, no derH in blob
                     root.fback_t[fd] += [[PP.derH, PP.valt, PP.rdnt]]
         if fr: PP.P_ = sub_PP_t
     for fd in 0,1:
-        if termt[fd] and isinstance(root, CPP):
+        if termt[fd] and root.fback_t[fd] and isinstance(root, CPP):
             feedback(root, fd)  # upward recursive extend root.derT, forward eval only
 
 
@@ -40,8 +40,6 @@ def sub_recursion(PP, P_, fd):  # evaluate PP for rng+ and der+, add layers to s
         if sub_PP_:  # add eval
             for sPP in sub_PP_: sPP.roott[i] = PP
             sub_recursion_eval(PP, sub_PP_)
-        else:
-            feedback(PP, fd=i)  # not sure
 
     return sub_PP_t  # for 4 nested forks in replaced P_?
 

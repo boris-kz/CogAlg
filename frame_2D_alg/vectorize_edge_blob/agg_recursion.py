@@ -151,44 +151,47 @@ def graph_reval(graph, Val, fd):  # exclusive graph segmentation by reval,prune 
     aveG = G_aves[fd]
     reval = 0  # reval proto-graph nodes by all positive in-graph links:
 
-    for node,val in graph.Q:
-        link_val = 0
-        val = node.link_.valt[fd]
-        for link in node.link_.Qd if fd else node.link_.Qm:  # Qm=Qr: rng+
-            _node = link.G[1] if link.G[0] is node else link.G[0]
-            link_val += val + _node.link_.valt[fd]*med_decay - val*med_decay
-        reval += val - link_val  # _node.link_.valt was updated in previous round
-        node.link_.valt[fd] = link_val  # update
+    for node in graph:
+        lval = 0
+        _lval = node.valt[fd]  # = sum([link.valt[fd] for link in node.link_t[fd]])?
+        for derG in node.link_t[fd]:
+            val = derG.valt[fd]
+            _node = derG.node_[1] if derG.node_[0] is node else derG.node_[0]
+            lval += val + (_node.valt[fd]-val) * med_decay
+        reval += _lval - lval  # _node.link_t val was updated in previous round
     rreval = 0
-    if reval > aveG:  # prune:
-        regraph = CQ()  # reformed proto-graph
-        for node in graph.Q:
-            val = node.link_.valt[fd]
-            if val < G_aves[fd] and node in graph.Q:  # prune revalued node and its links
-                for link in node.link_.Qd if fd else node.link_.Qm:
-                    _node = link.G[1] if link.G[0] is node else link.G[0]
-                    _link_ = _node.link_.Qd if fd else node.link_.Qm
-                    if link in _link_: _link_.remove(link)
-                    rreval += link.pH.valt[fd] + val*med_decay - link.pH.valt[fd]*med_decay  # else same as rreval += link_.val
+    if reval > aveG:
+        # prune:
+        regraph = [[],[]]  # reformed proto-graph
+        for node in graph:
+            val = node.valt[fd]
+            if val < G_aves[fd] and node in graph:  # prune revalued node and its links
+                for derG in node.link_t[fd]:
+                    _node = derG.node_[1] if derG.node_[0] is node else derG.node_[0]
+                    _link_ = _node.link_t[fd]
+                    if derG in _link_: _link_.remove(derG)
+                    rreval += derG.valt[fd] + (_node.valt[fd]-derG.valt[fd]) * med_decay  # else same as rreval += link_.val
             else:
-                link_ = node.link_.Qd if fd else node.link_.Qm  # prune node links only:
+                link_ = node.link_t[fd]  # prune node links only:
                 remove_link_ = []
-                for link in link_:
-                    _node = link.G[1] if link.G[0] is node else link.G[0]  # add med_link_ val to link val:
-                    link_val = link.pH.valt[fd] + _node.link_.valt[fd]*med_decay - link.pH.valt[fd]*med_decay
-                    if link_val < aveG:  # prune link, else no change
-                        remove_link_ += [link]
-                        rreval += link_val
+                for derG in link_:
+                    _node = derG.node_[1] if derG.node_[0] is node else derG.node_[0]  # add med_link_ val to link val:
+                    lval = derG.valt[fd] + (_node.valt[fd]-derG.valt[fd]) * med_decay
+                    if lval < aveG:  # prune link, else no change
+                        remove_link_ += [derG]
+                        rreval += lval
                 while remove_link_:
                     link_.remove(remove_link_.pop(0))
                 Val+=val  #?
-                regraph.Q += [node]; regraph.valt[fd] += node.link_.valt[fd]
+                regraph[0] += [node]
+                regraph[1] += node.valt[fd]
         # recursion:
         if rreval > aveG and Val > aveG:
-            regraph, reval, Val = graph_reval(graph, Val, fd)  # not sure about Val
-            rreval+= reval
+            regraph, reval, Val = graph_reval(regraph, Val, fd)  # not sure about Val
+            rreval += reval
 
     else: regraph = graph
+
     return regraph, rreval, Val
 '''
 In rng+, graph may be extended with out-linked nodes, merged with their graphs and re-segmented to fit fixed processors?
@@ -283,44 +286,40 @@ def sum_ext(_ext, ext):
 sum_derH(Graph.uH[0][fd].derH,root.derH) or sum_G(Graph.uH[0][fd],root)? init if empty
 sum_H(Graph.uH[1:], root.uH)  # root of Graph, init if empty
 '''
-# draft:
+
+# not reviewed:
 def sum2graph_(graph_, fd):  # sum node and link params into graph, derH in agg+ or player in sub+
 
     Graph_ = []
     for graph in graph_:  # seq Gs
-        if graph.valt[fd] < G_aves[fd]:  # form graph if val>min only
+        if graph[1][fd] < G_aves[fd]:  # form graph if val>min only
             continue
-        Graph = Cgraph(pH=deepcopy(graph.Q[0].pH))
+        Graph = Cgraph(derH=deepcopy(graph[0].derH))
         Link_ = []
-        for i, iG in enumerate(graph.Q):  # form G, keep iG as local subset of lower Gs
-            if i: comp_unpack(Graph.pH, iG.pH, rn=1)  # rn needs to be specified?
-            # if g.uH: sum_H(G.uH, g.uH[1:])  # sum g->G
-            # if g.H: sum_H(G.H[1:], g.H)  # not used yet
-            for i in 0, 1:
-                np.sum(Graph.valT[i],iG.valT[i]); np.sum(Graph.rdnT[i],iG.rdnT[i])
+        for i, iG in enumerate(graph[0]):  # form G, keep iG as local subset of lower Gs
             sum_box(Graph.box, iG.box)
+            sum_derH([Graph.derH, Graph.valt,Graph.rdnt], [iG.derH, iG.valt,iG.rdnt],0)
             link_ = iG.link_t[fd]  # mlink_|dlink_; not sure
             Link_[:] = list(set(Link_ + link_))
-            subH = deepcopy(link_[0].pH)  # init, fd = new Cgraph.aggH fd
-            G = Cgraph(pH=subH, root=Graph, node_=link_, box=copy(iG.box))
+            G = Cgraph(root=Graph, node_=link_, box=copy(iG.box))
             for j, derG in enumerate(link_):
-                if j: comp_unpack(G.parT, derG.parT, rn=1)  # rn needs to be specified?
+                sum_derH([G.derH, G.valt,G.rdnt], [derG.derH, derG.valt,derG.rdnt], 0)
                 sum_box(G.box, derG.G[0].box if derG.G[1] is iG else derG.G[1].box)
                 Graph.nval += iG.nval
             Graph.node_ += [G]
         # if mult roots: sum_H(G.uH[1:], Graph.uH)
         Graph.root = iG.root  # same root, lower derivation is higher composition
-        SubH = deepcopy(Link_[0].pH) # init
-        for derG in Link_[1:]:  # sum unique links only
-            op_parH(SubH, derG.pH, fcomp=0)
-        # if Graph.uH: Graph.val += sum([lev.val for lev in Graph.uH]) / sum([lev.rdn for lev in Graph.uH])  # if val>alt_val: rdn+=len_Q?
-        Graph.pH.Qd += [SubH]; Graph.pH.Q+=[0]
-        Graph.pH.valt[0]+=SubH.valt[0]; Graph.pH.valt[1]+=SubH.valt[1]
-        Graph.pH.rdnt[0]+=SubH.rdnt[0]; Graph.pH.rdnt[1]+=SubH.rdnt[1]
-        Graph.pH.fds+=[fd]
+        DerH, Valt, Rdnt = [], [0,0], [1,1]
+        for derG in Link_:  # sum unique links only
+            sum_derH([DerH, Valt, Rdnt], [derG.derH, derG.valt, derG.rdnt], 0)
+        Graph.derH += DerH  # concatenate
+        for i in 0, 1:
+            Graph.valt[i] += Valt[i]
+            Graph.rdnt[i] += Rdnt[i]
         Graph_ += [Graph]
 
     return Graph_
+
 
 def sum_derG(G):
     pass  # sum links: add_unpack(G.valT[0],mval)
@@ -372,7 +371,7 @@ def sub_recursion_eval(root, graph_):  # eval per fork, same as in comp_slice, s
         if fr:
             graph.node_ = sub_G_t
     for fd in 0,1:
-        if termt[fd]:  # no lower layers in any graph
+        if termt[fd] and root.fback_t[fd]:  # no lower layers in any graph
            feedback(root, fd)
 
 
@@ -385,7 +384,5 @@ def sub_recursion(graph, node_, fd):  # rng+: extend G_ per graph, der+: replace
         if sub_G_:  # and graph.rdn > ave_sub * graph.rdn:  # from sum2graph, not last-layer valt,rdnt?
             for sub_G in sub_G_: sub_G.roott[i] = graph
             sub_recursion_eval(graph, sub_G_)
-        else:
-            feedback(graph, fd=i)  # not sure
 
     return sub_G_t  # for 4 nested forks in replaced P_?
