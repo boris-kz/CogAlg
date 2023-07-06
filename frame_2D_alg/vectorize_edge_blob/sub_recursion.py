@@ -52,7 +52,7 @@ def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip cluste
         # trace mlinks:
         for derP in P.link_t[0]:
             _P = derP._P
-            for _derP in _P.link_t[0]:  # next layer of mlinks
+            for _derP in _P.link_:  # next layer, of all links?
                 __P = _derP._P  # next layer of Ps
                 distance = np.hypot(__P.x-P.x, __P.y-P.y)  # distance between mid points
                 if distance > rng:

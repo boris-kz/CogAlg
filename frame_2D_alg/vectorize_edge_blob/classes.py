@@ -101,17 +101,17 @@ class CPP(CderP):
 
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
-    # G: object = None  # same-scope lower-der|rng G.G.G., or [G0,G1] in derG, None in PP
-    # implicit: aggH(subH(derH: Lev+= node tree slice/fb, Lev/agg+,lev/sub+? subH if derG
     fd: int = 0
-    derH : list = z([])  # [[mtuple,dtuple, mval,dval, mrdn,drdn]]: cross-fork composition layers
-    id_H : list = z([])  # indices in the list of all possible layers | forks, for sparse representation?
-    valt : list = z([0,0])
-    rdnt : list = z([1,1])
+    link_ : list = z([])  # internal in sum2graph, replace with external in comp_G_
+    link_t : list = z([[],[]])  # +ve rlink_, dlink_
+    # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
+    derT : list = z([[],[]])  # [[[mtuple,dtuple, mval,dval, mrdn,drdn]]]: cross-fork composition layers
+    id_T : list = z([[],[]])  # indices in the list of all possible layers | forks, for sparse representation?
+    # also top Lay from links, lower Lays from nodes:
+    valt : list = z([[0,0],[0,0]])
+    rdnt : list = z([[1,1],[1,1]])
     node_: list = z([])  # same-fork, incremental nesting if wH: down-forking tree of node Levs, forks in id_T?
     root_: list = z([])  # agg|sub+ mset forks, incr.nest if uH: up-forking tree of root Levs, separate id_T for feedback?
-    link_ : list = z([])  # unique internal links, or temporary store of der+ node_
-    link_t: list = z([[],[]])  # +ve rlink_, dlink_
     # external params, summed from links:
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers
