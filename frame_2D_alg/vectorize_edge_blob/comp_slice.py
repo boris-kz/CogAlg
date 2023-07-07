@@ -184,7 +184,7 @@ def reval_P_(P_, fd):  # prune qPP by link_val + mediated link__val
 def sum2PP(qPP, base_rdn, fd):  # sum links in Ps and Ps in PP
 
     P_,_,_ = qPP  # proto-PP is a list
-    PP = CPP(fd=fd, P_=P_)
+    PP = CPP(fd=fd, node_=P_)
     # accum:
     for i, P in enumerate(P_):
         P.roott[fd] = PP

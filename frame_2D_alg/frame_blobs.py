@@ -107,9 +107,9 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
     if verbose: start_time = time()
     Y, X = image.shape[:2]
     der__t = comp_pixel(image)
-
-    blob_, idmap, adj_pairs = flood_fill(der__t, sign__= ave-der__t[3]>0, prior_forks='', verbose=verbose)
-    # der__t[3] is g, https://en.wikipedia.org/wiki/Flood_fill
+    sign__ = ave - der__t[3] > 0   # sign is positive for below-average g in [i__, dy__, dx__, g__, ri]
+    # https://en.wikipedia.org/wiki/Flood_fill:
+    blob_, idmap, adj_pairs = flood_fill(der__t, sign__, prior_forks='', verbose=verbose)
     assign_adjacents(adj_pairs)  # forms adj_blobs per blob in adj_pairs
     I, Dy, Dx = 0, 0, 0
     for blob in blob_: I += blob.I; Dy += blob.Dy; Dx += blob.Dx

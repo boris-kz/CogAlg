@@ -18,10 +18,11 @@ def agg_recursion_eval(blob, PP_, fd):
         PP_[i] = converted_graph
     converted_blob = blob2graph(blob, 0, fd)  # convert root to graph
 
-    fork_rdnt = [1+(converted_blob.valt[fd] > converted_blob.valt[1-fd]), 1+(converted_blob.valt[1-fd] > converted_blob.valt[fd])]
-    if (converted_blob.valt[fd] > PP_aves[fd] * ave_agg * (converted_blob.rdnt[fd]+1) * fork_rdnt[fd]) \
+    # use internal params?
+    fork_rdnt = [1+(converted_blob.valt[1][fd] > converted_blob.valt[1][1-fd]), 1+(converted_blob.valt[1][1-fd] > converted_blob.valt[1][fd])]
+    if (converted_blob.valt[1][fd] > PP_aves[fd] * ave_agg * (converted_blob.rdnt[1][fd]+1) * fork_rdnt[fd]) \
         and len(PP_) > ave_nsub : # and converted_blob[0].alt_rdn < ave_overlap:
-        converted_blob.rdnt[fd] += 1
+        converted_blob.rdnt[1][fd] += 1
         agg_recursion(converted_blob)
 
 # old
@@ -45,14 +46,15 @@ def blob2graph(blob, fseg, fd):
 
     PP_ = [blob.PPm_, blob.PPd_][fd]
     x0, xn, y0, yn = blob.box
-    Graph = Cgraph(fd=PP_[0].fd, rng=PP_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+    Graph = Cgraph(fd=PP_[0].fd, rng=PP_[0].rng, id_T = [[],[0]], box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
     [blob.mgraph, blob.dgraph][fd] = Graph  # update graph reference
 
     for i, PP in enumerate(PP_):
         graph = PP2graph(PP, fseg, fd)
-        sum_derH([Graph.derH, Graph.valt, Graph.rdnt], [graph.derH, graph.valt, graph.rdnt], 0)
+        sum_derH([Graph.derT[1], Graph.valt[1], Graph.rdnt[1]], [graph.derT[1], graph.valt[1], graph.rdnt[1]], 0)  # skip index 0, external params are empty now
         graph.root = Graph
         Graph.node_ += [graph]
+    Graph.id_T[1] += [len(Graph.derT[1])]  # add index of derH
 
     return Graph
 
@@ -60,9 +62,10 @@ def blob2graph(blob, fseg, fd):
 def PP2graph(PP, fseg, ifd=1):
 
     box = [(PP.box[0]+PP.box[1]) /2, (PP.box[2]+PP.box[3]) /2] + list(PP.box)
-    graph = Cgraph(derH = deepcopy(PP.derH),valt=copy(PP.valt),rdnt=copy(PP.rdnt), box=box)
-    return graph
+    graph = Cgraph(derT = [[], deepcopy(PP.derH)], valt=[[0,0],copy(PP.valt)],rdnt=[[1,1,], copy(PP.rdnt)], id_T=[[], [0, len(PP.derH)]], box=box)
+    return graph  # the converted graph doesn't have links yet, so init their valt with PP.valt?
 
+# all the code below should be not needed now
 # drafts:
 def inpack_derH(pPP, ptuples, idx_=[]):  # pack ptuple vars in derH of pPP vars, converting macro derH -> micro derH
     # idx_: indices per lev order in derH, lenlev: 1, 1, 2, 4, 8...

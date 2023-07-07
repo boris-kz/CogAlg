@@ -10,21 +10,6 @@ from class_cluster import ClusterStructure, init_param as z
     longer names are normally classes
 
 not needed:
-class CQ(ClusterStructure):  # generic links
-
-    Q : list = z([])  # generic sequence or index increments in ptuple, derH, etc
-    Qm : list = z([])  # in-graph only
-    Qd : list = z([])
-    ext : list = z([[], []])  # [ms,ds], per subH only
-    valt : list = z([0,0])  # in-graph vals
-    rdnt : list = z([1,1])  # none if represented m and d?
-    out_valt : list = z([0,0])  # of non-graph links, as alt?
-    fds : list = z([])  # not used?
-    rng : int = 1  # not used?
-
-class CH(ClusterStructure):  # generic hierarchy, or that's most of a node?
-      pass
-
 class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, derH per par in derP, or PP
 
     I : int = 0  # [m,d] in higher layers:
@@ -39,8 +24,8 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
-    ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # latuple: I,G,Ga,M,Ma, angle(Dy,Dx), aangle(Sin_da0,Cos_da0,Sin_da1,Cos_da1),L
-    derH : list = z([])  # [[mtuple,dtuple,mval,dval,mrdn,drdn]]: vertical derivatives summed from P links
+    ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # latuple: I,G,Ga,M,Ma, angle(Dy,Dx), aangle(Sin_da0,Cos_da0,Sin_da1,Cos_da1), L
+    derH : list = z([])  # [[mtuple,dtuple,mval,dval,mrdn,drdn]] vertical derivatives summed from P links
     valt : list = z([0,0])
     rdnt : list = z([1,1])
     axis : list = z([0,1])  # prior slice angle, init sin=0,cos=1
@@ -88,13 +73,12 @@ class CPP(CderP):
     valt : list = z([0,0])
     rdnt : list = z([1,1])
     mask__: object = None
-    P_ : list = z([])  # array of nodes: Ps or sub-PPs
-    # link_ : list = z([])  # all links summed from Ps  # link_t: list = z([[],[]])  # +ve rlink_, dlink_
+    node_ : list = z([])  # array of nodes: Ps or sub-PPs
     roott : list = z([None, None])  # PPPm | PPPd containing this PP, for sub+ only
     rng : int = 1  # sum of rng+: odd forks in last layer?
     box : list = z([0,0,0,0])  # y0,yn,x0,xn
     # temporary:
-    fback_ : list = z([])  # [feedback derT,valT,rdnT per node]
+    fback_t : list = z([])  # [feedback derT,valT,rdnT per node]
     coPP_ : list = z([])  # rdn reps in other PPPs, to eval and remove?
     Rdn : int = 0  # for accumulation or separate recursion count?
     # fdiv = NoneType  # if div_comp?
@@ -102,7 +86,7 @@ class CPP(CderP):
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
     fd: int = 0
-    link_ : list = z([])  # internal in sum2graph, replace with external in comp_G_
+    link_ : list = z([])  # to all compared Gs
     link_t : list = z([[],[]])  # +ve rlink_, dlink_
     # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
     derT : list = z([[],[]])  # [[[mtuple,dtuple, mval,dval, mrdn,drdn]]]: cross-fork composition layers
@@ -111,7 +95,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     valt : list = z([[0,0],[0,0]])
     rdnt : list = z([[1,1],[1,1]])
     node_: list = z([])  # same-fork, incremental nesting if wH: down-forking tree of node Levs, forks in id_T?
-    root_: list = z([])  # agg|sub+ mset forks, incr.nest if uH: up-forking tree of root Levs, separate id_T for feedback?
+    root: object  # root_: list = z([])  # agg|sub+ mset forks, incr.nest if uH: up-forking tree of root Levs, separate id_T for feedback?
     # external params, summed from links:
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers
@@ -121,7 +105,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     alt_graph_: list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
     alt_Graph : object = None  # conditional, summed and concatenated params of alt_graph_
     # temporary:
-    fback_ : list = z([])  # [feedback derT,valT,rdnT per node]
+    fback_t : list = z([])  # [feedback derT,valT,rdnT per node]
     Rdn : int = 0  # for accumulation or separate recursion count?
     ''' 
     ext / agg.sub.derH:

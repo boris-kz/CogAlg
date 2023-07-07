@@ -64,12 +64,12 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fd=0, fsub=0):  # cross-comp Graphs if f1Q, 
                     continue
             dy = _iG.box[0]-iG.box[0]; dx = _iG.box[1]-iG.box[1]  # between center x0,y0
             distance = np.hypot(dy,dx) # Euclidean distance between centers, sum in sparsity, proximity = ave-distance
-            if distance < ave_distance * ((np.sum(_iG.valt) + np.sum(iG.valt)) / (2*sum(G_aves))):
+            if distance < ave_distance * ((sum(_iG.valt[1]) + sum(iG.valt[1])) / (2*sum(G_aves))):
                 # same for cis and alt Gs:
                 for _G, G in ((_iG, iG), (_iG.alt_Graph, iG.alt_Graph)):
                     if not _G or not G:  # or G.val
                         continue
-                    derH,valt,rdnt = comp_derH(_G.derH, G.derH, rn=1)  # comp layers while lower match?
+                    derH, valt, rdnt = comp_derH(_G.derT[1], G.derT[1], rn=1)  # comp aggH, or layers while lower match?
                     derG = Cgraph(node_=[_G,G], derH=derH,valt=valt,rdnt=rdnt, S=distance, A=[dy,dx], box=[])  # box is redundant to G
                     # add links:
                     _G.link_ += [derG]; G.link_ += [derG]  # no didx, no ext_valt accum?
@@ -138,8 +138,8 @@ def graph_reval_(graph_, reval_, fd):  # recursive eval nodes for regraph, after
                 regraph_+=[[graph,val]]; rreval_+=[0]
             else:
                 regraph, reval = graph_reval([graph,val], fd)  # recursive depth-first node and link revaluation
-                if val > aveG:
-                    regraph_ += [[regraph,val]]; rreval_+=[reval]
+                if regraph[1] > aveG:
+                    regraph_ += [regraph]; rreval_+=[reval]
     if rreval_:
         if max([reval for reval in rreval_]) > aveG:
             regraph_ = graph_reval_(regraph_, rreval_, fd)  # graph reval while min val reduction
@@ -151,7 +151,7 @@ def graph_reval(graph, fd):  # exclusive graph segmentation by reval,prune nodes
     aveG = G_aves[fd]
     reval = 0  # reval proto-graph nodes by all positive in-graph links:
 
-    for node in graph[0]:
+    for node in graph[0]:  # compute reval: link_Val reinforcement by linked nodes Val:
         lval = 0  # link value
         _lval = node.valt[0][fd]  # = sum([link.valt[fd] for link in node.link_t[fd]])?
         for derG in node.link_t[fd]:
@@ -163,7 +163,7 @@ def graph_reval(graph, fd):  # exclusive graph segmentation by reval,prune nodes
     if reval > aveG:
         # prune:
         regraph, Val = [], 0  # reformed proto-graph
-        for node in graph:
+        for node in graph[0]:
             val = node.valt[0][fd]
             if val < G_aves[fd] and node in graph:  # prune revalued node and its links
                 for derG in node.link_t[fd]:
@@ -357,7 +357,7 @@ def sub_recursion_eval(root, graph_):  # eval per fork, same as in comp_slice, s
             else:
                 sub_G_t += [node_]
                 if isinstance(root, Cgraph):
-                    root.fback_t[fd] += [[graph.derH, graph.valt, graph.rdnt]]  # we need fback_t here? Else they all will be flat
+                    root.fback_t[fd] += [[graph.derH, graph.valt, graph.rdnt]]  # fback_t vs. flat?
         if fr:
             graph.node_ = sub_G_t
     for fd in 0,1:
