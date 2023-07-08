@@ -23,7 +23,7 @@ def sub_recursion_eval(root, PP_):  # fork PP_ in PP or blob, no derH in blob
                     root.fback_t[fd] += [[PP.derH, PP.valt, PP.rdnt]]
         if fr: PP.node_ = sub_PP_t
     for fd in 0,1:
-        if termt[fd] and root.fback_t[fd] and isinstance(root, CPP):
+        if termt[fd] and isinstance(root, CPP) and root.fback_t[fd]:
             feedback(root, fd)  # upward recursive extend root.derT, forward eval only
 
 
@@ -71,7 +71,7 @@ def comp_der(P_):  # keep same Ps and links, increment link derTs, then P derTs 
 
 def feedback(root, fd):  # append new der layers to root
 
-    Fback = root.fback_t[fd].pop()  # init with 1st fback: [derH,valt,rdnt], derH: [[mtuple,dtuple, mval,dval, mrdn, drdn]]
+    Fback = deepcopy(root.fback_t[fd].pop())  # init with 1st fback: [derH,valt,rdnt], derH: [[mtuple,dtuple, mval,dval, mrdn, drdn]]
     while root.fback_t[fd]:
         sum_derH(Fback,root.fback_t[fd].pop(), base_rdn=0)
     sum_derH([root.derH, root.valt,root.rdnt], Fback, base_rdn=0)

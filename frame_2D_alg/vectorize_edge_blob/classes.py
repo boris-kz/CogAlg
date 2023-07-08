@@ -95,7 +95,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     valt : list = z([[0,0],[0,0]])
     rdnt : list = z([[1,1],[1,1]])
     node_: list = z([])  # same-fork, incremental nesting if wH: down-forking tree of node Levs, forks in id_T?
-    root: object  # root_: list = z([])  # agg|sub+ mset forks, incr.nest if uH: up-forking tree of root Levs, separate id_T for feedback?
+    root: object= None  # root_: list = z([])  # agg|sub+ mset forks, incr.nest if uH: up-forking tree of root Levs, separate id_T for feedback?
     # external params, summed from links:
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers
@@ -105,7 +105,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     alt_graph_: list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
     alt_Graph : object = None  # conditional, summed and concatenated params of alt_graph_
     # temporary:
-    fback_t : list = z([])  # [feedback derT,valT,rdnT per node]
+    fback_t : list = z([[], []])  # [feedback derT,valT,rdnT per node]
     Rdn : int = 0  # for accumulation or separate recursion count?
     ''' 
     ext / agg.sub.derH:
