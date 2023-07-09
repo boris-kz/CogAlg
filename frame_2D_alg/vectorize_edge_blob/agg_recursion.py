@@ -56,11 +56,9 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fd=0, fsub=0):  # cross-comp Graphs if f1Q, 
     if not f1Q: dpars_=[]  # this was for nested node, we need single node with link-specific partial-parT access now
 
     for i, _iG in enumerate(G_ if f1Q else pri_G_):  # G_ is node_ of root graph, initially converted PPs
-        merge_externals(_iG)
         # follow links in der+, loop all Gs (or link_?) in rng+:
         for iG in _iG.link_t[1] if fd \
             else G_[i+1:] if f1Q else G_:  # compare each G to other Gs in rng+, bilateral link assign, val accum:
-            merge_externals(iG)
             if not fd:   # not fd if f1Q?
                 if iG in [node for link in _iG.link_ for node in link.node_]:  # the pair compared in prior rng+
                     continue
@@ -84,15 +82,6 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fd=0, fsub=0):  # cross-comp Graphs if f1Q, 
                 # implicit cis, alt pair nesting in mderH, dderH
     if not f1Q:
         return dpars_  # else no return, packed in links
-
-def merge_externals(G):  # merge external params into internal params:
-
-    G.derT[1] += [G.derT[0]]
-    G.derT[0] = []
-    for i in 0,1:
-        for j in 0,1:  # not sure:
-            G.valt[i][j] += G.valt[i][j]
-            G.rdnt[i][j] += G.rdnt[i][j]
     '''
     comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D?
     '''
@@ -217,24 +206,36 @@ def sum2graph_(graph_, fd):  # sum node and link params into graph, derH in agg+
             continue
         Graph = Cgraph()
         Link_ = []
-        for i, G in enumerate(graph[0]):
+        for G in graph[0]:
             sum_box(Graph.box, G.box)
-            sum_derH([Graph.derT[1],Graph.valt[1],Graph.rdnt[1]], [G.derT[1], G.valt[1],G.rdnt[1]], 0)  # internals
+            sum_derH([Graph.derT[1],Graph.valt[1],Graph.rdnt[1]], [G.derT[1],G.valt[1],G.rdnt[1]], base_rdn=1)  # G internals
             link_ = G.link_t[fd]
             Link_[:] = list(set(Link_ + link_))
-            for j, derG in enumerate(link_):
-                sum_derH([G.derT[0],G.valt[0],G.rdnt[0]], [derG.derT,derG.valt,derG.rdnt], 0)  # externals per node
+            derH=[]; valt=[0,0]; rdnt=[1,1]
+            for derG in link_:
+                sum_derH([derH,valt,rdnt], [derG.derT,derG.valt,derG.rdnt], base_rdn=1)  # node externals
                 sum_box(G.box, derG.node_[0].box if derG.node_[1] is G else derG.node_[1].box)
-                Graph.nval += G.nval
+            merge_externals([G.derT[1],G.valt[1],G.valt[1]], [derH,valt,rdnt])
+            Graph.nval += G.nval
             Graph.node_ += [G]
-        DerH = []
+        derH=[]; valt=[0,0]; rdnt=[1,1]
         for derG in Link_:
-            sum_derH([DerH, Graph.valt[0], Graph.rdnt[0]], [derG.derT, derG.valt, derG.rdnt], 0)  # sum unique links in externals per Graph
-        Graph.derT[0] += DerH  # concatenate external
+            sum_derH([derH,valt,rdnt], [derG.derT, derG.valt, derG.rdnt], base_rdn=1)  # sum unique links
+        merge_externals([Graph.derT[1],Graph.valt[1],Graph.valt[1]], [derH,valt,rdnt])
         Graph_ += [Graph]
 
     return Graph_
 
+def merge_externals(int, ext):  # merge external params into internal params:
+
+    DerH, Valt, Rdnt = int
+    derH, valt, rdnt = ext
+    DerH += derH
+    derH[:] = []
+    for i in 0,1:
+        Valt[i] += valt[i]; Rdnt[i] += rdnt[i]
+    valt[:] = [0,0]
+    rdnt[:] = [1,1]
 
 def comp_ext(_ext, ext, dsub):
     # comp ds:

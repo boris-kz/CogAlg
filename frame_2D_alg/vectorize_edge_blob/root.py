@@ -180,18 +180,17 @@ def scan_direction(P, rdert_,dert_ext_, y,x, axis, der__t,mask__, fleft):  # lef
             (y0, x1, (y1 - y) * (x - x0)),
             (y1, x0, (y - y0) * (x1 - x)),
             (y1, x1, (y - y0) * (x - x0))]
-        cy, cx = round(y), round(x)                         # nearest cell of (y, x)
-        if mask__[cy, cx]: break                            # mask check of (y, x)
-        if abs(cy-_cy) + abs(cx-_cx) == 2:                  # mask check of intermediate cell between (y, x) and (_y, _x)
+        cy, cx = round(y), round(x)         # nearest cell of (y, x)
+        if mask__[cy, cx]: break            # mask check of (y, x)
+        if abs(cy-_cy) + abs(cx-_cx) == 2:  # mask check of intermediate cell between (y, x) and (_y, _x)
             # Get 2 potential intermediate cells
             diags = [(ky,kx) for ky, kx, w in kernel        # start from kernel cells...
                      if (ky,kx) not in ((_cy,_cx),(cy,cx))] # ...excludes (_y, _x) and (y, x)
-
             # Determine whether P goes above, below or crosses the middle point:
-            mx, my = x0 + 0.5, y0 + 0.5                     # Get middle point
-            myc1 = sin * mx + r                             # my1: y at mx on P; myc1 = my1*cos
-            myc = my*cos                                    # multiply by cos to avoid division
-            if abs(myc-myc1) > 1e-5:                        # check whether myc!=myc1, taking precision error into account
+            mx, my = x0 + 0.5, y0 + 0.5  # Get middle point
+            myc1 = sin * mx + r          # my1: y at mx on P; myc1 = my1*cos
+            myc = my*cos                 # multiply by cos to avoid division
+            if abs(myc-myc1) > 1e-5:     # check whether myc!=myc1, taking precision error into account
                 # y is reversed in image processing, so:
                 # - myc1 > myc: P goes below the middle point
                 # - myc1 < myc: P goes above the middle point

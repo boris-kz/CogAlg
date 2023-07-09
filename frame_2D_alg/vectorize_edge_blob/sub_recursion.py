@@ -29,11 +29,10 @@ def sub_recursion_eval(root, PP_):  # fork PP_ in PP or blob, no derH in blob
 
 def sub_recursion(PP, P_, fd):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
 
-    # same else new P_:
-    P_ = comp_der(P_) if fd else comp_rng(P_, PP.rng+1)
+    P_ = comp_der(P_) if fd else comp_rng(P_, PP.rng+1)  # same else new P_ and links
     PP.rdnt[fd] += PP.valt[fd] - PP_aves[fd]*PP.rdnt[fd] > PP.valt[1-fd] - PP_aves[1-fd]*PP.rdnt[1-fd]  # not last layer val?
 
-    cP_ = [replace(P, roott=[None,None], link_t=[[],[]]) for P in P_]  # reassign roots to sub_PPs
+    cP_ = [replace(P, roott=[None,None]) for P in P_]  # reassign roots to sub_PPs
     sub_PP_t = form_PP_t(cP_, base_rdn=PP.rdnt[fd])  # replace P_ with sub_PPm_, sub_PPd_
 
     for i, sub_PP_ in enumerate(sub_PP_t):

@@ -35,8 +35,7 @@ from time import time
 from collections import deque
 from visualization.draw_frame_blobs import visualize_blobs
 from class_cluster import ClusterStructure, init_param as z
-from copy import copy
-# from frame_blobs_wrapper import wrapped_flood_fill, from utils import minmax
+from utils import kernel_slice_3x3 as ks    # use in comp_pixel
 
 # hyper-parameters, set as a guess, latter adjusted by feedback:
 ave = 30  # base filter, directly used for comp_r fork
@@ -133,7 +132,31 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
     if render: visualize_blobs(frame)
     return frame
 
-def comp_pixel(image):  # 2x2 pixel cross-correlation within image, see comp_pixel_versions file for other versions and more explanation
+def comp_pixel(image):
+    pi__ = np.pad(image, pad_width=1, mode='edge')  # pad with edge values
+    # pi__ = image
+
+    # compute directional derivatives:
+    dy__ = (
+        (pi__[ks.bl] - pi__[ks.tl]) * 0.25 +            # left column
+        (pi__[ks.bc] - pi__[ks.tc]) * 0.50 +            # middle column
+        (pi__[ks.br] - pi__[ks.tr]) * 0.25              # right column
+    )
+    dx__ = (
+        (pi__[ks.tr] - pi__[ks.tl]) * 0.25 +            # top row
+        (pi__[ks.mr] - pi__[ks.mc]) * 0.50 *            # middle row
+        (pi__[ks.br] - pi__[ks.bl]) * 0.25              # bottom row
+    )
+    G__ = np.hypot(dy__, dx__)                          # compute gradient magnitude
+    rp__ = (                                            # mean of 3x3 kernel
+        pi__[ks.tl] + pi__[ks.tc] + pi__[ks.tr] +       # top row
+        pi__[ks.ml] + pi__[ks.mc] + pi__[ks.mr] +       # middle row
+        pi__[ks.bl] + pi__[ks.bc] + pi__[ks.br]         # bottom row
+    ) / 9
+
+    return (pi__[ks.mc], dy__, dx__, G__, rp__)
+
+def comp_pixel_2x2(image):  # 2x2 pixel cross-correlation within image, see comp_pixel_versions file for other versions and more explanation
 
     # input slices into sliding 2x2 kernel, each slice is a shifted 2D frame of grey-scale pixels:
     topleft__ = image[:-1, :-1]
