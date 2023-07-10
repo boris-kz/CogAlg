@@ -3,7 +3,7 @@ Agg_recursion eval and PP->graph conversion
 '''
 
 import numpy as np
-from .agg_recursion import Cgraph, agg_recursion, op_parT
+from .agg_recursion import Cgraph, agg_recursion
 from copy import copy, deepcopy
 from .classes import CP, CderP, CPP
 from .filters import PP_vars, PP_aves, ave_nsub, ave_agg, med_decay

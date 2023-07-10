@@ -30,9 +30,11 @@
 '''
 
 import sys
+from typing import Union
+
 import numpy as np
 from time import time
-from collections import deque
+from collections import deque, namedtuple
 from visualization.draw_frame_blobs import visualize_blobs
 from class_cluster import ClusterStructure, init_param as z
 from utils import kernel_slice_3x3 as ks    # use in comp_pixel
@@ -46,6 +48,8 @@ ave_mP = 100
 UNFILLED = -1
 EXCLUDED_ID = -2
 # FrameOfBlobs = namedtuple('FrameOfBlobs', 'I, Dy, Dx, M, blob_, der__t')
+idert = namedtuple('idert', 'i, dy, d, g, ri')
+adert = namedtuple('adert', 'i, g, ga, ri, dy, dx, dyy, dyx, dxy, dxx')
 
 class CBlob(ClusterStructure):
     # comp_pixel:
@@ -59,16 +63,16 @@ class CBlob(ClusterStructure):
     M : float = 0.0 # summed PP.M, for both types of recursion?
     box : tuple = (0,0,0,0)  # y0, yn, x0, xn
     mask__ : object = None
-    der__t : object = None
+    der__t : Union[idert, adert] = None
     der__t_roots : object = None  # map to der__t
     adj_blobs : list = z([])  # adjacent blobs
     fopen : bool = False
     # intra_blob params: # or pack in intra = lambda: Cintra
     # comp_angle:
-    Sin_da0 : float = 0.0
-    Cos_da0 : float = 0.0
-    Sin_da1 : float = 0.0
-    Cos_da1 : float = 0.0
+    Dyy : float = 0.0
+    Dyx : float = 0.0
+    Dxy : float = 0.0
+    Dxx : float = 0.0
     Ga : float = 0.0
     # comp_dx:
     Mdx : float = 0.0
@@ -133,9 +137,8 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
     return frame
 
 def comp_pixel(image):
-    pi__ = np.pad(image, pad_width=1, mode='edge')  # pad with edge values
-    # pi__ = image
 
+    pi__ = np.pad(image, pad_width=1, mode='edge')  # pad image with edge values
     # compute directional derivatives:
     dy__ = (
         (pi__[ks.bl] - pi__[ks.tl]) * 0.25 +            # left column
@@ -153,8 +156,7 @@ def comp_pixel(image):
         pi__[ks.ml] + pi__[ks.mc] + pi__[ks.mr] +       # middle row
         pi__[ks.bl] + pi__[ks.bc] + pi__[ks.br]         # bottom row
     ) / 9
-
-    return (pi__[ks.mc], dy__, dx__, G__, rp__)
+    return idert(pi__[ks.mc], dy__, dx__, G__, rp__)
 
 def comp_pixel_2x2(image):  # 2x2 pixel cross-correlation within image, see comp_pixel_versions file for other versions and more explanation
 
@@ -216,10 +218,10 @@ def flood_fill(der__t, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
                         blob.accumulate(I  = der__t[3][y1][x1],  # rp__,
                                         Dy = der__t[4][y1][x1],
                                         Dx = der__t[5][y1][x1],
-                                        Sin_da0 = der__t[6][y1][x1],
-                                        Cos_da0 = der__t[7][y1][x1],
-                                        Sin_da1 = der__t[8][y1][x1],
-                                        Cos_da1 = der__t[9][y1][x1])
+                                        Dyy = der__t[6][y1][x1],
+                                        Dyx = der__t[7][y1][x1],
+                                        Dxy = der__t[8][y1][x1],
+                                        Dxx = der__t[9][y1][x1])
                     else:  # comp_pixel or comp_range
                         blob.accumulate(I  = der__t[4][y1][x1],  # rp__,
                                         Dy = der__t[1][y1][x1],
@@ -262,7 +264,7 @@ def flood_fill(der__t, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
                 blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses
                 blob.G = np.hypot(blob.Dy, blob.Dx)  # recompute G
                 if len(der__t) > 5:  # recompute Ga
-                    blob.Ga = (blob.Cos_da0 + 1) + (blob.Cos_da1 + 1)  # +1 for all positives
+                    blob.Ga = (blob.Dyx + 1) + (blob.Dxx + 1)  # +1 for all positives
                 if verbose:
                     progress += blob.A * step; print(f"\rClustering... {round(progress)} %", end=""); sys.stdout.flush()
     if verbose: print("\r" + " " * 79, end=""); sys.stdout.flush(); print("\r", end="")

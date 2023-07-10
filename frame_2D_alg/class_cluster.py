@@ -75,7 +75,7 @@ if __name__ == "__main__":  # for tests
     class CBblob(CBlob, CderBlob):
         A : int = 5
 
-    # ---- example  -----------------------------------------------------------
+'''---- example  -----------------------------------------------------------
 
     # root layer
     blob1 = CBlob(I=5, Dy=5, Dx=7, G=5, M=6, Day=4 + 5j, Dax=8 + 9j)
@@ -86,3 +86,4 @@ if __name__ == "__main__":  # for tests
     bblob = CBblob(55)
 
     print(bblob)
+'''

@@ -3,7 +3,6 @@ from itertools import zip_longest
 from copy import copy, deepcopy
 from .classes import CderP, CPP
 from .filters import ave, aves, vaves, ave_dangle, ave_daangle,med_decay, aveB, P_aves
-from dataclasses import replace
 
 '''
 comp_slice traces edge blob axis by cross-comparing vertically adjacent Ps: slices across edge blob, along P.G angle.
@@ -102,7 +101,7 @@ def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
 
     PP_t = []
     for fd in 0,1:
-        qPP_ = []  # initial sequence-PPs
+        qPP_ = []  # initial sequence_PPs
         for P in P_:
             if not P.roott[fd]:  # else already packed in qPP
                 qPP = [[P]]  # init PP is 2D queue of Ps, + valt of all layers?
@@ -112,8 +111,8 @@ def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
                 while uplink_:
                     for derP in uplink_:
                         _P = derP._P; _qPP = _P.roott[fd]
-                        if _qPP:  # merge _qPP in qPP:
-                            for i in 0, 1: valt[i] += _qPP[1][i]
+                        if _qPP:  # merge _qPP into qPP:
+                            for i in 0,1: valt[i] += _qPP[1][i]
                             for qP in _qPP[0]:
                                 qP.roott[fd] = qPP; qPP[0] += [qP]  # append qP_
                             qPP_.remove(_qPP)
@@ -126,7 +125,7 @@ def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
                     uuplink_ = []
                 qPP += [valt,ave+1]  # ini reval=ave+1, keep qPP same object for ref in P.roott
                 qPP_ += [qPP]
-        # prune qPPs by med links val:
+        # prune qPPs by mediated links vals:
         rePP_= reval_PP_(qPP_, fd)  # PP = [qPP,valt,reval]
         CPP_ = [sum2PP(qPP, base_rdn, fd) for qPP in rePP_]
         PP_t += [CPP_]  # may be empty

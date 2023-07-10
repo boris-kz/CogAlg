@@ -215,27 +215,20 @@ def sum2graph_(graph_, fd):  # sum node and link params into graph, derH in agg+
             for derG in link_:
                 sum_derH([derH,valt,rdnt], [derG.derT,derG.valt,derG.rdnt], base_rdn=1)  # node externals
                 sum_box(G.box, derG.node_[0].box if derG.node_[1] is G else derG.node_[1].box)
-            merge_externals([G.derT[1],G.valt[1],G.valt[1]], [derH,valt,rdnt])
-            Graph.nval += G.nval
+            G.derT[1]+=derH  # internals+=externals after clustering:
+            for i in 0,1:
+                G.valt[1][i] += valt[i]; G.rdnt[1][i] += rdnt[i]
             Graph.node_ += [G]
         derH=[]; valt=[0,0]; rdnt=[1,1]
         for derG in Link_:
             sum_derH([derH,valt,rdnt], [derG.derT, derG.valt, derG.rdnt], base_rdn=1)  # sum unique links
-        merge_externals([Graph.derT[1],Graph.valt[1],Graph.valt[1]], [derH,valt,rdnt])
+        Graph.derT[1] += derH  # internals+=externals after clustering:
+        for i in 0,1:
+            Graph.valt[1][i] += valt[i]; Graph.rdnt[1][i] += rdnt[i]
         Graph_ += [Graph]
 
     return Graph_
 
-def merge_externals(int, ext):  # merge external params into internal params:
-
-    DerH, Valt, Rdnt = int
-    derH, valt, rdnt = ext
-    DerH += derH
-    derH[:] = []
-    for i in 0,1:
-        Valt[i] += valt[i]; Rdnt[i] += rdnt[i]
-    valt[:] = [0,0]
-    rdnt[:] = [1,1]
 
 def comp_ext(_ext, ext, dsub):
     # comp ds:

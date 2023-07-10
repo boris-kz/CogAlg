@@ -16,6 +16,7 @@ from vectorize_edge_blob.root import vectorize_root
 
 # filters, All *= rdn:
 ave = 50   # cost / dert: of cross_comp + blob formation, same as in frame blobs, use rcoef and acoef if different
+ave_a = 2*(2**0.5) / 8  # 1/8 maximum ga possible
 aveR = 10  # for range+, fixed overhead per blob
 aveA = 10  # for angle+
 pcoef = 2  # for vectorize_root; no ave_ga = .78, ave_ma = 2: no eval for comp_aa..
@@ -38,7 +39,7 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
 
         if blob_height > 3 and blob_width > 3:  # min blob dimensions: Ly, Lx
             if root_blob.fBa:  # vectorize fork in angle blobs
-                if (blob.G - aveA*(blob.rdn+2)) + (aveA*(blob.rdn+2) - blob.Ga) > 0:  # G * angle match, x2 costs?
+                if (blob.G - aveA*(blob.rdn+2)) + (aveA*(blob.rdn+2) - blob.Ga) > 0 and blob.sign:  # G * angle match, x2 costs
                     blob.fBa = 0; blob.rdn = root_blob.rdn+1
                     blob.prior_forks += 'v'
                     if verbose: print('fork: v')  # if render and blob.A < 100: deep_blobs += [blob]
@@ -58,7 +59,7 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
                     blob.fBa = 1; blob.rdn = root_blob.rdn + 1.5  # comp cost * fork rdn, sub_blob root values
                     # comp_a 2x2:
                     new_der__t, new_mask__ = comp_a(blob.der__t, blob.mask__)
-                    sign__ = (new_der__t[1] - ave*(blob.rdn+1)) + (ave*(blob.rdn+1)*pcoef - new_der__t[2]) > 0
+                    sign__ = ave_a - new_der__t.ga > 0
                     # vectorize if dev_gr + inv_dev_ga, if min Ly and Lx, der__t>=1: form, splice sub_blobs:
                     if new_mask__.shape[0] > 2 and new_mask__.shape[1] > 2 and False in new_mask__:
                         spliced_layers[:] =\

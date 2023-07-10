@@ -3,6 +3,9 @@ Cross-comparison of pixels or gradient angles in 2x2 kernels
 """
 
 import numpy as np
+from collections import namedtuple
+
+from frame_blobs import idert, adert
 from utils import kernel_slice_3x3 as ks
 # no ave_ga = .78, ave_ma = 2  # at 22.5 degrees
 # https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_diagrams.png
@@ -49,7 +52,7 @@ def comp_r(dert__, rng, mask__=None):
     g__ = np.hypot(d_upright__, d_upleft__)  # match = inverse of abs gradient (variation), recomputed at each comp_r
     ri__ = i__topleft + i__topright + i__bottomleft + i__bottomright
 
-    return (i__topleft, d_upleft__, d_upright__, g__, ri__), majority_mask__
+    return idert(i__topleft, d_upleft__, d_upright__, g__, ri__), majority_mask__
 
 
 def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 3x3 kernels
@@ -84,13 +87,13 @@ def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 3x3 kernels
     mdax__ = 0.25*trow + 0.5*mrow + 0.25*brow
 
     # normalize mean vectors into unit vectors
-    uday__, vday__ = mday__ / np.hypot(*mday__)
-    udax__, vdax__ = mdax__ / np.hypot(*mdax__)
+    dyy__, dyx__ = mday__ / np.hypot(*mday__)
+    dxy__, dxx__ = mdax__ / np.hypot(*mdax__)
 
     # v component of mean unit vector represents similarity of angles
     # between compared vectors, goes from -1 (opposite) to 1 (same)
-    ga__ = np.hypot(1-vday__, 1-vday__)     # +1 for all positives
-    # or ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__)?
+    ga__ = np.hypot(1-dyx__, 1-dxx__)     # +1 for all positives
+    # or ga__ = np.hypot(np.pi + np.arctan2(dyy__, dyx__), np.pi + np.arctan2(dxy__, dxx__)?
 
     '''
     sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
@@ -103,7 +106,7 @@ def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 3x3 kernels
     g__ = g__[ks.mc]
     ri__ = ri__[ks.mc]
 
-    return (i__, g__, ga__, ri__, dy__, dx__, uday__, vday__, udax__, vdax__), majority_mask__
+    return adert(i__, g__, ga__, ri__, dy__, dx__, dyy__, dyx__, dxy__, dxx__), majority_mask__
 
 def angle_diff(uv2, uv1):  # compare angles of uv1 to uv2 (uv1 to uv2)
 
@@ -223,4 +226,4 @@ def comp_r_odd(dert__, ave, rng, root_fia, mask__=None):
            + abs(i__center - i__left) * 2 * rngSkip
            )
 
-    return (i__center, dy__, dx__, g__, m__), majority_mask__
+    return idert(i__center, dy__, dx__, g__, m__), majority_mask__
