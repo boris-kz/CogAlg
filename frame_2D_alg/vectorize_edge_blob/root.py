@@ -56,7 +56,8 @@ def vectorize_root(blob, verbose=False):  # always angle blob, composite dert co
 
     comp_slice(blob, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
     for fd, PP_ in enumerate([blob.PPm_, blob.PPd_]):
-        sub_recursion_eval(blob, PP_)  # intra PP, no blob fb
+        # intra PP, no fback to blob:
+        sub_recursion_eval(blob, PP_)
         # cross-compare PPs, cluster them in graphs:
         if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
             agg_recursion_eval(blob, copy(PP_), fd=fd)  # comp sub_PPs, form intermediate PPs
@@ -104,7 +105,7 @@ def term_P(I, M, Ma, Dy, Dx, Dyy, Dyx, Dxy, Dxx, y,x, Pdert_):
     L = len(Pdert_)  # params.valt = [params.M+params.Ma, params.G+params.Ga]?
     P = CP(ptuple=[I, G, Ga, M, Ma, [Dy, Dx], [Dyy, Dyx, Dxy, Dxx], L], dert_=Pdert_)
     P.dert_ext_ = [(y, kx) for kx in range(x-L+1, x+1)]  # +1 to compensate for x-1 in slice_blob
-    P.anchor = P.dert_ext_[L//2]
+    P.yx = P.dert_ext_[L//2]
     P.dert_olp_ = set(P.dert_ext_)
     return P
 
@@ -140,10 +141,10 @@ def rotate_P_(blob, verbose=False):  # rotate each P to align it with direction 
     if verbose: print("\r", end=" " * 79); sys.stdout.flush(); print("\r", end="")
 
 def form_P(P, der__t, mask__, axis):
-    rdert_, dert_ext_ = [P.dert_[len(P.dert_)//2]],[P.anchor]      # include pivot
-    dert_olp_ = {(round(P.anchor[0]), round(P.anchor[1]))}
-    rdert_,dert_ext_,dert_olp_ = scan_direction(rdert_,dert_ext_,dert_olp_, P.anchor, axis, der__t,mask__, fleft=1)  # scan left
-    rdert_,dert_ext_,dert_olp_ = scan_direction(rdert_,dert_ext_,dert_olp_, P.anchor, axis, der__t,mask__, fleft=0)  # scan right
+    rdert_, dert_ext_ = [P.dert_[len(P.dert_)//2]],[P.yx]      # include pivot
+    dert_olp_ = {(round(P.yx[0]), round(P.yx[1]))}
+    rdert_,dert_ext_,dert_olp_ = scan_direction(rdert_,dert_ext_,dert_olp_, P.yx, axis, der__t,mask__, fleft=1)  # scan left
+    rdert_,dert_ext_,dert_olp_ = scan_direction(rdert_,dert_ext_,dert_olp_, P.yx, axis, der__t,mask__, fleft=0)  # scan right
     # initialization
     rdert = rdert_[0]
     G, Ga, I, Dy, Dx, Dyy, Dyx, Dxy, Dxx = rdert; M=ave_g-G; Ma=ave_ga-Ga; dert_=[rdert]
@@ -154,16 +155,16 @@ def form_P(P, der__t, mask__, axis):
         dert_ += [rdert]
     L = len(dert_)
     P.dert_ = dert_; P.dert_ext_ = dert_ext_  # new dert and dert_ext
-    P.anchor = P.dert_ext_[L//2]              # new center
+    P.yx = P.dert_ext_[L//2]              # new center
     G = np.hypot(Dy,Dx); Ga =(Dyx+1)+(Dxx+1)  # recompute G,Ga
     P.ptuple = [I,G,Ga,M,Ma, [Dy,Dx], [Dyy,Dyx,Dxy,Dxx], L]
     P.axis = axis
     P.dert_olp_ = dert_olp_
     return P
 
-def scan_direction(rdert_,dert_ext_,dert_olp_, anchor, axis, der__t,mask__, fleft):  # leftward or rightward from y,x
+def scan_direction(rdert_,dert_ext_,dert_olp_, yx, axis, der__t,mask__, fleft):  # leftward or rightward from y,x
     Y, X = mask__.shape # boundary
-    y, x = anchor
+    y, x = yx
     sin,cos = axis      # unpack axis
     r = cos*y - sin*x   # from P line equation: cos*y - sin*x = r = constant
     _cy,_cx = round(y), round(x)  # keep previous cell
@@ -226,10 +227,10 @@ def form_link_(P, cP_, blob):  # trace adj Ps up and down by adj dert roots, fil
             and not blob.mask__[rim_y,rim_x]}                               # blob boundary check
     # scan rim roots:
     link_ = {*sum(rim_.values(), start=[])} & cP_   # intersect with cP_ to prevent duplicate links and self linking (P not in cP_)
-
     # form links:
     for _P in link_:
-        P.link_ += [_P]; _P.link_ += [P]
+        P.link_ += [_P]
+        # _P.link_ += [P]: bidirectional assign maybe needed in ortho version, else uplinks only?
     # check empty link_:
     if not P.link_:
         # filter non-empty roots and get max-G dert coord:
@@ -238,7 +239,7 @@ def form_link_(P, cP_, blob):  # trace adj Ps up and down by adj dert roots, fil
         # get max-G dert:
         dert = [par__[y,x] for par__ in blob.der__t[1:]]       # get max-G dert
         # form new P
-        _P = form_P(CP(dert, dert_=[dert], dert_ext_=[(y,x)], dert_olp_={(y,x)}, anchor=(y, x)),
+        _P = form_P(CP(dert, dert_=[dert], dert_ext_=[(y,x)], dert_olp_={(y,x)}, yx=(y, x)),
                     blob.der__t, blob.mask__,
                     axis=np.divide(dert[3:5], dert[0]))
         # link _P:
