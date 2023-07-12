@@ -32,7 +32,7 @@ ave_Gm = ave_Gd = 10
 G_aves = [ave_Gm,ave_Gd]
 
 ave_splice = 10
-ave_nsub = 1
+ave_nsubt = [3,3]
 ave_sub = 2  # cost of calling sub_recursion and looping
 ave_agg = 3  # cost of agg_recursion
 ave_overlap = 10

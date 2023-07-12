@@ -58,7 +58,7 @@ def comp_P(_P,P, fd=0, derP=None):  #  derP if der+, S if rng+
 
     if fd:  # der+: extend old link derP
         rn *= len(_P.link_t[1]) / len(P.link_t[1])  # derH is summed from links
-        dderH, valt, rdnt = comp_derH(_P.derH, P.derH, rn)
+        dderH, valt, rdnt = comp_derH(_P.derH, P.derH, rn)  # +=fork rdn
         derP.derH += [dderH]  # flat, appended with each der+
         for i in 0,1:
             derP.valt[i]+=valt[i]; derP.rdnt[i]+=rdnt[i]
@@ -190,14 +190,12 @@ def sum2PP(qPP, base_rdn, fd):  # sum links in Ps and Ps in PP
         P.roott[fd] = PP
         sum_ptuple(PP.ptuple, P.ptuple)
         L = P.ptuple[-1]
-        Dy = P.axis[0]*L/2; Dx = P.axis[1]*L/2; y=P.y; x=P.x
+        Dy = P.axis[0]*L/2; Dx = P.axis[1]*L/2; y,x =P.yx
         if i: Y0=min(Y0,(y-Dy)); Yn=max(Yn,(y+Dy)); X0=min(X0,(x-Dx)); Xn=max(Xn,(x+Dx))
         else: Y0=y-Dy; Yn=y+Dy; X0=x-Dx; Xn=x+Dx  # init
 
         for derP in P.link_t[fd]:
             derH, valt, rdnt = derP.derH, derP.valt, derP.rdnt
-            if valt[0] < valt[1]: valt[0]+=1  # fork rdn
-            else: valt[1]+=1
             sum_derH([P.derH,P.valt,P.rdnt], [derH,valt,rdnt], base_rdn)
             _P = derP._P  # bilateral summation:
             sum_derH([_P.derH,_P.valt,_P.rdnt], [derH,valt,rdnt], base_rdn)

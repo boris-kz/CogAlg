@@ -56,7 +56,7 @@ class CderP(ClusterStructure):  # tuple of derivatives in P link: binary tree wi
     box : list = z([0,0,0,0])  # y0,yn, x0,xn: P.box+_P.box, or center+_center?
     S : float = 0.0  # sparsity: distance between centers
     A : list = z([0,0])  # angle: dy,dx between centers
-    fdx : object = None  # if comp_dx
+    # fdx : object = None  # if comp_dx
 
 '''
 max n of tuples per der layer = summed n of tuples in all lower layers: 1, 1, 2, 4, 8..:
