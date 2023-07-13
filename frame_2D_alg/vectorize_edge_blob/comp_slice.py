@@ -59,7 +59,7 @@ def comp_P(_P,P, fd=0, derP=None):  #  derP if der+, S if rng+
     if fd:  # der+: extend old link derP
         rn *= len(_P.link_t[1]) / len(P.link_t[1])  # derH is summed from links
         dderH, valt, rdnt = comp_derH(_P.derH, P.derH, rn)  # +=fork rdn
-        derP.derH += [dderH]  # flat, appended with each der+
+        derP.derH += [dderH]  # flat, concatenated per der+
         for i in 0,1:
             derP.valt[i]+=valt[i]; derP.rdnt[i]+=rdnt[i]
     else:
@@ -101,7 +101,7 @@ def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
 
     PP_t = []
     for fd in 0,1:
-        qPP_ = []  # initial sequence_PPs
+        qPP_ = []  # initial sequence_PP s
         for P in P_:
             if not P.roott[fd]:  # else already packed in qPP
                 qPP = [[P]]  # init PP is 2D queue of (P,val)s of all layers?
@@ -129,7 +129,8 @@ def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
         # prune qPPs by mediated links vals:
         rePP_= reval_PP_(qPP_, fd)  # PP = [qPP,valt,reval]
         CPP_ = [sum2PP(qPP, base_rdn, fd) for qPP in rePP_]
-        PP_t += [CPP_]  # may be empty
+
+        PP_t += [CPP_]  # least one PP in rePP_, which would have node_ = P_
 
     return PP_t  # add_alt_PPs_(graph_t)?
 

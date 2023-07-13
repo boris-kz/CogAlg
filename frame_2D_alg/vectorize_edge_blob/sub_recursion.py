@@ -17,7 +17,7 @@ def sub_recursion_eval(root, PP_):  # fork PP_ in PP or blob, no derH in blob
         for fd in 0,1:  # rng+ and der+:
             if len(PP.node_) > ave_nsubt[fd] and PP.valt[fd] > PP_aves[fd] * PP.rdnt[fd]:
                 termt[fd] = 0; fr = 1
-                sub_tt += [sub_recursion(PP, P_, fd=fd)]  # comp_der|rng in PP -> parLayer
+                sub_tt += [sub_recursion(PP, P_, fd=fd)]  # comp_der|rng in PP->parLayer
             else:
                 sub_tt += [P_]
                 if isinstance(root, CPP):  # separate feedback per terminated comp fork:
@@ -30,9 +30,9 @@ def sub_recursion_eval(root, PP_):  # fork PP_ in PP or blob, no derH in blob
 def sub_recursion(PP, node_, fd):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
 
     node_ = comp_der(node_) if fd else comp_rng(node_, PP.rng+1)  # same else new P_ and links
-    PP.rdnt[fd] += PP.valt[fd] - PP_aves[fd]*PP.rdnt[fd] > PP.valt[1-fd] - PP_aves[1-fd]*PP.rdnt[1-fd]  # not last layer val?
+    # eval all or last layer?:
+    PP.rdnt[fd] += PP.valt[fd] - PP_aves[fd]*PP.rdnt[fd] > PP.valt[1-fd] - PP_aves[1-fd]*PP.rdnt[1-fd]
 
-    for node in node_: node.roott = [None, None]  # reassign roots to sub_PPs:
     sub_PP_t = form_PP_t(node_, base_rdn=PP.rdnt[fd])  # replace P_ with sub_PPm_, sub_PPd_
 
     for i, sub_PP_ in enumerate(sub_PP_t):  # sub_PP_ has at least one sub_PP: len node_ > ave_nsubt[fd]
@@ -41,7 +41,8 @@ def sub_recursion(PP, node_, fd):  # evaluate PP for rng+ and der+, add layers t
         if any(termt):
             for fd in 0, 1:
                 if termt[fd] and PP.fback_t[fd]:
-                    feedback(PP, fd)  # upward recursive extend root.derH, forward eval only
+                    feedback(PP, fd)
+                    # upward recursive extend root.derH, forward eval only
     return sub_PP_t
 
 def feedback(root, fd):  # append new der layers to root
@@ -62,7 +63,7 @@ def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip cluste
 
     P_ = []
     for P in iP_:
-        cP = CP(ptuple=deepcopy(P.ptuple), dert_=copy(P.dert_))  # replace links, then derT in sum2PP
+        # cP = CP(ptuple=deepcopy(P.ptuple), dert_=copy(P.dert_))  # replace links, then derT in sum2PP
         # trace mlinks:
         for derP in P.link_t[0]:
             _P = derP._P
@@ -70,9 +71,9 @@ def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip cluste
                 __P = _derP._P  # next layer of Ps
                 distance = np.hypot(__P.yx[1]-P.yx[1], __P.yx[0]-P.yx[0])   # distance between mid points
                 if distance > rng:
-                    c__P = CP(ptuple=deepcopy(__P.ptuple), dert_=copy(__P.dert_))
-                    comp_P(cP,c__P, fd=0, derP=distance)  # distance=S, mostly lateral, relative to L for eval?
-        P_ += [cP]
+                    # c__P = CP(ptuple=deepcopy(__P.ptuple), dert_=copy(__P.dert_))
+                    comp_P(P,__P, fd=0, derP=distance)  # distance=S, mostly lateral, relative to L for eval?
+        P_ += [P]
     return P_
 
 def comp_der(P_):  # keep same Ps and links, increment link derTs, then P derTs in sum2PP

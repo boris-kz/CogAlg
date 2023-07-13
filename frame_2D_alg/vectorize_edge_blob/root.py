@@ -230,7 +230,7 @@ def form_link_(P, cP_, blob):  # trace adj Ps up and down by adj dert roots, fil
     # form links:
     for _P in link_:
         P.link_ += [_P]
-        # _P.link_ += [P]: bidirectional assign maybe needed in ortho version, else uplinks only?
+        _P.link_ += [P]  # bidirectional assign maybe needed in ortho version, else uplinks only?
     # check empty link_:
     if not P.link_:
         # filter non-empty roots and get max-G dert coord:

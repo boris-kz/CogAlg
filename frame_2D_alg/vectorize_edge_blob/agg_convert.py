@@ -6,7 +6,7 @@ import numpy as np
 from .agg_recursion import Cgraph, agg_recursion
 from copy import copy, deepcopy
 from .classes import CP, CderP, CPP
-from .filters import PP_vars, PP_aves, ave_nsub, ave_agg, med_decay
+from .filters import PP_vars, PP_aves, ave_nsubt, ave_agg, med_decay
 from .comp_slice import sum_derH
 
 # move here temporary, for debug purpose
@@ -21,7 +21,7 @@ def agg_recursion_eval(blob, PP_, fd):
     # use internal params?
     fork_rdnt = [1+(converted_blob.valt[1][fd] > converted_blob.valt[1][1-fd]), 1+(converted_blob.valt[1][1-fd] > converted_blob.valt[1][fd])]
     if (converted_blob.valt[1][fd] > PP_aves[fd] * ave_agg * (converted_blob.rdnt[1][fd]+1) * fork_rdnt[fd]) \
-        and len(PP_) > ave_nsub : # and converted_blob[0].alt_rdn < ave_overlap:
+        and len(PP_) > ave_nsubt : # and converted_blob[0].alt_rdn < ave_overlap:
         converted_blob.rdnt[1][fd] += 1
         agg_recursion(converted_blob)
 

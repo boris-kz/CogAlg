@@ -33,6 +33,7 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     dert_ext_: list = z([])  # external params: roots and coords per dert
     dert_olp_: list = z(set())
     link_ : list = z([])  # all links
+    # or linkH, rootH, with layers added by rng+?:
     link_t: list = z([[],[]])  # +ve rlink_, dlink_
     roott : list = z([None, None])  # mPP,dPP that contain this P
     yx : list = z([])

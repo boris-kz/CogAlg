@@ -1,7 +1,7 @@
 import numpy as np
 from copy import deepcopy, copy
 from .classes import Cgraph
-from .filters import aves, ave, ave_nsub, ave_sub, ave_agg, G_aves, med_decay, ave_distance, ave_Gm, ave_Gd
+from .filters import aves, ave, ave_nsubt, ave_sub, ave_agg, G_aves, med_decay, ave_distance, ave_Gm, ave_Gd
 from .comp_slice import comp_angle, comp_aangle, comp_derH, sum_derH
 # from .sub_recursion import feedback  # temporary
 
@@ -45,7 +45,7 @@ def agg_recursion(root):  # compositional recursion in root.PP_
             sub_recursion_eval(root, graph_)
     # agg+:
     for fd, graph_ in enumerate(graph_t):
-        if  np.sum(root.valt) > G_aves[fd] * ave_agg * np.sum(root.rdnt) and len(graph_) > ave_nsub:
+        if  np.sum(root.valt) > G_aves[fd] * ave_agg * np.sum(root.rdnt) and len(graph_) > ave_nsubt[fd]:
             agg_recursion(root)  # replace root.node_ with new graphs
         elif root.root:  # if deeper agg+
             feedback(root, fd)  # update root.root..H, breadth-first
@@ -292,7 +292,7 @@ def sub_recursion_eval(root, graph_):  # eval per fork, same as in comp_slice, s
         fr = 0
         for fd in 0,1:
             # not sure int or/and ext:
-            if graph.valt[1][fd] > G_aves[fd] * graph.rdnt[1][fd] and len(graph.node_) > ave_nsub:
+            if graph.valt[1][fd] > G_aves[fd] * graph.rdnt[1][fd] and len(graph.node_) > ave_nsubt[fd]:
                 graph.rdnt[1][fd] += 1  # estimate, no node.rdnt[fd] += 1?
                 termt[fd] = 0; fr = 1
                 sub_G_t += [sub_recursion(graph, node_, fd)]  # comp_der|rng in graph -> parLayer, sub_Gs
