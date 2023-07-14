@@ -121,14 +121,9 @@ def extend_der__t(blob):  # extend dert borders (+1 dert to boundaries)
     x0e = max(0, x0 - 1)
     xne = min(rX, xn + 1)  # e is for extended
     # take ext_der__t from part of root_der__t:
-    ext_der__t = []
-    for par__ in blob.root_der__t:
-        if isinstance(par__,list):  # tuple of 2 for day, dax - (Dyy, Dyx) or (Dxy, Dxx)
-            ext_der__t += [par__[0][y0e:yne, x0e:xne]]
-            ext_der__t += [par__[1][y0e:yne, x0e:xne]]
-        else:
-            ext_der__t += [par__[y0e:yne, x0e:xne]]
-    ext_der__t = tuple(ext_der__t)  # change list to tuple
+    ext_der__t = type(blob.der__t)(
+        *(par__[y0e:yne, x0e:xne] for par__ in blob.root_der__t))
+
     # extend mask__:
     ext_mask__ = np.pad(blob.mask__,
                         ((y0 - y0e, yne - yn),

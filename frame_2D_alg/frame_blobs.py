@@ -259,7 +259,8 @@ def flood_fill(der__t, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
                 # terminate blob
                 yn += 1; xn += 1
                 blob.box = y0, yn, x0, xn
-                blob.der__t = tuple([par__[y0:yn, x0:xn] for par__ in blob.root_der__t])  # add None__ for m__?
+                blob.der__t = type(der__t)(
+                    *(par__[y0:yn, x0:xn] for par__ in der__t))
                 blob.mask__ = (idmap[y0:yn, x0:xn] != blob.id)
                 blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses
                 blob.G = np.hypot(blob.Dy, blob.Dx)  # recompute G

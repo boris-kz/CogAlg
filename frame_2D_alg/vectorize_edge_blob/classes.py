@@ -32,10 +32,9 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     dert_ : list = z([])  # array of pixel-level derts, redundant to uplink_, only per blob?
     dert_ext_: list = z([])  # external params: roots and coords per dert
     dert_olp_: list = z(set())
-    link_ : list = z([])  # all links
-    # or linkH, rootH, with layers added by rng+?:
-    link_t: list = z([[],[]])  # +ve rlink_, dlink_
-    roott : list = z([None, None])  # mPP,dPP that contain this P
+    link_H : list = z([[]])  # all links per rng layer
+    link_tH : list = z([[[],[]]])  # +ve rlink_, dlink_ per rng layer
+    root_tH : list = z([[None, None]])  # mPP,dPP that contain this P, per rng layer
     yx : list = z([])
     ''' 
     add L,S,A from links?

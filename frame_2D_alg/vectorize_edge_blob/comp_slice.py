@@ -17,7 +17,7 @@ def comp_slice(blob, verbose=False):  # high-G, smooth-angle blob, composite der
 
     P_ = []
     for P in blob.P_:  # must be contiguous, gaps filled in scan_P_rim
-        link_ = copy(P.link_); P.link_=[]
+        link_ = copy(P.link_H[-1]); P.link_H[-1]=[]
         P_ += [[P,link_]]
 
     for P, link_ in P_:
@@ -57,7 +57,7 @@ def comp_P(_P,P, fd=0, derP=None):  #  derP if der+, S if rng+
     rn = len(_P.dert_)/ len(P.dert_)
 
     if fd:  # der+: extend old link derP
-        rn *= len(_P.link_t[1]) / len(P.link_t[1])  # derH is summed from links
+        rn *= len(_P.link_tH[-1][1]) / len(P.link_tH[-1][1])  # derH is summed from links
         dderH, valt, rdnt = comp_derH(_P.derH, P.derH, rn)  # +=fork rdn
         derP.derH += [dderH]  # flat, concatenated per der+
         for i in 0,1:
@@ -68,9 +68,9 @@ def comp_P(_P,P, fd=0, derP=None):  #  derP if der+, S if rng+
         mval = sum(mtuple); dval = sum(dtuple)
         mrdn = 1+(dval>mval); drdn = 1+(1-(dval>mval))  # rdn = Dval/Mval?
         derP = CderP(derH=[[mtuple,dtuple, mval,dval,mrdn,drdn]], valt=[mval,dval], rdnt=[mrdn,drdn], P=P,_P=_P, S=derP)
-        P.link_ += [derP]  # all links
-        if mval > aveP*mrdn: P.link_t[0] += [derP]  # +ve links, fork selection in form_PP_t
-        if dval > aveP*drdn: P.link_t[1] += [derP]
+        P.link_H[-1] += [derP]  # all links
+        if mval > aveP*mrdn: P.link_tH[-1][0] += [derP]  # +ve links, fork selection in form_PP_t
+        if dval > aveP*drdn: P.link_tH[-1][1] += [derP]
 
 def comp_derH(_derH, derH, rn):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
@@ -103,29 +103,30 @@ def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
     for fd in 0,1:
         qPP_ = []  # initial sequence_PP s
         for P in P_:
-            if not P.roott[fd]:  # else already packed in qPP
+            if not P.root_tH[-1][fd]:  # else already packed in qPP
                 qPP = [[P]]  # init PP is 2D queue of (P,val)s of all layers?
-                P.roott[fd]=qPP; val = 0
-                uplink_ = P.link_t[fd]
+                P.root_tH[-1][fd]=qPP; val = 0
+                uplink_ = P.link_tH[-1][fd]
                 uuplink_ = []  # next layer of links
                 while uplink_:
                     for derP in uplink_:
-                        _P = derP._P; _qPP = _P.roott[fd]
+                        _P = derP._P; _qPP = _P.root_tH[-1][fd]
                         if _qPP:
                             if _qPP is not qPP:  # _P may be added to qPP via other downlinked P
                                 val += _qPP[1]  # merge _qPP in qPP:
                                 for qP in _qPP[0]:
-                                    qP.roott[fd] = qPP; qPP[0] += [qP]  # append qP_
+                                    qP.root_tH[-1][fd] = qPP; qPP[0] += [qP]  # append qP_
                                 qPP_.remove(_qPP)
                         else:
                             qPP[0] += [_P]  # pack bottom up
-                            _P.roott[fd] = qPP
+                            _P.root_tH[-1][fd] = qPP
                             val += derP.valt[fd]
-                            uuplink_ += derP._P.link_t[fd]
+                            uuplink_ += derP._P.link_tH[-1][fd]
                     uplink_ = uuplink_
                     uuplink_ = []
                 qPP += [val,ave+1]  # ini reval=ave+1, keep qPP same object for ref in P.roott
                 qPP_ += [qPP]
+                     
         # prune qPPs by mediated links vals:
         rePP_= reval_PP_(qPP_, fd)  # PP = [qPP,valt,reval]
         CPP_ = [sum2PP(qPP, base_rdn, fd) for qPP in rePP_]
@@ -159,21 +160,21 @@ def reval_P_(P_, fd):  # prune qPP by link_val + mediated link__val
 
     for P in P_:
         P_val = 0; remove_ = []
-        for link in P.link_t[fd]:    # link val + med links val: single mediation layer in comp_slice:
-            link_val = link.valt[fd] + sum([mlink.valt[fd] for mlink in link._P.link_t[fd]]) * med_decay
+        for link in P.link_tH[-1][fd]:    # link val + med links val: single mediation layer in comp_slice:
+            link_val = link.valt[fd] + sum([mlink.valt[fd] for mlink in link._P.link_tH[-1][fd]]) * med_decay
             if link_val < vaves[fd]:
                 remove_ += [link]; reval += link_val
             else: P_val += link_val
         for link in remove_:
-            P.link_t[fd].remove(link)  # prune weak links
+            P.link_tH[-1][fd].remove(link)  # prune weak links
         if P_val * P.rdnt[fd] < vaves[fd]:
             prune_ += [P]
         else:
             Val += P_val * P.rdnt[fd]
     for P in prune_:
-        for link in P.link_t[fd]:  # prune direct links only?
+        for link in P.link_tH[-1][fd]:  # prune direct links only?
             _P = link._P
-            _link_ = _P.link_t[fd]
+            _link_ = _P.link_tH[-1][fd]
             if link in _link_:
                 _link_.remove(link); reval += link.valt[fd]
 
@@ -188,21 +189,20 @@ def sum2PP(qPP, base_rdn, fd):  # sum links in Ps and Ps in PP
     PP = CPP(fd=fd, node_=P_)
     # accum:
     for i, P in enumerate(P_):
-        P.roott[fd] = PP
+        P.root_tH[-1][fd] = PP
         sum_ptuple(PP.ptuple, P.ptuple)
         L = P.ptuple[-1]
         Dy = P.axis[0]*L/2; Dx = P.axis[1]*L/2; y,x =P.yx
         if i: Y0=min(Y0,(y-Dy)); Yn=max(Yn,(y+Dy)); X0=min(X0,(x-Dx)); Xn=max(Xn,(x+Dx))
         else: Y0=y-Dy; Yn=y+Dy; X0=x-Dx; Xn=x+Dx  # init
 
-        for derP in P.link_t[fd]:
+        for derP in P.link_tH[-1][fd]:
             derH, valt, rdnt = derP.derH, derP.valt, derP.rdnt
             sum_derH([P.derH,P.valt,P.rdnt], [derH,valt,rdnt], base_rdn)
             _P = derP._P  # bilateral summation:
             sum_derH([_P.derH,_P.valt,_P.rdnt], [derH,valt,rdnt], base_rdn)
         # excluding bilateral sums:
         sum_derH([PP.derH,PP.valt,PP.rdnt], [P.derH,P.valt,P.rdnt], base_rdn)
-        # not needed: PP.link_+=P.link_; PP.link_t[0]+=P.link_t[0]; PP.link_t[1]+=P.link_t[1]
 
     PP.box =(Y0,Yn,X0,Xn)
     return PP

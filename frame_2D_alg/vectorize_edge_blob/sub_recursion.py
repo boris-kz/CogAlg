@@ -6,13 +6,18 @@ from .classes import CP, CPP
 from .comp_slice import comp_P, form_PP_t, sum_derH
 from dataclasses import replace
 
-
-def sub_recursion_eval(root, PP_):  # fork PP_ in PP or blob, no derH in blob
+def sub_recursion_eval(root, PP_, ifd):  # fork PP_ in PP or blob, no derH in blob
 
     termt = [1,1]
     # PP_ in PP_t:
     for PP in PP_:
         P_ = copy(PP.node_); sub_tt = []  # from rng+, der+
+        # update new layer link and root
+        for P in P_:
+            _link_ = P.link_tH[-1][ifd]  # select links based on prior fork
+            P.link_H += [copy(P.link_H[-1])]  # inherit from last layer
+            P.link_tH += [[copy(_link_), copy(_link_)]]  # use a same link_, so that all nodes present in PP.node_
+            P.root_tH += [[None, None]]
         fr = 0
         for fd in 0,1:  # rng+ and der+:
             if len(PP.node_) > ave_nsubt[fd] and PP.valt[fd] > PP_aves[fd] * PP.rdnt[fd]:
@@ -37,7 +42,7 @@ def sub_recursion(PP, node_, fd):  # evaluate PP for rng+ and der+, add layers t
 
     for i, sub_PP_ in enumerate(sub_PP_t):  # sub_PP_ has at least one sub_PP: len node_ > ave_nsubt[fd]
         for sPP in sub_PP_: sPP.roott[i] = PP
-        termt = sub_recursion_eval(PP, sub_PP_)
+        termt = sub_recursion_eval(PP, sub_PP_, ifd=fd)
         if any(termt):
             for fd in 0, 1:
                 if termt[fd] and PP.fback_t[fd]:
@@ -63,15 +68,13 @@ def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip cluste
 
     P_ = []
     for P in iP_:
-        # cP = CP(ptuple=deepcopy(P.ptuple), dert_=copy(P.dert_))  # replace links, then derT in sum2PP
         # trace mlinks:
-        for derP in P.link_t[0]:
+        for derP in P.link_tH[-1][0]:
             _P = derP._P
-            for _derP in _P.link_:  # next layer, of all links?
+            for _derP in _P.link_tH[-1][0]:  # next layer, of all links? (here should be fork specific too, else we may get out of PP's nodes)
                 __P = _derP._P  # next layer of Ps
                 distance = np.hypot(__P.yx[1]-P.yx[1], __P.yx[0]-P.yx[0])   # distance between mid points
                 if distance > rng:
-                    # c__P = CP(ptuple=deepcopy(__P.ptuple), dert_=copy(__P.dert_))
                     comp_P(P,__P, fd=0, derP=distance)  # distance=S, mostly lateral, relative to L for eval?
         P_ += [P]
     return P_
@@ -79,10 +82,9 @@ def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip cluste
 def comp_der(P_):  # keep same Ps and links, increment link derTs, then P derTs in sum2PP
 
     for P in P_:
-        for derP in P.link_t[1]:  # trace dlinks
-            if derP._P.link_t[1]:  # else no _P.derT to compare
+        for derP in P.link_tH[-1][1]:  # trace dlinks
+            if derP._P.link_tH[-1][1]:  # else no _P.derT to compare
                 _P = derP._P
                 comp_P(_P,P, fd=1, derP=derP)
     return P_
-
 
