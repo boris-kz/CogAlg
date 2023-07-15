@@ -59,7 +59,7 @@ def comp_P(_P,P, fd=0, derP=None):  #  derP if der+, S if rng+
     if fd:  # der+: extend old link derP
         rn *= len(_P.link_tH[-1][1]) / len(P.link_tH[-1][1])  # derH is summed from links
         dderH, valt, rdnt = comp_derH(_P.derH, P.derH, rn)  # +=fork rdn
-        derP.derH += [dderH]  # flat, concatenated per der+
+        derP.derH += dderH  # flat, concatenated per der+
         for i in 0,1:
             derP.valt[i]+=valt[i]; derP.rdnt[i]+=rdnt[i]
     else:
@@ -100,22 +100,39 @@ def comp_dtuple(_ptuple, ptuple, rn):
 def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
 
     PP_t = []
-    for fd in 0,1:
+    for fd in 0, 1:
         qPP_ = []  # initial sequence_PP s
         for P in P_:
             if not P.root_tH[-1][fd]:  # else already packed in qPP
                 qPP = [[P]]  # init PP is 2D queue of (P,val)s of all layers?
-                P.root_tH[-1][fd]=qPP; val = 0
+                P.root_tH[-1][fd] = qPP; val = 0
                 uplink_ = P.link_tH[-1][fd]
                 uuplink_ = []  # next layer of links
                 while uplink_:
                     for derP in uplink_:
-                        _P = derP._P; _qPP = _P.root_tH[-1][fd]
+                        _P = derP._P
+                        if _P not in P_:  # _P is outside of current PP, merge their root PP
+                            if len(P.root_tH) > len(_P.root_tH): add_ext_layer(_P)
+                            # not fully reviewed:
+                            PP = P.root_tH[-2][fd]
+                            _PP = _P.root_tH[-2][fd]
+                            if isinstance(_PP, CPP):  # _PP is CPP, not qPP, they may remain in qPP if reval_PP_ filtered them
+                                for _node in _PP.node_:
+                                    if _node not in P_:
+                                        if len(P.root_tH) > len(_node.root_tH): add_ext_layer(_node)
+                                        P_ += [_node]
+                                        _node.root_tH[-2][fd] = PP  # reassign root
+                                        _node.root_tH[-1][fd] = None  # reset node, in case they already form sub_PP
+                                        _PP.node_ = []  # reset them so that no sub_PPs is formed from the merged _PP
+                            _qPP = None
+                        else:
+                            _qPP = _P.root_tH[-1][fd]
                         if _qPP:
                             if _qPP is not qPP:  # _P may be added to qPP via other downlinked P
                                 val += _qPP[1]  # merge _qPP in qPP:
                                 for qP in _qPP[0]:
-                                    qP.root_tH[-1][fd] = qPP; qPP[0] += [qP]  # append qP_
+                                    qP.root_tH[-1][fd] = qPP
+                                    qPP[0] += [qP]  # append qP_
                                 qPP_.remove(_qPP)
                         else:
                             qPP[0] += [_P]  # pack bottom up
@@ -124,11 +141,11 @@ def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
                             uuplink_ += derP._P.link_tH[-1][fd]
                     uplink_ = uuplink_
                     uuplink_ = []
-                qPP += [val,ave+1]  # ini reval=ave+1, keep qPP same object for ref in P.roott
+                qPP += [val, ave + 1]  # ini reval=ave+1, keep qPP same object for ref in P.roott
                 qPP_ += [qPP]
-                     
+
         # prune qPPs by mediated links vals:
-        rePP_= reval_PP_(qPP_, fd)  # PP = [qPP,valt,reval]
+        rePP_ = reval_PP_(qPP_, fd)  # PP = [qPP,valt,reval]
         CPP_ = [sum2PP(qPP, base_rdn, fd) for qPP in rePP_]
 
         PP_t += [CPP_]  # least one PP in rePP_, which would have node_ = P_
@@ -294,3 +311,10 @@ def comp_aangle(_aangle, aangle):
     maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
 
     return [maangle,daangle]
+
+def add_ext_layer(P):
+
+    P.link_H += [copy(P.link_H[-1])]  # inherit from last layer
+    mlink_, dlink_ = P.link_tH[-1]
+    P.link_tH += [[copy(mlink_), copy(dlink_)]]
+    P.root_tH += [[None, None]]

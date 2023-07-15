@@ -86,7 +86,7 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fd=0, fsub=0):  # cross-comp Graphs if f1Q, 
     comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D?
     '''
 
-def form_graph_(root): # form derH in agg+ or sub-pplayer in sub+, G is node in GG graph
+def form_graph_(root):  # form list graphs and their derHs, G is node in GG graph
 
     G_ = root.node_
     mnode_, dnode_ = [],[]  # Gs with >0 +ve fork links:

@@ -3,26 +3,21 @@ import numpy as np
 from copy import copy, deepcopy
 from .filters import PP_aves, ave_nsubt
 from .classes import CP, CPP
-from .comp_slice import comp_P, form_PP_t, sum_derH
+from .comp_slice import comp_P, form_PP_t, sum_derH, add_ext_layer
 from dataclasses import replace
 
-def sub_recursion_eval(root, PP_, ifd):  # fork PP_ in PP or blob, no derH in blob
+def sub_recursion_eval(root, PP_):  # fork PP_ in PP or blob, no derH in blob
 
     termt = [1,1]
     # PP_ in PP_t:
     for PP in PP_:
         P_ = copy(PP.node_); sub_tt = []  # from rng+, der+
-        # update new layer link and root
-        for P in P_:
-            _link_ = P.link_tH[-1][ifd]  # select links based on prior fork
-            P.link_H += [copy(P.link_H[-1])]  # inherit from last layer
-            P.link_tH += [[copy(_link_), copy(_link_)]]  # use a same link_, so that all nodes present in PP.node_
-            P.root_tH += [[None, None]]
+        for P in P_: add_ext_layer(P)  # update new layer link and root
         fr = 0
         for fd in 0,1:  # rng+ and der+:
             if len(PP.node_) > ave_nsubt[fd] and PP.valt[fd] > PP_aves[fd] * PP.rdnt[fd]:
                 termt[fd] = 0; fr = 1
-                sub_tt += [sub_recursion(PP, P_, fd=fd)]  # comp_der|rng in PP->parLayer
+                sub_tt += [sub_recursion(PP, fd=fd)]  # comp_der|rng in PP->parLayer
             else:
                 sub_tt += [P_]
                 if isinstance(root, CPP):  # separate feedback per terminated comp fork:
@@ -32,17 +27,17 @@ def sub_recursion_eval(root, PP_, ifd):  # fork PP_ in PP or blob, no derH in bl
                 # nested PP_ tuple from 2 comp forks, each returns sub_PP_t: 2 clustering forks, if taken
     return termt
 
-def sub_recursion(PP, node_, fd):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
+def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
 
-    node_ = comp_der(node_) if fd else comp_rng(node_, PP.rng+1)  # same else new P_ and links
+    comp_der(PP.node_) if fd else comp_rng(PP.node_, PP.rng+1)  # same else new P_ and links
     # eval all or last layer?:
     PP.rdnt[fd] += PP.valt[fd] - PP_aves[fd]*PP.rdnt[fd] > PP.valt[1-fd] - PP_aves[1-fd]*PP.rdnt[1-fd]
 
-    sub_PP_t = form_PP_t(node_, base_rdn=PP.rdnt[fd])  # replace P_ with sub_PPm_, sub_PPd_
+    sub_PP_t = form_PP_t(PP.node_, base_rdn=PP.rdnt[fd])  # replace P_ with sub_PPm_, sub_PPd_
 
     for i, sub_PP_ in enumerate(sub_PP_t):  # sub_PP_ has at least one sub_PP: len node_ > ave_nsubt[fd]
         for sPP in sub_PP_: sPP.roott[i] = PP
-        termt = sub_recursion_eval(PP, sub_PP_, ifd=fd)
+        termt = sub_recursion_eval(PP, sub_PP_)
         if any(termt):
             for fd in 0, 1:
                 if termt[fd] and PP.fback_t[fd]:
@@ -71,7 +66,7 @@ def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip cluste
         # trace mlinks:
         for derP in P.link_tH[-1][0]:
             _P = derP._P
-            for _derP in _P.link_tH[-1][0]:  # next layer, of all links? (here should be fork specific too, else we may get out of PP's nodes)
+            for _derP in _P.link_tH[-1][0]:  # next layer, of all links
                 __P = _derP._P  # next layer of Ps
                 distance = np.hypot(__P.yx[1]-P.yx[1], __P.yx[0]-P.yx[0])   # distance between mid points
                 if distance > rng:
@@ -85,6 +80,6 @@ def comp_der(P_):  # keep same Ps and links, increment link derTs, then P derTs 
         for derP in P.link_tH[-1][1]:  # trace dlinks
             if derP._P.link_tH[-1][1]:  # else no _P.derT to compare
                 _P = derP._P
-                comp_P(_P,P, fd=1, derP=derP)
+                if len(_P.derH) == len(P.derH):  # comp if same nesting only
+                    comp_P(_P,P, fd=1, derP=derP)
     return P_
-

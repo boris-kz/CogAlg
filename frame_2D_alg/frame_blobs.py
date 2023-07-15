@@ -263,14 +263,27 @@ def flood_fill(der__t, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
                     *(par__[y0:yn, x0:xn] for par__ in der__t))
                 blob.mask__ = (idmap[y0:yn, x0:xn] != blob.id)
                 blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses
-                blob.G = np.hypot(blob.Dy, blob.Dx)  # recompute G
-                if len(der__t) > 5:  # recompute Ga
-                    blob.Ga = (blob.Dyx + 1) + (blob.Dxx + 1)  # +1 for all positives
+                blob.G = recompute_dert(blob.Dy, blob.Dx)
+                if len(der__t) > 5:
+                    blob.Ga, blob.Dyy, blob.Dyx, blob.Dxy, blob.Dxx = recompute_adert(blob.Dyy, blob.Dyx, blob.Dxy, blob.Dxx)
                 if verbose:
                     progress += blob.A * step; print(f"\rClustering... {round(progress)} %", end=""); sys.stdout.flush()
     if verbose: print("\r" + " " * 79, end=""); sys.stdout.flush(); print("\r", end="")
 
     return blob_, idmap, adj_pairs
+
+
+def recompute_dert(Dy, Dx):   # recompute params after accumulation
+    return np.hypot(Dy, Dx)  # recompute G from Dy, Dx
+
+
+def recompute_adert(Dyy, Dyx, Dxy, Dxx):  # recompute angle fork params after accumulation
+    # normalize
+    Dyy, Dyx = [Dyy, Dyx] / np.hypot(Dyy, Dyx)
+    Dxy, Dxx = [Dxy, Dxx] / np.hypot(Dxy, Dxx)
+    # recompute Ga
+    Ga = (1 - Dyx) + (1 - Dxx)  # +1 for all positives
+    return Ga, Dyy, Dyx, Dxy, Dxx
 
 
 def assign_adjacents(adj_pairs):  # adjacents are connected opposite-sign blobs

@@ -107,3 +107,44 @@ def op_ptuple(_ptuple, ptuple, fcomp, fd=0, fneg=0):  # may be ptuple, vertuple,
             idx += 1
         _idx += 1
     if fcomp: return dtuple
+
+
+def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
+
+    PP_t = []
+    for fd in 0, 1:
+        qPP_ = []  # initial sequence_PP s
+        for P in P_:
+            if not P.root_tH[-1][fd]:  # else already packed in qPP
+                qPP = [[P]]  # init PP is 2D queue of (P,val)s of all layers?
+                P.root_tH[-1][fd] = qPP; val = 0
+                uplink_ = P.link_tH[-1][fd]
+                uuplink_ = []  # next layer of links
+                while uplink_:
+                    for derP in uplink_:
+                        _P = derP._P; _qPP = _P.root_tH[-1][fd]
+                        if _qPP:
+                            if _qPP is not qPP:  # _P may be added to qPP via other downlinked P
+                                val += _qPP[1]  # merge _qPP in qPP:
+                                for qP in _qPP[0]:
+                                    qP.root_tH[-1][fd] = qPP; qPP[0] += [qP]  # append qP_
+                                qPP_.remove(_qPP)
+                        else:
+                            qPP[0] += [_P]  # pack bottom up
+                            _P.root_tH[-1][fd] = qPP
+                            val += derP.valt[fd]
+                            uuplink_ += derP._P.link_tH[-1][fd]
+                    uplink_ = uuplink_
+                    uuplink_ = []
+                qPP += [val, ave + 1]  # ini reval=ave+1, keep qPP same object for ref in P.roott
+                qPP_ += [qPP]
+
+        # prune qPPs by mediated links vals:
+        rePP_ = reval_PP_(qPP_, fd)  # PP = [qPP,valt,reval]
+        CPP_ = [sum2PP(qPP, base_rdn, fd) for qPP in rePP_]
+
+        PP_t += [CPP_]  # least one PP in rePP_, which would have node_ = P_
+
+    return PP_t  # add_alt_PPs_(graph_t)?
+
+
