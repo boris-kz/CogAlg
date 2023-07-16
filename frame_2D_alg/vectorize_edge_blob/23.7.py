@@ -112,7 +112,7 @@ def op_ptuple(_ptuple, ptuple, fcomp, fd=0, fneg=0):  # may be ptuple, vertuple,
 def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
 
     PP_t = []
-    for fd in 0, 1:
+    for fd in 0,1:
         qPP_ = []  # initial sequence_PP s
         for P in P_:
             if not P.root_tH[-1][fd]:  # else already packed in qPP

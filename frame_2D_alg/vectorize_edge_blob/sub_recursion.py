@@ -3,7 +3,7 @@ import numpy as np
 from copy import copy, deepcopy
 from .filters import PP_aves, ave_nsubt
 from .classes import CP, CPP
-from .comp_slice import comp_P, form_PP_t, sum_derH, add_ext_layer
+from .comp_slice import comp_P, form_PP_t, sum_derH  # add_ext_layer
 from dataclasses import replace
 
 def sub_recursion_eval(root, PP_):  # fork PP_ in PP or blob, no derH in blob
@@ -11,20 +11,21 @@ def sub_recursion_eval(root, PP_):  # fork PP_ in PP or blob, no derH in blob
     termt = [1,1]
     # PP_ in PP_t:
     for PP in PP_:
-        P_ = copy(PP.node_); sub_tt = []  # from rng+, der+
-        for P in P_: add_ext_layer(P)  # update new layer link and root
-        fr = 0
+        sub_tt = []  # from rng+, der+
+        fr = 0  # recursion in any fork
         for fd in 0,1:  # rng+ and der+:
             if len(PP.node_) > ave_nsubt[fd] and PP.valt[fd] > PP_aves[fd] * PP.rdnt[fd]:
-                termt[fd] = 0; fr = 1
+                termt[fd] = 0
+                for P in PP.node_: add_ext_layer(PP, P, fd, fr)  # add link_ and root, for both forks if not fr
                 sub_tt += [sub_recursion(PP, fd=fd)]  # comp_der|rng in PP->parLayer
+                fr = 1
             else:
-                sub_tt += [P_]
+                sub_tt += [PP.node_]
                 if isinstance(root, CPP):  # separate feedback per terminated comp fork:
                     root.fback_t[fd] += [[PP.derH, PP.valt, PP.rdnt]]
-            if fr:
-                PP.node_ = sub_tt
-                # nested PP_ tuple from 2 comp forks, each returns sub_PP_t: 2 clustering forks, if taken
+        if fr:
+            PP.node_ = sub_tt
+            # nested PP_ tuple from 2 comp forks, each returns sub_PP_t: 2 clustering forks, if taken
     return termt
 
 def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
@@ -47,7 +48,8 @@ def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to selec
 
 def feedback(root, fd):  # append new der layers to root
 
-    Fback = deepcopy(root.fback_t[fd].pop())  # init with 1st fback: [derH,valt,rdnt], derH: [[mtuple,dtuple, mval,dval, mrdn, drdn]]
+    Fback = deepcopy(root.fback_t[fd].pop())
+    # init with 1st fback: [derH,valt,rdnt], derH: [[mtuple,dtuple, mval,dval, mrdn, drdn]]
     while root.fback_t[fd]:
         sum_derH(Fback,root.fback_t[fd].pop(), base_rdn=0)
     sum_derH([root.derH, root.valt,root.rdnt], Fback, base_rdn=0)
@@ -74,12 +76,57 @@ def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip cluste
         P_ += [P]
     return P_
 
-def comp_der(P_):  # keep same Ps and links, increment link derTs, then P derTs in sum2PP
+def comp_der(P_):  # keep same Ps and links, increment link derH, then P derH in sum2PP
 
     for P in P_:
-        for derP in P.link_tH[-1][1]:  # trace dlinks
-            if derP._P.link_tH[-1][1]:  # else no _P.derT to compare
-                _P = derP._P
-                if len(_P.derH) == len(P.derH):  # comp if same nesting only
-                    comp_P(_P,P, fd=1, derP=derP)
+        link_ = []  # exclude uplinks to nested _sub_PPs
+
+        while P.link_tH[-1][1]:
+            derP = P.link_tH[-1][1].pop()  # trace dlinks
+            _P = derP._P
+            if len(_P.derH) == len(P.derH):  # if _P is not _sub_PP:
+                comp_P(_P,P, fd=1, derP=derP)
+                link_+= [derP]
+
+        P.link_tH[-1][1] = link_  # exclude uplinks to nested _sub_PPs
     return P_
+
+
+def add_ext_layer(PP, P, fd, fr):
+
+    if not fr:
+        P.root_tH += [[None, None]]
+    if fd:
+        P.link_H = copy(P.link_H[-1])  # inherit from last layer
+        mlink_, dlink_ = P.link_tH[-1]
+        P.link_tH += [[copy(mlink_), copy(dlink_)]]
+    else:
+        P.link_H += []
+        P.link_tH += [[], []]  # rng+ forms new links
+
+    P.root_tH[-1][fd] = PP
+
+''' 
+lateral splicing, draft:
+spliced_link_ = []
+__P = link_.pop()
+for _P in link_.pop():
+    spliced_link_ += lat_comp_P(__P, _P)  # comp uplinks, merge if close and similar, return merged __P
+    __P = _P
+'''
+
+# draft, ignore for now:
+def lat_comp_P(_P,P):  # to splice, no der+
+
+    ave = P_aves[0]
+    rn = len(_P.dert_)/ len(P.dert_)
+
+    mtuple,dtuple = comp_ptuple(_P.ptuple[:-1], P.ptuple[:-1], rn)
+
+    _L, L = _P.ptuple[-1], P.ptuple[-1]
+    gap = np.hypot((_P.y - P.y), (_P.x, P.x))
+    rL = _L - L
+    mM = min(_L, L) - ave
+    mval = sum(mtuple); dval = sum(dtuple)
+    mrdn = 1+(dval>mval); drdn = 1+(1-(dval>mval))  # rdn = Dval/Mval?
+
