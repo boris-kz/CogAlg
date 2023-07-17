@@ -24,7 +24,7 @@ def comp_slice(blob, verbose=False):  # high-G, smooth-angle blob, composite der
         for _P in link_:  # or spliced_link_ if active
             comp_P(_P,P)  # replaces P.link_ Ps with derPs
 
-    PPm_,PPd_ = form_PP_t([Pt[0] for Pt in P_], base_rdn=2)
+    PPm_,PPd_ = form_PP_t([Pt[0] for Pt in P_], PP_=None, base_rdn=2)
     blob.PPm_, blob.PPd_  = PPm_, PPd_
 
 
@@ -49,14 +49,15 @@ def comp_P(_P,P, fd=0, derP=None):  #  derP if der+, S if rng+
         if mval > aveP*mrdn: P.link_tH[-1][0] += [derP]  # +ve links, fork selection in form_PP_t
         if dval > aveP*drdn: P.link_tH[-1][1] += [derP]
 
+
 def comp_derH(_derH, derH, rn):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
     dderH = []  # or = not-missing comparand if xor?
     Mval, Dval, Mrdn, Drdn = 0,0,1,1
 
-    for _lay, lay in zip_longest(_derH, derH, fillvalue=[]):
+    for _lay, lay in zip_longest(_derH, derH, fillvalue=[]):  # compare common lower der layers | sublayers in derHs
         if _lay and lay:
-            mtuple, dtuple = comp_dtuple(_lay[1], lay[1], rn)
+            mtuple, dtuple = comp_dtuple(_lay[1], lay[1], rn)  # compare dtuples, mtuples are for evaluation only
             mval = sum(mtuple); dval = sum(dtuple)
             mrdn = dval > mval; drdn = dval < mval
             dderH += [[mtuple,dtuple,mval,dval,mrdn,drdn]]
@@ -74,7 +75,9 @@ def comp_dtuple(_ptuple, ptuple, rn):
 
     return [mtuple, dtuple]
 
-def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
+# this needs to be revised for root_ttH and link_ttH:
+
+def form_PP_t(P_, PP_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
 
     PP_t = []
     for fd in 0, 1:
@@ -85,11 +88,15 @@ def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
                 P.root_tH[-1][fd] = qPP; val = 0
                 uplink_ = P.link_tH[-1][fd]
                 uuplink_ = []  # next layer of uplinks
-                while uplink_:  # may be uuplink_
+                while uplink_:  # later uuplink_
                     for derP in uplink_:
                         _P = derP._P
                         if _P not in P_:  # _P is outside of current PP, merge its root PP:
-                            merge_PP(P.root_tH[-1][fd],_P.root_tH[-1][fd], fd)
+                            PP = P.root_tH[-2][fd]  # P.root_tH[-1] is qPP
+                            _PP = _P.root_tH[-1][fd]
+                            if _PP:  # not None
+                                if PP_: PP_.remove(_PP)
+                                merge_PP(PP,_PP, fd)
                         else:
                             _qPP = _P.root_tH[-1][fd]
                             if _qPP:
@@ -97,7 +104,7 @@ def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
                                     val += _qPP[1]  # merge _qPP in qPP:
                                     for qP in _qPP[0]:
                                         qP.root_tH[-1][fd] = qPP
-                                        qPP[0] += [qP]  # append qP_
+                                        qPP[0] += [qP]  # qP_+=[qP]
                                     qPP_.remove(_qPP)
                             else:
                                 qPP[0] += [_P]  # pack bottom up
@@ -132,8 +139,10 @@ def reval_PP_(PP_, fd):  # recursive eval / prune Ps for rePP
                 if val > ave:  # min adjusted val
                     rePP_ += [rePP]
                 else:
-                    for P in rePP:
-                        P.root_tH[-1][fd] = None  # not sure 
+                    for P in rePP: P.root_tH[-1][fd] = None  # not sure
+        else:  # low-val qPPs are removed
+            for P in P_: P.root_tH[-1][fd] = None
+
     if rePP_ and max([rePP[2] for rePP in rePP_]) > ave:  # recursion if any min reval:
         rePP_ = reval_PP_(rePP_,fd)
 
@@ -167,16 +176,6 @@ def reval_P_(P_, fd):  # prune qPP by link_val + mediated link__val
         P_, Val, reval = reval_P_(P_, fd)  # recursion
     return [P_, Val, reval]
 
-# draft:
-def merge_PP(PP, _PP, fd):
-
-    node_=PP.node_
-    for _node in _PP.node_:
-        if _node not in node_:
-            node_ += [_node]
-            _node.root_tH[-1][fd] = PP  # reassign root
-    # add sum derH, etc?
-    
 
 def sum2PP(qPP, base_rdn, fd):  # sum links in Ps and Ps in PP
 
@@ -289,4 +288,18 @@ def comp_aangle(_aangle, aangle):
     maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
 
     return [maangle,daangle]
+
+# draft:
+def merge_PP(PP, _PP, fd):
+
+    node_=PP.node_
+    for _node in _PP.node_:
+        if _node not in node_:
+            node_ += [_node]
+            _node.root_tH[-1][fd] = PP  # reassign root
+    sum_derH([PP.derH, PP.valt, PP.rdnt], [_PP.derH, _PP.valt, _PP.rdnt], base_rdn=0)
+
+    Y0,Yn,X0,Xn = PP.box; y0,yn,x0, xn = _PP.box
+    PP.box = [min(X0,x0),max(Xn,xn),min(Y0,y0),max(Yn,yn)]
+    # mask__, ptuple as etc.
 
