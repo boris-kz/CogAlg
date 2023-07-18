@@ -30,11 +30,11 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     rdnt : list = z([1,1])
     axis : list = z([0,1])  # prior slice angle, init sin=0,cos=1
     dert_ : list = z([])  # array of pixel-level derts, redundant to uplink_, only per blob?
-    dert_ext_: list = z([])  # external params: roots and coords per dert
+    dert_yx_: list = z([])
     dert_olp_: list = z(set())
-    link_H : list = z([[]])  # all links per rng layer
-    link_tH : list = z([[[],[]]])  # +ve rlink_, dlink_ per rng layer
-    root_tH : list = z([[None, None]])  # mPP,dPP that contain this P, per rng layer
+    link_H : list = z([[]])  # all links per comp layer, rng+ or der+
+    link_tH : list = z([[[],[]]])  # +ve rlink_, dlink_
+    root_tt : list = z([[None,None],[None,None]])  # rmPP,rdPP, dmPP,ddPP that contain this P
     yx : list = z([])
     ''' 
     add L,S,A from links?
@@ -52,10 +52,10 @@ class CderP(ClusterStructure):  # tuple of derivatives in P link: binary tree wi
     rdnt : list = z([1,1])  # mrdn + uprdn if branch overlap?
     _P : object = None  # higher comparand
     P : object = None  # lower comparand
-    roott : list = z([None, None])  # for der++
     box : list = z([0,0,0,0])  # y0,yn, x0,xn: P.box+_P.box, or center+_center?
     S : float = 0.0  # sparsity: distance between centers
     A : list = z([0,0])  # angle: dy,dx between centers
+    # roott : list = z([None, None])  # for der++, if clustering is per link
     # fdx : object = None  # if comp_dx
 
 '''
@@ -73,8 +73,8 @@ class CPP(CderP):
     valt : list = z([0,0])
     rdnt : list = z([1,1])
     mask__: object = None
-    node_ : list = z([])  # array of nodes: Ps or sub-PPs
-    roott : list = z([None, None])  # PPPm | PPPd containing this PP, for sub+ only
+    node_ : list = z([])  # array of nodes: Ps or sub-PPs in node_tt
+    root_tt : list = z([[None,None],[None,None]])  # PPPm | PPPd containing this PP, for sub+ only
     rng : int = 1  # sum of rng+: odd forks in last layer?
     box : list = z([0,0,0,0])  # y0,yn,x0,xn
     # temporary:

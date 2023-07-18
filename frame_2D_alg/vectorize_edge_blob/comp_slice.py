@@ -24,17 +24,17 @@ def comp_slice(blob, verbose=False):  # high-G, smooth-angle blob, composite der
         for _P in link_:  # or spliced_link_ if active
             comp_P(_P,P)  # replaces P.link_ Ps with derPs
 
-    PPm_,PPd_ = form_PP_t([Pt[0] for Pt in P_], PP_=None, base_rdn=2)
+    PPm_,PPd_ = form_PP_t([Pt[0] for Pt in P_], PP_=None, base_rdn=2, fder=0)  # root fork is rng+
     blob.PPm_, blob.PPd_  = PPm_, PPd_
 
 
-def comp_P(_P,P, fd=0, derP=None):  #  derP if der+, S if rng+
+def comp_P(_P,P, fd=0, fder=1, derP=None):  #  derP if der+, S if rng+
 
     aveP = P_aves[fd]
     rn = len(_P.dert_)/ len(P.dert_)
 
     if fd:  # der+: extend old link derP
-        rn *= len(_P.link_tH[-1][1]) / len(P.link_tH[-1][1])  # derH is summed from links
+        rn *= len(_P.link_tH[-1][fder]) / len(P.link_tH[-1][fder])  # derH is summed from links
         dderH, valt, rdnt = comp_derH(_P.derH, P.derH, rn)  # +=fork rdn
         derP.derH += dderH  # flat, concatenated per der+
         for i in 0,1:
@@ -75,40 +75,40 @@ def comp_dtuple(_ptuple, ptuple, rn):
 
     return [mtuple, dtuple]
 
-# this needs to be revised for root_ttH and link_ttH:
 
-def form_PP_t(P_, PP_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
+def form_PP_t(P_, PP_, base_rdn, fder):  # form PPs of derP.valt[fd] + connected Ps val
 
     PP_t = []
-    for fd in 0, 1:
+    for fd in 0,1:
         qPP_ = []  # initial sequence_PP s
         for P in P_:
-            if not P.root_tH[-1][fd]:  # else already packed in qPP
+            if not P.root_tt[fder][fd]:  # else already packed in qPP
                 qPP = [[P]]  # init PP is 2D queue of (P,val)s of all layers?
-                P.root_tH[-1][fd] = qPP; val = 0
+                P.root_tt[fder][fd] = qPP; val = 0
                 uplink_ = P.link_tH[-1][fd]
                 uuplink_ = []  # next layer of uplinks
                 while uplink_:  # later uuplink_
                     for derP in uplink_:
                         _P = derP._P
                         if _P not in P_:  # _P is outside of current PP, merge its root PP:
-                            PP = P.root_tH[-2][fd]  # P.root_tH[-1] is qPP
-                            _PP = _P.root_tH[-1][fd]
-                            if _PP:  # not None
-                                if PP_: PP_.remove(_PP)
-                                merge_PP(PP,_PP, fd)
+                            _PP = _P.root_tt[fder][fd]
+                            if _PP:  # _P is already clustered
+                                for _node in _PP.node_:
+                                    if _node not in qPP[0]:
+                                        qPP[0] += [_node]; _node.root_tt[fder][fd] = qPP  # reassign root
+                                PP_.remove(_PP)
                         else:
-                            _qPP = _P.root_tH[-1][fd]
+                            _qPP = _P.root_tt[fder][fd]
                             if _qPP:
                                 if _qPP is not qPP:  # _P may be added to qPP via other downlinked P
                                     val += _qPP[1]  # merge _qPP in qPP:
                                     for qP in _qPP[0]:
-                                        qP.root_tH[-1][fd] = qPP
+                                        qP.root_tt[fder][fd] = qPP
                                         qPP[0] += [qP]  # qP_+=[qP]
                                     qPP_.remove(_qPP)
                             else:
                                 qPP[0] += [_P]  # pack bottom up
-                                _P.root_tH[-1][fd] = qPP
+                                _P.root_tt[fder][fd] = qPP
                                 val += derP.valt[fd]
                                 uuplink_ += derP._P.link_tH[-1][fd]
                     uplink_ = uuplink_
@@ -117,15 +117,15 @@ def form_PP_t(P_, PP_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps va
                 qPP_ += [qPP]
 
         # prune qPPs by mediated links vals:
-        rePP_ = reval_PP_(qPP_, fd)  # PP = [qPP,valt,reval]
-        CPP_ = [sum2PP(qPP, base_rdn, fd) for qPP in rePP_]
+        rePP_ = reval_PP_(qPP_, fd, fder)  # PP = [qPP,valt,reval]
+        CPP_ = [sum2PP(qPP, base_rdn, fd, fder) for qPP in rePP_]
 
         PP_t += [CPP_]  # least one PP in rePP_, which would have node_ = P_
 
     return PP_t  # add_alt_PPs_(graph_t)?
 
 
-def reval_PP_(PP_, fd):  # recursive eval / prune Ps for rePP
+def reval_PP_(PP_, fd, fder):  # recursive eval / prune Ps for rePP
 
     rePP_ = []
     while PP_:  # init P__
@@ -139,12 +139,12 @@ def reval_PP_(PP_, fd):  # recursive eval / prune Ps for rePP
                 if val > ave:  # min adjusted val
                     rePP_ += [rePP]
                 else:
-                    for P in rePP: P.root_tH[-1][fd] = None  # not sure
+                    for P in rePP: P.root_tt[fder][fd] = []
         else:  # low-val qPPs are removed
-            for P in P_: P.root_tH[-1][fd] = None
+            for P in P_: P.root_tt[fder][fd] = []
 
     if rePP_ and max([rePP[2] for rePP in rePP_]) > ave:  # recursion if any min reval:
-        rePP_ = reval_PP_(rePP_,fd)
+        rePP_ = reval_PP_(rePP_, fd, fder)
 
     return rePP_
 
@@ -154,8 +154,8 @@ def reval_P_(P_, fd):  # prune qPP by link_val + mediated link__val
 
     for P in P_:
         P_val = 0; remove_ = []
-        for link in P.link_tH[-1][fd]:    # link val + med links val: single mediation layer in comp_slice:
-            link_val = link.valt[fd] + sum([mlink.valt[fd] for mlink in link._P.link_tH[-1][fd]]) * med_decay
+        for link in P.link_tH[-1][fd]:  # link val + med links val: single mediation layer in comp_slice:
+            link_val = link.valt[fd] + sum([mlink.valt[fd] for mlink in link._P.link_tH[-1][0]]) * med_decay
             if link_val < vaves[fd]:
                 remove_ += [link]; reval += link_val
             else: P_val += link_val
@@ -177,13 +177,13 @@ def reval_P_(P_, fd):  # prune qPP by link_val + mediated link__val
     return [P_, Val, reval]
 
 
-def sum2PP(qPP, base_rdn, fd):  # sum links in Ps and Ps in PP
+def sum2PP(qPP, base_rdn, fd, fder):  # sum links in Ps and Ps in PP
 
     P_,_,_ = qPP  # proto-PP is a list
     PP = CPP(fd=fd, node_=P_)
     # accum:
     for i, P in enumerate(P_):
-        P.root_tH[-1][fd] = PP
+        P.root_tt[fder][fd] = PP
         sum_ptuple(PP.ptuple, P.ptuple)
         L = P.ptuple[-1]
         Dy = P.axis[0]*L/2; Dx = P.axis[1]*L/2; y,x =P.yx
@@ -288,18 +288,4 @@ def comp_aangle(_aangle, aangle):
     maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
 
     return [maangle,daangle]
-
-# draft:
-def merge_PP(PP, _PP, fd):
-
-    node_=PP.node_
-    for _node in _PP.node_:
-        if _node not in node_:
-            node_ += [_node]
-            _node.root_tH[-1][fd] = PP  # reassign root
-    sum_derH([PP.derH, PP.valt, PP.rdnt], [_PP.derH, _PP.valt, _PP.rdnt], base_rdn=0)
-
-    Y0,Yn,X0,Xn = PP.box; y0,yn,x0, xn = _PP.box
-    PP.box = [min(X0,x0),max(Xn,xn),min(Y0,y0),max(Yn,yn)]
-    # mask__, ptuple as etc.
 

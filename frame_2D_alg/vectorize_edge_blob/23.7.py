@@ -147,4 +147,16 @@ def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
 
     return PP_t  # add_alt_PPs_(graph_t)?
 
+# draft:
+def merge_PP(PP, _PP, fd, fder):
 
+    node_=PP.node_
+    for _node in _PP.node_:
+        if _node not in node_:
+            node_ += [_node]
+            _node.root_tt[-1][fder][fd] = PP  # reassign root
+    sum_derH([PP.derH, PP.valt, PP.rdnt], [_PP.derH, _PP.valt, _PP.rdnt], base_rdn=0)
+
+    Y0,Yn,X0,Xn = PP.box; y0,yn,x0, xn = _PP.box
+    PP.box = [min(X0,x0),max(Xn,xn),min(Y0,y0),max(Yn,yn)]
+    # mask__, ptuple as etc.
