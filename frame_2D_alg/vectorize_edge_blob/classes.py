@@ -26,19 +26,19 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
 
     ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # latuple: I,G,Ga,M,Ma, angle(Dy,Dx), aangle(Dyy,Dyx,Dxy,Dxx), L
     derH : list = z([])  # [[mtuple,dtuple,mval,dval,mrdn,drdn]] vertical derivatives summed from P links
-    valt : list = z([0,0])
+    valt : list = z([0,0])  # summed from the whole derH
     rdnt : list = z([1,1])
-    axis : list = z([0,1])  # prior slice angle, init sin=0,cos=1
-    dert_ : list = z([])  # array of pixel-level derts, redundant to uplink_, only per blob?
-    dert_yx_: list = z([])
+    dert_ : list = z([])  # array of pixel-level derts, ~ node_
+    link_tH : list = z([[[],[]]])  # +ve rlink_, dlink_ H from lower sub+
+    root_tt : list = z([[None,None],[None,None]])  # rmPP,rdPP, dmPP,ddPP that contain this P, single-layer
+    dert_yx_ : list = z([])  # mappings to blob der_t
     dert_olp_: list = z(set())
-    link_H : list = z([[]])  # all links per comp layer, rng+ or der+
-    link_tH : list = z([[[],[]]])  # +ve rlink_, dlink_
-    root_tt : list = z([[None,None],[None,None]])  # rmPP,rdPP, dmPP,ddPP that contain this P
+    axis : list = z([0,1])  # prior slice angle, init sin=0,cos=1
     yx : list = z([])
     ''' 
     add L,S,A from links?
     optional:
+    link_H : list = z([[]])  # all links per comp layer, rng+ or der+
     dxdert_ : list = z([])  # only in Pd
     Pd_ : list = z([])  # only in Pm
     Mdx : int = 0  # if comp_dx
@@ -67,7 +67,7 @@ lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays:
 '''
 class CPP(CderP):
 
-    fd : int = 0  # PP is defined by combined-fork value per link: derP mtuple | dtuple
+    fd : int = 0  # PP is defined by combined-fork value per link: derP mtuple | dtuple; not fder?
     ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # summed P__ ptuples, = 0th derLay
     derH : list = z([])  # [[mtuple,dtuple, mval,dval, mrdn,drdn]]: cross-fork composition layers
     valt : list = z([0,0])
@@ -85,15 +85,14 @@ class CPP(CderP):
 
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
-    fd: int = 0
-    link_ : list = z([])  # to all compared Gs
-    link_t : list = z([[],[]])  # +ve rlink_, dlink_
+    fd: int = 0  # not fder?
+    link_tH : list = z([[[],[]]])  # +ve rlink_, dlink_ H, ~ derH layers
     # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
-    derT : list = z([[],[]])  # [[[mtuple,dtuple, mval,dval, mrdn,drdn]]]: cross-fork composition layers
-    id_T : list = z([[],[]])  # indices in the list of all possible layers | forks, for sparse representation?
-    # also top Lay from links, lower Lays from nodes:
-    valt : list = z([[0,0],[0,0]])
-    rdnt : list = z([[1,1],[1,1]])
+    derHt : list = z([[],[]])  # [[[mtuple,dtuple, mval,dval, mrdn,drdn]]]: cross-fork composition layers
+    id_Ht : list = z([[],[]])  # indices in the list of all possible layers | forks, for sparse representation?
+    # also top Lay from links, lower Lays from nodes, hence nested tuple:
+    valtt : list = z([[0,0],[0,0]])
+    rdntt : list = z([[1,1],[1,1]])
     node_: list = z([])  # same-fork, incremental nesting if wH: down-forking tree of node Levs, forks in id_T?
     root: object= None  # root_: list = z([])  # agg|sub+ mset forks, incr.nest if uH: up-forking tree of root Levs, separate id_T for feedback?
     # external params, summed from links:

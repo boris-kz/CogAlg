@@ -28,29 +28,27 @@ def comp_slice(blob, verbose=False):  # high-G, smooth-angle blob, composite der
     blob.PPm_, blob.PPd_  = PPm_, PPd_
 
 
-def comp_P(_P,P, fd=0, fder=1, derP=None):  #  derP if der+, S if rng+
+def comp_P(_P,P, fder=1, derP=None):  #  derP if der+, S if rng+
 
-    aveP = P_aves[fd]
+    aveP = P_aves[fder]
     rn = len(_P.dert_)/ len(P.dert_)
 
-    if fd:  # der+: extend old link derP
-        rn *= len(_P.link_tH[-1][fder]) / len(P.link_tH[-1][fder])  # derH is summed from links
-        dderH, valt, rdnt = comp_derH(_P.derH, P.derH, rn)  # +=fork rdn
-        derP.derH += dderH  # flat, concatenated per der+
-        for i in 0,1:
-            derP.valt[i]+=valt[i]; derP.rdnt[i]+=rdnt[i]
-    else:
-        # rng+: add new link derP
+    if fder:  # der+: extend in-link derH
+        rn *= len(_P.link_tH[-2][fder]) / len(P.link_tH[-2][fder])  # derH is summed from links
+        dderH, valt, rdnt = comp_derH(_P.derH, P.derH, rn)  # += fork rdn
+        derP = CderP(derH = derP.derH+dderH, valt=valt, rdnt=rdnt, P=P,_P=_P, S=derP.S)  # dderH valt,rdnt for new link
+        mval,dval = valt; mrdn,drdn = rdnt
+    else:  # rng+: add derH
         mtuple,dtuple = comp_ptuple(_P.ptuple, P.ptuple, rn)
         mval = sum(mtuple); dval = sum(dtuple)
         mrdn = 1+(dval>mval); drdn = 1+(1-(dval>mval))  # rdn = Dval/Mval?
         derP = CderP(derH=[[mtuple,dtuple, mval,dval,mrdn,drdn]], valt=[mval,dval], rdnt=[mrdn,drdn], P=P,_P=_P, S=derP)
-        P.link_H[-1] += [derP]  # all links
-        if mval > aveP*mrdn: P.link_tH[-1][0] += [derP]  # +ve links, fork selection in form_PP_t
-        if dval > aveP*drdn: P.link_tH[-1][1] += [derP]
+
+    if mval > aveP*mrdn: P.link_tH[-1][0] += [derP]  # +ve links, for fork selection in form_PP_t, not fd as -ve links?
+    if dval > aveP*drdn: P.link_tH[-1][1] += [derP]
 
 
-def comp_derH(_derH, derH, rn):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
+def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
     dderH = []  # or = not-missing comparand if xor?
     Mval, Dval, Mrdn, Drdn = 0,0,1,1
@@ -74,7 +72,6 @@ def comp_dtuple(_ptuple, ptuple, rn):
         dtuple += [_par - npar]
 
     return [mtuple, dtuple]
-
 
 def form_PP_t(P_, PP_, base_rdn, fder):  # form PPs of derP.valt[fd] + connected Ps val
 
@@ -100,7 +97,7 @@ def form_PP_t(P_, PP_, base_rdn, fder):  # form PPs of derP.valt[fd] + connected
                         else:
                             _qPP = _P.root_tt[fder][fd]
                             if _qPP:
-                                if _qPP is not qPP:  # _P may be added to qPP via other downlinked P
+                                if _qPP is not qPP:  # _P may be added to qPP via other down-linked P
                                     val += _qPP[1]  # merge _qPP in qPP:
                                     for qP in _qPP[0]:
                                         qP.root_tt[fder][fd] = qPP
@@ -117,15 +114,15 @@ def form_PP_t(P_, PP_, base_rdn, fder):  # form PPs of derP.valt[fd] + connected
                 qPP_ += [qPP]
 
         # prune qPPs by mediated links vals:
-        rePP_ = reval_PP_(qPP_, fd, fder)  # PP = [qPP,valt,reval]
-        CPP_ = [sum2PP(qPP, base_rdn, fd, fder) for qPP in rePP_]
+        rePP_ = reval_PP_(qPP_, fder, fd)  # PP = [qPP,valt,reval]
+        CPP_ = [sum2PP(qPP, base_rdn, fder, fd) for qPP in rePP_]
 
         PP_t += [CPP_]  # least one PP in rePP_, which would have node_ = P_
 
     return PP_t  # add_alt_PPs_(graph_t)?
 
 
-def reval_PP_(PP_, fd, fder):  # recursive eval / prune Ps for rePP
+def reval_PP_(PP_, fder, fd):  # recursive eval / prune Ps for rePP
 
     rePP_ = []
     while PP_:  # init P__
@@ -144,7 +141,7 @@ def reval_PP_(PP_, fd, fder):  # recursive eval / prune Ps for rePP
             for P in P_: P.root_tt[fder][fd] = []
 
     if rePP_ and max([rePP[2] for rePP in rePP_]) > ave:  # recursion if any min reval:
-        rePP_ = reval_PP_(rePP_, fd, fder)
+        rePP_ = reval_PP_(rePP_, fder, fd)
 
     return rePP_
 
@@ -177,7 +174,7 @@ def reval_P_(P_, fd):  # prune qPP by link_val + mediated link__val
     return [P_, Val, reval]
 
 
-def sum2PP(qPP, base_rdn, fd, fder):  # sum links in Ps and Ps in PP
+def sum2PP(qPP, base_rdn, fder, fd):  # sum links in Ps and Ps in PP
 
     P_,_,_ = qPP  # proto-PP is a list
     PP = CPP(fd=fd, node_=P_)
@@ -190,7 +187,7 @@ def sum2PP(qPP, base_rdn, fd, fder):  # sum links in Ps and Ps in PP
         if i: Y0=min(Y0,(y-Dy)); Yn=max(Yn,(y+Dy)); X0=min(X0,(x-Dx)); Xn=max(Xn,(x+Dx))
         else: Y0=y-Dy; Yn=y+Dy; X0=x-Dx; Xn=x+Dx  # init
 
-        for derP in P.link_tH[-1][fd]:
+        for derP in P.link_tH[-1][fder]:
             derH, valt, rdnt = derP.derH, derP.valt, derP.rdnt
             sum_derH([P.derH,P.valt,P.rdnt], [derH,valt,rdnt], base_rdn)
             _P = derP._P  # bilateral summation:
