@@ -74,7 +74,7 @@ class CPP(CderP):
     rdnt : list = z([1,1])
     mask__: object = None
     node_ : list = z([])  # array of nodes: Ps or sub-PPs in node_tt
-    root_tt : list = z([[None,None],[None,None]])  # PPPm | PPPd containing this PP, for sub+ only
+    root_tt : list = z([[None,None],[None,None]])  # higher rmPP,rdPP,dmPP,ddPP that contain this PP, for sub+ only
     rng : int = 1  # sum of rng+: odd forks in last layer?
     box : list = z([0,0,0,0])  # y0,yn,x0,xn
     # temporary:
@@ -88,11 +88,11 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     fd: int = 0  # not fder?
     link_tH : list = z([[[],[]]])  # +ve rlink_, dlink_ H, ~ derH layers
     # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
-    derHt : list = z([[],[]])  # [[[mtuple,dtuple, mval,dval, mrdn,drdn]]]: cross-fork composition layers
-    id_Ht : list = z([[],[]])  # indices in the list of all possible layers | forks, for sparse representation?
+    derH : list = z([[]])  # [[[mtuple,dtuple, mval,dval, mrdn,drdn]]]: cross-fork composition layers
+    id_H : list = z([[]])  # indices in the list of all possible layers | forks, for sparse representation?
     # also top Lay from links, lower Lays from nodes, hence nested tuple:
-    valtt : list = z([[0,0],[0,0]])
-    rdntt : list = z([[1,1],[1,1]])
+    valt : list = z([0,0])
+    rdnt : list = z([[1,1]])
     node_: list = z([])  # same-fork, incremental nesting if wH: down-forking tree of node Levs, forks in id_T?
     root: object= None  # root_: list = z([])  # agg|sub+ mset forks, incr.nest if uH: up-forking tree of root Levs, separate id_T for feedback?
     # external params, summed from links:

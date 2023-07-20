@@ -2,7 +2,7 @@ import numpy as np
 from copy import deepcopy, copy
 from .classes import Cgraph
 from .filters import aves, ave, ave_nsubt, ave_sub, ave_agg, G_aves, med_decay, ave_distance, ave_Gm, ave_Gd
-from .comp_slice import comp_angle, comp_aangle, comp_derH, sum_derH
+from .comp_slice import comp_angle, comp_aangle, comp_aggH, sum_aggH
 # from .sub_recursion import feedback  # temporary
 
 '''
@@ -35,17 +35,17 @@ Weak value vars are combined into higher var, so derivation fork can be selected
 # not fully updated
 def agg_recursion(root):  # compositional recursion in root.PP_
 
-    for i in 0,1: root.rdntt[0][i] += 1  # estimate, no node.rdntt[fder] += 1?
+    for i in 0,1: root.rdnt[i] += 1  # estimate, no node.rdnt[fder] += 1?
 
     comp_G_(root.node_, pri_G_=None, f1Q=1, fsub=0)  # cross-comp all Gs within rng
     graph_t = form_graph_(root)  # clustering via link_t
     # sub+:
     for fd, graph_ in enumerate(graph_t):  # eval by external (last layer):
-        if root.valtt[0][fd] > ave_sub * root.rdntt[0][fd] and graph_:  # fixed costs and non empty graph_, same per fork
+        if root.valt[fd] > ave_sub * root.rdnt[fd] and graph_:  # fixed costs and non empty graph_, same per fork
             sub_recursion_eval(root, graph_)
     # agg+:
     for fd, graph_ in enumerate(graph_t):
-        if  np.sum(root.valtt) > G_aves[fd] * ave_agg * np.sum(root.rdntt) and len(graph_) > ave_nsubt[fd]:
+        if  np.sum(root.valt) > G_aves[fd] * ave_agg * np.sum(root.rdnt) and len(graph_) > ave_nsubt[fd]:
             agg_recursion(root)  # replace root.node_ with new graphs
         elif root.root:  # if deeper agg+
             feedback(root, fd)  # update root.root..H, breadth-first
@@ -64,29 +64,28 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fd=0, fsub=0):  # cross-comp Graphs if f1Q, 
                     continue
             dy = _iG.box[0]-iG.box[0]; dx = _iG.box[1]-iG.box[1]  # between center x0,y0
             distance = np.hypot(dy,dx) # Euclidean distance between centers, sum in sparsity, proximity = ave-distance
-            if distance < ave_distance * ((sum(_iG.valtt[1]) + sum(iG.valtt[1])) / (2*sum(G_aves))):
+            if distance < ave_distance * ((sum(_iG.valt) + sum(iG.valt)) / (2*sum(G_aves))):
                 # same for cis and alt Gs:
                 for _G, G in ((_iG, iG), (_iG.alt_Graph, iG.alt_Graph)):
                     if not _G or not G:  # or G.val
                         continue
-                    derH, valtt, rdntt = comp_derH(_G.derHt[1], G.derHt[1], rn=1)  # comp aggH, or layers while lower match?
-                    derG = Cgraph(node_=[_G,G], derHt=derH,valtt=valtt,rdntt=rdntt, S=distance, A=[dy,dx], box=[])  # box is redundant to G
+                    aggH, valt, rdnt = comp_aggH(_G.aggH[1], G.aggH[1], rn=1)  # comp aggH, or layers while lower match?
+                    derG = Cgraph(node_=[_G,G], aggH=aggH,valt=valt,rdnt=rdnt, S=distance, A=[dy,dx], box=[])  # box is redundant to G
                     # add links:
-                    _G.link_ += [derG]; G.link_ += [derG]  # no didx, no ext_valtt accum?
-                    if valtt[0] > ave_Gm:
+                    if valt[0] > ave_Gm:
                         _G.link_tH[0] += [derG]; G.link_tH[0] += [derG]  # bi-directional
-                    if valtt[1] > ave_Gd:
+                    if valt[1] > ave_Gd:
                         _G.link_tH[1] += [derG]; G.link_tH[1] += [derG]
 
-                    if not f1Q: dpars_ += [[derH,valtt,rdntt]]  # comp G_s? not sure
-                # implicit cis, alt pair nesting in mderH, dderH
+                    if not f1Q: dpars_ += [[aggH,valt,rdnt]]  # comp G_s? not sure
+                # implicit cis, alt pair nesting in maggH, daggH
     if not f1Q:
         return dpars_  # else no return, packed in links
     '''
     comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D?
     '''
 
-def form_graph_(root):  # form list graphs and their derHs, G is node in GG graph
+def form_graph_(root):  # form list graphs and their aggHs, G is node in GG graph
 
     G_ = root.node_
     mnode_, dnode_ = [],[]  # Gs with >0 +ve fork links:
@@ -119,7 +118,7 @@ def init_graph(gnode_, G_, G, fd, val):  # recursive depth-first gnode_+=[_G]
         if _G in G_:  # _G is not removed in prior loop
             gnode_ += [_G]
             G_.remove(_G)
-            val += _G.valtt[1][fd]  # interval
+            val += _G.valt[fd]  # interval
             val += init_graph(gnode_, G_, _G, fd, val)
     return val
 
@@ -131,7 +130,7 @@ def graph_reval_(graph_, reval_, fd):  # recursive eval nodes for regraph, after
 
     while graph_:
         graph,val = graph_.pop()
-        reval = reval_.pop()  # each link *= other_G.aggH.valtt
+        reval = reval_.pop()  # each link *= other_G.aggH.valt
 
         if val > aveG:  # else graph is not re-inserted
             if reval < aveG:  # same graph, skip re-evaluation:
@@ -153,30 +152,30 @@ def graph_reval(graph, fd):  # exclusive graph segmentation by reval,prune nodes
 
     for node in graph[0]:  # compute reval: link_Val reinforcement by linked nodes Val:
         lval = 0  # link value
-        _lval = node.valtt[0][fd]  # = sum([link.valtt[fd] for link in node.link_tH[fd]])?
-        for derG in node.link_tH[fd]:
-            val = derG.valtt[fd]  # of top derH only
+        _lval = node.valt[0][fd]  # = sum([link.valt[fd] for link in node.link_tH[-1][fd]])?
+        for derG in node.link_tH[-1][fd]:
+            val = derG.valt[fd]  # of top aggH only
             _node = derG.node_[1] if derG.node_[0] is node else derG.node_[0]
-            lval += val + (_node.valtt[0][fd]-val) * med_decay
+            lval += val + (_node.valt[0][fd]-val) * med_decay
         reval += _lval - lval  # _node.link_tH val was updated in previous round
     rreval = 0
     if reval > aveG:
         # prune:
         regraph, Val = [], 0  # reformed proto-graph
         for node in graph[0]:
-            val = node.valtt[0][fd]
+            val = node.valt[0][fd]
             if val < G_aves[fd] and node in graph:  # prune revalued node and its links
-                for derG in node.link_tH[fd]:
+                for derG in node.link_tH[-1][fd]:
                     _node = derG.node_[1] if derG.node_[0] is node else derG.node_[0]
-                    _link_ = _node.link_tH[fd]
+                    _link_ = _node.link_tH[-1][fd]
                     if derG in _link_: _link_.remove(derG)
-                    rreval += derG.valtt[fd] + (_node.valtt[0][fd]-derG.valtt[fd]) * med_decay  # else same as rreval += link_.val
+                    rreval += derG.valt[fd] + (_node.valt[0][fd]-derG.valt[fd]) * med_decay  # else same as rreval += link_.val
             else:
-                link_ = node.link_tH[fd]  # prune node links only:
+                link_ = node.link_tH[-1][fd]  # prune node links only:
                 remove_link_ = []
                 for derG in link_:
                     _node = derG.node_[1] if derG.node_[0] is node else derG.node_[0]  # add med_link_ val to link val:
-                    lval = derG.valtt[fd] + (_node.valtt[0][fd]-derG.valtt[fd]) * med_decay
+                    lval = derG.valt[fd] + (_node.valt[0][fd]-derG.valt[fd]) * med_decay
                     if lval < aveG:  # prune link, else no change
                         remove_link_ += [derG]
                         rreval += lval
@@ -198,7 +197,7 @@ Clusters of different forks / param sets may overlap, else no use of redundant i
 No centroid clustering, but cluster may have core subset.
 '''
 
-def sum2graph_(graph_, fd):  # sum node and link params into graph, derH in agg+ or player in sub+
+def sum2graph_(graph_, fd):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
     Graph_ = []
     for graph in graph_:  # seq Gs
@@ -208,23 +207,23 @@ def sum2graph_(graph_, fd):  # sum node and link params into graph, derH in agg+
         Link_ = []
         for G in graph[0]:
             sum_box(Graph.box, G.box)
-            sum_derH([Graph.derHt[1],Graph.valtt[1],Graph.rdntt[1]], [G.derHt[1],G.valtt[1],G.rdntt[1]], base_rdn=1)  # G internals
-            link_ = G.link_tH[fd]
+            sum_aggH([Graph.aggH[1],Graph.valt[1],Graph.rdnt[1]], [G.aggH[1],G.valt[1],G.rdnt[1]], base_rdn=1)  # G internals
+            link_ = G.link_tH[-1][fd]
             Link_[:] = list(set(Link_ + link_))
-            derH=[]; valtt=[0,0]; rdntt=[1,1]
+            aggH=[]; valt=[0,0]; rdnt=[1,1]
             for derG in link_:
-                sum_derH([derH,valtt,rdntt], [derG.derHt,derG.valtt,derG.rdntt], base_rdn=1)  # node externals
+                sum_aggH([aggH,valt,rdnt], [derG.aggH,derG.valt,derG.rdnt], base_rdn=1)  # node externals
                 sum_box(G.box, derG.node_[0].box if derG.node_[1] is G else derG.node_[1].box)
-            G.derHt[1]+=derH  # internals+=externals after clustering:
+            G.aggH[1]+=aggH  # internals+=externals after clustering:
             for i in 0,1:
-                G.valtt[1][i] += valtt[i]; G.rdntt[1][i] += rdntt[i]
+                G.valt[1][i] += valt[i]; G.rdnt[1][i] += rdnt[i]
             Graph.node_ += [G]
-        derH=[]; valtt=[0,0]; rdntt=[1,1]
+        aggH=[]; valt=[0,0]; rdnt=[1,1]
         for derG in Link_:
-            sum_derH([derH,valtt,rdntt], [derG.derHt, derG.valtt, derG.rdntt], base_rdn=1)  # sum unique links
-        Graph.derHt[1] += derH  # internals+=externals after clustering:
+            sum_aggH([aggH,valt,rdnt], [derG.aggH, derG.valt, derG.rdnt], base_rdn=1)  # sum unique links
+        Graph.aggH[1] += aggH  # internals+=externals after clustering:
         for i in 0,1:
-            Graph.valtt[1][i] += valtt[i]; Graph.rdntt[1][i] += rdntt[i]
+            Graph.valt[1][i] += valt[i]; Graph.rdnt[1][i] += rdnt[i]
         Graph_ += [Graph]
 
     return Graph_
@@ -238,7 +237,7 @@ def comp_ext(_ext, ext, dsub):
     else:
         dA=_A-A; mA=ave-abs(dA)
     dsub.ext[0][:]= mL,mS,mA; dsub.ext[1][:]= dL,dS,dA
-    dsub.valtt[0] += mL+mS+mA; dsub.valtt[1] += dL+dS+dA
+    dsub.valt[0] += mL+mS+mA; dsub.valt[1] += dL+dS+dA
 
 def sum_ext(_ext, ext):
     _dL,_dS,_dA = _ext[1]; dL,dS,dA = ext[1]
@@ -251,7 +250,7 @@ def sum_ext(_ext, ext):
             _ext[i] = _par+par
 
 ''' if n roots: 
-sum_derH(Graph.uH[0][fd].derH,root.derH) or sum_G(Graph.uH[0][fd],root)? init if empty
+sum_aggH(Graph.uH[0][fd].aggH,root.aggH) or sum_G(Graph.uH[0][fd],root)? init if empty
 sum_H(Graph.uH[1:], root.uH)  # root of Graph, init if empty
 '''
 
@@ -267,8 +266,8 @@ def add_alt_graph_(graph_t):  # mgraph_, dgraph_
     '''
     for fd, graph_ in enumerate(graph_t):
         for graph in graph_:
-            for node in graph.derHs.H[-1].node_:
-                for derG in node.link_.Q:  # contour if link.derHs.val < aveGm: link outside the graph
+            for node in graph.aggHs.H[-1].node_:
+                for derG in node.link_.Q:  # contour if link.aggHs.val < aveGm: link outside the graph
                     for G in [derG.node0, derG.node1]:  # both overlap: in-graph nodes, and contour: not in-graph nodes
                         alt_graph = G.roott[1-fd]
                         if alt_graph not in graph.alt_graph_ and isinstance(alt_graph, CQ):  # not proto-graph or removed
@@ -278,13 +277,13 @@ def add_alt_graph_(graph_t):  # mgraph_, dgraph_
     for fd, graph_ in enumerate(graph_t):
         for graph in graph_:
             if graph.alt_graph_:
-                graph.alt_derHs = CQ()  # players if fsub? der+: derHs[-1] += player, rng+: players[-1] = player?
+                graph.alt_aggHs = CQ()  # players if fsub? der+: aggHs[-1] += player, rng+: players[-1] = player?
                 for alt_graph in graph.alt_graph_:
-                    sum_pH(graph.alt_derHs, alt_graph.derHs)  # accum alt_graph_ params
-                    graph.alt_rdn += len(set(graph.derHs.H[-1].node_).intersection(alt_graph.derHs.H[-1].node_))  # overlap
+                    sum_pH(graph.alt_aggHs, alt_graph.aggHs)  # accum alt_graph_ params
+                    graph.alt_rdn += len(set(graph.aggHs.H[-1].node_).intersection(alt_graph.aggHs.H[-1].node_))  # overlap
 
 # draft:
-def sub_recursion_eval(root, graph_):  # eval per fork, same as in comp_slice, still flat derH, add valtt to return?
+def sub_recursion_eval(root, graph_):  # eval per fork, same as in comp_slice, still flat aggH, add valt to return?
 
     termt = [1,1]
     for graph in graph_:
@@ -292,15 +291,15 @@ def sub_recursion_eval(root, graph_):  # eval per fork, same as in comp_slice, s
         fr = 0
         for fd in 0,1:
             # not sure int or/and ext:
-            if graph.valtt[1][fd] > G_aves[fd] * graph.rdntt[1][fd] and len(graph.node_) > ave_nsubt[fd]:
-                graph.rdntt[1][fd] += 1  # estimate, no node.rdntt[fd] += 1?
+            if graph.valt[1][fd] > G_aves[fd] * graph.rdnt[1][fd] and len(graph.node_) > ave_nsubt[fd]:
+                graph.rdnt[1][fd] += 1  # estimate, no node.rdnt[fd] += 1?
                 termt[fd] = 0; fr = 1
                 sub_G_t += [sub_recursion(graph, node_, fd)]  # comp_der|rng in graph -> parLayer, sub_Gs
             else:
                 sub_G_t += [node_]
                 if isinstance(root, Cgraph):
                     # merge_externals?
-                    root.fback_t[fd] += [[graph.derHt, graph.valtt, graph.rdntt]]  # fback_t vs. flat?
+                    root.fback_t[fd] += [[graph.aggH, graph.valt, graph.rdnt]]  # fback_t vs. flat?
         if fr:
             graph.node_ = sub_G_t
     for fd in 0,1:
@@ -308,13 +307,13 @@ def sub_recursion_eval(root, graph_):  # eval per fork, same as in comp_slice, s
            feedback(root, fd)
 
 
-def sub_recursion(graph, node_, fd):  # rng+: extend G_ per graph, der+: replace G_ with derG_, valtt=[0,0]?
+def sub_recursion(graph, node_, fd):  # rng+: extend G_ per graph, der+: replace G_ with derG_, valt=[0,0]?
 
     comp_G_(graph.node_, pri_G_=None, f1Q=1, fd=fd)  # cross-comp all Gs in rng
     sub_G_t = form_graph_(graph)  # cluster sub_graphs via link_tH
 
     for i, sub_G_ in enumerate(sub_G_t):
-        if sub_G_:  # and graph.rdn > ave_sub * graph.rdn:  # from sum2graph, not last-layer valtt,rdntt?
+        if sub_G_:  # and graph.rdn > ave_sub * graph.rdn:  # from sum2graph, not last-layer valt,rdnt?
             for sub_G in sub_G_: sub_G.root = graph
             sub_recursion_eval(graph, sub_G_)
 
@@ -323,16 +322,16 @@ def sub_recursion(graph, node_, fd):  # rng+: extend G_ per graph, der+: replace
 # not revised:
 def feedback(root, fd):  # append new der layers to root
 
-    Fback = deepcopy(root.fback_t[fd].pop())  # init with 1st fback: [derH,valtt,rdntt], derH: [[mtuple,dtuple, mval,dval, mrdn, drdn]]
+    Fback = deepcopy(root.fback_t[fd].pop())  # init with 1st fback: [aggH,valt,rdnt], aggH: [[mtuple,dtuple, mval,dval, mrdn, drdn]]
     while root.fback_t[fd]:
-        derHt, valtt, rdntt = root.fback_t[fd].pop()
+        aggH, valt, rdnt = root.fback_t[fd].pop()
         for i in 0,1:
-            sum_derH([Fback[0][i],Fback[0][i],Fback[0][i]], [derHt[i], valtt[i], rdntt[i]] , base_rdn=0)
+            sum_aggH([Fback[0][i],Fback[0][i],Fback[0][i]], [aggH[i], valt[i], rdnt[i]] , base_rdn=0)
     for i in 0, 1:
-        sum_derH([root.derHt[i], root.valtt[i],root.rdntt[i]], [Fback[0][i],Fback[0][i],Fback[0][i]], base_rdn=0)
+        sum_aggH([root.aggH[i], root.valt[i],root.rdnt[i]], [Fback[0][i],Fback[0][i],Fback[0][i]], base_rdn=0)
 
     if isinstance(root.root, Cgraph):  # not blob
         root = root.root
         root.fback_t[fd] += [Fback]
         if len(root.fback_t[fd]) == len(root.node_[fd]):  # all nodes term, fed back to root.fback_t
-            feedback(root, fd)  # derH/ rng layer in sum2PP, deeper rng layers are appended by feedback
+            feedback(root, fd)  # aggH/ rng layer in sum2PP, deeper rng layers are appended by feedback

@@ -6,6 +6,7 @@ from frame_blobs import recompute_dert, recompute_adert
 from .classes import CP, CPP, CderP
 from .filters import ave, ave_g, ave_ga, ave_rotate
 from .comp_slice import comp_slice, comp_angle
+from .hough_P import new_rt_olp_array, hough_check
 from .agg_convert import agg_recursion_eval
 from .sub_recursion import sub_recursion_eval
 
@@ -254,8 +255,58 @@ def form_link_(P, cP_, blob):  # trace adj Ps up and down by adj dert roots, fil
 
 
 def slice_blob_ortho(blob, verbose=False):  # slice_blob with axis-orthogonal Ps
+    from frame_blob import UNFILLED, EXCLUDED_ID
+    Y, X = blob.mask__.shape
+    yx_ = sort_cell_by_da(blob)
+    idmap = np.full(blob.mask__.shape, UNFILLED, dtype=bool)
+    idmap[blob.mask__] = EXCLUDED_ID
 
-    from .hough_P import new_rt_olp_array, hough_check
+    blob.P_ = []
+    for y, x in yx_:
+        if idmap[y, x] == UNFILLED:
+            pass
+            # TODO: form P with y, x as pivot
+
+            # TODO: check for adjacent Ps using idmap
+
+            # TODO: fill idmap at P.dert_olp_ with P.id
+
+    return blob.P_
+
+def sort_cell_by_da(blob):   # sort derts by angle deviation of derts
+    with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
+        included = np.pad(~blob.mask__, 1, 'constant', constant_values=False)
+
+        uv__ = np.pad(blob.der__t[1:3] / blob.der__t.g,
+                      [(0, 0), (1, 1), (1, 1)], 'constant', constant_values=0)
+        if np.isnan(uv__[:, included]).any():
+            raise ValueError("g = 0 in edge blob")
+
+        # Get angle deviation of derts
+        from utils import kernel_slice_3x3 as ks
+        rim_slices = (
+            ks.tl, ks.tc, ks.tr,
+            ks.ml, ks.mr,
+            ks.bl, ks.bc, ks.br)
+        rim___ = [included[sl] for sl in rim_slices]
+        rim_da___ = [(1 - (uv__[ks.mc] * uv__[sl]).sum(axis=0))
+                     for sl in rim_slices]
+
+        # Set irrelevant rim = 0
+        for rim__, rim_da__ in zip(rim___, rim_da___):
+            rim_da__[~rim__] = 0
+
+        # Get average angle deviation
+        da__ = sum(rim_da___) / sum(rim___)
+
+        # Get in-blob cells
+        yx_ = sorted(zip(*np.indices(da__.shape)[:, included[ks.mc]]),
+                     key=lambda yx: da__[yx[0], yx[1]])
+
+    return yx_
+
+def slice_blob_hough(blob, verbose=False):  # slice_blob with axis-orthogonal Ps, using Hough transform
+
     Y, X = blob.mask__.shape
     # Get thetas and positions:
     dy__, dx__ = blob.der__t[4:6]  # Get blob derts' angle
@@ -269,13 +320,14 @@ def slice_blob_ortho(blob, verbose=False):  # slice_blob with axis-orthogonal Ps
     # floodfill derts with similar rho and theta
     P_ = []
     filled = blob.mask__.copy()
+    zy, zx = Y/2, X/2
     for y in y__[:, 0]:
         for x in x__[0]:
             # initialize P at first unfilled dert found
             if not filled[y, x]:
                 M = 0; Ma = 0; I = 0; Dy = 0; Dx = 0; Dyy = 0; Dyx = 0; Dxy = 0; Dxx = 0
                 dert_ = []
-                box = [y, y, x, x]
+                dert_yx_ = []
                 to_fill = [(y, x)]                  # dert indices to floodfill
                 rt_olp__ = new_rt_olp_array((Y, X)) # overlap of rho theta (line) space
                 while to_fill:                      # floodfill for one P
@@ -285,7 +337,7 @@ def slice_blob_ortho(blob, verbose=False):  # slice_blob with axis-orthogonal Ps
                     if filled[y2, x2]:              # skip if already filled
                         continue
                     # check if dert is almost on the same line and have similar gradient angle
-                    new_rt_olp__ = hough_check(rt_olp__, y2, x2, theta__[y2, x2])
+                    new_rt_olp__ = hough_check(rt_olp__, y2, x2, theta__[y2, x2], zx, zy)
                     if not new_rt_olp__.any():
                         continue
 
@@ -295,28 +347,23 @@ def slice_blob_ortho(blob, verbose=False):  # slice_blob with axis-orthogonal Ps
                     dert = tuple(param__[y2, x2] for param__ in blob.der__t[1:])
                     g, ga, ri, dy, dx, dyy, dyx, dxy, dxx = dert  # skip i
                     M += ave_g - g; Ma += ave_ga - ga; I += ri; Dy+=dy; Dx+=dx; Dyy+=dyy; Dyx+=dyx; Dxy+=dxy; Dxx+=dxx
-                    dert_ += [(y2, x2, *dert)]  # unpack x, y, add dert to P
+                    dert_ += [dert]  # unpack x, y, add dert to P
+                    dert_yx_ += [(y2, x2)]
 
-                    if y2 < box[0]: box[0] = y2
-                    if y2 > box[1]: box[1] = y2
-                    if x2 < box[2]: box[2] = x2
-                    if x2 > box[3]: box[3] = x2
                     # add neighbors to fill
                     to_fill += [*product(range(y2-1, y2+2), range(x2-1, x2+2))]
                 if not rt_olp__.any():
                     raise ValueError
-                G = np.hypot(Dy, Dx)  # Dy,Dx  # recompute G,Ga, it can't reconstruct M,Ma
-                Ga = (Dyx + 1) + (Dxx + 1)
+                G = recompute_dert(Dy, Dx)
+                Ga, Dyy, Dyx, Dxy, Dxx = recompute_adert(Dyy, Dyx, Dxy, Dxx)
                 L = len(dert_)
-                if G == 0:
-                    axis = 0, 1
-                else:
-                    axis = Dy / G, Dx / G
+                axis = (0, 1) if G == 0 else (Dy / G, Dx / G)
                 P_ += [CP(ptuple=[I, M, Ma, [Dy, Dx], [Dyy, Dyx, Dxy, Dxx], G, Ga, L],
-                          box=box, dert_=dert_, axis=axis)]
+                          yx=sorted(dert_yx_, key=lambda yx: yx[1])[L//2], axis=axis,
+                          dert_=dert_, dert_yx_=dert_yx_, dert_olp_=dert_yx_)]
                 if verbose:
                     progress += L * step; print(f"\rFilling... {round(progress)} %", end=""); sys.stdout.flush()
-    blob.P__ = [P_]
+    blob.P_ = P_
     if verbose: print("\r" + " " * 79, end=""); sys.stdout.flush(); print("\r", end="")
     return P_
 

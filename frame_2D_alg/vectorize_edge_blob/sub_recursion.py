@@ -18,9 +18,8 @@ def sub_recursion_eval(root, PP_):  # fork PP_ in PP or blob, no derH in blob
                 termt[fder] = 0
                 if not fr:  # add link_tt and root_tt for both comp forks:
                     for P in PP.node_:
-                        P.root_tt = [[None,None],[None,None]]  # replace root PPs with sub_PPs, not sure it will work here?
-                        P.link_H += [[]]; P.link_tH += [[[],[]]]
-                        # root_t and link_t of form forks are added in sub+:
+                        P.root_tt = [[None,None],[None,None]]
+                        P.link_tH += [[[],[]]]  # form root_t, link_t in sub+:
                 sub_tt += [sub_recursion(PP, PP_, fder)]  # comp_der|rng in PP->parLayer
                 fr = 1
             else:
