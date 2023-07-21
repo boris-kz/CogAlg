@@ -30,6 +30,9 @@ Clustering criterion is G.M|D, summed across >ave vars if selective comp (<ave v
 Fork selection should be per var or co-derived der layer or agg level. 
 There are concepts that include same matching vars: size, density, color, stability, etc, but in different combinations.
 Weak value vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
+
+agg+: [[new_aggLev]] += Node_aggH, where each lower aggLev is subH
+separate G.derH, with len = min([len(node.derH) for node in G.node_])
 '''
 
 # not fully updated
@@ -335,3 +338,40 @@ def feedback(root, fd):  # append new der layers to root
         root.fback_t[fd] += [Fback]
         if len(root.fback_t[fd]) == len(root.node_[fd]):  # all nodes term, fed back to root.fback_t
             feedback(root, fd)  # aggH/ rng layer in sum2PP, deeper rng layers are appended by feedback
+
+# not reviewed:
+
+def sum_aggH(T, t, base_rdn):
+
+    AggH, Valt, Rdnt = T
+    aggH, valt, rdnt = t
+    for i in 0, 1:
+        Valt[i] += valt[i]
+        Rdnt[i] += rdnt[i]
+
+    if AggH:
+        for Ht, ht in zip_longest(AggH, aggH, fillvalue=None):
+            if ht != None:
+                if Ht:
+                    # check for layer, mdtuple and finally value in each tuple
+                    if ht[0] and isinstance(ht[0], list) and ht[0][0] and isinstance(ht[0][0], list) and not isinstance(ht[0][0][0], list):
+                        for Layer, layer in zip_longest(Ht,ht, fillvalue=None):
+                            if layer != None:
+                                if Layer:
+                                    for i, param in enumerate(layer):
+                                        if i<2: sum_ptuple(Layer[i], param)  # mtuple | dtuple
+                                        elif i<4: Layer[i] += param  # mval | dval
+                                        else:     Layer[i] += param + base_rdn # | mrdn | drdn
+                                elif Layer!=None:
+                                    Layer[:] = deepcopy(layer)
+                                else:
+                                    Ht += [deepcopy(layer)]
+                    else:
+                        for H, h in zip(Ht, ht):  # recursively sum of each t of [t, valt, rdnt] (always 2 elements here)
+                            sum_aggH(H, h, base_rdn)
+                elif Ht != None:
+                    Ht[:] = deepcopy(ht)
+                else:
+                    AggH += [deepcopy(ht)]
+    else:
+        AggH[:] = deepcopy(aggH)

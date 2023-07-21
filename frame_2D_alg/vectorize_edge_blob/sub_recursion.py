@@ -5,6 +5,16 @@ from .filters import PP_aves, ave_nsubt
 from .classes import CP, CPP
 from .comp_slice import comp_P, form_PP_t, sum_derH
 from dataclasses import replace
+'''
+Nesting in dH, implicit or explicit, is added by each layer of comp, which forms dderH | dH.
+That dH has the same nesting as compared G.H, but then G.H += [dH].
+
+To preserve forks we encoded per layer, as fders in id_H (fd is clustering type, it doesn't matter here).
+Those are fders are single sequence in upward H (which is not represented), but a fork tree if we trace it down.
+
+We don't represent forks because they are merged in feedback, otherwise it's too complex:
+we would need fback_T and Fback_T: last_layer_nforks = 2^n_higher_layers, to map to last-layer root forks.
+'''
 
 def sub_recursion_eval(root, PP_):  # fork PP_ in PP or blob, no derH in blob
 
@@ -52,18 +62,24 @@ def sub_recursion(PP, PP_, fder):  # evaluate PP for rng+ and der+, add layers t
 
 def feedback(root, fder, fd):  # append new der layers to root
 
-    Fback = deepcopy(root.fback_t[fd].pop())
+    Fback = deepcopy(root.fback_.pop())
     # init with 1st fback: [derH,valt,rdnt], derH: [[mtuple,dtuple, mval,dval, mrdn, drdn]]
-    while root.fback_t[fd]:
-        sum_derH(Fback,root.fback_t[fd].pop(), base_rdn=0)
+    while root.fback_:
+        sum_derH(Fback,root.fback_.pop(), base_rdn=0)
     sum_derH([root.derH, root.valt,root.rdnt], Fback, base_rdn=0)
 
     if isinstance(root.root_tt[fder][fd], CPP):  # not blob
         root = root.root_tt[fder][fd]
-        root.fback_t[fd] += [Fback]
+        root.fback_ += [Fback]
+        if len(root.fback_) == len(root.node_):  # all original nodes term, fed back to root.fback_t
+            feedback(root, fder, fd)  # derH per comp layer in sum2PP, add deeper layers by feedback
+        '''
+        root.fback_t[fd] += [Fback] 
         if len(root.fback_t[fd]) == len(root.node_):  # all original nodes term, fed back to root.fback_t
-            feedback(root, fder, fd)  # derH/ rng layer in sum2PP, deeper rng layers are appended by feedback
-
+            feedback(root, fder, fd)  # derH per comp layer in sum2PP, deeper layers are appended by feedback
+        fback_t was to represent derH as a fork tree,
+        but that should be fback_T and Fback_T: last_layer_nforks = 2^n_higher_layers, which seems too complex
+        '''
 
 def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip clustering?
 

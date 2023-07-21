@@ -78,19 +78,18 @@ class CPP(CderP):
     rng : int = 1  # sum of rng+: odd forks in last layer?
     box : list = z([0,0,0,0])  # y0,yn,x0,xn
     # temporary:
-    fback_t : list = z([[],[]])  # [feedback derH,valt,rdnt per node]
+    fback_ : list = z([])  # [feedback derH,valt,rdnt per node]
     coPP_ : list = z([])  # rdn reps in other PPPs, to eval and remove?
     Rdn : int = 0  # for accumulation or separate recursion count?
     # fdiv = NoneType  # if div_comp?
 
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
-    fd: int = 0  # not fder?
+    fd: int = 0  # not fder
     link_tH : list = z([[[],[]]])  # +ve rlink_, dlink_ H, ~ derH layers
-    # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
-    derH : list = z([[]])  # [[[mtuple,dtuple, mval,dval, mrdn,drdn]]]: cross-fork composition layers
-    id_H : list = z([[]])  # indices in the list of all possible layers | forks, for sparse representation?
-    # also top Lay from links, lower Lays from nodes, hence nested tuple:
+    derH : list = z([[]])  # [[derH, valt, rdnt]]: sum from PP nodes for len(G.derH) = min([len(node.derH) for node in G.node_])
+    aggH : list = z([[]])  # [[subHt, valt, rdnt]]: cross-fork composition layers
+    # id_H : list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
     valt : list = z([0,0])
     rdnt : list = z([[1,1]])
     node_: list = z([])  # same-fork, incremental nesting if wH: down-forking tree of node Levs, forks in id_T?
@@ -104,11 +103,13 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     alt_graph_: list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
     alt_Graph : object = None  # conditional, summed and concatenated params of alt_graph_
     # temporary:
-    fback_t : list = z([[], []])  # [feedback derT,valT,rdnT per node]
+    fback_ : list = z([[], []])  # [feedback derT,valT,rdnT per node]
     Rdn : int = 0  # for accumulation or separate recursion count?
     ''' 
     ext / agg.sub.derH:
     L : list = z([])  # der L, init None
     S : int = 0  # sparsity: ave len link
     A : list = z([])  # area|axis: Dy,Dx, ini None
+    # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
+    # top Lay from links, lower Lays from nodes, hence nested tuple?
     '''
