@@ -35,7 +35,7 @@ def sub_recursion_eval(root, PP_):  # fork PP_ in PP or blob, no derH in blob
             else:
                 sub_tt += [PP.node_]
                 if isinstance(root, CPP):  # separate feedback per terminated comp fork:
-                    root.fback_t[fder] += [[PP.derH, PP.valt, PP.rdnt]]
+                    root.fback_ += [[PP.derH, PP.valt, PP.rdnt]]
         if fr:
             PP.node_ = sub_tt
             # nested PP_ tuple from 2 comp forks, each returns sub_PP_t: 2 clustering forks, if taken
@@ -55,7 +55,7 @@ def sub_recursion(PP, PP_, fder):  # evaluate PP for rng+ and der+, add layers t
 
         if any(termt):  # fder: comp fork, fd: form fork:
             for fder in 0,1:
-                if termt[fder] and PP.fback_t[fder]:
+                if termt[fder] and PP.fback_:
                     feedback(PP, fder=fder, fd=fd)
                     # upward recursive extend root.derH, forward eval only
     return sub_PP_t

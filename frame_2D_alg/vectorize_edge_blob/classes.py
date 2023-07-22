@@ -22,6 +22,11 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
     L : int = 0  # replaces n, still redundant to len dert_ in P, nlinks in PP or graph
 '''
 
+class Cedge(ClusterStructure):  # edge blob
+
+    # move all edge blob - specific params here, and remove them from Cblob, it's overloaded already?
+    pass
+
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # latuple: I,G,Ga,M,Ma, angle(Dy,Dx), aangle(Dyy,Dyx,Dxy,Dxx), L
@@ -73,7 +78,7 @@ class CPP(CderP):
     valt : list = z([0,0])
     rdnt : list = z([1,1])
     mask__: object = None
-    node_ : list = z([])  # array of nodes: Ps or sub-PPs in node_tt
+    node_ : list = z([])  # Ps or node_tt: [rng+'[sub_PPm_,sub_PPd_], der+'[sub_PPm_,sub_PPd_]]
     root_tt : list = z([[None,None],[None,None]])  # higher rmPP,rdPP,dmPP,ddPP that contain this PP, for sub+ only
     rng : int = 1  # sum of rng+: odd forks in last layer?
     box : list = z([0,0,0,0])  # y0,yn,x0,xn
@@ -87,13 +92,14 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
 
     fd: int = 0  # not fder
     link_tH : list = z([[[],[]]])  # +ve rlink_, dlink_ H, ~ derH layers
-    derH : list = z([[]])  # [[derH, valt, rdnt]]: sum from PP nodes for len(G.derH) = min([len(node.derH) for node in G.node_])
-    aggH : list = z([[]])  # [[subHt, valt, rdnt]]: cross-fork composition layers
-    # id_H : list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
+    derH : list = z([])  # [[derH, valt, rdnt]]: default input from PP, for both rng+ and der+, sum min len?
+    aggH : list = z([[]])  # [[subH, valt, rdnt]]: cross-fork composition layers
     valt : list = z([0,0])
-    rdnt : list = z([[1,1]])
-    node_: list = z([])  # same-fork, incremental nesting if wH: down-forking tree of node Levs, forks in id_T?
-    root: object= None  # root_: list = z([])  # agg|sub+ mset forks, incr.nest if uH: up-forking tree of root Levs, separate id_T for feedback?
+    rdnt : list = z([1,1])
+    node_: list = z([])  # same-fork, incremental nesting if wH: down-forking tree of node Levs, 4 top forks if sub+:
+    # node_tt: list = z([[[],[]],[[],[]]])  # rng+'Gm_,Gd_, der+'Gm_,Gd_, may not overlap
+    root: object= None  # root_: list = z([])  # agg|sub+ mset forks, incr.nest if uH: up-forking tree of root Levs,
+    # root_tt: list = z([[None,None],[None,None]])  # rng+'Gm,Gd, der+'Gm,Gd, if both comp and form are overlapping
     # external params, summed from links:
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers
@@ -110,6 +116,8 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     L : list = z([])  # der L, init None
     S : int = 0  # sparsity: ave len link
     A : list = z([])  # area|axis: Dy,Dx, ini None
+    
+    # id_H : list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
     # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
     # top Lay from links, lower Lays from nodes, hence nested tuple?
     '''

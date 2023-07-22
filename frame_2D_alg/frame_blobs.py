@@ -74,9 +74,6 @@ class CBlob(ClusterStructure):
     Dxy : float = 0.0
     Dxx : float = 0.0
     Ga : float = 0.0
-    # comp_dx:
-    Mdx : float = 0.0
-    Ddx : float = 0.0
     # derivation hierarchy:
     root_der__t : list = z([])  # from root blob, to extend der__t
     prior_forks : str = ''
@@ -86,14 +83,15 @@ class CBlob(ClusterStructure):
     P_ : list = z([])  # input + derPs, no internal sub-recursion
     rlayers : list = z([])  # list of layers across sub_blob derivation tree, deeper layers are nested with both forks
     dlayers : list = z([])  # separate for range and angle forks per blob
-    PPm_ : list = z([])  # mblobs in frame
-    PPd_ : list = z([])  # dblobs in frame
+    PP_tt : list = z([[[],[]],[[],[]]])  # node_tt: [rng+ PPm_,PPd_, der+ PPm_,PPd_]
     valt : list = z([])  # PPm_ val, PPd_ val, += M,G?
     fsliced : bool = False  # from comp_slice
     root : object = None  # frame or from frame_bblob
     mgraph : object = None  # reference to converted blob
     dgraph : object = None  # reference to converted blob
-
+    # comp_dx:
+    # Mdx : float = 0.0
+    # Ddx : float = 0.0
 '''
     Conventions:
     postfix 't' denotes tuple, multiple ts is a nested tuple

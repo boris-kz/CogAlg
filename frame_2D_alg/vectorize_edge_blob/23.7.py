@@ -160,3 +160,98 @@ def merge_PP(PP, _PP, fd, fder):
     Y0,Yn,X0,Xn = PP.box; y0,yn,x0, xn = _PP.box
     PP.box = [min(X0,x0),max(Xn,xn),min(Y0,y0),max(Yn,yn)]
     # mask__, ptuple as etc.
+
+def med_eval(last_link_, old_link_, med_valH, fd):  # recursive eval of mediated link layers, in form_graph only?
+
+    curr_link_ = []; med_val = 0
+    # compute med_valH, layer= val of links mediated by incremental number of nodes:
+
+    for llink in last_link_:
+        for _link in llink._P.link_t[fd]:
+            if _link not in old_link_:  # not-circular link
+                old_link_ += [_link]  # evaluated mediated links
+                curr_link_ += [_link]  # current link layer,-> last_link_ in recursion
+                med_val += np.sum(_link.valT[fd])
+    med_val *= med_decay ** (len(med_valH) + 1)
+    med_valH += [med_val]
+    if med_val > aveB:
+        # last med layer val-> likely next med layer val
+        curr_link_, old_link_, med_valH = med_eval(curr_link_, old_link_, med_valH, fd)  # eval next med layer
+
+    return curr_link_, old_link_, med_valH
+
+# currently not used:
+
+def sum_unpack(Q,q):  # recursive unpack of two pairs of nested sequences, to sum final ptuples
+
+    Que,Val_,Rdn_ = Q; que,val_,rdn_ = q  # alternating rngH( derH( rngH... nesting, down to ptuple|val|rdn
+    for i, (Ele,Val,Rdn, ele,val,rdn) in enumerate(zip_longest(Que,Val_,Rdn_, que,val_,rdn_, fillvalue=[])):
+        if ele:
+            if Ele:
+                if isinstance(val,list):  # element is layer or fork
+                    sum_unpack([Ele,Val,Rdn], [ele,val,rdn])
+                else:  # ptuple
+                    Val_[i] += val; Rdn_[i] += rdn
+                    sum_ptuple(Ele, ele)
+            else:
+                Que += [deepcopy(ele)]; Val_+= [deepcopy(val)]; Rdn_+= [deepcopy(rdn)]
+
+def comp_unpack(Que,que, rn):  # recursive unpack nested sequence to compare final ptuples
+
+    DerT,ValT,RdnT = [[],[]],[[],[]],[[],[]]  # alternating rngH( derH( rngH.. nesting,-> ptuple|val|rdn
+
+    for Ele,ele in zip_longest(Que,que, fillvalue=[]):
+        if Ele and ele:
+            if isinstance(Ele[0],list):
+                derT,valT,rdnT = comp_unpack(Ele, ele, rn)
+            else:
+                # elements are ptuples
+                mtuple, dtuple = comp_dtuple(Ele, ele, rn)  # accum rn across higher composition orders
+                mval=sum(mtuple); dval=sum(dtuple)
+                derT = [mtuple, dtuple]
+                valT = [mval, dval]
+                rdnT = [int(mval<dval),int(mval>=dval)]  # to use np.sum
+
+            for i in 0,1:  # adds nesting per recursion
+                DerT[i]+=[derT[i]]; ValT[i]+=[valT[i]]; RdnT[i]+=[rdnT[i]]
+
+    return DerT,ValT,RdnT
+
+def add_unpack(H, incr):  # recursive unpack hierarchy of unknown nesting to add input
+    # new_H = []
+    for i, e in enumerate(H):
+        if isinstance(e,list):
+            add_unpack(e,incr)
+        else: H[i] += incr
+    return H
+
+def last_add(H, i):  # recursive unpack hierarchy of unknown nesting to add input
+    while isinstance(H,list):
+        H=H[-1]
+    H+=i
+
+def unpack(H):  # recursive unpack hierarchy of unknown nesting
+    while isinstance(H,list):
+        last_H = H
+        H=H[-1]
+    return last_H
+
+def nest(P, ddepth=2):  # default ddepth is nest 2 times: tuple->layer->H, rngH is ptuple, derH is 1,2,4.. ptuples'layers?
+
+    # fback adds alt fork per layer, may be empty?
+    # agg+ adds depth: number brackets before the tested bracket: P.valT[0], P.valT[0][0], etc?
+
+    if not isinstance(P.valT[0],list):
+        curr_depth = 0
+        while curr_depth < ddepth:
+            P.derT[0]=[P.derT[0]]; P.valT[0]=[P.valT[0]]; P.rdnT[0]=[P.rdnT[0]]
+            P.derT[1]=[P.derT[1]]; P.valT[1]=[P.valT[1]]; P.rdnT[1]=[P.rdnT[1]]
+            curr_depth += 1
+
+        if isinstance(P, CP):
+            for derP in P.link_t[1]:
+                curr_depth = 0
+                while curr_depth < ddepth:
+                    derP.derT[0]=[derP.derT[0]]; derP.valT[0]=[derP.valT[0]]; derP.rdnT[0]=[derP.rdnT[0]]
+                    derP.derT[1]=[derP.derT[1]]; derP.valT[1]=[derP.valT[1]]; derP.rdnT[1]=[derP.rdnT[1]]
+                    curr_depth += 1

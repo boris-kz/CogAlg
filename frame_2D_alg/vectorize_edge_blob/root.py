@@ -3,11 +3,11 @@ import numpy as np
 from copy import copy, deepcopy
 from itertools import product
 from frame_blobs import recompute_dert, recompute_adert
-from .classes import CP, CPP, CderP
+from .classes import CP, CPP, CderP, Cgraph
 from .filters import ave, ave_g, ave_ga, ave_rotate
 from .comp_slice import comp_slice, comp_angle
 from .hough_P import new_rt_olp_array, hough_check
-from .agg_convert import agg_recursion_eval
+from .agg_recursion import agg_recursion
 from .sub_recursion import sub_recursion_eval
 
 '''
@@ -52,6 +52,8 @@ oct_sep = 0.3826834323650898
 
 def vectorize_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
 
+    # convert Cblob to Cedge here
+
     slice_blob(blob, verbose)  # form 2D array of Ps: horizontal blob slices in der__t
     rotate_P_(blob, verbose)  # re-form Ps around centers along P.G, P sides may overlap, if sum(P.M s + P.Ma s)?
     cP_ = set(blob.P_)  # to pop here
@@ -59,12 +61,18 @@ def vectorize_root(blob, verbose=False):  # always angle blob, composite dert co
         form_link_(cP_.pop(), cP_, blob)  # trace adjacent Ps, fill|prune if missing or redundant, add them to P.link_
 
     comp_slice(blob, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
-    for fd, PP_ in enumerate([blob.PPm_, blob.PPd_]):
-        # intra PP, no fback to blob:
-        sub_recursion_eval(blob, PP_)
-        # cross-compare PPs, cluster them in graphs:
-        if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
-            agg_recursion_eval(blob, copy(PP_), fd=fd)  # comp sub_PPs, form intermediate PPs
+
+    for fder, PP_t in enumerate(blob.PP_tt):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
+        for fd, PP_ in enumerate(PP_t):
+            # intra PP, no fback to blob:
+            sub_recursion_eval(blob, PP_)
+            # agg+, inter-PP:
+            if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
+                # convert PPs to graphs, cross-comp, cluster:
+                node_ = [Cgraph(derH=[copy(PP.derH), PP.valt, PP.rdnt], box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))
+                         for PP in PP_]
+                blob.node_tt[fder][fd] = node_
+                agg_recursion(blob, PP_)
 
 '''
 or only compute params needed for rotate_P_?
@@ -255,35 +263,47 @@ def form_link_(P, cP_, blob):  # trace adj Ps up and down by adj dert roots, fil
 
 
 def slice_blob_ortho(blob, verbose=False):  # slice_blob with axis-orthogonal Ps
-    from frame_blob import UNFILLED, EXCLUDED_ID
+
     Y, X = blob.mask__.shape
     yx_ = sort_cell_by_da(blob)
-    idmap = np.full(blob.mask__.shape, UNFILLED, dtype=bool)
+    idmap = np.full(blob.mask__.shape, UNFILLED, dtype=int)
     idmap[blob.mask__] = EXCLUDED_ID
 
     blob.P_ = []
+    adj_pairs = set()
     for y, x in yx_:
         if idmap[y, x] == UNFILLED:
-            pass
-            # TODO: form P with y, x as pivot
+            # form P along axis
+            dert = [par__[y, x] for par__ in blob.der__t[1:]]
+            axis = np.divide(dert[3:5], dert[0])
 
-            # TODO: check for adjacent Ps using idmap
+            P = form_P(
+                CP(dert, dert_=[dert], dert_yx_=[(y,x)], dert_olp_={(y,x)}, yx=(y, x)),
+                blob.der__t, blob.mask__, axis=axis)
+            blob.P_ += [P]
 
-            # TODO: fill idmap at P.dert_olp_ with P.id
+            for _y, _x in P.dert_olp_:
+                for __y, __x in product(range(_y-1,y+2), range(x-1,x+2)):
+                    if (0 <= __y < Y) and (0 <= __x < X) and idmap[__y, __x] not in (UNFILLED, EXCLUDED_ID):
+                        adj_pairs.add((idmap[__y, __x], P.id))
 
-    return blob.P_
+            # check for adjacent Ps using idmap
+            for _y, _x in P.dert_olp_:
+                if idmap[_y, _x] == UNFILLED:
+                    idmap[_y, _x] = P.id
+
+    return adj_pairs
 
 def sort_cell_by_da(blob):   # sort derts by angle deviation of derts
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
         included = np.pad(~blob.mask__, 1, 'constant', constant_values=False)
 
-        uv__ = np.pad(blob.der__t[1:3] / blob.der__t.g,
+        uv__ = np.pad(blob.der__t[4:6] / blob.der__t.g,
                       [(0, 0), (1, 1), (1, 1)], 'constant', constant_values=0)
         if np.isnan(uv__[:, included]).any():
             raise ValueError("g = 0 in edge blob")
 
         # Get angle deviation of derts
-        from utils import kernel_slice_3x3 as ks
         rim_slices = (
             ks.tl, ks.tc, ks.tr,
             ks.ml, ks.mr,
