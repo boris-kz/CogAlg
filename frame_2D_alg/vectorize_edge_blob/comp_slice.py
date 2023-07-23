@@ -13,10 +13,10 @@ P: any angle, connectivity in P_ is traced through root_s of derts adjacent to P
 len prior root_ sorted by G is rdn of each root, to evaluate it for inclusion in PP, or starting new P by ave*rdn.
 '''
 
-def comp_slice(blob, verbose=False):  # high-G, smooth-angle blob, composite dert core param is v_g + iv_ga
+def comp_slice(edge, verbose=False):  # high-G, smooth-angle blob, composite dert core param is v_g + iv_ga
 
     P_ = []
-    for P in blob.P_:  # must be contiguous, gaps filled in scan_P_rim
+    for P in edge.P_:  # must be contiguous, gaps filled in scan_P_rim
         link_ = copy(P.link_tH[-1][0])  # init rng+
         P.link_tH[-1][0] = []  # fill with derPs in comp_P
         P_ +=[[P,link_]]
@@ -24,8 +24,7 @@ def comp_slice(blob, verbose=False):  # high-G, smooth-angle blob, composite der
         for _P in link_:  # or spliced_link_ if active
             comp_P(_P,P, fder=0)  # replaces P.link_ Ps with derPs
 
-    PPm_,PPd_ = form_PP_t([Pt[0] for Pt in P_], PP_=None, base_rdn=2, fder=0)  # root fork is rng+
-    blob.PPm_, blob.PPd_  = PPm_, PPd_
+    edge.PP_tt[0] = form_PP_t([Pt[0] for Pt in P_], PP_=None, base_rdn=2, fder=0)  # root fork is rng+ only
 
 
 def comp_P(_P,P, fder=1, derP=None):  #  derP if der+, S if rng+
@@ -72,6 +71,7 @@ def comp_dtuple(_ptuple, ptuple, rn):
         dtuple += [_par - npar]
 
     return [mtuple, dtuple]
+
 
 def form_PP_t(P_, PP_, base_rdn, fder):  # form PPs of derP.valt[fd] + connected Ps val
 
@@ -206,6 +206,7 @@ def sum_derH(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = 
     for i in 0, 1:
         Valt[i] += valt[i]
         Rdnt[i] += rdnt[i] + base_rdn
+
     if DerH:
         for Layer, layer in zip_longest(DerH,derH, fillvalue=[]):
             if layer:

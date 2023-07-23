@@ -11,7 +11,7 @@
     Clustering here is nearest-neighbor only, same as image segmentation, to avoid overlap among blobs.
     -
     Main functions:
-    - comp_pixel:
+    - comp_axis:
     Comparison between diagonal pixels in 2x2 kernels of image forms derts: tuples of pixel + derivatives per kernel.
     The output is der__t: 2D array of pixel-mapped derts.
     - frame_blobs_root:
@@ -80,18 +80,42 @@ class CBlob(ClusterStructure):
     fBa : bool = False  # in root_blob: next fork is comp angle, else comp_r
     rdn : float = 1.0  # redundancy to higher blob layers, or combined?
     rng : int = 1  # comp range, set before intra_comp
-    P_ : list = z([])  # input + derPs, no internal sub-recursion
     rlayers : list = z([])  # list of layers across sub_blob derivation tree, deeper layers are nested with both forks
     dlayers : list = z([])  # separate for range and angle forks per blob
-    PP_tt : list = z([[[],[]],[[],[]]])  # node_tt: [rng+ PPm_,PPd_, der+ PPm_,PPd_]
-    valt : list = z([])  # PPm_ val, PPd_ val, += M,G?
-    fsliced : bool = False  # from comp_slice
+    sub_blobs : list = z([[],[]])
     root : object = None  # frame or from frame_bblob
-    mgraph : object = None  # reference to converted blob
-    dgraph : object = None  # reference to converted blob
+    # valt : list = z([])  # PPm_ val, PPd_ val, += M,G?
+    # fsliced : bool = False  # from comp_slice
     # comp_dx:
     # Mdx : float = 0.0
     # Ddx : float = 0.0
+
+class CEdge(ClusterStructure):  # edge blob
+
+    # replace with directional params:
+    I : float = 0.0
+    Dy : float = 0.0
+    Dx : float = 0.0
+    G : float = 0.0
+    M : float = 0.0 # summed PP.M, for both types of recursion?
+    # comp_angle:
+    Dyy : float = 0.0
+    Dyx : float = 0.0
+    Dxy : float = 0.0
+    Dxx : float = 0.0
+    Ga : float = 0.0
+    box: tuple = (0, 0, 0, 0)  # y0, yn, x0, xn
+
+    mask__: object = None
+    der__t: Union[idert, adert] = None
+    der__t_roots: object = None  # map to der__t
+    adj_blobs: list = z([])  # adjacent blobs
+    node_tt: list = z([[[],[]],[[],[]]])  # PP_ or G_ forks
+    root: object= None  # root_: list if fork overlap
+    derH : list = z([])  # formed in PPs and inherited in graphs
+    aggH : list = z([[]])  # [[subH, valt, rdnt]]: cross-fork composition layers
+    valt : list = z([0,0])
+    rdnt : list = z([1,1])
 '''
     Conventions:
     postfix 't' denotes tuple, multiple ts is a nested tuple
@@ -107,6 +131,12 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
 
     if verbose: start_time = time()
     Y, X = image.shape[:2]
+
+    id__tt = comp_axis(image)  # nested tuple of 2D arrays: [4|8 axes][i,d]: single difference per axis
+    sign__ = ave - id__tt[1] > 0
+    # select max d in each id__t for flood_fill(id__tt, sign__)?
+
+    # form der__t from id__tt, for negative edge blobs only:
     der__t = comp_pixel(image)
     sign__ = ave - der__t[3] > 0   # sign is positive for below-average g in [i__, dy__, dx__, g__, ri]
     # https://en.wikipedia.org/wiki/Flood_fill:

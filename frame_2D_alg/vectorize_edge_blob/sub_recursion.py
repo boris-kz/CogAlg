@@ -34,13 +34,11 @@ def sub_recursion_eval(root, PP_):  # fork PP_ in PP or blob, no derH in blob
                 fr = 1
             else:
                 sub_tt += [PP.node_]
-                if isinstance(root, CPP):  # separate feedback per terminated comp fork:
-                    root.fback_ += [[PP.derH, PP.valt, PP.rdnt]]
+                root.fback_ += [[PP.derH, PP.valt, PP.rdnt]]  # separate feedback per terminated comp fork
         if fr:
-            PP.node_ = sub_tt
-            # nested PP_ tuple from 2 comp forks, each returns sub_PP_t: 2 clustering forks, if taken
-    return termt
+            PP.node_ = sub_tt  # nested PP_ tuple from 2 comp forks, each returns sub_PP_t: 2 clustering forks, if taken
 
+    return termt
 
 def sub_recursion(PP, PP_, fder):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
 
