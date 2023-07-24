@@ -255,3 +255,26 @@ def nest(P, ddepth=2):  # default ddepth is nest 2 times: tuple->layer->H, rngH 
                     derP.derT[0]=[derP.derT[0]]; derP.valT[0]=[derP.valT[0]]; derP.rdnT[0]=[derP.rdnT[0]]
                     derP.derT[1]=[derP.derT[1]]; derP.valT[1]=[derP.valT[1]]; derP.rdnT[1]=[derP.rdnT[1]]
                     curr_depth += 1
+
+def form_graph_(G_, fder):  # form list graphs and their aggHs, G is node in GG graph
+
+    mnode_, dnode_ = [],[]  # Gs with >0 +ve fork links:
+
+    for G in G_:
+        if G.link_tH[0]: mnode_ += [G]  # all nodes with +ve links, not clustered in graphs yet
+        if G.link_tH[1]: dnode_ += [G]
+    graph_t = []
+    for fd, node_ in enumerate([mnode_, dnode_]):
+        graph_ = []  # init graphs by link val:
+        while node_:  # all Gs not removed in add_node_layer
+            G = node_.pop(); gnode_ = [G]
+            val = init_graph(gnode_, node_, G, fd, val=0)  # recursive depth-first gnode_ += [_G]
+            graph_ += [[gnode_,val]]
+        # prune graphs by node val:
+        regraph_ = graph_reval_(graph_, [G_aves[fd] for graph in graph_], fd)  # init reval_ to start
+        if regraph_:
+            graph_[:] = sum2graph_(regraph_, fd)  # sum proto-graph node_ params in graph
+        graph_t += [graph_]
+
+    # add_alt_graph_(graph_t)  # overlap+contour, cluster by common lender (cis graph), combined comp?
+    return graph_t

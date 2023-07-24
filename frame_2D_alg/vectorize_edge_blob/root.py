@@ -2,7 +2,7 @@ import sys
 import numpy as np
 from copy import copy, deepcopy
 from itertools import product
-from frame_blobs import recompute_dert, recompute_adert, Cedge
+from frame_blobs import recompute_dert, recompute_adert, CEdge
 from .classes import CP, CPP, CderP, Cgraph
 from .filters import ave, ave_g, ave_ga, ave_rotate
 from .comp_slice import comp_slice, comp_angle, sum_derH
@@ -50,10 +50,11 @@ octants = lambda: [
 oct_sep = 0.3826834323650898
 
 
-def vectorize_root(edge, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
+def vectorize_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
 
-    # convert Cblob to Cedge:
-    # edge = Cedge(I=blob.I, Dy=blob.Dy, Dx=blob.Dx, G=blob.G, M=blob.M, Dyy=blob.Dyy, Dyx=blob.Dyx, Dxy=blob.Dxy, Dxx=blob.Dxx, Ga=blob.Ga, blob=blob)
+    # convert Cblob to Cedge: (temporary)
+    edge = CEdge(der__t=blob.der__t, der__t_roots=[[[] for col in row] for row in blob.der__t[0]], mask__=blob.mask__,
+                 I=blob.I, Dy=blob.Dy, Dx=blob.Dx, G=blob.G, M=blob.M, Dyy=blob.Dyy, Dyx=blob.Dyx, Dxy=blob.Dxy, Dxx=blob.Dxx, Ga=blob.Ga, blob=blob)
 
     slice_edge(edge, verbose)  # form 2D array of Ps: horizontal blob slices in der__t
     rotate_P_(edge, verbose)  # re-form Ps around centers along P.G, P sides may overlap, if sum(P.M s + P.Ma s)?
@@ -71,10 +72,11 @@ def vectorize_root(edge, verbose=False):  # always angle blob, composite dert co
             node_= []
             for PP in PP_:  # convert PPs to graphs:
                 node_ += [Cgraph(derH=[copy(PP.derH), PP.valt, PP.rdnt], box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
-                der0 = [[[],PP.ptuple],[0,0],[1,1]]  # appendleft ptuple: single root fork of derH, no val,rdn:
+                der0 = [[[],PP.ptuple],[0,0],[1,1]]
+                # appendleft ptuple: single root fork of derH, no val,rdn:
                 sum_derH([edge.derH, edge.valt, edge.rdnt], [[der0]+PP.derH, PP.valt, PP.rdnt], 0)
-            edge.node_tt[0][fd] = node_
-            agg_recursion(edge, fder=0, fd=fd)  # node_ = edge.node_tt[0][fd]
+            # node_ = edge.node_tt[0][fd]
+            agg_recursion(edge, node_)
 
 '''
 or only compute params needed for rotate_P_?
@@ -245,10 +247,10 @@ def form_link_(P, cP_, edge):  # trace adj Ps up and down by adj dert roots, fil
     link_ = {*sum(rim_.values(), start=[])} & cP_   # intersect with cP_ to prevent duplicate links and self linking (P not in cP_)
     # form links:
     for _P in link_:
-        P.link_H[-1] += [_P]
-        _P.link_H[-1] += [P]  # bidirectional assign maybe needed in ortho version, else uplinks only?
+        P.link_tH[-1][0] += [_P]
+        _P.link_tH[-1][0] += [P]  # bidirectional assign maybe needed in ortho version, else uplinks only?
     # check empty link_:
-    if not P.link_H[-1]:
+    if not P.link_tH[-1][0]:
         # filter non-empty roots and get max-G dert coord:
         y, x = max([(y, x) for y, x in rim_ if not rim_[y, x]],     # filter non-empty roots
                      key=lambda yx: edge.der__t[1][yx])             # get max-G dert coord
@@ -259,7 +261,7 @@ def form_link_(P, cP_, edge):  # trace adj Ps up and down by adj dert roots, fil
                     edge.der__t, edge.mask__,
                     axis=np.divide(dert[3:5], dert[0]))
         # link _P:
-        P.link_H[-1] += [_P]; _P.link_H[-1] += [P]    # form link with P first to avoid further recursion
+        P.link_tH[-1][0] += [_P]; _P.link_tH[-1][0] += [P]    # form link with P first to avoid further recursion
         _cP_ = set(edge.P_) - {P}           # exclude P
         form_link_(_P, _cP_, edge)          # call form_link_ for the newly formed _P
         edge.P_ += [_P]                     # add _P to blob.P_ for further linking with remaining cP_

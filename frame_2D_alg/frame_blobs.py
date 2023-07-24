@@ -48,8 +48,8 @@ ave_mP = 100
 UNFILLED = -1
 EXCLUDED_ID = -2
 # FrameOfBlobs = namedtuple('FrameOfBlobs', 'I, Dy, Dx, M, blob_, der__t')
-idert = namedtuple('idert', 'i, dy, d, g, ri')
-adert = namedtuple('adert', 'i, g, ga, ri, dy, dx, dyy, dyx, dxy, dxx')
+idert = namedtuple('idert', 'i, dy, d, g')
+adert = namedtuple('adert', 'i, g, ga, dy, dx, dyy, dyx, dxy, dxx')
 
 class CBlob(ClusterStructure):
     # comp_pixel:
@@ -107,8 +107,8 @@ class CEdge(ClusterStructure):  # edge blob
     box: tuple = (0, 0, 0, 0)  # y0, yn, x0, xn
 
     mask__: object = None
-    der__t: Union[idert, adert] = None
-    der__t_roots: object = None  # map to der__t
+    dir__t: object = None
+    dir__t_roots: object = None  # map to dir__t
     adj_blobs: list = z([])  # adjacent blobs
     node_tt: list = z([[[],[]],[[],[]]])  # PP_ or G_ forks
     root: object= None  # root_: list if fork overlap
@@ -116,6 +116,7 @@ class CEdge(ClusterStructure):  # edge blob
     aggH : list = z([[]])  # [[subH, valt, rdnt]]: cross-fork composition layers
     valt : list = z([0,0])
     rdnt : list = z([1,1])
+    fback_ : list = z([])  # [feedback aggH,valt,rdnt per node]
 '''
     Conventions:
     postfix 't' denotes tuple, multiple ts is a nested tuple
@@ -127,90 +128,57 @@ class CEdge(ClusterStructure):  # edge blob
     longer names are normally classes
 '''
 
-def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=False):
+def frame_blobs_root(image, intra=False, render=False, verbose=False):
 
     if verbose: start_time = time()
     Y, X = image.shape[:2]
 
-    id__tt = comp_axis(image)  # nested tuple of 2D arrays: [4|8 axes][i,d]: single difference per axis
-    sign__ = ave - id__tt[1] > 0
-    # select max d in each id__t for flood_fill(id__tt, sign__)?
+    dir__t = comp_axis(image)  # nested tuple of 2D arrays: [i,[4|8 ds]]: single difference per axis
+    i__, (up_left__, up__, up_right__, right__) = dir__t
+    # combine ds:
+    dy__ = (up_right__+up_left__) * 0.25 + up__ * 0.5
+    dx__ = (up_right__-up_left__) * 0.25 + right__ * 0.5
+    g__ = np.hypot(dy__, dx__)  # gradient magnitude
+    der__t = [i__, dy__, dx__, g__]
 
-    # form der__t from id__tt, for negative edge blobs only:
-    der__t = comp_pixel(image)
-    sign__ = ave - der__t[3] > 0   # sign is positive for below-average g in [i__, dy__, dx__, g__, ri]
-    # https://en.wikipedia.org/wiki/Flood_fill:
-    blob_, idmap, adj_pairs = flood_fill(der__t, sign__, prior_forks='', verbose=verbose)
+    dsign__ = (ave - np.max(np.abs(up_left__), np.abs(up__), np.abs(up_right__), np.abs(right__), axis=0)) > 0   # max d per kernel
+    gsign__ = ave - der__t[3] > 0  # below-average g in [i__, dy__, dx__, g__]
+
+    edge_, idmap, adj_pairs = flood_fill(dir__t, dsign__, prior_forks='', verbose=verbose)  # https://en.wikipedia.org/wiki/Flood_fill
     assign_adjacents(adj_pairs)  # forms adj_blobs per blob in adj_pairs
+    blob_, idmap, adj_pairs = flood_fill(der__t, gsign__, prior_forks='', verbose=verbose)  # overlap or for negative edge blobs only?
+    assign_adjacents(adj_pairs)
+    # not updated:
     I, Dy, Dx = 0, 0, 0
     for blob in blob_: I += blob.I; Dy += blob.Dy; Dx += blob.Dx
 
-    frame = CBlob(I=I, Dy=Dy, Dx=Dx, der__t=der__t, rlayers=[blob_], box=(0,Y,0,X))
-    # dlayers = []: no comp_a yet
-    if verbose: print(f"{len(frame.rlayers[0])} blobs formed in {time() - start_time} seconds")
+    frameE = CEdge(I=I, Dy=Dy, Dx=Dx, dir__t=dir__t, rlayers=[blob_], box=(0,Y,0,X))
+    frameB = CBlob(I=I, Dy=Dy, Dx=Dx, der__t=der__t, rlayers=[blob_], box=(0,Y,0,X))
+    if verbose: print(f"{len(frame.rlayers[0])} blobs formed in {time() - start_time} seconds")  # dlayers = []: no comp_a yet
 
     if intra:  # omit for testing frame_blobs without intra_blob
         if verbose: print("\rRunning frame's intra_blob...")
         from intra_blob import intra_blob_root
 
-        frame.rlayers += intra_blob_root(frame, render, verbose, fBa=0)  # recursive eval cross-comp range| angle| slice per blob
+        frame.rlayers += intra_blob_root(frameB, render, verbose, fBa=0)  # recursive eval cross-comp range| angle| slice per blob
         if verbose: print("\rFinished intra_blob")  # print_deep_blob_forking(deep_blobs)
         # sublayers[0] is fork-specific, deeper sublayers combine sub-blobs of both forks
-    '''
-    if use_c:  # old version, no longer updated:
-        der__t = der__t[0], np.empty(0), np.empty(0), *der__t[1:], np.empty(0)
-        frame, idmap, adj_pairs = wrapped_flood_fill(der__t)
-    '''
+
     if render: visualize_blobs(frame)
     return frame
 
-def comp_pixel(image):
+
+def comp_axis(image):
 
     pi__ = np.pad(image, pad_width=1, mode='edge')  # pad image with edge values
-    # compute directional derivatives:
-    dy__ = (
-        (pi__[ks.bl] - pi__[ks.tl]) * 0.25 +            # left column
-        (pi__[ks.bc] - pi__[ks.tc]) * 0.50 +            # middle column
-        (pi__[ks.br] - pi__[ks.tr]) * 0.25              # right column
-    )
-    dx__ = (
-        (pi__[ks.tr] - pi__[ks.tl]) * 0.25 +            # top row
-        (pi__[ks.mr] - pi__[ks.mc]) * 0.50 *            # middle row
-        (pi__[ks.br] - pi__[ks.bl]) * 0.25              # bottom row
-    )
-    G__ = np.hypot(dy__, dx__)                          # compute gradient magnitude
-    rp__ = (                                            # mean of 3x3 kernel
-        pi__[ks.tl] + pi__[ks.tc] + pi__[ks.tr] +       # top row
-        pi__[ks.ml] + pi__[ks.mc] + pi__[ks.mr] +       # middle row
-        pi__[ks.bl] + pi__[ks.bc] + pi__[ks.br]         # bottom row
-    ) / 9
-    return idert(pi__[ks.mc], dy__, dx__, G__, rp__)
+    # direction ds:
+    up_left__ = pi__[ks.bl] - pi__[ks.tr]   # 135 deg
+    up__      = pi__[ks.bc] - pi__[ks.tc]   # 90 deg (y axis)
+    up_right__= pi__[ks.br] - pi__[ks.tl]   # 45 deg
+    right__   = pi__[ks.mr] - pi__[ks.ml]   # 0 deg (x axis)
 
-def comp_pixel_2x2(image):  # 2x2 pixel cross-correlation within image, see comp_pixel_versions file for other versions and more explanation
+    return (pi__[ks.mc], (up_left__, up__, up_right__, right__))
 
-    # input slices into sliding 2x2 kernel, each slice is a shifted 2D frame of grey-scale pixels:
-    topleft__ = image[:-1, :-1]
-    topright__ = image[:-1, 1:]
-    bottomleft__ = image[1:, :-1]
-    bottomright__ = image[1:, 1:]
-
-    d_upright__ = bottomleft__ - topright__
-    d_upleft__ = bottomright__ - topleft__
-
-    # rotate back to 0 deg:
-    dy__ = 0.5 * (d_upleft__ + d_upright__)
-    dx__ = 0.5 * (d_upleft__ - d_upright__)
-
-    G__ = np.hypot(d_upright__, d_upleft__)  # 2x2 kernel gradient (variation), match = inverse deviation, for sign_ only
-    rp__ = topleft__ + topright__ + bottomleft__ + bottomright__  # sum of 4 rim pixels -> mean, not summed in blob param
-
-    return (topleft__, dy__, dx__, G__, rp__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
-    # renamed der__t = (i__, dy__, dx__, g__, ri__) for readability in deeper functions
-'''
-    old version:
-    Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))  # decomposition of two diagonal differences into Gy
-    Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # decomposition of two diagonal differences into Gx
-'''
 
 def flood_fill(der__t, sign__, prior_forks, verbose=False, mask__=None, fseg=False):
 

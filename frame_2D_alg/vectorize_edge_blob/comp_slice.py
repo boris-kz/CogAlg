@@ -24,7 +24,7 @@ def comp_slice(edge, verbose=False):  # high-G, smooth-angle blob, composite der
         for _P in link_:  # or spliced_link_ if active
             comp_P(_P,P, fder=0)  # replaces P.link_ Ps with derPs
 
-    edge.PP_tt[0] = form_PP_t([Pt[0] for Pt in P_], PP_=None, base_rdn=2, fder=0)  # root fork is rng+ only
+    edge.node_tt[0][:] = form_PP_t([Pt[0] for Pt in P_], PP_=None, base_rdn=2, fder=0)  # root fork is rng+ only
 
 
 def comp_P(_P,P, fder=1, derP=None):  #  derP if der+, S if rng+
@@ -41,7 +41,7 @@ def comp_P(_P,P, fder=1, derP=None):  #  derP if der+, S if rng+
         mtuple,dtuple = comp_ptuple(_P.ptuple, P.ptuple, rn)
         mval = sum(mtuple); dval = sum(dtuple)
         mrdn = 1+(dval>mval); drdn = 1+(1-(dval>mval))  # rdn = Dval/Mval?
-        derP = CderP(derH=[[mtuple,dtuple, mval,dval,mrdn,drdn]], valt=[mval,dval], rdnt=[mrdn,drdn], P=P,_P=_P, S=derP)
+        derP = CderP(derH=[[[mtuple,dtuple], [mval,dval],[mrdn,drdn]]], valt=[mval,dval], rdnt=[mrdn,drdn], P=P,_P=_P, S=derP)
 
     if mval > aveP*mrdn: P.link_tH[-1][0] += [derP]  # +ve links, for fork selection in form_PP_t, not fd as -ve links?
     if dval > aveP*drdn: P.link_tH[-1][1] += [derP]
@@ -54,10 +54,10 @@ def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, e
 
     for _lay, lay in zip_longest(_derH, derH, fillvalue=[]):  # compare common lower der layers | sublayers in derHs
         if _lay and lay:
-            mtuple, dtuple = comp_dtuple(_lay[1], lay[1], rn)  # compare dtuples, mtuples are for evaluation only
+            mtuple, dtuple = comp_dtuple(_lay[0][1], lay[0][1], rn)  # compare dtuples, mtuples are for evaluation only
             mval = sum(mtuple); dval = sum(dtuple)
             mrdn = dval > mval; drdn = dval < mval
-            dderH += [[mtuple,dtuple,mval,dval,mrdn,drdn]]
+            dderH += [[[mtuple,dtuple],[mval,dval],[mrdn,drdn]]]
             Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
 
     return dderH, [Mval,Dval], [Mrdn,Drdn]  # new layer, 1/2 combined derH
@@ -211,10 +211,10 @@ def sum_derH(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = 
         for Layer, layer in zip_longest(DerH,derH, fillvalue=[]):
             if layer:
                 if Layer:
-                    for i, param in enumerate(layer):
-                        if i<2: sum_ptuple(Layer[i], param)  # mtuple | dtuple
-                        elif i<4: Layer[i] += param  # mval | dval
-                        else:     Layer[i] += param + base_rdn # | mrdn | drdn
+                    for i in range(0,1):
+                        sum_ptuple(Layer[0][i], layer[0][i])  # ptuplet
+                        Layer[1][i] += layer[1][i]  # valt
+                        Layer[2][i] += layer[2][i] + base_rdn  # rdnt
                 else:
                     DerH += [deepcopy(layer)]
     else:
