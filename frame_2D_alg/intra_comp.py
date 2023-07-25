@@ -52,7 +52,7 @@ def comp_r(dert__, rng, mask__=None):
     g__ = np.hypot(d_upright__, d_upleft__)  # match = inverse of abs gradient (variation), recomputed at each comp_r
     ri__ = i__topleft + i__topright + i__bottomleft + i__bottomright
 
-    return idert(i__topleft, d_upleft__, d_upright__, g__, ri__), majority_mask__
+    return idert(i__topleft, d_upleft__, d_upright__, g__), majority_mask__
 
 
 def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 3x3 kernels
@@ -68,7 +68,7 @@ def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 3x3 kernels
     else:
         majority_mask__ = None
 
-    i__, dy__, dx__, g__, ri__ = dert__[:5]  # day__,dax__,ma__ are recomputed
+    i__, dy__, dx__, g__= dert__[:4]  # day__,dax__,ma__ are recomputed
 
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
         uv__ = dert__[1:3] / g__
@@ -104,9 +104,8 @@ def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 3x3 kernels
     dy__ = dy__[ks.mc]
     dx__ = dx__[ks.mc]
     g__ = g__[ks.mc]
-    ri__ = ri__[ks.mc]
 
-    return adert(i__, g__, ga__, ri__, dy__, dx__, dyy__, dyx__, dxy__, dxx__), majority_mask__
+    return adert(g__, ga__, i__, dy__, dx__, dyy__, dyx__, dxy__, dxx__), majority_mask__
 
 def angle_diff(uv2, uv1):  # compare angles of uv1 to uv2 (uv1 to uv2)
 

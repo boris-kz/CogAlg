@@ -47,7 +47,7 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
 
 class CderP(ClusterStructure):  # tuple of derivatives in P link: binary tree with latuple root and vertuple forks
 
-    derH : list = z([])  # [[mtuple,dtuple,mval,dval,mrdn,drdn]], single in rng+
+    derH : list = z([])  # [[[mtuple,dtuple],[mval,dval],[mrdn,drdn]]], single in rng+
     valt : list = z([0,0])
     rdnt : list = z([1,1])  # mrdn + uprdn if branch overlap?
     _P : object = None  # higher comparand
@@ -86,9 +86,10 @@ class CPP(CderP):
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
     fd: int = 0  # not fder
-    link_tH : list = z([[[],[]]])  # +ve rlink_, dlink_ H, ~ derH layers
-    derH : list = z([])  # [[derH, valt, rdnt]]: default input from PP, for both rng+ and der+, sum min len?
-    aggH : list = z([])  # [[subH, valt, rdnt]]: cross-fork composition layers
+    link_tH : list = z([[[],[]]])  # rng H with +ve (rlink_,dlink_) layers
+    ptuple : list = z([])  # default from P
+    derH : list = z([])  # [[tuplet, valt, rdnt]]: default from PP, for both rng+ and der+, sum min len?
+    aggH : list = z([])  # [[subH_t, valt, rdnt]], subH: [[derH_t, valt, rdnt]]; cross-fork composition layers
     valt : list = z([0,0])
     rdnt : list = z([1,1])
     node_: list = z([])  # same-fork, incremental nesting if wH: down-forking tree of node Levs, 4 top forks if sub+:

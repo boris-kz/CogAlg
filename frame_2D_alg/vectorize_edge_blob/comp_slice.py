@@ -16,7 +16,7 @@ len prior root_ sorted by G is rdn of each root, to evaluate it for inclusion in
 def comp_slice(edge, verbose=False):  # high-G, smooth-angle blob, composite dert core param is v_g + iv_ga
 
     P_ = []
-    for P in edge.P_:  # must be contiguous, gaps filled in scan_P_rim
+    for P in edge.node_tt[0][0]:  # init P_, must be contiguous, gaps filled in scan_P_rim
         link_ = copy(P.link_tH[-1][0])  # init rng+
         P.link_tH[-1][0] = []  # fill with derPs in comp_P
         P_ +=[[P,link_]]
@@ -53,8 +53,9 @@ def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, e
     Mval, Dval, Mrdn, Drdn = 0,0,1,1
 
     for _lay, lay in zip_longest(_derH, derH, fillvalue=[]):  # compare common lower der layers | sublayers in derHs
-        if _lay and lay:
-            mtuple, dtuple = comp_dtuple(_lay[0][1], lay[0][1], rn)  # compare dtuples, mtuples are for evaluation only
+        if _lay and lay:  # also if lower-layers match: Mval > ave * Mrdn?
+
+            mtuple, dtuple = comp_dtuple(_lay[0][1], lay[0][1], rn)  # compare dtuples only, mtuples are for evaluation
             mval = sum(mtuple); dval = sum(dtuple)
             mrdn = dval > mval; drdn = dval < mval
             dderH += [[[mtuple,dtuple],[mval,dval],[mrdn,drdn]]]

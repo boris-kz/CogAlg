@@ -53,12 +53,12 @@ oct_sep = 0.3826834323650898
 def vectorize_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
 
     # convert Cblob to Cedge: (temporary)
-    edge = CEdge(der__t=blob.der__t, der__t_roots=[[[] for col in row] for row in blob.der__t[0]], mask__=blob.mask__,
-                 I=blob.I, Dy=blob.Dy, Dx=blob.Dx, G=blob.G, M=blob.M, Dyy=blob.Dyy, Dyx=blob.Dyx, Dxy=blob.Dxy, Dxx=blob.Dxx, Ga=blob.Ga, blob=blob)
+    edge = CEdge(dir__t=blob.der__t, dir__t_roots=[[[] for col in row] for row in blob.der__t[0]], mask__=blob.mask__,
+                 I=blob.I, Dy=blob.Dy, Dx=blob.Dx, G=blob.G, M=blob.M, Dyy=blob.Dyy, Dyx=blob.Dyx, Dxy=blob.Dxy, Dxx=blob.Dxx, Ga=blob.Ga)
 
-    slice_edge(edge, verbose)  # form 2D array of Ps: horizontal blob slices in der__t
+    slice_edge(edge, verbose)  # form 2D array of Ps: horizontal blob slices in dir__t
     rotate_P_(edge, verbose)  # re-form Ps around centers along P.G, P sides may overlap, if sum(P.M s + P.Ma s)?
-    cP_ = set(edge.P_)  # to pop here
+    cP_ = set(edge.node_tt[0][0])  # to pop here
     while cP_:
         form_link_(cP_.pop(), cP_, edge)  # trace adjacent Ps, fill|prune if missing or redundant, add them to P.link_
 
@@ -73,7 +73,7 @@ def vectorize_root(blob, verbose=False):  # always angle blob, composite dert co
             for PP in PP_:  # convert PPs to graphs:
                 node_ += [Cgraph(derH=[copy(PP.derH), PP.valt, PP.rdnt], box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
                 der0 = [[[],PP.ptuple],[0,0],[1,1]]
-                # appendleft ptuple: single root fork of derH, no val,rdn:
+                # derH appendleft ptuple: single root fork, no val,rdn:
                 sum_derH([edge.derH, edge.valt, edge.rdnt], [[der0]+PP.derH, PP.valt, PP.rdnt], 0)
             # node_ = edge.node_tt[0][fd]
             agg_recursion(edge, node_)
@@ -92,7 +92,7 @@ def slice_edge(edge, verbose=False):  # form blob slices nearest to slice Ga: Ps
         x = 0
         while x < width:  # iterate through pixels in a line
             mask = edge.mask__[y, x]
-            dert = [par__[y, x] for par__ in edge.der__t[1:]]   # exclude i
+            dert = [par__[y, x] for par__ in edge.dir__t]   # exclude i
             g, ga, ri, dy, dx, dyy, dyx, dxy, dxx = dert
             if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
                 if _mask:  # ini P params with first unmasked dert
@@ -112,7 +112,7 @@ def slice_edge(edge, verbose=False):  # form blob slices nearest to slice Ga: Ps
             P_ += [term_P(I, M, Ma, Dy, Dx, Dyy, Dyx, Dxy, Dxx, y,x-1, Pdert_)]
 
     if verbose: print("\r" + " " * 79, end=""); sys.stdout.flush(); print("\r", end="")
-    edge.P_ = P_
+    edge.node_tt[0][0] = P_
     return P_
 
 def term_P(I, M, Ma, Dy, Dx, Dyy, Dyx, Dxy, Dxx, y,x, Pdert_):
@@ -128,18 +128,18 @@ def term_P(I, M, Ma, Dy, Dx, Dyy, Dyx, Dxy, Dxx, y,x, Pdert_):
 
 def rotate_P_(edge, verbose=False):  # rotate each P to align it with direction of P or dert gradient
 
-    der__t = edge.der__t; mask__= edge.mask__
+    dir__t = edge.dir__t; mask__= edge.mask__
     if verbose: i = 0
     P_ = []
-    for P in edge.P_:
+    for P in edge.node_tt[0][0]:
         G = P.ptuple[1]
         daxis = P.ptuple[5][0] / G  # dy: deviation from horizontal axis
         _daxis = 0
         if verbose: i += 1
-        while abs(daxis) * G > ave_rotate:  # recursive reform P in blob.der__t along new G angle:
+        while abs(daxis) * G > ave_rotate:  # recursive reform P in blob.dir__t along new G angle:
             if verbose: print(f"\rRotating... {i}/{len(P_)}: {round(np.degrees(np.arctan2(*P.axis)))}°", end=" " * 79); sys.stdout.flush()
             _axis = P.axis
-            P = form_P(P, der__t, mask__, axis=np.divide(P.ptuple[5], np.hypot(*P.ptuple[5])))  # pivot to P angle
+            P = form_P(P, dir__t, mask__, axis=np.divide(P.ptuple[5], np.hypot(*P.ptuple[5])))  # pivot to P angle
             maxis, daxis = comp_angle(_axis, P.axis)
             ddaxis = daxis +_daxis  # cancel-out if opposite-sign
             _daxis = daxis
@@ -147,22 +147,22 @@ def rotate_P_(edge, verbose=False):  # rotate each P to align it with direction 
             if ddaxis * G < ave_rotate:  # terminate if oscillation
                 axis = np.add(_axis, P.axis)
                 axis = np.divide(axis, np.hypot(*axis))  # normalize
-                P = form_P(P, der__t, mask__, axis=axis)  # not pivoting to dert G
+                P = form_P(P, dir__t, mask__, axis=axis)  # not pivoting to dert G
                 break
-        for cy,cx in P.dert_olp_:  # assign roots in der__t
-            edge.der__t_roots[cy][cx] += [P]  # final rotated P
+        for cy,cx in P.dert_olp_:  # assign roots in dir__t
+            edge.dir__t_roots[cy][cx] += [P]  # final rotated P
 
         P_ += [P]
-    edge.P_[:] = P_
+    edge.node_tt[0][0] = P_
 
     if verbose: print("\r", end=" " * 79); sys.stdout.flush(); print("\r", end="")
 
-def form_P(P, der__t, mask__, axis):
+def form_P(P, dir__t, mask__, axis):
 
     rdert_, dert_yx_ = [P.dert_[len(P.dert_)//2]],[P.yx]      # include pivot
     dert_olp_ = {(round(P.yx[0]), round(P.yx[1]))}
-    rdert_,dert_yx_,dert_olp_ = scan_direction(rdert_,dert_yx_,dert_olp_, P.yx, axis, der__t,mask__, fleft=1)  # scan left
-    rdert_,dert_yx_,dert_olp_ = scan_direction(rdert_,dert_yx_,dert_olp_, P.yx, axis, der__t,mask__, fleft=0)  # scan right
+    rdert_,dert_yx_,dert_olp_ = scan_direction(rdert_,dert_yx_,dert_olp_, P.yx, axis, dir__t,mask__, fleft=1)  # scan left
+    rdert_,dert_yx_,dert_olp_ = scan_direction(rdert_,dert_yx_,dert_olp_, P.yx, axis, dir__t,mask__, fleft=0)  # scan right
     # initialization
     rdert = rdert_[0]
     G, Ga, I, Dy, Dx, Dyy, Dyx, Dxy, Dxx = rdert; M=ave_g-G; Ma=ave_ga-Ga; dert_=[rdert]
@@ -180,7 +180,7 @@ def form_P(P, der__t, mask__, axis):
     P.dert_olp_ = dert_olp_
     return P
 
-def scan_direction(rdert_,dert_yx_,dert_olp_, yx, axis, der__t,mask__, fleft):  # leftward or rightward from y,x
+def scan_direction(rdert_,dert_yx_,dert_olp_, yx, axis, dir__t,mask__, fleft):  # leftward or rightward from y,x
     Y, X = mask__.shape # boundary
     y, x = yx
     sin,cos = axis      # unpack axis
@@ -219,7 +219,7 @@ def scan_direction(rdert_,dert_yx_,dert_olp_, yx, axis, der__t,mask__, fleft):  
                 dert_olp_ |= {(ty,tx)}
         ptuple = [
             sum((par__[ky, kx] * dist for ky, kx, dist in kernel))
-            for par__ in der__t[1:]]
+            for par__ in dir__t]
         dert_olp_ |= {(cy, cx)}  # add current cell to overlap
         _cy, _cx = cy, cx
         if fleft:
@@ -238,7 +238,7 @@ def form_link_(P, cP_, edge):  # trace adj Ps up and down by adj dert roots, fil
     Y, X = edge.mask__.shape
 
     # rim as a dictionary with key=(y,x) and value=roots
-    rim_ = {(rim_y,rim_x):edge.der__t_roots[rim_y][rim_x]                   # unique key-value pair
+    rim_ = {(rim_y,rim_x):edge.dir__t_roots[rim_y][rim_x]                   # unique key-value pair
             for iy, ix in P.dert_olp_                                       # overlap derts
             for rim_y,rim_x in product(range(iy-1,iy+2),range(ix-1,ix+2))   # rim loop of iy, ix
             if (0 <= rim_y < Y) and (0 <= rim_x < X)                        # boundary check
@@ -253,18 +253,18 @@ def form_link_(P, cP_, edge):  # trace adj Ps up and down by adj dert roots, fil
     if not P.link_tH[-1][0]:
         # filter non-empty roots and get max-G dert coord:
         y, x = max([(y, x) for y, x in rim_ if not rim_[y, x]],     # filter non-empty roots
-                     key=lambda yx: edge.der__t[1][yx])             # get max-G dert coord
+                     key=lambda yx: edge.dir__t[1][yx])             # get max-G dert coord
         # get max-G dert:
-        dert = [par__[y,x] for par__ in edge.der__t[1:]]       # get max-G dert
+        dert = [par__[y,x] for par__ in edge.dir__t]       # get max-G dert
         # form new P
         _P = form_P(CP(dert, dert_=[dert], dert_yx_=[(y,x)], dert_olp_={(y,x)}, yx=(y, x)),
-                    edge.der__t, edge.mask__,
+                    edge.dir__t, edge.mask__,
                     axis=np.divide(dert[3:5], dert[0]))
         # link _P:
         P.link_tH[-1][0] += [_P]; _P.link_tH[-1][0] += [P]    # form link with P first to avoid further recursion
-        _cP_ = set(edge.P_) - {P}           # exclude P
+        _cP_ = set(edge.node_tt[0][0]) - {P}           # exclude P
         form_link_(_P, _cP_, edge)          # call form_link_ for the newly formed _P
-        edge.P_ += [_P]                     # add _P to blob.P_ for further linking with remaining cP_
+        edge.node_tt[0][0] += [_P]                     # add _P to blob.P_ for further linking with remaining cP_
 
 
 def slice_edge_ortho(edge, verbose=False):  # slice_blob with axis-orthogonal Ps
@@ -279,12 +279,12 @@ def slice_edge_ortho(edge, verbose=False):  # slice_blob with axis-orthogonal Ps
     for y, x in yx_:
         if idmap[y, x] == UNFILLED:
             # form P along axis
-            dert = [par__[y, x] for par__ in edge.der__t[1:]]
+            dert = [par__[y, x] for par__ in edge.dir__t[1:]]
             axis = np.divide(dert[3:5], dert[0])
 
             P = form_P(
                 CP(dert, dert_=[dert], dert_yx_=[(y,x)], dert_olp_={(y,x)}, yx=(y, x)),
-                edge.der__t, edge.mask__, axis=axis)
+                edge.dir__t, edge.mask__, axis=axis)
             edge.P_ += [P]
 
             for _y, _x in P.dert_olp_:
@@ -303,7 +303,7 @@ def sort_cell_by_da(edge):   # sort derts by angle deviation of derts
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
         included = np.pad(~edge.mask__, 1, 'constant', constant_values=False)
 
-        uv__ = np.pad(edge.der__t[4:6] / edge.der__t.g,
+        uv__ = np.pad(edge.dir__t[4:6] / edge.dir__t.g,
                       [(0, 0), (1, 1), (1, 1)], 'constant', constant_values=0)
         if np.isnan(uv__[:, included]).any():
             raise ValueError("g = 0 in edge blob")
@@ -334,7 +334,7 @@ def slice_blob_hough(blob, verbose=False):  # slice_blob with axis-orthogonal Ps
 
     Y, X = blob.mask__.shape
     # Get thetas and positions:
-    dy__, dx__ = blob.der__t[4:6]  # Get blob derts' angle
+    dy__, dx__ = blob.dir__t[4:6]  # Get blob derts' angle
     y__, x__ = np.indices((Y, X))  # Get blob derts' position
     theta__ = np.arctan2(dy__, dx__)  # Compute theta
 
@@ -369,7 +369,7 @@ def slice_blob_hough(blob, verbose=False):  # slice_blob with axis-orthogonal Ps
                     filled[y2, x2] = True       # mark as filled
                     rt_olp__[:] = new_rt_olp__  # update overlap
                     # accumulate P params:
-                    dert = tuple(param__[y2, x2] for param__ in blob.der__t[1:])
+                    dert = tuple(param__[y2, x2] for param__ in blob.dir__t[1:])
                     g, ga, ri, dy, dx, dyy, dyx, dxy, dxx = dert  # skip i
                     M += ave_g - g; Ma += ave_ga - ga; I += ri; Dy+=dy; Dx+=dx; Dyy+=dyy; Dyx+=dyx; Dxy+=dxy; Dxx+=dxx
                     dert_ += [dert]  # unpack x, y, add dert to P
@@ -398,7 +398,7 @@ def slice_blob_flow(blob, verbose=False):  # version of slice_blob_ortho
     # find the derts with gradient pointing at current dert:
     _yx_ = np.indices(blob.mask__.shape)[:, ~blob.mask__].T  # blob derts' position
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
-        sc_ = np.divide(blob.der__t[4:6], blob.der__t[1])[:, ~blob.mask__].T    # blob derts' angle
+        sc_ = np.divide(blob.dir__t[4:6], blob.dir__t[1])[:, ~blob.mask__].T    # blob derts' angle
     uv_ = np.zeros_like(sc_)        # (u, v) points to one of the eight neighbor cells
     u_, v_ = uv_.T                  # unpack u, v
     s_, c_ = sc_.T                  # unpack sin, cos
@@ -428,7 +428,7 @@ def slice_blob_flow(blob, verbose=False):  # version of slice_blob_ortho
             j = i
             while True:      # while there is a dert to follow
                 y, x = _yx_[j]      # get dert position
-                dert = tuple(par__[y, x] for par__ in blob.der__t[1:])  # dert params at _y, _x, skip i
+                dert = tuple(par__[y, x] for par__ in blob.dir__t[1:])  # dert params at _y, _x, skip i
                 g, ga, ri, dy, dx, dyy, dyx, dxy, dxx = dert
                 I+=i; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx; Dyy+=dyy; Dyx+=dyx; Dxy+=dxy; Dxx+=dxx
                 dert_ += [dert]
