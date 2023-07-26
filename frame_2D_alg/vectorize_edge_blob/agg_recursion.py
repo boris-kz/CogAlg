@@ -1,7 +1,7 @@
 import numpy as np
 from copy import deepcopy, copy
 from itertools import zip_longest
-from .classes import Cgraph
+from .classes import Cgraph, CderG
 from .filters import aves, ave, ave_nsubt, ave_sub, ave_agg, G_aves, med_decay, ave_distance, ave_Gm, ave_Gd
 from .comp_slice import comp_angle, comp_ptuple, sum_ptuple, comp_derH, sum_derH, comp_aangle
 # from .sub_recursion import feedback  # temporary
@@ -56,7 +56,7 @@ def agg_recursion(root, node_):  # compositional recursion in root.PP_
             root.node_tt[fder][fd] = graph_
 
 # draft:
-def comp_G_(G_, pri_G_=None, f1Q=1, fder=0):  # cross-comp Graphs if f1Q, else comp G_s in comp_node_
+def comp_G_(G_, pri_G_=None, f1Q=1, fder=0):  # cross-comp in G_ if f1Q, else comp between G_ and pri_G_, if comp_node_?
 
     while G_:
         G = G_.pop()  # node_
@@ -66,30 +66,50 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fder=0):  # cross-comp Graphs if f1Q, else c
             if _G in G.compared_:  # was compared in prior rng
                 continue
             dy = _G.box[0]-G.box[0]; dx = _G.box[1]-G.box[1]
-            distance = np.hypot(dy,dx) # Euclidean distance between centers, sum in sparsity
+            distance = np.hypot(dy, dx)  # Euclidean distance between centers, sum in sparsity
             if distance < ave_distance * ((sum(_G.valt) + sum(G.valt)) / (2*sum(G_aves))):
                 G.compared_ += [_G]; _G.compared_ += [G]
                 # same comp for cis and alt components:
                 for _cG, cG in ((_G, G), (_G.alt_Graph, G.alt_Graph)):
                     if _cG and cG:  # alt Gs maybe empty
-                        comp_G(_cG,cG)
-                    # draft, pack in comp_G:
-                    # add separate G.ptuple, comp_ptuple()
-                    dderH, valt, rdnt = comp_derH(_cG.derH, cG.derH, rn=1)
-                    daggH, valt, rdnt = comp_aggH(_cG.aggH, cG.aggH, rn=1)  # comp aggH: loop layers while lower match?
-                    # tentative, append to last derH in last subH:
-                    mext,dext = comp_ext([len(_cG.node_tt[fder][fd]),_cG.S,_cG.A],[len(cG.node_tt[fder][fd]),cG.S,cG.A])
-                    # sum valt,rdnt here
-                    derG = Cgraph(node_=[_cG,cG], derH=dderH, aggH=daggH, valt=valt,rdnt=rdnt, S=distance, A=[dy,dx])  # box is redundant
-                    # add links:
-                    if valt[0] > ave_Gm:
-                        _cG.link_tH[-1][0] += [derG]; cG.link_tH[-1][0] += [derG]  # bi-directional
-                    if valt[1] > ave_Gd:
-                        _cG.link_tH[-1][1] += [derG]; cG.link_tH[-1][1] += [derG]
-                # combine cis,alt in aggH?
+                        # form new layer of links:
+                        comp_G(_cG, cG, distance, [dy,dx])
     '''
-    comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D?
+    combine cis,alt in aggH? comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D?
     '''
+def comp_G(_G, G, distance, A):
+
+    # / P:
+    mtuple, dtuple = comp_ptuple(_G.ptuple, G.ptuple, rn=1)
+    mval, dval = sum(mtuple), sum(dtuple)
+    Mval = mval; Dval = dval; Mrdn = 1+(dval>mval); Drdn = 1+dval<=mval
+    # / PP:
+    dderH, valt, rdnt = comp_derH(_G.derH, G.derH, rn=1)
+    dderH = [[[mtuple,dtuple],[Mval,Dval],[Mrdn,Drdn]]] + dderH  # add der_tuple as 1st der order
+    mval,dval =valt
+    Mval += valt[0]; Dval += valt[1]; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1] + dval<=mval
+    # ext:
+    _L,_S,_A = _G.L,_G.S,_G.A; L,S,A = G.L,G.S,G.A
+    dL = _L-L; Dval+=dL; mL = ave-abs(dL); Mval+=mL
+    dS = _S/_L-S/L; Dval+=dS; mS=ave-abs(dS); Mval+=mS
+    mA, dA = comp_angle(_A,A); Mval+=mA; Dval+=dA
+    dderH = [[[mL,mS,mA][dL,dS,dA]]] + dderH  # der_ext in dderH[0]
+    # / G:
+    if _G.aggH and G.aggH:  # empty in base fork
+        subH, valt, rdnt = comp_aggH(_G.aggH, G.aggH, rn=1)
+        subH = [dderH,[Mval,Dval],[Mrdn,Drdn]] + subH  # add dderH as 1st der order
+        mval,dval =valt
+        Mval += valt[0]; Dval += valt[1]; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1] + dval<=mval
+    else:
+        subH = [[dderH,[Mval,Dval],[Mrdn,Drdn]]]  # add nesting
+
+    derG = CderG(G1=_G, G2=G, subH=subH, valt=[Mval,Dval], rdnt=[Mrdn,Drdn], S=distance, A=A)
+    # add links:
+    if valt[0] > ave_Gm:
+        _G.link_tH[-1][0] += [derG]; G.link_tH[-1][0] += [derG]  # bi-directional
+    if valt[1] > ave_Gd:
+        _G.link_tH[-1][1] += [derG]; G.link_tH[-1][1] += [derG]
+
 
 def form_graph_(G_, fder, fd):  # form list graphs and their aggHs, G is node in GG graph
 
@@ -348,15 +368,17 @@ def comp_subH(_subH, subH, rn):
     for _lay, lay in zip_longest(_subH, subH, fillvalue=[]):  # compare common lower layer|sublayer derHs
         if _lay and lay:  # also if lower-layers match: Mval > ave * Mrdn?
             _derH = _lay[0][1]; derH = lay[0][1]
-            # compare dderH only:
-            mext, dext = comp_ext(_derH[0],derH[0])
+            # comp dext:
+            _L,_S,_A = _derH[0][1]; L,S,A = derH[0][1]
+            dL = _L-L; Dval += dL; mL = ave-abs(dL); Mval += mL
+            dS = _S/_L-S/L; Dval += dS; mS = ave - abs(dS); Mval += mS
+            dA = _A-A;  Dval+=dA; mA = ave-abs(dL); Mval += mA
+            # comp dderH:
             dderH, valt, rdnt = comp_derH(_derH[1:], derH[1:], rn)
-            dderH = [[mext, dext]] + dderH  # 1st element in each subLay is der_ext
+            dderH = [[[mL,mS,mA],[dL,dS,dA]]] + dderH  # 1st element in each subLay is der_ext
             dsubH += [[dderH, valt, rdnt]]
             mval,dval = valt
-            mrdn = dval > mval; drdn = dval < mval
-            Mrdn += rdnt[0] + mrdn; Drdn += rdnt[1] + drdn  # + ext rdn?
-            Mval += mval+sum(mext); Dval += dval+sum(dext)
+            Mval += mval; Dval += dval; Mrdn += rdnt[0] + dval > mval; Drdn += rdnt[1] + dval <= mval
 
     return dsubH, [Mval,Dval], [Mrdn,Drdn]  # new layer, 1/2 combined derH
 

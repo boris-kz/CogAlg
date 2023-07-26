@@ -52,12 +52,9 @@ class CderP(ClusterStructure):  # tuple of derivatives in P link: binary tree wi
     rdnt : list = z([1,1])  # mrdn + uprdn if branch overlap?
     _P : object = None  # higher comparand
     P : object = None  # lower comparand
-    box : list = z([0,0,0,0])  # y0,yn, x0,xn: P.box+_P.box, or center+_center?
     S : float = 0.0  # sparsity: distance between centers
     A : list = z([0,0])  # angle: dy,dx between centers
     # roott : list = z([None, None])  # for der++, if clustering is per link
-    # fdx : object = None  # if comp_dx
-
 '''
 max n of tuples per der layer = summed n of tuples in all lower layers: 1, 1, 2, 4, 8..:
 lay1: par     # derH per param in vertuple, layer is derivatives of all lower layers:
@@ -92,11 +89,11 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     aggH : list = z([])  # [[subH_t, valt, rdnt]], subH: [[derH_t, valt, rdnt]]; cross-fork composition layers
     valt : list = z([0,0])
     rdnt : list = z([1,1])
-    node_: list = z([])  # same-fork, incremental nesting if wH: down-forking tree of node Levs, 4 top forks if sub+:
+    node_ : list = z([])  # same-fork, incremental nesting if wH: down-forking tree of node Levs, 4 top forks if sub+:
     # node_tt: list = z([[[],[]],[[],[]]])  # rng+'Gm_,Gd_, der+'Gm_,Gd_, may not overlap
     root: object= None  # root_: list = z([])  # agg|sub+ mset forks, incr.nest if uH: up-forking tree of root Levs,
     # root_tt: list = z([[None,None],[None,None]])  # rng+'Gm,Gd, der+'Gm,Gd, if both comp and form are overlapping
-    # external params, summed from links:
+    L : int  # len base node_; from internal links:
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers
     rng : int = 1
@@ -108,13 +105,17 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     compared_ : list = z([])
     fback_ : list = z([])  # [feedback aggH,valt,rdnt per node]
     Rdn : int = 0  # for accumulation or separate recursion count?
-    ''' 
-    ext / agg.sub.derH:
-    L : list = z([])  # der L, init None
-    S : int = 0  # sparsity: ave len link
-    A : list = z([])  # area|axis: Dy,Dx, ini None
-    
+
     # id_H : list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
     # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
     # top Lay from links, lower Lays from nodes, hence nested tuple?
-    '''
+
+class CderG(ClusterStructure):  # params of single-fork node_ cluster per pplayers
+
+    subH : list = z([])  # [[derH_t, valt, rdnt]]: top aggLev derived in comp_G
+    valt : list = z([0,0])
+    rdnt : list = z([1,1])
+    G0 : object = None  # comparand
+    G1 : object = None
+    S : float = 0.0  # sparsity: average distance to link centers
+    A : list = z([0,0])  # angle: average dy,dx to link centers

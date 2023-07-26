@@ -54,7 +54,7 @@ def vectorize_root(blob, verbose=False):  # always angle blob, composite dert co
 
     # convert Cblob to Cedge: (temporary)
     edge = CEdge(dir__t=blob.der__t, dir__t_roots=[[[] for col in row] for row in blob.der__t[0]], mask__=blob.mask__,
-                 I=blob.I, Dy=blob.Dy, Dx=blob.Dx, G=blob.G, M=blob.M, Dyy=blob.Dyy, Dyx=blob.Dyx, Dxy=blob.Dxy, Dxx=blob.Dxx, Ga=blob.Ga)
+                 I=blob.I)
 
     slice_edge(edge, verbose)  # form 2D array of Ps: horizontal blob slices in dir__t
     rotate_P_(edge, verbose)  # re-form Ps around centers along P.G, P sides may overlap, if sum(P.M s + P.Ma s)?
@@ -71,11 +71,10 @@ def vectorize_root(blob, verbose=False):  # always angle blob, composite dert co
         if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
             node_= []
             for PP in PP_:  # convert PPs to graphs:
-                node_ += [Cgraph(derH=[copy(PP.derH), PP.valt, PP.rdnt], box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
-                der0 = [[[],PP.ptuple],[0,0],[1,1]]
-                # derH appendleft ptuple: single root fork, no val,rdn:
-                sum_derH([edge.derH, edge.valt, edge.rdnt], [[der0]+PP.derH, PP.valt, PP.rdnt], 0)
-            # node_ = edge.node_tt[0][fd]
+                node_ += [Cgraph(ptuple=PP.ptuple, derH=[PP.derH, PP.valt, PP.rdnt], L=len(PP.node_), # empty aggH, etc.
+                                 box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
+                sum_derH([edge.derH, edge.valt, edge.rdnt], [PP.derH, PP.valt, PP.rdnt], 0)
+            # node_: edge.node_tt[0][fd]
             agg_recursion(edge, node_)
 
 '''
