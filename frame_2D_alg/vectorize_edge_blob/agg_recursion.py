@@ -53,7 +53,7 @@ def agg_recursion(root, node_):  # compositional recursion in root.PP_
                 agg_recursion(root, node_)  # replace root.node_ with new graphs
             elif root.root:  # if deeper agg+
                 feedback(root, fd)  # update root.root..H, breadth-first
-            root.node_tt[fder][fd] = graph_
+            root.node_[fder][fd] = graph_
 
 # draft:
 def comp_G_(G_, pri_G_=None, f1Q=1, fder=0):  # cross-comp in G_ if f1Q, else comp between G_ and pri_G_, if comp_node_?
@@ -84,26 +84,26 @@ def comp_G(_G, G, distance, A):
     mval, dval = sum(mtuple), sum(dtuple)
     Mval = mval; Dval = dval; Mrdn = 1+(dval>mval); Drdn = 1+dval<=mval
     # / PP:
-    dderH, valt, rdnt = comp_derH(_G.derH, G.derH, rn=1)
+    dderH, valt, rdnt = comp_derH(_G.derH[0], G.derH[0], rn=1)
     dderH = [[[mtuple,dtuple],[Mval,Dval],[Mrdn,Drdn]]] + dderH  # add der_tuple as 1st der order
     mval,dval =valt
-    Mval += valt[0]; Dval += valt[1]; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1] + dval<=mval
-    # ext:
-    _L,_S,_A = _G.L,_G.S,_G.A; L,S,A = G.L,G.S,G.A
-    dL = _L-L; Dval+=dL; mL = ave-abs(dL); Mval+=mL
-    dS = _S/_L-S/L; Dval+=dS; mS=ave-abs(dS); Mval+=mS
-    mA, dA = comp_angle(_A,A); Mval+=mA; Dval+=dA
-    dderH = [[[mL,mS,mA][dL,dS,dA]]] + dderH  # der_ext in dderH[0]
+    Mval += valt[0]; Dval += valt[1]; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
+    # comp ext:
+    _L,_S,_A = _G.L,_G.S,_G.A;      L,S,A = G.L,G.S,G.A
+    dL = _L-L; mL = ave-abs(dL);    Mval+=mL; Dval+=dL
+    dS = _S/_L-S/L; mS=ave-abs(dS); Mval+=mS; Dval+=dS
+    mA, dA = comp_angle(_A,A);      Mval+=mA; Dval+=dA
+    dderH = [[[mL,mS,mA],[dL,dS,dA]]] + dderH  # der_ext-> dderH[0]
     # / G:
     if _G.aggH and G.aggH:  # empty in base fork
         subH, valt, rdnt = comp_aggH(_G.aggH, G.aggH, rn=1)
         subH = [dderH,[Mval,Dval],[Mrdn,Drdn]] + subH  # add dderH as 1st der order
         mval,dval =valt
-        Mval += valt[0]; Dval += valt[1]; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1] + dval<=mval
+        Mval += valt[0]; Dval += valt[1]; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
     else:
         subH = [[dderH,[Mval,Dval],[Mrdn,Drdn]]]  # add nesting
 
-    derG = CderG(G1=_G, G2=G, subH=subH, valt=[Mval,Dval], rdnt=[Mrdn,Drdn], S=distance, A=A)
+    derG = CderG(G0=_G, G1=G, subH=subH, valt=[Mval,Dval], rdnt=[Mrdn,Drdn], S=distance, A=A)
     # add links:
     if valt[0] > ave_Gm:
         _G.link_tH[-1][0] += [derG]; G.link_tH[-1][0] += [derG]  # bi-directional
@@ -135,7 +135,7 @@ def init_graph(gnode_, G_, G, fder, fd, val):  # recursive depth-first gnode_+=[
 
     for link in G.link_tH[-(1+fder)][fd]:
         # all positive links init graph, eval node.link_ in prune_node_layer
-        _G = link.node_[1] if link.node_[0] is G else link.node_[0]
+        _G = link.G[1] if link.G[0] is G else link.G[0]
         if _G in G_:  # _G is not removed in prior loop
             gnode_ += [_G]
             G_.remove(_G)
@@ -228,23 +228,25 @@ def sum2graph_(graph_, fd):  # sum node and link params into graph, aggH in agg+
         Link_ = []
         for G in graph[0]:
             sum_box(Graph.box, G.box)
-            sum_aggH([Graph.aggH[1],Graph.valt[1],Graph.rdnt[1]], [G.aggH[1],G.valt[1],G.rdnt[1]], base_rdn=1)  # G internals
+            sum_ptuple(Graph.ptuple, G.ptuple)
+            sum_derH(Graph.der, G.der, base_rdn=1)
+            sum_aggH([Graph.aggH,Graph.valt,Graph.rdnt], [G.aggH,G.valt,G.rdnt], base_rdn=1)
             link_ = G.link_tH[-1][fd]
             Link_[:] = list(set(Link_ + link_))
-            aggH=[]; valt=[0,0]; rdnt=[1,1]
+            subH=[]; valt=[0,0]; rdnt=[1,1]
             for derG in link_:
-                sum_aggH([aggH,valt,rdnt], [derG.aggH,derG.valt,derG.rdnt], base_rdn=1)  # node externals
+                sum_subH([subH,valt,rdnt], [derG.subH,derG.valt,derG.rdnt], base_rdn=1)  # node externals
                 sum_box(G.box, derG.node_[0].box if derG.node_[1] is G else derG.node_[1].box)
-            G.aggH[1]+=aggH  # internals+=externals after clustering:
+            G.aggH += [subH]
             for i in 0,1:
-                G.valt[1][i] += valt[i]; G.rdnt[1][i] += rdnt[i]
-            Graph.node_ += [G]
-        aggH=[]; valt=[0,0]; rdnt=[1,1]
+                G.valt[i] += valt[i]; G.rdnt[i] += rdnt[i]
+            Graph.node_ += [G]  # converted to node_tt by feedback
+        subH=[]; valt=[0,0]; rdnt=[1,1]
         for derG in Link_:
-            sum_aggH([aggH,valt,rdnt], [derG.aggH, derG.valt, derG.rdnt], base_rdn=1)  # sum unique links
-        Graph.aggH[1] += aggH  # internals+=externals after clustering:
+            sum_subH([subH,valt,rdnt], [derG.aggH, derG.valt, derG.rdnt], base_rdn=1)  # sum unique links
+        Graph.aggH += [subH]
         for i in 0,1:
-            Graph.valt[1][i] += valt[i]; Graph.rdnt[1][i] += rdnt[i]
+            Graph.valt[i] += valt[i]; Graph.rdnt[i] += rdnt[i]
         Graph_ += [Graph]
 
     return Graph_
@@ -361,42 +363,40 @@ derH: [[tuplet, valt, rdnt]]: default input from PP, for both rng+ and der+, sum
 subH: [[derH_t, valt, rdnt]]: m,d derH, m,d ext added by agg+ as 1st tuplet
 aggH: [[subH_t, valt, rdnt]]: composition layers, ext per G
 '''
+
 def comp_subH(_subH, subH, rn):
-    dsubH = []
+    DerH = []
     Mval, Dval, Mrdn, Drdn = 0,0,1,1
 
     for _lay, lay in zip_longest(_subH, subH, fillvalue=[]):  # compare common lower layer|sublayer derHs
         if _lay and lay:  # also if lower-layers match: Mval > ave * Mrdn?
-            _derH = _lay[0][1]; derH = lay[0][1]
-            # comp dext:
-            _L,_S,_A = _derH[0][1]; L,S,A = derH[0][1]
-            dL = _L-L; Dval += dL; mL = ave-abs(dL); Mval += mL
-            dS = _S/_L-S/L; Dval += dS; mS = ave - abs(dS); Mval += mS
-            dA = _A-A;  Dval+=dA; mA = ave-abs(dL); Mval += mA
-            # comp dderH:
-            dderH, valt, rdnt = comp_derH(_derH[1:], derH[1:], rn)
-            dderH = [[[mL,mS,mA],[dL,dS,dA]]] + dderH  # 1st element in each subLay is der_ext
-            dsubH += [[dderH, valt, rdnt]]
-            mval,dval = valt
-            Mval += mval; Dval += dval; Mrdn += rdnt[0] + dval > mval; Drdn += rdnt[1] + dval <= mval
+            if isinstance(_lay[0][0],list):
+                dderH, valt, rdnt = comp_derH(_lay[0][1], lay[0][1], rn)
+                DerH += [[dderH, valt, rdnt]]  # for flat derH
+                mval,dval = valt
+                Mval += mval; Dval += dval; Mrdn += rdnt[0] + dval > mval; Drdn += rdnt[1] + dval <= mval
+            else:  # _lay[0][0] is L, comp dext:
+                _L,_S,_A = _lay[1]; L,S,A = lay[1]
+                dL = _L-L; mL = ave-abs(dL);      Mval += mL; Dval += dL
+                dS = _S/_L-S/L; mS = ave-abs(dS); Mval += mS; Dval += dS
+                dA = _A-A; mA = ave-abs(dL);      Mval += mA; Dval+=dA
+                DerH += [[[mL,mS,mA],[dL,dS,dA]]]  # der_ext
 
-    return dsubH, [Mval,Dval], [Mrdn,Drdn]  # new layer, 1/2 combined derH
-
+    return DerH, [Mval,Dval], [Mrdn,Drdn]  # new layer, 1/2 combined derH
 
 def comp_aggH(_aggH, aggH, rn):  # no separate ext processing?
-    daggH = []
-    Mval, Dval, Mrdn, Drdn = 0,0,1,1
+      SubH = []
+      Mval, Dval, Mrdn, Drdn = 0,0,1,1
 
-    for _lev, lev in zip_longest(_aggH, aggH, fillvalue=[]):  # compare common lower layer|sublayer derHs
-        if _lev and lev:  # also if lower-layers match: Mval > ave * Mrdn?
-            # compare dsubH only:
-            dsubH, valt, rdnt = comp_subH(_lev[0][1], lev[0][1], rn)
-            daggH += [[dsubH, valt, rdnt]]
-            mval,dval = valt
-            mrdn = dval > mval; drdn = dval < mval
-            Mrdn += rdnt[0] + mrdn; Drdn += rdnt[1] + drdn
+      for _lev, lev in zip_longest(_aggH, aggH, fillvalue=[]):  # compare common lower layer|sublayer derHs
+          if _lev and lev:  # also if lower-layers match: Mval > ave * Mrdn?
+              # compare dsubH only:
+              dsubH, valt, rdnt = comp_subH(_lev[0][1], lev[0][1], rn)
+              SubH += [[dsubH, valt, rdnt]]
+              mval,dval = valt
+              Mval += mval; Dval += dval; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+mval<=dval
 
-    return daggH, [Mval,Dval], [Mrdn,Drdn]  # new layer, 1/2 combined derH
+      return SubH, [Mval,Dval], [Mrdn,Drdn]
 
 # not revised:
 def sum_aggH(T, t, base_rdn):

@@ -58,13 +58,13 @@ def vectorize_root(blob, verbose=False):  # always angle blob, composite dert co
 
     slice_edge(edge, verbose)  # form 2D array of Ps: horizontal blob slices in dir__t
     rotate_P_(edge, verbose)  # re-form Ps around centers along P.G, P sides may overlap, if sum(P.M s + P.Ma s)?
-    cP_ = set(edge.node_tt[0][0])  # to pop here
+    cP_ = set(edge.node_)  # to pop here
     while cP_:
         form_link_(cP_.pop(), cP_, edge)  # trace adjacent Ps, fill|prune if missing or redundant, add them to P.link_
 
     comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
     # rng+ in comp_slice adds edge.node_tt[0]:
-    for fd, PP_ in enumerate(edge.node_tt[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
+    for fd, PP_ in enumerate(edge.node_[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
         # sub+, intra PP:
         sub_recursion_eval(edge, PP_)
         # agg+, inter-PP:
@@ -111,7 +111,7 @@ def slice_edge(edge, verbose=False):  # form blob slices nearest to slice Ga: Ps
             P_ += [term_P(I, M, Ma, Dy, Dx, Dyy, Dyx, Dxy, Dxx, y,x-1, Pdert_)]
 
     if verbose: print("\r" + " " * 79, end=""); sys.stdout.flush(); print("\r", end="")
-    edge.node_tt[0][0] = P_
+    edge.node_ = P_
     return P_
 
 def term_P(I, M, Ma, Dy, Dx, Dyy, Dyx, Dxy, Dxx, y,x, Pdert_):
@@ -130,7 +130,7 @@ def rotate_P_(edge, verbose=False):  # rotate each P to align it with direction 
     dir__t = edge.dir__t; mask__= edge.mask__
     if verbose: i = 0
     P_ = []
-    for P in edge.node_tt[0][0]:
+    for P in edge.node_:
         G = P.ptuple[1]
         daxis = P.ptuple[5][0] / G  # dy: deviation from horizontal axis
         _daxis = 0
@@ -152,7 +152,7 @@ def rotate_P_(edge, verbose=False):  # rotate each P to align it with direction 
             edge.dir__t_roots[cy][cx] += [P]  # final rotated P
 
         P_ += [P]
-    edge.node_tt[0][0] = P_
+    edge.node_ = P_
 
     if verbose: print("\r", end=" " * 79); sys.stdout.flush(); print("\r", end="")
 
@@ -261,9 +261,9 @@ def form_link_(P, cP_, edge):  # trace adj Ps up and down by adj dert roots, fil
                     axis=np.divide(dert[3:5], dert[0]))
         # link _P:
         P.link_tH[-1][0] += [_P]; _P.link_tH[-1][0] += [P]    # form link with P first to avoid further recursion
-        _cP_ = set(edge.node_tt[0][0]) - {P}           # exclude P
+        _cP_ = set(edge.node_) - {P}           # exclude P
         form_link_(_P, _cP_, edge)          # call form_link_ for the newly formed _P
-        edge.node_tt[0][0] += [_P]                     # add _P to blob.P_ for further linking with remaining cP_
+        edge.node_ += [_P]                     # add _P to blob.P_ for further linking with remaining cP_
 
 
 def slice_edge_ortho(edge, verbose=False):  # slice_blob with axis-orthogonal Ps
