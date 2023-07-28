@@ -278,3 +278,20 @@ def form_graph_(G_, fder):  # form list graphs and their aggHs, G is node in GG 
 
     # add_alt_graph_(graph_t)  # overlap+contour, cluster by common lender (cis graph), combined comp?
     return graph_t
+
+def sum_derHt(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
+
+    DerH, Valt, Rdnt = T
+    derH, valt, rdnt = t
+    for i in 0, 1:
+        Valt[i] += valt[i]; Rdnt[i] += rdnt[i] + base_rdn
+    if DerH:
+        for Layer, layer in zip_longest(DerH,derH, fillvalue=[]):
+            if layer:
+                if Layer:
+                    if layer[0]: sum_derH(Layer, layer)
+                else:
+                    DerH += [deepcopy(layer)]
+    else:
+        DerH[:] = deepcopy(derH)
+

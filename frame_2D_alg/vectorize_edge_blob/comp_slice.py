@@ -205,9 +205,7 @@ def sum_derH(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = 
     DerH, Valt, Rdnt = T
     derH, valt, rdnt = t
     for i in 0, 1:
-        Valt[i] += valt[i]
-        Rdnt[i] += rdnt[i] + base_rdn
-
+        Valt[i] += valt[i]; Rdnt[i] += rdnt[i] + base_rdn
     if DerH:
         for Layer, layer in zip_longest(DerH,derH, fillvalue=[]):
             if layer:
