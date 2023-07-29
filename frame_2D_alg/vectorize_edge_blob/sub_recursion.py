@@ -1,7 +1,7 @@
 from itertools import zip_longest
 import numpy as np
 from copy import copy, deepcopy
-from .filters import PP_aves, ave_nsubt
+from .filters import PP_aves, ave_nsubt, P_aves
 from .classes import CP, CPP
 from .comp_slice import comp_P, form_PP_t, sum_derH
 from dataclasses import replace
@@ -29,7 +29,7 @@ def sub_recursion_eval(root, PP_):  # fork PP_ in PP or blob, no derH in blob
                 if not fr:  # add link_tt and root_tt for both comp forks:
                     for P in PP.node_:
                         P.root_tt = [[None,None],[None,None]]
-                        P.link_tH += [[[],[]]]  # form root_t, link_t in sub+:
+                        P.link_H += [[]]  # form root_t, link_t in sub+:
                 sub_tt += [sub_recursion(PP, PP_, fder)]  # comp_der|rng in PP->parLayer
                 fr = 1
             else:
@@ -83,22 +83,25 @@ def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip cluste
 
     P_ = []
     for P in iP_:
-        for derP in P.link_tH[-2][0]:  # scan lower-layer mlinks
-            _P = derP._P
-            for _derP in _P.link_tH[-2][0]:  # next layer of all links, also lower-layer?
-                __P = _derP._P  # next layer of Ps
-                distance = np.hypot(__P.yx[1]-P.yx[1], __P.yx[0]-P.yx[0])   # distance between mid points
-                if distance > rng:
-                    comp_P(P,__P, fder=0, derP=distance)  # distance=S, mostly lateral, relative to L for eval?
+        for derP in P.link_H[-2]:  # scan lower-layer mlinks
+            if derP.valt[0] >  P_aves[0]* derP.rdnt[0]:
+                _P = derP._P
+                for _derP in _P.link_H[-2]:  # next layer of all links, also lower-layer?
+                   if _derP.valt[0] >  P_aves[0]* _derP.rdnt[0]:
+                        __P = _derP._P  # next layer of Ps
+                        distance = np.hypot(__P.yx[1]-P.yx[1], __P.yx[0]-P.yx[0])   # distance between mid points
+                        if distance > rng:
+                            comp_P(P,__P, fder=0, derP=distance)  # distance=S, mostly lateral, relative to L for eval?
         P_ += [P]
     return P_
 
 def comp_der(P_):  # keep same Ps and links, increment link derH, then P derH in sum2PP
 
     for P in P_:
-        for derP in P.link_tH[-2][1]:  # scan lower-layer dlinks
-            # comp extended derH of the same Ps, to sum in lower-composition sub_PPs:
-            comp_P(derP._P,P, fder=1, derP=derP)
+        for derP in P.link_H[-2]:  # scan lower-layer dlinks
+            if derP.valt[1] >  P_aves[1]* derP.rdnt[1]:
+                # comp extended derH of the same Ps, to sum in lower-composition sub_PPs:
+                comp_P(derP._P,P, fder=1, derP=derP)
     return P_
 
 ''' 

@@ -17,8 +17,8 @@ def comp_slice(edge, verbose=False):  # high-G, smooth-angle blob, composite der
 
     P_ = []
     for P in edge.node_:  # init P_, must be contiguous, gaps filled in scan_P_rim
-        link_ = copy(P.link_tH[-1][0])  # init rng+
-        P.link_tH[-1][0] = []  # fill with derPs in comp_P
+        link_ = copy(P.link_H[-1])  # init rng+
+        P.link_H[-1] = []  # fill with derPs in comp_P
         P_ +=[[P,link_]]
     for P, link_ in P_:
         for _P in link_:  # or spliced_link_ if active
@@ -33,7 +33,7 @@ def comp_P(_P,P, fder=1, derP=None):  #  derP if der+, S if rng+
     rn = len(_P.dert_)/ len(P.dert_)
 
     if fder:  # der+: extend in-link derH
-        rn *= len(_P.link_tH[-2][fder]) / len(P.link_tH[-2][fder])  # derH is summed from links
+        rn *= len(_P.link_H[-2]) / len(P.link_H[-2])  # derH is summed from links
         dderH, valt, rdnt = comp_derH(_P.derH, P.derH, rn)  # += fork rdn
         derP = CderP(derH = derP.derH+dderH, valt=valt, rdnt=rdnt, P=P,_P=_P, S=derP.S)  # dderH valt,rdnt for new link
         mval,dval = valt; mrdn,drdn = rdnt
@@ -43,8 +43,8 @@ def comp_P(_P,P, fder=1, derP=None):  #  derP if der+, S if rng+
         mrdn = 1+(dval>mval); drdn = 1+(1-(dval>mval))  # rdn = Dval/Mval?
         derP = CderP(derH=[[[mtuple,dtuple], [mval,dval],[mrdn,drdn]]], valt=[mval,dval], rdnt=[mrdn,drdn], P=P,_P=_P, S=derP)
 
-    if mval > aveP*mrdn: P.link_tH[-1][0] += [derP]  # +ve links, for fork selection in form_PP_t, not fd as -ve links?
-    if dval > aveP*drdn: P.link_tH[-1][1] += [derP]
+    if mval > aveP*mrdn or dval > aveP*drdn:
+        P.link_H[-1] += [derP]
 
 
 def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
@@ -73,7 +73,7 @@ def comp_dtuple(_ptuple, ptuple, rn):
 
     return [mtuple, dtuple]
 
-
+# not reviewed:
 def form_PP_t(P_, PP_, base_rdn, fder):  # form PPs of derP.valt[fd] + connected Ps val
 
     PP_t = []
@@ -83,32 +83,33 @@ def form_PP_t(P_, PP_, base_rdn, fder):  # form PPs of derP.valt[fd] + connected
             if not P.root_tt[fder][fd]:  # else already packed in qPP
                 qPP = [[P]]  # init PP is 2D queue of (P,val)s of all layers?
                 P.root_tt[fder][fd] = qPP; val = 0
-                uplink_ = P.link_tH[-1][fd]
+                uplink_ = P.link_H[-1]
                 uuplink_ = []  # next layer of uplinks
                 while uplink_:  # later uuplink_
                     for derP in uplink_:
-                        _P = derP._P
-                        if _P not in P_:  # _P is outside of current PP, merge its root PP:
-                            _PP = _P.root_tt[fder][fd]
-                            if _PP:  # _P is already clustered
-                                for _node in _PP.node_:
-                                    if _node not in qPP[0]:
-                                        qPP[0] += [_node]; _node.root_tt[fder][fd] = qPP  # reassign root
-                                PP_.remove(_PP)
-                        else:
-                            _qPP = _P.root_tt[fder][fd]
-                            if _qPP:
-                                if _qPP is not qPP:  # _P may be added to qPP via other down-linked P
-                                    val += _qPP[1]  # merge _qPP in qPP:
-                                    for qP in _qPP[0]:
-                                        qP.root_tt[fder][fd] = qPP
-                                        qPP[0] += [qP]  # qP_+=[qP]
-                                    qPP_.remove(_qPP)
+                        if derP.valt[fder] > P_aves[fder]* derP.rdnt[fder]:
+                            _P = derP._P
+                            if _P not in P_:  # _P is outside of current PP, merge its root PP:
+                                _PP = _P.root_tt[fder][fd]
+                                if _PP:  # _P is already clustered
+                                    for _node in _PP.node_:
+                                        if _node not in qPP[0]:
+                                            qPP[0] += [_node]; _node.root_tt[fder][fd] = qPP  # reassign root
+                                    PP_.remove(_PP)
                             else:
-                                qPP[0] += [_P]  # pack bottom up
-                                _P.root_tt[fder][fd] = qPP
-                                val += derP.valt[fd]
-                                uuplink_ += derP._P.link_tH[-1][fd]
+                                _qPP = _P.root_tt[fder][fd]
+                                if _qPP:
+                                    if _qPP is not qPP:  # _P may be added to qPP via other down-linked P
+                                        val += _qPP[1]  # merge _qPP in qPP:
+                                        for qP in _qPP[0]:
+                                            qP.root_tt[fder][fd] = qPP
+                                            qPP[0] += [qP]  # qP_+=[qP]
+                                        qPP_.remove(_qPP)
+                                else:
+                                    qPP[0] += [_P]  # pack bottom up
+                                    _P.root_tt[fder][fd] = qPP
+                                    val += derP.valt[fd]
+                                    uuplink_ += derP._P.link_H[-1]
                     uplink_ = uuplink_
                     uuplink_ = []
                 qPP += [val, ave + 1]  # ini reval=ave+1, keep qPP same object for ref in P.roott
@@ -146,29 +147,19 @@ def reval_PP_(PP_, fder, fd):  # recursive eval / prune Ps for rePP
 
     return rePP_
 
+# draft:
 def reval_P_(P_, fd):  # prune qPP by link_val + mediated link__val
 
-    prune_=[]; Val=0; reval=0  # comb PP value and recursion value
+    Val=0; reval=0  # comb PP value and recursion value
 
     for P in P_:
-        P_val = 0; remove_ = []
-        for link in P.link_tH[-1][fd]:  # link val + med links val: single mediation layer in comp_slice:
-            link_val = link.valt[fd] + sum([mlink.valt[fd] for mlink in link._P.link_tH[-1][0]]) * med_decay
-            if link_val < vaves[fd]:
-                remove_ += [link]; reval += link_val
-            else: P_val += link_val
-        for link in remove_:
-            P.link_tH[-1][fd].remove(link)  # prune weak links
-        if P_val * P.rdnt[fd] < vaves[fd]:
-            prune_ += [P]
-        else:
+        P_val = 0
+        for link in P.link_H[-1]:  # link val + med links val: single mediation layer in comp_slice:
+            link_val = link.valt[fd] + sum([link.valt[fd] for link in link._P.link_H[-1]]) * med_decay
+            if link_val >= vaves[fd]:
+                P_val += link_val
+        if P_val * P.rdnt[fd] > vaves[fd]:
             Val += P_val * P.rdnt[fd]
-    for P in prune_:
-        for link in P.link_tH[-1][fd]:  # prune direct links only?
-            _P = link._P
-            _link_ = _P.link_tH[-1][fd]
-            if link in _link_:
-                _link_.remove(link); reval += link.valt[fd]
 
     if reval > aveB:
         P_, Val, reval = reval_P_(P_, fd)  # recursion
@@ -188,11 +179,12 @@ def sum2PP(qPP, base_rdn, fder, fd):  # sum links in Ps and Ps in PP
         if i: Y0=min(Y0,(y-Dy)); Yn=max(Yn,(y+Dy)); X0=min(X0,(x-Dx)); Xn=max(Xn,(x+Dx))
         else: Y0=y-Dy; Yn=y+Dy; X0=x-Dx; Xn=x+Dx  # init
 
-        for derP in P.link_tH[-1][fder]:
-            derH, valt, rdnt = derP.derH, derP.valt, derP.rdnt
-            sum_derH([P.derH,P.valt,P.rdnt], [derH,valt,rdnt], base_rdn)
-            _P = derP._P  # bilateral summation:
-            sum_derH([_P.derH,_P.valt,_P.rdnt], [derH,valt,rdnt], base_rdn)
+        for derP in P.link_H[-1]:
+            if derP.valt[fder] > P_aves[fder]* derP.rdnt[fder]:
+                derH, valt, rdnt = derP.derH, derP.valt, derP.rdnt
+                sum_derH([P.derH,P.valt,P.rdnt], [derH,valt,rdnt], base_rdn)
+                _P = derP._P  # bilateral summation:
+                sum_derH([_P.derH,_P.valt,_P.rdnt], [derH,valt,rdnt], base_rdn)
         # excluding bilateral sums:
         sum_derH([PP.derH,PP.valt,PP.rdnt], [P.derH,P.valt,P.rdnt], base_rdn)
 
