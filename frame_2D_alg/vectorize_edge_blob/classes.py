@@ -29,7 +29,7 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     valt : list = z([0,0])  # summed from the whole derH
     rdnt : list = z([1,1])
     dert_ : list = z([])  # array of pixel-level derts, ~ node_
-    link_tH : list = z([[[],[]]])  # +ve rlink_, dlink_ H from lower sub+
+    link_H : list = z([[]])  # +ve rlink_, dlink_ H from lower sub+
     root_tt : list = z([[None,None],[None,None]])  # PPrm,PPrd, PPdm,PPdd that contain this P, single-layer
     dert_yx_ : list = z([])  # mappings to blob der_t
     dert_olp_: list = z(set())
@@ -83,17 +83,17 @@ class CPP(CderP):
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
     fd: int = 0  # not fder
-    link_tH : list = z([[[],[]]])  # rng H with +ve (rlink_,dlink_) layers
+    link_H : list = z([[]])
     ptuple : list = z([])  # default from P
-    derH : list = z([])  # [[tuplet, valt, rdnt]]: default from PP, for both rng+ and der+, sum min len?
+    derH : list = z([[], [0,0], [1,1]])  # [[tuplet, valt, rdnt]]: default from PP, for both rng+ and der+, sum min len?
     aggH : list = z([])  # [[subH_t, valt, rdnt]], subH: [[derH_t, valt, rdnt]]; cross-fork composition layers
     valt : list = z([0,0])
     rdnt : list = z([1,1])
     node_ : list = z([])  # same-fork, incremental nesting if wH: down-forking tree of node Levs, 4 top forks if sub+:
     # node_tt: list = z([[[],[]],[[],[]]])  # rng+'Gm_,Gd_, der+'Gm_,Gd_, may not overlap
-    root: object= None  # root_: list = z([])  # agg|sub+ mset forks, incr.nest if uH: up-forking tree of root Levs,
-    # root_tt: list = z([[None,None],[None,None]])  # rng+'Gm,Gd, der+'Gm,Gd, if both comp and form are overlapping
-    L : int  # len base node_; from internal links:
+    # root: object= None  # root_: list = z([])  # agg|sub+ mset forks, incr.nest if uH: up-forking tree of root Levs,
+    root_tt: list = z([[None,None],[None,None]])  # rng+'Gm,Gd, der+'Gm,Gd, if both comp and form are overlapping
+    L : int = 0 # len base node_; from internal links:
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers
     rng : int = 1

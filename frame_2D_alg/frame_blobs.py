@@ -131,18 +131,24 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False):
     Y, X = image.shape[:2]
 
     dir__t = comp_axis(image)  # nested tuple of 2D arrays: [i,[4|8 ds]]: single difference per axis
-    i__, dl__, dwn__, dr__, rgt__ = dir__t
+    i__, g__t = dir__t
     # combine ds: (diagonal is projected to orthogonal, cos(45) = sin(45) = 0.5**0.5)
-    dy__ = (dr__+dl__)*(0.5**0.5) + dwn__
-    dx__ = (dr__-dl__)*(0.5**0.5) + rgt__
+    dy__ = (g__t[3]-g__t[2])*(0.5**0.5) + g__t[0]
+    dx__ = (g__t[2]-g__t[3])*(0.5**0.5) + g__t[1]
     g__ = np.hypot(dy__, dx__)  # gradient magnitude
     der__t = i__, dy__, dx__, g__
 
     # compute signs
-    max_val__ = np.max([np.abs(np.abs(dwn__)-np.abs(rgt__)), np.abs(np.abs(dl__)-np.abs(dr__))], axis=0)
-    dsign__ = ave - max_val__ > 0   # max d per kernel
-    gsign__ = ave - g__       > 0   # below-average g
-    ## https://en.wikipedia.org/wiki/Flood_fill
+    g_sqr__t = g__t*g__t
+    val__ = np.sqrt(
+        # value is ratio between edge ones and the rest:
+        # https://www.rastergrid.com/blog/2011/01/frei-chen-edge-detector/#:~:text=When%20we%20are%20using%20the%20Frei%2DChen%20masks%20for%20edge%20detection%20we%20are%20searching%20for%20the%20cosine%20defined%20above%20and%20we%20use%20the%20first%20four%20masks%20as%20the%20elements%20of%20importance%20so%20the%20first%20sum%20above%20goes%20from%20one%20to%20four.
+        (g_sqr__t[0] + g_sqr__t[1] + g_sqr__t[2] + g_sqr__t[3]) /
+        (g_sqr__t[0] + g_sqr__t[1] + g_sqr__t[2] + g_sqr__t[3] + g_sqr__t[4] + g_sqr__t[5] + g_sqr__t[6] + g_sqr__t[7] + g_sqr__t[8])
+    )
+    dsign__ = ave - val__ > 0   # max d per kernel
+    gsign__ = ave - g__   > 0   # below-average g
+    # https://en.wikipedia.org/wiki/Flood_fill
     # edge_, idmap, adj_pairs = flood_fill(dir__t, dsign__, prior_forks='', verbose=verbose, cls=CEdge)
     # assign_adjacents(adj_pairs)  # forms adj_blobs per blob in adj_pairs
     # I, Ddl, Dd, Ddr, Dr = 0, 0, 0, 0, 0
@@ -173,13 +179,29 @@ def comp_axis(image):
 
     pi__ = np.pad(image, pad_width=1, mode='edge')      # pad image with edge values
 
-    # direction ds (↙ ↓ ↘ →): difference / distance
-    dl__  = (pi__[ks.bl] - pi__[ks.tr]) / DIAG_DIST     # (↙) 135 deg - down-left
-    dwn__ = (pi__[ks.bc] - pi__[ks.tc]) / ORTHO_DIST    # (↓)  90 deg - down (y axis)
-    dr__  = (pi__[ks.br] - pi__[ks.tl]) / DIAG_DIST     # (↘)  45 deg - down-right
-    rgt__ = (pi__[ks.mr] - pi__[ks.ml]) / ORTHO_DIST    # (→)   0 deg - right (x axis)
+    g___ = np.zeros((9,) + image.shape, dtype=float)    # g is gradient per axis
 
-    return (pi__[ks.mc], dl__, dwn__, dr__, rgt__)
+    # take 3x3 kernel slices of pixels:
+    tl = pi__[ks.tl]; tc = pi__[ks.tc]; tr = pi__[ks.tr]
+    ml = pi__[ks.ml]; mc = pi__[ks.mc]; mr = pi__[ks.mr]
+    bl = pi__[ks.bl]; bc = pi__[ks.bc]; br = pi__[ks.br]
+
+    # apply Frei-chen filter to image:
+    # https://www.rastergrid.com/blog/2011/01/frei-chen-edge-detector/
+    # First 4 values are edges:
+    g___[0] = (tl+tr-bl-br)/DIAG_DIST + (tc-bc)/ORTHO_DIST
+    g___[1] = (tl+bl-tr-br)/DIAG_DIST + (ml-mr)/ORTHO_DIST
+    g___[2] = (ml+bc-tc-mr)/DIAG_DIST + (tr-bl)/ORTHO_DIST
+    g___[3] = (mr+bc-tc-ml)/DIAG_DIST + (tr-bl)/ORTHO_DIST
+    # The next 4 are lines
+    g___[4] = (tc+bc-ml-mr)/ORTHO_DIST
+    g___[5] = (tr+bl-tl-br)/ORTHO_DIST
+    g___[6] = (mc*4-(tc+bc+ml+mr)*2+(tl+tr+bl+br))/6
+    g___[7] = (mc*4-(tl+br+tr+bl)*2+(tc+bc+ml+mr))/6
+    # The last one is average
+    g___[8] = (tl+tc+tr+ml+mc+mr+bl+bc+br)/9
+
+    return (pi__[ks.mc], g___)
 
 
 # not fully revised to include edge fork:

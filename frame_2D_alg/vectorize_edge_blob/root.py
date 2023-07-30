@@ -71,7 +71,7 @@ def vectorize_root(blob, verbose=False):  # always angle blob, composite dert co
         if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
             node_= []
             for PP in PP_:  # convert PPs to graphs:
-                node_ += [Cgraph(ptuple=PP.ptuple, derH=[PP.derH, PP.valt, PP.rdnt], L=len(PP.node_), # empty aggH, etc.
+                node_ += [Cgraph(valt=PP.valt, rdnt=PP.rdnt, ptuple=PP.ptuple, derH=[PP.derH, PP.valt, PP.rdnt], L=len(PP.node_), # empty aggH, etc.
                                  box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
                 sum_derH([edge.derH, edge.valt, edge.rdnt], [PP.derH, PP.valt, PP.rdnt], 0)
             # node_: edge.node_tt[0][fd]
@@ -246,10 +246,10 @@ def form_link_(P, cP_, edge):  # trace adj Ps up and down by adj dert roots, fil
     link_ = {*sum(rim_.values(), start=[])} & cP_   # intersect with cP_ to prevent duplicate links and self linking (P not in cP_)
     # form links:
     for _P in link_:
-        P.link_tH[-1][0] += [_P]
-        _P.link_tH[-1][0] += [P]  # bidirectional assign maybe needed in ortho version, else uplinks only?
+        P.link_H[-1] += [_P]
+        _P.link_H[-1] += [P]  # bidirectional assign maybe needed in ortho version, else uplinks only?
     # check empty link_:
-    if not P.link_tH[-1][0]:
+    if not P.link_H[-1]:
         # filter non-empty roots and get max-G dert coord:
         y, x = max([(y, x) for y, x in rim_ if not rim_[y, x]],     # filter non-empty roots
                      key=lambda yx: edge.dir__t[1][yx])             # get max-G dert coord
@@ -260,7 +260,7 @@ def form_link_(P, cP_, edge):  # trace adj Ps up and down by adj dert roots, fil
                     edge.dir__t, edge.mask__,
                     axis=np.divide(dert[3:5], dert[0]))
         # link _P:
-        P.link_tH[-1][0] += [_P]; _P.link_tH[-1][0] += [P]    # form link with P first to avoid further recursion
+        P.link_H[-1] += [_P]; _P.link_H[-1] += [P]    # form link with P first to avoid further recursion
         _cP_ = set(edge.node_) - {P}           # exclude P
         form_link_(_P, _cP_, edge)          # call form_link_ for the newly formed _P
         edge.node_ += [_P]                     # add _P to blob.P_ for further linking with remaining cP_
