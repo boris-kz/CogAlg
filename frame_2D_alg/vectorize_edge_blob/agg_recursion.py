@@ -91,14 +91,15 @@ def comp_G(_G, G, distance, A):
     # / P:
     mtuple, dtuple = comp_ptuple(_G.ptuple, G.ptuple, rn=1)
     mval, dval = sum(mtuple), sum(dtuple)
-    derLay0 = [[mtuple, dtuple], [Mval, Dval], [Mrdn, Drdn]]
-    Mval += mval; Dval += dval; Mrdn += dval>mval; Drdn += dval<=mval
+    mrdn = dval>mval; drdn = dval<=mval
+    derLay0 = [[mtuple,dtuple], [mval,dval], [mrdn,drdn]]
+    Mval += mval; Dval += dval; Mrdn += mrdn; Drdn += drdn
     # / PP:
     dderH, valt, rdnt = comp_derH(_G.derH[0], G.derH[0], rn=1)
-    mval,dval =valt
-    Mval += valt[0]; Dval += valt[1]; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
-    # SubH [0]:der_ext, [1]:derLay, [2:]:subH:
-    SubH = [der_ext, [[derLay0]+dderH],[Mval,Dval],[Mrdn,Drdn]]
+    mval,dval = valt
+    Mval += dval; Dval += mval; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
+    # SubH [0]:der_ext, [1]:derLay, then [2:]:subH from comp_aggH:
+    SubH = [der_ext, [derLay0] + [[dderH,valt,rdnt]]]
     # / G:
     if _G.aggH and G.aggH:  # empty in base fork
         subH, valt, rdnt = comp_aggH(_G.aggH, G.aggH, rn=1)
