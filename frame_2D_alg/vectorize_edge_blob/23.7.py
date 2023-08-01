@@ -295,3 +295,130 @@ def sum_derHt(T, t, base_rdn):  # derH is a list of layers or sub-layers, each =
     else:
         DerH[:] = deepcopy(derH)
 
+def frame_blobs_root(image, intra=False, render=False, verbose=False):
+
+    if verbose: start_time = time()
+    Y, X = image.shape[:2]
+
+    dir__t = comp_axis(image)  # nested tuple of 2D arrays: [i,[4|8 ds]]: single difference per axis
+    i__, g__t = dir__t
+    # combine ds: (diagonal is projected to orthogonal, cos(45) = sin(45) = 0.5**0.5)
+    dy__ = (g__t[3]-g__t[2])*(0.5**0.5) + g__t[0]
+    dx__ = (g__t[2]-g__t[3])*(0.5**0.5) + g__t[1]
+    g__ = np.hypot(dy__, dx__)  # gradient magnitude
+    der__t = i__, dy__, dx__, g__
+
+    # compute signs
+    g_sqr__t = g__t*g__t
+    val__ = np.sqrt(
+        # value is ratio between edge ones and the rest:
+        # https://www.rastergrid.com/blog/2011/01/frei-chen-edge-detector/#:~:text=When%20we%20are%20using%20the%20Frei%2DChen%20masks%20for%20edge%20detection%20we%20are%20searching%20for%20the%20cosine%20defined%20above%20and%20we%20use%20the%20first%20four%20masks%20as%20the%20elements%20of%20importance%20so%20the%20first%20sum%20above%20goes%20from%20one%20to%20four.
+        (g_sqr__t[0] + g_sqr__t[1] + g_sqr__t[2] + g_sqr__t[3]) /
+        (g_sqr__t[0] + g_sqr__t[1] + g_sqr__t[2] + g_sqr__t[3] + g_sqr__t[4] + g_sqr__t[5] + g_sqr__t[6] + g_sqr__t[7] + g_sqr__t[8])
+    )
+    dsign__ = ave - val__ > 0   # max d per kernel
+    gsign__ = ave - g__   > 0   # below-average g
+    # https://en.wikipedia.org/wiki/Flood_fill
+    # edge_, idmap, adj_pairs = flood_fill(dir__t, dsign__, prior_forks='', verbose=verbose, cls=CEdge)
+    # assign_adjacents(adj_pairs)  # forms adj_blobs per blob in adj_pairs
+    # I, Ddl, Dd, Ddr, Dr = 0, 0, 0, 0, 0
+    # for edge in edge_: I += edge.I; Ddl += edge.Ddl; Dd += edge.Dd; Ddr += edge.Ddr; Dr += edge.Dr
+    # frameE = CEdge(I=I, Ddl=Ddl, Dd=Dd, Ddr=Ddr, Dr=Dr, dir__t=dir__t, node_tt=[[[], blob_], [[], []]], box=(0, Y, 0, X))
+
+    blob_, idmap, adj_pairs = flood_fill(der__t, gsign__, prior_forks='', verbose=verbose)  # overlap or for negative edge blobs only?
+    assign_adjacents(adj_pairs)
+
+def comp_axis(image):
+
+    pi__ = np.pad(image, pad_width=1, mode='edge')      # pad image with edge values
+
+    g___ = np.zeros((9,) + image.shape, dtype=float)    # g is gradient per axis
+
+    # take 3x3 kernel slices of pixels:
+    tl = pi__[ks.tl]; tc = pi__[ks.tc]; tr = pi__[ks.tr]
+    ml = pi__[ks.ml]; mc = pi__[ks.mc]; mr = pi__[ks.mr]
+    bl = pi__[ks.bl]; bc = pi__[ks.bc]; br = pi__[ks.br]
+
+    # apply Frei-chen filter to image:
+    # https://www.rastergrid.com/blog/2011/01/frei-chen-edge-detector/
+    # First 4 values are edges:
+    g___[0] = (tl+tr-bl-br)/DIAG_DIST + (tc-bc)/ORTHO_DIST
+    g___[1] = (tl+bl-tr-br)/DIAG_DIST + (ml-mr)/ORTHO_DIST
+    g___[2] = (ml+bc-tc-mr)/DIAG_DIST + (tr-bl)/ORTHO_DIST
+    g___[3] = (mr+bc-tc-ml)/DIAG_DIST + (tr-bl)/ORTHO_DIST
+    # The next 4 are lines
+    g___[4] = (tc+bc-ml-mr)/ORTHO_DIST
+    g___[5] = (tr+bl-tl-br)/ORTHO_DIST
+    g___[6] = (mc*4-(tc+bc+ml+mr)*2+(tl+tr+bl+br))/6
+    g___[7] = (mc*4-(tl+br+tr+bl)*2+(tc+bc+ml+mr))/6
+    # The last one is average
+    g___[8] = (tl+tc+tr+ml+mc+mr+bl+bc+br)/9
+
+    return (pi__[ks.mc], g___)
+
+
+def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of cross-comp slice| range| angle per blob
+
+    # deep_blobs = []  # for visualization
+    spliced_layers = []
+    if fBa:
+        blob_ = root_blob.dlayers[0]
+    else:
+        blob_ = root_blob.rlayers[0]
+
+    for blob in blob_:  # fork-specific blobs, print('Processing blob number ' + str(bcount))
+        # increment forking sequence: g -> r|a, a -> v
+        extend_der__t(blob)  # der__t += 1: cross-comp in larger kernels or possible rotation
+        blob.root_der__t = root_blob.der__t
+        blob_height = blob.box[1] - blob.box[0];
+        blob_width = blob.box[3] - blob.box[2]
+
+        if blob_height > 3 and blob_width > 3:  # min blob dimensions: Ly, Lx
+            if root_blob.fBa:  # vectorize fork in angle blobs
+                if (blob.G - aveA * (blob.rdn + 2)) + (aveA * (blob.rdn + 2) - blob.Ga) > 0 and blob.sign:  # G * angle match, x2 costs
+                    blob.fBa = 0;
+                    blob.rdn = root_blob.rdn + 1
+                    blob.prior_forks += 'v'
+                    if verbose: print('fork: v')  # if render and blob.A < 100: deep_blobs += [blob]
+                    vectorize_root(blob, verbose=verbose)
+            else:
+                if blob.G < aveR * blob.rdn and blob.sign:  # below-average G, eval for comp_r
+                    blob.fBa = 0;
+                    blob.rng = root_blob.rng + 1;
+                    blob.rdn = root_blob.rdn + 1.5  # sub_blob root values
+                    # comp_r 4x4:
+                    new_der__t, new_mask__ = comp_r(blob.der__t, blob.rng, blob.mask__)
+                    sign__ = ave * (blob.rdn + 1) - new_der__t[3] > 0  # m__ = ave - g__
+                    # if min Ly and Lx, der__t>=1: form, splice sub_blobs:
+                    if new_mask__.shape[0] > 2 and new_mask__.shape[1] > 2 and False in new_mask__:
+                        spliced_layers[:] = \
+                            cluster_fork_recursive(blob, spliced_layers, new_der__t, sign__, new_mask__, verbose, render, fBa=0)
+                # || forks:
+                if blob.G > aveA * blob.rdn and not blob.sign:  # above-average G, eval for comp_a
+                    blob.fBa = 1;
+                    blob.rdn = root_blob.rdn + 1.5  # comp cost * fork rdn, sub_blob root values
+                    # comp_a 2x2:
+                    new_der__t, new_mask__ = comp_a(blob.der__t, blob.mask__)
+                    sign__ = ave_a - new_der__t.ga > 0
+                    # vectorize if dev_gr + inv_dev_ga, if min Ly and Lx, der__t>=1: form, splice sub_blobs:
+                    if new_mask__.shape[0] > 2 and new_mask__.shape[1] > 2 and False in new_mask__:
+                        spliced_layers[:] = \
+                            cluster_fork_recursive(blob, spliced_layers, new_der__t, sign__, new_mask__, verbose, render, fBa=1)
+            '''
+            this is comp_r || comp_a, gap or overlap version:
+            if aveBa < 1: blobs of ~average G are processed by both forks
+            if aveBa > 1: blobs of ~average G are not processed
+
+            else exclusive forks:
+            vG = blob.G - ave_G  # deviation of gradient, from ave per blob, combined max rdn = blob.rdn+1:
+            vvG = abs(vG) - ave_vG * blob.rdn  # 2nd deviation of gradient, from fixed costs of if "new_der__t" loop below
+            # vvG = 0 maps to max G for comp_r if vG < 0, and to min G for comp_a if vG > 0:
+
+            if blob.sign:  # sign of pixel-level g, which corresponds to sign of blob vG, so we don't need the later
+                if vvG > 0:  # below-average G, eval for comp_r...
+                elif vvG > 0:  # above-average G, eval for comp_a...
+            '''
+    # if verbose: print("\rFinished intra_blob")  # print_deep_blob_forking(deep_blobs)
+
+    return spliced_layers
+
