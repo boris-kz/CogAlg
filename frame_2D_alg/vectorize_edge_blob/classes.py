@@ -22,6 +22,29 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
     L : int = 0  # replaces n, still redundant to len dert_ in P, nlinks in PP or graph
 '''
 
+class CEdge(ClusterStructure):  # edge blob
+
+    I: float = 0.0
+    Dy: float = 0.0
+    Dx: float = 0.0
+    G: float = 0.0
+    A: float = 0.0  # blob area
+    M: float = 0.0  # summed PP.M, for both types of recursion?
+    # composite params:
+    box: tuple = (0, 0, 0, 0)  # y0, yn, x0, xn
+    mask__ : object = None
+    der__t : object = None
+    der__t_roots: object = None  # map to dir__t
+    adj_blobs: list = z([])  # adjacent blobs
+    node_ : list = z([])  # default P_, node_tt: list = z([[[],[]],[[],[]]]) in select PP_ or G_ forks
+    root : object= None  # list root_ if fork overlap?
+    derH : list = z([])  # formed in PPs, inherited in graphs
+    aggH : list = z([[]])  # [[subH, valt, rdnt]]: cross-fork composition layers
+    valt : list = z([0,0])
+    rdnt : list = z([1,1])
+    fback_ : list = z([])  # [feedback aggH,valt,rdnt per node]
+
+
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # latuple: I,G,Ga,M,Ma, angle(Dy,Dx), aangle(Dyy,Dyx,Dxy,Dxx), L
@@ -69,9 +92,9 @@ class CPP(CderP):
     derH : list = z([])  # [[mtuple,dtuple, mval,dval, mrdn,drdn]]: cross-fork composition layers
     valt : list = z([0,0])
     rdnt : list = z([1,1])
-    mask__: object = None
-    node_ : list = z([])  # P_, or node_tt: [rng+'[sub_PPm_,sub_PPd_], der+'[sub_PPm_,sub_PPd_]]
-    root_tt : list = z([[None,None],[None,None]])  # higher PPrm,PPrd, PPdm,PPdd that contain this PP, for sub+ only
+    mask__ : object = None
+    node_T : list = z([])  # P_,-> node_tt if sub+: [rng+ [sub_PPm_,sub_PPd_], der+ [sub_PPm_,sub_PPd_]]
+    root_T : list = z([[None,None],[None,None]])  # init edge, higher PPrm,PPrd, PPdm,PPdd that contain PP if sub+
     rng : int = 1  # sum of rng+: odd forks in last layer?
     box : list = z([0,0,0,0])  # y0,yn,x0,xn
     # temporary:
@@ -89,10 +112,8 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     aggH : list = z([])  # [[subH_t, valt, rdnt]], subH: [[derH_t, valt, rdnt]]; cross-fork composition layers
     valt : list = z([0,0])
     rdnt : list = z([1,1])
-    node_ : list = z([])  # same-fork, incremental nesting if wH: down-forking tree of node Levs, 4 top forks if sub+:
-    # node_tt: list = z([[[],[]],[[],[]]])  # rng+'Gm_,Gd_, der+'Gm_,Gd_, may not overlap
-    # root: object= None  # root_: list = z([])  # agg|sub+ mset forks, incr.nest if uH: up-forking tree of root Levs,
-    root_tt: list = z([[None,None],[None,None]])  # rng+'Gm,Gd, der+'Gm,Gd, if both comp and form are overlapping
+    node_T : list = z([])  # nest by agg+/ node_->node_tt: rng+ Gm_,Gd_, der+ Gm_,Gd_, incr if wH: down-forking tree of node Levs
+    root_T : list = z([])  # up reciprocal to down node_T; agg+| sub+ mset forks, incr.nest if uH: up-forking tree of root Levs?
     L : int = 0 # len base node_; from internal links:
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers

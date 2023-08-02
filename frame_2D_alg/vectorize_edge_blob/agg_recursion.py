@@ -4,8 +4,7 @@ from itertools import zip_longest
 from .classes import Cgraph, CderG
 from .filters import aves, ave, ave_nsubt, ave_sub, ave_agg, G_aves, med_decay, ave_distance, ave_Gm, ave_Gd
 from .comp_slice import comp_angle, comp_ptuple, sum_ptuple, sum_derH, comp_derH, comp_aangle
-# from .sub_recursion import feedback  # temporary
-
+# from .sub_recursion import feedback
 '''
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
 in combination with spliced lower-composition patterns, etc, if only lower param-layers match.
@@ -22,8 +21,8 @@ Agg+ cross-comps top Gs and forms higher-order Gs, adding up-forking levels to t
 Sub+ re-compares nodes within Gs, adding intermediate Gs, down-forking levels to root Gs, and up-forking levels to node Gs.
 -
 Generic graph is a dual tree with common root: down-forking input node Gs and up-forking output graph Gs. 
-This resembles neuron, which has dendritic tree as input and axonal tree as output.
-But we have recursively structured param sets packed in each level of these trees, there is no such structure in neurons.
+This resembles a neuron, which has dendritic tree as input and axonal tree as output. 
+But we have recursively structured param sets packed in each level of these trees, which don't exist in neurons.
 Diagram: 
 https://github.com/boris-kz/CogAlg/blob/76327f74240305545ce213a6c26d30e89e226b47/frame_2D_alg/Illustrations/generic%20graph.drawio.png
 -
@@ -36,6 +35,7 @@ Weak value vars are combined into higher var, so derivation fork can be selected
 def agg_recursion(root, node_):  # compositional recursion in root.PP_
 
     for i in 0,1: root.rdnt[i] += 1  # estimate, no node.rdnt[fder] += 1?
+    node_tt = [[[],[]],[[],[]]] # fill with 4 clustering forks:
 
     for fder in 0,1:  # comp forks, each adds a layer of links
         if fder and len(node_[0].link_H) < 2:  # 1st call, no der+ yet?
@@ -47,11 +47,13 @@ def agg_recursion(root, node_):  # compositional recursion in root.PP_
             if root.valt[fd] > ave_sub * root.rdnt[fd] and graph_:  # fixed costs and non empty graph_, same per fork
                 sub_recursion_eval(root, graph_)
             # agg+, eval all layers?:
-            if  sum(root.valt) > G_aves[fd] * ave_agg * sum(root.rdnt) and len(graph_) > ave_nsubt[fd]:
-                agg_recursion(root, node_)  # replace root.node_ with new graphs
+            if sum(root.valt) > G_aves[fd] * ave_agg * sum(root.rdnt) and len(graph_) > ave_nsubt[fd]:
+                agg_recursion(root, node_) # replace root.node_ with new graphs
             elif root.root:  # if deeper agg+
                 feedback(root, fd)  # update root.root..H, breadth-first
-            root.node_[fder][fd] = graph_
+
+            node_tt[fder][fd] = graph_
+    node_[:] = node_tt  # replace local element of root.node_tt
 
 
 def comp_G_(G_, pri_G_=None, f1Q=1, fder=0):  # cross-comp in G_ if f1Q, else comp between G_ and pri_G_, if comp_node_?
@@ -95,9 +97,9 @@ def comp_G(_G, G, distance, A):
     mval,dval = valt
     Mval += dval; Dval += mval; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
 
-    derH = [[derLay0]+dderH, [Mval,Dval], [Mrdn,Drdn]]  # appendleft derLay0 from comp_ptuple
+    derH = [[derLay0]+dderH, [Mval,Dval],[Mrdn,Drdn]]  # appendleft derLay0 from comp_ptuple
     der_ext = comp_ext([_G.L,_G.S,_G.A],[G.L,G.S,G.A], [Mval,Dval], [Mrdn,Drdn])
-    SubH = [der_ext, derH]  # 1st two layers of SubH, higher layers may be added by comp_aggH:
+    SubH = [der_ext, derH]  # two init layers of SubH, higher layers added by comp_aggH:
     # / G:
     if _G.aggH and G.aggH:  # empty in base fork
         subH, valt, rdnt = comp_aggH(_G.aggH, G.aggH, rn=1)
@@ -107,9 +109,18 @@ def comp_G(_G, G, distance, A):
 
     derG = CderG(G0=_G, G1=G, subH=SubH, valt=[Mval,Dval], rdnt=[Mrdn,Drdn], S=distance, A=A)
     if valt[0] > ave_Gm or valt[1] > ave_Gd:
-        _G.link_H[-1] += [derG]; G.link_H[-1] += [derG]  # bi-directional add links
+        _G.link_H[-1] += [derG]; G.link_H[-1] += [derG]  # bilateral add links
 
-
+'''
+Replace form_graph_ with fuzzy clustering, per cross-comp in (rng, der) in nD array:
+Start with clusters of matching nodes for every node,
+draft:  
+while dMatch per cluster > ave: 
+- sum in-cluster match per node root (positives only), for all clusters
+- sort node roots by computed in_cluster_match, index = cluster_redundancy per node
+- prune root if in_cluster_match < ave * cluster_redundancy, 
+- delete weak clusters, remove their roots from nodes
+'''
 def form_graph_(G_, fder, fd):  # form list graphs and their aggHs, G is node in GG graph
 
     node_ = []  # Gs with >0 +ve fork links:
@@ -345,7 +356,7 @@ def comp_ext(_ext, ext, Valt, Rdnt):  # comp ds:
     Valt[0] += M; Valt[1] += D
     Rdnt[0] += D>M; Rdnt[1] += D<=M
 
-    return [[[mL,mS,mA], [dL,dS,dA]]]
+    return [[mL,mS,mA], [dL,dS,dA]]
 
 
 def sum_ext(Extt, extt):
