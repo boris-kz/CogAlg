@@ -376,3 +376,17 @@ def blank_image(shape, fill_val=None):
     if fill_val is None:
         fill_val = masking_val
     return np.full((height, width, 3), fill_val, 'uint8')
+
+
+def print_deep_blob_forking(deep_layers):
+
+    def check_deep_blob(deep_layer,i):
+        for deep_blob_layer in deep_layer:
+            if isinstance(deep_blob_layer,list):
+                check_deep_blob(deep_blob_layer,i)
+            else:
+                print('blob num = '+str(i)+', forking = '+'->'.join([*deep_blob_layer.prior_forks]))
+
+    for i, deep_layer in enumerate(deep_layers):
+        if len(deep_layer)>0:
+            check_deep_blob(deep_layer,i)
