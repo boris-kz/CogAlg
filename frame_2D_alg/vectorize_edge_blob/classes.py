@@ -47,7 +47,7 @@ class CEdge(ClusterStructure):  # edge blob
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
-    ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # latuple: I,G,Ga,M,Ma, angle(Dy,Dx), aangle(Dyy,Dyx,Dxy,Dxx), L
+    ptuple : list = z([0,0,0,[0,0],0])  # latuple: I,G,M,angle(Dy,Dx), L
     derH : list = z([])  # [[tuplet,valt,rdnt]] vertical derivatives summed from P links
     valt : list = z([0,0])  # summed from the whole derH
     rdnt : list = z([1,1])
@@ -88,7 +88,7 @@ lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays:
 class CPP(CderP):
 
     fd : int = 0  # PP is defined by combined-fork value per link: derP mtuple | dtuple; not fder?
-    ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # summed P__ ptuples, = 0th derLay
+    ptuple : list = z([0,0,0,[0,0],0])   # summed P__ ptuples, = 0th derLay
     derH : list = z([])  # [[mtuple,dtuple, mval,dval, mrdn,drdn]]: cross-fork composition layers
     valt : list = z([0,0])
     rdnt : list = z([1,1])

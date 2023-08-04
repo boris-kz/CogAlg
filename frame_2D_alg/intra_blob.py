@@ -7,6 +7,7 @@ import numpy as np
 from itertools import zip_longest
 from frame_blobs import assign_adjacents, flood_fill, idert
 from vectorize_edge_blob.root import vectorize_root
+from utils import kernel_slice_3x3 as ks
 '''
     Conventions:
     postfix 't' denotes tuple, multiple ts is a nested tuple
@@ -41,8 +42,8 @@ def intra_blob_root(root_blob, render, verbose):  # recursive evaluation of cros
             *(par__[y0e:yne, x0e:xne] for par__ in blob.root_der__t))
         # extend mask__:
         blob.mask__ = np.pad(
-            blob.mask__, constant_values=True, mode='constant',
-            pad_with=((y0 - y0e, yne - yn), (x0 - x0e, xne - xn)))
+            blob.mask__, ((y0 - y0e, yne - yn), (x0 - x0e, xne - xn)),
+            constant_values=True, mode='constant')
         # extends blob box
         blob.box = (y0e, yne, x0e, xne)
         Ye = yne - y0e; Xe = xne - x0e
@@ -53,7 +54,6 @@ def intra_blob_root(root_blob, render, verbose):  # recursive evaluation of cros
             # <--- r fork
             if blob.G < aveR * blob.rdn and blob.sign:  # below-average G, eval for comp_r
                 blob.rng = root_blob.rng + 1; blob.rdn = root_blob.rdn + 1.5  # sub_blob root values
-                # TODO: revise comp_r:
                 new_der__t, new_mask__ = comp_r(blob.der__t, blob.rng, blob.mask__)
                 if new_mask__.shape[0] > 2 and new_mask__.shape[1] > 2 and False in new_mask__:
                     if verbose: print('fork: r')
@@ -82,12 +82,12 @@ def intra_blob_root(root_blob, render, verbose):  # recursive evaluation of cros
                 blob.rdn = root_blob.rdn + 1.5  # comp cost * fork rdn, sub_blob root values
                 blob.prior_forks += 'v'
                 if verbose: print('fork: v')
-                vectorize_root(blob, verbose=verbose)
+                # vectorize_root(blob, verbose=verbose)
             # ---> end v fork
     return spliced_layers
 
 
-def comp_r(dert__, ave, rng, root_fia, mask__=None):
+def comp_r(dert__, rng, mask__=None):
     '''
     Selective sampling: skipping current rim derts as kernel-central derts in following comparison kernels.
     Skipping forms increasingly sparse output dert__ for greater-range cross-comp, hence
@@ -109,120 +109,39 @@ def comp_r(dert__, ave, rng, root_fia, mask__=None):
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_diagrams.png
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_d.drawio
     '''
-    i__ = dert__[0]  # i is pixel intensity
-    '''
-    sparse aligned i__center and i__rim arrays:
-    rotate in first call only: same orientation as from frame_blobs?
-    '''
-    i__center = i__[1:-1:2, 1:-1:2]  # also assignment to new_dert__[0]
-    i__topleft = i__[:-2:2, :-2:2]
-    i__top = i__[:-2:2, 1:-1:2]
-    i__topright = i__[:-2:2, 2::2]
-    i__right = i__[1:-1:2, 2::2]
-    i__bottomright = i__[2::2, 2::2]
-    i__bottom = i__[2::2, 1:-1:2]
-    i__bottomleft = i__[2::2, :-2:2]
-    i__left = i__[1:-1:2, :-2:2]
-    ''' 
-    unmask all derts in kernels with only one masked dert (can be set to any number of masked derts), 
-    to avoid extreme blob shrinking and loss of info in other derts of partially masked kernels
-    unmasked derts were computed due to extend_dert() in intra_blob   
-    '''
+    # unmask all derts in kernels with only one masked dert (can be set to any number of masked derts),
+    # to avoid extreme blob shrinking and loss of info in other derts of partially masked kernels
+    # unmasked derts were computed due to extend_dert() in intra_blob
     if mask__ is not None:
-        majority_mask__ = ( mask__[1:-1:2, 1:-1:2].astype(int)
-                          + mask__[:-2:2, :-2:2].astype(int)
-                          + mask__[:-2:2, 1:-1: 2].astype(int)
-                          + mask__[:-2:2, 2::2].astype(int)
-                          + mask__[1:-1:2, 2::2].astype(int)
-                          + mask__[2::2, 2::2].astype(int)
-                          + mask__[2::2, 1:-1:2].astype(int)
-                          + mask__[2::2, :-2:2].astype(int)
-                          + mask__[1:-1:2, :-2:2].astype(int)
-                          ) > 1
-    else:
-        majority_mask__ = None  # returned at the end of function
-    '''
-    can't happen:
-    if root_fia:  # initialize derivatives:  
-        dy__ = np.zeros_like(i__center)  # sparse to align with i__center
-        dx__ = np.zeros_like(dy__)
-        m__ = np.zeros_like(dy__)
-    else: 
-    '''
-     # root fork is comp_r, accumulate derivatives:
-    dy__ = dert__[1][1:-1:2, 1:-1:2].copy()  # sparse to align with i__center
-    dx__ = dert__[2][1:-1:2, 1:-1:2].copy()
-    m__ = dert__[4][1:-1:2, 1:-1:2].copy()
-
-    # compare four diametrically opposed pairs of rim pixels, with Sobel coeffs * rim skip ratio:
-    rngSkip = 1
-    if rng>2: rngSkip *= (rng-2)*2  # *2 for 9x9, *4 for 17x17
-
-    dy__ += ((i__topleft - i__bottomright) * -1 * rngSkip +
-             (i__top - i__bottom) * -2  * rngSkip +
-             (i__topright - i__bottomleft) * -1 * rngSkip +
-             (i__right - i__left) * 0)
-
-    dx__ += ((i__topleft - i__bottomright) * -1 * rngSkip +
-             (i__top - i__bottom) * 0 +
-             (i__topright - i__bottomleft) * 1 * rngSkip+
-             (i__right - i__left) * 2 * rngSkip)
-
-    g__ = np.hypot(dy__, dx__) - ave  # gradient, recomputed at each comp_r
-    '''
-    currently not used: inverse match = SAD, direction-invariant and more precise measure of variation than g
-    (all diagonal derivatives can be imported from prior 2x2 comp)
-    '''
-    m__ += ( abs(i__center - i__topleft) * 1 * rngSkip
-           + abs(i__center - i__top) * 2 * rngSkip
-           + abs(i__center - i__topright) * 1 * rngSkip
-           + abs(i__center - i__right) * 2 * rngSkip
-           + abs(i__center - i__bottomright) * 1 * rngSkip
-           + abs(i__center - i__bottom) * 2 * rngSkip
-           + abs(i__center - i__bottomleft) * 1 * rngSkip
-           + abs(i__center - i__left) * 2 * rngSkip
-           )
-    return idert(i__center, dy__, dx__, g__), majority_mask__
-
-def comp_r_2x2(dert__, rng, mask__=None):
-    '''
-    Cross-comparison of input param (dert[0]) over rng passed from intra_blob.
-    This fork is selective for blobs with below-average gradient in shorter-range cross-comp: input intensity didn't vary much.
-    Such input is predictable enough for selective sampling: skipping current rim in following comparison kernels.
-    Skipping forms increasingly sparse dert__ for next-range cross-comp,
-    hence kernel width increases as 2^rng: 1: 2x2 kernel, 2: 4x4 kernel, 3: 8x8 kernel
-    There is also skipping within greater-rng rims, so configuration of compared derts is always 2x2
-    '''
-    i__ = dert__[0]  # pixel intensity, should be separate from i__sum
-    # sparse aligned rim arrays:
-    i__topleft = i__[:-1:2, :-1:2]  # also assignment to new_dert__[0]
-    i__topright = i__[:-1:2, 1::2]
-    i__bottomleft = i__[1::2, :-1:2]
-    i__bottomright = i__[1::2, 1::2]
-    ''' 
-    unmask all derts in kernels with only one masked dert (can be set to any number of masked derts), 
-    to avoid extreme blob shrinking and loss of info in other derts of partially masked kernels
-    unmasked derts were computed due to extend_dert() in intra_blob   
-    '''
-    if mask__ is not None:
-        majority_mask__ = ( mask__[:-1:2, :-1:2].astype(int)
-                          + mask__[:-1:2, 1::2].astype(int)
-                          + mask__[1::2, 1::2].astype(int)
-                          + mask__[1::2, :-1:2].astype(int)
-                          ) > 1
+        smsk__ = mask__[::2, ::2]     # sparse_mask__
+        majority_mask__ = (
+                smsk__[ks.tl].astype(int) + smsk__[ks.tc].astype(int) + smsk__[ks.tr].astype(int) +
+                smsk__[ks.ml].astype(int) + smsk__[ks.mc].astype(int) + smsk__[ks.mr].astype(int) +
+                smsk__[ks.bl].astype(int) + smsk__[ks.bc].astype(int) + smsk__[ks.br].astype(int)
+            ) > 1
     else:
         majority_mask__ = None  # returned at the end of function
 
-    d_upleft__ = dert__[1][:-1:2, :-1:2].copy()  # sparse step=2 sampling
-    d_upright__= dert__[2][:-1:2, :-1:2].copy()
-    rngSkip = 1
-    if rng>2: rngSkip *= (rng-2)*2  # *2 for 8x8, *4 for 16x16
-    # combined distance and extrapolation coeffs, or separate distance coef: ave * (rave / dist), rave = ave abs d / ave i?
-    # compare pixels diagonally:
-    d_upright__+= (i__bottomleft - i__topright) * rngSkip
-    d_upleft__ += (i__bottomright - i__topleft) * rngSkip
+    # unpack dert__:
+    i__, dy__, dx__, g__ = dert__  # i is pixel intensity, g is gradient
+    si__ = i__[::2, ::2]  # sparse_i, i is pixel intensity
+    sdy__ = dy__[::2, ::2].copy()  # sparse_dy, for accumulation
+    sdx__ = dx__[::2, ::2].copy()  # sparse_dx, for accumulation
 
-    g__ = np.hypot(d_upright__, d_upleft__)  # match = inverse of abs gradient (variation), recomputed at each comp_r
-    ri__ = i__topleft + i__topright + i__bottomleft + i__bottomright
+    # compare opposed pairs of rim pixels, project onto x, y:
+    dist = 2**rng
 
-    return idert(i__topleft, d_upleft__, d_upright__, g__), majority_mask__
+    sdy__[ks.mc] += (
+        (si__[ks.bl] - si__[ks.tr]) * 0.5 +
+        (si__[ks.bc] - si__[ks.tc]) +
+        (si__[ks.br] - si__[ks.tl]) * 0.5
+    ) / dist
+
+    sdx__[ks.mc] += (
+        (si__[ks.tr] - si__[ks.bl]) * 0.5 +
+        (si__[ks.mr] - si__[ks.mc]) +
+        (si__[ks.br] - si__[ks.tl]) * 0.5
+    ) / dist
+    sg__ = np.hypot(sdy__, sdx__)  # gradient, recomputed at each comp_r
+
+    return idert(si__[ks.mc], sdy__, sdx__, sg__), majority_mask__

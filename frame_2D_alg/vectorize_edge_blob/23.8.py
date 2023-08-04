@@ -32,3 +32,23 @@ def init_graph(qG, node_, fder, fd):  # recursive depth-first gnode_+=[_G]
                 val += init_graph(gnode_, G_, _G, fder, fd, val)
     return val
 
+def graph_reval_(graph_, reval_, fd):  # recursive eval nodes for regraph, after pruning weakly connected nodes
+
+    regraph_, rreval_ = [],[]
+    aveG = G_aves[fd]
+
+    while graph_:
+        graph,val = graph_.pop()
+        reval = reval_.pop()  # each link *= other_G.aggH.valt
+        if val > aveG:  # else graph is not re-inserted
+            if reval < aveG:  # same graph, skip re-evaluation:
+                regraph_+=[[graph,val]]; rreval_+=[0]
+            else:
+                regraph, reval = graph_reval([graph,val], fd)  # recursive depth-first node and link revaluation
+                if regraph[1] > aveG:
+                    regraph_ += [regraph]; rreval_+=[reval]
+    if rreval_:
+        if max([reval for reval in rreval_]) > aveG:
+            regraph_ = graph_reval_(regraph_, rreval_, fd)  # graph reval while min val reduction
+
+    return regraph_
