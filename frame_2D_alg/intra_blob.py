@@ -109,6 +109,8 @@ def comp_r(dert__, rng, mask__=None):
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_diagrams.png
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_d.drawio
     '''
+
+
     # unmask all derts in kernels with only one masked dert (can be set to any number of masked derts),
     # to avoid extreme blob shrinking and loss of info in other derts of partially masked kernels
     # unmasked derts were computed due to extend_dert() in intra_blob
@@ -128,20 +130,56 @@ def comp_r(dert__, rng, mask__=None):
     sdy__ = dy__[::2, ::2].copy()  # sparse_dy, for accumulation
     sdx__ = dx__[::2, ::2].copy()  # sparse_dx, for accumulation
 
-    # compare opposed pairs of rim pixels, project onto x, y:
-    dist = 2**rng
+    # Find coefficient = (sparsity / dist) -------------------------------------------
+    # Distance of rim:
+    # dist = 2**rng
+    # _dist = 2**(rng-1) = dist/2
+    #
+    # Number of rim derts at dist:
+    # n_rim_dert(dist) = dist*4
+    # for example:
+    # - dist 2 : 3x3 has rng=1 => dist=2 => n_rim_dert=8
+    # - dist 4 : 5x5 has rng=2 => dist=4 => n_rim_dert=16
+    # - dist 8 : 9x9 has rng=3 => dist=8 => n_rim_dert=32
+    #
+    # Skipped derts since last rng:
+    # n_skipped = n_rim_dert(_dist) + n_rim_dert(_dist+1)... + n_rim_dert(dist)
+    #           = (_dist+1)*4 + (_dist+2)*4 + ... + dist*4    (exclude rim at rng-1)
+    #           = 4*((_dist+1) ... + dist)
+    #           = 4*(dist + (_dist+1))*(dist-(_dist+1)+1)/2
+    #           = 2*(dist +_dist+1)*(dist-_dist)
+    #
+    # Since _dist = dist/2:
+    # n_skipped = 2*(3*dist/2+1)*(dist/2)
+    #           = dist*(3*dist+2)/2
+    #
+    # Sparsity compensation:
+    # sparsity = n_skipped / 8, with 8 == number of compared derts
+    #
+    # Substitude n_skipped:
+    #          = dist*(3*dist+2) / 16
+    #
+    # Coefficient is:
+    # coeff = (sparsity / dist)
+    #       = (3*dist+2) / 16
+    #
+    # Substitude dist = 2**rng:
+    # coeff = (3*(2**rng) + 2) / 16
+    #       = (3*(1 << rng) + 2) / 16
+    coeff = (3*(1<<rng) + 2) / 16
 
+    # compare opposed pairs of rim pixels, project onto x, y:
     sdy__[ks.mc] += (
         (si__[ks.bl] - si__[ks.tr]) * 0.5 +
         (si__[ks.bc] - si__[ks.tc]) +
         (si__[ks.br] - si__[ks.tl]) * 0.5
-    ) / dist
+    ) * coeff
 
     sdx__[ks.mc] += (
         (si__[ks.tr] - si__[ks.bl]) * 0.5 +
         (si__[ks.mr] - si__[ks.mc]) +
         (si__[ks.br] - si__[ks.tl]) * 0.5
-    ) / dist
+    ) * coeff
     sg__ = np.hypot(sdy__, sdx__)  # gradient, recomputed at each comp_r
 
     return idert(si__[ks.mc], sdy__, sdx__, sg__), majority_mask__
