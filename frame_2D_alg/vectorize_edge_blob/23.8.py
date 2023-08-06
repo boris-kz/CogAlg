@@ -52,3 +52,23 @@ def graph_reval_(graph_, reval_, fd):  # recursive eval nodes for regraph, after
             regraph_ = graph_reval_(regraph_, rreval_, fd)  # graph reval while min val reduction
 
     return regraph_
+
+def add_nodes(node, GQt, link_, fder, fd):
+
+    for link in link_:
+        val = link.valt[fd]
+        if val > G_aves[fd]:
+            GQt[1] += val  # in-graph links val per node
+            _node = link.G1 if link.G0 is node else link.G0
+            if _node not in GQt[0][0]:
+                _GQt = _node.root_T[fder][fd][0]   # [_GQ,_Val]
+                # cross-assign nodes, pri_roots, accum val:
+                if _GQt[0][1][0]:  # base fork pri_root is empty, and we can't use set with empty list
+                    unique_pri_roots = list(set(_GQt[0][1] + GQt[0][1]))
+                else:
+                    unique_pri_roots = [[]]
+                _GQt[0][1][:] = unique_pri_roots
+                GQt[0][1] = unique_pri_roots
+                link_ = _node.link_H[-(1+fder)]
+                add_nodes(_node, GQt, link_, fder, fd)  # add indirect nodes and their roots recursively
+

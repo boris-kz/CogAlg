@@ -60,34 +60,18 @@ def agg_recursion(root, node_):  # compositional recursion in root.PP_
             node_tt[fder][fd] = graph_
     node_[:] = node_tt  # replace local element of root.node_T
 
-# draft:
+# very tentative:
 def form_graph_(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per fder,fd, initially fully overlapping
 
     graph_ = []
+    nodet_ = []
     for node, pri_root_T in zip(node_, pri_root_T_):
-        GQ = [[node], [pri_root_T], 0]  # init graph per node
-        node.root_T[fder][fd] = [[GQ, 0]]  # init with 1st root, node-specific val
-        graph_ += [GQ]
-    for node in node_:
-        GQt = node.root_T[fder][fd][0]  # [GQ,Val]
-        for link in node.link_H[-(1+fder)]:
-            val = link.valt[fd]
-            if val > G_aves[fd]:
-                GQt[1] += val  # in-graph links val per node
-                _node = link.G1 if link.G0 is node else link.G0
-                _GQt = _node.root_T[fder][fd][0]   # [_GQ,_Val]
-                # cross-assign nodes, pri_roots, accum val:
-                unique_pri_roots = set(_GQt[0][1] + GQt[0][1])
-                _GQt[0][1][:] = unique_pri_roots
-                GQt[0][1] = unique_pri_roots
-                for __node in _GQt[0][0]:
-                    if __node not in GQt[0][0]:
-                        GQt[0][0] += [__node]; GQt[0][2] += __node.root_T[fder][fd][0][1]  # draft sum __node in-graph val, incorrect
-                        _GQt[0][0] += [node]; _GQt[0][2] += node.root_T[fder][fd][0][1]
-                # bilateral accum:
-                GQt[0][2] += val; _node.root_T[fder][fd] += [GQt]
-                _GQt[0][2] += val; node.root_T[fder][fd] += [_GQt]
-    # keep adding indirectly connected nodes?
+        nodet = [node, pri_root_T, 0]
+        nodet_ += [nodet]
+        graph = [[nodet], [pri_root_T], 0]  # init graph per node?
+        node.root_T[fder][fd] = [[graph, 0]]  # init with 1st root, node-specific val
+    for nodet, graph in zip(nodet_, graph_):
+        graph_ += [init_graph(nodet, nodet_, graph, fder, fd)]  # recursive depth-first GQ_+=[_nodet]
     # prune by rdn:
     regraph_ = graph_reval_(graph_, fder,fd)  # init reval_ to start
     if regraph_:
@@ -96,7 +80,31 @@ def form_graph_(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per
     # add_alt_graph_(graph_t)  # overlap+contour, cluster by common lender (cis graph), combined comp?
     return graph_
 
+def init_graph(nodet, nodet_, graph, fder, fd):  # recursive depth-first GQ_+=[_nodet]
+
+    node, pri_root_T, val = nodet
+
+    for link in node.link_H[-(1+fder)]:
+        if link.valt[fd] > G_aves[fd]:
+            # link is in node GQ
+            _nodet = link.G1 if link.G0 is nodet else link.G0
+            if _nodet in nodet_:  # not removed in prior loop
+                _node,_pri_root_T,_val = _nodet
+                graph[0] += [_node]
+                graph[2] += _val
+                if _pri_root_T not in graph[1]:
+                    graph[1] += [_pri_root_T]
+                nodet_.remove(_nodet)
+                init_graph(_nodet, nodet_, graph, fder, fd)
+    return graph
 '''
+Nodes in GQ form sub-GQs, initially fully overlapping: same root for all nodes.
+But they have different direct and mediated (link,val)s, so their sub-GQs are pruned to different shapes.
+Both GQs and sub-GQs may also be pruned as a whole.
+
+or initially links only: plain attention forming links to all nodes, then segmentation by backprop of 
+(sum of root vals / max_root_val) - 1, summed from all nodes in graph?
+ 
 while dMatch per cluster > ave: 
 - sum cluster match,
 - sum in-cluster match per node root: containing cluster, positives only,
