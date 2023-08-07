@@ -48,7 +48,7 @@ ave_mP = 100
 UNFILLED = -1
 EXCLUDED = -2
 
-idert = namedtuple('idert', 'i, dy, dx, g')
+Tdert = namedtuple('Tdert', 'dy, dx, g') # 'T' for tuple
 
 class CBlob(ClusterStructure):
     # comp_pixel:
@@ -62,7 +62,8 @@ class CBlob(ClusterStructure):
     M : float = 0.0 # summed PP.M, for both types of recursion?
     box : tuple = (0,0,0,0)  # y0, yn, x0, xn
     mask__ : object = None
-    der__t : idert = None
+    i__ : object = None     # reference to original input (no shrinking)
+    der__t : Tdert = None   # tuple of derivatives arrays, consistent in shape
     adj_blobs : list = z([])  # adjacent blobs
     fopen : bool = False
     # intra_blob params: # or pack in intra = lambda: Cintra
@@ -96,19 +97,20 @@ class CBlob(ClusterStructure):
     longer names are normally classes
 '''
 
-def frame_blobs_root(image, intra=False, render=False, verbose=False):
+def frame_blobs_root(i__, intra=False, render=False, verbose=False):
 
     if verbose: start_time = time()
-    Y, X = image.shape[:2]
-    der__t = comp_pixel(image)
-    sign__ = ave - der__t[3] > 0   # sign is positive for below-average g in [i__, dy__, dx__, g__, ri]
+    Y, X = i__.shape[:2]
+    der__t = comp_pixel(i__)
+    sign__ = ave - der__t.g > 0   # sign is positive for below-average g
+    frame = CBlob(i__=i__, der__t=der__t, box=(0, Y, 0, X), rlayers=[[]])
     # https://en.wikipedia.org/wiki/Flood_fill:
-    blob_, idmap, adj_pairs = flood_fill(der__t, sign__, prior_forks='', verbose=verbose)
+    frame.rlayers[0], idmap, adj_pairs = flood_fill(frame, der__t, sign__, verbose=verbose)
     assign_adjacents(adj_pairs)  # forms adj_blobs per blob in adj_pairs
-    I, Dy, Dx = 0, 0, 0
-    for blob in blob_: I += blob.I; Dy += blob.Dy; Dx += blob.Dx
-
-    frame = CBlob(I=I, Dy=Dy, Dx=Dx, der__t=der__t, rlayers=[blob_], box=(0,Y,0,X))
+    for blob in frame.rlayers[0]:
+        frame.accumulate(I  = blob.I,
+                         Dy = blob.Dy,
+                         Dx = blob.Dx)
     # dlayers = []: no comp_a yet
     if verbose: print(f"{len(frame.rlayers[0])} blobs formed in {time() - start_time} seconds")
 
@@ -123,10 +125,7 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False):
     if render: visualize_blobs(frame)
     return frame
 
-
-def comp_pixel(image):
-
-    pi__ = np.pad(image, pad_width=1, mode='edge')  # pad image with edge values
+def comp_pixel(pi__):
     # compute directional derivatives:
     dy__ = (
         (pi__[ks.bl] - pi__[ks.tr]) * 0.25 +
@@ -140,15 +139,14 @@ def comp_pixel(image):
     )
     G__ = np.hypot(dy__, dx__)                          # compute gradient magnitude
 
-    return idert(pi__[ks.mc], dy__, dx__, G__)
+    return Tdert(dy__, dx__, G__)
 
 
-def flood_fill(der__t, sign__, prior_forks, verbose=False, mask__=None, fseg=False):
+def flood_fill(root_blob, der__t, sign__, fork='', verbose=False, mask__=None):
 
-    if mask__ is None: height, width = der__t[0].shape  # init der__t
-    else:              height, width = mask__.shape  # intra der__t
+    height, width = der__t[0].shape
 
-    idmap = np.full((height, width), UNFILLED, 'int64')  # blob's id per dert, initialized UNFILLED
+    idmap = np.full((height, width), UNFILLED, 'int32')  # blob's id per dert, initialized UNFILLED
     if mask__ is not None:
         idmap[mask__] = EXCLUDED
     if verbose:
@@ -162,7 +160,9 @@ def flood_fill(der__t, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
         for x in range(width):
             if idmap[y, x] == UNFILLED:  # ignore filled/clustered derts
 
-                blob = CBlob(sign=sign__[y, x], root_der__t=der__t, prior_forks=prior_forks)
+                blob = CBlob(
+                    i__=root_blob.i__, sign=sign__[y, x], root_der__t=der__t,
+                    rng=root_blob.rng, prior_forks=root_blob.prior_forks+fork)
                 blob_ += [blob]
                 idmap[y, x] = blob.id
                 y0, yn = y, y
@@ -172,16 +172,16 @@ def flood_fill(der__t, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
                 while unfilled_derts:
                     y1, x1 = unfilled_derts.popleft()
                     # add dert to blob
-                    blob.accumulate(I  = der__t[0][y1][x1],  # rp__,
-                                    Dy = der__t[1][y1][x1],
-                                    Dx = der__t[2][y1][x1])
+                    blob.accumulate(I  = root_blob.i__[y1+blob.rng][x1+blob.rng],
+                                    Dy = der__t.dy[y1][x1],
+                                    Dx = der__t.dx[y1][x1])
                     blob.A += 1
                     if y1 < y0:   y0 = y1
                     elif y1 > yn: yn = y1
                     if x1 < x0:   x0 = x1
                     elif x1 > xn: xn = x1
                     # neighbors coordinates, 4 for -, 8 for +
-                    if blob.sign or fseg:   # include diagonals
+                    if blob.sign:   # include diagonals
                         adj_dert_coords = [(y1 - 1, x1 - 1), (y1 - 1, x1),
                                            (y1 - 1, x1 + 1), (y1, x1 + 1),
                                            (y1 + 1, x1 + 1), (y1 + 1, x1),
@@ -192,9 +192,8 @@ def flood_fill(der__t, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
                     # search neighboring derts:
                     for y2, x2 in adj_dert_coords:
                         # image boundary is reached:
-                        if (y2 < 0 or y2 >= height or
-                            x2 < 0 or x2 >= width or
-                            idmap[y2, x2] == EXCLUDED):
+                        if (y2 < 0 or y2 >= height or x2 < 0 or x2 >= width or
+                                idmap[y2, x2] == EXCLUDED):
                             blob.fopen = True
                         # pixel is filled:
                         elif idmap[y2, x2] == UNFILLED:
@@ -208,7 +207,7 @@ def flood_fill(der__t, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
                 # terminate blob
                 yn += 1; xn += 1
                 blob.box = y0, yn, x0, xn
-                blob.der__t = idert(
+                blob.der__t = Tdert(
                     *(par__[y0:yn, x0:xn] for par__ in der__t))
                 blob.mask__ = (idmap[y0:yn, x0:xn] != blob.id)
                 blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses

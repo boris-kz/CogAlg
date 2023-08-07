@@ -60,8 +60,41 @@ def agg_recursion(root, node_):  # compositional recursion in root.PP_
             node_tt[fder][fd] = graph_
     node_[:] = node_tt  # replace local element of root.node_T
 
-# very tentative:
+
 def form_graph_(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per fder,fd, initially fully overlapping
+
+    layer = [[node, node.link_H[-(1+fder)]] for node in copy(node_)]  # initial conversion
+    layers = []  # hierarchical network
+    # form layers of same nodes with incrementally mediated links:
+    form_mediation_layers(layer, layers, near_link_=[], fder=fder)
+    # reduce overlap by backprop, segment sparse layers to graphs:
+    graphs = segment_network(layers)
+
+    return graphs
+
+def form_mediation_layers(layer, layers, near_link_, fder):  # layers are initialized with same nodes and incrementally mediated links
+
+    out_layer = []  # next layer
+    new_val = 0
+    # overlap here is the same as n links per node: they are bilateral?
+    for node in layer:
+        new_link_ = []
+        for link in node[1]: # prior-layer links
+            _node = link.G1 if link.G0 is node else link.G0
+            for _link in _node.link_H[-(1+fder)]:
+                if _link not in near_link_:
+                    near_link_ += [_link]  # less-mediated links
+                    if _link.valt[fder] > ave:
+                        new_link_ += [_link]
+                        new_val += _link.valt[fder]
+        out_layer += [[node[0], new_link_]]  # add links of current mediation order
+    layers += [out_layer]
+
+    if new_val > ave:
+        form_mediation_layers(out_layer, layers, near_link_, fder)
+
+# not updated:
+def form_graph_direct(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per fder,fd, initially fully overlapping
 
     graph_ = []
     nodet_ = []
@@ -70,6 +103,7 @@ def form_graph_(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per
         nodet_ += [nodet]
         graph = [[nodet], [pri_root_T], 0]  # init graph per node?
         node.root_T[fder][fd] = [[graph, 0]]  # init with 1st root, node-specific val
+    # use popping?:
     for nodet, graph in zip(nodet_, graph_):
         graph_ += [init_graph(nodet, nodet_, graph, fder, fd)]  # recursive depth-first GQ_+=[_nodet]
     # prune by rdn:
@@ -117,13 +151,13 @@ while dMatch per cluster > ave:
 def graph_reval_(graph_, fder,fd):
 
     regraph_ = []
-    reval = 0
-    for GQ in graph_:
-        for node in GQ[0]:  # sort node root_(local) by root val (ascending)
-            node.root_T[fder][fd] = sorted(node.root_T[fder][fd], key=lambda root:root[0][2], reverse=False)  # index 2 is links val
+    reval, overlap  = 0, 0
+    for graph in graph_:
+        for node in graph[0]:  # sort node root_(local) by root val (ascending)
+            node.root_T[fder][fd] = sorted(node.root_T[fder][fd], key=lambda root:root[0][2], reverse=False)  # 2: links val
     while graph_:
-        GQ = graph_.pop()  # pre_graph or cluster
-        node_, root_, val = GQ
+        graph = graph_.pop()  # pre_graph or cluster
+        node_, root_, val = graph
         remove_ = []  # sum rdn (overlap) per node root_T, remove if val < ave * rdn:
         for node in node_:
             rdn = 1 + len(node.root_T)
@@ -131,21 +165,22 @@ def graph_reval_(graph_, fder,fd):
             # replace with node.root_T[i][1] < G_aves[fd] * i:
             # val graph links per node, graph is node.root_T[i], i=rdn: index in fork root_ sorted by val
                 remove_ += [node]       # to remove node from cluster
-                for i, GQt in enumerate(node.root_T[fder][fd]):  # each root is [GQ, Val]
-                    if GQ is GQt[0]:
+                for i, grapht in enumerate(node.root_T[fder][fd]):  # each root is [graph, Val]
+                    if graph is grapht[0]:
                         node.root_T[fder][fd].pop(i)  # remove root cluster from node
                         break
-        # remove node
         while remove_:
             remove_node = remove_.pop()
-            node_.remove(remove_node)       # remove node
-            GQ[2] -= remove_node.valt[fd]   # reduce val
+            node_.remove(remove_node)
+            graph[2] -= remove_node.valt[fd]
             reval += remove_node.valt[fd]
-        # repack pre_graph
-        regraph_ += [GQ]
+        for node in node_:
+            sum_root_val = sum([root[1] for root in node.root_T[fder][fd]])
+            max_root_val = max([root[1] for root in node.root_T[fder][fd]])
+            overlap += sum_root_val/ max_root_val
+        regraph_ += [graph]
 
-    # re-eval if reval is high
-    if reval > ave:
+    if reval > ave and overlap > 0.5:  # 0.5 can be a new ave here
         regraph_ = graph_reval_(regraph_, fder,fd)
 
     return regraph_
