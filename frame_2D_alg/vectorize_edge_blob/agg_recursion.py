@@ -61,37 +61,65 @@ def agg_recursion(root, node_):  # compositional recursion in root.PP_
     node_[:] = node_tt  # replace local element of root.node_T
 
 
-def form_graph_(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per fder,fd, initially fully overlapping
+def form_graph_(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per fder,fd, initially distributed across layers
 
-    layer = [[node, node.link_H[-(1+fder)]] for node in copy(node_)]  # initial conversion
-    layers = []  # hierarchical network
+    layer = []
+    for node in copy(node_):  # initial node_-> layer conversion
+        links, _nodes = [],[]
+        val = 0  # sum all lower (link_val * med_coef)s per node
+        for link in node.link_H[-(1+fder)]:
+            _node = link.G1 if link.G0 is node else link.G0
+            links += [link]; _nodes += [_node]
+            val += link.valt[fder]
+        layer += [[node, links, _nodes, val]]
+    # init hierarchical network:
+    layers = [layer]
     # form layers of same nodes with incrementally mediated links:
-    form_mediation_layers(layer, layers, near_link_=[], fder=fder)
-    # reduce overlap by backprop, segment sparse layers to graphs:
-    graphs = segment_network(layers)
+    form_mediation_layers(layer, layers, near_nodes=[], fder=fder)
+    # adjust link vals by stronger overlap per node across layers:
+    suppress_overlap(layers, fder)
+    # segment sparse layers to graphs, as in init_graphs:
+    graphs = segment_network(layers, pri_root_T_, fder, fd)
 
     return graphs
 
-def form_mediation_layers(layer, layers, near_link_, fder):  # layers are initialized with same nodes and incrementally mediated links
+def form_mediation_layers(layer, layers, near_nodes, fder):  # layers are initialized with same nodes and incrementally mediated links
 
-    out_layer = []  # next layer
-    new_val = 0
-    # overlap here is the same as n links per node: they are bilateral?
-    for node in layer:
-        new_link_ = []
-        for link in node[1]: # prior-layer links
-            _node = link.G1 if link.G0 is node else link.G0
+    out_layer = []  # new layer
+    mediated_val = 0  # new layer val
+
+    for (node, links, _nodes, val) in layer:
+        _links, __nodes = [], []
+        for _node in _nodes:
             for _link in _node.link_H[-(1+fder)]:
-                if _link not in near_link_:
-                    near_link_ += [_link]  # less-mediated links
-                    if _link.valt[fder] > ave:
-                        new_link_ += [_link]
-                        new_val += _link.valt[fder]
-        out_layer += [[node[0], new_link_]]  # add links of current mediation order
+                __node = _link.G1 if _link.G0 is node else _link.G0
+                if __node not in near_nodes:
+                    near_nodes += [__node]  # less-mediated nodes
+                    __nodes += [__node]
+                    _links += [_link]  # for val adjustment in suppress_overlap
+                    mediated_val += _link.valt[fder]
+        out_layer += [[node, _links, __nodes, val+mediated_val]]  # add links of current mediation order
     layers += [out_layer]
 
-    if new_val > ave:
-        form_mediation_layers(out_layer, layers, near_link_, fder)
+    if mediated_val > ave:
+        form_mediation_layers(out_layer, layers, near_nodes, fder)
+
+# partial draft:
+def suppress_overlap(layers, fder):  # adjust link vals by stronger overlap per node across layers:
+
+    for layer in layers:  # loop top-down, also accumulate rdn per node from higher layers?
+        for (node, links, _nodes, val) in layer:
+            # sort all node-mediated links by link_val * med_coef:
+            link_ = sorted(links, key=lambda link: link.valt[fder], reverse=False)
+            rdn = 0
+            for link in link_:
+                val = link.valt[fder]
+                rdn += val  # sum equal+higher link_val*med_coef links in all mediation layers per node
+                val = val * (val / rdn)  # adjust by stronger overlap
+
+
+def segment_network(layers, pri_root_T_, fder, fd):
+    pass
 
 # not updated:
 def form_graph_direct(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per fder,fd, initially fully overlapping

@@ -49,6 +49,13 @@ UNFILLED = -1
 EXCLUDED = -2
 
 Tdert = namedtuple('Tdert', 'dy, dx, g') # 'T' for tuple
+Tbox = namedtuple('Tbox', 'n, w, s, e')  # 'T' for tuple
+Tbox.slice = lambda b: (Ellipsis, slice(b.n,b.b.s), slice(b.w,b.e))  # box to array slice conversion
+Tbox.accumulate = lambda b,y,x: Tbox(min(b.n,y),min(b.w,x),max(b.s,y+1),max(b.e,x+1))  # box coordinate accumulation
+Tbox.expand = lambda b,r,Y,X: Tbox(max(0,b.n-r),max(0,b.w-r),min(Y,b.s+r),min(X,b.e+r))  # box expansion by margin r
+Tbox.shrink = lambda b,r: Tbox(b.n+r,b.w+r,b.s-r,b.e-r)  # box shrink by margin r
+Tbox.sub_box2box = lambda b,sb: Tbox(b.n+sb.n,b.w+sb.w,b.s+sb.n,sb.e+sb.w)  # sub_box to box transform
+Tbox.box2sub_box = lambda b1, b2: Tbox(b2.n-b1.n, b2.w-b1.w, b2.s-b2.n+b1.n, b2.e-b2.w+b1.w)  # box to sub_box transform
 
 class CBlob(ClusterStructure):
     # comp_pixel:
@@ -60,7 +67,8 @@ class CBlob(ClusterStructure):
     A : float = 0.0 # blob area
     # composite params:
     M : float = 0.0 # summed PP.M, for both types of recursion?
-    box : tuple = (0,0,0,0)  # y0, yn, x0, xn
+    box : Tbox = Tbox(0,0,0,0)  # n,w,s,e
+    ibox : Tbox = Tbox(0,0,0,0) # box for i__
     mask__ : object = None
     i__ : object = None     # reference to original input (no shrinking)
     der__t : Tdert = None   # tuple of derivatives arrays, consistent in shape
@@ -103,14 +111,13 @@ def frame_blobs_root(i__, intra=False, render=False, verbose=False):
     Y, X = i__.shape[:2]
     der__t = comp_pixel(i__)
     sign__ = ave - der__t.g > 0   # sign is positive for below-average g
-    frame = CBlob(i__=i__, der__t=der__t, box=(0, Y, 0, X), rlayers=[[]])
+    frame = CBlob(i__=i__, box=Tbox(0, Y, 0, X), rlayers=[[]])
+    fork_data = '', Tbox(1,1,Y-1,X-1), der__t, sign__, None  # fork, fork_ibox, der__t, sign__, mask__
     # https://en.wikipedia.org/wiki/Flood_fill:
-    frame.rlayers[0], idmap, adj_pairs = flood_fill(frame, der__t, sign__, verbose=verbose)
+    frame.rlayers[0], idmap, adj_pairs = flood_fill(frame, fork_data, verbose=verbose)
     assign_adjacents(adj_pairs)  # forms adj_blobs per blob in adj_pairs
     for blob in frame.rlayers[0]:
-        frame.accumulate(I  = blob.I,
-                         Dy = blob.Dy,
-                         Dx = blob.Dx)
+        frame.accumulate(I=blob.I, Dy=blob.Dy, Dx=blob.Dx)
     # dlayers = []: no comp_a yet
     if verbose: print(f"{len(frame.rlayers[0])} blobs formed in {time() - start_time} seconds")
 
@@ -124,6 +131,7 @@ def frame_blobs_root(i__, intra=False, render=False, verbose=False):
 
     if render: visualize_blobs(frame)
     return frame
+
 
 def comp_pixel(pi__):
     # compute directional derivatives:
@@ -142,13 +150,15 @@ def comp_pixel(pi__):
     return Tdert(dy__, dx__, G__)
 
 
-def flood_fill(root_blob, der__t, sign__, fork='', verbose=False, mask__=None):
-
-    height, width = der__t[0].shape
+def flood_fill(root_blob, fork_data, verbose=False):
+    # unpack and derive required fork data
+    fork, fork_ibox, der__t, sign__, mask__ = fork_data
+    height, width = der__t.g.shape  # der__t is consistent in shape
+    fork_i__ = blob.i__[fork_ibox.slice()]
+    assert height, width == fork_i__.shape  # fork_i__ is consistent in shape with der__t
 
     idmap = np.full((height, width), UNFILLED, 'int32')  # blob's id per dert, initialized UNFILLED
-    if mask__ is not None:
-        idmap[mask__] = EXCLUDED
+    if mask__ is not None: idmap[mask__] = EXCLUDED
     if verbose:
         n_masked = 0 if mask__ is None else mask__.sum()
         step = 100 / (height * width - n_masked)  # progress % percent per pixel
@@ -162,24 +172,19 @@ def flood_fill(root_blob, der__t, sign__, fork='', verbose=False, mask__=None):
 
                 blob = CBlob(
                     i__=root_blob.i__, sign=sign__[y, x], root_der__t=der__t,
-                    rng=root_blob.rng, prior_forks=root_blob.prior_forks+fork)
+                    box=Tbox(y,x,y+1,x+1), rng=root_blob.rng, prior_forks=root_blob.prior_forks+fork)
                 blob_ += [blob]
                 idmap[y, x] = blob.id
-                y0, yn = y, y
-                x0, xn = x, x
                 # flood fill the blob, start from current position
                 unfilled_derts = deque([(y, x)])
                 while unfilled_derts:
                     y1, x1 = unfilled_derts.popleft()
                     # add dert to blob
-                    blob.accumulate(I  = root_blob.i__[y1+blob.rng][x1+blob.rng],
+                    blob.accumulate(I  = fork_i__[y1][x1],
                                     Dy = der__t.dy[y1][x1],
                                     Dx = der__t.dx[y1][x1])
                     blob.A += 1
-                    if y1 < y0:   y0 = y1
-                    elif y1 > yn: yn = y1
-                    if x1 < x0:   x0 = x1
-                    elif x1 > xn: xn = x1
+                    blob.box.accumulate(y1, x1)
                     # neighbors coordinates, 4 for -, 8 for +
                     if blob.sign:   # include diagonals
                         adj_dert_coords = [(y1 - 1, x1 - 1), (y1 - 1, x1),
@@ -205,8 +210,7 @@ def flood_fill(root_blob, der__t, sign__, fork='', verbose=False, mask__=None):
                         elif blob.sign != sign__[y2, x2]:
                             adj_pairs.add((idmap[y2, x2], blob.id))  # blob.id always increases
                 # terminate blob
-                yn += 1; xn += 1
-                blob.box = y0, yn, x0, xn
+                blob.ibox = fork_ibox.sub_box2box(blob.box)
                 blob.der__t = Tdert(
                     *(par__[y0:yn, x0:xn] for par__ in der__t))
                 blob.mask__ = (idmap[y0:yn, x0:xn] != blob.id)
