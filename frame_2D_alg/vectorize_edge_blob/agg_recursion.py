@@ -66,7 +66,7 @@ def form_graph_(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per
     layer = []
     for node in copy(node_):  # initial node_-> layer conversion
         links, _nodes = [],[]
-        val = 0  # sum all lower (link_val * med_coef)s per node
+        val = 0  # sum all lower (link_val * med_coef)s per node, for node eval?
         for link in node.link_H[-(1+fder)]:
             _node = link.G1 if link.G0 is node else link.G0
             links += [link]; _nodes += [_node]
@@ -75,7 +75,7 @@ def form_graph_(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per
     # init hierarchical network:
     layers = [layer]
     # form layers of same nodes with incrementally mediated links:
-    form_mediation_layers(layer, layers, near_nodes=[], fder=fder)
+    form_mediation_layers(layer, layers, fder=fder)
     # adjust link vals by stronger overlap per node across layers:
     suppress_overlap(layers, fder)
     # segment sparse layers to graphs, as in init_graphs:
@@ -83,45 +83,54 @@ def form_graph_(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per
 
     return graphs
 
-def form_mediation_layers(layer, layers, near_nodes, fder):  # layers are initialized with same nodes and incrementally mediated links
+def form_mediation_layers(layer, layers, fder):  # layers are initialized with same nodes and incrementally mediated links
 
     out_layer = []  # new layer
     mediated_val = 0  # new layer val
 
-    for (node, links, _nodes, val) in layer:
-        _links, __nodes = [], []
+    for (node, _links, __nodes, node_val) in layer:
+        links, _nodes = [], []
         for _node in _nodes:
-            for _link in _node.link_H[-(1+fder)]:
-                __node = _link.G1 if _link.G0 is node else _link.G0
-                if __node not in near_nodes:
-                    near_nodes += [__node]  # less-mediated nodes
-                    __nodes += [__node]
-                    _links += [_link]  # for val adjustment in suppress_overlap
-                    mediated_val += _link.valt[fder]
-        out_layer += [[node, _links, __nodes, val+mediated_val]]  # add links of current mediation order
+            for link in _node.link_H[-(1+fder)]:
+                __node = link.G1 if link.G0 is node else link.G0
+                if __node not in __nodes:
+                    __nodes += [__node]  # less-mediated nodes
+                    links += [link]  # val is adjusted in suppress_overlap
+                    mediated_val += link.valt[fder]  # to form next layer, no sort,rdn+ yet
+                    # more direct link_val += vals * med_coef?
+        _links += links  # overlap includes indirect links, also in potential node graph
+        out_layer += [[node, _links,__nodes, node_val]]  # add links of current mediation order
+
     layers += [out_layer]
-
     if mediated_val > ave:
-        form_mediation_layers(out_layer, layers, near_nodes, fder)
+        form_mediation_layers(out_layer, layers, fder)
 
-# partial draft:
+# draft:
 def suppress_overlap(layers, fder):  # adjust link vals by stronger overlap per node across layers:
 
-    for layer in layers:  # loop top-down, also accumulate rdn per node from higher layers?
-        for (node, links, _nodes, val) in layer:
+    overlap = 0
+
+    for layer in layers:  # loop top-down, accumulate rdn per link from higher layers?
+        for (node, links, _nodes, node_val) in layer:
             # sort all node-mediated links by link_val * med_coef:
-            link_ = sorted(links, key=lambda link: link.valt[fder], reverse=False)
-            rdn = 0
-            for link in link_:
+            links = sorted(links, key=lambda link: link.valt[fder], reverse=False)
+            for link in links:
                 val = link.valt[fder]
-                rdn += val  # sum equal+higher link_val*med_coef links in all mediation layers per node
-                val = val * (val / rdn)  # adjust by stronger overlap
+                link.rdnt[fder] += val  # rnd = equal+higher link_val*med_coef links in all mediation layers per node
+                overlap += val  # full overlap: linked nodes represent all others when segmented in graphs
+                # add:
+                # direct link_val += vals * med_coef: med link nodes won't be in graph if direct links are pruned,
+                # and direct links rdn should be re-evaluated in recursive suppress_overlap?
+    while overlap > ave:
+        suppress_overlap(layers, fder)
 
 
 def segment_network(layers, pri_root_T_, fder, fd):
+
+    # evaluate links by val > ave*rdn, for fuzzy segmentation, no change in link vals
     pass
 
-# not updated:
+# not updated, ~segment_network:
 def form_graph_direct(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per fder,fd, initially fully overlapping
 
     graph_ = []
@@ -160,13 +169,8 @@ def init_graph(nodet, nodet_, graph, fder, fd):  # recursive depth-first GQ_+=[_
                 init_graph(_nodet, nodet_, graph, fder, fd)
     return graph
 '''
-Nodes in GQ form sub-GQs, initially fully overlapping: same root for all nodes.
-But they have different direct and mediated (link,val)s, so their sub-GQs are pruned to different shapes.
-Both GQs and sub-GQs may also be pruned as a whole.
-
-or initially links only: plain attention forming links to all nodes, then segmentation by backprop of 
-(sum of root vals / max_root_val) - 1, summed from all nodes in graph?
- 
+initially links only: plain attention forming links to all nodes, then segmentation by backprop of 
+(sum of root vals / max_root_val) - 1, summed from all nodes in graph? 
 while dMatch per cluster > ave: 
 - sum cluster match,
 - sum in-cluster match per node root: containing cluster, positives only,
