@@ -50,7 +50,7 @@ EXCLUDED = -2
 
 Tdert = namedtuple('Tdert', 'dy, dx, g') # 'T' for tuple
 Tbox = namedtuple('Tbox', 'n, w, s, e')  # 'T' for tuple
-Tbox.slice = lambda b: (Ellipsis, slice(b.n,b.b.s), slice(b.w,b.e))  # box to array slice conversion
+Tbox.slice = lambda b: (Ellipsis, slice(b.n,b.s), slice(b.w,b.e))  # box to array slice conversion
 Tbox.accumulate = lambda b,y,x: Tbox(min(b.n,y),min(b.w,x),max(b.s,y+1),max(b.e,x+1))  # box coordinate accumulation
 Tbox.expand = lambda b,r,Y,X: Tbox(max(0,b.n-r),max(0,b.w-r),min(Y,b.s+r),min(X,b.e+r))  # box expansion by margin r
 Tbox.shrink = lambda b,r: Tbox(b.n+r,b.w+r,b.s-r,b.e-r)  # box shrink by margin r
