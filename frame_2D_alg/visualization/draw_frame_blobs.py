@@ -41,7 +41,7 @@ def visualize_blobs(frame, layer='r'):
     """
     print("Preparing for visualization ...", end="")
 
-    height, width = frame.der__t[0].shape
+    _, _, height, width = frame.box
 
     # Prepare state object
     state = SimpleNamespace(
@@ -74,11 +74,10 @@ def visualize_blobs(frame, layer='r'):
 
         # Use indexing to get the gradient of the blob
         dy__, dx__ = state.gradient
-        y0, yn, x0, xn = blob.box
-        box_slice = slice(y0, yn), slice(x0, xn)
+        box_slice = blob.box.slice()
         dy_slice = dy__[state.img_slice][box_slice][~blob.mask__]
         dx_slice = dx__[state.img_slice][box_slice][~blob.mask__]
-        dy_index = 4 if len(blob.der__t) > 5 else 1
+        dy_index = 3 if len(blob.der__t) > 5 else 1
         dy_slice[:] = blob.der__t[dy_index][~blob.mask__]
         dx_slice[:] = blob.der__t[dy_index + 1][~blob.mask__]
         state.gradient_mask[state.img_slice][box_slice] = ~blob.mask__
@@ -103,26 +102,15 @@ def visualize_blobs(frame, layer='r'):
             raise ValueError("layer must be 'r' or 'd'")
 
         state.blob_cls = blob_[0].__class__
-        y0, yn, x0, xn = frame.box
-        if frame.root_der__t:
-            rY, rX = frame.root_der__t[0].shape
-            y0e = max(0, y0 - 1)
-            yne = min(rY, yn + 1)
-            x0e = max(0, x0 - 1)
-            xne = min(rX, xn + 1)  # e is for extended
-            state.img_slice = slice(y0e, yne), slice(x0e, xne)
-        else:
-            state.img_slice = slice(None), slice(None)
+        state.img_slice = blob_[0].root_ibox.slice()
         state.background[:] = MASKING_VAL
         state.idmap[:] = -1
         # Prepare blob ID map and background
+        local_idmap = state.idmap[state.img_slice]
+        local_background = state.background[state.img_slice]
         for blob in blob_:
-            paint_over(state.idmap[state.img_slice], None, blob.box,
-                       mask=blob.mask__,
-                       fill_color=blob.id)
-            paint_over(state.background[state.img_slice], None, blob.box,
-                       mask=blob.mask__,
-                       fill_color=[blob.sign * 32] * 3)
+            local_idmap[blob.box.slice()][~blob.mask__] = blob.id  # fill idmap with blobs' ids
+            local_background[blob.box.slice()][~blob.mask__] = blob.sign * 32  # fill image with blobs
         state.img = state.background.copy()
         state.blob_id = -1
         update_img()
@@ -159,14 +147,10 @@ def visualize_blobs(frame, layer='r'):
             sys.stdout.flush()
 
             # paint over the blob ...
-            paint_over(state.img[state.img_slice], None, blob.box,
-                       mask=blob.mask__,
-                       fill_color=WHITE)
+            state.img[state.img_slice][blob.box.slice()][~blob.mask__] = WHITE
             # ... and its adjacents
             for adj_blob, pose in zip(*blob.adj_blobs):
-                paint_over(state.img[state.img_slice], None, adj_blob.box,
-                           mask=adj_blob.mask__,
-                           fill_color=POSE2COLOR[pose])
+                state.img[state.img_slice][adj_blob.box.slice()][~adj_blob.mask__] = POSE2COLOR[pose]
             # Finally, update the image
             update_img()
 
@@ -217,51 +201,9 @@ def blank_image(shape, fill_val=None):
     if len(shape) == 2:
         height, width = shape
     else:
-        y0, yn, x0, xn = shape
+        y0, x0, yn, xn = shape
         height = yn - y0
         width = xn - x0
     if fill_val is None:
         fill_val = MASKING_VAL
     return np.full((height, width, 3), fill_val, 'uint8')
-
-def paint_over(map, sub_map, sub_box,
-               box=None, mask=None, mv=MASKING_VAL,
-               fill_color=None):
-    '''Paint the map of a sub-structure onto that of parent-structure.'''
-
-    if box is None:
-        y0, yn, x0, xn = sub_box
-    else:
-        y0, yn, x0, xn = localize_box(sub_box, box)
-    if mask is None:
-        if fill_color is None:
-            map[y0:yn, x0:xn][sub_map != mv] = sub_map[sub_map != mv]
-        else:
-            map[y0:yn, x0:xn][sub_map != mv] = fill_color
-    else:
-        if fill_color is None:
-            map[y0:yn, x0:xn][~mask] = sub_map[~mask]
-        else:
-            map[y0:yn, x0:xn][~mask] = fill_color
-    return map
-
-def localize_box(box, global_box):
-    '''
-    Compute local coordinates for given bounding box.
-    Used for overwriting map of parent structure with
-    maps of sub-structure, or other similar purposes.
-    Parameters
-    ----------
-    box : tuple
-        Bounding box need to be localized.
-    global_box : tuple
-        Reference to which box is localized.
-    Return
-    ------
-    out : tuple
-        Box localized with localized coordinates.
-    '''
-    y0s, yns, x0s, xns = box
-    y0, yn, x0, xn = global_box
-
-    return y0s - y0, yns - y0, x0s - x0, xns - x0

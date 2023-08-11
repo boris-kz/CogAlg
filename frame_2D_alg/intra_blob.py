@@ -76,9 +76,9 @@ def comp_r(blob):
     ky, kx, km = compute_kernel(rng)
 
     # expand ibox to reduce shrink if possible
-    n, w, s, e = blob.ibox
-    ne, we, se, ee = eibox = blob.ibox.expand(rng, *blob.i__.shape) # 'e' stands for 'expanded'
-    pad = (n-ne, w-we, se-s, ee-e)  # pad of emask__: expanded size per side
+    y0, x0, yn, xn = blob.ibox
+    y0e, x0e, yne, xne = eibox = blob.ibox.expand(rng, *blob.i__.shape) # 'e' stands for 'expanded'
+    pad = ((y0-y0e, yne-yn), (x0-x0e, xne-xn))  # pad of emask__: expanded size per side
 
     # compute majority mask, at this point, mask__ can't be None
     emask__ = np.pad(blob.mask__, pad, 'constant', constant_values=False).astype(int)

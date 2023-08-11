@@ -50,12 +50,12 @@ EXCLUDED = -2
 
 Tdert = namedtuple('Tdert', 'dy, dx, g') # 'T' for tuple
 Tbox = namedtuple('Tbox', 'n, w, s, e')  # 'T' for tuple
-Tbox.slice = lambda b: (Ellipsis, slice(b.n,b.s), slice(b.w,b.e))  # box to array slice conversion
+Tbox.slice = lambda b: (slice(b.n,b.s), slice(b.w,b.e))  # box to array slice conversion
 Tbox.accumulate = lambda b,y,x: Tbox(min(b.n,y),min(b.w,x),max(b.s,y+1),max(b.e,x+1))  # box coordinate accumulation
 Tbox.expand = lambda b,r,Y,X: Tbox(max(0,b.n-r),max(0,b.w-r),min(Y,b.s+r),min(X,b.e+r))  # box expansion by margin r
 Tbox.shrink = lambda b,r: Tbox(b.n+r,b.w+r,b.s-r,b.e-r)  # box shrink by margin r
-Tbox.sub_box2box = lambda b,sb: Tbox(b.n+sb.n,b.w+sb.w,b.s+sb.n,sb.e+sb.w)  # sub_box to box transform
-Tbox.box2sub_box = lambda b1, b2: Tbox(b2.n-b1.n, b2.w-b1.w, b2.s-b2.n+b1.n, b2.e-b2.w+b1.w)  # box to sub_box transform
+Tbox.sub_box2box = lambda b,sb: Tbox(b.n+sb.n,b.w+sb.w,sb.s+b.n,sb.e+b.w)  # sub_box to box transform
+Tbox.box2sub_box = lambda b1, b2: Tbox(b2.n-b1.n, b2.w-b1.w, b2.s-b1.n, b2.e-b1.w)  # box to sub_box transform
 
 class CBlob(ClusterStructure):
     # comp_pixel:
@@ -79,7 +79,8 @@ class CBlob(ClusterStructure):
     Mdx : float = 0.0
     Ddx : float = 0.0
     # derivation hierarchy:
-    root_der__t : list = z([])  # from root blob, to extend der__t
+    root_ibox : Tbox = Tbox(0,0,0,0)  # from root blob
+    root_der__t : list = z([])  # from root blob
     prior_forks : str = ''
     fBa : bool = False  # in root_blob: next fork is comp angle, else comp_r
     rdn : float = 1.0  # redundancy to higher blob layers, or combined?
@@ -111,7 +112,7 @@ def frame_blobs_root(i__, intra=False, render=False, verbose=False):
     Y, X = i__.shape[:2]
     der__t = comp_pixel(i__)
     sign__ = ave - der__t.g > 0   # sign is positive for below-average g
-    frame = CBlob(i__=i__, box=Tbox(0, Y, 0, X), rlayers=[[]])
+    frame = CBlob(i__=i__, box=Tbox(0, 0, Y, X), rlayers=[[]])
     fork_data = '', Tbox(1,1,Y-1,X-1), der__t, sign__, None  # fork, fork_ibox, der__t, sign__, mask__
     # https://en.wikipedia.org/wiki/Flood_fill:
     frame.rlayers[0], idmap, adj_pairs = flood_fill(frame, fork_data, verbose=verbose)
@@ -154,7 +155,7 @@ def flood_fill(root_blob, fork_data, verbose=False):
     # unpack and derive required fork data
     fork, fork_ibox, der__t, sign__, mask__ = fork_data
     height, width = der__t.g.shape  # der__t is consistent in shape
-    fork_i__ = blob.i__[fork_ibox.slice()]
+    fork_i__ = root_blob.i__[fork_ibox.slice()]
     assert height, width == fork_i__.shape  # fork_i__ is consistent in shape with der__t
 
     idmap = np.full((height, width), UNFILLED, 'int32')  # blob's id per dert, initialized UNFILLED
@@ -171,7 +172,7 @@ def flood_fill(root_blob, fork_data, verbose=False):
             if idmap[y, x] == UNFILLED:  # ignore filled/clustered derts
 
                 blob = CBlob(
-                    i__=root_blob.i__, sign=sign__[y, x], root_der__t=der__t,
+                    i__=root_blob.i__, sign=sign__[y, x], root_ibox=fork_ibox, root_der__t=der__t,
                     box=Tbox(y,x,y+1,x+1), rng=root_blob.rng, prior_forks=root_blob.prior_forks+fork)
                 blob_ += [blob]
                 idmap[y, x] = blob.id
@@ -184,7 +185,7 @@ def flood_fill(root_blob, fork_data, verbose=False):
                                     Dy = der__t.dy[y1][x1],
                                     Dx = der__t.dx[y1][x1])
                     blob.A += 1
-                    blob.box.accumulate(y1, x1)
+                    blob.box = blob.box.accumulate(y1, x1)
                     # neighbors coordinates, 4 for -, 8 for +
                     if blob.sign:   # include diagonals
                         adj_dert_coords = [(y1 - 1, x1 - 1), (y1 - 1, x1),
@@ -212,8 +213,8 @@ def flood_fill(root_blob, fork_data, verbose=False):
                 # terminate blob
                 blob.ibox = fork_ibox.sub_box2box(blob.box)
                 blob.der__t = Tdert(
-                    *(par__[y0:yn, x0:xn] for par__ in der__t))
-                blob.mask__ = (idmap[y0:yn, x0:xn] != blob.id)
+                    *(par__[blob.box.slice()] for par__ in der__t))
+                blob.mask__ = (idmap[blob.box.slice()] != blob.id)
                 blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses
                 blob.G = np.hypot(blob.Dy, blob.Dx)
                 if verbose:
