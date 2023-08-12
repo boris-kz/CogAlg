@@ -65,7 +65,7 @@ def intra_blob_root(root_blob, render, verbose):  # recursive evaluation of cros
             blob.rdn = root_blob.rdn + 1.5  # comp cost * fork rdn, sub_blob root values
             blob.prior_forks += 'v'
             if verbose: print('fork: v')
-            # vectorize_root(blob, verbose=verbose)
+            vectorize_root(blob, verbose=verbose)
         # ---> end v fork
     return spliced_layers
 

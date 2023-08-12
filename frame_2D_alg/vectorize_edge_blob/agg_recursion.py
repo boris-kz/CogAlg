@@ -43,11 +43,12 @@ def agg_recursion(root, node_):  # compositional recursion in root.PP_
         node.root_T = [[[],[]],[[],[]]]  # replace node.root_T, then append [root,val] in each fork
 
     for fder in 0,1:  # comp forks, each adds a layer of links
-        if fder and len(node_[0].link_H) < 2:  # 1st call, no der+ yet?
+        if fder and len(node_[0].link_H) < 2:  # 1st call, no der+ yet
             continue
         comp_G_(node_, pri_G_=None, f1Q=1, fder=fder)  # cross-comp all Gs in (rng,der), nD array? form link_H per G
-        for fd in 0, 1:
-            graph_ = form_graph_(node_, pri_root_T_, fder, fd)  # clustering via link_t, select by fder
+
+        for fd in 0,1: # clustering forks, each adds graph_: new node_ in node_tt:
+            graph_ = form_graph_(node_, pri_root_T_, fder, fd)  # clustering via link_H[-1], select by fder
             # sub+, eval last layer?:
             if root.valt[fd] > ave_sub * root.rdnt[fd] and graph_:  # fixed costs and non empty graph_, same per fork
                 sub_recursion_eval(root, graph_)
@@ -64,24 +65,29 @@ def agg_recursion(root, node_):  # compositional recursion in root.PP_
 def form_graph_(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per fder,fd, initially distributed across layers
 
     layer = []
+    Links = []
     for node in copy(node_):  # initial node_-> layer conversion
-        links, _nodes = [],[]
+        links, _nodes = [],[node]
         val = 0  # sum all lower (link_val * med_coef)s per node, for node eval?
         for link in node.link_H[-(1+fder)]:
             _node = link.G1 if link.G0 is node else link.G0
             links += [link]; _nodes += [_node]
             val += link.valt[fder]
-        layer += [[node, links, _nodes, val]]
-    # init hierarchical network:
-    layers = [layer]
-    # form layers of same nodes with incrementally mediated links:
-    form_mediation_layers(layer, layers, fder=fder)
-    # adjust link vals by stronger overlap per node across layers:
-    suppress_overlap(layers, fder)
-    # segment sparse layers to graphs, as in init_graphs:
-    graphs = segment_network(layers, node_, pri_root_T_, fder, fd)
-
-    return graphs
+        Links += links
+        layer += [[node, val, links, _nodes, _nodes]]
+    if len(Links) > ave:
+        # = n comps in comp_G_
+        # init hierarchical network:
+        layers = [layer]
+        # form layers of same nodes with incrementally mediated links:
+        form_mediation_layers(layer, layers, fder=fder)
+        # adjust link vals by stronger overlap per node across layers:
+        suppress_overlap(layers, fder)
+        # segment sparse layers to graphs, as in init_graphs:
+        graphs = segment_network(layers, node_, pri_root_T_, fder, fd)
+        return graphs
+    else:
+        return []
 
 def form_mediation_layers(layer, layers, fder):  # layers are initialized with same nodes and incrementally mediated links
 
@@ -114,58 +120,52 @@ def suppress_overlap(layers, fder):  # adjust link vals by stronger overlap per 
 
     for i, layer in enumerate(layers):  # loop bottom-up, accum rdn per link from higher layers?
         for j, (node, Val, links, nodes, Nodes) in enumerate(layer):
-            # sort same-layer links to assign rdn:
-            links = sorted(links, key=lambda link: link.valt[fder], reverse=False)
-            # or sort and rdn+ all lower-layer links by backprop: checked before but still add to rdn?
-            for link in links:
-                val = link.valt[fder] + link.Valt[fder]  # to prune links, not nodes, in segment_network
-                link.Rdnt[fder] += val  # graph overlap: current+higher val links per node, all layers?
-                Rdn += val  # stronger overlap within layer
-            # backprop to direct Links:
-            val = (Val / len(links)) * med_decay * i  # simplified redundancy and reinforcement by higher layer?
-            for _layer in reversed(layers[i-1:]):  # loop down from current layer
-                _node, _Val, _links, _nodes, _Nodes = _layer[j]  # more direct links of same node in lower layer
-                for _link in _links:
-                    _link.Valt[fder] += val  # direct links reinforced by ave mediated links val: higher layer, not sure
-                    if _link.valt[fder] < val:
-                        _link.Rdnt[fder] += val  # average higher-layer val is rdn if greater?
+            if len(links) > ave:
+                # sort same-layer links to assign rdn:
+                links = sorted(links, key=lambda link: link.valt[fder], reverse=False)
+                # or sort and rdn+ all lower-layer links by backprop: checked before but still add to rdn?
+                for link in links:
+                    val = link.valt[fder] + link.Valt[fder]  # to prune links, not nodes, in segment_network
+                    link.Rdnt[fder] += val  # graph overlap: current+higher val links per node, all layers?
+                    Rdn += val  # stronger overlap within layer
+                # backprop to more direct links per node:
+                val = (Val / len(links)) * med_decay * i  # simplified redundancy and reinforcement by higher layer?
+                for _layer in reversed(layers[:i]):  # loop down from current layer
+                    _node, _Val, _links, _nodes, _Nodes = _layer[j]  # more direct links of same node in lower layer
+                    for _link in _links:
+                        _link.Valt[fder] += val  # direct links reinforced by ave mediated links val: higher layer,
+                        # or segmentation eval per node' summed links, no link adjustment here?
+                        if _link.valt[fder] < val:
+                            _link.Rdnt[fder] += val  # average higher-layer val is rdn if greater?
     while Rdn > ave:
         suppress_overlap(layers, fder)
 
 # not revised:
 def segment_network(layers, node_, pri_root_T_, fder, fd):
-
     graph_ = []
     for layer in layers:  # loop top-down, accumulate rdn per link from higher layers?
-        for (node, links, _nodes, node_val) in layer:
+        for i, (node, Val, links, _nodes, Nodes) in enumerate(layer):
             if not node.root_T[fder][fd]:  # not forming graph in prior loops
-                graph = [[node], [pri_root_T_[node_.index(node)]], node_val]
+                graph = [[node], [pri_root_T_[node_.index(node)]], Val]
                 node.root_T[fder][fd] = graph
                 graph_ += [graph]
-
                 # search links recursively
-                nodes = [node];links_ = [links]
+                nodes = [node]; links_ = [links]
                 while links_:
                     node = nodes.pop()  # unpack node per links
                     links = links_.pop()
-
                     for link in links:
                         _node = link.G1 if link.G0 is node else link.G0
-                        if not _node.root_T[fder][fd] and link.valt[fder] > ave * link.rdnt[fder]:  # if _node has root, merge them?
-                            # get _node's links
-                            for (__node, _links, __nodes, _node_val) in layer:
+                        if _node not in graph[0] and link.Valt[fder] > ave * link.Rdnt[fder]:
+                            for (__node, _Val, _links, __nodes, _Nodes) in layer:  # find _node in a same layer
                                 if __node is _node: break
-
                             # pack _node into graph
                             graph[0] += [_node]
                             graph[1] += [pri_root_T_[node_.index(_node)]]
-                            graph[2] += _node_val
+                            graph[2] += _Val
                             _node.root_T[fder][fd] = graph
-
-                            # pack new links and _node
                             links_ += [_links]
                             nodes += [_node]
-
     # evaluate links by val > ave*rdn, for fuzzy segmentation, no change in link vals
     return graph_
 
