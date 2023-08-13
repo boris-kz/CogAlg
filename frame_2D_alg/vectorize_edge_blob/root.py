@@ -40,38 +40,91 @@ oct_sep = 0.3826834323650898
 
 def vectorize_root(blob, verbose=False):
 
-    max_der__t = non_max_suppression(blob)  # local max of dy, dx, g
+    max_mask__ = non_max_suppression(blob)  # mask of local directional maxima of dy, dx, g
+    import matplotlib.pyplot as plt
+    Y, X = blob.mask__.shape
+    p, q = (2, 1) if X > Y else (1, 2)
+    plt.subplot(p, q, 1)
+    plt.imshow(~blob.mask__, cmap='gray')
+    plt.subplot(p, q, 2)
+    plt.imshow(max_mask__, cmap='gray')
+    plt.show()
     # Otsu's method to determine ave: https://en.wikipedia.org/wiki/Otsu%27s_method
-    ave = otsu(max_der__t.g)
-    max_mask__ = ave - max_der__t.g > 0   # mask of strong edges
-    suppressed_mask__ = (ave/2) - max_der__t.g > 0   # mask of weak edges
-
-    # Edge tracking by hysteresis, forming edge structure:
-    edge_ = form_edge_(max_mask__, suppressed_mask__)
-
-    comp_slice(edge_, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
-    # rng+ in comp_slice adds edge.node_T[0]:
-    for edge in edge_:
-        for fd, PP_ in enumerate(edge.node_T[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
-            # sub+, intra PP:
-            sub_recursion_eval(edge, PP_)
-            # agg+, inter-PP, 1st layer is two forks only:
-            if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
-                node_= []
-                for PP in PP_: # CPP -> Cgraph:
-                    derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
-                    node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH,valt,rdnt], valt=valt,rdnt=rdnt, L=len(PP.node_),
-                                     box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
-                    sum_derH([edge.derH,edge.valt,edge.rdnt], [derH,valt,rdnt], 0)
-                edge.node_T[0][fd][:] = node_
-                # node_[:] = new node_tt in the end:
-                agg_recursion(edge, node_)
+    # ave = otsu(blob.der__t, blob.der__t.g[max_mask__])
+    # st_mask__ = (ave - max_der__t.g > 0) & max_mask__   # mask of strong edges
+    # wk_mask__ = ((ave/2) - max_der__t.g > 0) & max_mask__   # mask of weak edges
+    #
+    # # Edge tracking by hysteresis, forming edge structure:
+    # edge_ = form_edge_(st_mask__, wk_mask__)
+    #
+    # comp_slice(edge_, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
+    # # rng+ in comp_slice adds edge.node_T[0]:
+    # for edge in edge_:
+    #     for fd, PP_ in enumerate(edge.node_T[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
+    #         # sub+, intra PP:
+    #         sub_recursion_eval(edge, PP_)
+    #         # agg+, inter-PP, 1st layer is two forks only:
+    #         if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
+    #             node_= []
+    #             for PP in PP_: # CPP -> Cgraph:
+    #                 derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
+    #                 node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH,valt,rdnt], valt=valt,rdnt=rdnt, L=len(PP.node_),
+    #                                  box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
+    #                 sum_derH([edge.derH,edge.valt,edge.rdnt], [derH,valt,rdnt], 0)
+    #             edge.node_T[0][fd][:] = node_
+    #             # node_[:] = new node_tt in the end:
+    #             agg_recursion(edge, node_)
 
 
 def non_max_suppression(blob):
-    pass
+    Y, X = blob.mask__.shape
+    g__ = blob.der__t.g
 
-def otsu(g):
+    # compute direction of gradient
+    with np.errstate(divide='ignore', invalid='ignore'):
+        s__, c__ = [blob.der__t.dy, blob.der__t.dx] / g__
+
+    # round angle to one of eight directions
+    up__, lft__, dwn__, rgt__ = (s__ < -oct_sep), (c__ < -oct_sep), (s__ > oct_sep), (c__ > oct_sep)
+    mdly__, mdlx__ = ~(up__ | dwn__), ~(lft__ | rgt__)
+
+    # assign directions, reduced to four
+    dir_mask___ = [
+        mdly__ & (rgt__ | lft__), (dwn__ & rgt__) | (up__ & lft__),     #  0,  45 deg
+        (dwn__ | up__) & mdlx__,  (dwn__ & lft__) | (up__ & rgt__),     # 90, 135 deg
+    ]
+    ryx_ = [(0, 1), (1, 1), (1, 0), (1, -1)]
+
+    # for each direction, find local maximum by comparing with neighboring pixels
+    max_mask__ = np.zeros_like(blob.mask__, dtype=bool)
+    for dir_mask__, (ry, rx) in zip(dir_mask___, ryx_):
+        # get indices of pixels in blob with corresponding direction
+        mask__ = dir_mask__ & (~blob.mask__)    # and with blob mask
+        y_, x_ = mask__.nonzero()
+
+        # get neighbor pixel indices
+        yn1_, xn1_ = y_ + ry, x_ + rx
+        yn2_, xn2_ = y_ - ry, x_ - rx
+
+        # choose valid neighbor indices
+        valid1_ = (0 <= yn1_) & (yn1_ < Y) & (0 <= xn1_) & (xn1_ < X)
+        valid2_ = (0 <= yn2_) & (yn2_ < Y) & (0 <= xn2_) & (xn2_ < X)
+
+        # compare values
+        not_max_ = np.zeros_like(y_, dtype=bool)
+        not_max_[valid1_] |= (g__[y_[valid1_], x_[valid1_]] < g__[yn1_[valid1_], xn1_[valid1_]])
+        not_max_[valid2_] |= (g__[y_[valid2_], x_[valid2_]] < g__[yn2_[valid2_], xn2_[valid2_]])
+
+        # suppress non-maximum points
+        mask__[y_[not_max_], x_[not_max_]] = False
+
+        # add to max_mask__
+        max_mask__ |= mask__
+
+    return max_mask__
+
+
+def otsu(der__t, mask__):
     pass
 
 def form_edge_(sedge_mask__, wedge_mask__):
