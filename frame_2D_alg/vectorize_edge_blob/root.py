@@ -41,39 +41,32 @@ oct_sep = 0.3826834323650898
 def vectorize_root(blob, verbose=False):
 
     max_mask__ = non_max_suppression(blob)  # mask of local directional maxima of dy, dx, g
-    import matplotlib.pyplot as plt
-    Y, X = blob.mask__.shape
-    p, q = (2, 1) if X > Y else (1, 2)
-    plt.subplot(p, q, 1)
-    plt.imshow(~blob.mask__, cmap='gray')
-    plt.subplot(p, q, 2)
-    plt.imshow(max_mask__, cmap='gray')
-    plt.show()
+
     # Otsu's method to determine ave: https://en.wikipedia.org/wiki/Otsu%27s_method
-    # ave = otsu(blob.der__t, blob.der__t.g[max_mask__])
-    # st_mask__ = (ave - max_der__t.g > 0) & max_mask__   # mask of strong edges
-    # wk_mask__ = ((ave/2) - max_der__t.g > 0) & max_mask__   # mask of weak edges
-    #
-    # # Edge tracking by hysteresis, forming edge structure:
-    # edge_ = form_edge_(st_mask__, wk_mask__)
-    #
-    # comp_slice(edge_, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
-    # # rng+ in comp_slice adds edge.node_T[0]:
-    # for edge in edge_:
-    #     for fd, PP_ in enumerate(edge.node_T[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
-    #         # sub+, intra PP:
-    #         sub_recursion_eval(edge, PP_)
-    #         # agg+, inter-PP, 1st layer is two forks only:
-    #         if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
-    #             node_= []
-    #             for PP in PP_: # CPP -> Cgraph:
-    #                 derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
-    #                 node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH,valt,rdnt], valt=valt,rdnt=rdnt, L=len(PP.node_),
-    #                                  box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
-    #                 sum_derH([edge.derH,edge.valt,edge.rdnt], [derH,valt,rdnt], 0)
-    #             edge.node_T[0][fd][:] = node_
-    #             # node_[:] = new node_tt in the end:
-    #             agg_recursion(edge, node_)
+    ave = otsu(blob.der__t.g)
+    st_mask__ = (ave - blob.der__t.g > 0) & max_mask__   # mask of strong edges
+    wk_mask__ = ((ave/2) - blob.der__t.g > 0) & max_mask__   # mask of weak edges
+
+    # Edge tracking by hysteresis, forming edge structure:
+    edge_ = form_edge_(st_mask__, wk_mask__)
+
+    comp_slice(edge_, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
+    # rng+ in comp_slice adds edge.node_T[0]:
+    for edge in edge_:
+        for fd, PP_ in enumerate(edge.node_T[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
+            # sub+, intra PP:
+            sub_recursion_eval(edge, PP_)
+            # agg+, inter-PP, 1st layer is two forks only:
+            if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
+                node_= []
+                for PP in PP_: # CPP -> Cgraph:
+                    derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
+                    node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH,valt,rdnt], valt=valt,rdnt=rdnt, L=len(PP.node_),
+                                     box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
+                    sum_derH([edge.derH,edge.valt,edge.rdnt], [derH,valt,rdnt], 0)
+                edge.node_T[0][fd][:] = node_
+                # node_[:] = new node_tt in the end:
+                agg_recursion(edge, node_)
 
 
 def non_max_suppression(blob):
@@ -124,8 +117,28 @@ def non_max_suppression(blob):
     return max_mask__
 
 
-def otsu(der__t, mask__):
-    pass
+def otsu(g__):
+    g_ = np.sort(g__.reshape(-1))
+    n = len(g_)
+    sg0 = 0; sg0_sqr = 0
+    sg1 = np.sum(g_); sg1_sqr = np.sum(g_*g_)
+    ave = 0; min_var = np.inf
+    for i in range(0, n):
+        g = g_[i]; g_sqr = g*g
+        sg0 += g; sg0_sqr += g_sqr
+        sg1 -= g; sg1_sqr -= g_sqr
+        if i < n - 1 and g == g_[i+1]:
+            continue
+        # mean and variance of g_, with probability distribution p_:
+        # mu = [g*p for g, p in zip(g_, p_)]
+        # var = [(g - mu)**2*p for g, p in zip(g_, p_)]
+        # var = [p*(g**2 - mu**2) +  for g, p in zip(g_, p_)]
+        var0 = (sg0_sqr - sg0*sg0) / (i+1); var1 = (sg1_sqr - sg1*sg1) / (n-i-1)
+        wei0 = (i+1) / n; wei1 = 1 - wei0
+        if (var0*wei0 + var1*wei1) < min_var:
+            min_var = var0*wei0 + var1*wei1
+            ave = (sg0 + sg1) / n
+    return ave
 
 def form_edge_(sedge_mask__, wedge_mask__):
     pass
