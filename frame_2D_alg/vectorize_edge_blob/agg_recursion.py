@@ -47,115 +47,56 @@ def agg_recursion(root, node_):  # compositional recursion in root.PP_
             continue
         comp_G_(node_, pri_G_=None, f1Q=1, fder=fder)  # cross-comp all Gs in (rng,der), nD array? form link_H per G
 
-        for fd in 0,1: # clustering forks, each adds graph_: new node_ in node_tt:
-            graph_ = form_graph_(node_, pri_root_T_, fder, fd)  # clustering via link_H[-1], select by fder
-            # sub+, eval last layer?:
-            if root.valt[fd] > ave_sub * root.rdnt[fd] and graph_:  # fixed costs and non empty graph_, same per fork
-                sub_recursion_eval(root, graph_)
-            # agg+, eval all layers?:
-            if sum(root.valt) > G_aves[fd] * ave_agg * sum(root.rdnt) and len(graph_) > ave_nsubt[fd]:
-                agg_recursion(root, node_) # replace root.node_ with new graphs
+        for fd in 0,1:  # clustering forks, each adds graph_: new node_ in node_tt:
+            if sum(root.val_Ht[fder]) > G_aves[fder] * sum(root.rdn_Ht[fder]):
+                # cluster link_H[-1]:
+                graph_ = form_graph_(node_, pri_root_T_, fder, fd)
+                sub_recursion_eval(root, graph_)  # sub+, eval last layer?
+                if sum(root.val_Ht[fder]) > G_aves[fder] * sum(root.rdn_Ht[fder]):  # updated in sub+
+                    agg_recursion(root, node_)  # agg+, replace root.node_ with new graphs
+                node_tt[fder][fd] = graph_
             elif root.root:  # if deeper agg+
+                node_tt[fder][fd] = node_
                 feedback(root, fd)  # update root.root..H, breadth-first
 
-            node_tt[fder][fd] = graph_
     node_[:] = node_tt  # replace local element of root.node_T
 
+# partial redraft:
+def form_graph_(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per fder,fd, within root
 
-def form_graph_(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per fder,fd, initially distributed across layers
+    # rdn: stronger overlap per node for local max selection in linked nodes, all-layers
+    # direct or iterative up to rng for partial overlap:
+    # each node represents all other positively linked nodes when segmented in graphs
 
-    layer = []; Val = 0  # of new links
+    ave = G_aves[fder]  # val = (Val / len(links)) * med_decay * i?
+    nodet_ = []
+    # tentative:
+    for node in node_:
+        if sum(node.val_Ht[fder]) - ave * sum(node.rdn_Ht[fder]):
+            Rdn = 0; _node_ = []
+            for link in node.link_H[-1]: _node_ += [link.G1 if link.G0 is node else link.G0]
+            # sort to assign rdn: soft non-max, by backprop?
+            _node_ = sorted(_node_+[node], key=lambda _node: sum(_node.val_Ht[fder]) - ave * sum(_node.rdn_Ht[fder]), reverse=False)
+            for _node in _node_:
+                Rdn += sum(_node.val_Ht[fder])  # stronger overlap within links
+                # not correct:
+                nodet_ += [_node, Rdn]
 
-    for node in copy(node_):  # initial node_-> layer conversion
-        links, _nodes = [],[node]
-        val = 0  # sum all lower (link_val * med_coef)s per node, for node eval?
-        for link in node.link_H[-(1+fder)]:
-            _node = link.G1 if link.G0 is node else link.G0
-            links += [link]; _nodes += [_node]
-            val += link.valt[fder]
-        # add fork val of direct (1st layer) links:
-        node.val_Ht[fder] += [Val]
-        layer += [[node, links, _nodes, copy(_nodes)]]
-        Val += val
-    if Val > ave:  # init hierarchical network:
-        layers = [layer]
-        # form layers of same nodes with incrementally mediated links:
-        form_mediation_layers(layer, layers, fder=fder)
-        # segment suppressed-overlap layers to graphs:
-        return segment_network(layers, node_, pri_root_T_, fder, fd)
-    else:
-        return node_
-
-def form_mediation_layers(layer, layers, fder):  # layers are initialized with same nodes and incrementally mediated links
-
-    out_layer = []; out_val = 0   # new layer, val
-
-    for (node, _links, _nodes, Nodes) in layer:  # higher layers have incrementally mediated _links and _nodes
-        links, nodes = [], []  # per current-layer node
-        Val = 0
-        for _node in _nodes:
-            for link in _node.link_H[-(1+fder)]:  # mediated links
-                __node = link.G1 if link.G0 is _node else link.G0
-                if __node not in Nodes:  # not in lower-layer links
-                    nodes += [__node]
-                    links += [link]  # to adjust link.val in suppress_overlap
-                    Val += link.valt[fder]
-        # add fork val of link layer:
-        node.val_Ht[fder] += [Val]
-        out_layer += [[node, links, nodes, Nodes+nodes]]  # current link mediation order
-        out_val += Val
-        # no permanent val per layer?
-    layers += [out_layer]
-    suppress_overlap(layers, fder)  # adjust node val and rdn by stronger overlap per node across layers
-
-    if out_val > ave:
-        form_mediation_layers(out_layer, layers, fder)
-
-# draft:
-def suppress_overlap(layers, fder):  # adjust node vals by overlap, to combine with link val in segment
-
-    # rdn: stronger overlap per node via NMS with linked nodes, direct for all-layers overlap,
-    # or up to rng for partial overlap?
-    Rdn = 0  # overlap: each positively linked node represents all others when segmented in graphs
-
-    for i, layer in enumerate(layers):  # loop bottom-up, accum rdn per link from higher layers?
-        for j, (node, links, nodes, Nodes) in enumerate(layer):
-            if sum(node.val_Ht[fder]) > ave:
-                # sort same-layer nodes to assign rdn: soft non-max?
-                nodes = sorted(nodes, key=lambda node: sum(node.val_Ht[fder]), reverse=False)
-                # or sort and rdn+ all lower-layer nodes by backprop: checked before but still add to rdn?
-                for _node in nodes:
-                    if _node is not node:
-                        val = sum(_node.val_Ht[fder])  # to scale links for pruning in segment_network
-                        node.Rdn_Ht[fder] += [val]  # graph overlap: current+higher val links per node, all layers?
-                        Rdn += val  # stronger overlap within layer
-                '''
-                # not updated:
-                # backprop to more direct links per node:
-                val = (Val / len(links)) * med_decay * i  # simplified redundancy and reinforcement by higher layer?
-                for _layer in reversed(layers[:i]):  # loop down from current layer
-                    _node, _links, _nodes, _Nodes = _layer[j]  # more direct links of same node in lower layer
-                    for _link in _links:
-                        _link.Valt[fder] += val  # direct links reinforced by ave mediated links val: higher layer,
-                        # or segmentation eval per node' summed links, no link adjustment here?
-                        if _link.valt[fder] < val:
-                            _link.Rdnt[fder] += val  # average higher-layer val is rdn if greater?
-                '''
-    while Rdn > ave:
-        suppress_overlap(layers, fder)
+    segment_network(nodet_, pri_root_T_, fder, fd)
 
 # not revised:
-def segment_network(layers, node_, pri_root_T_, fder, fd):
+def segment_network(nodet_, pri_root_T_, fder, fd):
 
     # select local max nodes to initialize graphs, then prune links to add other nodes:
     # link val,rnd are combined with G0+G1 valH, rdnH for evaluation
     graph_ = []
-    for layer in layers:  # loop top-down, accumulate rdn per link from higher layers?
+    for nodet in nodet_:  # loop top-down, accumulate rdn per link from higher layers?
 
         max_nodes = []
         for i, (node, links, nodes, Nodes) in enumerate(layer):
             # get local max and max node based on rdn and val
-            adjusted_val = [sum(node.val_Ht[fder]) * (1/sum(node.rdn_Ht[fder]))  for node in nodes]  # adjust node.val_Ht[fder] by 1/rdn? So the higher rdn, the lower the graph's val?
+            adjusted_val = [sum(node.val_Ht[fder]) * (1/sum(node.rdn_Ht[fder]))  for node in nodes]
+            # adjust node.val_Ht[fder] by 1/rdn? So the higher rdn, the lower the graph's val?
             max_node = nodes[np.argmax(adjusted_val)]
             if max_node not in max_nodes: max_nodes += [max_node]
 
