@@ -41,8 +41,8 @@ def agg_recursion(root, node_):  # compositional recursion in root.PP_
     for node in node_:
         pri_root_T_ += [node.root_T]  # save root_T for new graphs, different per node
         node.root_T = [[[],[]],[[],[]]]  # replace node.root_T, then append [root,val] in each fork
-        node.val_Ht[0] += [0]; node.val_Ht[1] += [0]  # new layer of val and rdn, to be accumulated later in comp_G
-        node.rdn_Ht[0] += [0]; node.rdn_Ht[1] += [0]
+        for i in 0,1:
+            node.val_Ht[i]+=[0]; node.rdn_Ht[i]+=[1]  # new val,rdn layer, accum in comp_G_
 
     for fder in 0,1:  # comp forks, each adds a layer of links
         if fder and len(node_[0].link_H) < 2:  # 1st call, no der+ yet
@@ -63,53 +63,49 @@ def agg_recursion(root, node_):  # compositional recursion in root.PP_
 
     node_[:] = node_tt  # replace local element of root.node_T
 
-# partial redraft:
+
 def form_graph_(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per fder,fd, within root
 
     ave = G_aves[fder]  # val = (Val / len(links)) * med_decay * i?
-    Rdn_ = [0 for node in node_]  # to accum stronger linked nodes as potential graph overlap
-    '''
-    compute stronger overlap per node for fuzzy max selection in linked nodes, 
-    easier than forming fully overlapping graphs (each node'graph may represent all other positively linked nodes)
-    '''
+    Rdn_ = [0 for node in node_]  # accum >vals of linked nodes: pot.graph overlap, vs. overlapping graphs init with each node
+    # layers = []  # layers of mediating links
+
     for node in node_:
         if sum(node.val_Ht[fder]) - ave * sum(node.rdn_Ht[fder]):  # potential graph init
             layer = []
-            for link in node.link_H[-1]:
-                layer += [[link.G1 if link.G0 is node else link.G0, link]]  # nodet: [node,link]
-            # sort, lower-val node rdn += higher vals:
-            layer = sorted(layer+[[node,1]], key=lambda _nodet:  # effective node rdn is proportional to relative link val:
-                    sum(_nodet[0].val_Ht[fder]) - ave*sum(_nodet[0].rdn_Ht[fder]) * (_nodet[1].valt[fder] / (_nodet[1].val+ave)),
+            for link in node.link_H[-1]: layer += [[link.G1 if link.G0 is node else link.G0, link.valt[fder]]]
+            # sort, lower-val node rdn += higher (val * relative link val)s:
+            layer = sorted(layer+[[node,1]], key=lambda _nodet:  # * link.val: may be pruned:
+                    sum(_nodet[0].val_Ht[fder]) - ave * sum(_nodet[0].rdn_Ht[fder])* _nodet[1]/(_nodet[1]+ave),
                     reverse=True)
-            __node = layer[0]  # local max
-            Rdn = sum(__node.val_Ht[fder])
-            for _node in layer[1:]:
-                Rdn_[node_.index(_node)] += Rdn  # stronger vals is potential overlap between node-initialized graphs
-                Rdn += sum(__node.val_Ht[fder])
-                '''
-                or Rdn += val * link.val / (link.val+ave): effective overlap is proportional to connection strength?
-                recursion to adjust for indirectly connected nodes: 
-                sort, then Rdn += stronger (med_Val * med_decay * med_depth): soft fuzzy global maxes?
-                '''
+            __node,_ = layer[0]  # local max
+            Rdn = sum(__node.val_Ht[fder])  # accum in loop, add to weaker nodes Rdn_[i]:
+            for _node,_ in layer[1:]:
+                Rdn_[node_.index(_node)] += Rdn  # stronger-node-init graphs would overlap current-node-init graph
+                Rdn += sum(_node.val_Ht[fder])  #* link_val/ (link_val+ave): effective overlap *= connection strength?
+    '''            
+    no explicit layers, recursion to re-sort and re-sum with previously adjusted directly-linked _node Rdns? 
+    or form longer-range more mediated soft maxes, Rdn += stronger (med_Val * med_decay * med_depth)?
+    '''
     # not revised:
-    while True:
-        new_nodet_ = []
-        total_Rdn = 0
-        for node_, Rdn in nodet_:
-            _node_ = []; _Rdn = 0
-            for node in node_:
-                for link in node.link_H[-1]:
-                    _node =  link.G1 if link.G0 is node else link.G0
-                    if _node not in node_ + _node_:
-                        _Rdn += sum(_node.val_Ht[fder])  # add rdn per overlap
-                        _node_ += [_node]
-            _node_ = sorted(_node_+node_, key=lambda _node: sum(_node.val_Ht[fder]) - ave * sum(_node.rdn_Ht[fder]), reverse=True)
-            new_nodet_ += [[_node_, Rdn+ _Rdn]]
-            total_Rdn += _Rdn
+    while layers:
+        new_layers = []
+        for (node, layer) in layers:  # each element in layers is [node, layer]
+            for (_node, _) in layer:  # each element in layer is [node, link's val]
+                if _node is not node:
+                    layer = []
+                    for link in node.link_H[-1]:
+                        layer =  [[link.G1 if link.G0 is node else link.G0, link.valt[fder]]]
+                    layer = sorted(layer+[[node,1]], key=lambda _nodet:  # effective node rdn is proportional to relative link val:
+                            sum(_nodet[0].val_Ht[fder]) - ave*sum(_nodet[0].rdn_Ht[fder]) * (_nodet[1]/ (_nodet[1]+ave)),
+                            reverse=True)
+                    for i, (node, _) in enumerate(layer):  # i think we need to add rdn from strongest to weakest here so that the weaker node's rdn will be added with all rdn from prior stronger nodes
+                        Rdn = sum(node.val_Ht[fder])
+                        for (_node, _) in layer[i+1:]:
+                            Rdn_[node_.index(_node)] += Rdn  # stronger vals is potential overlap between node-initialized graphs
+                    new_layers += [[node, layer]]
 
-        nodet_ = new_nodet_  # update for next recursion
-        if total_Rdn < ave:  # if overlap is small, stop the updating
-            break  # stop updating rdn
+        layers = new_layers  # for next recursion
 
     segment_network(nodet_, pri_root_T_, fder, fd)
 
