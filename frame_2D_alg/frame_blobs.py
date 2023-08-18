@@ -49,6 +49,8 @@ UNFILLED = -1
 EXCLUDED = -2
 
 Tdert = namedtuple('Tdert', 'dy, dx, g') # 'T' for tuple
+Tdert.get_pixel = lambda der__t, y, x: Tdert(der__t.dy[y, x], der__t.dx[y, x], der__t.g[y, x])
+
 Tbox = namedtuple('Tbox', 'n, w, s, e')  # 'T' for tuple
 Tbox.slice = lambda b: (slice(b.n,b.s), slice(b.w,b.e))  # box to array slice conversion
 Tbox.accumulate = lambda b,y,x: Tbox(min(b.n,y),min(b.w,x),max(b.s,y+1),max(b.e,x+1))  # box coordinate accumulation
@@ -74,6 +76,7 @@ class CBlob(ClusterStructure):
     der__t : Tdert = None   # tuple of derivatives arrays, consistent in shape
     adj_blobs : list = z([])  # adjacent blobs
     fopen : bool = False
+    P_ : list = z([])
     # intra_blob params: # or pack in intra = lambda: Cintra
     # comp_dx:
     Mdx : float = 0.0

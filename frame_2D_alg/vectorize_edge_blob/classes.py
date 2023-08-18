@@ -1,4 +1,27 @@
 from class_cluster import ClusterStructure, init_param as z
+
+class CEdge(ClusterStructure):  # edge blob
+
+    I: float = 0.0
+    Dy: float = 0.0
+    Dx: float = 0.0
+    G: float = 0.0
+    A: float = 0.0  # blob area
+    M: float = 0.0  # summed PP.M, for both types of recursion?
+    # composite params:
+    box: tuple = (0, 0, 0, 0)  # y0, yn, x0, xn
+    mask__ : object = None
+    der__t : object = None
+    der__t_roots: object = None  # map to dir__t
+    adj_blobs: list = z([])  # adjacent blobs
+    node_ : list = z([])  # default P_, node_tt: list = z([[[],[]],[[],[]]]) in select PP_ or G_ forks
+    root : object= None  # list root_ if fork overlap?
+    derH : list = z([])  # formed in PPs, inherited in graphs
+    aggH : list = z([[]])  # [[subH, valt, rdnt]]: cross-fork composition layers
+    valt : list = z([0,0])
+    rdnt : list = z([1,1])
+    fback_ : list = z([])  # [feedback aggH,valt,rdnt per node]
+
 '''
     Conventions:
     postfix 't' denotes tuple, multiple ts is a nested tuple, 'T' for indefinite nesting
@@ -47,7 +70,7 @@ class CEdge(ClusterStructure):  # edge blob
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
-    ptuple : list = z([0,0,0,[0,0],0])  # latuple: I,G,M,angle(Dy,Dx), L
+    ptuple : tuple = (0,0,0,(0,0),0)  # latuple: I,G,M,angle(Dy,Dx), L
     derH : list = z([])  # [[tuplet,valt,rdnt]] vertical derivatives summed from P links
     valt : list = z([0,0])  # summed from the whole derH
     rdnt : list = z([1,1])
@@ -55,9 +78,9 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     link_H : list = z([[]])  # +ve rlink_, dlink_ H from lower sub+
     root_tt : list = z([[None,None],[None,None]])  # PPrm,PPrd, PPdm,PPdd that contain this P, single-layer
     dert_yx_ : list = z([])  # mappings to blob der_t
-    dert_olp_: list = z(set())
-    axis : list = z([0,1])  # prior slice angle, init sin=0,cos=1
-    yx : list = z([])
+    dert_olp_: set = z(set())
+    axis : tuple = (0, 1)  # prior slice angle, init sin=0,cos=1
+    yx : tuple = None
     ''' 
     add L,S,A from links?
     optional:

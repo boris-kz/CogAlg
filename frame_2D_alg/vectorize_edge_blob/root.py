@@ -2,7 +2,7 @@ import sys
 import numpy as np
 from copy import copy, deepcopy
 from itertools import product
-from frame_blobs import UNFILLED, EXCLUDED
+from frame_blobs import Tdert
 from .classes import CEdge, CP, CPP, CderP, Cgraph
 from .filters import ave, ave_g, ave_ga, ave_rotate
 from .comp_slice import comp_slice, comp_angle, sum_derH
@@ -40,10 +40,11 @@ oct_sep = 0.3826834323650898
 
 def vectorize_root(blob, verbose=False):
 
-    max_mask__ = non_max_suppression(blob)  # mask of local max dy,dx,g
-    # form Ps from max_mask__ and form links by tracing max_mask__:
-    edge = slice_blob_ortho(blob, max_mask__, verbose=verbose)
+    max_mask__ = non_max_suppression(blob)  # mask of local directional maxima of dy, dx, g
 
+    # form slices (Ps) from max_mask__ and form links by tracing max_mask__:
+    edge = slice_blob_ortho(blob, max_mask__, verbose=verbose)
+    '''
     comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
     # rng+ in comp_slice adds edge.node_T[0]:
     for fd, PP_ in enumerate(edge.node_T[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
@@ -60,7 +61,7 @@ def vectorize_root(blob, verbose=False):
             edge.node_T[0][fd][:] = node_
             # node_[:] = new node_tt in the end:
             agg_recursion(edge, node_)
-
+    '''
 
 def non_max_suppression(blob):
     Y, X = blob.mask__.shape
@@ -111,42 +112,38 @@ def non_max_suppression(blob):
 
 
 def slice_blob_ortho(blob, max_mask__, verbose=False):
-    pass
+    for y, x in zip(*max_mask__.nonzero()):
+        i = blob.i__[blob.ibox.slice()][y, x]
+        dy, dx, g = blob.der__t.get_pixel(y, x)
+        assert g > 0, "g must be positive"
+        P = form_P(CP(yx=(y, x), axis=(dy/g, dx/g), dert_yx_=[(y, x)], dert_olp_={(y, x)}, dert_=[(i, dy, dx, g)]),
+                   blob)
+        blob.P_ += [P]
 
-def form_P(P, dir__t, mask__, axis):
 
-    rdert_, dert_yx_ = [P.dert_[len(P.dert_)//2]],[P.yx]      # include pivot
-    dert_olp_ = {(round(P.yx[0]), round(P.yx[1]))}
-    rdert_,dert_yx_,dert_olp_ = scan_direction(rdert_,dert_yx_,dert_olp_, P.yx, axis, dir__t,mask__, fleft=1)  # scan left
-    rdert_,dert_yx_,dert_olp_ = scan_direction(rdert_,dert_yx_,dert_olp_, P.yx, axis, dir__t,mask__, fleft=0)  # scan right
+def form_P(P, blob):
+    scan_direction(P, blob, fleft=1)  # scan left
+    scan_direction(P, blob, fleft=0)  # scan right
     # initialization
-    rdert = rdert_[0]
-    I, Dy, Dx, G = rdert; M=ave_g-G; dert_=[rdert]
-    # accumulation:
-    for rdert in rdert_[1:]:
-        i, dy, dx, g = rdert
-        I+=i; M+=ave_g-g; Dy+=dy; Dx+=dx
-        dert_ += [rdert]
-    L = len(dert_)
-    P.dert_ = dert_; P.dert_yx_ = dert_yx_  # new dert and dert_yx
+    I, Dy, Dx, G = map(sum, zip(*P.dert_))
+    L = len(P.dert_)
+    M = ave_g*L - G
+    G = np.hypot(Dy, Dx)           # recompute G
+    P.ptuple = I, G, M, (Dy, Dx), L
     P.yx = P.dert_yx_[L//2]              # new center
-    G = np.hypot(Dy, Dx)  # recompute G
-    P.ptuple = [I,G,M,[Dy,Dx], L]
-    P.axis = axis
-    P.dert_olp_ = dert_olp_
     return P
 
-def scan_direction(rdert_,dert_yx_,dert_olp_, yx, axis, dir__t,mask__, fleft):  # leftward or rightward from y,x
-    Y, X = mask__.shape # boundary
-    y, x = yx
-    sin,cos = axis      # unpack axis
+def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
+    Y, X = blob.mask__.shape # boundary
+    y, x = P.yx
+    sin,cos = P.axis      # unpack axis
     r = cos*y - sin*x   # from P line equation: cos*y - sin*x = r = constant
     _cy,_cx = round(y), round(x)  # keep previous cell
     y, x = (y-sin,x-cos) if fleft else (y+sin, x+cos)   # first dert position in the direction of axis
     while True:                   # start scanning, stop at boundary or edge of blob
         x0, y0 = int(x), int(y)   # floor
         x1, y1 = x0 + 1, y0 + 1   # ceiling
-        if x0 < 0 or x1 >= X or y0 < 0 or y1 >= Y: break  # boundary check
+        if x0 < 0 or x1 >= X or y0 < 0 or y1 >= Y: break   # boundary check
         kernel = [  # cell weighing by inverse distance from float y,x:
             # https://www.researchgate.net/publication/241293868_A_study_of_sub-pixel_interpolation_algorithm_in_digital_speckle_correlation_method
             (y0, x0, (y1 - y) * (x1 - x)),
@@ -154,7 +151,7 @@ def scan_direction(rdert_,dert_yx_,dert_olp_, yx, axis, dir__t,mask__, fleft):  
             (y1, x0, (y - y0) * (x1 - x)),
             (y1, x1, (y - y0) * (x - x0))]
         cy, cx = round(y), round(x)                         # nearest cell of (y, x)
-        if mask__[cy, cx]: break                            # mask check of (y, x)
+        if blob.mask__[cy, cx]: break                       # mask check of (y, x)
         if abs(cy-_cy) + abs(cx-_cx) == 2:                  # mask check of intermediate cell between (y, x) and (_y, _x)
             # Determine whether P goes above, below or crosses the middle point:
             my, mx = (_cy+cy) / 2, (_cx+cx) / 2             # Get middle point
@@ -171,78 +168,21 @@ def scan_direction(rdert_,dert_yx_,dert_olp_, yx, axis, dir__t,mask__, fleft):  
                     if myc1 < myc else
                     ((_cy, cx) if _cy > cy else (cy, _cx))
                 )
-                if mask__[ty, tx]: break    # if the cell is masked, stop
-                dert_olp_ |= {(ty,tx)}
-        ptuple = [
+                if blob.mask__[ty, tx]: break    # if the cell is masked, stop
+                P.dert_olp_ |= {(ty,tx)}
+
+        ider__t = (blob.i__[blob.ibox.slice()],) + blob.der__t
+        dert = tuple(
             sum((par__[ky, kx] * dist for ky, kx, dist in kernel))
-            for par__ in dir__t]
-        dert_olp_ |= {(cy, cx)}  # add current cell to overlap
+            for par__ in ider__t)
+        P.dert_olp_ |= {(cy, cx)}  # add current cell to overlap
         _cy, _cx = cy, cx
         if fleft:
-            rdert_ = [ptuple] + rdert_          # append left
-            dert_yx_ = [(y,x)] + dert_yx_     # append left coords per dert
+            P.dert_ = [dert] + P.dert_              # append left
+            P.dert_yx_ = [(y,x)] + P.dert_yx_       # append left coords per dert
             y -= sin; x -= cos  # next y,x
         else:
-            rdert_ = rdert_ + [ptuple]  # append right
-            dert_yx_ = dert_yx_ + [(y,x)]
+            P.dert_ = P.dert_ + [dert]              # append right
+            P.dert_yx_ = P.dert_yx_ + [(y,x)]
             y += sin; x += cos  # next y,x
 
-    return rdert_,dert_yx_,dert_olp_
-
-
-# -------------- Alternatives
-
-def otsu(g_):
-    # Mean and variance of g_, with probability distribution p_:
-    # mu = sum([p*g for p, g in zip(p_, g_)])
-    # var = sum([p*(g - mu)**2 for p, g in zip(p_, g_)])
-    # Expand the terms:
-    # var = sum([(p*g**2 - 2*p*g*mu + p*mu**2) for p, g in zip(p_, g_)])
-    # Split the sum:
-    # var = sum([p*g**2 for p, g in zip(p_, g_)])
-    #     - 2*mu*sum([p*g for p, g in zip(p_, g_)])
-    #     + mu**2*sum([p for p in p_])
-    # Since p_ sums up to 1 and mu = sum([p*g for p, g in zip(p_, g_)]):
-    # var = [p*g**2 for g, p in zip(g_, p_)] - 2*mu*mu + mu**2
-    # Simplify:
-    # var = [p*g**2 for g, p in zip(g_, p_)] - mu**2
-    # Intra-class variance of Otsu's method:
-    # var = var0*wei0 + var1*wei1
-    # With:
-    # var0 = sum([g**2 for g in g0_])/len(g0_) - (sum(g0_)/len(g0_))**2
-    # Factor out (1/len(g0_)):
-    # var0 = (sum([g**2 for g in g0_]) - sum(g0_)**2/len(g0_))/len(g0_)
-    # Weight of class 0:
-    # wei0 = len(g0_)/len(g_)
-    # The product of the two:
-    # var0*wei0 = (sum([g**2 for g in g0_]) - sum(g0_)**2/len(g0_))/len(g_)
-    # Same with var1, wei1. Substitute var0, wei0, var1, wei1 into var and factor out (1/len(g_)):
-    # var = (sum([g**2 for g in g0_]) + sum([g**2 for g in g1_])
-    #      - sum(g0_)**2/len(g0_) - sum(g1_)**2/len(g1_)) / len(g_)
-    # Simplify:
-    # var = (sum([g**2 for g in g_]) - sum(g0_)**2/len(g0_) - sum(g1_)**2/len(g1_)) / len(g_)
-    #
-    # sum([g**2 for g in g_]) and len(g_) is the same for all classes. Therefore, we can simplify the formula:
-    # ┌───────────────────────────────────────────────────┐
-    # │ val = sum(g0_)**2/len(g0_) + sum(g1_)**2/len(g1_) │
-    # └───────────────────────────────────────────────────┘
-    # with val = sg_sqr - var * lg, where lg = len(g_), sg = sum([g*g for g in g_])
-    # The threshold at which var is minimal is the threshold at which val is maximal.
-
-    if len(g_) <= 1: return g_[0]
-    g_ = np.sort(g_.reshape(-1))
-
-    # lengths of g0_ and g1_ through all possible thresholds:
-    lg0_ = np.arange(1, len(g_))
-    lg1_ = len(g_) - lg0_
-
-    # sums of g0_ and g1_ through all possible thresholds:
-    sg0_ = np.cumsum(g_)[:-1]
-    sg1_ = g_.sum() - sg0_
-
-    # value for threshold selection:
-    val_ = sg0_*sg0_/lg0_ + sg1_*sg1_/lg1_
-
-    return g_[val_.argmax()]
-
-# replace form_edge_ with comp_slice and form_PP_
