@@ -67,30 +67,33 @@ def agg_recursion(root, node_):  # compositional recursion in root.PP_
 def form_graph_(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per fder,fd, within root
 
     ave = G_aves[fder]  # val = (Val / len(links)) * med_decay * i?
-    _Rdn_ = Rdn_ = [0 for node in node_]  # accum >vals of linked nodes: pot.graph overlap, vs. overlapping graphs init with each node
-    dRdn = ave+1   # layers = []  # layers of mediating links to sparsify maxes?
+    _Rdn_, Rdn_ = [1 for node in node_], [1 for node in node_]  # accum >vals of linked nodes to reduce graph overlap
+    dRdn = ave+1
 
-    while dRdn > ave:
-        for node in node_:
-            if sum(node.val_Ht[fder]) - ave * sum(node.rdn_Ht[fder]):  # potential graph init
-                layer = []
-                for link in node.link_H[-1]: layer += [[link.G1 if link.G0 is node else link.G0, link.valt[fder]]]
-                # sort, lower-val node rdn += higher (val * rel_med_val: links may be pruned)s:
-                layer = sorted(layer+[[node,1]], key=lambda _nodet:  # add adjust by _Rdn here:
-                        sum(_nodet[0].val_Ht[fder]) - ave * sum(_nodet[0].rdn_Ht[fder])* _nodet[1]/(_nodet[1]+ave),
-                        reverse=True)
-                __node, _link_val = layer[0]  # local max
-                val = _link_val; _Rdn = Rdn_[node_.index(__node)]  # adjust overlap val by mediating link vals:
-                Rdn = sum(__node.val_Ht[fder]) *val/(val+ave) *_Rdn/(_Rdn+ave)  # effective overlap *= connection strength?
+    while dRdn > ave:  # iteratively propagate lateral Rdn (soft non-max per node) through mediating links, to define ultimate maxes?
+
+        # or compute local_max(val + sum(surround_vals*mediation_decay)), with incremental mediation rng?
+        # similar to Gaussian blurring, but only to select graph pivots?
+        
+        for node, Rdn in zip(node_, Rdn_):
+            if (sum(node.val_Ht[fder]) * Rdn/(Rdn+ave))  - ave * sum(node.rdn_Ht[fder]):  # potential graph init
+                nodet_ = []
+                for link in node.link_H[-1]:
+                    _node = link.G1 if link.G0 is node else link.G0
+                    nodet_ += [[_node, link.valt[fder], Rdn_[node_.index(_node)]]]
+                # [[_node,link_val,_rdn_val]]:
+                nodet_ = sorted(nodet_+[[node,1,1]], key=lambda _nodet:  # lower-val node rdn += higher val*medDecay, because links maybe pruned:
+                         sum(_nodet[0].val_Ht[fder]) - ave * sum(_nodet[0].rdn_Ht[fder]) * _nodet[1]/(_nodet[1]+ave) * _nodet[2]/(_nodet[2]+ave),
+                         reverse=True)
+                __node, __val, __Rdn = nodet_[0]  # local max  # adjust overlap val by mediating link vals:
+                Rdn = sum(__node.val_Ht[fder]) *__val/(__val+ave) *__Rdn/(__Rdn+ave)  # effective overlap *= connection strength?
                 # add to weaker nodes Rdn_[i], accum for next:
-                for _node, link_val in layer[1:]:
+                for _node, _val, _Rdn in nodet_[1:]:
                     Rdn_[node_.index(_node)] += Rdn  # stronger-node-init graphs would overlap current-node-init graph
-                    val = _link_val; _Rdn = Rdn_[node_.index(__node)]
-                    Rdn += sum(__node.val_Ht[fder]) * val/(val+ave) * _Rdn/(_Rdn+ave)  # adjust overlap by rel_med_val
+                    Rdn += sum(_node.val_Ht[fder]) * _val/(_val+ave) * _Rdn/(_Rdn+ave)  # adjust overlap by medDecay
 
-        dRdn = abs(sum(Rdn_) - sum(_Rdn_))
-        _Rdn_ = Rdn_; Rdn_ = [0 for node in node_]
-
+        dRdn = sum([abs(Rdn-_Rdn) for Rdn,_Rdn in zip(Rdn_,_Rdn_)])
+        _Rdn_ = Rdn_; Rdn_ = [1 for node in node_]
     '''            
     no explicit layers, recursion to re-sort and re-sum with previously adjusted directly-linked _node Rdns? 
     or form longer-range more mediated soft maxes, Rdn += stronger (med_Val * med_decay * med_depth)?
@@ -98,21 +101,24 @@ def form_graph_(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per
     # not revised, we may need to check mediating links to sparsify maxes:
     while layers:
         new_layers = []
-        for (node, layer) in layers:  # each element in layers is [node, layer]
-            for (_node, _) in layer:  # each element in layer is [node, link's val]
-                if _node is not node:
+        for layer in layers:
+            __node, __val, __Rdn = layer[0]  # 1st index: local max
+            for (node, val, Rdn) in layer[1:]:  # each element in layer is [node, link's val, rdn]
+                 if (sum(node.val_Ht[fder]) * Rdn/ (Rdn+ave))  - ave * sum(node.rdn_Ht[fder]):
                     layer = []
-                    for link in node.link_H[-1]:
-                        layer =  [[link.G1 if link.G0 is node else link.G0, link.valt[fder]]]
-                    layer = sorted(layer+[[node,1]], key=lambda _nodet:  # effective node rdn is proportional to relative link val:
-                            sum(_nodet[0].val_Ht[fder]) - ave*sum(_nodet[0].rdn_Ht[fder]) * (_nodet[1]/ (_nodet[1]+ave)),
+                    for link in node.link_H[-1]:  # mediated nodes
+                        _node = link.G1 if link.G0 is node else link.G0
+                        _Rdn = Rdn_[node_.index(_node)]
+                        layer += [[_node, link.valt[fder], _Rdn]]
+                    # sort, lower-val node rdn += higher (val * rel_med_val: links may be pruned)s:
+                    layer = sorted(layer+[[node,1, 1]], key=lambda _nodet:  # add adjust by _Rdn here:
+                            sum(_nodet[0].val_Ht[fder]) - ave * sum(_nodet[0].rdn_Ht[fder]) * (_nodet[1]/(_nodet[1]+ave)) * (_nodet[2]/(_nodet[2]+ave)) ,
                             reverse=True)
-                    for i, (node, _) in enumerate(layer):  # i think we need to add rdn from strongest to weakest here so that the weaker node's rdn will be added with all rdn from prior stronger nodes
-                        Rdn = sum(node.val_Ht[fder])
-                        for (_node, _) in layer[i+1:]:
-                            Rdn_[node_.index(_node)] += Rdn  # stronger vals is potential overlap between node-initialized graphs
-                    new_layers += [[node, layer]]
-
+                    Rdn = sum(__node.val_Ht[fder]) *__val/(__val+ave) *__Rdn/(__Rdn+ave)
+                    for _node, _val, _Rdn in layer:
+                        Rdn_[node_.index(_node)] += Rdn
+                        Rdn += sum(_node.val_Ht[fder]) * _val/(_val+ave) * _Rdn/(_Rdn+ave)
+                    new_layers += [layer]
         layers = new_layers  # for next recursion
 
     segment_network(nodet_, pri_root_T_, fder, fd)
