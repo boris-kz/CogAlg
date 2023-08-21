@@ -74,48 +74,44 @@ def form_graph_(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per
     prune_graphs(graph_, fder, fd)  # sort node roots and prune the weak
 
 # draft
-def select_max_(node_, fder, fd, ave):
+def select_max_(node_, fder, fd, ave):  # final maxes are graph-initializing nodes
 
-    Val_, _Val_ = [0 for node in node_], [0 for node in node_]  # final maxes are graph init nodes
+    Val_ = [sum(node.val_Ht[fder]) for node in node_]
+    _Val_= [0 for node in node_]
     dVal = ave+1  # adjustment of combined val per node per recursion
 
     while dVal > ave:  #  iterative adjust Val by surround propagation, no direct incrementing of mediation rng?
-        for node, Val in zip(node_, Val_):  # val + sum([_val * (link_val/max_val]):
+        for i, (node, Val) in enumerate(zip(node_, Val_)):
 
             if sum(node.val_Ht[fder]) - ave * sum(node.rdn_Ht[fder]):  # potential graph init
                 for link in node.link_H[-1]:
                     _node = link.G1 if link.G0 is node else link.G0
-                    _val = sum(_node.val_Ht[fder]) * (link.valt[fder] / link.Valt[fder]) - ave * sum(_node.rdn_Ht[fder])
-                    # in comp_G_, we need to compute and add to link.Valt: full match | diff between node and _node
-                    Val += _val
-                    Val_[node_.index(_node)] += _val
-
+                    # val + sum([_val * relative link val]), link.valt[2] is max m|d(node,_node):
+                    Val_[i] += _Val_[node_.index(_node)] * (link.valt[fder] / link.valt[2]) - ave * sum(_node.rdn_Ht[fder])
+                    # not bilateral: simpler, parallelizable
         dVal = sum([abs(Val-_Val) for Val,_Val in zip(Val_,_Val_)])
         _Val_ = Val_; Val_ = [0 for node in node_]
 
-    # here we need to add form and return max_: local maxes of Vals formed above
+    max_ = []  # local maxes of quasi-Gaussians per node, not sure:
+    for node, Val in zip(node_, Val_):
+        if Val < 0: continue
+        fmax = 1
+        for link in node.link_H[-1]:
+            _node = link.G1 if link.G0 is node else link.G0
+            if Val_[node_.index(_node)] > Val:
+                fmax = 0
+                break
+        if fmax: max_ += [node]
 
-# not revised:
+    return max_
+
+# partly revised:
 def segment_node_(node_, max_, pri_root_T_, fder, fd):
 
-    # select local max nodes to initialize graphs, then prune links to add other nodes:
-    # link val,rnd are combined with G0+G1 valH, rdnH for evaluation
+    # initialize graphs with local maxes, then prune links to add other nodes:
     graph_ = []
-    for node in node_:  # loop top-down, accumulate rdn per link from higher layers?
+    for max_node in max_:
 
-        max_nodes = []
-        for i, (node, links, nodes, Nodes) in enumerate(layer):
-            # get local max and max node based on rdn and val
-            adjusted_val = [sum(node.val_Ht[fder]) * (1/sum(node.rdn_Ht[fder]))  for node in nodes]
-            # adjust node.val_Ht[fder] by 1/rdn? So the higher rdn, the lower the graph's val?
-            max_node = nodes[np.argmax(adjusted_val)]
-            if max_node not in max_nodes: max_nodes += [max_node]
-
-        for node in max_nodes:
-            for (_node, links, nodes, Nodes) in layer:  # get max nodes' linksn nodes and etc
-                if _node is node: break
-
-            # below is not updated
             if not node.root_T[fder][fd]:  # not forming graph in prior loops
                 graph = [[node], [pri_root_T_[node_.index(node)]], Val]
                 node.root_T[fder][fd] = graph

@@ -157,10 +157,8 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
 class CderG(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
     subH : list = z([])  # [[derH_t, valt, rdnt]]: top aggLev derived in comp_G
-    valt : list = z([0,0])
+    valt : list = z([0,0,0])  # m,d,max
     rdnt : list = z([1,1])
-    Valt : list = z([0,0])  # full match,diff
-    Rdnt : list = z([1,1])  # full rdn?
     G0 : object = None  # comparand
     G1 : object = None
     S : float = 0.0  # sparsity: average distance to link centers

@@ -75,12 +75,12 @@ def visualize_blobs(frame, layer='r'):
         # Use indexing to get the gradient of the blob
         dy__, dx__ = state.gradient
         box_slice = blob.box.slice()
-        dy_slice = dy__[state.img_slice][box_slice][~blob.mask__]
-        dx_slice = dx__[state.img_slice][box_slice][~blob.mask__]
+        dy_slice = dy__[state.img_slice][box_slice][blob.mask__]
+        dx_slice = dx__[state.img_slice][box_slice][blob.mask__]
         dy_index = 3 if len(blob.der__t) > 5 else 1
-        dy_slice[:] = blob.der__t[dy_index][~blob.mask__]
-        dx_slice[:] = blob.der__t[dy_index + 1][~blob.mask__]
-        state.gradient_mask[state.img_slice][box_slice] = ~blob.mask__
+        dy_slice[:] = blob.der__t[dy_index][blob.mask__]
+        dx_slice[:] = blob.der__t[dy_index + 1][blob.mask__]
+        state.gradient_mask[state.img_slice][box_slice] = blob.mask__
         iy, ix = state.gradient_mask.nonzero()
 
         # Apply quiver
@@ -109,8 +109,8 @@ def visualize_blobs(frame, layer='r'):
         local_idmap = state.idmap[state.img_slice]
         local_background = state.background[state.img_slice]
         for blob in blob_:
-            local_idmap[blob.box.slice()][~blob.mask__] = blob.id  # fill idmap with blobs' ids
-            local_background[blob.box.slice()][~blob.mask__] = blob.sign * 32  # fill image with blobs
+            local_idmap[blob.box.slice()][blob.mask__] = blob.id  # fill idmap with blobs' ids
+            local_background[blob.box.slice()][blob.mask__] = blob.sign * 32  # fill image with blobs
         state.img = state.background.copy()
         state.blob_id = -1
         update_img()
@@ -147,10 +147,10 @@ def visualize_blobs(frame, layer='r'):
             sys.stdout.flush()
 
             # paint over the blob ...
-            state.img[state.img_slice][blob.box.slice()][~blob.mask__] = WHITE
+            state.img[state.img_slice][blob.box.slice()][blob.mask__] = WHITE
             # ... and its adjacents
             for adj_blob, pose in zip(*blob.adj_blobs):
-                state.img[state.img_slice][adj_blob.box.slice()][~adj_blob.mask__] = POSE2COLOR[pose]
+                state.img[state.img_slice][adj_blob.box.slice()][adj_blob.mask__] = POSE2COLOR[pose]
             # Finally, update the image
             update_img()
 

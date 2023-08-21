@@ -87,7 +87,7 @@ def comp_r(blob):
 
     majority_mask__ = convolve2d(emask__, km, mode='valid') > 1
 
-    if np.all(majority_mask__):  # no unmasked dert
+    if not majority_mask__.any():  # no dert
         return None
 
     # fork is valid, update blob's rng

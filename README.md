@@ -50,7 +50,7 @@ Resulting matches and misses are summed into lateral match and miss per pattern.
 
 Higher-level feedback will adjust filters, starting with average match, then ave per parameter derived by deeper cross-comp. More precisely, these should be co-averages: values coincident with an average value of combined higher-level param. There are also positional or external filters, starting with pixel size and kernel size, which determine external dimensions of the input. Quantization (bit, integer, float..) of internal and external filters corresponds to the order of comparison. The filters are similar to hyperparameters in Neural Nets, with the same values across a level. The equivalent to weight matrix are links (edges) between nodes of a graph, but they are lateral vs. implicitly vertical when formed via backprop or [Hebbian learning](https://data-flair.training/blogs/learning-rules-in-neural-network/#:~:text=The%20Hebbian%20rule%20was%20the,of%20nodes%20of%20a%20network.&text=For%20neurons%20operating%20in%20the,weight%20between%20them%20should%20decrease.) in NNs.
 
-In a wider frame of reference, the above-mentioned external filters will define source locations for higher-level patterns, which is similar to attention. And these locations can be projected vs. actually observed, analogous to hypothetical reasoning.
+In a broader frame of reference, the above-mentioned external filters will define source locations for selective input to higher-level patterns. This is similar to conventionally understood attention, and ultimately decision making. And these locations can be projected vs. actually observed, generating input for imagination and hypothetical reasoning.
 
 
 #### Hierarchy, part 4 is out of date:
@@ -66,8 +66,8 @@ Please see [system diagram](https://github.com/boris-kz/CogAlg/blob/master/frame
 Some notes:
 - There should be a unique set of operations added per level, hence a singular in “cognitive algorithm”.
 - Core design must be done theoretically: generality requires large upfront investment in process complexity, which makes it a huge overkill for any specific task. That’s one reason why such schemes are not explored.
-- Many readers note disconnect between abstractions in this outline, and the amount of detail in current code. That’s because we are in space-time continuum: search must follow proximity in each dimension, which requires specific processing. It’s not specific to vision, the process is mostly the same for all raw modalities. 
-- Another complaint is that I don't use mathematical notation, but it simply doesn't have the flexibility to express deeply conditional process, with recursively increasing complexity.
+- Many readers note disconnect between abstractions in this outline, and the amount of detail in current code. That’s because we are in space-time continuum: search must follow proximity in each dimension, which requires specific processing. It’s not specific to vision, the process is roughly the same for all raw modalities. 
+- Another complaint is that I don't use mathematical notation, but it doesn't have the flexibility to express deeply conditional process. Math is not separable from logic here.
 - Most people who aspire to work on AGI think in terms behavior and robotics. I think this is far too coarse to make progress, the most significant mechanisms are on the level of perception. Feedforward (perception) must drive feedback (action), not the other way around.
 - Other distractions are supervision and reinforcement. These are optional task-specific add-ons, core cognitive process is unsupervised pattern discovery, and main problem here is scaling in complexity.
 - Don’t even start me on chatbots.  

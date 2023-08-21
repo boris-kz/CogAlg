@@ -162,10 +162,10 @@ def flood_fill(root_blob, fork_data, verbose=False):
     assert height, width == fork_i__.shape  # fork_i__ is consistent in shape with der__t
 
     idmap = np.full((height, width), UNFILLED, 'int32')  # blob's id per dert, initialized UNFILLED
-    if mask__ is not None: idmap[mask__] = EXCLUDED
+    if mask__ is not None: idmap[~mask__] = EXCLUDED
     if verbose:
-        n_masked = 0 if mask__ is None else mask__.sum()
-        step = 100 / (height * width - n_masked)  # progress % percent per pixel
+        n_pixels = (height*width) if mask__ is None else mask__.sum()
+        step = 100 / n_pixels  # progress % percent per pixel
         progress = 0.0; print(f"\rClustering... {round(progress)} %", end="");  sys.stdout.flush()
     blob_ = []
     adj_pairs = set()
@@ -217,7 +217,7 @@ def flood_fill(root_blob, fork_data, verbose=False):
                 blob.ibox = fork_ibox.sub_box2box(blob.box)
                 blob.der__t = Tdert(
                     *(par__[blob.box.slice()] for par__ in der__t))
-                blob.mask__ = (idmap[blob.box.slice()] != blob.id)
+                blob.mask__ = (idmap[blob.box.slice()] == blob.id)
                 blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses
                 blob.G = np.hypot(blob.Dy, blob.Dx)
                 if verbose:
