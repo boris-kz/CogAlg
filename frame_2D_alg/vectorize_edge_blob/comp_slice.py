@@ -27,6 +27,7 @@ def comp_slice(edge, verbose=False):  # high-G, smooth-angle blob, composite der
     edge.node_T = [form_PP_t([Pt[0] for Pt in P_], PP_=None, base_rdn=2, fder=0), [[], []]]  # root fork is rng+ only
 
 
+# not revised:
 def comp_P(_P,P, fder=1, derP=None):  #  derP if der+, S if rng+
 
     aveP = P_aves[fder]
@@ -36,12 +37,12 @@ def comp_P(_P,P, fder=1, derP=None):  #  derP if der+, S if rng+
         rn *= len(_P.link_H[-2]) / len(P.link_H[-2])  # derH is summed from links
         dderH, valt, rdnt = comp_derH(_P.derH, P.derH, rn)  # += fork rdn
         derP = CderP(derH = derP.derH+dderH, valt=valt, rdnt=rdnt, P=P,_P=_P, S=derP.S)  # dderH valt,rdnt for new link
-        mval,dval = valt; mrdn,drdn = rdnt
+        mval,dval = valt[:2]; mrdn,drdn = rdnt
     else:  # rng+: add derH
-        mtuple,dtuple = comp_ptuple(_P.ptuple, P.ptuple, rn)
+        mtuple,dtuple, max_val = comp_ptuple(_P.ptuple, P.ptuple, rn)
         mval = sum(mtuple); dval = sum(dtuple)
         mrdn = 1+(dval>mval); drdn = 1+(1-(dval>mval))  # rdn = Dval/Mval?
-        derP = CderP(derH=[[[mtuple,dtuple], [mval,dval],[mrdn,drdn]]], valt=[mval,dval], rdnt=[mrdn,drdn], P=P,_P=_P, S=derP)
+        derP = CderP(derH=[[[mtuple,dtuple], [mval,dval],[mrdn,drdn]]], valt=[mval,dval, max_val], rdnt=[mrdn,drdn], P=P,_P=_P, S=derP)
 
     if mval > aveP*mrdn or dval > aveP*drdn:
         P.link_H[-1] += [derP]
@@ -50,28 +51,30 @@ def comp_P(_P,P, fder=1, derP=None):  #  derP if der+, S if rng+
 def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
     dderH = []  # or = not-missing comparand if xor?
-    Mval, Dval, Mrdn, Drdn = 0,0,1,1
+    Mval, Dval, Mrdn, Drdn, Max_val = 0,0,1,1,0
 
     for _lay, lay in zip_longest(_derH, derH, fillvalue=[]):  # compare common lower der layers | sublayers in derHs
         if _lay and lay:  # also if lower-layers match: Mval > ave * Mrdn?
 
-            mtuple, dtuple = comp_dtuple(_lay[0][1], lay[0][1], rn)  # compare dtuples only, mtuples are for evaluation
+            mtuple, dtuple, max_val = comp_dtuple(_lay[0][1], lay[0][1], rn)  # compare dtuples only, mtuples are for evaluation
             mval = sum(mtuple); dval = sum(dtuple)
             mrdn = dval > mval; drdn = dval < mval
             dderH += [[[mtuple,dtuple],[mval,dval],[mrdn,drdn]]]
-            Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
+            Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn; Max_val += max_val
 
-    return dderH, [Mval,Dval], [Mrdn,Drdn]  # new layer, 1/2 combined derH
+    return dderH, [Mval,Dval], [Mrdn,Drdn], Max_val  # new layer, 1/2 combined derH
 
 def comp_dtuple(_ptuple, ptuple, rn):
 
     mtuple, dtuple = [],[]
+    max_val = 0  # sum of greater compared params
     for _par, par, ave in zip(_ptuple, ptuple, aves):  # compare ds only?
         npar= par*rn
         mtuple += [min(_par, npar) - ave]
         dtuple += [_par - npar]
+        max_val += max(_par, par)
 
-    return [mtuple, dtuple]
+    return [mtuple, dtuple, max_val]
 
 # not reviewed:
 def form_PP_t(P_, PP_, base_rdn, fder):  # form PPs of derP.valt[fd] + connected Ps val
@@ -226,7 +229,7 @@ def sum_ptuple(Ptuple, ptuple, fneg=0):
 
 def comp_ptuple(_ptuple, ptuple, rn):  # 0der
 
-    mtuple, dtuple = [],[]
+    mtuple, dtuple, max_val = [],[], 0
     # _n, n = _ptuple, ptuple: add to rn?
     for i, (_par, par, ave) in enumerate(zip(_ptuple, ptuple, aves)):
         if isinstance(_par, list):
@@ -236,9 +239,9 @@ def comp_ptuple(_ptuple, ptuple, rn):  # 0der
             d = _par - npar
             if i: m = min(_par,npar)-ave
             else: m = ave-abs(d)  # inverse match for I, no mag/value correlation
-
+            max_val += max(_par, par)
         mtuple+=[m]; dtuple+=[d]
-    return [mtuple, dtuple]
+    return [mtuple, dtuple, max_val]
 
 
 def comp_angle(_angle, angle):  # rn doesn't matter for angles

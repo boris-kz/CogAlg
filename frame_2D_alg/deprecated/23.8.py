@@ -254,6 +254,30 @@ def suppress_overlap(layers, fder):  # adjust node vals by overlap, to combine w
     while Rdn > ave:
         suppress_overlap(layers, fder)
 
+# old:
+def add_alt_graph_(graph_t):  # mgraph_, dgraph_
+    '''
+    Select high abs altVal overlapping graphs, to compute value borrowed from cis graph.
+    This altVal is a deviation from ave borrow, which is already included in ave
+    '''
+    for fd, graph_ in enumerate(graph_t):
+        for graph in graph_:
+            for node in graph.aggHs.H[-1].node_:
+                for derG in node.link_.Q:  # contour if link.aggHs.val < aveGm: link outside the graph
+                    for G in [derG.node0, derG.node1]:  # both overlap: in-graph nodes, and contour: not in-graph nodes
+                        alt_graph = G.roott[1-fd]
+                        if alt_graph not in graph.alt_graph_ and isinstance(alt_graph, CQ):  # not proto-graph or removed
+                            graph.alt_graph_ += [alt_graph]
+                            alt_graph.alt_graph_ += [graph]
+                            # bilateral assign
+    for fd, graph_ in enumerate(graph_t):
+        for graph in graph_:
+            if graph.alt_graph_:
+                graph.alt_aggHs = CQ()  # players if fsub? der+: aggHs[-1] += player, rng+: players[-1] = player?
+                for alt_graph in graph.alt_graph_:
+                    sum_pH(graph.alt_aggHs, alt_graph.aggHs)  # accum alt_graph_ params
+                    graph.alt_rdn += len(set(graph.aggHs.H[-1].node_).intersection(alt_graph.aggHs.H[-1].node_))  # overlap
+
 
 def form_graph_(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per fder,fd, within root
 
@@ -324,3 +348,52 @@ def form_graph_(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per
         # use dRdn to stop the recursion too?
 
     segment_network(nodet_, pri_root_T_, fder, fd)
+
+# not updated, ~segment_network:
+def form_graph_direct(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per fder,fd, initially fully overlapping
+
+    graph_ = []
+    nodet_ = []
+    for node, pri_root_T in zip(node_, pri_root_T_):
+        nodet = [node, pri_root_T, 0]
+        nodet_ += [nodet]
+        graph = [[nodet], [pri_root_T], 0]  # init graph per node?
+        node.root_T[fder][fd] = [[graph, 0]]  # init with 1st root, node-specific val
+    # use popping?:
+    for nodet, graph in zip(nodet_, graph_):
+        graph_ += [init_graph(nodet, nodet_, graph, fder, fd)]  # recursive depth-first GQ_+=[_nodet]
+    # prune by rdn:
+    regraph_ = graph_reval_(graph_, fder,fd)  # init reval_ to start
+    if regraph_:
+        graph_[:] = sum2graph_(regraph_, fder, fd)  # sum proto-graph node_ params in graph
+
+    # add_alt_graph_(graph_t)  # overlap+contour, cluster by common lender (cis graph), combined comp?
+    return graph_
+
+def init_graph(nodet, nodet_, graph, fder, fd):  # recursive depth-first GQ_+=[_nodet]
+
+    node, pri_root_T, val = nodet
+
+    for link in node.link_H[-(1+fder)]:
+        if link.valt[fd] > G_aves[fd]:
+            # link is in node GQ
+            _nodet = link.G1 if link.G0 is nodet else link.G0
+            if _nodet in nodet_:  # not removed in prior loop
+                _node,_pri_root_T,_val = _nodet
+                graph[0] += [_node]
+                graph[2] += _val
+                if _pri_root_T not in graph[1]:
+                    graph[1] += [_pri_root_T]
+                nodet_.remove(_nodet)
+                init_graph(_nodet, nodet_, graph, fder, fd)
+    return graph
+'''
+initially links only: plain attention forming links to all nodes, then segmentation by backprop of 
+(sum of root vals / max_root_val) - 1, summed from all nodes in graph? 
+while dMatch per cluster > ave: 
+- sum cluster match,
+- sum in-cluster match per node root: containing cluster, positives only,
+- sort node roots by in_cluster_match,-> index = cluster_rdn for node,
+- prune root if in_cluster_match < ave * cluster_redundancy, 
+- prune weak clusters, remove corresponding roots
+'''

@@ -68,23 +68,21 @@ def visualize_blobs(frame, layer='r'):
         blob = state.blob_cls.get_instance(state.blob_id)
         if blob is None or not state.show_gradient:
             return
+
         # Reset gradient
         state.gradient[:] = 1e-3
         state.gradient_mask[:] = False
 
         # Use indexing to get the gradient of the blob
-        dy__, dx__ = state.gradient
-        box_slice = blob.box.slice()
-        dy_slice = dy__[state.img_slice][box_slice][blob.mask__]
-        dx_slice = dx__[state.img_slice][box_slice][blob.mask__]
-        dy_index = 3 if len(blob.der__t) > 5 else 1
-        dy_slice[:] = blob.der__t[dy_index][blob.mask__]
-        dx_slice[:] = blob.der__t[dy_index + 1][blob.mask__]
-        state.gradient_mask[state.img_slice][box_slice] = blob.mask__
-        iy, ix = state.gradient_mask.nonzero()
+        box_slice = blob.ibox.slice()
+        state.gradient[1][box_slice] = -blob.der__t.dy
+        state.gradient[0][box_slice] = blob.der__t.dx
+        state.gradient_mask[box_slice] = blob.mask__
 
         # Apply quiver
-        state.quiver = ax.quiver(ix, iy, dx_slice, -dy_slice)
+        state.quiver = ax.quiver(
+            *state.gradient_mask.nonzero()[::-1],
+            *state.gradient[:, state.gradient_mask])
 
     def update_img():
         update_gradient()

@@ -68,128 +68,79 @@ def form_graph_(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per
 
     ave = G_aves[fder]
     # compute max of quasi-Gaussians: val + sum([_val * (link_val/max_val]):
-    max_ = select_max_(node_, fder,fd, ave)
+    max_ = select_max_(node_, fder, ave)
 
     graph_ = segment_node_(node_, max_, pri_root_T_, fder, fd)
     prune_graphs(graph_, fder, fd)  # sort node roots and prune the weak
 
-# draft
-def select_max_(node_, fder, fd, ave):  # final maxes are graph-initializing nodes
 
-    Val_ = [sum(node.val_Ht[fder]) for node in node_]
-    _Val_= [0 for node in node_]
+def select_max_(node_, fder, ave):  # final maxes are graph-initializing nodes
+
+    _Val_= [sum(node.val_Ht[fder]) for node in node_]
     dVal = ave+1  # adjustment of combined val per node per recursion
 
-    while dVal > ave:  #  iterative adjust Val by surround propagation, no direct incrementing of mediation rng?
+    while dVal > ave:  # iterative adjust Val by surround propagation, no direct increment mediation rng?
+        Val_ = [0 for node in node_]
         for i, (node, Val) in enumerate(zip(node_, Val_)):
 
             if sum(node.val_Ht[fder]) - ave * sum(node.rdn_Ht[fder]):  # potential graph init
                 for link in node.link_H[-1]:
                     _node = link.G1 if link.G0 is node else link.G0
-                    # val + sum([_val * relative link val]), link.valt[2] is max m|d(node,_node):
+                    # val + sum([_val * relative link val,= decay of max m|d: link.valt[2]:
                     Val_[i] += _Val_[node_.index(_node)] * (link.valt[fder] / link.valt[2]) - ave * sum(_node.rdn_Ht[fder])
-                    # not bilateral: simpler, parallelizable
+                    # unilateral: simpler, parallelizable
         dVal = sum([abs(Val-_Val) for Val,_Val in zip(Val_,_Val_)])
-        _Val_ = Val_; Val_ = [0 for node in node_]
+        _Val_ = Val_
 
-    max_ = []  # local maxes of quasi-Gaussians per node, not sure:
+    max_, non_max_ = [],[]  # select local maxes of node quasi-Gaussian, not sure:
     for node, Val in zip(node_, Val_):
-        if Val < 0: continue
+        if Val<=0 or node in non_max_:
+            continue
         fmax = 1
         for link in node.link_H[-1]:
             _node = link.G1 if link.G0 is node else link.G0
-            if Val_[node_.index(_node)] > Val:
+            if Val > _Val_[node_.index(_node)]:
+                non_max_ += [_node]  # skip in the future
+            else:
                 fmax = 0
                 break
         if fmax: max_ += [node]
-
     return max_
 
-# partly revised:
+
 def segment_node_(node_, max_, pri_root_T_, fder, fd):
 
-    # initialize graphs with local maxes, then prune links to add other nodes:
-    graph_ = []
-    for max_node in max_:
+    graph_ = []  # initialize graphs with local maxes, then prune links to add other nodes:
 
-            if not node.root_T[fder][fd]:  # not forming graph in prior loops
-                graph = [[node], [pri_root_T_[node_.index(node)]], Val]
-                node.root_T[fder][fd] = graph
-                graph_ += [graph]
-                # search links recursively
-                nodes = [node]; links_ = [links]
-                while links_:
-                    node = nodes.pop()  # unpack node per links
-                    links = links_.pop()
-                    for link in links:
-                        _node = link.G1 if link.G0 is node else link.G0
-                        if _node not in graph[0] and link.Valt[fder] > ave * link.Rdnt[fder]:
-                            for (__node, _Val, _links, __nodes, _Nodes) in layer:  # find _node in a same layer
-                                if __node is _node: break
-                            # pack _node into graph
+    for max_node in max_:
+        graph = [[max_node], [pri_root_T_[node_.index(max_node)]], sum(max_node.val_Ht[fder])]
+        max_node.root_T[fder][fd] = graph
+        _nodes = [max_node]  # current periphery of the graph
+        # search links recursively outwards:
+        while _nodes:
+            nodes = []
+            for node in _nodes:
+                val = sum(node.val_Ht[fder]) - ave * sum(node.rdn_Ht[fder])
+                for link in node.link_H[-1]:
+                    _node = link.G1 if link.G0 is node else link.G0
+                    if _node not in graph[0]:
+                        _val = sum(_node.val_Ht[fder]) - ave * sum(_node.rdn_Ht[fder])
+                        link_rel_val = link.valt[fder] / link.valt[2]
+                        # link eval, tentative:
+                        if (val+_val) * link_rel_val > 0:  # pack _node in graph:
                             graph[0] += [_node]
-                            graph[1] += [pri_root_T_[node_.index(_node)]]
-                            graph[2] += _Val
-                            _node.root_T[fder][fd] = graph
-                            links_ += [_links]
+                            graph[1] += [pri_root_T_[node_.index(_node)]]  # transfer node roots to new intermediate graph
+                            graph[2] += link_rel_val * _val
+                            _node.root_T[fder][fd] = graph  # single root per fork?
                             nodes += [_node]
-    # evaluate links by val > ave*rdn, for fuzzy segmentation, no change in link vals
+            _nodes = nodes
+        graph_ += [graph]
     return graph_
 
 def prune_graphs(graph_, fder, fd):
     pass
 
-
-# not updated, ~segment_network:
-def form_graph_direct(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per fder,fd, initially fully overlapping
-
-    graph_ = []
-    nodet_ = []
-    for node, pri_root_T in zip(node_, pri_root_T_):
-        nodet = [node, pri_root_T, 0]
-        nodet_ += [nodet]
-        graph = [[nodet], [pri_root_T], 0]  # init graph per node?
-        node.root_T[fder][fd] = [[graph, 0]]  # init with 1st root, node-specific val
-    # use popping?:
-    for nodet, graph in zip(nodet_, graph_):
-        graph_ += [init_graph(nodet, nodet_, graph, fder, fd)]  # recursive depth-first GQ_+=[_nodet]
-    # prune by rdn:
-    regraph_ = graph_reval_(graph_, fder,fd)  # init reval_ to start
-    if regraph_:
-        graph_[:] = sum2graph_(regraph_, fder, fd)  # sum proto-graph node_ params in graph
-
-    # add_alt_graph_(graph_t)  # overlap+contour, cluster by common lender (cis graph), combined comp?
-    return graph_
-
-def init_graph(nodet, nodet_, graph, fder, fd):  # recursive depth-first GQ_+=[_nodet]
-
-    node, pri_root_T, val = nodet
-
-    for link in node.link_H[-(1+fder)]:
-        if link.valt[fd] > G_aves[fd]:
-            # link is in node GQ
-            _nodet = link.G1 if link.G0 is nodet else link.G0
-            if _nodet in nodet_:  # not removed in prior loop
-                _node,_pri_root_T,_val = _nodet
-                graph[0] += [_node]
-                graph[2] += _val
-                if _pri_root_T not in graph[1]:
-                    graph[1] += [_pri_root_T]
-                nodet_.remove(_nodet)
-                init_graph(_nodet, nodet_, graph, fder, fd)
-    return graph
-'''
-initially links only: plain attention forming links to all nodes, then segmentation by backprop of 
-(sum of root vals / max_root_val) - 1, summed from all nodes in graph? 
-while dMatch per cluster > ave: 
-- sum cluster match,
-- sum in-cluster match per node root: containing cluster, positives only,
-- sort node roots by in_cluster_match,-> index = cluster_rdn for node,
-- prune root if in_cluster_match < ave * cluster_redundancy, 
-- prune weak clusters, remove corresponding roots
-'''
-
-# draft:
+# replace with prune_graphs?:
 def graph_reval_(graph_, fder,fd):
 
     regraph_ = []
@@ -297,34 +248,36 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fder=0):  # cross-comp in G_ if f1Q, else co
 
 def comp_G(_G, G, distance, A):
 
-    Mval,Dval = 0,0
+    Mval,Dval,Maxv = 0,0,0
     Mrdn,Drdn = 1,1
+
     # / P:
-    mtuple, dtuple = comp_ptuple(_G.ptuple, G.ptuple, rn=1)
-    mval, dval = sum(mtuple), sum(dtuple)
+    mtuple, dtuple, Mtuple = comp_ptuple(_G.ptuple, G.ptuple, rn=1)
+    mval, dval, maxv = sum(mtuple), sum(dtuple), sum(Mtuple)
     mrdn = dval>mval; drdn = dval<=mval
-    derLay0 = [[mtuple,dtuple], [mval,dval], [mrdn,drdn]]
-    Mval += mval; Dval += dval; Mrdn += mrdn; Drdn += drdn
+    derLay0 = [[mtuple,dtuple], [mval,dval,maxv], [mrdn,drdn]]
+    Mval+=mval; Dval+=dval; Maxv+=maxv; Mrdn += mrdn; Drdn += drdn
     # / PP:
     dderH, valt, rdnt = comp_derH(_G.derH[0], G.derH[0], rn=1)
-    mval,dval = valt
-    Mval += dval; Dval += mval; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
+    mval, dval, max = valt
+    Mval+=dval; Dval+= mval; Maxv+=maxv; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
 
-    derH = [[derLay0]+dderH, [Mval,Dval],[Mrdn,Drdn]]  # appendleft derLay0 from comp_ptuple
-    der_ext = comp_ext([_G.L,_G.S,_G.A],[G.L,G.S,G.A], [Mval,Dval], [Mrdn,Drdn])
+    derH = [[derLay0]+dderH, [Mval,Dval,Maxv], [Mrdn,Drdn]]  # appendleft derLay0 from comp_ptuple
+    der_ext = comp_ext([_G.L,_G.S,_G.A],[G.L,G.S,G.A], [Mval,Dval,Maxv], [Mrdn,Drdn])
     SubH = [der_ext, derH]  # two init layers of SubH, higher layers added by comp_aggH:
     # / G:
     if _G.aggH and G.aggH:  # empty in base fork
         subH, valt, rdnt = comp_aggH(_G.aggH, G.aggH, rn=1)
         SubH += subH  # append higher subLayers: list of der_ext | derH s
-        mval,dval =valt
-        Mval += valt[0]; Dval += valt[1]; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
+        mval, dval, maxv = valt
+        Mval+=mval; Dval+=dval; Maxv+=maxv; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
 
-    derG = CderG(G0=_G, G1=G, subH=SubH, valt=[Mval,Dval], rdnt=[Mrdn,Drdn], S=distance, A=A)
+    derG = CderG(G0=_G, G1=G, subH=SubH, valt=[Mval,Dval,Maxv], rdnt=[Mrdn,Drdn], S=distance, A=A)
     if valt[0] > ave_Gm or valt[1] > ave_Gd:
         _G.link_H[-1] += [derG]; G.link_H[-1] += [derG]  # bilateral add links
         _G.val_Ht[0][-1] += Mval; _G.val_Ht[1][-1] += Dval; _G.rdn_Ht[0][-1] += Mrdn; _G.rdn_Ht[1][-1] += Drdn
         G.val_Ht[0][-1] += Mval;   G.val_Ht[1][-1] += Dval;  G.rdn_Ht[0][-1] += Mrdn;  G.rdn_Ht[1][-1] += Drdn
+
 
 def sum2graph_(graph_, fder, fd):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
@@ -342,7 +295,7 @@ def sum2graph_(graph_, fder, fd):  # sum node and link params into graph, aggH i
             sum_aggH([Graph.aggH,Graph.valt,Graph.rdnt], [G.aggH,G.valt,G.rdnt], base_rdn=1)
             link_ = G.link_H[-1]
             Link_[:] = list(set(Link_ + link_))
-            subH=[]; valt=[0,0]; rdnt=[1,1]
+            subH=[]; valt=[0,0]; rdnt=[1,1]  # no max in G.valt?
             for derG in link_:
                 if derG.valt[fd] > G_aves[fd]:
                     sum_subH([subH,valt,rdnt], [derG.subH,derG.valt,derG.rdnt], base_rdn=1)
@@ -371,30 +324,6 @@ sum_H(Graph.uH[1:], root.uH)  # root of Graph, init if empty
 def sum_box(Box, box):
     Y, X, Y0, Yn, X0, Xn = Box;  y, x, y0, yn, x0, xn = box
     Box[:] = [Y + y, X + x, min(X0, x0), max(Xn, xn), min(Y0, y0), max(Yn, yn)]
-
-# old:
-def add_alt_graph_(graph_t):  # mgraph_, dgraph_
-    '''
-    Select high abs altVal overlapping graphs, to compute value borrowed from cis graph.
-    This altVal is a deviation from ave borrow, which is already included in ave
-    '''
-    for fd, graph_ in enumerate(graph_t):
-        for graph in graph_:
-            for node in graph.aggHs.H[-1].node_:
-                for derG in node.link_.Q:  # contour if link.aggHs.val < aveGm: link outside the graph
-                    for G in [derG.node0, derG.node1]:  # both overlap: in-graph nodes, and contour: not in-graph nodes
-                        alt_graph = G.roott[1-fd]
-                        if alt_graph not in graph.alt_graph_ and isinstance(alt_graph, CQ):  # not proto-graph or removed
-                            graph.alt_graph_ += [alt_graph]
-                            alt_graph.alt_graph_ += [graph]
-                            # bilateral assign
-    for fd, graph_ in enumerate(graph_t):
-        for graph in graph_:
-            if graph.alt_graph_:
-                graph.alt_aggHs = CQ()  # players if fsub? der+: aggHs[-1] += player, rng+: players[-1] = player?
-                for alt_graph in graph.alt_graph_:
-                    sum_pH(graph.alt_aggHs, alt_graph.aggHs)  # accum alt_graph_ params
-                    graph.alt_rdn += len(set(graph.aggHs.H[-1].node_).intersection(alt_graph.aggHs.H[-1].node_))  # overlap
 
 # draft:
 def sub_recursion_eval(root, graph_):  # eval per fork, same as in comp_slice, still flat aggH, add valt to return?
@@ -453,21 +382,23 @@ def feedback(root, fd):  # append new der layers to root
 def comp_ext(_ext, ext, Valt, Rdnt):  # comp ds:
 
     (_L,_S,_A),  (L,S,A) = _ext, ext
+
     dL=_L-L;      mL=ave-abs(dL)
     dS=_S/_L-S/L; mS=ave-abs(dS)
     if isinstance(A,list):
-        mA, dA = comp_angle(_A,A)
+        mA, dA = comp_angle(_A,A); maxA = mA  # what is max possible match here?
     else:
-        dA= _A-A; mA= ave-abs(dA)
+        dA= _A-A; mA= ave-abs(dA); maxA = (A,_A)
 
     M = mL+mS+mA; D = dL+dS+dA
-    Valt[0] += M; Valt[1] += D
+
+    Valt[0] += M; Valt[1] += D; Valt[2] += max(L,_L) + max(S,_S) + maxA
     Rdnt[0] += D>M; Rdnt[1] += D<=M
 
-    return [[mL,mS,mA], [dL,dS,dA]]
+    return [[mL,mS,mA], [dL,dS,dA]]  # no Mtuple?
 
 
-def sum_ext(Extt, extt):
+def sum_ext(Extt, extt):  # add max?
 
     if isinstance(Extt[0], list):  # ext fd tuple
         for fd, (Ext,ext) in enumerate(zip(Extt,extt)):
@@ -485,7 +416,7 @@ aggH: [[subH_t, valt, rdnt]]: composition layers, ext per G
 
 def comp_subH(_subH, subH, rn):
     DerH = []
-    Mval, Dval, Mrdn, Drdn = 0,0,1,1
+    Mval, Dval, Maxv, Mrdn, Drdn = 0,0,0,1,1
 
     for _lay, lay in zip_longest(_subH, subH, fillvalue=[]):  # compare common lower layer|sublayer derHs
         if _lay and lay:  # also if lower-layers match: Mval > ave * Mrdn?
@@ -493,26 +424,26 @@ def comp_subH(_subH, subH, rn):
 
                 dderH, valt, rdnt = comp_derH(_lay[0], lay[0], rn)
                 DerH += [[dderH, valt, rdnt]]  # for flat derH
-                mval,dval = valt
-                Mval += mval; Dval += dval; Mrdn += rdnt[0] + dval > mval; Drdn += rdnt[1] + dval <= mval
+                mval,dval,maxv = valt
+                Mval += mval; Dval += dval; Maxv += maxv; Mrdn += rdnt[0] + dval > mval; Drdn += rdnt[1] + dval <= mval
             else:  # _lay[0][0] is L, comp dext:
                 DerH += comp_ext(_lay[1],lay[1], [Mval,Dval], [Mrdn,Drdn])
 
-    return DerH, [Mval,Dval], [Mrdn,Drdn]  # new layer, 1/2 combined derH
+    return DerH, [Mval,Dval,Maxv], [Mrdn,Drdn]  # new layer, 1/2 combined derH
 
 def comp_aggH(_aggH, aggH, rn):  # no separate ext processing?
       SubH = []
-      Mval, Dval, Mrdn, Drdn = 0,0,1,1
+      Mval, Dval, Maxv, Mrdn, Drdn = 0,0,0,1,1
 
       for _lev, lev in zip_longest(_aggH, aggH, fillvalue=[]):  # compare common lower layer|sublayer derHs
           if _lev and lev:  # also if lower-layers match: Mval > ave * Mrdn?
               # compare dsubH only:
               dsubH, valt, rdnt = comp_subH(_lev[0], lev[0], rn)
               SubH += [[dsubH, valt, rdnt]]
-              mval,dval = valt
-              Mval += mval; Dval += dval; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+mval<=dval
+              mval,dval,maxv = valt
+              Mval += mval; Dval += dval; Maxv+=maxv; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+mval<=dval
 
-      return SubH, [Mval,Dval], [Mrdn,Drdn]
+      return SubH, [Mval,Dval,Maxv], [Mrdn,Drdn]
 
 
 def sum_subH(T, t, base_rdn):
