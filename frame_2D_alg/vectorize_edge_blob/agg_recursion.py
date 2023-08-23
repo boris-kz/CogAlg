@@ -99,7 +99,7 @@ def select_max_(node_, fder, ave):  # final maxes are graph-initializing nodes
         fmax = 1
         for link in node.link_H[-1]:
             _node = link.G1 if link.G0 is node else link.G0
-            if Val > _Val_[node_.index(_node)]:
+            if Val > Val_[node_.index(_node)]:
                 non_max_ += [_node]  # skip in the future
             else:
                 fmax = 0
@@ -129,7 +129,9 @@ def segment_node_(node_, max_, pri_root_T_, fder, fd):
                         # link eval, tentative:
                         if (val+_val) * link_rel_val > 0:  # pack _node in graph:
                             graph[0] += [_node]
-                            graph[1] += [pri_root_T_[node_.index(_node)]]  # transfer node roots to new intermediate graph
+                            pri_root_T = pri_root_T_[node_.index(_node)]
+                            if pri_root_T not in graph[1]:
+                                graph[1] += [pri_root_T]  # transfer node roots to new intermediate graph
                             graph[2] += link_rel_val * _val
                             _node.root_T[fder][fd] = graph  # single root per fork?
                             nodes += [_node]
@@ -140,7 +142,7 @@ def segment_node_(node_, max_, pri_root_T_, fder, fd):
 def prune_graphs(graph_, fder, fd):
     pass
 
-# replace with prune_graphs?:
+# replace with prune_graphs:
 def graph_reval_(graph_, fder,fd):
 
     regraph_ = []
@@ -259,7 +261,7 @@ def comp_G(_G, G, distance, A):
     Mval+=mval; Dval+=dval; Maxv+=maxv; Mrdn += mrdn; Drdn += drdn
     # / PP:
     dderH, valt, rdnt = comp_derH(_G.derH[0], G.derH[0], rn=1)
-    mval, dval, max = valt
+    mval, dval, maxv = valt
     Mval+=dval; Dval+= mval; Maxv+=maxv; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
 
     derH = [[derLay0]+dderH, [Mval,Dval,Maxv], [Mrdn,Drdn]]  # appendleft derLay0 from comp_ptuple
@@ -276,7 +278,7 @@ def comp_G(_G, G, distance, A):
     if valt[0] > ave_Gm or valt[1] > ave_Gd:
         _G.link_H[-1] += [derG]; G.link_H[-1] += [derG]  # bilateral add links
         _G.val_Ht[0][-1] += Mval; _G.val_Ht[1][-1] += Dval; _G.rdn_Ht[0][-1] += Mrdn; _G.rdn_Ht[1][-1] += Drdn
-        G.val_Ht[0][-1] += Mval;   G.val_Ht[1][-1] += Dval;  G.rdn_Ht[0][-1] += Mrdn;  G.rdn_Ht[1][-1] += Drdn
+        G.val_Ht[0][-1] += Mval; G.val_Ht[1][-1] += Dval; G.rdn_Ht[0][-1] += Mrdn; G.rdn_Ht[1][-1] += Drdn
 
 
 def sum2graph_(graph_, fder, fd):  # sum node and link params into graph, aggH in agg+ or player in sub+
@@ -285,8 +287,7 @@ def sum2graph_(graph_, fder, fd):  # sum node and link params into graph, aggH i
     for graph in graph_:  # seq Gs
         if graph[2] < G_aves[fd]:  # form graph if val>min only
             continue
-        pri_roots = graph[1]  # not sure how to pack this pri_roots into Graph since we have only fd here, so Graph.root_T[fd] = pri_roots?
-        Graph = Cgraph(L=len(graph[0]))  # n nodes
+        Graph = Cgraph(root_T = graph[1], L=len(graph[0]))  # n nodes
         Link_ = []
         for G in graph[0]:
             sum_box(Graph.box, G.box)
@@ -386,22 +387,23 @@ def comp_ext(_ext, ext, Valt, Rdnt):  # comp ds:
     dL=_L-L;      mL=ave-abs(dL)
     dS=_S/_L-S/L; mS=ave-abs(dS)
     if isinstance(A,list):
-        mA, dA = comp_angle(_A,A); maxA = mA  # what is max possible match here?
+        mA, dA = comp_angle(_A,A); max_mA = 2
     else:
-        dA= _A-A; mA= ave-abs(dA); maxA = (A,_A)
+        dA= _A-A; mA= ave-abs(dA); max_mA = max(A,_A)
+    M = mL+mS+mA
+    D = dL+dS+dA
+    maxv = max(L,_L)+max(S,_S)+max_mA
 
-    M = mL+mS+mA; D = dL+dS+dA
-
-    Valt[0] += M; Valt[1] += D; Valt[2] += max(L,_L) + max(S,_S) + maxA
+    Valt[0] += M; Valt[1] += D; Valt[2] += maxv
     Rdnt[0] += D>M; Rdnt[1] += D<=M
 
     return [[mL,mS,mA], [dL,dS,dA]]  # no Mtuple?
 
 
-def sum_ext(Extt, extt):  # add max?
+def sum_ext(Extt, extt):
 
-    if isinstance(Extt[0], list):  # ext fd tuple
-        for fd, (Ext,ext) in enumerate(zip(Extt,extt)):
+    if isinstance(Extt[0], list):
+        for Ext,ext in zip(Extt,extt):  # ext: m,d tuple
             for i,(Par,par) in enumerate(zip(Ext,ext)):
                 Ext[i] = Par+par
     else:  # single ext
@@ -427,7 +429,7 @@ def comp_subH(_subH, subH, rn):
                 mval,dval,maxv = valt
                 Mval += mval; Dval += dval; Maxv += maxv; Mrdn += rdnt[0] + dval > mval; Drdn += rdnt[1] + dval <= mval
             else:  # _lay[0][0] is L, comp dext:
-                DerH += comp_ext(_lay[1],lay[1], [Mval,Dval], [Mrdn,Drdn])
+                DerH += comp_ext(_lay[1],lay[1], [Mval,Dval,Maxv], [Mrdn,Drdn])
 
     return DerH, [Mval,Dval,Maxv], [Mrdn,Drdn]  # new layer, 1/2 combined derH
 
@@ -450,7 +452,8 @@ def sum_subH(T, t, base_rdn):
 
     SubH, Valt, Rdnt = T
     subH, valt, rdnt = t
-    for i in 0, 1:
+
+    for i in 0,1:  # link maxv is not summed in G.valt
         Valt[i] += valt[i]; Rdnt[i] += rdnt[i]
     if SubH:
         for Layer, layer in zip_longest(SubH,subH, fillvalue=[]):
@@ -468,7 +471,8 @@ def sum_aggH(T, t, base_rdn):
 
     AggH, Valt, Rdnt = T
     aggH, valt, rdnt = t
-    for i in 0, 1:
+
+    for i in 0,1:  # link maxv is not summed in G.valt
         Valt[i] += valt[i]; Rdnt[i] += rdnt[i]
     if aggH:
         if AggH:
