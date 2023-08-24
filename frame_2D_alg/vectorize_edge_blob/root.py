@@ -147,14 +147,14 @@ def form_P(P, blob):
     P.yx = P.dert_yx_[L//2]              # new center
     return P
 
-def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
+def scan_direction(P, _deryx, blob, fleft):  # leftward or rightward from y,x
 
     Y, X = blob.mask__.shape # boundary
-    y, x = P.yx
     sin,cos = P.axis      # unpack axis
-    r = cos*y - sin*x   # from P line equation: cos*y - sin*x = r = constant
-    _cy,_cx = round(y), round(x)  # keep previous cell
-    y, x = (y-sin,x-cos) if fleft else (y+sin, x+cos)   # first dert position in the direction of axis
+    _dy, _dx, _g, _y, _x = _deryx  # start with pivot
+    r = cos*_y - sin*_x   # from P line equation: cos*y - sin*x = r = constant
+    _cy,_cx = round(_y), round(_x)  # keep previous cell
+    y, x = (_y-sin,_x-cos) if fleft else (_y+sin, _x+cos)   # first dert position in the direction of axis
     while True:                   # start scanning, stop at boundary or edge of blob
         x0, y0 = int(x), int(y)   # floor
         x1, y1 = x0 + 1, y0 + 1   # ceiling
@@ -166,7 +166,8 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
             (y1, x0, (y - y0) * (x1 - x)),
             (y1, x1, (y - y0) * (x - x0))]
         cy, cx = round(y), round(x)                         # nearest cell of (y, x)
-        if not blob.mask__[cy, cx]: break                   # mask check of (y, x)
+        if not blob.mask__[cy, cx]:
+            break
         if abs(cy-_cy) + abs(cx-_cx) == 2:                  # mask check of intermediate cell between (y, x) and (_y, _x)
             # Determine whether P goes above, below or crosses the middle point:
             my, mx = (_cy+cy) / 2, (_cx+cx) / 2             # Get middle point
@@ -187,16 +188,17 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
                 P.dert_olp_ |= {(ty,tx)}
 
         ider__t = (blob.i__[blob.ibox.slice()],) + blob.der__t
-        dert = tuple(
-            sum((par__[ky, kx] * dist for ky, kx, dist in kernel))
-            for par__ in ider__t)
+        dert = tuple(sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t)
+        mangle,dangle = comp_angle((_dy,_dx),(dert[:2]))
+        if mangle < 0:
+            break  # terminate P if angle miss
         P.dert_olp_ |= {(cy, cx)}  # add current cell to overlap
         _cy, _cx = cy, cx
         if fleft:
             P.dert_ = [dert] + P.dert_              # append left
-            P.dert_yx_ = [(y,x)] + P.dert_yx_       # append left coords per dert
-            y -= sin; x -= cos  # next y,x
+            # P.dert_yx_ = [(y,x)] + P.dert_yx_       # append left coords per dert
+            _y -= sin; _x -= cos  # next y,x
         else:
             P.dert_ = P.dert_ + [dert]              # append right
-            P.dert_yx_ = P.dert_yx_ + [(y,x)]
-            y += sin; x += cos  # next y,x
+            # P.dert_yx_ = P.dert_yx_ + [(y,x)]
+            _y += sin; _x += cos  # next y,x

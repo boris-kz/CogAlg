@@ -131,6 +131,7 @@ def segment_node_(node_, max_, pri_root_T_, fder, fd):
                             graph[0] += [_node]
                             pri_root_T = pri_root_T_[node_.index(_node)]
                             if pri_root_T not in graph[1]:
+                                # need ro unpack root tree and align forks?:
                                 graph[1] += [pri_root_T]  # transfer node roots to new intermediate graph
                             graph[2] += link_rel_val * _val
                             _node.root_T[fder][fd] = graph  # single root per fork?
@@ -139,8 +140,36 @@ def segment_node_(node_, max_, pri_root_T_, fder, fd):
         graph_ += [graph]
     return graph_
 
-def prune_graphs(graph_, fder, fd):
-    pass
+def prune_graphs(_graph_, fder, fd):
+
+    graph_ = []
+    for _node_, _pri_root_T_, _Val in _graph_:
+        node_, pri_root_T_ = [],[]
+        for node in _node_:
+            roots = sorted(node.root_T[fder][fd], key=lambda root: root[2], reverse=True)
+            rdn_Val = 1  # val of stronger inclusion in overlapping graphs, in same fork
+            for root in roots:
+                Val = sum(node.val_Ht) - ave * (sum(node.rdn_Ht) + rdn_Val/ave)  # not sure
+                if Val > 0:
+                    node_ += [node]
+                    for link in node.link_Ht[fder]:
+                        # tentative re-eval node links:
+                        _node = link.G1 if link.G0 is node else link.G0
+                        sum(_node.val_ht)  * (link.valt[fder]/link.valt[2]) - ave * (sum(_node.rdn_Ht[fder]) + node.Rdn)
+                        # prune the value above is negative?
+                    rdn_Val += root[2]
+                    
+            # not revised:
+            else:
+                node.root_T[fder][fd] = []  # reset root
+                pri_root_T_.pop(j)  # remove pri_root_T
+                Val -= Val_[j]  # reduce by link_rel_val * _val
+
+        # evaluate and prune graphs
+        if Val > ave:
+            graph_ += [[new_nodes, pri_root_T_, Val]]
+
+    return graph_
 
 # replace with prune_graphs:
 def graph_reval_(graph_, fder,fd):
@@ -387,7 +416,7 @@ def comp_ext(_ext, ext, Valt, Rdnt):  # comp ds:
     dL=_L-L;      mL=ave-abs(dL)
     dS=_S/_L-S/L; mS=ave-abs(dS)
     if isinstance(A,list):
-        mA, dA = comp_angle(_A,A); max_mA = 2
+        mA, dA = comp_angle(_A,A); max_mA = 1.5
     else:
         dA= _A-A; mA= ave-abs(dA); max_mA = max(A,_A)
     M = mL+mS+mA
