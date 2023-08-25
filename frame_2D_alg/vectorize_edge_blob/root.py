@@ -118,15 +118,15 @@ def slice_blob_ortho(blob, max_mask__, verbose=False):
     der_t = blob.der__t.get_pixel(y_, x_)
     deryx_ = sorted(zip(y_, x_, *der_t), key=lambda t: t[-1]) # sort by g
     filled = set()
+    if verbose:
+        step = 100 / len(deryx_)  # progress % percent per pixel
+        progress = 0.0; print(f"\rSlicing... {round(progress)} %", end="");  sys.stdout.flush()
 
     for y, x, dy, dx, g in deryx_:
         i = blob.i__[blob.ibox.slice()][y, x]
         assert g > 0, "g must be positive"
-        P = form_P(CP(yx=(y, x), axis=(dy/g, dx/g), dert_yx_=[(y,x)], dert_olp_={(y,x)}, dert_=[(i, dy, dx, g)]), blob)
-
-        maxis = (P.axis[0]*P.ptuple.Dy + P.axis[1]*P.ptuple.Dx) / P.ptuple.G
-        # exclude cells with different angle:
-        if abs(maxis) < 0.74:
+        P = form_P(CP(yx=(y, x), axis=(dy/g, dx/g), dert_olp_={(y,x)}, dert_=[(y, x, i, dy, dx, g)]), blob)
+        if P is None:   # angle missed
             continue
         # exclude >=50% overlap:
         if len(filled & P.dert_olp_) / len(P.dert_olp_) >= 0.5:
@@ -134,24 +134,29 @@ def slice_blob_ortho(blob, max_mask__, verbose=False):
         filled.update(P.dert_olp_)
         blob.P_ += [P]
 
-def form_P(P, blob):
+        if verbose:
+            progress += step; print(f"\rSlicing... {round(progress)} %", end=""); sys.stdout.flush()
+    if verbose: print("\r" + " " * 79, end=""); sys.stdout.flush(); print("\r", end="")
 
-    scan_direction(P, blob, fleft=1)  # scan left
-    scan_direction(P, blob, fleft=0)  # scan right
+
+def form_P(P, blob):
+    if (scan_direction(P, blob, fleft=1)            # scan left
+            or scan_direction(P, blob, fleft=0)):   # scan right
+        return None
     # initialization
-    I, Dy, Dx, G = map(sum, zip(*P.dert_))
+    _, _, I, Dy, Dx, G = map(sum, zip(*P.dert_))
     L = len(P.dert_)
     M = ave_g*L - G
     G = np.hypot(Dy, Dx)           # recompute G
     P.ptuple = Tptuple(I, Dy, Dx, G, M, L)
-    P.yx = P.dert_yx_[L//2]              # new center
+    P.yx = P.dert_[L//2][:2]       # new center
     return P
 
-def scan_direction(P, _deryx, blob, fleft):  # leftward or rightward from y,x
+def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
 
-    Y, X = blob.mask__.shape # boundary
-    sin,cos = P.axis      # unpack axis
-    _dy, _dx, _g, _y, _x = _deryx  # start with pivot
+    Y, X = blob.mask__.shape    # boundary
+    sin,cos = _dy,_dx = P.axis  # unpack axis
+    _y, _x = P.yx               # start with pivot
     r = cos*_y - sin*_x   # from P line equation: cos*y - sin*x = r = constant
     _cy,_cx = round(_y), round(_x)  # keep previous cell
     y, x = (_y-sin,_x-cos) if fleft else (_y+sin, _x+cos)   # first dert position in the direction of axis
@@ -188,17 +193,15 @@ def scan_direction(P, _deryx, blob, fleft):  # leftward or rightward from y,x
                 P.dert_olp_ |= {(ty,tx)}
 
         ider__t = (blob.i__[blob.ibox.slice()],) + blob.der__t
-        dert = tuple(sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t)
-        mangle,dangle = comp_angle((_dy,_dx),(dert[:2]))
-        if mangle < 0:
-            break  # terminate P if angle miss
+        _,_, i,dy,dx,g = dert = (y,x, *(sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t))
+        mangle,dangle = comp_angle((_dy,_dx), (dy, dx))
+        if mangle < 0:  # terminate P if angle miss
+            return
         P.dert_olp_ |= {(cy, cx)}  # add current cell to overlap
-        _cy, _cx = cy, cx
+        _cy, _cx, _dy, _dx = cy, cx, dy, dx
         if fleft:
             P.dert_ = [dert] + P.dert_              # append left
-            # P.dert_yx_ = [(y,x)] + P.dert_yx_       # append left coords per dert
-            _y -= sin; _x -= cos  # next y,x
+            y -= sin; x -= cos  # next y,x
         else:
             P.dert_ = P.dert_ + [dert]              # append right
-            # P.dert_yx_ = P.dert_yx_ + [(y,x)]
-            _y += sin; _x += cos  # next y,x
+            y += sin; x += cos  # next y,x

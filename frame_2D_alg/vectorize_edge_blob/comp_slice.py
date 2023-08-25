@@ -248,15 +248,12 @@ def comp_ptuple(_ptuple, ptuple, rn):  # 0der
 
 def comp_angle(_angle, angle):  # rn doesn't matter for angles
 
-    _Dy, _Dx = _angle
-    Dy, Dx = angle
-    _G = np.hypot(_Dy,_Dx); G = np.hypot(Dy,Dx)
-    sin = Dy / (.1 if G == 0 else G);     cos = Dx / (.1 if G == 0 else G)
-    _sin = _Dy / (.1 if _G == 0 else _G); _cos = _Dx / (.1 if _G == 0 else _G)
-    sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
+    # angle = [dy,dx]
+    (_sin, sin), (_cos, cos) = [*zip(_angle, angle)] / np.hypot(*zip(_angle, angle))
+
+    dangle = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
     # cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
-    dangle = sin_da
-    mangle = ave_dangle - abs(dangle)  # inverse match, not redundant as summed across sign
+    mangle = ave_dangle - abs(dangle)  # inverse match, not redundant if sum cross sign
 
     return [mangle, dangle]
 
