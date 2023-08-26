@@ -397,3 +397,44 @@ while dMatch per cluster > ave:
 - prune root if in_cluster_match < ave * cluster_redundancy, 
 - prune weak clusters, remove corresponding roots
 '''
+
+def prune_graphs(_graph_, fder, fd):
+
+    for _node_, _pri_root_T_, _Val in _graph_:
+        node_, pri_root_T_ = [],[]
+        prune_Val = -1
+        graph_ = []
+        for node in _node_:
+            roots = sorted(node.root_T[fder][fd], key=lambda root: root[2], reverse=True)
+            rdn_Val = 1  # val of stronger inclusion in overlapping graphs, in same fork
+
+        # for _node_, _, _ in _graph_: I think this is not needed, we can just loop node_?
+        for node in node_:
+            roots = sorted(node.root_T[fder][fd], key=lambda root: root[2], reverse=True)
+            # rdn_Val = 0  # val of stronger inclusion in overlapping graphs, in same fork (strongest root with 0 rdn)
+            for root_rdn, root in enumerate(roots):
+                Val = np.sum(node.val_Ht) - ave * (np.sum(node.rdn_Ht) + root_rdn)  # not sure
+                if Val > 0:
+                    prune_Val += Val
+                    pruned_link_ = []  # per node
+                    for link in node.link_H[fder]:
+                        # tentative re-eval node links:
+                        _node = link.G1 if link.G0 is node else link.G0
+                        # prune links from node
+                        if not np.sum(_node.val_Ht)  * (link.valt[fder]/link.valt[2]) - ave * (np.sum(_node.rdn_Ht[fder]) + root_rdn):
+                            pruned_link_ += [link]
+                    # prune links
+                    for pruned_link in pruned_link_:
+                        node.link_Ht[fder].remove(pruned_link)
+                # if Val is < 0, increase their rdn so that we will not select them as max?
+                else:
+                    node.rdn_Ht[-1] += root_rdn * abs(Val)
+
+        # reform graphs after pruning
+        max_ = select_max_(node_, fder, ave)
+        graph_ = segment_node_(node_, max_, pri_root_T_, fder, fd)
+
+        if prune_Val < 0:
+            break
+
+    return graph_

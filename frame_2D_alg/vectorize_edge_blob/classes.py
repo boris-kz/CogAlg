@@ -115,8 +115,8 @@ class CPP(CderP):
     valt : list = z([0,0])
     rdnt : list = z([1,1])
     mask__ : object = None
-    node_T : list = z([])  # P_,-> node_tt if sub+: [rng+ [sub_PPm_,sub_PPd_], der+ [sub_PPm_,sub_PPd_]]
-    root_T : list = z([[None,None],[None,None]])  # init edge, higher PPrm,PPrd, PPdm,PPdd that contain PP if sub+
+    node_tt : list = z([])  # P_,-> node_tt if sub+: [rng+ [sub_PPm_,sub_PPd_], der+ [sub_PPm_,sub_PPd_]]
+    root_tt : list = z([[None,None],[None,None]])  # init edge, higher PPrm,PPrd, PPdm,PPdd that contain PP if sub+
     rng : int = 1  # sum of rng+: odd forks in last layer?
     box : list = z([0,0,0,0])  # y0,yn,x0,xn
     # temporary:
@@ -134,8 +134,8 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     link_H : list = z([[]])  # added with each comp_G_
     val_Ht : list = z([[0],[0]])  # H of link vals per fder
     rdn_Ht : list = z([[1],[1]])
-    node_T : list = z([])  # nest by agg+/ node_->node_tt: rng+ Gm_,Gd_, der+ Gm_,Gd_, incr if wH: down-forking tree of node Levs
-    root_T : list = z([])  # up reciprocal to down node_T; agg+| sub+ mset forks, incr.nest if uH: up-forking tree of root Levs?
+    node_tt : list = z([])  # nest by agg+/ node_->node_tt: rng+ Gm_,Gd_, der+ Gm_,Gd_, incr if wH: down-forking tree of node Levs
+    root_tt : list = z([])  # up reciprocal to down node_T; agg+| sub+ mset forks, incr.nest if uH: up-forking tree of root Levs?
     L : int = 0 # len base node_; from internal links:
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers
