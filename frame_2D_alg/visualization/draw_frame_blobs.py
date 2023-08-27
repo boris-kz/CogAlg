@@ -52,8 +52,12 @@ def visualize_blobs(frame, layer='r'):
         gradient_mask=np.zeros((height, width), bool),
         blob_id=None, img_slice=None, blob_cls=None,
         layers_stack=[(frame, layer)],
+        # plots
+        quiver=None,
+        blob_slice=None,
         # flags
-        show_gradient=False, quiver=None,
+        show_gradient=False,
+        show_slice=False,
     )
 
     fig, ax = plt.subplots()
@@ -84,8 +88,31 @@ def visualize_blobs(frame, layer='r'):
             *state.gradient_mask.nonzero()[::-1],
             *state.gradient[:, state.gradient_mask])
 
+    def update_blob_slice():
+        if state.blob_slice is not None:
+            for line, L_text in state.blob_slice:
+                line.remove()
+                L_text.remove()
+            state.blob_slice = None
+
+        blob = state.blob_cls.get_instance(state.blob_id)
+        if blob is None or not blob.P_ or not state.show_slice:
+            return
+        state.blob_slice = []
+        for P in blob.P_:
+            y, x = P.yx
+            y_, x_, *_ = np.array([*zip(*P.dert_)])
+            L = len(x_)
+            y0, x0, *_ = blob.ibox
+            state.blob_slice += [(
+                ax.plot(x_+x0, y_+y0, 'bo-', linewidth=1, markersize=2)[0],
+                ax.text(x+x0, y+y0, str(L), color = 'b', fontsize = 12),
+            )]
+
+
     def update_img():
         update_gradient()
+        update_blob_slice()
         imshow_obj.set_data(state.img)
         fig.canvas.draw_idle()
 
@@ -171,7 +198,11 @@ def visualize_blobs(frame, layer='r'):
     def on_key_press(event):
         if event.key == 'd':
             state.show_gradient = not state.show_gradient
-            update_img()
+        elif event.key == 'c':
+            state.show_slice = not state.show_slice
+        else:
+            return
+        update_img()
 
     fig.canvas.mpl_connect('motion_notify_event', on_mouse_movement)
     fig.canvas.mpl_connect('button_release_event', on_click)

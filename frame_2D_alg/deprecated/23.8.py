@@ -438,3 +438,100 @@ def prune_graphs(_graph_, fder, fd):
             break
 
     return graph_
+# replace with prune_graphs:
+def graph_reval_(graph_, fder,fd):
+
+    regraph_ = []
+    reval, overlap  = 0, 0
+    for graph in graph_:
+        for node in graph[0]:  # sort node root_(local) by root val (ascending)
+            node.root_T[fder][fd] = sorted(node.root_T[fder][fd], key=lambda root:root[0][2], reverse=False)  # 2: links val
+    while graph_:
+        graph = graph_.pop()  # pre_graph or cluster
+        node_, root_, val = graph
+        remove_ = []  # sum rdn (overlap) per node root_T, remove if val < ave * rdn:
+        for node in node_:
+            rdn = 1 + len(node.root_T)
+            if node.valt[fd] < G_aves[fd] * rdn:
+            # replace with node.root_T[i][1] < G_aves[fd] * i:
+            # val graph links per node, graph is node.root_T[i], i=rdn: index in fork root_ sorted by val
+                remove_ += [node]       # to remove node from cluster
+                for i, grapht in enumerate(node.root_T[fder][fd]):  # each root is [graph, Val]
+                    if graph is grapht[0]:
+                        node.root_T[fder][fd].pop(i)  # remove root cluster from node
+                        break
+        while remove_:
+            remove_node = remove_.pop()
+            node_.remove(remove_node)
+            graph[2] -= remove_node.valt[fd]
+            reval += remove_node.valt[fd]
+        for node in node_:
+            sum_root_val = sum([root[1] for root in node.root_T[fder][fd]])
+            max_root_val = max([root[1] for root in node.root_T[fder][fd]])
+            overlap += sum_root_val/ max_root_val
+        regraph_ += [graph]
+
+    if reval > ave and overlap > 0.5:  # 0.5 can be a new ave here
+        regraph_ = graph_reval_(regraph_, fder,fd)
+
+    return regraph_
+
+# draft:
+def graph_reval(graph, fd):  # exclusive graph segmentation by reval,prune nodes and links
+
+    aveG = G_aves[fd]
+    reval = 0  # reval proto-graph nodes by all positive in-graph links:
+
+    for node in graph[0]:  # compute reval: link_Val reinforcement by linked nodes Val:
+        link_val = 0
+        _link_val = node.valt[fd]
+        for derG in node.link_H[-1]:
+            if derG.valt[fd] > [ave_Gm, ave_Gd][fd]:
+                val = derG.valt[fd]  # of top aggH only
+                _node = derG.G1 if derG.G0 is node else derG.G0
+                # consider in-graph _nodes only, add to graph if link + _node > ave_comb_val?
+                link_val += val + (_node.valt[fd]-val) * med_decay
+        reval += _link_val - link_val  # _node.link_tH val was updated in previous round
+    rreval = 0
+    if reval > aveG:  # prune graph
+        regraph, Val = [], 0  # reformed proto-graph
+        for node in graph[0]:
+            val = node.valt[fd]
+            if val > G_aves[fd] and node in graph:
+            # else no regraph += node
+                for derG in node.link_H[-1][fd]:
+                    _node = derG.G1 if derG.G0 is node else derG.G0  # add med_link_ val to link val:
+                    val += derG.valt[fd] + (_node.valt[fd]-derG.valt[fd]) * med_decay
+                Val += val
+                regraph += [node]
+        # recursion:
+        if rreval > aveG and Val > aveG:
+            regraph, reval = graph_reval([regraph,Val], fd)  # not sure about Val
+            rreval += reval
+
+    else: regraph, Val = graph
+
+    return [regraph,Val], rreval
+
+def prune_graph_(_graph_, fder, fd):
+
+    graph_ = [[[],[],0] for graph in _graph_]  # init new graphs: [[node_, pri_root_tt_, Val]]
+
+    for _node_, _pri_root_tt_, _Val in _graph_:
+        for node, pri_root_tt  in zip(_node_, _pri_root_tt_):
+            roots = sorted(node.root_tt[fder][fd], key=lambda root: root[2], reverse=True)
+            for rdn, root in enumerate(roots):
+                # rdn to stronger inclusion in same-fork overlapping graphs
+                val = sum(node.val_Ht[fder]) - ave * (sum(node.rdn_Ht[fder]) + rdn)
+                # no link pruning: they are not a component of graph, don't depend on rdn?
+                if val > 0:
+                    i = _graph_.index(root)  # current root graph of current node
+                    graph_[i][0] += [node]
+                    graph_[i][1] += [_pri_root_tt_]
+                    graph_[i][2] += val
+                else:
+                    node.root_tt[fder][fd].remove(root)
+
+    graph_ = [graph for graph in graph_ if graph[2] > G_aves[fder]]  # graph pruning
+    graph_ = sum2graph_(graph_, fder, fd)
+    return graph_
