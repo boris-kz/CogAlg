@@ -12,7 +12,7 @@ class CEdge(ClusterStructure):  # edge blob
     box: tuple = (0, 0, 0, 0)  # y0, yn, x0, xn
     mask__ : object = None
     der__t : object = None
-    der__t_roots: object = None  # map to dir__t
+    der__t_roots: object = None  # map Ps to dir__t
     adj_blobs: list = z([])  # adjacent blobs
     node_ : list = z([])  # default P_, node_tt: list = z([[[],[]],[[],[]]]) in select PP_ or G_ forks
     root : object= None  # list root_ if fork overlap?

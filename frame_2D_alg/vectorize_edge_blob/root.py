@@ -1,6 +1,6 @@
 import sys
 import numpy as np
-from collections import namedtuple
+from collections import namedtuple, deque, defaultdict
 from itertools import product
 from frame_blobs import Tdert
 from .classes import CEdge, CP, CPP, CderP, Cgraph
@@ -45,7 +45,10 @@ def vectorize_root(blob, verbose=False):
     max_mask__ = max_selection(blob)  # mask of local directional maxima of dy, dx, g
 
     # form slices (Ps) from max_mask__ and form links by tracing max_mask__:
-    edge = slice_blob_ortho(blob, max_mask__, verbose=verbose)
+    slice_blob_ortho(blob, max_mask__, verbose=verbose)
+
+    form_link_(blob, max_mask__)
+
     '''
     comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
     # rng+ in comp_slice adds edge.node_T[0]:
@@ -90,11 +93,10 @@ def max_selection(blob):
         # direction pixels AND blob mask:
         mask__ = dir_mask__ & blob.mask__
         y_, x_ = mask__.nonzero()
-        # get neighbor pixel indices
+        # neighbors:
         yn1_, xn1_ = y_ + ry, x_ + rx
         yn2_, xn2_ = y_ - ry, x_ - rx
-
-        # choose valid neighbor indices
+        # computed vals:
         valid1_ = (0 <= yn1_) & (yn1_ < Y) & (0 <= xn1_) & (xn1_ < X)
         valid2_ = (0 <= yn2_) & (yn2_ < Y) & (0 <= xn2_) & (xn2_ < X)
 
@@ -102,19 +104,17 @@ def max_selection(blob):
         not_max_ = np.zeros_like(y_, dtype=bool)
         not_max_[valid1_] |= (g__[y_[valid1_], x_[valid1_]] < g__[yn1_[valid1_], xn1_[valid1_]])
         not_max_[valid2_] |= (g__[y_[valid2_], x_[valid2_]] < g__[yn2_[valid2_], xn2_[valid2_]])
-
-        # suppress non-maximum points
+        # select maxes
         mask__[y_[not_max_], x_[not_max_]] = False
-
         # add to max_mask__
         max_mask__ |= mask__
 
     return max_mask__
 
 
-def slice_blob_ortho(blob, max_mask__, verbose=False):
+def slice_blob_ortho(blob, mask__, verbose=False):
 
-    y_, x_ = max_mask__.nonzero()
+    y_, x_ = mask__.nonzero()
     der_t = blob.der__t.get_pixel(y_, x_)
     deryx_ = sorted(zip(y_, x_, *der_t), key=lambda t: t[-1]) # sort by g
     filled = set()
@@ -126,8 +126,6 @@ def slice_blob_ortho(blob, max_mask__, verbose=False):
         i = blob.i__[blob.ibox.slice()][y, x]
         assert g > 0, "g must be positive"
         P = form_P(CP(yx=(y, x), axis=(dy/g, dx/g), dert_olp_={(y,x)}, dert_=[(y, x, i, dy, dx, g)]), blob)
-        if P is None:   # angle missed
-            continue
         # exclude >=50% overlap:
         if len(filled & P.dert_olp_) / len(P.dert_olp_) >= 0.5:
             continue
@@ -140,16 +138,17 @@ def slice_blob_ortho(blob, max_mask__, verbose=False):
 
 
 def form_P(P, blob):
-    if (scan_direction(P, blob, fleft=1)            # scan left
-            or scan_direction(P, blob, fleft=0)):   # scan right
-        return None
-    # initialization
+
+    scan_direction(P, blob, fleft=1)  # scan left
+    scan_direction(P, blob, fleft=0)  # scan right
+    # init:
     _, _, I, Dy, Dx, G = map(sum, zip(*P.dert_))
     L = len(P.dert_)
     M = ave_g*L - G
-    G = np.hypot(Dy, Dx)           # recompute G
+    G = np.hypot(Dy, Dx)  # recompute G
     P.ptuple = Tptuple(I, Dy, Dx, G, M, L)
-    P.yx = P.dert_[L//2][:2]       # new center
+    P.yx = P.dert_[L//2][:2]  # new center
+
     return P
 
 def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
@@ -170,23 +169,21 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
             (y0, x1, (y1 - y) * (x - x0)),
             (y1, x0, (y - y0) * (x1 - x)),
             (y1, x1, (y - y0) * (x - x0))]
-        cy, cx = round(y), round(x)                         # nearest cell of (y, x)
+        cy, cx = round(y), round(x)  # nearest cell of (y, x)
         if not blob.mask__[cy, cx]:
             break
-        if abs(cy-_cy) + abs(cx-_cx) == 2:                  # mask check of intermediate cell between (y, x) and (_y, _x)
-            # Determine whether P goes above, below or crosses the middle point:
-            my, mx = (_cy+cy) / 2, (_cx+cx) / 2             # Get middle point
-            myc1 = sin * mx + r                             # my1: y at mx on P; myc1 = my1*cos
-            myc = my*cos                                    # multiply by cos to avoid division
-            if cos < 0: myc, myc1 = -myc, -myc1             # reverse sign for comparison because of cos
-            if abs(myc-myc1) > 1e-5:                        # check whether myc!=myc1, taking precision error into account
-                # y is reversed in image processing, so:
-                # - myc1 > myc: P goes below the middle point
-                # - myc1 < myc: P goes above the middle point
-                # - myc1 = myc: P crosses the middle point, there's no intermediate cell
+        if abs(cy-_cy) + abs(cx-_cx) == 2:  # mask check of intermediate cell between (y, x) and (_y, _x)
+            my = (_cy+cy) / 2
+            mx = (_cx+cx) / 2    # cell midpoint, P axis may be above, below or over
+            _myc = sin * mx + r  # y at mx in P; myc1 = my1*cos
+            myc = my * cos       # new cell, multiply by cos to avoid division
+            if cos < 0: myc, _myc = -myc, -_myc   # reverse sign for comparison because of cos
+            if abs(myc-_myc) > 1e-5:
+                # deviation from P axis, y is reversed in image processing:
+                # myc1 > myc: above axis, myc1 < myc: below axis, myc1 = myc: over axis, no intermediate cell
                 ty, tx = (
                     ((_cy, cx) if _cy < cy else (cy, _cx))
-                    if myc1 < myc else
+                    if _myc < myc else
                     ((_cy, cx) if _cy > cy else (cy, _cx))
                 )
                 if not blob.mask__[ty, tx]: break    # if the cell is masked, stop
@@ -197,7 +194,7 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
         i,dy,dx,g = dert
         mangle,dangle = comp_angle((_dy,_dx), (dy, dx))
         if mangle < 0:  # terminate P if angle miss
-            return True
+            break
         P.dert_olp_ |= {(cy, cx)}  # add current cell to overlap
         _cy, _cx, _dy, _dx = cy, cx, dy, dx
         if fleft:
@@ -206,3 +203,32 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
         else:
             P.dert_ = P.dert_ + [[y,x,*dert]]  # append right
             y += sin; x += cos  # next y,x
+
+# not revised:
+def form_link_(blob, mask__):
+
+    max_ = set(zip(*mask__.nonzero()))  # mask__ coordinates
+
+    dert_root_ = defaultdict(set)
+    for P in blob.P_:
+        for y, x in P.dert_olp_ & max_:
+            dert_root_[y, x].add(P)
+
+    # trace edge from each P
+    blob.P_link_ = set()    # clear P_link_
+    for P in blob.P_:
+        traceq_ = deque(P.dert_olp_ & max_)  # start with dert_olp_ & max_
+        traced_ = set(traceq_)
+        while traceq_:   # trace adjacent through max_
+            _y, _x = traceq_.popleft()
+            # check for root
+            stop = False
+            for _P in (dert_root_[_y, _x] - {P}):
+                link = (P, _P) if P.id < _P.id else (_P, P)
+                blob.P_link_.add(link)
+                stop = True     # stop when a root is reached
+            if not stop:    # continue
+                yx_ = {*product(range(_y-1,_y+2), range(_x-1,_x+2))}
+                yx_ = (yx_ & max_) - traced_
+                traceq_.extend(yx_)
+                traced_.add(yx_)
