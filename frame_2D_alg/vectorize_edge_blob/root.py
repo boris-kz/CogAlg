@@ -175,7 +175,7 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
         if abs(cy-_cy) + abs(cx-_cx) == 2:  # mask check of intermediate cell between (y, x) and (_y, _x)
             my = (_cy+cy) / 2
             mx = (_cx+cx) / 2    # cell midpoint, P axis may be above, below or over
-            _myc = sin * mx + r  # y at mx in P; myc1 = my1*cos
+            _myc = sin * mx + r  # y at mx in P; _myc = _my*cos
             myc = my * cos       # new cell, multiply by cos to avoid division
             if cos < 0: myc, _myc = -myc, -_myc   # reverse sign for comparison because of cos
             if abs(myc-_myc) > 1e-5:
@@ -190,18 +190,17 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
                 P.dert_olp_ |= {(ty,tx)}
 
         ider__t = (blob.i__[blob.ibox.slice()],) + blob.der__t
-        dert = (sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t)
-        i,dy,dx,g = dert
+        i,dy,dx,g = (sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t)
         mangle,dangle = comp_angle((_dy,_dx), (dy, dx))
         if mangle < 0:  # terminate P if angle miss
             break
         P.dert_olp_ |= {(cy, cx)}  # add current cell to overlap
         _cy, _cx, _dy, _dx = cy, cx, dy, dx
         if fleft:
-            P.dert_ = [[y,x,*dert]] + P.dert_  # append left
+            P.dert_ = [[y,x,i,dy,dx,g]] + P.dert_  # append left
             y -= sin; x -= cos  # next y,x
         else:
-            P.dert_ = P.dert_ + [[y,x,*dert]]  # append right
+            P.dert_ = P.dert_ + [[y,x,i,dy,dx,g]]  # append right
             y += sin; x += cos  # next y,x
 
 # not revised:
@@ -211,8 +210,8 @@ def form_link_(blob, mask__):
 
     dert_root_ = defaultdict(set)
     for P in blob.P_:
-        for y, x in P.dert_olp_ & max_:
-            dert_root_[y, x].add(P)
+        for olp, max in P.dert_olp_ & max_:
+            dert_root_[olp, max].add(P)
 
     # trace edge from each P
     blob.P_link_ = set()    # clear P_link_
