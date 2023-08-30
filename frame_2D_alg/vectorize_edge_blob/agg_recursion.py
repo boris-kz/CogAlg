@@ -32,14 +32,15 @@ There are concepts that include same matching vars: size, density, color, stabil
 Weak value vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
 '''
 
-def agg_recursion(root, node_):  # compositional recursion in root.PP_
+# not revised:
+def agg_recursion(root, node_, pri_root_tt_=[]):  # compositional recursion in root.PP_
 
+    if not pri_root_tt_:  pri_root_tt_ = [[[[],[]],[[],[]]] for _ in node_]  # for root fork
     for i in 0,1: root.rdn_Ht[i][0] += 1  # estimate, no node.rdnt[fder] += 1?
 
     node_tt = [[[],[]],[[],[]]]  # fill with 4 clustering forks
-    pri_root_tt_ = []
-    for node in node_:
-        list(set(pri_root_tt_+ node.root_tt))  # save root_T for new graphs, different per node
+    for node, pri_root_tt in zip(node_, pri_root_tt_):
+        merge_root_tree(pri_root_tt, node.root_tt)  # save root_T for new graphs, different per node
         node.root_tt = [[[],[]],[[],[]]]  # replace node.root_T, then append [root,val] in each fork
         for i in 0,1:
             node.val_Ht[i]+=[0]; node.rdn_Ht[i]+=[1]  # new val,rdn layer, accum in comp_G_
@@ -52,10 +53,10 @@ def agg_recursion(root, node_):  # compositional recursion in root.PP_
         for fd in 0,1:  # clustering forks, each adds graph_: new node_ in node_tt:
             if sum(root.val_Ht[fder]) > G_aves[fder] * sum(root.rdn_Ht[fder]):
                 # cluster link_H[-1]:
-                graph_ = form_graph_(node_, pri_root_tt_, fder, fd)
+                graph_ = form_graph_(node_, fder, fd, pri_root_tt_)
                 sub_recursion_eval(root, graph_)  # sub+, eval last layer?
                 if sum(root.val_Ht[fder]) > G_aves[fder] * sum(root.rdn_Ht[fder]):  # updated in sub+
-                    agg_recursion(root, node_)  # agg+, replace root.node_ with new graphs, if any
+                    agg_recursion(root, node_, pri_root_tt_)  # agg+, replace root.node_ with new graphs, if any
                 node_tt[fder][fd] = graph_
             elif root.root_T:  # if deeper agg+
                 node_tt[fder][fd] = node_
@@ -123,7 +124,7 @@ def comp_G(_G, G, distance, A):
         G.val_Ht[0][-1] += Mval; G.val_Ht[1][-1] += Dval; G.rdn_Ht[0][-1] += Mrdn; G.rdn_Ht[1][-1] += Drdn
 
 
-def form_graph_(node_, fder, fd, pri_root_tt_=None):  # form fuzzy graphs of nodes per fder,fd, within root
+def form_graph_(node_, fder, fd, pri_root_tt_):  # form fuzzy graphs of nodes per fder,fd, within root
 
     ave = G_aves[fder]
     max_ = select_max_(node_, fder, ave)  # compute max of quasi-Gaussians: val + sum([_val * (link_val/max_val])
@@ -171,7 +172,7 @@ def segment_node_(node_, max_, fder, fd, pri_root_tt_):
     graph_ = []  # initialize graphs with local maxes, then prune links to add other nodes:
 
     for i, max_node in enumerate(max_):
-        graph = [[max_node], sum(max_node.val_Ht[fder]), [[pri_root_tt_[i]]]]
+        graph = [[max_node], sum(max_node.val_Ht[fder]), [pri_root_tt_[i]]]
         max_node.root_tt[fder][fd] += [graph]
         _nodes = [max_node]  # current periphery of the graph
         while _nodes:  # search links recursively outwards:
@@ -186,11 +187,10 @@ def segment_node_(node_, max_, fder, fd, pri_root_tt_):
                         # tentative:
                         if (val+_val) * link_rel_val > 0:  # link eval to pack _node in graph
                             graph[0] += [_node]
-                            graph[2] += link_rel_val * _val
+                            graph[1] += link_rel_val * _val
                             if pri_root_tt_:  # agg+
                                 pri_root_tt = pri_root_tt_[node_.index(_node)]
-                                if pri_root_tt not in graph[2]:
-                                    merge_root_tree(graph[2], pri_root_tt)  # transfer node roots to new intermediate graph
+                                graph[2] += [pri_root_tt]  # this should be packing pri_root_tt into pri_root_tt_, so merging is not needed
                             _node.root_tt[fder][fd] += [graph]  # single root per fork?
                             nodes += [_node]
             _nodes = nodes
@@ -205,8 +205,7 @@ def merge_root_tree(Root_tt, root_tt):  # not-empty fork layer is root_tt, each 
                 if root.root_tt:
                     if Root.root_tt: merge_root_tree(Root.root_tt, root.root_tt)
                     else: Root.root_tt[:] = root.root_tt
-
-            list( set(Root_+root_))  # merge root_, may be empty
+            Root_[:] = list( set(Root_+root_))  # merge root_, may be empty
 
 def prune_graph_(graph_, fder, fd):
 
@@ -288,14 +287,12 @@ def sub_recursion_eval(root, graph_):  # eval per fork, same as in comp_slice, s
                 sub_tt += [sub_recursion(graph, node_, fder)]  # comp_der|rng in graph -> parLayer, sub_Gs
             else:
                 sub_tt += [node_]
-                if isinstance(root, Cgraph):
-                    # not sure
-                    root.fback_ += [[graph.aggH, graph.val_Ht, graph.rdn_Ht]]  # fback_t vs. flat?
+                root.fback_t[fder] += [[graph.aggH, graph.val_Ht, graph.rdn_Ht]]
         if fr:
             graph.node_tt = sub_tt  # else still graph.node_
-    for fder in 0,1:
-        if termt[fder] and root.fback_:  # no lower layers in any graph
-           feedback(root, fder)
+    for fder in 0, 1:
+        if termt[fder] and root.fback_t[fder]:  # no lower layers in any graph
+            feedback(root, fder)
 
 def sub_recursion(graph, node_, fder):  # rng+: extend G_ per graph, der+: replace G_ with derG_, valt=[0,0]?
 
@@ -315,38 +312,22 @@ def sub_recursion(graph, node_, fder):  # rng+: extend G_ per graph, der+: repla
 
     return sub_t
 
-def feedback_Ht(root):  # append new der layers to root
+def feedback(root, fder):  # append new der layers to root
 
-    Fback = deepcopy(root.fback_.pop())  # init with 1st fback: [aggH,val_Ht,rdn_Ht]
-    while root.fback_:
-        aggH, val_Ht, rdn_Ht = root.fback_.pop()
+    Fback = deepcopy(root.fback_t[fder].pop())  # init with 1st fback: [aggH,val_Ht,rdn_Ht]
+    while root.fback_t[fder]:
+        aggH, val_Ht, rdn_Ht = root.fback_t[fder].pop()
         sum_aggH(Fback, [aggH, val_Ht, rdn_Ht] , base_rdn=0)
 
-    sum_aggH([root.aggH, root.val_Ht,root.rdn_Ht], Fback, base_rdn=0)
+    sum_aggH([root.aggH, root.val_Ht,root.rdn_Ht], Fback, base_rdn=0)  # both fder forks sum into a same root?
 
     if isinstance(root.root_tt, list):  # not blob
         for fder, root_t in enumerate(root.root_tt):
             for fd, root_ in enumerate(root_t):
-                for new_root in root_:
-                    new_root.fback_ += [Fback]
-                if len(new_root.fback_) == len(new_root.node_tt[fder][fd]):  # all nodes term, fed back to root.fback_
-                    feedback(new_root, fder)  # aggH/ rng layer in sum2PP, deeper rng layers are appended by feedback
-
-
-def feedback(root, fd):  # append new der layers to root
-
-    Fback = deepcopy(root.fback_.pop())  # init with 1st fback: [aggH,valt,rdnt]
-    while root.fback_:
-        aggH, valt, rdnt = root.fback_.pop()
-        sum_aggH(Fback, [aggH, valt, rdnt] , base_rdn=0)
-    for i in 0, 1:
-        sum_aggH([root.aggH[i], root.valt[i],root.rdnt[i]], [Fback[i],Fback[0][i],Fback[0][i]], base_rdn=0)
-
-    if isinstance(root.root, Cgraph):  # not blob
-        root = root.root
-        root.fback_ += [Fback]
-        if len(root.fback_) == len(root.node_[fd]):  # all nodes term, fed back to root.fback_
-            feedback(root, fd)  # aggH/ rng layer in sum2PP, deeper rng layers are appended by feedback
+                for rroot in root_:
+                    rroot.fback_t[fder] += [Fback]
+                if len(rroot.fback_t[fder]) == len(rroot.node_tt[fder][fd]):  # all nodes term, fed back to root.fback_
+                    feedback(rroot, fder)  # aggH/ rng layer in sum2PP, deeper rng layers are appended by feedback
 
 
 def comp_ext(_ext, ext, Valt, Rdnt):  # comp ds:
@@ -442,13 +423,13 @@ def sum_aggH(T, t, base_rdn):
     aggH, val_Ht, rdn_Ht = t
 
     for i in 0,1:  # link maxv is not summed in G.valt
-        for i, (Val, val) in enumerate(zip_longest(Val_Ht[i], val_Ht[i], fillvalue=None)):
+        for j, (Val, val) in enumerate(zip_longest(Val_Ht[i], val_Ht[i], fillvalue=None)):
             if val != None:
-                if Val != None: Val_Ht[i] += val
+                if Val != None: Val_Ht[i][j] += val
                 else:           Val_Ht[i] += [val]
-        for i, (Rdn, rdn) in enumerate(zip_longest(Rdn_Ht[i], rdn_Ht[i], fillvalue=None)):
+        for j, (Rdn, rdn) in enumerate(zip_longest(Rdn_Ht[i], rdn_Ht[i], fillvalue=None)):
             if rdn != None:
-                if Rdn != None: Rdn_Ht[i] += rdn
+                if Rdn != None: Rdn_Ht[i][j] += rdn
                 else:           Rdn_Ht[i] += [rdn]
 
     if aggH:

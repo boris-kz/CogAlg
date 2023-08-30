@@ -175,6 +175,7 @@ def comp_r(dert__, rng, mask__=None):
     return idert(new_i__, new_dy__, new_dx__, new_g__), majority_mask__
 
 
+
 def form_graph_(node_, pri_root_T_, fder, fd):  # form fuzzy graphs of nodes per fder,fd, initially distributed across layers
 
     layer = []; Val = 0  # of new links
@@ -587,3 +588,48 @@ def sub_recursion(graph, node_, fd):  # rng+: extend G_ per graph, der+: replace
 
     sub_G_t[:] = G_tt  # for 4 nested forks in replaced P_?
 
+def feedback(root, fd):  # append new der layers to root
+
+    Fback = deepcopy(root.fback_.pop())  # init with 1st fback: [aggH,valt,rdnt]
+    while root.fback_:
+        aggH, valt, rdnt = root.fback_.pop()
+        sum_aggH(Fback, [aggH, valt, rdnt] , base_rdn=0)
+    for i in 0, 1:
+        sum_aggH([root.aggH[i], root.valt[i],root.rdnt[i]], [Fback[i],Fback[0][i],Fback[0][i]], base_rdn=0)
+
+    if isinstance(root.root, Cgraph):  # not blob
+        root = root.root
+        root.fback_ += [Fback]
+        if len(root.fback_) == len(root.node_[fd]):  # all nodes term, fed back to root.fback_
+            feedback(root, fd)  # aggH/ rng layer in sum2PP, deeper rng layers are appended by feedback
+
+def agg_recursion(root, node_):  # compositional recursion in root.PP_
+
+    for i in 0,1: root.rdn_Ht[i][0] += 1  # estimate, no node.rdnt[fder] += 1?
+
+    node_tt = [[[],[]],[[],[]]]  # fill with 4 clustering forks
+    pri_root_tt_ = []
+    for node in node_:
+        list(set(pri_root_tt_+ node.root_tt))  # save root_T for new graphs, different per node
+        node.root_tt = [[[],[]],[[],[]]]  # replace node.root_T, then append [root,val] in each fork
+        for i in 0,1:
+            node.val_Ht[i]+=[0]; node.rdn_Ht[i]+=[1]  # new val,rdn layer, accum in comp_G_
+
+    for fder in 0,1:  # comp forks, each adds a layer of links
+        if fder and len(node_[0].link_H) < 2:  # 1st call, no der+ yet
+            continue
+        comp_G_(node_, pri_G_=None, f1Q=1, fder=fder)  # cross-comp all Gs in (rng,der), nD array? form link_H per G
+
+        for fd in 0,1:  # clustering forks, each adds graph_: new node_ in node_tt:
+            if sum(root.val_Ht[fder]) > G_aves[fder] * sum(root.rdn_Ht[fder]):
+                # cluster link_H[-1]:
+                graph_ = form_graph_(node_, pri_root_tt_, fder, fd)
+                sub_recursion_eval(root, graph_)  # sub+, eval last layer?
+                if sum(root.val_Ht[fder]) > G_aves[fder] * sum(root.rdn_Ht[fder]):  # updated in sub+
+                    agg_recursion(root, node_)  # agg+, replace root.node_ with new graphs, if any
+                node_tt[fder][fd] = graph_
+            elif root.root_T:  # if deeper agg+
+                node_tt[fder][fd] = node_
+                feedback(root, fd)  # update root.root..H, breadth-first
+
+    node_[:] = node_tt  # replace local element

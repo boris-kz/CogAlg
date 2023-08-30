@@ -45,14 +45,15 @@ def vectorize_root(blob, verbose=False):
     max_mask__ = max_selection(blob)  # mask of local directional maxima of dy, dx, g
 
     # form slices (Ps) from max_mask__ and form links by tracing max_mask__:
-    slice_blob_ortho(blob, max_mask__, verbose=verbose)
-
+    edge = slice_blob_ortho(blob, max_mask__, verbose=verbose)
+    # add prune_P_():
+    # P_ = [P for P in P_ if P.G*P.Ma > ave*P.rdn]
     form_link_(blob, max_mask__)
 
-    '''
+    # not revised:
     comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
     # rng+ in comp_slice adds edge.node_T[0]:
-    for fd, PP_ in enumerate(edge.node_T[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
+    for fd, PP_ in enumerate(edge.node_tt[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
         # sub+, intra PP:
         sub_recursion_eval(edge, PP_)
         # agg+, inter-PP, 1st layer is two forks only:
@@ -63,10 +64,10 @@ def vectorize_root(blob, verbose=False):
                 node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH,valt,rdnt], valt=valt,rdnt=rdnt, L=len(PP.node_),
                                  box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
                 sum_derH([edge.derH,edge.valt,edge.rdnt], [derH,valt,rdnt], 0)
-            edge.node_T[0][fd][:] = node_
+            edge.node_tt[0][fd][:] = node_
             # node_[:] = new node_tt in the end:
             agg_recursion(edge, node_)
-    '''
+
 
 def max_selection(blob):
     Y, X = blob.mask__.shape
@@ -197,26 +198,26 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
         P.dert_olp_ |= {(cy, cx)}  # add current cell to overlap
         _cy, _cx, _dy, _dx = cy, cx, dy, dx
         if fleft:
-            P.dert_ = [[y,x,i,dy,dx,g]] + P.dert_  # append left
+            P.dert_ = [(y,x,i,dy,dx,g,mangle)] + P.dert_  # append left
             y -= sin; x -= cos  # next y,x
         else:
-            P.dert_ = P.dert_ + [[y,x,i,dy,dx,g]]  # append right
+            P.dert_ = P.dert_ + [(y,x,i,dy,dx,g,mangle)]  # append right
             y += sin; x += cos  # next y,x
 
 # not revised:
 def form_link_(blob, mask__):
 
-    max_ = set(zip(*mask__.nonzero()))  # mask__ coordinates
-
+    max_yx__ = set(zip(*mask__.nonzero()))  # mask__ coordinates
+    # I don't think this is needed:
     dert_root_ = defaultdict(set)
     for P in blob.P_:
-        for olp, max in P.dert_olp_ & max_:
-            dert_root_[olp, max].add(P)
+        for y,x in P.olp_yx_ & max_yx_:
+            dert_root_[y,x].add(P)
 
     # trace edge from each P
     blob.P_link_ = set()    # clear P_link_
     for P in blob.P_:
-        traceq_ = deque(P.dert_olp_ & max_)  # start with dert_olp_ & max_
+        traceq_ = deque(P.olp_yx_ & max_yx_)  # start with dert_olp_ & max_
         traced_ = set(traceq_)
         while traceq_:   # trace adjacent through max_
             _y, _x = traceq_.popleft()
@@ -228,6 +229,6 @@ def form_link_(blob, mask__):
                 stop = True     # stop when a root is reached
             if not stop:    # continue
                 yx_ = {*product(range(_y-1,_y+2), range(_x-1,_x+2))}
-                yx_ = (yx_ & max_) - traced_
+                yx_ = (yx_ & max_yx_) - traced_
                 traceq_.extend(yx_)
                 traced_.add(yx_)

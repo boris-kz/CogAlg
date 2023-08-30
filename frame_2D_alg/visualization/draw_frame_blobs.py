@@ -104,8 +104,15 @@ def visualize_blobs(frame, layer='r'):
             y_, x_, *_ = np.array([*zip(*P.dert_)])
             L = len(x_)
             y0, x0, *_ = blob.ibox
+            if L > 1:
+                blob_slice_plot = ax.plot(x_+x0, y_+y0, 'bo-', linewidth=1, markersize=2)[0]
+            else:
+                s, c = P.axis
+                x_ = np.array([x-c, x, x+c])
+                y_ = np.array([y-c, y, y+c])
+                blob_slice_plot = ax.plot(x_ + x0, y_ + y0, 'b-', linewidth=1, markersize=2)[0]
             state.blob_slice += [(
-                ax.plot(x_+x0, y_+y0, 'bo-', linewidth=1, markersize=2)[0],
+                blob_slice_plot,
                 ax.text(x+x0, y+y0, str(L), color = 'b', fontsize = 12),
             )]
 

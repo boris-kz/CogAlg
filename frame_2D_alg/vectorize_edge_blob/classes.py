@@ -36,14 +36,14 @@ class CEdge(ClusterStructure):  # edge blob
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
-    ptuple : tuple = (0,0,0,0,(0,0),0)  # latuple: I,G,M,Ma,angle(Dy,Dx), L
+    ptuple : tuple = (0,0,0,0,(0,0),0)  # latuple: I,G,M,Ma, angle(Dy,Dx), L
     derH : list = z([])  # [[tuplet,valt,rdnt]] vertical derivatives summed from P links
     valt : list = z([0,0])  # summed from the whole derH
     rdnt : list = z([1,1])
     dert_ : list = z([])  # array of pixel-level derts, ~ node_
     link_H : list = z([[]])  # +ve rlink_, dlink_ H from lower sub+
     root_tt : list = z([[None,None],[None,None]])  # PPrm,PPrd, PPdm,PPdd that contain this P, single-layer
-    dert_olp_: set = z(set())
+    olp_P_ : list = z([])  # overlaping Ps
     axis : tuple = (0, 1)  # prior slice angle, init sin=0,cos=1
     yx : tuple = None
     ''' 
@@ -76,7 +76,7 @@ lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays:
 class CPP(CderP):
 
     fd : int = 0  # PP is defined by combined-fork value per link: derP mtuple | dtuple; not fder?
-    ptuple : list = z([0,0,0,[0,0],0])   # summed P__ ptuples, = 0th derLay
+    ptuple : list = z([0,0,0,0,[0,0],0])   # summed P__ ptuples, = 0th derLay
     derH : list = z([])  # [[mtuple,dtuple, mval,dval, mrdn,drdn]]: cross-fork composition layers
     valt : list = z([0,0])
     rdnt : list = z([1,1])
@@ -100,8 +100,8 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     link_H : list = z([[]])  # added per rng+ comp_G_
     val_Ht : list = z([[0],[0]])  # H of link vals per fder
     rdn_Ht : list = z([[1],[1]])
-    node_tt : list = z([])  # nest by agg+/ node_->node_tt: rng+ Gm_,Gd_, der+ Gm_,Gd_, incr if wH: down-forking tree of node Levs
-    root_tt : list = z([])  # up reciprocal to down node_T; agg+| sub+ mset forks, incr.nest if uH: up-forking tree of root Levs?
+    node_tt : list = z([])  #-> Gmr_,Gdr_, Gmd_,Gdd_ by agg+/sub+, nested if wH: down-forking tree of node Levs
+    root_tt : list = z([[],[]],[[],[]])  # up reciprocal to node_tt, nested if uH: up-forking tree of root Levs
     L : int = 0 # len base node_; from internal links:
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers
