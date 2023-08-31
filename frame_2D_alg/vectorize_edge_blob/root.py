@@ -68,7 +68,6 @@ def vectorize_root(blob, verbose=False):
             # node_[:] = new node_tt in the end:
             agg_recursion(edge, node_)
 
-
 def max_selection(blob):
     Y, X = blob.mask__.shape
     g__ = blob.der__t.g

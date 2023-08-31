@@ -42,9 +42,9 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     rdnt : list = z([1,1])
     dert_ : list = z([])  # array of pixel-level derts, ~ node_
     link_H : list = z([[]])  # +ve rlink_, dlink_ H from lower sub+
+    olp_Ps : list = z([])  # overlapping Ps = [der__t_roots[dert[0][dert[1] for dert in P.dert_]
     root_tt : list = z([[None,None],[None,None]])  # PPrm,PPrd, PPdm,PPdd that contain this P, single-layer
-    olp_P_ : list = z([])  # overlaping Ps
-    axis : tuple = (0, 1)  # prior slice angle, init sin=0,cos=1
+    axis : tuple = (0,1)  # prior slice angle, init sin=0,cos=1
     yx : tuple = None
     ''' 
     add L,S,A from links?
@@ -112,7 +112,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     alt_Graph : object = None  # conditional, summed and concatenated params of alt_graph_
     # temporary:
     compared_ : list = z([])
-    fback_ : list = z([])  # [feedback aggH,valt,rdnt per node]
+    fback_tt : list = z([[],[]],[[],[]])  # feedback [[aggH,valt,rdnt]] per node fork
     Rdn : int = 0  # for accumulation or separate recursion count?
 
     # id_H : list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
