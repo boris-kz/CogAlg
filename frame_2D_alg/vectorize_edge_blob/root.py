@@ -96,10 +96,9 @@ def max_selection(blob):
         # neighbors:
         yn1_, xn1_ = y_ + ry, x_ + rx
         yn2_, xn2_ = y_ - ry, x_ - rx
-        # computed vals:
+        # computed vals
         valid1_ = (0 <= yn1_) & (yn1_ < Y) & (0 <= xn1_) & (xn1_ < X)
         valid2_ = (0 <= yn2_) & (yn2_ < Y) & (0 <= xn2_) & (xn2_ < X)
-
         # compare values
         not_max_ = np.zeros_like(y_, dtype=bool)
         not_max_[valid1_] |= (g__[y_[valid1_], x_[valid1_]] < g__[yn1_[valid1_], xn1_[valid1_]])
@@ -206,7 +205,7 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
 # not revised:
 def form_link_(blob, mask__):
 
-    max_yx__ = set(zip(*mask__.nonzero()))  # mask__ coordinates
+    max_yx_ = set(zip(*mask__.nonzero()))  # mask__ coordinates
     # I don't think this is needed:
     dert_root_ = defaultdict(set)
     for P in blob.P_:
