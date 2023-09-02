@@ -42,10 +42,10 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     rdnt : list = z([1,1])
     dert_ : list = z([])  # array of pixel-level derts, ~ node_
     link_H : list = z([[]])  # +ve rlink_, dlink_ H from lower sub+
-    olp_Ps : list = z([])  # overlapping Ps = [der__t_roots[dert[0][dert[1] for dert in P.dert_]
     root_tt : list = z([[None,None],[None,None]])  # PPrm,PPrd, PPdm,PPdd that contain this P, single-layer
     axis : tuple = (0,1)  # prior slice angle, init sin=0,cos=1
     yx : tuple = None
+    box_olp_ : set = z(set())  # a set of overlaps between P box and other P boxes, with pixels?
     ''' 
     add L,S,A from links?
     optional:
@@ -101,7 +101,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     val_Ht : list = z([[0],[0]])  # H of link vals per fder
     rdn_Ht : list = z([[1],[1]])
     node_tt : list = z([])  #-> Gmr_,Gdr_, Gmd_,Gdd_ by agg+/sub+, nested if wH: down-forking tree of node Levs
-    root_tt : list = z([[],[]],[[],[]])  # up reciprocal to node_tt, nested if uH: up-forking tree of root Levs
+    root_tt : list = z([[[],[]],[[],[]]])  # up reciprocal to node_tt, nest if uH: up-forking tree of root Levs
     L : int = 0 # len base node_; from internal links:
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers

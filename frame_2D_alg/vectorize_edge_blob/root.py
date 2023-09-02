@@ -4,7 +4,7 @@ from collections import namedtuple, deque, defaultdict
 from itertools import product
 from frame_blobs import Tdert
 from .classes import CEdge, CP, CPP, CderP, Cgraph
-from .filters import ave, ave_g, ave_ga, ave_rotate
+from .filters import ave, ave_g, ave_dangle
 from .comp_slice import comp_slice, comp_angle, sum_derH
 from .hough_P import new_rt_olp_array, hough_check
 from .agg_recursion import agg_recursion, sum_aggH
@@ -36,9 +36,9 @@ As we add higher dimensions (3D and time), this dimensionality reduction is done
 (likely edges in 2D or surfaces in 3D) to form more compressed "skeletal" representations of full-dimensional patterns.
 '''
 
-Tptuple = namedtuple("Tptuple", "I Dy Dx G M L")
+Tptuple = namedtuple("Tptuple", "I Dy Dx G M Ma L")
 
-oct_sep = 0.3826834323650898
+octant = 0.3826834323650898
 
 def vectorize_root(blob, verbose=False):
 
@@ -46,27 +46,26 @@ def vectorize_root(blob, verbose=False):
 
     # form slices (Ps) from max_mask__ and form links by tracing max_mask__:
     edge = slice_blob_ortho(blob, max_mask__, verbose=verbose)
-    # add prune_P_():
-    # P_ = [P for P in P_ if P.G*P.Ma > ave*P.rdn]
+    # prune_P_(): P_ = [P for P in P_ if P.G*P.Ma > ave*P.rdn]
     form_link_(blob, max_mask__)
 
     # not revised:
-    comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
-    # rng+ in comp_slice adds edge.node_T[0]:
-    for fd, PP_ in enumerate(edge.node_tt[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
-        # sub+, intra PP:
-        sub_recursion_eval(edge, PP_)
-        # agg+, inter-PP, 1st layer is two forks only:
-        if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
-            node_= []
-            for PP in PP_: # CPP -> Cgraph:
-                derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
-                node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH,valt,rdnt], valt=valt,rdnt=rdnt, L=len(PP.node_),
-                                 box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
-                sum_derH([edge.derH,edge.valt,edge.rdnt], [derH,valt,rdnt], 0)
-            edge.node_tt[0][fd][:] = node_
-            # node_[:] = new node_tt in the end:
-            agg_recursion(edge, node_)
+    # comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
+    # # rng+ in comp_slice adds edge.node_T[0]:
+    # for fd, PP_ in enumerate(edge.node_tt[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
+    #     # sub+, intra PP:
+    #     sub_recursion_eval(edge, PP_)
+    #     # agg+, inter-PP, 1st layer is two forks only:
+    #     if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
+    #         node_= []
+    #         for PP in PP_: # CPP -> Cgraph:
+    #             derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
+    #             node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH,valt,rdnt], valt=valt,rdnt=rdnt, L=len(PP.node_),
+    #                              box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
+    #             sum_derH([edge.derH,edge.valt,edge.rdnt], [derH,valt,rdnt], 0)
+    #         edge.node_tt[0][fd][:] = node_
+    #         # node_[:] = new node_tt in the end:
+    #         agg_recursion(edge, node_)
 
 def max_selection(blob):
     Y, X = blob.mask__.shape
@@ -74,35 +73,32 @@ def max_selection(blob):
 
     # compute direction of gradient
     with np.errstate(divide='ignore', invalid='ignore'):
-        s__, c__ = [blob.der__t.dy, blob.der__t.dx] / g__
+        sin__, cos__ = [blob.der__t.dy, blob.der__t.dx] / g__
 
     # round angle to one of eight directions
-    up__, lft__, dwn__, rgt__ = (s__ < -oct_sep), (c__ < -oct_sep), (s__ > oct_sep), (c__ > oct_sep)
+    up__, lft__, dwn__, rgt__ = (sin__< -octant), (cos__< -octant), (sin__> octant), (cos__> octant)
     mdly__, mdlx__ = ~(up__ | dwn__), ~(lft__ | rgt__)
-
-    # assign directions, reduced to four
-    dir_mask___ = [
+    # merge in 4 bilateral axes
+    axes_mask__ = [
         mdly__ & (rgt__ | lft__), (dwn__ & rgt__) | (up__ & lft__),     #  0,  45 deg
         (dwn__ | up__) & mdlx__,  (dwn__ & lft__) | (up__ & rgt__),     # 90, 135 deg
     ]
-    ryx_ = [(0, 1), (1, 1), (1, 0), (1, -1)]
-
     max_mask__ = np.zeros_like(blob.mask__, dtype=bool)
-    # local max by comparing neighboring pixels per direction:
-    for dir_mask__, (ry, rx) in zip(dir_mask___, ryx_):
-        # direction pixels AND blob mask:
-        mask__ = dir_mask__ & blob.mask__
+    # local max from cross-comp in each axis:
+    for axis_mask__, (ydir, xdir) in zip(axes_mask__, ((0,1),(1,1),(1,0),(1,-1))):  # y,x dir per axis
+        # axis AND mask:
+        mask__ = axis_mask__ & blob.mask__
         y_, x_ = mask__.nonzero()
         # neighbors:
-        yn1_, xn1_ = y_ + ry, x_ + rx
-        yn2_, xn2_ = y_ - ry, x_ - rx
+        yn1_, xn1_ = y_ + ydir, x_ + xdir
+        yn2_, xn2_ = y_ - ydir, x_ - xdir
         # computed vals
-        valid1_ = (0 <= yn1_) & (yn1_ < Y) & (0 <= xn1_) & (xn1_ < X)
-        valid2_ = (0 <= yn2_) & (yn2_ < Y) & (0 <= xn2_) & (xn2_ < X)
+        axis1_ = (0 <= yn1_) & (yn1_ < Y) & (0 <= xn1_) & (xn1_ < X)
+        axis2_ = (0 <= yn2_) & (yn2_ < Y) & (0 <= xn2_) & (xn2_ < X)
         # compare values
         not_max_ = np.zeros_like(y_, dtype=bool)
-        not_max_[valid1_] |= (g__[y_[valid1_], x_[valid1_]] < g__[yn1_[valid1_], xn1_[valid1_]])
-        not_max_[valid2_] |= (g__[y_[valid2_], x_[valid2_]] < g__[yn2_[valid2_], xn2_[valid2_]])
+        not_max_[axis1_] |= (g__[y_[axis1_], x_[axis1_]] < g__[yn1_[axis1_], xn1_[axis1_]])
+        not_max_[axis2_] |= (g__[y_[axis2_], x_[axis2_]] < g__[yn2_[axis2_], xn2_[axis2_]])
         # select maxes
         mask__[y_[not_max_], x_[not_max_]] = False
         # add to max_mask__
@@ -116,7 +112,7 @@ def slice_blob_ortho(blob, mask__, verbose=False):
     y_, x_ = mask__.nonzero()
     der_t = blob.der__t.get_pixel(y_, x_)
     deryx_ = sorted(zip(y_, x_, *der_t), key=lambda t: t[-1]) # sort by g
-    filled = set()
+    filled = set()  # filled with P boxes?
     if verbose:
         step = 100 / len(deryx_)  # progress % percent per pixel
         progress = 0.0; print(f"\rSlicing... {round(progress)} %", end="");  sys.stdout.flush()
@@ -124,11 +120,11 @@ def slice_blob_ortho(blob, mask__, verbose=False):
     for y, x, dy, dx, g in deryx_:
         i = blob.i__[blob.ibox.slice()][y, x]
         assert g > 0, "g must be positive"
-        P = form_P(CP(yx=(y, x), axis=(dy/g, dx/g), dert_olp_={(y,x)}, dert_=[(y, x, i, dy, dx, g)]), blob)
+        P = form_P(CP(yx=(y, x), axis=(dy/g, dx/g), box_olp_={(y,x)}, dert_=[(y, x, i, dy, dx, g, ave_dangle)]), blob)
         # exclude >=50% overlap:
-        if len(filled & P.dert_olp_) / len(P.dert_olp_) >= 0.5:
+        if len(filled & P.box_olp_) / len(P.box_olp_) >= 0.5:
             continue
-        filled.update(P.dert_olp_)
+        filled.update(P.box_olp_)
         blob.P_ += [P]
 
         if verbose:
@@ -141,11 +137,11 @@ def form_P(P, blob):
     scan_direction(P, blob, fleft=1)  # scan left
     scan_direction(P, blob, fleft=0)  # scan right
     # init:
-    _, _, I, Dy, Dx, G = map(sum, zip(*P.dert_))
+    _, _, I, Dy, Dx, G, Ma = map(sum, zip(*P.dert_))
     L = len(P.dert_)
     M = ave_g*L - G
     G = np.hypot(Dy, Dx)  # recompute G
-    P.ptuple = Tptuple(I, Dy, Dx, G, M, L)
+    P.ptuple = Tptuple(I, Dy, Dx, G, M, Ma, L)
     P.yx = P.dert_[L//2][:2]  # new center
 
     return P
@@ -155,12 +151,13 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
     Y, X = blob.mask__.shape    # boundary
     sin,cos = _dy,_dx = P.axis  # unpack axis
     _y, _x = P.yx               # start with pivot
-    r = cos*_y - sin*_x   # from P line equation: cos*y - sin*x = r = constant
-    _cy,_cx = round(_y), round(_x)  # keep previous cell
-    y, x = (_y-sin,_x-cos) if fleft else (_y+sin, _x+cos)   # first dert position in the direction of axis
-    while True:                   # start scanning, stop at boundary or edge of blob
-        x0, y0 = int(x), int(y)   # floor
-        x1, y1 = x0 + 1, y0 + 1   # ceiling
+    r = cos*_y - sin*_x  # from P line equation: cos*y - sin*x = r = constant
+    _cy,_cx = round(_y), round(_x)  # keep initial cell
+    y, x = (_y-sin,_x-cos) if fleft else (_y+sin, _x+cos)  # first dert in the direction of axis
+
+    while True:  # scan to blob boundary or angle miss
+        x0, y0 = int(x), int(y)  # floor
+        x1, y1 = x0 + 1, y0 + 1  # ceiling
         if x0 < 0 or x1 >= X or y0 < 0 or y1 >= Y: break   # boundary check
         kernel = [  # cell weighing by inverse distance from float y,x:
             # https://www.researchgate.net/publication/241293868_A_study_of_sub-pixel_interpolation_algorithm_in_digital_speckle_correlation_method
@@ -171,29 +168,26 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
         cy, cx = round(y), round(x)  # nearest cell of (y, x)
         if not blob.mask__[cy, cx]:
             break
-        if abs(cy-_cy) + abs(cx-_cx) == 2:  # mask check of intermediate cell between (y, x) and (_y, _x)
-            my = (_cy+cy) / 2
-            mx = (_cx+cx) / 2    # cell midpoint, P axis may be above, below or over
-            _myc = sin * mx + r  # y at mx in P; _myc = _my*cos
-            myc = my * cos       # new cell, multiply by cos to avoid division
-            if cos < 0: myc, _myc = -myc, -_myc   # reverse sign for comparison because of cos
-            if abs(myc-_myc) > 1e-5:
-                # deviation from P axis, y is reversed in image processing:
-                # myc1 > myc: above axis, myc1 < myc: below axis, myc1 = myc: over axis, no intermediate cell
-                ty, tx = (
-                    ((_cy, cx) if _cy < cy else (cy, _cx))
-                    if _myc < myc else
+        if abs(cy-_cy) + abs(cx-_cx) == 2:  # mask of cell between (y,x) and (_y,_x)
+            my = (_cy+cy) / 2  # midpoint cell, P axis is above, below or over it
+            mx = (_cx+cx) / 2
+            _my_cos = sin * mx + r  # _my*cos at mx in P, to avoid division
+            my_cos = my * cos       # new cell
+            if cos < 0: my_cos, _my_cos = -my_cos, -_my_cos   # reverse sign for comparison because of cos
+            if abs(my_cos-_my_cos) > 1e-5:
+                ty, tx = (  # deviation from P axis: above/_y>y, below/_y<y, over/_y~=y, with reversed y:
+                    ((_cy, cx) if _cy < cy else (cy, _cx)) if _my_cos < my_cos else
                     ((_cy, cx) if _cy > cy else (cy, _cx))
                 )
                 if not blob.mask__[ty, tx]: break    # if the cell is masked, stop
-                P.dert_olp_ |= {(ty,tx)}
+                P.box_olp_ |= {(ty,tx)}
 
         ider__t = (blob.i__[blob.ibox.slice()],) + blob.der__t
         i,dy,dx,g = (sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t)
         mangle,dangle = comp_angle((_dy,_dx), (dy, dx))
         if mangle < 0:  # terminate P if angle miss
             break
-        P.dert_olp_ |= {(cy, cx)}  # add current cell to overlap
+        P.box_olp_ |= {(cy, cx)}  # add current cell to overlap
         _cy, _cx, _dy, _dx = cy, cx, dy, dx
         if fleft:
             P.dert_ = [(y,x,i,dy,dx,g,mangle)] + P.dert_  # append left
@@ -206,16 +200,15 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
 def form_link_(blob, mask__):
 
     max_yx_ = set(zip(*mask__.nonzero()))  # mask__ coordinates
-    # I don't think this is needed:
     dert_root_ = defaultdict(set)
     for P in blob.P_:
-        for y,x in P.olp_yx_ & max_yx_:
+        for y,x in P.box_olp_ & max_yx_:
             dert_root_[y,x].add(P)
 
     # trace edge from each P
     blob.P_link_ = set()    # clear P_link_
     for P in blob.P_:
-        traceq_ = deque(P.olp_yx_ & max_yx_)  # start with dert_olp_ & max_
+        traceq_ = deque(P.box_olp_ & max_yx_)  # start with box_olp_ & max_
         traced_ = set(traceq_)
         while traceq_:   # trace adjacent through max_
             _y, _x = traceq_.popleft()
@@ -229,4 +222,4 @@ def form_link_(blob, mask__):
                 yx_ = {*product(range(_y-1,_y+2), range(_x-1,_x+2))}
                 yx_ = (yx_ & max_yx_) - traced_
                 traceq_.extend(yx_)
-                traced_.add(yx_)
+                traced_ |= yx_
