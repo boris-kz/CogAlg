@@ -54,10 +54,12 @@ def visualize_blobs(frame, layer='r'):
         layers_stack=[(frame, layer)],
         # plots
         quiver=None,
-        blob_slice=None,
+        blob_slices=None,
+        P_links=None,
         # flags
         show_gradient=False,
-        show_slice=False,
+        show_slices=False,
+        show_links=False,
     )
 
     fig, ax = plt.subplots()
@@ -88,38 +90,53 @@ def visualize_blobs(frame, layer='r'):
             *state.gradient_mask.nonzero()[::-1],
             *state.gradient[:, state.gradient_mask])
 
-    def update_blob_slice():
-        if state.blob_slice is not None:
-            for line, L_text in state.blob_slice:
+    def update_blob_slices():
+        if state.blob_slices is not None:
+            for line, L_text in state.blob_slices:
                 line.remove()
                 L_text.remove()
-            state.blob_slice = None
+            state.blob_slices = None
 
         blob = state.blob_cls.get_instance(state.blob_id)
-        if blob is None or not blob.P_ or not state.show_slice:
+        if blob is None or not blob.P_ or not state.show_slices:
             return
-        state.blob_slice = []
+        y0, x0, *_ = blob.ibox
+        state.blob_slices = []
         for P in blob.P_:
             y, x = P.yx
             y_, x_, *_ = np.array([*zip(*P.dert_)])
             L = len(x_)
-            y0, x0, *_ = blob.ibox
             if L > 1:
-                blob_slice_plot = ax.plot(x_+x0, y_+y0, 'bo-', linewidth=1, markersize=2)[0]
+                blob_slices_plot = ax.plot(x_+x0, y_+y0, 'bo-', linewidth=1, markersize=2)[0]
             else:
                 s, c = P.axis
                 x_ = np.array([x-c, x, x+c])
-                y_ = np.array([y-c, y, y+c])
-                blob_slice_plot = ax.plot(x_ + x0, y_ + y0, 'b-', linewidth=1, markersize=2)[0]
-            state.blob_slice += [(
-                blob_slice_plot,
+                y_ = np.array([y-s, y, y+s])
+                blob_slices_plot = ax.plot(x_ + x0, y_ + y0, 'b-', linewidth=1, markersize=2)[0]
+            state.blob_slices += [(
+                blob_slices_plot,
                 ax.text(x+x0, y+y0, str(L), color = 'b', fontsize = 12),
             )]
 
+    def update_P_links():
+        if state.P_links is not None:
+            for line in state.P_links:
+                line.remove()
+            state.P_links = None
+
+        blob = state.blob_cls.get_instance(state.blob_id)
+        if blob is None or not blob.P_link_ or not state.show_links:
+            return
+        y0, x0, *_ = blob.ibox
+        state.P_links = []
+        for link in blob.P_link_:
+            (_y, _x), (y, x) = link[0].yx, link[1].yx
+            state.P_links += ax.plot([_x+x0,x+x0], [_y+y0,y+y0], 'ko-', linewidth=2, markersize=4)
 
     def update_img():
         update_gradient()
-        update_blob_slice()
+        update_blob_slices()
+        update_P_links()
         imshow_obj.set_data(state.img)
         fig.canvas.draw_idle()
 
@@ -205,8 +222,10 @@ def visualize_blobs(frame, layer='r'):
     def on_key_press(event):
         if event.key == 'd':
             state.show_gradient = not state.show_gradient
-        elif event.key == 'c':
-            state.show_slice = not state.show_slice
+        elif event.key == 'z':
+            state.show_slices = not state.show_slices
+        elif event.key == 'x':
+            state.show_links = not state.show_links
         else:
             return
         update_img()
@@ -217,6 +236,8 @@ def visualize_blobs(frame, layer='r'):
 
     print("hit 'q' to exit")
     print("hit 'd' to toggle show gradient")
+    print("hit 'z' to toggle show slices")
+    print("hit 'x' to toggle show links")
     print("blob:")
     print(f"┌{'─'*10}┬{'─'*6}┬{'─'*10}┬{'─'*10}┬{'─'*10}┬{'─'*10}"
           f"┬{'─'*10}┬{'─'*10}┬{'─'*16}┬{'─'*10}┐")
