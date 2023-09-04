@@ -18,8 +18,8 @@ ave_L = 10
 ave_x = 1
 ave_dx = 5  # inv, difference between median x coords of consecutive Ps
 ave_dy = 5
-ave_daxis = .5
-ave_dangle = .5  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
+ave_daxis = .2
+ave_dangle = .2  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
 # max mangle = ave_dangle + 1; or ave_dangle is from comp adjacent angles, which is lower?
 ave_daangle = 2
 

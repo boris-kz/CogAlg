@@ -35,26 +35,28 @@ Weak value vars are combined into higher var, so derivation fork can be selected
 
 def agg_recursion(root, node_):  # compositional recursion in root graph
 
-    pri_root_tt_, node_tt = [[],[]], [[],[]]  # fill with select comp forks:
-    # draft:
+    pri_root_tt_ = [node.root_tt for node in node_]  # merge node roots for new graphs, same for both comp forks
+    node_tt = [[],[]]  # fill with comp fork if selected, else stays empty
+
     for fder in 0,1:
-        # eval per comp fork, each adds a layer of links and val_H, rdn_H:
-        root.val_Ht[fder] += [0]; root.rdn_Ht[fder] += [1]  # estimate, no node.rdnt[fder] += 1?
-        # n comp graphs ~-> n matches, match rate decreasing with distance:
-        if sum(root.val_Ht[fder]) * np.sqrt(len(node_) - 1) if node_ else 0 > G_aves[fder] * sum(root.rdn_Ht[fder]):
+        # eval per comp fork, n comp graphs ~-> n matches, match rate decreases with distance:
+        if sum(root.val_Ht[fder]) * np.sqrt(len(node_)-1) if node_ else 0 > G_aves[fder] * sum(root.rdn_Ht[fder]):
             if fder and len(node_[0].link_H) < 2:  # 1st call, no der+ yet
                 continue
-            for node in node_:  # draft
-                pri_root_tt_[fder] += [node.root_tt[fder]]  # merge node roots for new graphs in segment_node_
-                node.root_tt[fder] = [[],[]]  # replace node roots, per select comp fork?
-                node.val_Ht[fder] += [0]; node.rdn_Ht[fder] += [1]  # new val,rdn layer, accum in comp_G_
+            root.val_Ht[fder] += [0]; root.rdn_Ht[fder] += [1]  # estimate, no node.rdnt[fder] += 1?
+            for node in node_:
+                node.root_tt[fder] = [[],[]]  # to replace node roots per comp fork
+                node.val_Ht[fder] += [0]; node.rdn_Ht[fder] += [1]  # new layer, accum in comp_G_:
+            if not fder:  # add layer of links if rng+
+                for node in node_: node.link_H += [[]]
 
             comp_G_(node_, pri_G_=None, f1Q=1, fder=fder)  # cross-comp all Gs in (rng,der), nD array? form link_H per G
+            node_tt[fder] = [[],[]]  # fill with clustering forks by default
             for fd in 0,1:
                 # cluster link_H[-1] -> graph_,= node_ in node_tt, default, agg+ eval per graph:
                 graph_ = form_graph_(node_, fder, fd, pri_root_tt_)
                 if sum(root.val_Ht[fder]) * np.sqrt(len(graph_)-1) if graph_ else 0 > G_aves[fder] * sum(root.rdn_Ht[fder]):
-                    agg_recursion(root, graph_)  # replaces graph_ formed above with graphs-of-graphs node_tt, recursive
+                    agg_recursion(root, graph_)  # replaces graph_ with node_tt graphs-of-graphs, recursive
                 node_tt[fder][fd] = graph_
     for fder in 0,1:
         if node_tt[fder]:  # new nodes, all terminated, all send feedback
@@ -72,7 +74,7 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fder=0):  # cross-comp in G_ if f1Q, else co
             for link in G.link_H[-2]:
                 if link.valt[1] > ave_Gd:
                     _G_ += [link.G1 if G is link.G0 else link.G0]
-        else:    _G_ = G_ if f1Q else pri_G_  # loop all Gs in rng+
+        else:  _G_ = G_ if f1Q else pri_G_  # loop all Gs in rng+
         for _G in _G_:
             if _G in G.compared_:  # was compared in prior rng
                 continue
@@ -128,16 +130,14 @@ def form_graph_(node_, fder, fd, pri_root_tt_):  # form fuzzy graphs of nodes pe
     ave = G_aves[fder]
     max_ = select_max_(node_, fder, ave)  # compute max of quasi-Gaussians: val + sum([_val * (link_val/max_val])
 
-    pre_graph_ = segment_node_(node_, max_, fder, fd, pri_root_tt_)
-    graph_ = prune_graph_(pre_graph_, fder, fd)  # sort node roots and prune the weak
-    sum2graph_(graph_, fder, fd)  # convert seq_graphs to Cgraphs
+    full_graph_ = segment_node_(node_, max_, fder, fd, pri_root_tt_)
+    list_graph_ = prune_graph_(full_graph_, fder, fd)  # sort node roots and prune the weak
+    graph_ = sum2graph_(list_graph_, fder, fd)  # convert list graphs to Cgraphs
     # sub+:
     for graph in graph_:
-        for fder in 0,1:
-            for fd in 0,1:
-                node_ = graph.node_[fder][fd]
-                if sum(graph.val_Ht[fder]) * np.sqrt(len(node_) - 1) if node_ else 0 > G_aves[fder] * sum(graph.rdn_Ht[fder]):
-                    agg_recursion(graph, node_)  # replaces node_ formed above with new graphs in node_tt, recursive
+        node_ = copy(graph.node_tt)  # still node_ here
+        if sum(graph.val_Ht[fder]) * np.sqrt(len(node_)-1) if node_ else 0 > G_aves[fder] * sum(graph.rdn_Ht[fder]):
+            agg_recursion(graph, node_)  # replaces node_ formed above with new graphs in node_tt, recursive
 
     return graph_
 
