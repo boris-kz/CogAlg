@@ -49,3 +49,17 @@ def sub_recursion(root, graph, node_, fder):  # rng+: extend G_ per graph, der+:
         sub_t += [sub_G_]
 
     return sub_t
+
+# ignore: lateral splicing of initial Ps is not needed: will be spliced in PPs through common forks?
+def lat_comp_P(_P,P):  # to splice, no der+
+
+    ave = P_aves[0]
+    rn = len(_P.dert_)/ len(P.dert_)
+
+    mtuple,dtuple = comp_ptuple(_P.ptuple[:-1], P.ptuple[:-1], rn)
+    _L, L = _P.ptuple[-1], P.ptuple[-1]
+    gap = np.hypot((_P.y - P.y), (_P.x, P.x))
+    rL = _L - L
+    mM = min(_L, L) - ave
+    mval = sum(mtuple); dval = sum(dtuple)
+    mrdn = 1+(dval>mval); drdn = 1+(1-(dval>mval))  # rdn = Dval/Mval?

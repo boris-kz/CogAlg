@@ -237,7 +237,9 @@ def sum2graph_(graph_, fder, fd):  # sum node and link params into graph, aggH i
 
     Graph_ = []
     for graph in graph_:  # seq graphs
-        Graph = Cgraph(root_tt=graph[2], L=len(graph[0]))  # pri_root_tt_, n nodes
+        Root_tt = copy(graph[2][0])  # merge pri_root_tt_ into Root_tt:
+        [merge_root_tree(Root_tt, root_tt) for root_tt in graph[2][1:]]
+        Graph = Cgraph(root_tt=Root_tt, L=len(graph[0]))  # n nodes
         Link_ = []
         for G in graph[0]:
             sum_box(Graph.box, G.box)

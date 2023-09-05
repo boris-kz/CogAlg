@@ -1,17 +1,52 @@
 import numpy as np
-from itertools import zip_longest
 from copy import copy, deepcopy
-from .classes import CderP, CPP
-from .filters import ave, aves, vaves, ave_dangle, ave_daangle,med_decay, aveB, P_aves
+from itertools import zip_longest
+from .slice_edge import slice_edge
+from .agg_recursion import agg_recursion
+from .classes import Cgraph, CP, CderP, CPP
+from .filters import ave, aves, vaves, ave_dangle, ave_daangle, med_decay, aveB, P_aves, PP_aves, G_aves, ave_nsubt
+from dataclasses import replace
 
 '''
+Vectorize is a terminal fork of intra_blob.
+
+comp_slice traces edge axis by cross-comparing vertically adjacent Ps: horizontal slices across an edge blob.
+These are low-M high-Ma blobs, vectorized into outlines of adjacent flat (high internal match) blobs.
+(high match or match of angle: M | Ma, roughly corresponds to low gradient: G | Ga)
+-
+Vectorization is clustering of parameterized Ps + their derivatives (derPs) into PPs: patterns of Ps that describe edge blob.
+This process is a reduced-dimensionality (2D->1D) version of cross-comp and clustering cycle, common across this project.
+As we add higher dimensions (3D and time), this dimensionality reduction is done in salient high-aspect blobs
+(likely edges in 2D or surfaces in 3D) to form more compressed "skeletal" representations of full-dimensional patterns.
+
 comp_slice traces edge blob axis by cross-comparing vertically adjacent Ps: slices across edge blob, along P.G angle.
 These low-M high-Ma blobs are vectorized into outlines of adjacent flat (high internal match) blobs.
 (high match or match of angle: M | Ma, roughly corresponds to low gradient: G | Ga)
 
-P: any angle, connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possibly forking. 
+Connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possibly forking. 
 len prior root_ sorted by G is rdn of each root, to evaluate it for inclusion in PP, or starting new P by ave*rdn.
 '''
+
+def vectorize_root(edge, verbose=False):
+
+    slice_edge(edge, verbose=False)
+    comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
+    # not revised:
+    for fd, PP_ in enumerate(edge.node_tt[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
+        # sub+, intra PP:
+        sub_recursion_eval(edge, PP_)
+        # agg+, inter-PP, 1st layer is two forks only:
+        if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
+            node_= []
+            for PP in PP_: # CPP -> Cgraph:
+                derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
+                node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH,valt,rdnt], valt=valt,rdnt=rdnt, L=len(PP.node_),
+                                 box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
+                sum_derH([edge.derH,edge.valt,edge.rdnt], [derH,valt,rdnt], 0)
+            edge.node_tt[0][fd][:] = node_
+            # rng+ comp new graphs:
+            while sum(edge.val_Ht[0]) * np.sqrt(len(node_)-1) if node_ else 0 > G_aves[0] * sum(edge.rdn_Ht[0]):
+                agg_recursion(edge, node_)  # node_[:] = new node_tt in the end, with sub+
 
 def comp_slice(edge, verbose=False):  # high-G, smooth-angle blob, composite dert core param is v_g + iv_ga
 
@@ -24,7 +59,7 @@ def comp_slice(edge, verbose=False):  # high-G, smooth-angle blob, composite der
         for _P in link_:  # or spliced_link_ if active
             comp_P(_P,P, fder=0)  # replaces P.link_ Ps with derPs
     # convert node_ to node_tt:
-    edge.node_T = [form_PP_t([Pt[0] for Pt in P_], PP_=None, base_rdn=2, fder=0), [[], []]]  # root fork is rng+ only
+    edge.node_tt = [form_PP_t([Pt[0] for Pt in P_], PP_=None, base_rdn=2, fder=0), [[], []]]  # root fork is rng+ only
 
 
 # not revised:
@@ -120,7 +155,6 @@ def form_PP_t(P_, PP_, base_rdn, fder):  # form PPs of derP.valt[fd] + connected
         # prune qPPs by mediated links vals:
         rePP_ = reval_PP_(qPP_, fder, fd)  # PP = [qPP,valt,reval]
         CPP_ = [sum2PP(qPP, base_rdn, fder, fd) for qPP in rePP_]
-
         PP_t += [CPP_]  # least one PP in rePP_, which would have node_ = P_
 
     return PP_t  # add_alt_PPs_(graph_t)?
@@ -257,7 +291,7 @@ def comp_angle(_angle, angle):  # rn doesn't matter for angles
 
     return [mangle, dangle]
 
-def comp_aangle(_aangle, aangle):
+def comp_aangle(_aangle, aangle):  # currently not used
 
     _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _aangle
     sin_da0, cos_da0, sin_da1, cos_da1 = aangle
@@ -278,3 +312,89 @@ def comp_aangle(_aangle, aangle):
     maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
 
     return [maangle,daangle]
+
+'''
+Each call to comp_rng | comp_der forms dderH: a layer of derH
+Comp fork fder and clustering fork fd are not represented in derH because they are merged in feedback, to control complexity
+(deeper layers are appended by feedback, if nested we would need fback_T and Fback_T: last_layer_nforks = 2^n_higher_layers)
+'''
+def sub_recursion_eval(root, PP_):  # fork PP_ in PP or blob, no derH in blob
+
+    termt = [1,1]
+    # PP_ in PP_t:
+    for PP in PP_:
+        sub_tt = []  # from rng+, der+
+        fr = 0  # recursion in any fork
+        for fder in 0,1:  # rng+ and der+:
+            if len(PP.node_) > ave_nsubt[fder] and PP.valt[fder] > PP_aves[fder] * PP.rdnt[fder]:
+                termt[fder] = 0
+                if not fr:  # add link_tt and root_tt for both comp forks:
+                    for P in PP.node_:
+                        P.root_tt = [[None,None],[None,None]]
+                        P.link_H += [[]]  # form root_t, link_t in sub+:
+                sub_tt += [sub_recursion(PP, PP_, fder)]  # comp_der|rng in PP->parLayer
+                fr = 1
+            else:
+                sub_tt += [PP.node_]
+                root.fback_ += [[PP.derH, PP.valt, PP.rdnt]]  # separate feedback per terminated comp fork
+        if fr:
+            PP.node_ = sub_tt  # nested PP_ tuple from 2 comp forks, each returns sub_PP_t: 2 clustering forks, if taken
+
+    return termt
+
+def sub_recursion(PP, PP_, fder):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
+
+    comp_der(PP.node_) if fder else comp_rng(PP.node_, PP.rng+1)  # same else new P_ and links
+    # eval all| last layer?:
+    PP.rdnt[fder] += PP.valt[fder] - PP_aves[fder]*PP.rdnt[fder] > PP.valt[1-fder] - PP_aves[1-fder]*PP.rdnt[1-fder]
+    sub_PP_t = form_PP_t(PP.node_, PP_, base_rdn=PP.rdnt[fder], fder=fder)  # replace node_ with sub_PPm_, sub_PPd_
+
+    for fd, sub_PP_ in enumerate(sub_PP_t):  # not empty: len node_ > ave_nsubt[fd]
+        for sPP in sub_PP_: sPP.root_tt[fder][fd] = PP
+        termt = sub_recursion_eval(PP, sub_PP_)
+
+        if any(termt):  # fder: comp fork, fd: form fork:
+            for fder in 0,1:
+                if termt[fder] and PP.fback_:
+                    feedback(PP, fder=fder, fd=fd)
+                    # upward recursive extend root.derH, forward eval only
+    return sub_PP_t
+
+def feedback(root, fder, fd):  # append new der layers to root, not updated
+
+    Fback = deepcopy(root.fback_.pop())
+    # init with 1st fback: [derH,valt,rdnt], derH: [[mtuple,dtuple, mval,dval, mrdn, drdn]]
+    while root.fback_:
+        sum_derH(Fback,root.fback_.pop(), base_rdn=0)
+    sum_derH([root.derH, root.valt,root.rdnt], Fback, base_rdn=0)
+
+    if isinstance(root.root_tt[fder][fd], CPP):  # not blob
+        root = root.root_tt[fder][fd]
+        root.fback_ += [Fback]
+        if len(root.fback_) == len(root.node_):  # all original nodes term, fed back to root.fback_t
+            feedback(root, fder, fd)  # derH per comp layer in sum2PP, add deeper layers by feedback
+
+def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip clustering?
+
+    P_ = []
+    for P in iP_:
+        for derP in P.link_H[-2]:  # scan lower-layer mlinks
+            if derP.valt[0] >  P_aves[0]* derP.rdnt[0]:
+                _P = derP._P
+                for _derP in _P.link_H[-2]:  # next layer of all links, also lower-layer?
+                   if _derP.valt[0] >  P_aves[0]* _derP.rdnt[0]:
+                        __P = _derP._P  # next layer of Ps
+                        distance = np.hypot(__P.yx[1]-P.yx[1], __P.yx[0]-P.yx[0])   # distance between midpoints
+                        if distance > rng:
+                            comp_P(P,__P, fder=0, derP=distance)  # distance=S, mostly lateral, relative to L for eval?
+        P_ += [P]
+    return P_
+
+def comp_der(P_):  # keep same Ps and links, increment link derH, then P derH in sum2PP
+
+    for P in P_:
+        for derP in P.link_H[-2]:  # scan lower-layer dlinks
+            if derP.valt[1] >  P_aves[1]* derP.rdnt[1]:
+                # comp extended derH of the same Ps, to sum in lower-composition sub_PPs:
+                comp_P(derP._P,P, fder=1, derP=derP)
+    return P_
