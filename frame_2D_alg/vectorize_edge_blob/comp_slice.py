@@ -1,10 +1,9 @@
 import numpy as np
 from copy import copy, deepcopy
 from itertools import zip_longest
-from .slice_edge import slice_edge
-from .agg_recursion import agg_recursion
-from .classes import Cgraph, CP, CderP, CPP
-from .filters import ave, aves, vaves, ave_dangle, ave_daangle, med_decay, aveB, P_aves, PP_aves, G_aves, ave_nsubt
+from .slice_edge import comp_angle
+from .classes import CEdge, CderP, CPP
+from .filters import ave, aves, vaves, med_decay, aveB, P_aves, PP_aves, ave_nsubt
 from dataclasses import replace
 
 '''
@@ -27,29 +26,11 @@ Connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possib
 len prior root_ sorted by G is rdn of each root, to evaluate it for inclusion in PP, or starting new P by ave*rdn.
 '''
 
-def vectorize_root(edge, verbose=False):
-
-    slice_edge(edge, verbose=False)
-    comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
-    # not revised:
-    for fd, PP_ in enumerate(edge.node_tt[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
-        # sub+, intra PP:
-        sub_recursion_eval(edge, PP_)
-        # agg+, inter-PP, 1st layer is two forks only:
-        if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
-            node_= []
-            for PP in PP_: # CPP -> Cgraph:
-                derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
-                node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH,valt,rdnt], valt=valt,rdnt=rdnt, L=len(PP.node_),
-                                 box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
-                sum_derH([edge.derH,edge.valt,edge.rdnt], [derH,valt,rdnt], 0)
-            edge.node_tt[0][fd][:] = node_
-            # rng+ comp new graphs:
-            while sum(edge.val_Ht[0]) * np.sqrt(len(node_)-1) if node_ else 0 > G_aves[0] * sum(edge.rdn_Ht[0]):
-                agg_recursion(edge, node_)  # node_[:] = new node_tt in the end, with sub+
 
 def comp_slice(edge, verbose=False):  # high-G, smooth-angle blob, composite dert core param is v_g + iv_ga
 
+    edge = CEdge(I=edge.I, Dy=edge.Dy, Dx=edge.Dx, G=edge.G, A=edge.A, M=edge.M, box=edge.box, mask__=edge.mask__,
+                 node_=edge.P_, der__t=edge.der__t, der__t_roots=[[[] for col in row] for row in edge.der__t[0]], adj_blobs=edge.adj_blobs)
     P_ = []
     for P in edge.node_:  # init P_, must be contiguous, gaps filled in scan_P_rim
         link_ = copy(P.link_H[-1])  # init rng+
@@ -205,7 +186,7 @@ def reval_P_(P_, fd):  # prune qPP by link_val + mediated link__val
 def sum2PP(qPP, base_rdn, fder, fd):  # sum links in Ps and Ps in PP
 
     P_,_,_ = qPP  # proto-PP is a list
-    PP = CPP(fd=fd, node_T=P_)
+    PP = CPP(fd=fd, node_tt=P_)
     # accum:
     for i, P in enumerate(P_):
         P.root_tt[fder][fd] = PP
@@ -279,39 +260,6 @@ def comp_ptuple(_ptuple, ptuple, rn):  # 0der
         Mtuple+=[maxv]
     return [mtuple, dtuple, Mtuple]
 
-
-def comp_angle(_angle, angle):  # rn doesn't matter for angles
-
-    # angle = [dy,dx]
-    (_sin, sin), (_cos, cos) = [*zip(_angle, angle)] / np.hypot(*zip(_angle, angle))
-
-    dangle = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
-    # cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
-    mangle = ave_dangle - abs(dangle)  # inverse match, not redundant if sum cross sign
-
-    return [mangle, dangle]
-
-def comp_aangle(_aangle, aangle):  # currently not used
-
-    _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _aangle
-    sin_da0, cos_da0, sin_da1, cos_da1 = aangle
-
-    sin_dda0 = (cos_da0 * _sin_da0) - (sin_da0 * _cos_da0)
-    cos_dda0 = (cos_da0 * _cos_da0) + (sin_da0 * _sin_da0)
-    sin_dda1 = (cos_da1 * _sin_da1) - (sin_da1 * _cos_da1)
-    cos_dda1 = (cos_da1 * _cos_da1) + (sin_da1 * _sin_da1)
-    # for 2D, not reduction to 1D:
-    # aaangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
-    # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]
-    # dax = [-sin_dda0 + sin_dda1, cos_dda0 + cos_dda1]
-    gay = np.arctan2((-sin_dda0 - sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in y?
-    gax = np.arctan2((-sin_dda0 + sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in x?
-
-    # daangle = sin_dda0 + sin_dda1?
-    daangle = np.arctan2(gay, gax)  # diff between aangles, probably wrong
-    maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
-
-    return [maangle,daangle]
 
 '''
 Each call to comp_rng | comp_der forms dderH: a layer of derH

@@ -2,8 +2,9 @@ import numpy as np
 from copy import deepcopy, copy
 from itertools import zip_longest
 from .classes import Cgraph, CderG
-from .filters import aves, ave, ave_nsubt, ave_sub, ave_agg, G_aves, med_decay, ave_distance, ave_Gm, ave_Gd
-from .comp_slice import comp_angle, comp_ptuple, sum_ptuple, sum_derH, comp_derH, comp_aangle
+from .filters import aves, ave, med_decay, ave_distance, G_aves, ave_Gm, ave_Gd
+from .slice_edge import slice_edge, comp_angle
+from .comp_slice import comp_slice, sub_recursion_eval, comp_ptuple, sum_ptuple, sum_derH, comp_derH
 # from .sub_recursion import feedback
 '''
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
@@ -32,6 +33,28 @@ There are concepts that include same matching vars: size, density, color, stabil
 Weak value vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
 '''
 
+def vectorize_root(edge, verbose=False):
+
+    slice_edge(edge, verbose=False)
+    comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
+    # not revised:
+    for fd, PP_ in enumerate(edge.node_tt[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
+        # sub+, intra-PP:
+        sub_recursion_eval(edge, PP_)
+        # agg+, inter-PP, 1st layer is two forks only:
+        if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
+            node_ = [] # G_
+            for PP in PP_: # CPP -> Cgraph:
+                derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
+                node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH,valt,rdnt], val_Ht=[[valt[0]],[valt[1]]], rdn_Ht=[[rdnt[0]],[rdnt[1]]],
+                                 L=len(PP.node_), box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
+                                 # init aggH is empty
+                sum_derH([edge.derH,edge.valt,edge.rdnt], [derH,valt,rdnt], 0)
+            edge.node_tt[0][fd][:] = node_
+
+            # form incrementally higher-composition graphs, graphs-of-graphs, etc., rng+ comp only because they are not linked yet:
+            while sum(edge.val_Ht[0]) * np.sqrt(len(node_)-1) if node_ else 0 > G_aves[0] * sum(edge.rdn_Ht[0]):
+                agg_recursion(edge, node_)  # node_[:] = new node_tt in the end, with sub+
 
 def agg_recursion(root, node_):  # compositional recursion in root graph
 
@@ -54,9 +77,7 @@ def agg_recursion(root, node_):  # compositional recursion in root graph
             node_tt[fder] = [[],[]]  # fill with clustering forks by default
             for fd in 0,1:
                 # cluster link_H[-1] -> graph_,= node_ in node_tt, default, agg+ eval per graph:
-                graph_ = form_graph_(node_, fder, fd, pri_root_tt_)
-                if sum(root.val_Ht[fder]) * np.sqrt(len(graph_)-1) if graph_ else 0 > G_aves[fder] * sum(root.rdn_Ht[fder]):
-                    agg_recursion(root, graph_)  # replaces graph_ with node_tt graphs-of-graphs, recursive
+                graph_ = form_graph_(root, node_, fder, fd, pri_root_tt_)
                 node_tt[fder][fd] = graph_
     for fder in 0,1:
         if node_tt[fder]:  # new nodes, all terminated, all send feedback
@@ -125,7 +146,7 @@ def comp_G(_G, G, distance, A):
         G.val_Ht[0][-1] += Mval; G.val_Ht[1][-1] += Dval; G.rdn_Ht[0][-1] += Mrdn; G.rdn_Ht[1][-1] += Drdn
 
 
-def form_graph_(node_, fder, fd, pri_root_tt_):  # form fuzzy graphs of nodes per fder,fd, within root
+def form_graph_(root, node_, fder, fd, pri_root_tt_):  # form fuzzy graphs of nodes per fder,fd, within root
 
     ave = G_aves[fder]
     max_ = select_max_(node_, fder, ave)  # compute max of quasi-Gaussians: val + sum([_val * (link_val/max_val])
@@ -138,6 +159,8 @@ def form_graph_(node_, fder, fd, pri_root_tt_):  # form fuzzy graphs of nodes pe
         node_ = copy(graph.node_tt)  # still node_ here
         if sum(graph.val_Ht[fder]) * np.sqrt(len(node_)-1) if node_ else 0 > G_aves[fder] * sum(graph.rdn_Ht[fder]):
             agg_recursion(graph, node_)  # replaces node_ formed above with new graphs in node_tt, recursive
+        else:
+            for graph in graph_: root.fback_tt[fder][fd] += [[graph.aggH, graph.val_Ht, graph.rdn_Ht]]
 
     return graph_
 
@@ -325,7 +348,7 @@ def sum_ext(Extt, extt):
 '''
 derH: [[tuplet, valt, rdnt]]: default input from PP, for both rng+ and der+, sum min len?
 subH: [[derH_t, valt, rdnt]]: m,d derH, m,d ext added by agg+ as 1st tuplet
-aggH: [[subH_t, valt, rdnt]]: composition layers, ext per G
+aggH: [[subH_t, valt, rdnt]]: composition levels, ext per G, 
 '''
 
 def comp_subH(_subH, subH, rn):

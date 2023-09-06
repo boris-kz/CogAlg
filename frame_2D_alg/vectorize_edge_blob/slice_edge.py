@@ -3,8 +3,7 @@ import numpy as np
 from collections import namedtuple, deque, defaultdict
 from itertools import product, combinations
 from .classes import CEdge, CP
-from .filters import ave_g, ave_dangle
-from .comp_slice import comp_angle
+from .filters import ave_g, ave_dangle, ave_daangle
 
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
@@ -20,7 +19,7 @@ and inverse gradient deviation of flat blobs. But the latter is implicit here: h
 A stable combination of a core flat blob with adjacent edge blobs is a potential object.
 '''
 
-Tptuple = namedtuple("Tptuple", "I Dy Dx G M Ma L")
+Tptuple = namedtuple("Tptuple", "I G M Ma angle L")
 octant = 0.3826834323650898
 
 def slice_edge(blob, verbose=False):
@@ -42,8 +41,8 @@ def max_selection(blob):
     mdly__, mdlx__ = ~(up__ | dwn__), ~(lft__ | rgt__)
     # merge in 4 bilateral axes
     axes_mask__ = [
-        mdly__ & (rgt__ | lft__), (dwn__ & rgt__) | (up__ & lft__),     #  0,  45 deg
-        (dwn__ | up__) & mdlx__,  (dwn__ & lft__) | (up__ & rgt__),     # 90, 135 deg
+        mdly__ & (rgt__ | lft__), (dwn__ & rgt__) | (up__ & lft__),  #  0,  45 deg
+        (dwn__ | up__) & mdlx__,  (dwn__ & lft__) | (up__ & rgt__),  # 90, 135 deg
     ]
     max_mask__ = np.zeros_like(blob.mask__, dtype=bool)
     # local max from cross-comp within axis,
@@ -76,67 +75,59 @@ def trace_edge(blob, mask__, verbose=False):
     if verbose:
         step = 100 / len(max_)  # progress % percent per pixel
         progress = 0.0; print(f"\rTracing max... {round(progress)} %", end="");  sys.stdout.flush()
-
     P_ = []
     link_ = set()
     remaining_max_ = set(max_)
     max_olps = defaultdict(list)
-    while remaining_max_:  # queue of (y,x,P)s
-        y, x = remaining_max_.pop()
-        maxQue = deque([(y, x, None)])    # queue tp trace start with (y, x) from max_
 
-        while maxQue:
+    while remaining_max_:  # queue of (y,x,P)s
+        y,x = remaining_max_.pop()
+        maxQue = deque([(y,x,None)])
+        while maxQue:  # trace remaining_max_
             # initialize dert to form P
-            y, x, _P = maxQue.popleft()     # pop from queue
-            i = blob.i__[blob.ibox.slice()][y, x]   # get i
-            dy, dx, g = blob.der__t.get_pixel(y, x) # get dy, dx, g
-            ma = ave_dangle     # m is at maximum value because P direction is the same as dert gradient direction
+            y,x,_P = maxQue.popleft()
+            i = blob.i__[blob.ibox.slice()][y, x]
+            dy, dx, g = blob.der__t.get_pixel(y, x)
+            ma = ave_dangle  # max value because P direction is the same as dert gradient direction
             assert g > 0, "g must be positive"
-            P = form_P(blob, CP(yx=(y, x), axis=(dy/g, dx/g), cells={(y,x)}, dert_=[(y, x, i, dy, dx, g, ma)]))
+            P = form_P(blob, CP(yx=(y,x), axis=(dy/g, dx/g), cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
             P_ += [P]
             if _P is not None:
                 link_ |= {(_P, P)}
             for olp_yx in P.cells & max_:
                 max_olps[olp_yx] += [P]
-
             # search in max_ path
             adjacents = remaining_max_ & {*product(range(y-1,y+2), range(x-1,x+2))}   # search neighbors
             maxQue.extend(((_y, _x, P) for _y, _x in adjacents))
-            remaining_max_ -= adjacents   # set difference = first set AND not both sets: https://www.scaler.com/topics/python-set-difference/
+            remaining_max_ -= adjacents  # set difference = first set AND not both sets: https://www.scaler.com/topics/python-set-difference/
             if verbose:
                 progress += step; print(f"\rTracing max... {round(progress)} %", end=""); sys.stdout.flush()
 
     if verbose: print("\r" + " " * 79, end=""); sys.stdout.flush(); print("\r", end="")
 
-    # likely irrelevant:
+    # likely irrelevant, removed merging, need to return to link_H per P?
+    # distance and angle should be compared between consecutive derts, not Ps
     olp_pairs = set()
     for yx in max_olps:
         for _P, P in combinations(max_olps[yx], r=2):  # loop thru the rest
             assert _P.id < P.id
             yx_dist = np.hypot(*np.subtract(P.yx, _P.yx))   # compute distance
-            axis_diff, axis_match = comp_angle(P.axis, _P.axis) # compute angle match
-            if yx_dist >= 1.0 or axis_match < ave_dangle - 0.1:
+            # axis_diff, axis_match = comp_angle(P.axis, _P.axis) # compute angle match
+            if yx_dist >= 1.0:  # or axis_match < ave_dangle - 0.1:
                 continue
             olp_pairs |= {(_P, P)}
-    for merging_P_ in connected_groups(P_, olp_pairs):
-        # initialize merged P
-        y, x = np.mean([merging_P.yx for merging_P in merging_P_], axis=0)
-        summed_axis = np.sum([merging_P.axis for merging_P in merging_P_], axis=0)
+    for P in P_:
+        y,x = P.yx
+        summed_axis = np.sum([P.axis for P in P_], axis=0)
         axis = summed_axis / np.hypot(*summed_axis)
         i, dy, dx, g = interpolate2dert(blob, y, x)
         ma = ave_dangle
-        merged_P = form_P(blob, CP(yx=(y,x), axis=axis, cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
-
-        link_ -= combinations(merging_P_, r=2)      # remove links between merged Ps, if any
-        P_ = [P for P in P_ if P not in merging_P_] # remove merging_P_
-        P_ += [merged_P]   # add merged P to P_
+        P = form_P(blob, CP(yx=(y,x), axis=axis, cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
+        # link_ -= combinations(P_, r=2)      # remove links between merged Ps, if any
+        # P_ = [P for P in P_ if P not in P_] # remove P
+        P_ += [P]
 
     return P_, link_
-
-def connected_groups(nodes, edges):
-    # TODO: implement connected_groups
-    # https://www.geeksforgeeks.org/connected-components-in-an-undirected-graph/
-    return []
 
 def form_P(blob, P):
 
@@ -147,7 +138,7 @@ def form_P(blob, P):
     L = len(P.dert_)
     M = ave_g*L - G
     G = np.hypot(Dy, Dx)  # recompute G
-    P.ptuple = Tptuple(I, Dy, Dx, G, M, Ma, L)
+    P.ptuple = Tptuple(I, G, M, Ma, (Dy,Dx), L)
     P.yx = P.dert_[L//2][:2]  # new center
 
     return P
@@ -207,3 +198,37 @@ def interpolate2dert(blob, y, x):
     ider__t = (blob.i__[blob.ibox.slice()],) + blob.der__t
 
     return (sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t)
+
+
+def comp_angle(_angle, angle):  # rn doesn't matter for angles
+
+    # angle = [dy,dx]
+    (_sin, sin), (_cos, cos) = [*zip(_angle, angle)] / np.hypot(*zip(_angle, angle))
+
+    dangle = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
+    # cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
+    mangle = ave_dangle - abs(dangle)  # inverse match, not redundant if sum cross sign
+
+    return [mangle, dangle]
+
+def comp_aangle(_aangle, aangle):  # currently not used, just in case we need it later
+
+    _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _aangle
+    sin_da0, cos_da0, sin_da1, cos_da1 = aangle
+
+    sin_dda0 = (cos_da0 * _sin_da0) - (sin_da0 * _cos_da0)
+    cos_dda0 = (cos_da0 * _cos_da0) + (sin_da0 * _sin_da0)
+    sin_dda1 = (cos_da1 * _sin_da1) - (sin_da1 * _cos_da1)
+    cos_dda1 = (cos_da1 * _cos_da1) + (sin_da1 * _sin_da1)
+    # for 2D, not reduction to 1D:
+    # aaangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
+    # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]
+    # dax = [-sin_dda0 + sin_dda1, cos_dda0 + cos_dda1]
+    gay = np.arctan2((-sin_dda0 - sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in y?
+    gax = np.arctan2((-sin_dda0 + sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in x?
+
+    # daangle = sin_dda0 + sin_dda1?
+    daangle = np.arctan2(gay, gax)  # diff between aangles, probably wrong
+    maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
+
+    return [maangle,daangle]

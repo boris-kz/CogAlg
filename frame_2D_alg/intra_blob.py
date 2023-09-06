@@ -7,7 +7,7 @@ import numpy as np
 from scipy.signal import convolve2d
 from itertools import zip_longest
 from frame_blobs import assign_adjacents, flood_fill, Tdert
-from vectorize_edge_blob.root import vectorize_root
+from vectorize_edge_blob.agg_recursion import vectorize_root
 from utils import kernel_slice_3x3 as ks
 '''
     Conventions:
