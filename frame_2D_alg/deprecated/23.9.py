@@ -63,3 +63,53 @@ def lat_comp_P(_P,P):  # to splice, no der+
     mM = min(_L, L) - ave
     mval = sum(mtuple); dval = sum(dtuple)
     mrdn = 1+(dval>mval); drdn = 1+(1-(dval>mval))  # rdn = Dval/Mval?
+
+def sub_recursion_eval_PP(root, PP_):  # fork PP_ in PP or blob, no derH in blob
+
+    termt = [1,1]
+    # PP_ in PP_t:
+    for PP in PP_:
+        sub_tt = []  # from rng+, der+
+        fr = 0  # recursion in any fork
+        for fder in 0,1:  # rng+ and der+:
+            if len(PP.node_tt) > ave_nsubt[fder] and PP.valt[fder] > PP_aves[fder] * PP.rdnt[fder]:
+                termt[fder] = 0
+                if not fr:  # add link_tt and root_tt for both comp forks:
+                    for P in PP.node_tt:
+                        P.root_tt = [[None,None],[None,None]]
+                        P.link_H += [[]]  # form root_t, link_t in sub+:
+                sub_tt += [sub_recursion(PP, PP_, fder)]  # comp_der|rng in PP->parLayer
+                fr = 1
+            else:
+                sub_tt += [PP.node_tt]
+                # we have a separated fback for PPs here, not sure if this should be merged into fback_tt? Because this is derH instead of aggH here
+                root.fback_ += [[PP.derH, PP.valt, PP.rdnt]]  # separate feedback per terminated comp fork
+        if fr:
+            PP.node_tt = sub_tt  # nested PP_ tuple from 2 comp forks, each returns sub_PP_t: 2 clustering forks, if taken
+
+    return termt
+
+def vectorize_root(edge, verbose=False):
+
+    slice_edge(edge, verbose=False)
+    edge = comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
+    # not revised:
+    for fd, PP_ in enumerate(edge.node_tt[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
+        # sub+, intra-PP:
+        sub_recursion_eval(edge, PP_)
+        # agg+, inter-PP, 1st layer is two forks only:
+        if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
+            node_ = [] # G_
+            for PP in PP_: # CPP -> Cgraph:
+                derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
+                node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH,valt,rdnt], val_Ht=[[valt[0]],[valt[1]]], rdn_Ht=[[rdnt[0]],[rdnt[1]]],
+                                 L=PP.ptuple[-1], box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]  # use PP.ptuple[-1] for L because node might be updated with sub_tt
+                                 # init aggH is empty
+                sum_derH([edge.derH,edge.valt,edge.rdnt], [derH,valt,rdnt], 0)
+            edge.node_tt[0][fd][:] = node_
+
+            # form incrementally higher-composition graphs, graphs-of-graphs, etc., rng+ comp only because they are not linked yet:
+            while sum(edge.val_Ht[0]) * np.sqrt(len(node_)-1) if node_ else 0 > G_aves[0] * sum(edge.rdn_Ht[0]):
+                agg_recursion(edge, node_)  # node_[:] = new node_tt in the end, with sub+
+                # no feedback of node_ in agg+ here?
+

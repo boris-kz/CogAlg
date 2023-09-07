@@ -98,11 +98,13 @@ def visualize_blobs(frame, layer='r'):
             state.blob_slices = None
 
         blob = state.blob_cls.get_instance(state.blob_id)
-        if blob is None or not blob.P_ or not state.show_slices:
+        if blob is None or not blob.dlayers or not blob.dlayers[0] or not state.show_slices:
             return
+        edge = blob.dlayers[0][0]
+        if not edge.P_: return
         y0, x0, *_ = blob.ibox
         state.blob_slices = []
-        for P in blob.P_:
+        for P in edge.P_:
             y, x = P.yx
             y_, x_, *_ = np.array([*zip(*P.dert_)])
             L = len(x_)
@@ -125,12 +127,19 @@ def visualize_blobs(frame, layer='r'):
             state.P_links = None
 
         blob = state.blob_cls.get_instance(state.blob_id)
-        if blob is None or not blob.P_link_ or not state.show_links:
+        if blob is None or not blob.dlayers or not blob.dlayers[0] or not state.show_links:
             return
+        edge = blob.dlayers[0][0]
+        if not edge.P_: return
+        link_ = set()
+        for P in edge.P_:
+            for _P, _ in P.link_H[0]:
+                if _P.id < P.id:
+                    link_ |= {(_P, P)}
         y0, x0, *_ = blob.ibox
         state.P_links = []
-        for link in blob.P_link_:
-            (_y, _x), (y, x) = link[0].yx, link[1].yx
+        for _P, P in link_:
+            (_y, _x), (y, x) = _P.yx, P.yx
             state.P_links += ax.plot([_x+x0,x+x0], [_y+y0,y+y0], 'ko-', linewidth=2, markersize=4)
 
     def update_img():
@@ -212,8 +221,9 @@ def visualize_blobs(frame, layer='r'):
                 reset_state()
         elif event.key == "shift":    # Look into dlayer
             if blob.dlayers and blob.dlayers[0] and blob is not None:
-                state.layers_stack.append((blob, 'd'))
-                reset_state()
+                pass
+                # state.layers_stack.append((blob, 'd'))
+                # reset_state()
         else:
             if (len(state.layers_stack) > 1):
                 state.layers_stack.pop()

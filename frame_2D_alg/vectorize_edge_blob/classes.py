@@ -13,25 +13,28 @@ from class_cluster import ClusterStructure, init_param as z
 
 class CEdge(ClusterStructure):  # edge blob
 
-    I: float = 0.0
-    Dy: float = 0.0
-    Dx: float = 0.0
-    G: float = 0.0
-    Ma: float = 0.0  # summed PP.Ma, for both types of recursion?
-    A: float = 0.0  # blob area
+    blob: object = None  # blob initialized from
+    M: float = 0.0  # summed PP.M, for both types of recursion?
+    Ma: float = 0.0  # summed PP.Ma
     # composite params:
-    box: tuple = (0, 0, 0, 0)  # y0, yn, x0, xn
-    mask__ : object = None
-    der__t : object = None
+    P_ : list = z([])   # list of slices
     der__t_roots: object = None  # map to dir__t
-    adj_blobs: list = z([])  # adjacent blobs
     node_ : list = z([])  # default P_, node_tt: list = z([[[],[]],[[],[]]]) in select PP_ or G_ forks
     root_ : object= None  # list root_ if fork overlap?
     derH : list = z([])  # formed in PPs, inherited in graphs
     aggH : list = z([[]])  # [[subH, valt, rdnt]]: cross-fork composition layers
-    val_Ht : list = z([[0],[0]])  # H of link vals per fder
-    rdn_Ht : list = z([[1],[1]])
+    valt : list = z(0,0)  # for PPs, then Ht of link vals per fder
+    rdnt : list = z(1,1)
     fback_ : list = z([])  # [feedback aggH,valt,rdnt per node]
+    # params from blob, can be accessed via edge.blob, for example, edge.blob.I:I: float = 0.0
+    # Dy: float = 0.0
+    # Dx: float = 0.0
+    # G: float = 0.0
+    # A: float = 0.0  # blob area
+    # box: tuple = (0, 0, 0, 0)  # y0, yn, x0, xn
+    # mask__ : object = None
+    # der__t : object = None
+    # adj_blobs: list = z([])  # adjacent blobs
 
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive

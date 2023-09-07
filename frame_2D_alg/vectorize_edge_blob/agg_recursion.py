@@ -4,7 +4,7 @@ from itertools import zip_longest
 from .classes import Cgraph, CderG
 from .filters import aves, ave, med_decay, ave_distance, G_aves, ave_Gm, ave_Gd
 from .slice_edge import slice_edge, comp_angle
-from .comp_slice import comp_slice, sub_recursion_eval, comp_ptuple, sum_ptuple, sum_derH, comp_derH
+from .comp_slice import comp_slice, comp_ptuple, sum_ptuple, sum_derH, comp_derH
 # from .sub_recursion import feedback
 '''
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
@@ -33,28 +33,23 @@ There are concepts that include same matching vars: size, density, color, stabil
 Weak value vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
 '''
 
-def vectorize_root(edge, verbose=False):
+def vectorize_root(blob, verbose=False):  # vectorization pipeline: three composition levels of cross-comp->clustering:
 
-    slice_edge(edge, verbose=False)
+    # lateral kernel cross-comp -> P clustering
+    edge = slice_edge(blob, verbose=False)
+    # vertical P cross-comp -> PP clustering
     comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
-    # not revised:
-    for fd, PP_ in enumerate(edge.node_tt[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
-        # sub+, intra-PP:
-        sub_recursion_eval(edge, PP_)
-        # agg+, inter-PP, 1st layer is two forks only:
-        if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
-            node_ = [] # G_
-            for PP in PP_: # CPP -> Cgraph:
-                derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
-                node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH,valt,rdnt], val_Ht=[[valt[0]],[valt[1]]], rdn_Ht=[[rdnt[0]],[rdnt[1]]],
-                                 L=len(PP.node_), box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
+    # PP cross-comp -> graph clustering
+    node_ = edge.node_tt  # PP_|G_ before feedback, rng+ only: they are not linked yet
+    ini = 1
+    while sum(edge.val_Ht[0]) * np.sqrt(len(node_)-1) if node_ else 0 > G_aves[0] * sum(edge.rdn_Ht[0]):
+        if ini:  # CPPs -> Cgraphs:
+            for PP in node_:
+                derH, valt, rdnt = PP.derH, PP.valt, PP.rdnt
+                node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH, valt, rdnt], val_Ht=[[valt[0]], [valt[1]]], rdn_Ht=[[rdnt[0]], [rdnt[1]]],
+                                 L=PP.ptuple[-1], box=[(PP.box[0] + PP.box[1]) / 2, (PP.box[2] + PP.box[3]) / 2] + list(PP.box))]
                                  # init aggH is empty
-                sum_derH([edge.derH,edge.valt,edge.rdnt], [derH,valt,rdnt], 0)
-            edge.node_tt[0][fd][:] = node_
-
-            # form incrementally higher-composition graphs, graphs-of-graphs, etc., rng+ comp only because they are not linked yet:
-            while sum(edge.val_Ht[0]) * np.sqrt(len(node_)-1) if node_ else 0 > G_aves[0] * sum(edge.rdn_Ht[0]):
-                agg_recursion(edge, node_)  # node_[:] = new node_tt in the end, with sub+
+        agg_recursion(edge, node_)  # node_[:] = new node_tt in sub+ feedback?
 
 def agg_recursion(root, node_):  # compositional recursion in root graph
 
@@ -77,7 +72,15 @@ def agg_recursion(root, node_):  # compositional recursion in root graph
             node_tt[fder] = [[],[]]  # fill with clustering forks by default
             for fd in 0,1:
                 # cluster link_H[-1] -> graph_,= node_ in node_tt, default, agg+ eval per graph:
-                graph_ = form_graph_(root, node_, fder, fd, pri_root_tt_)
+                graph_ = form_graph_(node_, fder, fd, pri_root_tt_)
+                for graph in graph_:  # sub+:
+                    node_ = copy(graph.node_tt)  # still node_ here
+                    if sum(graph.val_Ht[fder]) * np.sqrt(len(node_) - 1) if node_ else 0 > G_aves[fder] * sum(graph.rdn_Ht[fder]):
+                        agg_recursion(graph, node_)  # replaces node_ formed above with new graphs in node_tt, recursive
+                    else:
+                        if not root.fback_tt: root.fback_tt = [[[],[]],[[],[]]]  # init empty
+                        for graph in graph_: root.fback_tt[fder][fd] += [[graph.aggH, graph.val_Ht, graph.rdn_Ht]]
+
                 node_tt[fder][fd] = graph_
     for fder in 0,1:
         if node_tt[fder]:  # new nodes, all terminated, all send feedback
@@ -146,7 +149,7 @@ def comp_G(_G, G, distance, A):
         G.val_Ht[0][-1] += Mval; G.val_Ht[1][-1] += Dval; G.rdn_Ht[0][-1] += Mrdn; G.rdn_Ht[1][-1] += Drdn
 
 
-def form_graph_(root, node_, fder, fd, pri_root_tt_):  # form fuzzy graphs of nodes per fder,fd, within root
+def form_graph_(node_, fder, fd, pri_root_tt_):  # form fuzzy graphs of nodes per fder,fd, within root
 
     ave = G_aves[fder]
     max_ = select_max_(node_, fder, ave)  # compute max of quasi-Gaussians: val + sum([_val * (link_val/max_val])
@@ -154,13 +157,6 @@ def form_graph_(root, node_, fder, fd, pri_root_tt_):  # form fuzzy graphs of no
     full_graph_ = segment_node_(node_, max_, fder, fd, pri_root_tt_)
     list_graph_ = prune_graph_(full_graph_, fder, fd)  # sort node roots and prune the weak
     graph_ = sum2graph_(list_graph_, fder, fd)  # convert list graphs to Cgraphs
-    # sub+:
-    for graph in graph_:
-        node_ = copy(graph.node_tt)  # still node_ here
-        if sum(graph.val_Ht[fder]) * np.sqrt(len(node_)-1) if node_ else 0 > G_aves[fder] * sum(graph.rdn_Ht[fder]):
-            agg_recursion(graph, node_)  # replaces node_ formed above with new graphs in node_tt, recursive
-        else:
-            for graph in graph_: root.fback_tt[fder][fd] += [[graph.aggH, graph.val_Ht, graph.rdn_Ht]]
 
     return graph_
 
@@ -201,7 +197,8 @@ def segment_node_(node_, max_, fder, fd, pri_root_tt_):
 
     graph_ = []  # initialize graphs with local maxes, then prune links to add other nodes:
 
-    for max_node, pri_root_tt in zip(max_, pri_root_tt_):
+    for max_node in max_:
+        pri_root_tt = pri_root_tt_[node_.index(max_node)]
         graph = [[max_node], sum(max_node.val_Ht[fder]), [pri_root_tt]]
         max_node.root_tt[fder][fd] += [graph]
         _nodes = [max_node]  # current periphery of the graph
