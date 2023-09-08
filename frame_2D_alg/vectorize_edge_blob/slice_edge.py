@@ -45,7 +45,7 @@ def max_selection(blob):
         (dwn__ | up__) & mdlx__,  (dwn__ & lft__) | (up__ & rgt__),  # 90, 135 deg
     ]
     max_mask__ = np.zeros_like(blob.mask__, dtype=bool)
-    # local max from cross-comp within axis, switch to kernel max to add vertical sparsity?
+    # local max from cross-comp within axis, use kernel max for vertical sparsity?
     for axis_mask__, (ydir, xdir) in zip(axes_mask__, ((0,1),(1,1),(1,0),(1,-1))):  # y,x direction per axis
         # axis AND mask:
         mask__ = axis_mask__ & blob.mask__
@@ -76,7 +76,7 @@ def trace_edge(blob, mask__, verbose=False):
     if verbose:
         step = 100 / len(max_)  # progress % percent per pixel
         progress = 0.0; print(f"\rTracing max... {round(progress)} %", end="");  sys.stdout.flush()
-    edge.P_ = []
+    edge.node_ = []
     while max_:  # queue of (y,x,P)s
         y,x = max_.pop()
         maxQue = deque([(y,x,None)])
@@ -88,10 +88,10 @@ def trace_edge(blob, mask__, verbose=False):
             ma = ave_dangle  # max value because P direction is the same as dert gradient direction
             assert g > 0, "g must be positive"
             P = form_P(blob, CP(yx=(y,x), axis=(dy/g, dx/g), cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
-            edge.P_ += [P]
-            if _P is not None:  # form link
-                _P.link_H[0] += [(P, None)]    # None : place holder for link params
-                P.link_H[0] += [(_P, None)]
+            edge.node_ += [P]
+            if _P is not None:  # bilateral add link
+                _P.link_H[0] += [P]
+                P.link_H[0] += [_P]
             # search in max_ path
             adjacents = max_ & {*product(range(y-1,y+2), range(x-1,x+2))}   # search neighbors
             maxQue.extend(((_y, _x, P) for _y, _x in adjacents))
@@ -121,9 +121,9 @@ def form_P(blob, P):
 
 def scan_direction(blob, P, fleft):  # leftward or rightward from y,x
 
-    sin,cos = _dy,_dx = P.axis  # unpack axis
-    _y, _x = P.yx               # start with pivot
-    r = cos*_y - sin*_x  # from P line equation: cos*y - sin*x = r = constant
+    sin,cos = _dy,_dx = P.axis
+    _y, _x = P.yx  # pivot
+    r = cos*_y - sin*_x  # P axial line: cos*y - sin*x = r = constant
     _cy,_cx = round(_y), round(_x)  # keep initial cell
     y, x = (_y-sin,_x-cos) if fleft else (_y+sin, _x+cos)  # first dert in the direction of axis
 

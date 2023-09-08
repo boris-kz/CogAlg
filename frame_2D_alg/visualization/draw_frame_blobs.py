@@ -101,10 +101,10 @@ def visualize_blobs(frame, layer='r'):
         if blob is None or not blob.dlayers or not blob.dlayers[0] or not state.show_slices:
             return
         edge = blob.dlayers[0][0]
-        if not edge.P_: return
+        if not edge.node_: return
         y0, x0, *_ = blob.ibox
         state.blob_slices = []
-        for P in edge.P_:
+        for P in edge.node_:
             y, x = P.yx
             y_, x_, *_ = np.array([*zip(*P.dert_)])
             L = len(x_)
@@ -130,9 +130,9 @@ def visualize_blobs(frame, layer='r'):
         if blob is None or not blob.dlayers or not blob.dlayers[0] or not state.show_links:
             return
         edge = blob.dlayers[0][0]
-        if not edge.P_: return
+        if not edge.node_: return
         link_ = set()
-        for P in edge.P_:
+        for P in edge.node_:
             for _P, _ in P.link_H[0]:
                 if _P.id < P.id:
                     link_ |= {(_P, P)}

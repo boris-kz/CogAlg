@@ -40,16 +40,19 @@ def vectorize_root(blob, verbose=False):  # vectorization pipeline: three compos
     # vertical P cross-comp -> PP clustering
     comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
     # PP cross-comp -> graph clustering
-    node_ = edge.node_tt  # PP_|G_ before feedback, rng+ only: they are not linked yet
-    ini = 1
-    while sum(edge.val_Ht[0]) * np.sqrt(len(node_)-1) if node_ else 0 > G_aves[0] * sum(edge.rdn_Ht[0]):
-        if ini:  # CPPs -> Cgraphs:
+    for fd in 0,1:
+        node_ = edge.node_[fd]  # only comp rng+ for edge
+        if edge.valt[0] * np.sqrt(len(node_)-1) if node_ else 0 > G_aves[0] * edge.rdnt[0]:  # still valt and rdnt
+            G_ = []  # CPP -> Cgraph
             for PP in node_:
-                derH, valt, rdnt = PP.derH, PP.valt, PP.rdnt
-                node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH, valt, rdnt], val_Ht=[[valt[0]], [valt[1]]], rdn_Ht=[[rdnt[0]], [rdnt[1]]],
+                derH, valt, rdnt = PP.derH, PP.valt, PP.rdnt  # init aggH is empty:
+                G_ += [Cgraph(ptuple=PP.ptuple, derH=[derH, valt, rdnt], val_Ht=[[valt[0]], [valt[1]]], rdn_Ht=[[rdnt[0]], [rdnt[1]]],
                                  L=PP.ptuple[-1], box=[(PP.box[0] + PP.box[1]) / 2, (PP.box[2] + PP.box[3]) / 2] + list(PP.box))]
-                                 # init aggH is empty
-        agg_recursion(edge, node_)  # node_[:] = new node_tt in sub+ feedback?
+            edge.node_t[fd] = G_
+        while True:
+            agg_recursion(edge, node_)  # node_[:] = new node_tt in sub+ feedback?
+            if sum(edge.valt[0]) * np.sqrt(len(node_)-1) if node_ else 0 <= G_aves[0] * sum(edge.rdnt[0]):
+                break
 
 def agg_recursion(root, node_):  # compositional recursion in root graph
 

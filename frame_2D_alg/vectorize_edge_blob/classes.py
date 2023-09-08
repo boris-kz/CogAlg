@@ -17,15 +17,14 @@ class CEdge(ClusterStructure):  # edge blob
     M: float = 0.0  # summed PP.M, for both types of recursion?
     Ma: float = 0.0  # summed PP.Ma
     # composite params:
-    P_ : list = z([])   # list of slices
     der__t_roots: object = None  # map to dir__t
-    node_ : list = z([])  # default P_, node_tt: list = z([[[],[]],[[],[]]]) in select PP_ or G_ forks
-    root_ : object= None  # list root_ if fork overlap?
+    node_t : list = z([])  # default P_, node_t in select PP_ or G_ fder forks
+    fback_tt : list = z([])  # for consistency, only fder=0 is used; [feedback aggH,valt,rdnt per node], default empty
+
     derH : list = z([])  # formed in PPs, inherited in graphs
     aggH : list = z([[]])  # [[subH, valt, rdnt]]: cross-fork composition layers
-    valt : list = z(0,0)  # for PPs, then Ht of link vals per fder
-    rdnt : list = z(1,1)
-    fback_ : list = z([])  # [feedback aggH,valt,rdnt per node]
+    valt : list = z([0,0])  # for PPs, then Ht of link vals per fder
+    rdnt : list = z([1,1])
     # params from blob, can be accessed via edge.blob, for example, edge.blob.I:I: float = 0.0
     # Dy: float = 0.0
     # Dx: float = 0.0
@@ -84,12 +83,12 @@ class CPP(CderP):
     valt : list = z([0,0])
     rdnt : list = z([1,1])
     mask__ : object = None
+    root_tt : list = z([[[],[]],[[],[]]])  # init edge, higher PPrm,PPrd, PPdm,PPdd that contain PP if sub+
     node_tt : list = z([])  # init P_, -> node_tt if sub+: [rng+ [sub_PPm_,sub_PPd_], der+ [sub_PPm_,sub_PPd_]]
-    root_tt : list = z([[None,None],[None,None]])  # init edge, higher PPrm,PPrd, PPdm,PPdd that contain PP if sub+
+    fback_tt: list = z([])  # maps to node_tt: [feedback derH,valt,rdnt per node]
     rng : int = 1  # sum of rng+: odd forks in last layer?
     box : list = z([0,0,0,0])  # y0,yn,x0,xn
     # temporary:
-    fback_ : list = z([])  # [feedback derH,valt,rdnt per node]
     coPP_ : list = z([])  # rdn reps in other PPPs, to eval and remove?
     Rdn : int = 0  # for accumulation or separate recursion count?
     # fdiv = NoneType  # if div_comp?
@@ -103,8 +102,9 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     link_H : list = z([[]])  # added per rng+ comp_G_
     val_Ht : list = z([[0],[0]])  # H of link vals per fder
     rdn_Ht : list = z([[1],[1]])
-    node_tt : list = z([])  # init G_ -> Gmr_,Gdr_, Gmd_,Gdd_ by agg+/sub+, nested if wH: down-forking tree of node Levs
     root_tt : list = z([[[],[]],[[],[]]])  # upward reciprocal for node_tt, nested if uH: up-forking tree of root Levs
+    node_tt : list = z([])  # init G_ -> Gmr_,Gdr_, Gmd_,Gdd_ by agg+/sub+, nested if wH: down-forking tree of node Levs
+    fback_tt: list = z([])  # maps to node_tt: feedback [[aggH,valt,rdnt]] per node fork, init empty
     L : int = 0 # len base node_; from internal links:
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers
@@ -115,9 +115,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     alt_Graph : object = None  # conditional, summed and concatenated params of alt_graph_
     # temporary:
     compared_ : list = z([])
-    fback_tt : list = z([])  # feedback [[aggH,valt,rdnt]] per node fork, init empty
     Rdn : int = 0  # for accumulation or separate recursion count?
-
     # id_H : list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
     # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
     # top Lay from links, lower Lays from nodes, hence nested tuple?
