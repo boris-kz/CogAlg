@@ -13,18 +13,18 @@ from class_cluster import ClusterStructure, init_param as z
 
 class CEdge(ClusterStructure):  # edge blob
 
-    blob: object = None  # blob initialized from
     M: float = 0.0  # summed PP.M, for both types of recursion?
     Ma: float = 0.0  # summed PP.Ma
     # composite params:
     der__t_roots: object = None  # map to dir__t
     node_t : list = z([])  # default P_, node_t in select PP_ or G_ fder forks
-    fback_tt : list = z([])  # for consistency, only fder=0 is used; [feedback aggH,valt,rdnt per node], default empty
-
+    fback_tt : list = z([])
+    # for consistency, only fder=0 is used; [feedback aggH,valt,rdnt per node], default empty
     derH : list = z([])  # formed in PPs, inherited in graphs
     aggH : list = z([[]])  # [[subH, valt, rdnt]]: cross-fork composition layers
     valt : list = z([0,0])  # for PPs, then Ht of link vals per fder
     rdnt : list = z([1,1])
+    blob : object = None  # initializing blob
     # params from blob, can be accessed via edge.blob, for example, edge.blob.I:I: float = 0.0
     # Dy: float = 0.0
     # Dx: float = 0.0
@@ -110,8 +110,9 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     A : list = z([0,0])  # angle: average dy,dx to link centers
     rng : int = 1
     box : list = z([0,0,0,0,0,0])  # y,x, y0,yn, x0,xn
+    # tentative:
     nval : int = 0  # of open links: base alt rep
-    alt_graph_: list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
+    alt_graph_ : list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
     alt_Graph : object = None  # conditional, summed and concatenated params of alt_graph_
     # temporary:
     compared_ : list = z([])
