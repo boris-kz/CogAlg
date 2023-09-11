@@ -89,8 +89,8 @@ def trace_edge(blob, mask__, verbose=False):
             assert g > 0, "g must be positive"
             P = form_P(blob, CP(yx=(y,x), axis=(dy/g, dx/g), cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
             edge.node_t += [P]
-            if _P is not None:  # bilateral add link
-                P.link_H[0] += [_P]
+            if _P is not None:
+                P.link_H[0] += [_P]  # add up links only
             # search in max_ path
             adjacents = max_ & {*product(range(y-1,y+2), range(x-1,x+2))}   # search neighbors
             maxQue.extend(((_y, _x, P) for _y, _x in adjacents))

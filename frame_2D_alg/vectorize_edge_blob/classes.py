@@ -18,12 +18,12 @@ class CEdge(ClusterStructure):  # edge blob
     # composite params:
     der__t_roots: object = None  # map to dir__t
     node_t : list = z([])  # default P_, node_t in select PP_ or G_ fder forks
-    fback_tt : list = z([])
-    # for consistency, only fder=0 is used; [feedback aggH,valt,rdnt per node], default empty
+    fback_tt : list = z([])  # for consistency, only fder=0 is used; [feedback aggH,valt,rdnt per node], default empty
+
     derH : list = z([])  # formed in PPs, inherited in graphs
     aggH : list = z([[]])  # [[subH, valt, rdnt]]: cross-fork composition layers
-    valt : list = z([0,0])  # for PPs, then Ht of link vals per fder
-    rdnt : list = z([1,1])
+    val_Ht : list = z([0,0])  # init valt for PPs, then Ht of link vals per fder
+    rdn_Ht : list = z([1,1])
     blob : object = None  # initializing blob
     # params from blob, can be accessed via edge.blob, for example, edge.blob.I:I: float = 0.0
     # Dy: float = 0.0

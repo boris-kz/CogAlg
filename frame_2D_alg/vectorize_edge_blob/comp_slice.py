@@ -1,8 +1,8 @@
 import numpy as np
 from copy import copy, deepcopy
-from itertools import zip_longest, starmap
+from itertools import zip_longest
 from .slice_edge import comp_angle
-from .classes import CEdge, CderP, CPP
+from .classes import CderP, CPP
 from .filters import ave, aves, vaves, med_decay, aveB, P_aves, PP_aves, ave_nsubt
 from dataclasses import replace
 
@@ -27,11 +27,11 @@ len prior root_ sorted by G is rdn of each root, to evaluate it for inclusion in
 '''
 
 
-def comp_slice(edge):  # edge is high-gradient blob, sliced in Ps in the direction of G
+def comp_P_(edge):  # renamed for consistency, cross-comp P_ in edge: high-gradient blob, sliced in Ps in the direction of G
 
     for P in edge.node_t:  # init as P_
-
-        derP_ = [comp_P(_P, P, fder=0) for _P in P.link_H[-1]]  # uplinks only, not bilateral, contiguous?
+        # scan and compare contiguously uplinked Ps, rn= relative weight:
+        derP_ = [comp_P(_P, P, rn=len(_P.dert_)/len(P.dert_), fder=0) for _P in P.link_H[-1]]
         P.link_H[-1] = [derP for derP in derP_ if derP is not None]  # replace link _Ps with derPs
 
     edge.node_t = [  # replace P_ with PP_t, root fork is rng+ only:
@@ -39,13 +39,10 @@ def comp_slice(edge):  # edge is high-gradient blob, sliced in Ps in the directi
         for fd in (0, 1)
     ]
 
-def comp_P(_P,P, fder=1, derP=None):  #  derP if der+, S if rng+
-
+def comp_P(_P,P, rn, fder=1, derP=None):  #  derP if der+, reused as S if rng+
     aveP = P_aves[fder]
-    rn = len(_P.dert_)/ len(P.dert_)
 
     if fder:  # der+: extend in-link derH
-        rn *= len(_P.link_H[-2]) / len(P.link_H[-2])  # derH is summed from links
         dderH, valt, rdnt = comp_derH(_P.derH, P.derH, rn)  # += fork rdn
         derP = CderP(derH = derP.derH+dderH, valt=valt, rdnt=rdnt, P=P,_P=_P, S=derP.S)  # dderH valt,rdnt for new link
         mval,dval = valt[:2]; mrdn,drdn = rdnt  # exclude maxv
@@ -59,7 +56,7 @@ def comp_P(_P,P, fder=1, derP=None):  #  derP if der+, S if rng+
     if mval > aveP*mrdn or dval > aveP*drdn:
         return derP
 
-#  called from sub_recursion
+# rng+ and der+ are called from sub_recursion
 def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip clustering?
 
     P_, derP_ = [],[]
@@ -73,7 +70,7 @@ def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip cluste
                         __P = _derP._P  # next layer of Ps
                         distance = np.hypot(__P.yx[1]-P.yx[1], __P.yx[0]-P.yx[0])   # distance between midpoints
                         if distance > rng:  # distance=S, mostly lateral, /= L for eval?
-                            derP = comp_P(P,__P, fder=0, derP=distance)
+                            derP = comp_P(__P,P, rn=len(__P.dert_)/len(P.dert_), fder=0, derP=distance)
                             if derP: derP_ += [derP]  # not None
 
         P.link_H += [derP_]  # add new link layer, in rng+ only
@@ -85,12 +82,15 @@ def comp_der(P_, frng):  # keep same Ps and links, increment link derH, then P d
 
     derP_ = []
     for P in P_:
-        for derP in P.link_H[-(1+frng)]:  # scan root-PP links, exclude top layer if formed by concurrent rng+
+        link_ = P.link_H[-(1+frng)]
+        for derP in link_:  # scan root-PP links, exclude top layer if formed by concurrent rng+
             if derP.valt[1] >  P_aves[1]* derP.rdnt[1]:
-                # comp extended derH of the same Ps, to sum in lower-composition sub_PPs:
-                derP = comp_P(derP._P,P, fder=1, derP=derP)
+                _P = derP._P  # comp extended derH of previously compared Ps, sum in lower-composition sub_PPs
+                # weight of compared derH is relative compound scope: summed from linked Ps( summed from derts:
+                rn = (len(_P.dert_) / len(P.dert_)) * (len(_P.link_H[-(1+frng)]) / len(link_))
+                derP = comp_P(_P,P, rn, fder=1, derP=derP)
                 if derP: derP_ += [derP]  # not None
-        P.link_H[-(1+frng)] = derP_  # replacing derPs have extended derH
+        link_[:] = derP_  # replace with extended-derH derPs
     return P_
 
 
@@ -109,13 +109,12 @@ def form_PP_(root, P_, base_rdn, fder, fd):  # form PPs of derP.valt[fd] + conne
                 for derP in uplink_:
                     if derP.valt[fder] > P_aves[fder]* derP.rdnt[fder]:
                         _P = derP._P
-                        if _P not in P_:  # _P is outside of current PP, merge its root PP:
+                        if _P not in P_:  # _P is outside qPP, add it
                             _PP = _P.root_tt[fder][fd]
-                            if isinstance(_PP, list):  # _P has root: was clustered as P in prior loops, merge _PP into qPP
-                                for __P in _PP[0]:  # merge PPs
-                                    if __P not in qPP[0]:  # not sure this check is needed, maybe for downlinks only
-                                        qPP[0] += [__P]; __P.root_tt[fder][fd] = qPP
-                                qPP_.remove(_PP)  # merged
+                            if _PP:  # _P was clustered as P in prior loops
+                                for __P in _PP[0]:  # merge _PP into qPP
+                                    qPP[0] += [__P]; __P.root_tt[fder][fd] = qPP
+                                qPP_.remove(_PP)
                         else:  # _P is in qPP
                             _qPP = _P.root_tt[fder][fd]
                             if _qPP:
@@ -212,21 +211,6 @@ def sum2PP(root, pre_PP, base_rdn, fder, fd):  # sum links in Ps and Ps in PP
     PP.box =(Y0,Yn,X0,Xn)
     return PP
 
-# as in agg+, but single root per fork and [derH, valt,rdnt] vs [aggH, val_Ht,rdn_Ht]
-def feedback(root, fder, fd):  # append new der layers to root PP, one per fork node_
-
-    Fback = deepcopy(root.fback_tt[fder][fd][0])  # init with 1st [derH,valt,rdnt]
-    for derH, valt, rdnt in root.fback_tt[fder][fd][1:]:
-        sum_derH(Fback, [derH, valt, rdnt], base_rdn=0)
-    sum_derH([root.derH, root.valt,root.rdnt], Fback, base_rdn=0)  # both fder forks sum into a same root
-
-    if isinstance(root, CPP):  # root is not CEdge, which has no roots
-        for fder, root_t in enumerate(root.root_tt):
-            for fd, rroot in enumerate(root_t):
-                rroot.fback_tt[fder][fd] += [Fback]  # merged per root
-                if len(rroot.fback_tt[fder][fd]) == len(rroot.node_tt[fder][fd]):  # all nodes term and fed back to root
-                    feedback(rroot, fder, fd)  # aggH/rng in sum2PP, deeper rng layers are appended by feedback
-
 
 def sum_derH(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
@@ -238,7 +222,7 @@ def sum_derH(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = 
         for Layer, layer in zip_longest(DerH,derH, fillvalue=[]):
             if layer:
                 if Layer:
-                    for i in range(0,1):
+                    for i in 0,1:
                         sum_ptuple(Layer[0][i], layer[0][i])  # ptuplet
                         Layer[1][i] += layer[1][i]  # valt
                         Layer[2][i] += layer[2][i] + base_rdn  # rdnt
@@ -322,7 +306,7 @@ def sub_recursion(root, PP_):  # called in form_PP_, evaluate PP for rng+ and de
             if PP.valt[fder] * np.sqrt(len(P_)-1) if P_ else 0 > P_aves[fder] * PP.rdnt[fder]:  # comp_der|rng in PP->parLayer
 
                 comp_der(P_, fr) if fder else comp_rng(P_, PP.rng+1)  # same else new P_ and links
-                fr = 1  # per comp fork, both form sub-forks will be taken
+                fr = 1  # eval is per comp fork, both clustering sub-forks will be taken
                 PP.rdnt[fder] += PP.valt[fder] - PP_aves[fder] * PP.rdnt[fder] > PP.valt[1-fder] - PP_aves[1-fder] * PP.rdnt[1-fder]
                 for fd in 0,1:
                     sub_PP_ = form_PP_(root=PP, P_=P_, base_rdn=PP.rdnt[fder], fder=fder, fd=fd)
@@ -332,4 +316,42 @@ def sub_recursion(root, PP_):  # called in form_PP_, evaluate PP for rng+ and de
                     node_tt[fder][fd] = sub_PP_
         if fr:
             PP.node_tt = node_tt  # replace node_ with sub_PPm_, sub_PPd_, not empty
+
+
+def feedback(root, fder, fd):  # from form_PP_, append new der layers to root PP, single vs. root_ per fork in agg+
+
+    Fback = deepcopy(root.fback_tt[fder][fd][0])  # init with 1st [derH,valt,rdnt]
+
+    for derH, valt, rdnt in root.fback_tt[fder][fd][1:]:
+        sum_derH(Fback, [derH, valt, rdnt], base_rdn=0)
+    sum_derH([root.derH, root.valt, root.rdnt], Fback, base_rdn=0)  # both fder forks sum into a same root
+
+    # probably wrong, root may be an element in multiple higher PPs?
+    if isinstance(root, CPP):  # root has root_tt: is not CEdge
+        rroot = root.root_tt[fder][fd]  # same fork, higher level
+        if rroot:  # CPP, fder rroots are empty in top PPs
+            rroot.fback_tt[fder][fd] += [Fback]
+            if len(rroot.fback_tt[fder][fd]) == len(rroot.node_tt[fder][fd]):
+                # all rroot nodes terminated and fed back
+                feedback(rroot, fder, fd)
+                # derH is added per rng in sum2PP, deeper layers are appended by feedback
+    # Chee:
+    if isinstance(root, CPP):  # root is not CEdge, which has no roots
+        for fder, root_t in enumerate(root.root_tt):
+            for fd, rroot in enumerate(root_t):
+                # check next layer of up-forking rrots:
+                if rroot and rroot.fback_tt and rroot.fback_tt[fder][fd]:
+                    rroot.fback_tt[fder][fd] += [Fback]  # each node is all root forks?
+                    if isinstance(rroot, CPP):
+                        if isinstance(rroot.node_tt[0], list):  # rroot.node_tt is not updated with node_tt yet
+                            len_node = len(rroot.node_tt[fder][fd])
+                        else:
+                            len_node = len(rroot.node_tt)
+                    else:  # CEdge has no fder nodes
+                        len_node = 0
+                        if not fder and rroot.node_t:  # node_t in rroot.node_t only after form_PP_?
+                            len_node = len(rroot.node_t)
+                    if len(rroot.fback_tt[fder][fd]) == len_node:  # all nodes term and fed back to root
+                        feedback(rroot, fder, fd)
+
 

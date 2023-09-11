@@ -1,8 +1,8 @@
 # utf-8
 
 """
-Provide the function visualize_blobs to display
-formed blobs interactively.
+Provide the function to display
+frame of blobs interactively.
 """
 
 import sys
@@ -27,7 +27,7 @@ POSE2COLOR = {
 MASKING_VAL = 128  # Pixel at this value can be over-written
 
 
-def visualize_blobs(frame, layer='r'):
+def visualize(frame, layer='r'):
     """
     Visualize blobs after clustering.
     Highlight the blob the mouse is hovering on and its
@@ -134,8 +134,9 @@ def visualize_blobs(frame, layer='r'):
         y0, x0, *_ = blob.ibox
         state.P_links = []
         for P in edge.node_t:
-            for _P in P.link_H[0]: (_y, _x), (y, x) = _P.yx, P.yx
-            state.P_links += ax.plot([_x+x0,x+x0], [_y+y0,y+y0], 'ko-', linewidth=2, markersize=4)
+            for derP in P.link_H[0]:
+                (_y, _x), (y, x) = (derP._P.yx, derP.P.yx)
+                state.P_links += ax.plot([_x+x0,x+x0], [_y+y0,y+y0], 'ko-', linewidth=2, markersize=4)
 
     def update_img():
         update_gradient()

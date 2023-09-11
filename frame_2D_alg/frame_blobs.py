@@ -35,7 +35,7 @@ from typing import Union
 import numpy as np
 from time import time
 from collections import deque, namedtuple
-from visualization.draw_frame_blobs import visualize_blobs
+from visualization.draw_frame import visualize
 from class_cluster import ClusterStructure, init_param as z
 from utils import kernel_slice_3x3 as ks    # use in comp_pixel
 
@@ -76,7 +76,6 @@ class CBlob(ClusterStructure):
     der__t : Tdert = None   # tuple of derivatives arrays, consistent in shape
     adj_blobs : list = z([])  # adjacent blobs
     fopen : bool = False
-    P_ : list = z([])
     # intra_blob params: # or pack in intra = lambda: Cintra
     # comp_dx:
     Mdx : float = 0.0
@@ -133,7 +132,7 @@ def frame_blobs_root(i__, intra=False, render=False, verbose=False):
         if verbose: print("\rFinished intra_blob")  # print_deep_blob_forking(deep_blobs)
         # sublayers[0] is fork-specific, deeper sublayers combine sub-blobs of both forks
 
-    if render: visualize_blobs(frame)
+    if render: visualize(frame)
     return frame
 
 
