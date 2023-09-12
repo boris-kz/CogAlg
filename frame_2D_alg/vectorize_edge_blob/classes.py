@@ -13,19 +13,22 @@ from class_cluster import ClusterStructure, init_param as z
 
 class CEdge(ClusterStructure):  # edge blob
 
-    M: float = 0.0  # summed PP.M, for both types of recursion?
-    Ma: float = 0.0  # summed PP.Ma
-    # composite params:
     der__t_roots: object = None  # map to dir__t
     node_t : list = z([])  # default P_, node_t in select PP_ or G_ fder forks
-    fback_tt : list = z([])  # for consistency, only fder=0 is used; [feedback aggH,valt,rdnt per node], default empty
-
+    fback_tt : list = z([[[],[]],[[],[]]])  # for consistency, only fder=0 is used
+    # for comp_slice:
     derH : list = z([])  # formed in PPs, inherited in graphs
-    aggH : list = z([[]])  # [[subH, valt, rdnt]]: cross-fork composition layers
-    val_Ht : list = z([0,0])  # init valt for PPs, then Ht of link vals per fder
-    rdn_Ht : list = z([1,1])
-    blob : object = None  # initializing blob
-    # params from blob, can be accessed via edge.blob, for example, edge.blob.I:I: float = 0.0
+    valt : list = z([0,0])
+    rdnt : list = z([1,1])
+    # for agg+:
+    aggH : list = z([[]])  # formed in Gs: [[subH, valt, rdnt]]: cross-fork composition layers
+    val_Ht : list = z([[0],[0]])  # Ht of link vals | rdns per fder
+    rdn_Ht : list = z([[1],[1]])
+    # initializing blob:
+    blob : object = None
+    M: float = 0.0  # summed PP.M, for both types of recursion?
+    Ma: float = 0.0  # summed PP.Ma
+    # access blob params as edge.blob.I:I: float = 0.0, etc.
     # Dy: float = 0.0
     # Dx: float = 0.0
     # G: float = 0.0
@@ -85,7 +88,7 @@ class CPP(CderP):
     mask__ : object = None
     root_tt : list = z([[[],[]],[[],[]]])  # init edge, higher PPrm,PPrd, PPdm,PPdd that contain PP if sub+
     node_tt : list = z([])  # init P_, -> node_tt if sub+: [rng+ [sub_PPm_,sub_PPd_], der+ [sub_PPm_,sub_PPd_]]
-    fback_tt: list = z([])  # maps to node_tt: [feedback derH,valt,rdnt per node]
+    fback_tt: list = z([[[],[]],[[],[]]])  # maps to node_tt: [derH,valt,rdnt] per node fork
     rng : int = 1  # sum of rng+: odd forks in last layer?
     box : list = z([0,0,0,0])  # y0,yn,x0,xn
     # temporary:
@@ -95,7 +98,7 @@ class CPP(CderP):
 
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
-    fd: int = 0  # not fder
+    fd: int = 0  # not used?
     ptuple : list = z([])  # default from P
     derH : list = z([[], [0,0], [1,1]])  # [[tuplet, valt, rdnt]]: default from PP, for both rng+ and der+, sum min len?
     aggH : list = z([])  # [[sub_Ht, valt, rdnt]], subH: [[der_Ht, valt, rdnt]]; cross-fork composition layers
@@ -104,7 +107,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     rdn_Ht : list = z([[1],[1]])
     root_tt : list = z([[[],[]],[[],[]]])  # upward reciprocal for node_tt, nested if uH: up-forking tree of root Levs
     node_tt : list = z([])  # init G_ -> Gmr_,Gdr_, Gmd_,Gdd_ by agg+/sub+, nested if wH: down-forking tree of node Levs
-    fback_tt: list = z([])  # maps to node_tt: feedback [[aggH,valt,rdnt]] per node fork, init empty
+    fback_tt: list = z([[[],[]],[[],[]]])  # maps to node_tt: feedback [[aggH,valt,rdnt]] per node fork
     L : int = 0 # len base node_; from internal links:
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers

@@ -113,3 +113,55 @@ def vectorize_root(edge, verbose=False):
                 agg_recursion(edge, node_)  # node_[:] = new node_tt in the end, with sub+
                 # no feedback of node_ in agg+ here?
 
+def agg_recursion(root, node_):  # compositional recursion in root graph
+
+    pri_root_tt_ = [node.root_tt for node in node_]  # merge node roots for new graphs, same for both comp forks
+    node_tt = [[],[]]  # fill with comp fork if selected, else stays empty
+
+    for fder in 0,1:
+        # eval per comp fork, n comp graphs ~-> n matches, match rate decreases with distance:
+        if np.sum(root.val_Ht[fder]) * np.sqrt(len(node_)-1) if node_ else 0 > G_aves[fder] * np.sum(root.rdn_Ht[fder]):
+            if fder and len(node_[0].link_H) < 2:  # 1st call, no der+ yet
+                continue
+            root.val_Ht[fder] += [0]; root.rdn_Ht[fder] += [1]  # estimate, no node.rdnt[fder] += 1?
+            for node in node_:
+                node.root_tt[fder] = [[],[]]  # to replace node roots per comp fork
+                node.val_Ht[fder] += [0]; node.rdn_Ht[fder] += [1]  # new layer, accum in comp_G_:
+            if not fder:  # add layer of links if rng+
+                for node in node_: node.link_H += [[]]
+
+            comp_G_(node_, pri_G_=None, f1Q=1, fder=fder)  # cross-comp all Gs in (rng,der), nD array? form link_H per G
+            node_tt[fder] = [[],[]]  # fill with clustering forks by default
+            for fd in 0,1:
+                # cluster link_H[-1] -> graph_,= node_ in node_tt, default, agg+ eval per graph:
+                graph_ = form_graph_(root, node_, fder, fd, pri_root_tt_)
+                node_tt[fder][fd] = graph_
+    node_[:] = node_tt  # replace local element with new graph forks, possibly empty
+
+
+def comp_G_(G_, pri_G_=None, f1Q=1, fder=0):  # cross-comp in G_ if f1Q, else comp between G_ and pri_G_, if comp_node_?
+
+    for G in G_:  # node_
+        if fder:  # follow prior link_ layer
+            _G_ = []
+            for link in G.link_H[-2]:
+                if link.valt[1] > ave_Gd:
+                    _G_ += [link.G1 if G is link.G0 else link.G0]
+        else:  _G_ = G_ if f1Q else pri_G_  # loop all Gs in rng+
+        for _G in _G_:
+            if _G in G.compared_:  # was compared in prior rng
+                continue
+            dy = _G.box[0]-G.box[0]; dx = _G.box[1]-G.box[1]
+            distance = np.hypot(dy, dx)  # Euclidean distance between centers, sum in sparsity
+            if distance < ave_distance * ((sum(_G.val_Ht[fder]) + sum(G.val_Ht[fder])) / (2*sum(G_aves))):
+                G.compared_ += [_G]; _G.compared_ += [G]
+                # same comp for cis and alt components:
+                for _cG, cG in ((_G, G), (_G.alt_Graph, G.alt_Graph)):
+                    if _cG and cG:  # alt Gs maybe empty
+                        # form new layer of links:
+                        comp_G(_cG, cG, distance, [dy,dx])
+    '''
+    combine cis,alt in aggH: alt represents node isolation?
+    comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D?
+    '''
+
