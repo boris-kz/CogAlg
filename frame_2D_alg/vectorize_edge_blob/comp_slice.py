@@ -4,7 +4,7 @@ from itertools import zip_longest
 from collections import deque
 from .slice_edge import comp_angle
 from .classes import CderP, CPP
-from .filters import ave, aves, vaves, med_decay, aveB, P_aves, PP_aves, ave_nsubt
+from .filters import ave, med_decay, aveB, aves, P_aves, PP_aves, ave_nsubt
 from dataclasses import replace
 
 '''
@@ -27,25 +27,24 @@ Connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possib
 len prior root_ sorted by G is rdn of each root, to evaluate it for inclusion in PP, or starting new P by ave*rdn.
 '''
 
-
 def comp_P_(edge):  # renamed for consistency, cross-comp P_ in edge: high-gradient blob, sliced in Ps in the direction of G
 
-    P_ = edge.node_tt  # init as P_
-    edge.node_tt = ([[],[]], [])  # (rng+, der+(always empty))
+    P_ = edge.node_t  # init as P_
+    edge.node_t = [[],[]]  # (rng+, der+(always empty))
     # ~ sub+:
-    for P in P_:  # scan and compare contiguously uplinked Ps, rn = relative weight of comparand:
-
-        derP_ = [comp_P(_P, P, rn=len(_P.dert_)/len(P.dert_), fder=0) for _P in P.link_H[-1]]
+    for P in P_:
+        # scan and comp contiguously uplinked Ps, rn: relative weight of comparand
+        derP_ = [comp_P(_P, P, rn=len(_P.dert_)/len(P.dert_), fd=0) for _P in P.link_H[-1]]
         P.link_H[-1] = [derP for derP in derP_ if derP is not None]  # replace link _Ps with derPs
 
     for fd in 0,1:  # replace P_ with PP_t, root fork is rng+ only:
-        form_PP_(edge, P_, base_rdn=2, fder=0, fd=fd)  # may be nested by sub+ in form_PP_
+        form_PP_(edge, P_, base_rdn=2, fd=fd)  # may be nested by sub+ in form_PP_
 
 
-def comp_P(_P,P, rn, fder=1, derP=None):  #  derP if der+, reused as S if rng+
-    aveP = P_aves[fder]
+def comp_P(_P,P, rn, fd=1, derP=None):  #  derP if der+, reused as S if rng+
+    aveP = P_aves[fd]
 
-    if fder:  # der+: extend in-link derH, in sub+ only
+    if fd:  # der+: extend in-link derH, in sub+ only
         dderH, valt, rdnt = comp_derH(_P.derH, P.derH, rn)  # += fork rdn
         derP = CderP(derH = derP.derH+dderH, valt=valt, rdnt=rdnt, P=P,_P=_P, S=derP.S)  # dderH valt,rdnt for new link
         mval,dval = valt[:2]; mrdn,drdn = rdnt  # exclude maxv
@@ -66,14 +65,14 @@ def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip cluste
 
     for P in iP_:
         for derP in P.link_H[-1]:  # scan last-layer links
-            if derP.valt[0] >  P_aves[0] * derP.rdnt[0]:
+            if derP.valt[0] > P_aves[0] * derP.rdnt[0]:
                 _P = derP._P
                 for _derP in _P.link_H[-1]:  # next layer of all links, also lower-layer?
                    if _derP.valt[0] >  P_aves[0]* _derP.rdnt[0]:
                         __P = _derP._P  # next layer of Ps
                         distance = np.hypot(__P.yx[1]-P.yx[1], __P.yx[0]-P.yx[0])   # distance between midpoints
                         if distance > rng:  # distance=S, mostly lateral, /= L for eval?
-                            derP = comp_P(__P,P, rn=len(__P.dert_)/len(P.dert_), fder=0, derP=distance)
+                            derP = comp_P(__P,P, rn=len(__P.dert_)/len(P.dert_), fd=0, derP=distance)
                             if derP: derP_ += [derP]  # not None
 
         P.link_H += [derP_]  # add new link layer, in rng+ only
@@ -81,72 +80,68 @@ def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip cluste
 
     return P_
 
-def comp_der(P_, frng):  # keep same Ps and links, increment link derH, then P derH in sum2PP
+def comp_der(P_):  # keep same Ps and links, increment link derH, then P derH in sum2PP
 
     derP_ = []
     for P in P_:
-        link_ = P.link_H[-(1+frng)]
+        link_ = P.link_H[-1]
         for derP in link_:  # scan root-PP links, exclude top layer if formed by concurrent rng+
-            if derP.valt[1] >  P_aves[1]* derP.rdnt[1]:
+            if derP._P in P_ and derP.valt[1] >  P_aves[1]* derP.rdnt[1]:
                 _P = derP._P  # comp extended derH of previously compared Ps, sum in lower-composition sub_PPs
                 # weight of compared derH is relative compound scope of (sum linked Ps( sum P derts)):
-                rn = (len(_P.dert_) / len(P.dert_)) * (len(_P.link_H[-(1+frng)]) / len(link_))
-                derP = comp_P(_P,P, rn, fder=1, derP=derP)
+                rn = (len(_P.dert_) / len(P.dert_)) * (len(_P.link_H[-1]) / len(link_))
+                derP = comp_P(_P,P, rn, fd=1, derP=derP)
                 if derP: derP_ += [derP]  # not None
+
         link_[:] = derP_  # replace with extended-derH derPs
     return P_
 
-
-# tentative:
-def form_PP_(root, P_, base_rdn, fder, fd):  # form PPs of derP.valt[fd] + connected Ps val
+# tentative
+def form_PP_(root, P_, base_rdn, fd):  # form PPs of derP.valt[fd] + connected Ps val
 
     qPP_ = []  # initial pre_PPs are in list format
+
     for P in P_:
-        if P.root_tt[fder][fd]:  continue  # else already packed in some qPP
-        qPP = [[P]]  # init PP is 2D queue of (P,val)s of all layers, assigned in the end
-        P.root_tt[fder][fd] = qPP; val = 0
-        uplink_ = P.link_H[-1]
+        if P.root_t[fd]:  continue  # skip if already packed in some qPP
+        qPP = [[P]]  # init PP is 2D queue of Ps
+        P.root_t[fd] = qPP
+        val = 0  # sum of in-graph link vals, added to qPP in the end
+        uplink_ = P.link_H[-1] # 1st layer of uplinks
         uuplink_ = []  # next layer of uplinks
+        # or uplink_ = deque(P.link_H[-1]) # queue in breadth first search
+
         while uplink_:  # test for next-line uuplink_, set at loop's end
             for derP in uplink_:
-                if derP.valt[fder] <= P_aves[fder]*derP.rdnt[fder]: continue  # link _P should not be in qPP
+                if derP.valt[fd] <= P_aves[fd]*derP.rdnt[fd]: continue  # link _P should not be in qPP
+                # else qPP += [derP], links are visited once
+                val += derP.valt[fd]
                 _P = derP._P
-                if _P not in P_:  # _P is outside qPP, add it
-                    _PP = _P.root_tt[fder][fd]
-                    if _PP:  # _P was clustered as P in prior loops
-                        for __P in _PP[0]:  # merge _PP into qPP
-                            qPP[0] += [__P]; __P.root_tt[fder][fd] = qPP
-                        qPP_.remove(_PP)
-                else:  # _P is in qPP
-                    _qPP = _P.root_tt[fder][fd]
-                    if _qPP:
-                        if _qPP is not qPP:  # _P may be added to qPP via other down-linked P
-                            val += _qPP[1]  # merge _qPP in qPP:
-                            for qP in _qPP[0]:
-                                qP.root_tt[fder][fd] = qPP
-                                qPP[0] += [qP] # qP_+=[qP]
-                            qPP_.remove(_qPP)
-                    else:
-                        qPP[0] += [_P]  # pack bottom up
-                        _P.root_tt[fder][fd] = qPP
-                        val += derP.valt[fd]
-                        uuplink_ += derP._P.link_H[-1]
+                _qPP = _P.root_t[fd]
+                if _qPP:  # _P was clustered in prior loops, can't be qPP: links are visited once
+                    for __P in _qPP[0]:  # merge _PP into qPP
+                        qPP[0] += [__P]; __P.root_t[fd] = qPP
+                    val += _qPP[1]  # _qPP Val
+                    qPP_.remove(_qPP)
+                else:  # no root yet
+                    qPP[0] += [_P]; _P.root_t[fd] = qPP
+                # pack bottom up
+                uuplink_ += derP._P.link_H[-1]
             uplink_ = uuplink_
             uuplink_ = []
-        qPP += [val, ave+1]  # ini reval=ave+1, keep qPP same object for ref in P.root_tt
+        qPP += [val, ave+1]  # ini reval=ave+1, keep qPP same object for ref in P.root_t
         qPP_ += [qPP]
 
-    rePP_ = reval_PP_(qPP_, fder, fd)  # prune qPPs by mediated links vals, PP = [qPP,valt,reval]
-    PP_ = [sum2PP(root, qPP, base_rdn, fder, fd) for qPP in rePP_]
+    rePP_ = reval_PP_(qPP_, fd)  # prune qPPs by mediated links vals, PP = [qPP,valt,reval]
+    PP_ = [sum2PP(root, qPP, base_rdn, fd) for qPP in rePP_]
 
-    sub_recursion(root.fback_tt[fder][fd], PP_)  # eval rng+,der+ per PP.P_
-    if root.fback_tt and root.fback_tt[fder][fd]:
-        feedback(root, fder, fd)  # feedback after sub+ is terminated in all root fork nodes, to avoid individual traffic
+    sub_recursion(root.fback_t[fd], PP_, fd)  # eval rng+|der+ in PP.P_
+    if root.fback_t and root.fback_t[fd]:
+        feedback(root, fd)  # feedback after sub+ is terminated in all root fork nodes, to avoid individual traffic
 
-    root.node_tt[fder][fd] = PP_  # PPs maybe nested in sub+, revert node_tt if empty, add_alt_PPs_(graph_t)?
+    root.node_t[fd] = PP_  # PPs maybe nested in sub+, revert node_t if empty, add_alt_PPs_(graph_t)?
 
 
-def reval_PP_(PP_, fder, fd):  # recursive eval / prune Ps for rePP
+def reval_PP_(PP_, fd):  # recursive eval / prune Ps for rePP
 
     rePP_ = []
     while PP_:  # init P__
@@ -160,12 +155,12 @@ def reval_PP_(PP_, fder, fd):  # recursive eval / prune Ps for rePP
                 if val > ave:  # min adjusted val
                     rePP_ += [rePP]
                 else:
-                    for P in rePP: P.root_tt[fder][fd] = []
+                    for P in rePP: P.root_t[fd] = []
         else:  # low-val qPPs are removed
-            for P in P_: P.root_tt[fder][fd] = []
+            for P in P_: P.root_t[fd] = []
 
     if rePP_ and max([rePP[2] for rePP in rePP_]) > ave:  # recursion if any min reval:
-        rePP_ = reval_PP_(rePP_, fder, fd)
+        rePP_ = reval_PP_(rePP_, fd)
 
     return rePP_
 
@@ -175,11 +170,11 @@ def reval_P_(P_, fd):  # prune qPP by link_val + mediated link__val
     Val, reval = 0,0  # comb PP value and recursion value
     for P in P_:
         P_val = 0
-        for link in P.link_H[-1]:  # link val + med links val: single mediation layer in comp_slice:
+        for link in P.link_H[-1]:    # link val + med links val: single mediation layer in comp_slice:
             link_val = link.valt[fd] + sum([link.valt[fd] for link in link._P.link_H[-1]]) * med_decay
-            if link_val >= vaves[fd]:
+            if link_val >= aves[fd]:
                 P_val += link_val
-        if P_val * P.rdnt[fd] > vaves[fd]:
+        if P_val * P.rdnt[fd] > aves[fd]:
             Val += P_val * P.rdnt[fd]
 
     if reval > aveB:
@@ -187,14 +182,14 @@ def reval_P_(P_, fd):  # prune qPP by link_val + mediated link__val
     return [P_, Val, reval]
 
 
-def sum2PP(root, pre_PP, base_rdn, fder, fd):  # sum links in Ps and Ps in PP
+def sum2PP(root, pre_PP, base_rdn, fd):  # sum links in Ps and Ps in PP
 
     P_,_,_ = pre_PP  # proto-PP is a list
-    PP = CPP(fd=fd, node_tt=P_)
-    PP.root_tt[fder][fd] = root
+    PP = CPP(fd=fd, node_t=P_)
+    PP.root_t[fd] = root
     # accum:
     for i, P in enumerate(P_):
-        P.root_tt[fder][fd] = PP
+        P.root_t[fd] = PP
         sum_ptuple(PP.ptuple, P.ptuple)
         L = P.ptuple[-1]
         Dy = P.axis[0]*L/2; Dx = P.axis[1]*L/2; y,x =P.yx
@@ -202,7 +197,7 @@ def sum2PP(root, pre_PP, base_rdn, fder, fd):  # sum links in Ps and Ps in PP
         else: Y0=y-Dy; Yn=y+Dy; X0=x-Dx; Xn=x+Dx  # init
 
         for derP in P.link_H[-1]:
-            if derP.valt[fder] > P_aves[fder]* derP.rdnt[fder]:
+            if derP.valt[fd] > P_aves[fd]* derP.rdnt[fd]:
                 derH, valt, rdnt = derP.derH, derP.valt, derP.rdnt
                 sum_derH([P.derH,P.valt,P.rdnt], [derH,valt,rdnt], base_rdn)
                 _P = derP._P  # bilateral summation:
@@ -293,43 +288,35 @@ def comp_ptuple(_ptuple, ptuple, rn):  # 0der
     return [mtuple, dtuple, Mtuple]
 
 '''
-Each call to comp_rng | comp_der forms dderH: a layer of derH
-Comp fork fder and clustering fork fd are not represented in derH because they are merged in feedback, to control complexity
+Each call to comp_rng | comp_der forms dderH: a layer of derH. Layer fd forks are merged in feedback to control complexity
 (deeper layers are appended by feedback, if nested we need fback_tree: last_layer_nforks = 2^n_higher_layers)
 '''
-def sub_recursion(fback_, PP_):  # called in form_PP_, evaluate PP for rng+ and der+, add layers to select sub_PPs
+def sub_recursion(fback_, PP_, fd):  # called in form_PP_, evaluate PP for rng+ and der+, add layers to select sub_PPs
 
     for PP in PP_:
-        P_ = PP.node_tt  # flat before sub+
-        PP.node_tt = (([],[]),([],[]))  # sub_PPm_t, sub_PPd_t, revert if not fr
-        fr = 0  # sub+ in any fork
+        P_ = PP.node_t  # flat before sub+
+        if PP.valt[fd] * np.sqrt(len(P_)-1) if P_ else 0 > P_aves[fd] * PP.rdnt[fd]:  # comp_der|rng in PP->parLayer
 
-        for fder in 0,1:  # eval all| last layer?
-            if PP.valt[fder] * np.sqrt(len(P_)-1) if P_ else 0 > P_aves[fder] * PP.rdnt[fder]:  # comp_der|rng in PP->parLayer
-
-                comp_der(P_, fr) if fder else comp_rng(P_, PP.rng+1)  # same else new P_ and links
-                fr = 1  # eval per comp fork, not clustering sub-forks
-                PP.rdnt[fder] += PP.valt[fder] - PP_aves[fder] * PP.rdnt[fder] > PP.valt[1-fder] - PP_aves[1-fder] * PP.rdnt[1-fder]
-                for fd in 0,1:
-                    form_PP_(root=PP, P_=P_, base_rdn=PP.rdnt[fder], fder=fder, fd=fd)
-                    fback_ += [[PP.derH, PP.valt, PP.rdnt]]  # merge in root.fback_tt fork: || root.node_tt vs. fback_tree
-        if not fr:
-            PP.node_tt = P_  # revert if empty node_tt
+            PP.node_t = [[],[]]  # sub_PPm_, sub_PPd_
+            comp_der(P_) if fd else comp_rng(P_, PP.rng+1)  # same else new links
+            PP.rdnt[fd] += PP.valt[fd] - PP_aves[fd] * PP.rdnt[fd] > PP.valt[1-fd] - PP_aves[1-fd] * PP.rdnt[1-fd]
+            for fd in 0,1:
+                form_PP_(root=PP, P_=P_, base_rdn=PP.rdnt[fd], fd=fd)
+                fback_ += [[PP.derH, PP.valt, PP.rdnt]]  # merge in root.fback_t fork: || root.node_t vs. fback_tree
 
 
-def feedback(root, fder, fd):  # from form_PP_, append new der layers to root PP, single vs. root_ per fork in agg+
+def feedback(root, fd):  # from form_PP_, append new der layers to root PP, single vs. root_ per fork in agg+
 
-    Fback = root.fback_tt[fder][fd].pop(0)  # init with 1st [derH,valt,rdnt]
-    while root.fback_tt[fder][fd]:
-        sum_derH(Fback, root.fback_tt[fder][fd].pop(0), base_rdn=0)
+    Fback = root.fback_t[fd].pop(0)  # init with 1st [derH,valt,rdnt]
+    while root.fback_t[fd]:
+        sum_derH(Fback, root.fback_t[fd].pop(0), base_rdn=0)
     sum_derH([root.derH, root.valt, root.rdnt], Fback, base_rdn=0)  # both fder forks sum into a same root
 
     if isinstance(root, CPP):  # root is not CEdge, which has no roots
-        for fder, root_tt in enumerate(root.root_tt):
-            for fd, rroot in enumerate(root.root_t):
-                if rroot:  # may be empty if the fork was not taken
-                    rroot.fback_tt[fder][fd] += [Fback]
-                    fback_ = rroot.fback_tt[fder][fd]
-                    if fback_ and (len(fback_) == len(rroot.node_tt[fder][fd])):
-                        # all rroot nodes terminated and fed back
-                        feedback(rroot, fder, fd) # sum2PP adds derH per rng, feedback adds deeper sub+ layers
+        for fd, rroot in enumerate(root.root_t):
+            if rroot:  # may be empty if the fork was not taken
+                rroot.fback_t[fd] += [Fback]
+                fback_ = rroot.fback_t[fd]
+                if fback_ and (len(fback_) == len(rroot.node_t[fd])):
+                    # all rroot nodes terminated and fed back
+                    feedback(rroot, fd) # sum2PP adds derH per rng, feedback adds deeper sub+ layers

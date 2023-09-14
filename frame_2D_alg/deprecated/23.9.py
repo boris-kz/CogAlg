@@ -165,3 +165,75 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fder=0):  # cross-comp in G_ if f1Q, else co
     comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D?
     '''
 
+def agg_recursion(rroot, root, G_, fini):  # compositional recursion in root graph, rng+ only if fini
+
+    pri_root_tt_ = []
+    for G in deepcopy(G_):  # copy for reversibility
+        pri_root_tt_ += [G.root_tt]  # merge node roots for new graphs, same for both comp forks
+        G.root_tt = (([],[]),([],[]))  # replace with new graphs
+    fr = 0  # comp of either fork
+
+    for fder in 0,1:  # der+| rng+ comp forks
+        if fder and fini:  # 1st call, no der+ yet, or test len(G_[0].link_H) < 2?
+            break
+        # eval last layer, per comp fork only, n comp graphs ~-> n matches, match rate decreases with distance:
+        if root.val_Ht[fder][-1] * np.sqrt(len(G_)-1) if G_ else 0 > G_aves[fder] * root.rdn_Ht[fder][-1]:
+            fr = 1
+            comp_G_(G_, pri_G_=None, f1Q=1, fder=fder)  # cross-comp all Gs in (rng,der), nD array? form link_H per G
+            root.val_Ht[fder] += [0]; root.rdn_Ht[fder] += [1]  # estimate, no node.rdnt[fder] += 1?
+            # or root.rdn_t[fder][-1] += (root.val_Ht[fder][-1] - G_aves[fder] * root.rdn_Ht[fder][-1] > root.val_Ht[1-fder][-1] - G_aves[1-fder] * root.rdn_Ht[1-fder][-1])
+            for fd in 0,1:
+                # cluster link_H[-1] -> graph_,= node_ in node_tt, default, agg+ eval per graph:
+                form_graph_(root, G_, fder, fd, pri_root_tt_)
+                if rroot:
+                    rroot.fback_tt[fder][fd] += [[root.aggH, root.val_Ht, root.rdn_Ht]]  # merge across forks
+        if not fr:
+            root.node_tt = G_  # revert if empty node_tt
+
+def form_PP_(root, P_, base_rdn, fder, fd):  # form PPs of derP.valt[fd] + connected Ps val
+
+    qPP_ = []  # initial pre_PPs are in list format
+    for P in P_:
+        if P.root_tt[fder][fd]:  continue  # skip if already packed in some qPP
+        qPP = [[P]]  # init PP is 2D queue of (P,val)s of all layers, assigned in the end
+        P.root_tt[fder][fd] = qPP; val = 0
+        uplink_ = P.link_H[-1]
+        uuplink_ = []  # next layer of uplinks
+        while uplink_:  # test for next-line uuplink_, set at loop's end
+            for derP in uplink_:
+                if derP.valt[fder] <= P_aves[fder]*derP.rdnt[fder]: continue  # link _P should not be in qPP
+                _P = derP._P
+                if _P not in qPP[0]:  # _P is outside qPP, add it
+                    _PP = _P.root_tt[fder][fd]
+                    if _PP:  # _P was clustered as P in prior loops
+                        for __P in _PP[0]:  # merge _PP into qPP
+                            qPP[0] += [__P]; __P.root_tt[fder][fd] = qPP
+                        qPP_.remove(_PP)
+                else:  # _P is in qPP
+                    _qPP = _P.root_tt[fder][fd]
+                    if _qPP:
+                        if _qPP is not qPP:  # _P may be added to qPP via other down-linked P
+                            val += _qPP[1]  # merge _qPP in qPP:
+                            for qP in _qPP[0]:
+                                qP.root_tt[fder][fd] = qPP
+                                qPP[0] += [qP] # qP_+=[qP]
+                            qPP_.remove(_qPP)
+                    else:
+                        qPP[0] += [_P]  # pack bottom up
+                        _P.root_tt[fder][fd] = qPP
+                        val += derP.valt[fd]
+                        uuplink_ += derP._P.link_H[-1]
+            uplink_ = uuplink_
+            uuplink_ = []
+        qPP += [val, ave+1]  # ini reval=ave+1, keep qPP same object for ref in P.root_tt
+        qPP_ += [qPP]
+
+    rePP_ = reval_PP_(qPP_, fder, fd)  # prune qPPs by mediated links vals, PP = [qPP,valt,reval]
+    PP_ = [sum2PP(root, qPP, base_rdn, fder, fd) for qPP in rePP_]
+
+    sub_recursion(root.fback_tt[fder][fd], PP_)  # eval rng+,der+ per PP.P_
+    if root.fback_tt and root.fback_tt[fder][fd]:
+        feedback(root, fder, fd)  # feedback after sub+ is terminated in all root fork nodes, to avoid individual traffic
+
+    root.node_tt[fder][fd] = PP_  # PPs maybe nested in sub+, revert node_tt if empty, add_alt_PPs_(graph_t)?
+

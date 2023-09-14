@@ -14,8 +14,8 @@ from class_cluster import ClusterStructure, init_param as z
 class CEdge(ClusterStructure):  # edge blob
 
     der__t_roots: object = None  # map to dir__t
-    node_tt : list = z([])  # default P_, node_t in select PP_ or G_ fder forks
-    fback_tt : list = z((([],[]),([],[])))  # for consistency, only fder=0 is used
+    node_t : list = z([])  # default P_, node_t in select PP_ or G_ fder forks
+    fback_t : list = z([[],[]])  # for consistency, only fder=0 is used
     # for comp_slice:
     derH : list = z([])  # formed in PPs, inherited in graphs
     valt : list = z([0,0])
@@ -48,7 +48,7 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     dert_ : list = z([])  # array of pixel-level derts, ~ node_
     cells : set = z(set())  # pixel-level kernels adjacent to P axis, combined into corresponding derts projected on P axis.
     link_H : list = z([[]])  # +ve rlink_, dlink_ H from lower sub+
-    root_tt : list = z([[None,None],[None,None]])  # PPrm,PPrd, PPdm,PPdd that contain this P, single-layer
+    root_t : list = z([None,None])  # PPrm,PPrd, PPdm,PPdd that contain this P, single-layer
     axis : tuple = (0,1)  # prior slice angle, init sin=0,cos=1
     yx : tuple = None
     ''' 
@@ -86,9 +86,9 @@ class CPP(CderP):
     valt : list = z([0,0])
     rdnt : list = z([1,1])
     mask__ : object = None
-    root_tt : list = z((([],[]),([],[])))  # init edge, higher PPrm,PPrd, PPdm,PPdd that contain PP if sub+
-    node_tt : list = z([])  # init P_, -> node_tt if sub+: [rng+ [sub_PPm_,sub_PPd_], der+ [sub_PPm_,sub_PPd_]]
-    fback_tt: list = z((([],[]),([],[])))  # maps to node_tt: [derH,valt,rdnt] per node fork
+    root_t : list = z([[],[]])  # init edge, higher PPrm,PPrd, PPdm,PPdd that contain PP if sub+
+    node_t : list = z([])  # init P_, -> node_tt if sub+: [rng+ [sub_PPm_,sub_PPd_], der+ [sub_PPm_,sub_PPd_]]
+    fback_t: list = z([[],[]])  # maps to node_tt: [derH,valt,rdnt] per node fork
     rng : int = 1  # sum of rng+: odd forks in last layer?
     box : list = z([0,0,0,0])  # y0,yn,x0,xn
     # temporary:
@@ -103,11 +103,11 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     derH : list = z([[], [0,0], [1,1]])  # [[tuplet, valt, rdnt]]: default from PP, for both rng+ and der+, sum min len?
     aggH : list = z([])  # [[sub_Ht, valt, rdnt]], subH: [[der_Ht, valt, rdnt]]; cross-fork composition layers
     link_H : list = z([[]])  # added per rng+ comp_G_
-    val_Ht : list = z([[0],[0]])  # H of link vals per fder
-    rdn_Ht : list = z([[1],[1]])
-    root_tt : list = z((([],[]),([],[])))  # upward reciprocal for node_tt, nested if uH: up-forking tree of root Levs
-    node_tt : list = z([])  # init G_ -> Gmr_,Gdr_, Gmd_,Gdd_ by agg+/sub+, nested if wH: down-forking tree of node Levs
-    fback_tt: list = z((([],[]),([],[])))  # maps to node_tt: feedback [[aggH,valt,rdnt]] per node fork
+    val_Ht : list = z(([0],[0]))  # H of link vals per fder
+    rdn_Ht : list = z(([1],[1]))
+    root_t : list = z(([],[]))  # upward reciprocal for node_tt, nested if uH: up-forking tree of root Levs
+    node_t : list = z([])  # init G_ -> Gmr_,Gdr_, Gmd_,Gdd_ by agg+/sub+, nested if wH: down-forking tree of node Levs
+    fback_t: list = z(([],[]))  # maps to node_tt: feedback [[aggH,valt,rdnt]] per node fork
     L : int = 0 # len base node_; from internal links:
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers
