@@ -86,9 +86,9 @@ class CPP(CderP):
     valt : list = z([0,0])
     rdnt : list = z([1,1])
     mask__ : object = None
-    root_t : list = z([[],[]])  # init edge, higher PPrm,PPrd, PPdm,PPdd that contain PP if sub+
+    root : object = None  # edge / PP, PP / sub_PP: not shared between root forks
     node_t : list = z([])  # init P_, -> node_tt if sub+: [rng+ [sub_PPm_,sub_PPd_], der+ [sub_PPm_,sub_PPd_]]
-    fback_t: list = z([[],[]])  # maps to node_tt: [derH,valt,rdnt] per node fork
+    fback_t : list = z([[],[]])  # maps to node_tt: [derH,valt,rdnt] per node fork
     rng : int = 1  # sum of rng+: odd forks in last layer?
     box : list = z([0,0,0,0])  # y0,yn,x0,xn
     # temporary:
@@ -105,9 +105,9 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     link_H : list = z([[]])  # added per rng+ comp_G_
     val_Ht : list = z(([0],[0]))  # H of link vals per fder
     rdn_Ht : list = z(([1],[1]))
-    root_t : list = z(([],[]))  # upward reciprocal for node_tt, nested if uH: up-forking tree of root Levs
+    root_t : list = z([[],[]])  # upward reciprocal for node_tt, nested if uH: up-forking tree of root Levs
     node_t : list = z([])  # init G_ -> Gmr_,Gdr_, Gmd_,Gdd_ by agg+/sub+, nested if wH: down-forking tree of node Levs
-    fback_t: list = z(([],[]))  # maps to node_tt: feedback [[aggH,valt,rdnt]] per node fork
+    fback_t: list = z([[],[]])  # maps to node_tt: feedback [[aggH,valt,rdnt]] per node fork
     L : int = 0 # len base node_; from internal links:
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers

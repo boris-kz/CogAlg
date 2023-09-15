@@ -37,9 +37,9 @@ def vectorize_root(blob):  # vectorization pipeline is 3 composition levels of c
 
     # lateral kernel cross-comp -> P clustering:
     edge = slice_edge(blob, verbose=False)
-    # vertical P cross-comp -> PP clustering, for vertically-adjacent, laterally-overlapping Ps
+    # vertical P cross-comp -> PP clustering, for vertically-adjacent, laterally-overlapping Ps:
     comp_P_(edge)
-    # PP cross-comp -> graph clustering, discontinuous
+    # PP cross-comp -> graph clustering, discontinuous:
     for fd in 0,1:
         node_ = edge.node_t[fd]
         if edge.valt[0] * np.sqrt(len(node_)-1) if node_ else 0 > G_aves[0] * edge.rdnt[0]:  # init rng+
@@ -50,30 +50,29 @@ def vectorize_root(blob):  # vectorization pipeline is 3 composition levels of c
                                L=PP.ptuple[-1], box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
             node_ = G_
             edge.val_Ht[0][0] = edge.valt[0]; edge.rdn_Ht[0][0] = edge.rdnt[0]  # copy
-            edge.node_t = ([],[])
+            edge.node_t = [[],[]]
             while True:
-                agg_recursion(None, edge, node_, fd=0)  # edge.node_t[0] = node_tt formed from node_ sub+
+                agg_recursion(None, edge, node_, fd=0)  # edge.node_t[0] = node_t formed from node_ sub+
                 if np.sum(edge.val_Ht[0]) * np.sqrt(len(node_)-1) if node_ else 0 <= G_aves[0] * np.sum(edge.rdn_Ht[0]):
                     break
 
-# per node_ vs. root_ in sub+:
-def agg_recursion(rroot, root, G_, fd):  # compositional recursion in root graph, clustering G_
+# per node_, vs root_ in sub+:
+def agg_recursion(rroot, root, G_, fd=0):  # compositional recursion in root graph, clustering G_
 
-    pri_root_t_ = []  # to merge node roots in new graphs roots:  new graphs are intermediate between nodes and roots
+    ave = G_aves[fd]
+    _root_t_ = [G.root_t for G in G_]  # merge G roots in)between forks into GG roots: between Gs and root
 
-    for G in G_:
-        pri_root_t_ += [G.root_t]
-        # eval last layer, n comp graphs ~-> n matches, match rate decreases with distance:
-        if root.val_Ht[fd][-1] * np.sqrt(len(G_)-1) if G_ else 0 > G_aves[fd] * root.rdn_Ht[fd][-1]:
-            G.root_t = ([],[])  # replace with new graphs
+    if root.val_Ht[fd][-1] * np.sqrt(len(G_)-1) if G_ else 0 > ave * root.rdn_Ht[fd][-1]:
+    # eval last layer for rng+|der+, n comp graphs ~-> n matches, match rate decreases with distance
+        comp_G_(G_, pri_G_=None, f1Q=1, fder=fd)  # cross-comp all Gs in (rng,der), nD array? form link_H per G
 
-            comp_G_(G_, pri_G_=None, f1Q=1, fder=fd)  # cross-comp all Gs in (rng,der), nD array? form link_H per G
-            root.val_Ht[fd] += [0]; root.rdn_Ht[fd] += [1]  # estimate, no node.rdnt[fder] += 1?
-            # or root.rdn_t[fd][-1] += (root.val_Ht[fd][-1] - G_aves[fd]*root.rdn_Ht[fd][-1] > root.val_Ht[1-fd][-1] - G_aves[1-fd]*root.rdn_Ht[1-fd][-1])
-            for fd in 0,1:
-                form_graph_(root, G_, fd, pri_root_t_)  # cluster link_H[-1] -> graph_,= node_ in node_tt, default, agg+ eval per graph
-                if rroot:
-                    rroot.fback_t[fd] += [[root.aggH, root.val_Ht, root.rdn_Ht]]  # merge across forks
+        root.val_Ht[fd] += [0]; root.rdn_Ht[fd] += [1]  #  estimate, no node.rdn += 1, refine?:
+        root.rdn_Ht[fd][-1] += (root.val_Ht[fd][-1] - ave*root.rdn_Ht[fd][-1] > root.val_Ht[1-fd][-1] - ave[1-fd]*root.rdn_Ht[1-fd][-1])
+        for G in G_: G.root_t = [[],[]]  # to fill with GGs
+        for fd in 0,1:
+            form_graph_(root, G_, fd, _root_t_)  # cluster link_H[-1] -> graph_,= node_ in node_tt, default, agg+ eval per graph
+            if rroot:
+                rroot.fback_t[fd] += [[root.aggH, root.val_Ht, root.rdn_Ht]]  # merge across forks
 
 
 def comp_G_(G_, pri_G_=None, f1Q=1, fder=0):  # cross-comp in G_ if f1Q, else comp between G_ and pri_G_, if comp_node_?
@@ -137,12 +136,12 @@ def comp_G(_G, G, distance, A):
         G.val_Ht[0][-1] += Mval; G.val_Ht[1][-1] += Dval; G.rdn_Ht[0][-1] += Mrdn; G.rdn_Ht[1][-1] += Drdn
 
 # tentative
-def form_graph_(root, Node_, fd, pri_root_tt_):  # root function to form fuzzy graphs of nodes per fder,fd
+def form_graph_(root, Node_, fd, _root_t_):  # root function to form fuzzy graphs of nodes per fder,fd
 
     ave = G_aves[fd]
     max_ = select_max_(Node_, fd, ave)  # compute max of quasi-Gaussians: val + sum([_val * (link_val/max_val])
 
-    full_graph_ = segment_node_(Node_, max_, fd, pri_root_tt_)
+    full_graph_ = segment_node_(Node_, max_, fd, _root_t_)
     list_graph_ = prune_graph_(full_graph_, fd)  # sort node roots and prune the weak
     graph_ = sum2graph_(list_graph_, fd)  # convert to Cgraphs
     # sub+:
@@ -193,13 +192,13 @@ def select_max_(node_, fd, ave):  # final maxes are graph-initializing nodes
         if fmax: max_ += [node]
     return max_
 
-def segment_node_(node_, max_, fd, pri_root_t_):
+def segment_node_(node_, max_, fd, _root_t_):
 
     graph_ = []  # initialize graphs with local maxes, then prune links to add other nodes:
     for max_node in max_:
 
-        pri_root_t = pri_root_t_[node_.index(max_node)]  # node roots will be assigned to new graphs, but not only from maxes?
-        graph = [[max_node], sum(max_node.val_Ht[fd]), [pri_root_t]]
+        _root_t = _root_t_[node_.index(max_node)]  # assign node roots to new graphs, but not only from maxes?
+        graph = [[max_node], sum(max_node.val_Ht[fd]), [_root_t]]
         max_node.root_t[fd] += [graph]
         _nodes = [max_node]  # current periphery of the graph, as nodes vs. links in comp_slice?
         while _nodes:  # search links outwards, recursively:
@@ -215,9 +214,9 @@ def segment_node_(node_, max_, fd, pri_root_t_):
                         if (val+_val) * link_rel_val > 0:
                             graph[0] += [_node]
                             graph[1] += link_rel_val * _val
-                            if pri_root_t_:  # agg+
-                                pri_root_t = pri_root_t_[node_.index(_node)]
-                                graph[2] += [pri_root_t]
+                            if _root_t_:  # agg+
+                                _root_t = _root_t_[node_.index(_node)]
+                                graph[2] += [_root_t]
                             _node.root_t[fd] += [graph]  # single root per fork?
                             nodes += [_node]
             _nodes = nodes
@@ -256,7 +255,7 @@ def sum2graph_(graph_, fd):  # sum node and link params into graph, aggH in agg+
 
     Graph_ = []
     for graph in graph_:  # seq graphs
-        Root_t = copy(graph[2][0])  # merge pri_root_t_ into Root_t:
+        Root_t = graph[2][0]  # merge _root_t_ into Root_t:
         [merge_root_tree(Root_t, root_t) for root_t in graph[2][1:]]
 
         Graph = Cgraph(root_t=Root_t, L=len(graph[0]))  # n nodes
@@ -279,6 +278,7 @@ def sum2graph_(graph_, fd):  # sum node and link params into graph, aggH in agg+
             G.root_t[fd][G.root_t[fd].index(graph)] = Graph  # replace list graph in root_tt
             Graph.node_t += [G]  # then converted to node_t by feedback
         subH=[]; valt=[0,0]; rdnt=[1,1]
+
         for derG in Link_:  # sum unique links:
             sum_subH([subH,valt,rdnt], [derG.subH, derG.valt, derG.rdnt], base_rdn=1)
             Graph.A[0] += derG.A[0]; Graph.A[1] += derG.A[1]
@@ -418,8 +418,7 @@ def feedback(root, fd):  # called from form_graph_, append new der layers to roo
     if isinstance(root, Cgraph):  # root is not CEdge, which has no roots
         for fd, rroot_ in enumerate(root.root_t):
             for rroot in rroot_:  # may be empty if the fork was not taken
-                rroot.fback_t[fd] += [Fback]
                 fback_ = rroot.fback_t[fd]
-                if fback_ and (len(fback_) == len(rroot.node_t[fd])):
-                    # all rroot nodes terminated and fed back
+                fback_ += [Fback]
+                if fback_ and (len(fback_) == len(rroot.node_t[fd])):  # all rroot nodes terminated and fed back
                     feedback(rroot, fd)  # sum2graph adds aggH per rng, feedback adds deeper sub+ layers
