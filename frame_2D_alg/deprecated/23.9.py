@@ -236,3 +236,71 @@ def form_PP_t(root, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps v
 
     root.node_t = PP_t  # PPs maybe nested in sub+, add_alt_PPs_?
 
+def reval_PP(P_, fd):   # recursive eval / prune Ps for rePP
+
+    val = sum((derP.valt[fd] for P in P_ for derP in P.link_H[-1]
+               if derP.valt[fd] > P_aves[fd] * derP.rdnt[fd]))
+    # add rdn: Ave = ave * 1+(valt[fd] < valt[1-fd])  # * PP.rdn for more selective clustering?
+
+    if val <= ave: return   # check val first, return None if val doesn't pass ave
+    reval = ave+1  # to start reval
+
+    while reval > ave:
+        P_, val, reval = reval_P_(P_, fd)  # recursive node and link re-evaluation by med val
+        if val <= ave: return  # always check val after reval
+
+    rePP = [P_, val, reval]     # pack rePP
+    for P in P_:
+        P.root_t = rePP         # assign root_t
+
+    return [P_, val, reval]
+
+def reval_PP_(PP_, fd):  # recursive eval / prune Ps for rePP
+
+    rePP_ = []
+    while PP_:  # init P__
+        P_, val, reval = PP_.pop(0)
+        # Ave = ave * 1+(valt[fd] < valt[1-fd])  # * PP.rdn for more selective clustering?
+        if val > ave:
+            if reval < ave:  # same graph, skip re-evaluation:
+                rePP_ += [[P_,val,0]]  # reval=0
+            else:
+                rePP = reval_P_(P_,fd)  # recursive node and link re-evaluation by med val
+                if val > ave:  # min adjusted val
+                    rePP_ += [rePP]
+                else:
+                    for P in rePP: P.root_t[fd] = []
+        else:  # low-val qPPs not added to rePP_
+            for P in P_: P.root_t[fd] = []
+
+    if rePP_ and max([rePP[2] for rePP in rePP_]) > ave:  # recursion if any min reval:
+        rePP_ = reval_PP_(rePP_, fd)
+
+    return rePP_
+'''
+            while _Val > Ave *_Rdn:
+                Val = reval_cP_(cP_, ave, fd)  # recursive link revaluation by mediated link vals
+                if abs(_Val-Val) < Ave/2:  # lower filter for reval vs. eval
+                    PP_t[fd] += sum2PP(root, cP_, base_rdn, fd)
+                    break
+'''
+def reval_cP_(cP_, ave, fd):  # reval cP_ by link_val + mediated link_vals
+    Val = 0  # pre PP val
+
+    for P in cP_:
+        P_val = 0
+        for link in P.link_H[-1]:
+            _val,_rdn = 0,0
+            for _link in link._P.link_H[-1]:
+                _val += _link.valt[fd]; _rdn += _link.rdnt[fd]
+            # link val += med links val, single mediation layer in comp_slice:
+            link_val = (link.valt[fd]+ _val* med_decay) - ave * (link.rdnt[fd]+ _rdn* med_decay)
+            if link_val > ave/2:  # lower filter for links vs Ps
+                P_val += link_val  # consider positive med-adjusted links only
+
+        if P_val > ave:
+            Val += P_val
+
+    return Val  # same cP_: pruning Ps would split it into multiple sub-cP_ s?
+
+

@@ -89,7 +89,7 @@ def form_graph_t(root, Node_, _root_t_, root_fd):  # root function to form fuzzy
 
     root.node_t = graph_t
     if root.fback_t and root.fback_t[root_fd]:  # next-level feedback after all Gs sub+
-        feedback(root, fd)  # update root.root.. aggH, val_Ht,rdn_Ht
+        feedback(root, root_fd)  # update root.root.. aggH, val_Ht,rdn_Ht
 
 
 def comp_G_(G_, pri_G_=None, f1Q=1, fd=0):  # cross-comp in G_ if f1Q, else comp between G_ and pri_G_, if comp_node_?
