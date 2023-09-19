@@ -87,9 +87,10 @@ def form_graph_t(root, Node_, _root_t_, root_fd):  # root function to form fuzzy
             else:  # feedback after sub+:
                 root.fback_t[root_fd] += [[graph.aggH, graph.val_Ht, graph.rdn_Ht]]  # merge forks in root fork
 
-    root.node_t = graph_t
     if root.fback_t and root.fback_t[root_fd]:  # next-level feedback after all Gs sub+
         feedback(root, root_fd)  # update root.root.. aggH, val_Ht,rdn_Ht
+
+    root.node_t = graph_t
 
 
 def comp_G_(G_, pri_G_=None, f1Q=1, fd=0):  # cross-comp in G_ if f1Q, else comp between G_ and pri_G_, if comp_node_?
@@ -160,7 +161,8 @@ def select_max_(node_, fd):  # final maxes are graph-initializing nodes
     dVal = ave+1  # adjustment of combined val per node per recursion
 
     while dVal > ave:  # iterative adjust Val by surround propagation, no direct increment mediation rng?
-        Val_ = [0 for node in node_]
+
+        Val_ = [0 for _ in node_]  # updated exemplar values
         for i, (node, Val) in enumerate(zip(node_, Val_)):
 
             if sum(node.val_Ht[fd]) - ave * sum(node.rdn_Ht[fd]):  # potential graph init
@@ -412,7 +414,8 @@ def feedback(root, fd):  # called from form_graph_, append new der layers to roo
 
     if isinstance(root, Cgraph):  # root is not CEdge, which has no roots
         for fd, rroot_ in enumerate(root.root_t):
-            for rroot in rroot_:  # may be empty if the fork was not taken
+            for rroot in rroot_:
+                fd = root.fd  # current node_ fork
                 fback_ = rroot.fback_t[fd]
                 fback_ += [Fback]
                 if fback_ and (len(fback_) == len(rroot.node_t)):  # flat, all rroot nodes terminated and fed back

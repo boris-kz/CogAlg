@@ -4,7 +4,7 @@ from itertools import zip_longest
 from collections import deque, defaultdict
 from .slice_edge import comp_angle
 from .classes import CderP, CPP
-from .filters import ave, med_decay, aveB, aves, P_aves, PP_aves, ave_nsubt
+from .filters import aves, P_aves, PP_aves
 from dataclasses import replace
 
 '''
@@ -37,7 +37,7 @@ def comp_P_(edge):  # renamed for consistency, cross-comp P_ in edge: high-gradi
         derP_ = [comp_P(_P, P, rn=len(_P.dert_)/len(P.dert_), fd=0) for _P in P.link_H[-1]]
         P.link_H[-1] = [derP for derP in derP_ if derP is not None]  # replace link _Ps with derPs
 
-    form_PP_t(edge, P_, base_rdn=2, root_fd=0)  # replace edge.node_t with PP_t, may be nested by sub+
+    form_PP_t(edge, P_, base_rdn=2)  # replace edge.node_t with PP_t, may be nested by sub+
 
 
 def comp_P(_P,P, rn, fd=1, derP=None):  #  derP if der+, reused as S if rng+
@@ -96,7 +96,7 @@ def comp_der(P_):  # keep same Ps and links, increment link derH, then P derH in
     return P_
 
 
-def form_PP_t(root, P_, base_rdn, root_fd):  # form PPs of derP.valt[fd] + connected Ps val
+def form_PP_t(root, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
 
     PP_t = [[],[]]
     for fd in 0,1:
@@ -104,31 +104,31 @@ def form_PP_t(root, P_, base_rdn, root_fd):  # form PPs of derP.valt[fd] + conne
         for P in P_:
             for derP in P.link_H[-1]:
                 if derP.valt[fd] > ave * derP.rdnt[fd]:
-                    link_map[P] += [derP._P]  # keys are Ps, vals are lists of links, up and down
+                    link_map[P] += [derP._P]  # keys: Ps, vals: linked _P_s, up and down
                     link_map[derP._P] += [P]
         for P in P_:
             if P.root_t[fd]: continue  # skip if already packed in some PP
-            cP_ = [P]  # clustered Ps
+            cP_ = [P]  # clustered Ps and their val,rdn s
             P_layer = deque(link_map[P])  # recycle with breadth-first search, up and down:
+            Val, Rdn = 0,0
             while P_layer:
                 _P = P_layer.popleft()
                 if _P in cP_: continue
-                cP_ += [_P]
-                P_layer += link_map[_P]
-            # eval cP_:
-            Val,Rdn = 0,0; Ave = PP_aves[fd]  # Ave/PP vs. ave/P
-            for cP in cP_:
-                for derP in cP.link_H[-1]:
+                for derP in _P.link_H[-1]:
+                    if derP._P in cP_: continue  # circular link? or derP._P in cP_?
                     _val, _rdn = derP.valt[fd], derP.rdnt[fd]
-                    if _val > ave/2 * _rdn:  # lower filter for link vs. P
+                    if _val > ave/2 * _rdn:  # consider +ve links only: sparse representation? lower filter for link vs. P
                         Val += _val; Rdn += _rdn
-            if Val > Ave * Rdn:
+                cP_ += [_P]
+                P_layer += link_map[_P]  # append linked __Ps to extended perimeter of P
+            # eval cP_:
+            if Val > PP_aves[fd] * Rdn:
                 PP_t[fd] += sum2PP(root, cP_, base_rdn, fd)
-    # after form_PP_t -> P.root_t:
-    for fd in 0,1:
-        sub_recursion(root, PP_t[fd], fd)  # eval P_ rng+ per PPm or der+ per PP
-        if root.fback_t and root.fback_t[root_fd]:
-            feedback(root, root_fd)  # after sub+ is terminated in all nodes, not indiv.node up multiple layers
+
+    for fd, PP_ in enumerate(PP_t):   # after form_PP_t -> P.root_t
+        sub_recursion(root, PP_, fd)  # eval rng+/ PPm or der+/ PPd
+        if root.fback_t and root.fback_t[fd]:
+            feedback(root, fd)  # after sub+ in all nodes, no single node feedback up multiple layers
 
     root.node_t = PP_t  # PPs maybe nested in sub+, add_alt_PPs_?
 
@@ -170,7 +170,7 @@ def sub_recursion(root, PP_, fd):  # called in form_PP_, evaluate PP for rng+ an
             comp_der(P_) if fd else comp_rng(P_, PP.rng+1)  # same else new links
             PP.rdnt[fd] += PP.valt[fd] - PP_aves[fd] * PP.rdnt[fd] > PP.valt[1-fd] - PP_aves[1-fd] * PP.rdnt[1-fd]
             for P in P_: P.root_t = [[],[]]  # fill with sub_PPm_,sub_PPd_ between nodes and PP:
-            form_PP_t(PP, P_, base_rdn=PP.rdnt[fd], root_fd=fd)
+            form_PP_t(PP, P_, base_rdn=PP.rdnt[fd])
             root.fback_t[fd] += [[PP.derH, PP.valt, PP.rdnt]]  # merge in root.fback_t fork, else need fback_tree
 
 
@@ -182,12 +182,12 @@ def feedback(root, fd):  # from form_PP_, append new der layers to root PP, sing
     sum_derH([root.derH, root.valt, root.rdnt], Fback, base_rdn=0)  # both fder forks sum into a same root
 
     if isinstance(root, CPP):  # root is not CEdge, which has no roots
-        rroot = root.root  # single PP.root, sub+ node is always P
-        if rroot:  # may be empty if the fork was not taken
-            fback_ = rroot.fback_t[fd]
-            fback_ += [Fback]
-            if fback_ and (len(fback_) == len(rroot.node_t)):  # still flat, all nodes terminated and fed back
-                feedback(rroot, fd) # sum2PP adds derH per rng, feedback adds deeper sub+ layers
+        rroot = root.root  # single PP.root, can't be P
+        fd = root.fd  # current node_ fork
+        fback_ = rroot.fback_t[fd]
+        fback_ += [Fback]
+        if fback_ and (len(fback_) == len(rroot.node_t)):  # still flat, all nodes terminated and fed back
+            feedback(rroot, fd)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
 
 
 def sum_derH(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
