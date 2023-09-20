@@ -1,4 +1,6 @@
+from math import inf
 from class_cluster import ClusterStructure, init_param as z
+from frame_blobs import boxT
 
 '''
     Conventions:
@@ -80,7 +82,7 @@ lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays:
 '''
 class CPP(CderP):
 
-    fd : int = 0  # PP is defined by combined-fork value per link: derP mtuple | dtuple; not fder?
+    fd : int = 0  # PP is defined by m|d value
     ptuple : list = z([0,0,0,0,[0,0],0])   # summed P__ ptuples, = 0th derLay
     derH : list = z([])  # [[mtuple,dtuple, mval,dval, mrdn,drdn]]: cross-fork composition layers
     valt : list = z([0,0])
@@ -90,7 +92,7 @@ class CPP(CderP):
     node_t : list = z([])  # init P_, -> node_tt if sub+: [rng+ [sub_PPm_,sub_PPd_], der+ [sub_PPm_,sub_PPd_]]
     fback_t : list = z([[],[]])  # maps to node_tt: [derH,valt,rdnt] per node fork
     rng : int = 1  # sum of rng+: odd forks in last layer?
-    box : list = z([0,0,0,0])  # y0,yn,x0,xn
+    box : boxT = boxT(-inf, -inf, inf, inf)  # y0,x0,yn,xn
     # temporary:
     coPP_ : list = z([])  # rdn reps in other PPPs, to eval and remove?
     Rdn : int = 0  # for accumulation or separate recursion count?
@@ -98,7 +100,7 @@ class CPP(CderP):
 
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
-    fd: int = 0  # not used?
+    fd: int = 0  # graph is defined by m|d value
     ptuple : list = z([])  # default from P
     derH : list = z([[], [0,0], [1,1]])  # [[tuplet, valt, rdnt]]: default from PP, for both rng+ and der+, sum min len?
     aggH : list = z([])  # [[sub_Ht, valt, rdnt]], subH: [[der_Ht, valt, rdnt]]; cross-fork composition layers

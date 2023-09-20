@@ -48,16 +48,16 @@ ave_mP = 100
 UNFILLED = -1
 EXCLUDED = -2
 
-Tdert = namedtuple('Tdert', 'dy, dx, g') # 'T' for tuple
-Tdert.get_pixel = lambda der__t, y, x: Tdert(der__t.dy[y, x], der__t.dx[y, x], der__t.g[y, x])
+dertT = namedtuple('dertT', 'dy, dx, g')  # 'T' for tuple
+dertT.get_pixel = lambda der__t, y, x: dertT(der__t.dy[y, x], der__t.dx[y, x], der__t.g[y, x])
 
-Tbox = namedtuple('Tbox', 'n, w, s, e')  # 'T' for tuple
-Tbox.slice = lambda b: (slice(b.n,b.s), slice(b.w,b.e))  # box to array slice conversion
-Tbox.accumulate = lambda b,y,x: Tbox(min(b.n,y),min(b.w,x),max(b.s,y+1),max(b.e,x+1))  # box coordinate accumulation
-Tbox.expand = lambda b,r,Y,X: Tbox(max(0,b.n-r),max(0,b.w-r),min(Y,b.s+r),min(X,b.e+r))  # box expansion by margin r
-Tbox.shrink = lambda b,r: Tbox(b.n+r,b.w+r,b.s-r,b.e-r)  # box shrink by margin r
-Tbox.sub_box2box = lambda b,sb: Tbox(b.n+sb.n,b.w+sb.w,sb.s+b.n,sb.e+b.w)  # sub_box to box transform
-Tbox.box2sub_box = lambda b1, b2: Tbox(b2.n-b1.n, b2.w-b1.w, b2.s-b1.n, b2.e-b1.w)  # box to sub_box transform
+boxT = namedtuple('boxT', 'n, w, s, e')  # 'T' for tuple
+boxT.slice = lambda b: (slice(b.n,b.s), slice(b.w,b.e))  # box to array slice conversion
+boxT.accumulate = lambda b,y,x: boxT(min(b.n,y),min(b.w,x),max(b.s,y+1),max(b.e,x+1))  # box coordinate accumulation
+boxT.expand = lambda b,r,Y,X: boxT(max(0,b.n-r),max(0,b.w-r),min(Y,b.s+r),min(X,b.e+r))  # box expansion by margin r
+boxT.shrink = lambda b,r: boxT(b.n+r,b.w+r,b.s-r,b.e-r)  # box shrink by margin r
+boxT.sub_box2box = lambda b,sb: boxT(b.n+sb.n,b.w+sb.w,sb.s+b.n,sb.e+b.w)  # sub_box to box transform
+boxT.box2sub_box = lambda b1, b2: boxT(b2.n-b1.n, b2.w-b1.w, b2.s-b1.n, b2.e-b1.w)  # box to sub_box transform
 
 class CBlob(ClusterStructure):
     # comp_pixel:
@@ -69,11 +69,11 @@ class CBlob(ClusterStructure):
     A : float = 0.0 # blob area
     # composite params:
     M : float = 0.0 # summed PP.M, for both types of recursion?
-    box : Tbox = Tbox(0,0,0,0)  # n,w,s,e
-    ibox : Tbox = Tbox(0,0,0,0) # box for i__
+    box : boxT = boxT(0,0,0,0)  # n,w,s,e
+    ibox : boxT = boxT(0,0,0,0) # box for i__
     mask__ : object = None
     i__ : object = None     # reference to original input (no shrinking)
-    der__t : Tdert = None   # tuple of derivatives arrays, consistent in shape
+    der__t : dertT = None   # tuple of derivatives arrays, consistent in shape
     adj_blobs : list = z([])  # adjacent blobs
     fopen : bool = False
     # intra_blob params: # or pack in intra = lambda: Cintra
@@ -81,7 +81,7 @@ class CBlob(ClusterStructure):
     Mdx : float = 0.0
     Ddx : float = 0.0
     # derivation hierarchy:
-    root_ibox : Tbox = Tbox(0,0,0,0)  # from root blob
+    root_ibox : boxT = boxT(0,0,0,0)  # from root blob
     root_der__t : list = z([])  # from root blob
     prior_forks : str = ''
     fBa : bool = False  # in root_blob: next fork is comp angle, else comp_r
@@ -114,8 +114,8 @@ def frame_blobs_root(i__, intra=False, render=False, verbose=False):
     Y, X = i__.shape[:2]
     der__t = comp_pixel(i__)
     sign__ = ave - der__t.g > 0   # sign is positive for below-average g
-    frame = CBlob(i__=i__, box=Tbox(0, 0, Y, X), rlayers=[[]])
-    fork_data = '', Tbox(1,1,Y-1,X-1), der__t, sign__, None  # fork, fork_ibox, der__t, sign__, mask__
+    frame = CBlob(i__=i__, box=boxT(0, 0, Y, X), rlayers=[[]])
+    fork_data = '', boxT(1,1,Y-1,X-1), der__t, sign__, None  # fork, fork_ibox, der__t, sign__, mask__
     # https://en.wikipedia.org/wiki/Flood_fill:
     frame.rlayers[0], idmap, adj_pairs = flood_fill(frame, fork_data, verbose=verbose)
     assign_adjacents(adj_pairs)  # forms adj_blobs per blob in adj_pairs
@@ -150,15 +150,15 @@ def comp_pixel(pi__):
     )
     G__ = np.hypot(dy__, dx__)                          # compute gradient magnitude
 
-    return Tdert(dy__, dx__, G__)
+    return dertT(dy__, dx__, G__)
 
 
 def flood_fill(root_blob, fork_data, verbose=False):
     # unpack and derive required fork data
     fork, fork_ibox, der__t, sign__, mask__ = fork_data
-    height, width = der__t.g.shape  # der__t is consistent in shape
+    height, width = der__t.g.shape  # = der__t shape
     fork_i__ = root_blob.i__[fork_ibox.slice()]
-    assert height, width == fork_i__.shape  # fork_i__ is consistent in shape with der__t
+    assert height, width == fork_i__.shape  # same shape as der__t
 
     idmap = np.full((height, width), UNFILLED, 'int32')  # blob's id per dert, initialized UNFILLED
     if mask__ is not None: idmap[~mask__] = EXCLUDED
@@ -172,10 +172,9 @@ def flood_fill(root_blob, fork_data, verbose=False):
     for y in range(height):
         for x in range(width):
             if idmap[y, x] == UNFILLED:  # ignore filled/clustered derts
-
                 blob = CBlob(
                     i__=root_blob.i__, sign=sign__[y, x], root_ibox=fork_ibox, root_der__t=der__t,
-                    box=Tbox(y,x,y+1,x+1), rng=root_blob.rng, prior_forks=root_blob.prior_forks+fork)
+                    box=boxT(y,x,y+1,x+1), rng=root_blob.rng, prior_forks=root_blob.prior_forks+fork)
                 blob_ += [blob]
                 idmap[y, x] = blob.id
                 # flood fill the blob, start from current position
@@ -214,7 +213,7 @@ def flood_fill(root_blob, fork_data, verbose=False):
                             adj_pairs.add((idmap[y2, x2], blob.id))  # blob.id always increases
                 # terminate blob
                 blob.ibox = fork_ibox.sub_box2box(blob.box)
-                blob.der__t = Tdert(
+                blob.der__t = dertT(
                     *(par__[blob.box.slice()] for par__ in der__t))
                 blob.mask__ = (idmap[blob.box.slice()] == blob.id)
                 blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses

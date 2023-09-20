@@ -40,7 +40,7 @@ def vectorize_root(blob):  # vectorization pipeline is 3 composition levels of c
     # PP cross-comp -> discontinuous graph clustering:
     for fd in 0,1:
         node_ = edge.node_t[fd]
-        if edge.valt[0] * np.sqrt(len(node_)-1) if node_ else 0 > G_aves[0] * edge.rdnt[0]:  # init rng+
+        if edge.valt[fd] * np.sqrt(len(node_)-1) if node_ else 0 > G_aves[fd] * edge.rdnt[fd]:
             G_ = []  # convert CPPs to Cgraphs:
             for PP in node_:
                 derH, valt, rdnt = PP.derH, PP.valt, PP.rdnt  # init aggH is empty:
@@ -62,14 +62,16 @@ def agg_recursion(rroot, root, G_, fd=0):  # compositional agg+|sub+ recursion i
     for G in G_:
         _root_t_+= [G.root_t]  # merge G roots in)between forks into GG roots: between Gs and root
         G.root_t = [[],[]]  # fill with GGs:
-    form_graph_t(root, G_, _root_t_, fd)  # internal eval sub+/graph and feedback
-
-    # eval last link layer for rng+|der+, n comp graphs ~-> n matches, match rate decreases with distance:
+    form_graph_t(root, G_, _root_t_)  # internal eval sub+/graph and feedback
+    '''
+    sub+: looping-> evaluation-> cross-comp, in comp_slice,
+    agg+: cross-comp, loop for form_graph_t sub+, eval comp graphs: n~-> n matches, match rate decreases with distance:
+    '''
     if root.val_Ht[fd][-1] * np.sqrt(len(G_)-1) if G_ else 0 > ave * root.rdn_Ht[fd][-1]:
-        agg_recursion(rroot, root, G_, fd)  # actual agg+ with arg fd?
+        agg_recursion(rroot, root, G_, fd)
 
 
-def form_graph_t(root, Node_, _root_t_, root_fd):  # root function to form fuzzy graphs of nodes per fder,fd
+def form_graph_t(root, Node_, _root_t_):  # root function to form fuzzy graphs of nodes per fder,fd
 
     graph_t = []
     for fd in 0,1:
@@ -80,17 +82,17 @@ def form_graph_t(root, Node_, _root_t_, root_fd):  # root function to form fuzzy
         graph_t += [graph_]  # add alt_graphs?
     # sub+:
     for fd, graph_ in enumerate(graph_t):  # breadth-first for in-layer-only roots
-        for graph in graph_:
+        for graph in graph_:  # external to agg+, vs. internal in comp_slice sub+?
             node_ = graph.node_t  # still flat, for fd comp_G_ in sub+:
             if sum(graph.val_Ht[fd]) * np.sqrt(len(node_)-1) if node_ else 0 > G_aves[fd] * sum(graph.rdn_Ht[fd]):
                 agg_recursion(root, graph, node_, fd)  # replace node_ with node_t, recursive
-            else:  # feedback after sub+:
-                root.fback_t[root_fd] += [[graph.aggH, graph.val_Ht, graph.rdn_Ht]]  # merge forks in root fork
+            else:  # feedback after graph sub+:
+                root.fback_t[fd] += [[graph.aggH, graph.val_Ht, graph.rdn_Ht]]  # merge forks in root fork
+        # recursive feedback after all Gs sub+:
+        if root.fback_t and root.fback_t[fd]:
+            feedback(root, fd)  # update root.root.. aggH, val_Ht,rdn_Ht
 
-    if root.fback_t and root.fback_t[root_fd]:  # next-level feedback after all Gs sub+
-        feedback(root, root_fd)  # update root.root.. aggH, val_Ht,rdn_Ht
-
-    root.node_t = graph_t
+    Node_[:] = graph_t  # root.node_T: incrementally nested with each agg+?
 
 
 def comp_G_(G_, pri_G_=None, f1Q=1, fd=0):  # cross-comp in G_ if f1Q, else comp between G_ and pri_G_, if comp_node_?
@@ -254,8 +256,7 @@ def sum2graph_(graph_, fd):  # sum node and link params into graph, aggH in agg+
     for graph in graph_:  # seq graphs
         Root_t = graph[2][0]  # merge _root_t_ into Root_t:
         [merge_root_tree(Root_t, root_t) for root_t in graph[2][1:]]
-
-        Graph = Cgraph(root_t=Root_t, L=len(graph[0]))  # n nodes
+        Graph = Cgraph(fd=fd, root_t=Root_t, L=len(graph[0]))  # n nodes
         Link_ = []
         for G in graph[0]:
             sum_box(Graph.box, G.box)
@@ -415,8 +416,9 @@ def feedback(root, fd):  # called from form_graph_, append new der layers to roo
     if isinstance(root, Cgraph):  # root is not CEdge, which has no roots
         for fd, rroot_ in enumerate(root.root_t):
             for rroot in rroot_:
-                fd = root.fd  # current node_ fork
+                fd = root.fd  # current node_ fd
                 fback_ = rroot.fback_t[fd]
                 fback_ += [Fback]
                 if fback_ and (len(fback_) == len(rroot.node_t)):  # flat, all rroot nodes terminated and fed back
+                    # getting cyclic rroot here not sure why it can happen, need to check further
                     feedback(rroot, fd)  # sum2graph adds aggH per rng, feedback adds deeper sub+ layers
