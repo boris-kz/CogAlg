@@ -39,7 +39,7 @@ def vectorize_root(blob):  # vectorization pipeline is 3 composition levels of c
     comp_P_(edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
     # PP cross-comp -> discontinuous graph clustering:
     for fd in 0,1:
-        node_ = edge.node_t[fd]
+        node_ = edge.node_t[fd]  # always PP_t
         if edge.valt[fd] * np.sqrt(len(node_)-1) if node_ else 0 > G_aves[fd] * edge.rdnt[fd]:
             G_ = []  # convert CPPs to Cgraphs:
             for PP in node_:
@@ -62,37 +62,37 @@ def agg_recursion(rroot, root, G_, fd=0):  # compositional agg+|sub+ recursion i
     for G in G_:
         _root_t_+= [G.root_t]  # merge G roots in)between forks into GG roots: between Gs and root
         G.root_t = [[],[]]  # fill with GGs:
-    form_graph_t(root, G_, _root_t_)  # internal eval sub+/graph and feedback
-    '''
-    sub+: looping-> evaluation-> cross-comp, in comp_slice,
-    agg+: cross-comp, loop for form_graph_t sub+, eval comp graphs: n~-> n matches, match rate decreases with distance:
-    '''
-    if root.val_Ht[fd][-1] * np.sqrt(len(G_)-1) if G_ else 0 > ave * root.rdn_Ht[fd][-1]:
-        agg_recursion(rroot, root, G_, fd)
+    GG_t = form_graph_t(root, G_, _root_t_)  # internal eval sub+/graph and feedback
+    # agg+ cross-comp-> form_graph_t loop sub+) recursive agg+, vs. comp_slice sub+ looping-> evaluation-> cross-comp
 
+    for fd, GG_ in enumerate(GG_t):  # comp_G_ eval: n_matches ~ nG, match rate decreases with distance, root vals updated in form_t:
+        if root.val_Ht[fd][-1] * np.sqrt(len(GG_)-1) if GG_ else 0 > ave * root.rdn_Ht[fd][-1]:
+            agg_recursion(rroot, root, GG_, fd)  # comp fd = GG form fd
+
+    G_[:] = GG_t
 
 def form_graph_t(root, Node_, _root_t_):  # root function to form fuzzy graphs of nodes per fder,fd
 
     graph_t = []
     for fd in 0,1:
-        max_ = select_max_(Node_, fd)  # compute max of quasi-Gaussians: val + sum([_val * (link_val/max_val])
-        full_graph_ = segment_node_(Node_, max_, fd, _root_t_)
+        init_ = select_init_node_(Node_, fd)  # compute max of quasi-Gaussians: val + sum([_val * (link_val/max_val])
+        full_graph_ = segment_node_(Node_, init_, fd, _root_t_)
         list_graph_ = prune_graph_(full_graph_, fd)  # sort node roots and prune the weak
         graph_ = sum2graph_(list_graph_, fd)  # convert to Cgraphs
         graph_t += [graph_]  # add alt_graphs?
     # sub+:
     for fd, graph_ in enumerate(graph_t):  # breadth-first for in-layer-only roots
-        for graph in graph_:  # external to agg+, vs. internal in comp_slice sub+?
-            node_ = graph.node_t  # still flat, for fd comp_G_ in sub+:
+        for graph in graph_:  # external to agg+ vs internal in comp_slice sub+
+            node_ = graph.node_t  # still flat?  eval fd comp_G_ in sub+:
             if sum(graph.val_Ht[fd]) * np.sqrt(len(node_)-1) if node_ else 0 > G_aves[fd] * sum(graph.rdn_Ht[fd]):
                 agg_recursion(root, graph, node_, fd)  # replace node_ with node_t, recursive
             else:  # feedback after graph sub+:
                 root.fback_t[fd] += [[graph.aggH, graph.val_Ht, graph.rdn_Ht]]  # merge forks in root fork
-        # recursive feedback after all Gs sub+:
+        # recursive feedback after all G_ sub+:
         if root.fback_t and root.fback_t[fd]:
             feedback(root, fd)  # update root.root.. aggH, val_Ht,rdn_Ht
 
-    Node_[:] = graph_t  # root.node_T: incrementally nested with each agg+?
+    return graph_t  # root.node_t'node_ -> node_t: incr nested with each agg+?
 
 
 def comp_G_(G_, pri_G_=None, f1Q=1, fd=0):  # cross-comp in G_ if f1Q, else comp between G_ and pri_G_, if comp_node_?
@@ -156,28 +156,27 @@ def comp_G(_G, G, distance, A):
         G.val_Ht[0][-1] += Mval; G.val_Ht[1][-1] += Dval; G.rdn_Ht[0][-1] += Mrdn; G.rdn_Ht[1][-1] += Drdn
 
 
-def select_max_(node_, fd):  # final maxes are graph-initializing nodes
+def select_init_node_(node_, fd):  # sum surrounding link values to select nodes that will initialize graphs
 
     ave = G_aves[fd]
-    _Val_= [sum(node.val_Ht[fd]) for node in node_]
     dVal = ave+1  # adjustment of combined val per node per recursion
+    _Val_ = [(node.val_Ht[fd][-1] - ave * node.rdn_Ht[fd][-1]) for node in node_]
 
     while dVal > ave:  # iterative adjust Val by surround propagation, no direct increment mediation rng?
+        Val_ = []; dVal = 0
 
-        Val_ = [0 for _ in node_]  # updated exemplar values
-        for i, (node, Val) in enumerate(zip(node_, Val_)):
-
-            if sum(node.val_Ht[fd]) - ave * sum(node.rdn_Ht[fd]):  # potential graph init
+        for i, (node,_Val) in enumerate(zip(node_, _Val_)):
+            if _Val > 0:  # potential graph init
                 for link in node.link_H[-1]:
-                    _node = link.G1 if link.G0 is node else link.G0
-                    # val + sum([_val * relative link val,= decay of max m|d: link.valt[2]:
-                    Val_[i] += _Val_[node_.index(_node)] * (link.valt[fd] / link.valt[2]) - ave * sum(_node.rdn_Ht[fd])
-                    # unilateral: simpler, parallelizable
-        dVal = sum([abs(Val-_Val) for Val,_Val in zip(Val_,_Val_)])
+                    _node = link.G1 if link.G0 is node else link.G0   # val + sum(decayed perimeter node vals):
+                    dval = _Val_[node_.index(_node)] * (link.valt[fd]/ link.valt[2])  # * m|d decay
+                    Val_[i] += dval; dVal += dval  # unilateral: simpler, parallelizable?
         _Val_ = Val_
-    # select local maxes of node quasi-Gaussian, not sure:
+
     max_, non_max_ = [],[]
-    for node, Val in zip(node_, Val_):
+    # add selection of local maxes here, for sparsity?
+
+    for node, Val in (zip(node_,Val_)):
         if Val<=0 or node in non_max_:
             continue
         fmax = 1
@@ -191,15 +190,15 @@ def select_max_(node_, fd):  # final maxes are graph-initializing nodes
         if fmax: max_ += [node]
     return max_
 
-def segment_node_(node_, max_, fd, _root_t_):
+def segment_node_(node_, init_, fd, _root_t_):
 
     graph_ = []  # initialize graphs with local maxes, then prune links to add other nodes:
-    for max_node in max_:
+    for _node in init_:
 
-        _root_t = _root_t_[node_.index(max_node)]  # assign node roots to new graphs, but not only from maxes?
-        graph = [[max_node], sum(max_node.val_Ht[fd]), [_root_t]]
-        max_node.root_t[fd] += [graph]
-        _nodes = [max_node]  # current periphery of the graph, as nodes vs. links in comp_slice?
+        _root_t = _root_t_[node_.index(_node)]  # assign node roots to new graphs, but not only from maxes?
+        graph = [[_node], sum(_node.val_Ht[fd]), [_root_t]]
+        _node.root_t[fd] += [graph]
+        _nodes = [_node]  # current periphery of the graph, as nodes vs. links in comp_slice?
         while _nodes:  # search links outwards, recursively:
             nodes = []
             for node in _nodes:
@@ -253,7 +252,7 @@ def prune_graph_(graph_, fd):
 def sum2graph_(graph_, fd):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
     Graph_ = []
-    for graph in graph_:  # seq graphs
+    for graph in graph_:      # seq graphs
         Root_t = graph[2][0]  # merge _root_t_ into Root_t:
         [merge_root_tree(Root_t, root_t) for root_t in graph[2][1:]]
         Graph = Cgraph(fd=fd, root_t=Root_t, L=len(graph[0]))  # n nodes
@@ -363,8 +362,7 @@ def comp_aggH(_aggH, aggH, rn):  # no separate ext
 
 def sum_subH(T, t, base_rdn):
 
-    SubH, Valt, Rdnt = T
-    subH, valt, rdnt = t
+    SubH, Valt, Rdnt = T; subH, valt, rdnt = t
 
     for i in 0,1:  # link maxv is not summed in G.valt
         Valt[i] += valt[i]; Rdnt[i] += rdnt[i]
@@ -382,8 +380,7 @@ def sum_subH(T, t, base_rdn):
 
 def sum_aggH(T, t, base_rdn):
 
-    AggH, Val_Ht, Rdn_Ht = T
-    aggH, val_Ht, rdn_Ht = t
+    AggH, Val_Ht, Rdn_Ht = T; aggH, val_Ht, rdn_Ht = t
 
     for i in 0,1:  # link maxv is not summed in G.valt
         for j, (Val, val) in enumerate(zip_longest(Val_Ht[i], val_Ht[i], fillvalue=None)):

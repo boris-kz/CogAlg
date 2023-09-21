@@ -92,7 +92,7 @@ class CPP(CderP):
     node_t : list = z([])  # init P_, -> node_tt if sub+: [rng+ [sub_PPm_,sub_PPd_], der+ [sub_PPm_,sub_PPd_]]
     fback_t : list = z([[],[]])  # maps to node_tt: [derH,valt,rdnt] per node fork
     rng : int = 1  # sum of rng+: odd forks in last layer?
-    box : boxT = boxT(-inf, -inf, inf, inf)  # y0,x0,yn,xn
+    box : boxT = boxT(inf,inf,-inf,-inf)  # y0,x0,yn,xn
     # temporary:
     coPP_ : list = z([])  # rdn reps in other PPPs, to eval and remove?
     Rdn : int = 0  # for accumulation or separate recursion count?
@@ -107,6 +107,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     link_H : list = z([[]])  # added per rng+ comp_G_
     val_Ht : list = z(([0],[0]))  # H of link vals per fder
     rdn_Ht : list = z(([1],[1]))
+    # node_T, root_T
     root_t : list = z([[],[]])  # upward reciprocal for node_tt, nested if uH: up-forking tree of root Levs
     node_t : list = z([])  # init G_ -> Gmr_,Gdr_, Gmd_,Gdd_ by agg+/sub+, nested if wH: down-forking tree of node Levs
     fback_t: list = z([[],[]])  # maps to node_tt: feedback [[aggH,valt,rdnt]] per node fork

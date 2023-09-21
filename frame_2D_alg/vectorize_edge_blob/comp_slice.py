@@ -116,7 +116,7 @@ def form_PP_t(root, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps v
                 for derP in _P.link_H[-1]:
                     if derP._P in cP_: continue  # circular link? or derP._P in cP_?
                     _val, _rdn = derP.valt[fd], derP.rdnt[fd]
-                    if _val > P_aves[fd]/2 * _rdn:  # consider +ve links only: sparse representation? lower filter for link vs. P
+                    if _val > P_aves[fd]/2 * _rdn:  # no interference by -ve links? lower filter for link vs. P
                         Val += _val; Rdn += _rdn
                 cP_ += [_P]
                 P_layer += link_map[_P]  # append linked __Ps to extended perimeter of P
@@ -207,16 +207,11 @@ def sum_derH(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = 
 
 def sum_ptuple(Ptuple, ptuple, fneg=0):
 
-    for i, (Par, par) in enumerate(zip_longest(Ptuple, ptuple, fillvalue=None)):
-        if par != None:
-            if Par != None:    # there are cases where len(Ptuple) > len(ptuple) and len(Ptuple) < len(ptuple) ?
-                if isinstance(Par, list) or isinstance(Par, tuple):  # angle or aangle
-                    for i,(P,p) in enumerate(zip(Par,par)):
-                        Par[i] = P-p if fneg else P+p
-                else:
-                    Ptuple[i] += (-par if fneg else par)  # now includes n in ptuple[-1]?
-            elif not fneg:
-                Ptuple += [copy(par)]
+    I, G, M, Ma, (Dy, Dx), L = Ptuple
+    _I, _G, _M, _Ma, (_Dy, _Dx), _L = ptuple
+    if fneg: Ptuple[:] = ((I-_I), (G-_G), (M-_M), (Ma-_Ma), [(Dy-_Dy),(Dx-_Dx)], (L-_L))
+    else:    Ptuple[:] = ((I+_I), (G+_G), (M+_M), (Ma+_Ma), [(Dy+_Dy),(Dx+_Dx)], (L+_L))
+
 
 def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 

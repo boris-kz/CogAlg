@@ -303,4 +303,27 @@ def reval_cP_(cP_, ave, fd):  # reval cP_ by link_val + mediated link_vals
 
     return Val  # same cP_: pruning Ps would split it into multiple sub-cP_ s?
 
+def sum_ptuple(Ptuple, ptuple, fneg=0):
+
+    for i, (Par, par) in enumerate(zip_longest(Ptuple, ptuple, fillvalue=None)):
+        if par != None:
+            if Par != None:
+                if isinstance(Par, list) or isinstance(Par, tuple):  # angle or aangle
+                    for i,(P,p) in enumerate(zip(Par,par)):
+                        Par[i] = P-p if fneg else P+p
+                else:
+                    Ptuple[i] += (-par if fneg else par)  # now includes n in ptuple[-1]?
+            elif not fneg:
+                Ptuple += [copy(par)]
+
+    nodet_ = [[node, (node.val_Ht[fd][-1] - ave * node.rdn_Ht[fd][-1])] for node in node_]
+
+    while dVal > ave:  # iterative adjust Val by surround propagation, no direct increment mediation rng?
+
+        dVal = 0
+        for i, [node,Val] in enumerate(nodet_):
+            if Val>0:  # potential graph init
+                for link in node.link_H[-1]:
+                    _node = link.G1 if link.G0 is node else link.G0   # val + sum([_val * link_rel_val: max m|d decay]):
+                    dval = _Val_[node_.index(_node)] * (link.valt[fd] / link.valt[2]) - ave * sum(_node.rdn_Ht[fd])
 
