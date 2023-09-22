@@ -51,9 +51,9 @@ def vectorize_root(blob):  # vectorization pipeline is 3 composition levels of c
             agg_recursion(None, edge, node_, fd=0)  # edge.node_t = graph_t, both macro and micro recursive
 
 
-def agg_recursion(rroot, root, G_, fd=0):  # compositional agg+|sub+ recursion in root graph, clustering G_
+def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_
 
-    comp_G_(G_, pri_G_=None, f1Q=1, fd=fd)  # cross-comp all Gs in (rng,der), nD array? form link_H per G
+    comp_G_(G_, fd)  # cross-comp all Gs in (rng,der), nD array? form link_H per G
 
     root.val_Ht[fd] += [0]; root.rdn_Ht[fd] += [1]  #  estimate, no node.rdn += 1
     ave = G_aves[fd]  # add current fork rdn:
@@ -65,9 +65,9 @@ def agg_recursion(rroot, root, G_, fd=0):  # compositional agg+|sub+ recursion i
     GG_t = form_graph_t(root, G_, _root_t_)  # internal eval sub+/graph and feedback
     # agg+ cross-comp-> form_graph_t loop sub+) recursive agg+, vs. comp_slice sub+ looping-> evaluation-> cross-comp
 
-    for fd, GG_ in enumerate(GG_t):  # comp_G_ eval: n_matches ~ nG, match rate decreases with distance, root vals updated in form_t:
-        if root.val_Ht[fd][-1] * np.sqrt(len(GG_)-1) if GG_ else 0 > ave * root.rdn_Ht[fd][-1]:
-            agg_recursion(rroot, root, GG_, fd)  # comp fd = GG form fd
+    for GG_ in GG_t:  # comp_G_ eval: n_matches ~ nG, match rate decreases with distance, root vals updated in form_t:
+        if root.val_Ht[0][-1] * np.sqrt(len(GG_)-1) if GG_ else 0 > ave * root.rdn_Ht[0][-1]:
+            agg_recursion(rroot, root, GG_, fd=0) # 1st xcomp in GG_
 
     G_[:] = GG_t
 
@@ -95,36 +95,42 @@ def form_graph_t(root, Node_, _root_t_):  # root function to form fuzzy graphs o
     return graph_t  # root.node_t'node_ -> node_t: incr nested with each agg+?
 
 
-def comp_G_(G_, pri_G_=None, f1Q=1, fd=0):  # cross-comp in G_ if f1Q, else comp between G_ and pri_G_, if comp_node_?
+def comp_G_(G_, fd=0, oG_=None, fin=1):  # cross-comp in G_ if fin, else comp between G_ and other_G_, for comp_node_
 
-    for G in G_:  # node_
-        if fd:  # follow prior link_ layer
-            _G_ = []
-            for link in G.link_H[-2]:
-                if link.valt[1] > ave_Gd:
-                    _G_ += [link.G1 if G is link.G0 else link.G0]
-        else:
-            _G_ = G_ if f1Q else pri_G_  # loop all Gs in rng+
-            G.link_H += [[]]  # add layer of links if rng+
-        for _G in _G_:
-            if _G in G.compared_:  # was compared in prior rng
-                continue
-            dy = _G.box[0]-G.box[0]; dx = _G.box[1]-G.box[1]
-            distance = np.hypot(dy, dx)  # Euclidean distance between centers, sum into sparsity
-            if distance < ave_distance * ((sum(_G.val_Ht[fd]) + sum(G.val_Ht[fd])) / (2*sum(G_aves))):
-                G.compared_ += [_G]; _G.compared_ += [G]
-                # same comp for cis and alt components:
-                for _cG, cG in ((_G, G), (_G.alt_Graph, G.alt_Graph)):
-                    if _cG and cG:  # alt Gs maybe empty
-                        # form new layer of links:
-                        comp_G(_cG, cG, distance, [dy,dx])
-    '''
-    combine cis,alt in aggH: alt represents node isolation?
-    comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D?
-    '''
+    if not fd:  # cross-comp all Gs in rng+, regardless of links
+        for G in G_: G.link_H += [[]]  # add empty link layer, may remove if stays empty
+        if oG_:
+            for oG in oG_: oG.link_H += [[]]
+    for G in G_:
+        if not fd:
+            # form new links:
+            if fin: _G_ = G_  # xcomp in G_
+            else:  _G_ = oG_  # xcomp G_,other_G_, not used yet
+            for _G in _G_:
+                if _G in G.compared_: continue  # skip if previously compared
+                dy = _G.box[0] - G.box[0]; dx = _G.box[1] - G.box[1]
+                distance = np.hypot(dy, dx)  # Euclidean distance between centers of Gs
+                if distance < ave_distance * ((sum(_G.val_Ht[fd]) + sum(G.val_Ht[fd])) / (2*sum(G_aves))):  # very tentative
+                    # close enough to compare:
+                    G.compared_ += [_G]; _G.compared_ += [G]
+                    G.link_H[-1] += [CderG( G0=G, G1=_G, S=distance, A=[dy,dx])]  # proto-links, in G only
+    for G in G_:
+        for link in G.link_H[-1]:  # if fd: follow links, comp old derH, else follow proto-links, form new derH
+            _G = link.G1 if G is link.G0 else link.G0
+            if fd and link.valt[1] < G_aves[1]: continue  # weak link
+            comp_G(link, fd)
+            '''
+            same comp for cis and alt components?
+            for _cG, cG in ((_G, G), (_G.alt_Graph, G.alt_Graph)):
+                if _cG and cG:  # alt Gs maybe empty
+                    comp_G(_cG, cG, fd)  # form new layer of links:
+            combine cis,alt in aggH: alt represents node isolation?
+            comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D?
+            '''
 
-def comp_G(_G, G, distance, A):
+def comp_G(link, fd):
 
+    _G, G = link.G0, link.G1  # direction of comparison = G0, G1
     Mval,Dval,Maxv = 0,0,0
     Mrdn,Drdn = 1,1
 
@@ -143,15 +149,16 @@ def comp_G(_G, G, distance, A):
     der_ext = comp_ext([_G.L,_G.S,_G.A],[G.L,G.S,G.A], [Mval,Dval,Maxv], [Mrdn,Drdn])
     SubH = [der_ext, derH]  # two init layers of SubH, higher layers added by comp_aggH:
     # / G:
-    if _G.aggH and G.aggH:  # empty in base fork
+    if fd:  # else no aggH yet?
         subH, valt, rdnt = comp_aggH(_G.aggH, G.aggH, rn=1)
         SubH += subH  # append higher subLayers: list of der_ext | derH s
         mval, dval, maxv = valt
         Mval+=mval; Dval+=dval; Maxv+=maxv; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
 
-    derG = CderG(G0=_G, G1=G, subH=SubH, valt=[Mval,Dval,Maxv], rdnt=[Mrdn,Drdn], S=distance, A=A)
     if valt[0] > ave_Gm or valt[1] > ave_Gd:
-        _G.link_H[-1] += [derG]; G.link_H[-1] += [derG]  # bilateral add links
+        link.subH = SubH; link.valt = [Mval, Dval, Maxv]; link.rdnt = [Mrdn, Drdn]
+        _G.link_H[-1] += [link]  # bilateral add link, or replace if fd?
+        # add new val, rdn? or all this is in sum2graph?:
         _G.val_Ht[0][-1] += Mval; _G.val_Ht[1][-1] += Dval; _G.rdn_Ht[0][-1] += Mrdn; _G.rdn_Ht[1][-1] += Drdn
         G.val_Ht[0][-1] += Mval; G.val_Ht[1][-1] += Dval; G.rdn_Ht[0][-1] += Mrdn; G.rdn_Ht[1][-1] += Drdn
 
@@ -170,11 +177,12 @@ def select_init_node_(node_, fd):  # sum surrounding link values to select nodes
                 for link in node.link_H[-1]:
                     _node = link.G1 if link.G0 is node else link.G0   # val + sum(decayed perimeter node vals):
                     dval = _Val_[node_.index(_node)] * (link.valt[fd]/ link.valt[2])  # * m|d decay
-                    Val_[i] += dval; dVal += dval  # unilateral: simpler, parallelizable?
+                    # partly redundant, this Val includes circular links?
+                    Val_[i] += dval; dVal += dval    # unilateral assign: simpler, parallelizable?
         _Val_ = Val_
 
     max_, non_max_ = [],[]
-    # add selection of local maxes here, for sparsity?
+    # add local max selection here, for sparsity
 
     for node, Val in (zip(node_,Val_)):
         if Val<=0 or node in non_max_:
