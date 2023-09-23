@@ -103,7 +103,7 @@ def form_PP_t(root, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps v
         for P in P_:
             for derP in P.link_H[-1]:
                 if derP.valt[fd] > P_aves[fd] * derP.rdnt[fd]:
-                    link_map[P] += [derP._P]  # keys: Ps, vals: linked _P_s, up and down
+                    link_map[P] += [derP._P]  # keys:Ps, vals: linked _P_s, up and down
                     link_map[derP._P] += [P]
         for P in P_:
             if P.root_t[fd]: continue  # skip if already packed in some PP
@@ -138,7 +138,7 @@ def sum2PP(root, P_, base_rdn, fd):  # sum links in Ps and Ps in PP
     # accum:
     for i, P in enumerate(P_):
         P.root_t[fd] = PP   # assign root
-        sum_ptuple(PP.ptuple, P.ptuple)  # accumulate ptuple
+        sum_ptuple(PP.ptuple, P.ptuple)   # accum ptuple
         (y0,x0),(yn,xn) = P.dert_[0][:2], P.dert_[-1][:2]
         PP.box = PP.box.accumulate(y0,x0).accumulate(yn,xn)  # accumulate box
 
@@ -185,27 +185,26 @@ def feedback(root, fd):  # from form_PP_, append new der layers to root PP, sing
         if fback_ and (len(fback_) == len(rroot.node_t)):  # still flat, all nodes terminated and fed back
             feedback(rroot, fd)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
 
-# not fully reviewed:
-def sum_derH_Khanh(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
+
+def sum_derH(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
     DerH, Valt, Rdnt = T; derH, valt, rdnt = t
+
     for i in 0, 1:
         Valt[i] += valt[i]
         Rdnt[i] += rdnt[i] + base_rdn
-
-    DerH[:] = [ # sum der layers:
+    DerH[:] = [  # sum der layers:
         [ [sum_dertuple(Mtuple,mtuple), sum_dertuple(Dtuple,dtuple)],  # ptuplet
           [Mval + mval, Dval + dval],  # valt
           [Mrdn + mrdn + base_rdn, Drdn + drdn + base_rdn],  # rdnt
         ]
         for [(Mtuple,Dtuple),(Mval,Dval),(Mrdn,Drdn)], [(mtuple,dtuple),(mval,dval),(mrdn,drdn)]
         in zip_longest(DerH, derH, fillvalue=[((0,0,0,0,0,0),(0,0,0,0,0,0)), (0,0),(0,0)])  # ptuplet, valt, rdnt
+    ]
 
+def sum_derH_old(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
-def sum_derH(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
-
-    DerH, Valt, Rdnt = T
-    derH, valt, rdnt = t
+    DerH, Valt, Rdnt = T; derH, valt, rdnt = t
     for i in 0, 1:
         Valt[i] += valt[i]; Rdnt[i] += rdnt[i] + base_rdn
     if DerH:
@@ -224,8 +223,8 @@ def sum_derH(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = 
 def sum_ptuple(Ptuple, ptuple, fneg=0):
     I, G, M, Ma, (Dy, Dx), L = Ptuple
     _I, _G, _M, _Ma, (_Dy, _Dx), _L = ptuple
-    if fneg: Ptuple[:] = ((I-_I), (G-_G), (M-_M), (Ma-_Ma), [(Dy-_Dy),(Dx-_Dx)], (L-_L))
-    else:    Ptuple[:] = ((I+_I), (G+_G), (M+_M), (Ma+_Ma), [(Dy+_Dy),(Dx+_Dx)], (L+_L))
+    if fneg: Ptuple[:] = (_I-I, _G-G, _M-M, _Ma-Ma, [_Dy-Dy,_Dx-Dx], _L-L)
+    else:    Ptuple[:] = (_I+I, _G+G, _M+M, _Ma+Ma, [_Dy+Dy,_Dx+Dx], _L+L)
 
 def sum_dertuple(Ptuple, ptuple, fneg=0):
     I, G, M, Ma, A, L = Ptuple

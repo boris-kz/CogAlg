@@ -121,6 +121,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     alt_graph_ : list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
     alt_Graph : object = None  # conditional, summed and concatenated params of alt_graph_
     # temporary:
+    it = list = z([0,0])  # indices in root.node_t, maybe nested?
     compared_ : list = z([])
     Rdn : int = 0  # for accumulation or separate recursion count?
     # id_H : list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
