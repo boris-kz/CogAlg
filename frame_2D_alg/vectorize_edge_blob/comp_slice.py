@@ -186,7 +186,7 @@ def feedback(root, fd):  # from form_PP_, append new der layers to root PP, sing
             feedback(rroot, fd)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
 
 
-def sum_derH(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
+def sum_derH(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
     DerH, Valt, Rdnt = T; derH, valt, rdnt = t
 
@@ -194,7 +194,7 @@ def sum_derH(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = 
         Valt[i] += valt[i]
         Rdnt[i] += rdnt[i] + base_rdn
     DerH[:] = [  # sum der layers:
-        [ [sum_dertuple(Mtuple,mtuple), sum_dertuple(Dtuple,dtuple)],  # ptuplet
+        [ [sum_dertuple(Mtuple,mtuple), sum_dertuple(Dtuple,dtuple,fneg)],  # ptuplet, only dtuple is directional: needs fneg
           [Mval + mval, Dval + dval],  # valt
           [Mrdn + mrdn + base_rdn, Drdn + drdn + base_rdn],  # rdnt
         ]
@@ -202,7 +202,7 @@ def sum_derH(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = 
         in zip_longest(DerH, derH, fillvalue=[((0,0,0,0,0,0),(0,0,0,0,0,0)), (0,0),(0,0)])  # ptuplet, valt, rdnt
     ]
 
-def sum_derH_old(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
+def sum_derH_old(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
     DerH, Valt, Rdnt = T; derH, valt, rdnt = t
     for i in 0, 1:
@@ -212,7 +212,7 @@ def sum_derH_old(T, t, base_rdn):  # derH is a list of layers or sub-layers, eac
             if layer:
                 if Layer:
                     for i in 0,1:
-                        sum_dertuple(Layer[0][i], layer[0][i])  # ptuplet
+                        sum_dertuple(Layer[0][i], layer[0][i], fneg and i)  # ptuplet, only dtuple is directional: needs fneg
                         Layer[1][i] += layer[1][i]  # valt
                         Layer[2][i] += layer[2][i] + base_rdn  # rdnt
                 else:
