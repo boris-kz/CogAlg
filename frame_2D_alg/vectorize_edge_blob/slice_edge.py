@@ -19,7 +19,7 @@ and inverse gradient deviation of flat blobs. But the latter is implicit here: h
 A stable combination of a core flat blob with adjacent edge blobs is a potential object.
 '''
 
-Tptuple = namedtuple("Tptuple", "I G M Ma angle L")
+ptupleT = namedtuple("ptupleT", "I G M Ma angle L")
 octant = 0.3826834323650898
 
 def slice_edge(blob, verbose=False):
@@ -113,7 +113,7 @@ def form_P(blob, P):
     L = len(P.dert_)
     M = ave_g*L - G
     G = np.hypot(Dy, Dx)  # recompute G
-    P.ptuple = Tptuple(I, G, M, Ma, (Dy,Dx), L)
+    P.ptuple = ptupleT(I, G, M, Ma, (Dy,Dx), L)
     P.yx = P.dert_[L//2][:2]  # new center
 
     return P

@@ -65,8 +65,8 @@ def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in 
     GG_t = form_graph_t(root, G_, _root_t_)  # internal eval sub+/graph and feedback
     # agg+ cross-comp-> form_graph_t loop sub+) recursive agg+, vs. comp_slice sub+ looping-> evaluation-> cross-comp
 
-    for GG_ in GG_t:  # comp_G_ eval: n_matches ~ nG, match rate decreases with distance, root vals updated in form_t:
-        if root.val_Ht[0][-1] * np.sqrt(len(GG_)-1) if GG_ else 0 > ave * root.rdn_Ht[0][-1]:
+    for GG_ in GG_t:  # comp_G_ eval: ave_m * len*rng - fixed cost, root update in form_t:
+        if root.val_Ht[0][-1] * (len(GG_)-1)*root.rng > ave * root.rdn_Ht[0][-1]:  
             agg_recursion(rroot, root, GG_, fd=0) # 1st xcomp in GG_
 
     G_[:] = GG_t
@@ -78,14 +78,14 @@ def form_graph_t(root, G_, _root_t_):  # root function to form fuzzy graphs of n
         Gt_ = eval_node_connectivity(G_, fd)  # sum surround link values @ incr rng: val + sum([_val * (link_val/max_val])
         init_ = select_init_(Gt_, fd)  # select sparse max nodes to initialize graphs
         graph_ = segment_node_(init_, Gt_, fd, _root_t_)
-        graph_ = prune_graph_(graph_, fd)  # sort node roots and prune the weak? but that breaks the graph, done in segment_node_?
+        graph_ = prune_graph_(graph_, fd)  # sort node roots and prune the weak, or only whole graphs?
         graph_ = sum2graph_(graph_, fd)  # convert to Cgraphs
         graph_t += [graph_]  # add alt_graphs?
     # sub+:
     for fd, graph_ in enumerate(graph_t):  # breadth-first for in-layer-only roots
         for graph in graph_:  # external to agg+ vs internal in comp_slice sub+
             node_ = graph.node_t  # still flat?  eval fd comp_G_ in sub+:
-            if sum(graph.val_Ht[fd]) * np.sqrt(len(node_)-1) if node_ else 0 > G_aves[fd] * sum(graph.rdn_Ht[fd]):
+            if sum(graph.val_Ht[fd]) * (len(node_)-1)*root.rng > G_aves[fd] * sum(graph.rdn_Ht[fd]):
                 agg_recursion(root, graph, node_, fd)  # replace node_ with node_t, recursive
             else:  # feedback after graph sub+:
                 root.fback_t[fd] += [[graph.aggH, graph.val_Ht, graph.rdn_Ht]]  # merge forks in root fork
@@ -98,7 +98,7 @@ def form_graph_t(root, G_, _root_t_):  # root function to form fuzzy graphs of n
 
 def comp_G_(G_, fd=0, oG_=None, fin=1):  # cross-comp in G_ if fin, else comp between G_ and other_G_, for comp_node_
 
-    if not fd:  # cross-comp all Gs in rng+, regardless of links
+    if not fd:  # cross-comp all Gs in extended rng, add proto-links regardless of prior links
         for G in G_: G.link_H += [[]]  # add empty link layer, may remove if stays empty
         if oG_:
             for oG in oG_: oG.link_H += [[]]
@@ -113,11 +113,11 @@ def comp_G_(G_, fd=0, oG_=None, fin=1):  # cross-comp in G_ if fin, else comp be
                 if distance < ave_distance * ((sum(_G.val_Ht[fd]) + sum(G.val_Ht[fd])) / (2*sum(G_aves))):  # very tentative
                     # close enough to compare:
                     G.compared_ += [_G]; _G.compared_ += [G]
-                    G.link_H[-1] += [CderG( G0=G, G1=_G, S=distance, A=[dy,dx])]  # proto-links, in G only
+                    G.link_H[-1] += [CderG( G=G, _G=_G, S=distance, A=[dy,dx])]  # proto-links, in G only
     for G in G_:
         for link in G.link_H[-1]:  # if fd: follow links, comp old derH, else follow proto-links, form new derH
-            if fd and link.valt[1] < G_aves[1]: continue  # weak link
-            comp_G(G, link, fd)
+            if fd and link.valt[1] > G_aves[1]*link.rdnt[1]:  # maybe weak after rdn incr?
+                comp_G(link, fd)
             '''
             same comp for cis and alt components?
             for _cG, cG in ((_G, G), (_G.alt_Graph, G.alt_Graph)):
@@ -126,14 +126,11 @@ def comp_G_(G_, fd=0, oG_=None, fin=1):  # cross-comp in G_ if fin, else comp be
             combine cis,alt in aggH: alt represents node isolation?
             comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D?
             '''
-
-def comp_G(G, link, fd):
+def comp_G(link, fd):
 
     Mval,Dval,Maxv = 0,0,0
     Mrdn,Drdn = 1,1
-    # dir = G is link.G0  # or link.dir is not needed, sum2graph can get it from G, and links are not compared?
-    # _G = [link.G1,link.G0][dir]
-    _G = link.G1 if G is link.G0 else link.G0
+    _G, G = link._G, link.G
 
     # / P:
     mtuple, dtuple, Mtuple = comp_ptuple(_G.ptuple, G.ptuple, rn=1)
@@ -167,16 +164,16 @@ def eval_node_connectivity(node_, fd):  # sum surrounding link values to select 
 
     ave = G_aves[fd]
     Gt_ = []
-    for i, G in enumerate(node_):
-        G.it[fd] = i  # or assigned in last sum2graph?
-        Gt_ += [G, G.val_Ht[fd][-1] - ave * G.rdn_Ht[fd][-1]]  # Gt = [G,_Val], ave is normalized for circular links?
+    for i,G in enumerate(node_):
+        G.it[fd] = i  # replace with i in GG.node_ in segment_node_, or not needed later?
+        Gt_ += [[G, G.val_Ht[fd][-1] - ave * G.rdn_Ht[fd][-1]]]  # Gt = [G,_Val], ave is normalized for circular links?
 
     while True:  # iterative Val range expansion by summing decayed surround node Vals, via same direct links
         dVal = 0
         for i, (G,_Val) in enumerate(Gt_):
             Val = 0  # updated surround value
             for link in G.link_H[-1]:
-                _G = link.G1 if link.G0 is G else link.G0
+                _G = link._G if link.G is G else link.G
                 _G_Val = Gt_[_G.it[fd]][1]
                 Val += _G_Val * (link.valt[fd] / link.valt[2])  # _G Val * link decay (m|d / max: self=100%?)
             Gt_[i][1] = Val  # G Val update, unilateral for simplicity: computed separately for _G
@@ -189,13 +186,13 @@ def eval_node_connectivity(node_, fd):  # sum surrounding link values to select 
 def select_init_(Gt_, fd):  # local max selection for sparse graph init:
 
     max_, non_max_ = [],[]  # pick max in direct links,
-    # add _node_ buffer, recursive mediation increment for more sparsity?
+    # add _node_ buffer and recursive mediation increment for more sparsity?
 
     for node, Val in Gt_:
-        if Val<=0 or node in non_max_: continue  # # can't init graph
+        if Val<=0 or node in non_max_: continue  # can't init graph
         fmax=1
         for link in node.link_H[-1]:
-            _node = link.G1 if link.G0 is node else link.G0
+            _node = link._G if link.G is node else link.G
             if Val > Gt_[_node.it[fd]][1]:
                 non_max_ += [_node]  # skip as next node
             else:
@@ -219,7 +216,7 @@ def segment_node_(max_, Gt_, fd, root_t_):
             nodet_ = []
             for _node,_val,_root_t in _nodet_:
                 for link in _node.link_H[-1]:
-                    node = link.G1 if link.G0 is _node else link.G0
+                    node = link._G if link.G is _node else link.G
                     if node in graph[0]: continue
                     val = Gt_[node.it[fd]][1]
                     root_t = root_t_[node.it[fd]]  # if agg+?
@@ -228,7 +225,7 @@ def segment_node_(max_, Gt_, fd, root_t_):
                         graph[1] += val
                         graph[2] += [root_t]
                         nodet_ += [node,val,root_t]  # new perimeter
-                    # 
+                    # else: not in this graph, but may be in another?
             _nodet_ = nodet_
         graph_ += [graph]
     return graph_
@@ -243,8 +240,8 @@ def merge_root_tree(Root_t, root_t):  # not-empty fork layer is root_t, each for
                 else: Root.root_t[:] = root.root_t
         Root_[:] = list( set(Root_+root_))  # merge root_, may be empty
 
-# may not be needed:
-def prune_graph_(graph_, fd):  # sort node roots and prune the weak? but that breaks the graph, done in segment_node_?
+
+def prune_graph_(graph_, fd):  # sort node roots and prune the weak? but that breaks the graph, prune whole graphs only?
 
     for graph in graph_:
         for node in graph[0]:
@@ -271,18 +268,18 @@ def sum2graph_(graph_, fd):  # sum node and link params into graph, aggH in agg+
         [merge_root_tree(Root_t, root_t) for root_t in graph[2][1:]]
         Graph = Cgraph(fd=fd, root_t=Root_t, L=len(graph[0]))  # n nodes
         Link_ = []
-        for G in graph[0]:
+        for G in enumerate(graph[0]):
             sum_box(Graph.box, G.box)
             sum_ptuple(Graph.ptuple, G.ptuple)
             sum_derH(Graph.derH, G.derH, base_rdn=1)  # base_rdn?
             sum_aggH([Graph.aggH,Graph.val_Ht,Graph.rdn_Ht], [G.aggH,G.val_Ht,G.rdn_Ht], base_rdn=1)
             link_ = G.link_H[-1]
             Link_[:] = list(set(Link_ + link_))
-            subH=[]; valt=[0,0]; rdnt=[1,1]  # no max in G.valt?
+            subH=[]; valt=[0,0]; rdnt=[1,1]
             for derG in link_:
                 if derG.valt[fd] > G_aves[fd]:
-                    sum_subH([subH,valt,rdnt], [derG.subH,derG.valt,derG.rdnt], base_rdn=1, fneg = G is derG.G1)  # fneg: reverse link direction
-                    sum_box(G.box, derG.G0.box if derG.G1 is G else derG.G1.box)
+                    sum_subH([subH,valt,rdnt], [derG.subH,derG.valt,derG.rdnt], base_rdn=1, fneg = G is derG.G)  # fneg: reverse link sign
+                    sum_box(G.box, derG._G.box if derG.G is G else derG.G.box)
             G.aggH += [[subH,valt,rdnt]]
             for i in 0,1:
                 G.val_Ht[i][-1] += valt[i]; G.rdn_Ht[i][-1] += rdnt[i]
@@ -296,7 +293,6 @@ def sum2graph_(graph_, fd):  # sum node and link params into graph, aggH in agg+
             Graph.S += derG.S
         Graph.aggH += [[subH, valt, rdnt]]  # new aggLev
         for i in 0,1:
-            # replace with Val: graph[1]?
             Graph.val_Ht[i][-1] += valt[i]; Graph.rdn_Ht[i][-1] += rdnt[i]
         Graph_ += [Graph]
 

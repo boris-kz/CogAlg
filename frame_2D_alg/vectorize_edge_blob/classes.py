@@ -133,8 +133,8 @@ class CderG(ClusterStructure):  # params of single-fork node_ cluster per pplaye
     subH : list = z([])  # [[derH_t, valt, rdnt]]: top aggLev derived in comp_G
     valt : list = z([0,0,0])  # m,d,max
     rdnt : list = z([1,1])
-    dir : bool  # direction of comparison = G is link.G0, not G0,G1, or not needed, sum2graph can get it from G?
-    G0 : object = None  # comparand
-    G1 : object = None  # comparand
+    _G : object = None  # comparand
+    G: object = None  # comparand
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers
+    # dir : bool  # direction of comparison if not G0,G1, only needed for comp link?
