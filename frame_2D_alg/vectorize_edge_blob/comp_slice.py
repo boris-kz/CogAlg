@@ -141,18 +141,20 @@ def sum2PP(root, P_, base_rdn, fd):  # sum links in Ps and Ps in PP
         sum_ptuple(PP.ptuple, P.ptuple)   # accum ptuple
         (y0,x0),(yn,xn) = P.dert_[0][:2], P.dert_[-1][:2]
         PP.box = PP.box.accumulate(y0,x0).accumulate(yn,xn)
-        # unilateral sum links:
+
         for derP in P.link_H[-1]:
             if derP.valt[fd] > P_aves[fd] * derP.rdnt[fd]:
                 derH, valt, rdnt = derP.derH, derP.valt, derP.rdnt
-                sum_derH([P.derH,P.valt,P.rdnt], [derH,valt,rdnt], base_rdn, fneg = P is derP._P)  # links may be up|down?
-        # no bilateral sum:
+                sum_derH([P.derH,P.valt,P.rdnt], [derH,valt,rdnt], base_rdn, fneg=0)  # uplink
+                _P = derH._P  # bilateral accum downlink, reverse d signs:
+                sum_derH([_P.derH,_P.valt,_P.rdnt], [derH,valt,rdnt], base_rdn, fneg=1)
+        # unilateral sum:
         sum_derH([PP.derH,PP.valt,PP.rdnt], [P.derH,P.valt,P.rdnt], base_rdn)
 
     return PP
 
 '''
-Each call to comp_rng | comp_der forms dderH: a layer of derH. Layer fd forks are merged in feedback to contain complexity
+Each call to comp_rng | comp_der forms dderH: new layer of derH. Both forks are merged in feedback to contain complexity
 (deeper layers are appended by feedback, if nested we need fback_tree: last_layer_nforks = 2^n_higher_layers)
 '''
 def sub_recursion(root, PP_, fd):  # called in form_PP_, evaluate PP for rng+ and der+, add layers to select sub_PPs
@@ -160,7 +162,7 @@ def sub_recursion(root, PP_, fd):  # called in form_PP_, evaluate PP for rng+ an
     for PP in PP_:
         P_ = PP.node_t  # flat before sub+
         rng = PP.rng+(1-fd)
-        if PP.valt[fd] * (len(P_)-1)*rng > PP_aves[fd] * PP.rdnt[fd]:  # len*rng: sum ave matches, - fixed PP costs?
+        if PP.valt[fd] * (len(P_)-1)*rng > PP_aves[fd] * PP.rdnt[fd]:  # val*len*rng: sum ave matches, - fixed PP costs?
             # der+|rng+:
             comp_der(P_) if fd else comp_rng(P_, rng)  # same else new links
             PP.rdnt[fd] += PP.valt[fd] - PP_aves[fd] * PP.rdnt[fd] > PP.valt[1-fd] - PP_aves[1-fd] * PP.rdnt[1-fd]
