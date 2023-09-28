@@ -2,10 +2,9 @@ import numpy as np
 from copy import deepcopy, copy
 from itertools import zip_longest
 from .classes import Cgraph, CderG, CPP
-from .filters import aves, ave, med_decay, ave_distance, G_aves, ave_Gm, ave_Gd
+from .filters import aves, ave, ave_distance, G_aves, ave_Gm, ave_Gd
 from .slice_edge import slice_edge, comp_angle
 from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, sum_derH, comp_derH
-# from .sub_recursion import feedback
 '''
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
 in combination with spliced lower-composition patterns, etc, if only lower param-layers match.
@@ -104,7 +103,7 @@ def comp_G_(G_, fd=0, oG_=None, fin=1):  # cross-comp in G_ if fin, else comp be
             for oG in oG_: oG.link_H += [[]]
         # form new links:
         for i, G in enumerate(G_):
-            if fin: _G_ = G_[i:]  # xcomp in G_
+            if fin: _G_ = G_[i+1:]  # xcomp in G_
             else:   _G_ = oG_  # xcomp G_,other_G_, also start @ i? not used yet
             for _G in _G_:
                 if _G in G.compared_: continue  # skip if previously compared
@@ -115,49 +114,55 @@ def comp_G_(G_, fd=0, oG_=None, fin=1):  # cross-comp in G_ if fin, else comp be
                     G.compared_ += [_G]; _G.compared_ += [G]
                     G.link_H[-1] += [CderG( G=G, _G=_G, S=distance, A=[dy,dx])]  # proto-links, in G only
     for G in G_:
+        link_ = []
         for link in G.link_H[-1]:  # if fd: follow links, comp old derH, else follow proto-links, form new derH
             if fd and link.valt[1] < G_aves[1]*link.rdnt[1]: continue  # maybe weak after rdn incr?
-            comp_G(link, fd)
-            '''
-            same comp for cis and alt components?
-            for _cG, cG in ((_G, G), (_G.alt_Graph, G.alt_Graph)):
-                if _cG and cG:  # alt Gs maybe empty
-                    comp_G(_cG, cG, fd)  # form new layer of links:
-            combine cis,alt in aggH: alt represents node isolation?
-            comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D?
-            '''
+            link_ += comp_G(link, fd)
+        G.link_H[-1] = link_
+        '''
+        same comp for cis and alt components?
+        for _cG, cG in ((_G, G), (_G.alt_Graph, G.alt_Graph)):
+            if _cG and cG:  # alt Gs maybe empty
+                comp_G(_cG, cG, fd)  # form new layer of links:
+        combine cis,alt in aggH: alt represents node isolation?
+        comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D? '''
+
 def comp_G(link, fd):
 
-    Mval,Dval,Maxv = 0,0,0
+    maxM,maxD = 0,0  # max possible summed m|d, to compute relative summed m|d: V/maxV, link mediation coef
+    Mval,Dval = 0,0
     Mrdn,Drdn = 1,1
     _G, G = link._G, link.G
 
     # / P:
-    mtuple, dtuple, Mtuple = comp_ptuple(_G.ptuple, G.ptuple, rn=1)
-    mval, dval, maxv = sum(mtuple), sum(abs(x) for x in dtuple), sum(Mtuple)
+    mtuple, dtuple, Mtuple, Dtuple = comp_ptuple(_G.ptuple, G.ptuple, rn=1, fagg=1)
+    maxm, maxd = sum(Mtuple), sum(Dtuple)
+    mval, dval = sum(mtuple), sum(abs(d) for d in dtuple)  # mval is signed, m=-min in comp x sign
     mrdn = dval>mval; drdn = dval<=mval
-    derLay0 = [[mtuple,dtuple], [mval,dval,maxv], [mrdn,drdn]]
-    Mval+=mval; Dval+=dval; Maxv+=maxv; Mrdn += mrdn; Drdn += drdn
+    derLay0 = [[mtuple,dtuple], [mval,dval], [mrdn,drdn]]
+    Mval+=mval; Dval+=dval; Mrdn += mrdn; Drdn += drdn; maxM+=maxm; maxD+=maxd
     # / PP:
-    dderH, valt, rdnt = comp_derH(_G.derH[0], G.derH[0], rn=1)
-    mval, dval, maxv = valt
-    Mval+=dval; Dval+= mval; Maxv+=maxv; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
+    dderH, valt, rdnt, maxt = comp_derH(_G.derH[0], G.derH[0], rn=1, fagg=1)
+    mval,dval = valt; maxm,maxd = maxt
+    Mval+=dval; Dval+=mval; maxM+=maxm; maxD+=maxd
+    Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
 
-    derH = [[derLay0]+dderH, [Mval,Dval,Maxv], [Mrdn,Drdn]]  # appendleft derLay0 from comp_ptuple
-    der_ext = comp_ext([_G.L,_G.S,_G.A],[G.L,G.S,G.A], [Mval,Dval,Maxv], [Mrdn,Drdn])
+    derH = [[derLay0]+dderH, [Mval,Dval], [Mrdn,Drdn]]  # appendleft derLay0 from comp_ptuple
+    der_ext = comp_ext([_G.L,_G.S,_G.A],[G.L,G.S,G.A], [Mval,Dval], [Mrdn,Drdn])
     SubH = [der_ext, derH]  # two init layers of SubH, higher layers added by comp_aggH:
     # / G:
     if fd:  # else no aggH yet?
-        subH, valt, rdnt = comp_aggH(_G.aggH, G.aggH, rn=1)
+        subH, valt, rdnt, maxt = comp_aggH(_G.aggH, G.aggH, rn=1)
         SubH += subH  # append higher subLayers: list of der_ext | derH s
-        mval, dval, maxv = valt
-        Mval+=mval; Dval+=dval; Maxv+=maxv; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
+        mval,dval = valt; maxm,maxd = maxt
+        Mval+=mval; Dval+=dval; maxM += maxm; maxD += maxd
+        Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
+        return link
 
-    if Mval > ave_Gm or Dval > ave_Gd:  # or sum?
-        link.subH = SubH; link.valt = [Mval,Dval,Maxv]; link.rdnt = [Mrdn,Drdn]  # complete proto-link
-        _G.link_H[-1] += [link]  # bilateral add link, replace if fd?
-    elif not fd:
-        G.link_H[-1].remove(link)  # for rng+ only
+    elif Mval > ave_Gm or Dval > ave_Gd:  # or sum?
+        link.subH = SubH; link.maxt = [maxM,maxD]; link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]  # complete proto-link
+        return link
+    else: return []  # rng+ proto-link is not replaced
 
 
 def eval_node_connectivity(node_, fd):  # sum surrounding link values to select nodes, to initialize graphs
@@ -165,7 +170,7 @@ def eval_node_connectivity(node_, fd):  # sum surrounding link values to select 
     ave = G_aves[fd]
     Gt_ = []
     for i,G in enumerate(node_):
-        G.it[fd] = i  # only used here, select_init_, segment_node_?
+        G.it[fd] = i  # only used here, in select_init_, segment_node_?
         Gt_ += [[G, G.val_Ht[fd][-1] - ave * G.rdn_Ht[fd][-1]]]  # Gt = [G,_Val], ave is normalized for circular links?
 
     while True:  # iterative Val range expansion by summing decayed surround node Vals, via same direct links
@@ -341,40 +346,43 @@ aggH: [[subH_t, valt, rdnt]]: composition levels, ext per G,
 
 def comp_subH(_subH, subH, rn):
     DerH = []
-    Mval, Dval, Maxv, Mrdn, Drdn = 0,0,0,1,1
+    maxM, maxD, Mval, Dval, Mrdn, Drdn = 0,0,0,0,1,1
 
     for _lay, lay in zip_longest(_subH, subH, fillvalue=[]):  # compare common lower layer|sublayer derHs
         if _lay and lay:  # also if lower-layers match: Mval > ave * Mrdn?
             if _lay[0] and isinstance(_lay[0][0],list):  # _lay[0][0] is derHt
 
-                dderH, valt, rdnt = comp_derH(_lay[0], lay[0], rn)
-                DerH += [[dderH, valt, rdnt]]  # for flat derH
-                mval,dval,maxv = valt
-                Mval += mval; Dval += dval; Maxv += maxv; Mrdn += rdnt[0] + dval > mval; Drdn += rdnt[1] + dval <= mval
+                dderH, valt, rdnt, maxt = comp_derH(_lay[0], lay[0], rn, fagg=1)
+                DerH += [[dderH, valt, rdnt, maxt]]  # for flat derH
+                mval,dval = valt; maxm,maxd = maxt
+                Mval += mval; Dval += dval; maxM += maxm; maxD += maxd
+                Mrdn += rdnt[0] + dval > mval; Drdn += rdnt[1] + dval <= mval
             else:  # _lay[0][0] is L, comp dext:
-                DerH += [comp_ext(_lay[1],lay[1], [Mval,Dval,Maxv], [Mrdn,Drdn])]  # pack as ptuple
+                DerH += [comp_ext(_lay[1],lay[1],[Mval,Dval], [Mrdn,Drdn])]  # pack extt as ptuple
 
-    return DerH, [Mval,Dval,Maxv], [Mrdn,Drdn]  # new layer, 1/2 combined derH
+    return DerH, [Mval,Dval],[Mrdn,Drdn],[maxM,maxD]  # new layer,= 1/2 combined derH
 
 def comp_aggH(_aggH, aggH, rn):  # no separate ext
     SubH = []
-    Mval, Dval, Maxv, Mrdn, Drdn = 0,0,0,1,1
+    maxM,maxD, Mval,Dval, Mrdn,Drdn = 0,0,0,0,1,1
 
     for _lev, lev in zip_longest(_aggH, aggH, fillvalue=[]):  # compare common lower layer|sublayer derHs
         if _lev and lev:  # also if lower-layers match: Mval > ave * Mrdn?
             # compare dsubH only:
-            dsubH, valt, rdnt = comp_subH(_lev[0], lev[0], rn)
+            dsubH, valt,rdnt,maxt = comp_subH(_lev[0], lev[0], rn)
             SubH += dsubH  # flatten to keep subH
-            mval,dval,maxv = valt
-            Mval += mval; Dval += dval; Maxv+=maxv; Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+mval<=dval
+            mval,dval = valt; maxm,maxd = maxt
+            Mval += mval; Dval += dval; maxM += maxm; maxD += maxd
+            Mrdn += rdnt[0] + dval > mval; Drdn += rdnt[1] + mval <= dval
 
-    return SubH, [Mval,Dval,Maxv], [Mrdn,Drdn]
+    return SubH, [Mval,Dval],[Mrdn,Drdn],[maxM,maxD]
+
 
 def sum_subH(T, t, base_rdn, fneg=0):
 
     SubH, Valt, Rdnt = T; subH, valt, rdnt = t
 
-    for i in 0,1:  # link maxv is not summed in G.valt
+    for i in 0,1:
         Valt[i] += valt[i]; Rdnt[i] += rdnt[i]
     if SubH:
         for Layer, layer in zip_longest(SubH,subH, fillvalue=[]):
