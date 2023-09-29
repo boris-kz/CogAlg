@@ -26,6 +26,7 @@ class CEdge(ClusterStructure):  # edge blob
     aggH : list = z([[]])  # formed in Gs: [[subH, valt, rdnt]]: cross-fork composition layers
     val_Ht : list = z([[0],[0]])  # Ht of link vals | rdns per fder
     rdn_Ht : list = z([[1],[1]])
+    rng = 1
     # initializing blob:
     blob : object = None
     M: float = 0.0  # summed PP.M, for both types of recursion?
