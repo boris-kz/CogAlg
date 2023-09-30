@@ -32,14 +32,15 @@ def comp_P_(edge):  # cross-comp P_ in edge: high-gradient blob, sliced in Ps in
     edge.node_t = [[],[]]  # fill with sub_PPm_, sub_PPd_ in form_PP_t:
     # ~ sub+ but rng+ only:
     for P in P_:
-        # scan, comp contiguously uplinked Ps, rn: relative weight of comparand
-        derP_ = [comp_P(_P, P, rn=len(_P.dert_)/len(P.dert_), fd=0) for _P in P.link_H[-1]]
-        P.link_H[-1] = [derP for derP in derP_ if derP]
+        link_ = []
+        for _P in P.link_H[-1]:  # scan, comp contiguously uplinked Ps, rn: relative weight of comparand
+            comp_P(link_,_P,P, rn=len(_P.dert_)/len(P.dert_), fd=0)
+        P.link_H[-1] = link_
 
     form_PP_t(edge, P_, base_rdn=2)  # replace edge.node_t with PP_t, may be nested by sub+
 
 
-def comp_P(_P,P, rn, fd=1, derP=None):  #  derP if der+, reused as S if rng+
+def comp_P(link_, _P,P, rn, fd=1, derP=None):  #  derP if der+, reused as S if rng+
     aveP = P_aves[fd]
 
     if fd:  # der+: extend in-link derH, in sub+ only
@@ -54,14 +55,14 @@ def comp_P(_P,P, rn, fd=1, derP=None):  #  derP if der+, reused as S if rng+
         derP = CderP(derH=[[[mtuple,dtuple], [mval,dval],[mrdn,drdn]]], valt=[mval,dval], rdnt=[mrdn,drdn], P=P,_P=_P, S=derP)
 
     if mval > aveP*mrdn or dval > aveP*drdn:
-        return derP
+        link_ += derP
 
 # rng+ and der+ are called from sub_recursion:
 def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip clustering?
 
     P_ = []
     for P in iP_:
-        derP_ = []
+        link_ = []
         for derP in P.link_H[-1]:  # scan last-layer links
             if derP.valt[0] > P_aves[0] * derP.rdnt[0]:
                 _P = derP._P
@@ -70,10 +71,9 @@ def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip cluste
                         __P = _derP._P  # next layer of Ps
                         distance = np.hypot(__P.yx[1]-P.yx[1], __P.yx[0]-P.yx[0])   # distance between midpoints
                         if distance > rng:  # distance=S, mostly lateral, /= L for eval?
-                            derP = comp_P(__P,P, rn=len(__P.dert_)/len(P.dert_), fd=0, derP=distance)
-                            if derP: derP_ += [derP]  # not None
+                            derP = comp_P(link_, __P,P, rn=len(__P.dert_)/len(P.dert_), fd=0, derP=distance)
 
-        P.link_H += [derP_]  # add new link layer, in rng+ only
+        P.link_H += [link_]  # add new link layer, in rng+ only
         P_ += [P]
 
     return P_
@@ -81,16 +81,15 @@ def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip cluste
 def comp_der(P_):  # keep same Ps and links, increment link derH, then P derH in sum2PP
 
     for P in P_:
-        derP_ = []
-        link_ = P.link_H[-1]
-        for derP in link_:  # scan root PP links, exclude top layer if formed by concurrent rng+
+        link_ = []
+        for derP in P.link_H[-1]:  # scan root PP links, no concurrent rng+
             if derP._P in P_ and derP.valt[1] > P_aves[1] * derP.rdnt[1]:
                 _P = derP._P  # comp extended derH of previously compared Ps, sum in lower-composition sub_PPs
                 # weight of compared derH is relative compound scope of (sum linked Ps( sum P derts)):
                 rn = (len(_P.dert_) / len(P.dert_)) * (len(_P.link_H[-1]) / len(link_))
-                derP = comp_P(_P,P, rn, fd=1, derP=derP)
-                if derP: derP_ += [derP]  # not None
-        link_[:] = derP_  # replace with extended-derH derPs
+                comp_P(link_,_P,P, rn, fd=1, derP=derP)
+
+        P.link_H[-1] = link_  # replace with extended-derH derPs
     return P_
 
 
@@ -236,7 +235,6 @@ def comp_derH(_derH, derH, rn, fagg=0):  # derH is a list of der layers or sub-l
                 derLay[0] += [Mtuple,Dtuple]
                 maxm = sum(Mtuple); maxd = sum(Dtuple)
                 maxM += maxm; maxD += maxd
-                derLay[0] += [maxm,maxd]  # not sure needed per lay
             dderH += [derLay]
 
     ret = [dderH, [Mval,Dval], [Mrdn,Drdn]]  # new derLayer,= 1/2 combined derH
@@ -250,16 +248,19 @@ def comp_dtuple(_ptuple, ptuple, rn, fagg=0):
     if fagg: Mtuple, Dtuple = [],[]
 
     for _par, par, ave in zip(_ptuple, ptuple, aves):  # compare ds only
-        npar = par*rn
-        match = min(abs(_par),abs(npar)); if _par<0 != npar<0: match = -match  # match = neg min if opposite-sign comparands
-        mtuple += [match - ave]
+        npar = par * rn
+        mtuple += [matchF(_par, npar) - ave]
         dtuple += [_par - npar]
         if fagg:
-            Mtuple += [max(_par, npar)]; Dtuple += [abs(_par)+abs(npar)]
-
+            Mtuple += [max(abs(_par),abs(npar))]
+            Dtuple += [abs(_par)+abs(npar)]
     ret = [mtuple, dtuple]
     if fagg: ret += [Mtuple, Dtuple]
     return ret
+
+def matchF(_par, par):
+    match = min(abs(_par),abs(par))
+    return -match if (_par<0) != (par<0) else match    # match = neg min if opposite-sign comparands
 
 def comp_ptuple(_ptuple, ptuple, rn, fagg=0):  # 0der params
 
@@ -268,9 +269,9 @@ def comp_ptuple(_ptuple, ptuple, rn, fagg=0):  # 0der params
 
     dI = _I - I*rn;  mI = ave-dI
     dG = _G - G*rn;  mG = min(_G, G*rn) - ave
-    dM = _M - M*rn;  mM = min(_M, M*rn) - ave  # M, Ma can be negative?
-    dMa= _Ma- Ma*rn; mMa= min(_Ma,Ma*rn)- ave
     dL = _L - L*rn;  mL = min(_L, L*rn) - ave
+    dM = _M - M*rn;  mM = matchF(_M, M*rn) - ave  # M, Ma may be negative
+    dMa= _Ma- Ma*rn; mMa = matchF(_Ma, Ma*rn) - ave
     mAngle, dAngle = comp_angle((_Dy,_Dx), (Dy,Dx))
 
     mtuple = [mI, mG, mM, mMa, mAngle, mL]

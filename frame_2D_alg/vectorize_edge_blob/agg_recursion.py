@@ -4,7 +4,7 @@ from itertools import zip_longest
 from .classes import Cgraph, CderG, CPP
 from .filters import ave_L, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd
 from .slice_edge import slice_edge, comp_angle
-from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, sum_derH, comp_derH
+from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, sum_derH, comp_derH, matchF
 '''
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
 in combination with spliced lower-composition patterns, etc, if only lower param-layers match.
@@ -32,9 +32,9 @@ There are concepts that include same matching vars: size, density, color, stabil
 Weak value vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
 '''
 
-def vectorize_root(blob):  # vectorization pipeline is 3 composition levels of cross-comp,clustering:
+def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition levels of cross-comp,clustering:
 
-    edge = slice_edge(blob, verbose=False)  # lateral kernel cross-comp -> P clustering
+    edge = slice_edge(blob, verbose)  # lateral kernel cross-comp -> P clustering
     comp_P_(edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
     # PP cross-comp -> discontinuous graph clustering:
     for fd in 0,1:
@@ -117,8 +117,7 @@ def comp_G_(G_, fd=0, oG_=None, fin=1):  # cross-comp in G_ if fin, else comp be
         link_ = []
         for link in G.link_H[-1]:  # if fd: follow links, comp old derH, else follow proto-links, form new derH
             if fd and link.valt[1] < G_aves[1]*link.rdnt[1]: continue  # maybe weak after rdn incr?
-            derG = comp_G(link, fd)
-            if derG: link_ += [derG]
+            comp_G(link_, link, fd)
         G.link_H[-1] = link_
         '''
         same comp for cis and alt components?
@@ -128,7 +127,7 @@ def comp_G_(G_, fd=0, oG_=None, fin=1):  # cross-comp in G_ if fin, else comp be
         combine cis,alt in aggH: alt represents node isolation?
         comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D? '''
 
-def comp_G(link, fd):
+def comp_G(link_, link, fd):
 
     maxM,maxD = 0,0  # max possible summed m|d, to compute relative summed m|d: V/maxV, link mediation coef
     Mval,Dval = 0,0
@@ -158,11 +157,11 @@ def comp_G(link, fd):
         mval,dval = valt; maxm,maxd = maxt
         Mval+=mval; Dval+=dval; maxM += maxm; maxD += maxd
         Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
-        return link
+        link_ += [link]
 
     elif Mval > ave_Gm or Dval > ave_Gd:  # or sum?
         link.subH = SubH; link.maxt = [maxM,maxD]; link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]  # complete proto-link
-        return link
+        link_ += [link]
 
 
 def eval_node_connectivity(node_, fd):  # sum surrounding link values to select nodes, to initialize graphs
@@ -191,8 +190,7 @@ def eval_node_connectivity(node_, fd):  # sum surrounding link values to select 
 def select_init_(Gt_, fd):  # local max selection for sparse graph init:
 
     max_, non_max_ = [],[]  # pick max in direct links,
-    # add _node_ buffer and recursive mediation increment for more sparsity?
-
+    # max mediated links and _node_ buffer for more sparsity?
     for _node, _Val in Gt_:
         if _Val<=0 or _node in non_max_: continue  # can't init graph
         fmax=1
@@ -206,16 +204,16 @@ def select_init_(Gt_, fd):  # local max selection for sparse graph init:
             max_ += [[_node,_Val]]
     return max_
 
-# draft
+
 def segment_node_(init_, Gt_, fd, root_t_):
 
     graph_ = []  # initialize graphs with local maxes, eval their links to add other nodes:
     for inode, ival in init_:
 
-        iroot_t = [root_t_[inode.it[fd]]]  # same order as Gt_, assign node roots to new graphs, init with max
+        iroot_t = root_t_[inode.it[fd]]  # same order as Gt_, assign node roots to new graphs, init with max
         graph = [[inode],ival,[iroot_t]]
         inode.root_t[fd] += [graph]
-        _nodet_ = [[inode,ival,iroot_t]]  # current perimeter of the graph, init = graph?
+        _nodet_ = [[inode,ival,[iroot_t]]]  # current perimeter of the graph, init = graph
 
         while _nodet_:  # search links outwards recursively to form overlapping graphs:
             nodet_ = []
@@ -239,9 +237,9 @@ def segment_node_(init_, Gt_, fd, root_t_):
 def prune_graph_(graph_, fd):  # compute graph overlap to prune weak graphs, not nodes: rdn doesn't change the structure
                                # prune rootless nodes?
     for graph in graph_:
-        for node in graph[0]:  # sort node roots, sum rank as graph/node rdn:
-            roots = sorted(node.root_t[fd], key=lambda root: root[1], reverse=True)  # roots~backprop, sort by net val
-            # or rdn = root_val/ sum_higher_root_vals?
+        for node in graph[0]:  # root rank = graph/node rdn:
+            roots = sorted(node.root_t[fd], key=lambda root: root[1], reverse=True)  # sort by net val
+            # or grey-scale rdn = root_val / sum_higher_root_vals?
             for rdn, graph in enumerate(roots):
                 graph[1] -= ave*rdn  # rdn to >val overlapping graphs per node, also >val forks, alt sparse param sets?
                 # nodes are shared by multiple max-initialized graphs, pruning here still allows for some overlap
@@ -264,7 +262,7 @@ def sum2graph_(graph_, fd):  # sum node and link params into graph, aggH in agg+
         [merge_root_tree(Root_t, root_t) for root_t in graph[2][1:]]
         Graph = Cgraph(fd=fd, root_t=Root_t, L=len(graph[0]))  # n nodes
         Link_ = []
-        for G in enumerate(graph[0]):
+        for G in graph[0]:
             sum_box(Graph.box, G.box)
             sum_ptuple(Graph.ptuple, G.ptuple)
             sum_derH(Graph.derH, G.derH, base_rdn=1)  # base_rdn?
@@ -399,17 +397,18 @@ def comp_ext(_ext, ext, Valt, Rdnt, Maxt):  # comp ds:
     if isinstance(A,list):
         mA, dA = comp_angle(_A,A); adA=dA; max_mA = max_dA = .5  # = ave_dangle
     else:
-        dA= _A-A; adA = abs(dA);  max_dA = abs(_A)+abs(A); max_mA = max(A,_A)
-        mA = min(abs(_A),abs(A)); if _A<0!=L<0: mA=-mA; mA -= ave_dangle
-    mL = min(abs(_L),abs(L));     if _L<0!=L<0: mL=-mL; mL -= ave_L
-    mS = min(abs(_S),abs(S));     if _S<0!=S<0: mS=-mS; mS -= ave_L
-
-    d = abs(dL) + abs(dS) + adA
+        mA = matchF(_A,A) - ave_dangle; dA = _A-A; adA = abs(dA); _aA=abs(_A); aA=abs(A)
+        max_dA = _aA + aA; max_mA = max(_aA, aA)
+    mL = matchF(_L,L) - ave_L
+    mS = matchF(_S,S) - ave_L
     m = mL + mS + mA
+    d = abs(dL) + abs(dS) + adA
     Valt[0] += m; Valt[1] += d
     Rdnt[0] += d>m; Rdnt[1] += d<=m
-    Maxt[0] += max(L,_L) + max(S,_S) + max_mA
-    Maxt[1] += abs(_L)+abs(L) + abs(_S)+abs(S) + max_dA
+
+    _aL = abs(_L); aL = abs(L); _aS = abs(_S); aS = abs(S)
+    Maxt[0] += max(aL,_aL) + max(aS,_aS) + max_mA
+    Maxt[1] += _aL+aL + _aS+aS + max_dA
 
     return [[mL,mS,mA], [dL,dS,dA]]  # no Mtuple, Dtuple?
 
