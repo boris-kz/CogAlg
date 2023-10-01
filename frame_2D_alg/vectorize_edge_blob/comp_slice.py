@@ -29,8 +29,7 @@ len prior root_ sorted by G is rdn of each root, to evaluate it for inclusion in
 def comp_P_(edge):  # cross-comp P_ in edge: high-gradient blob, sliced in Ps in the direction of G
 
     P_ = edge.node_t  # init as P_
-    edge.node_t = [[],[]]  # fill with sub_PPm_, sub_PPd_ in form_PP_t:
-    # ~ sub+ but rng+ only:
+    edge.node_t = [[],[]]  # fill with sub_PPm_, sub_PPd_ in form_PP_t, ~ sub+ but rng+ only:
     for P in P_:
         link_ = []
         for _P in P.link_H[-1]:  # scan, comp contiguously uplinked Ps, rn: relative weight of comparand
@@ -55,7 +54,7 @@ def comp_P(link_, _P,P, rn, fd=1, derP=None):  #  derP if der+, reused as S if r
         derP = CderP(derH=[[[mtuple,dtuple], [mval,dval],[mrdn,drdn]]], valt=[mval,dval], rdnt=[mrdn,drdn], P=P,_P=_P, S=derP)
 
     if mval > aveP*mrdn or dval > aveP*drdn:
-        link_ += derP
+        link_ += [derP]
 
 # rng+ and der+ are called from sub_recursion:
 def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip clustering?
@@ -71,7 +70,7 @@ def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip cluste
                         __P = _derP._P  # next layer of Ps
                         distance = np.hypot(__P.yx[1]-P.yx[1], __P.yx[0]-P.yx[0])   # distance between midpoints
                         if distance > rng:  # distance=S, mostly lateral, /= L for eval?
-                            derP = comp_P(link_, __P,P, rn=len(__P.dert_)/len(P.dert_), fd=0, derP=distance)
+                            comp_P(link_, __P,P, rn=len(__P.dert_)/len(P.dert_), fd=0, derP=distance)
 
         P.link_H += [link_]  # add new link layer, in rng+ only
         P_ += [P]
@@ -86,7 +85,7 @@ def comp_der(P_):  # keep same Ps and links, increment link derH, then P derH in
             if derP._P in P_ and derP.valt[1] > P_aves[1] * derP.rdnt[1]:
                 _P = derP._P  # comp extended derH of previously compared Ps, sum in lower-composition sub_PPs
                 # weight of compared derH is relative compound scope of (sum linked Ps( sum P derts)):
-                rn = (len(_P.dert_) / len(P.dert_)) * (len(_P.link_H[-1]) / len(link_))
+                rn = (len(_P.dert_) / len(P.dert_)) * (len(_P.link_H[-1]) / len(P.link_H[-1]))
                 comp_P(link_,_P,P, rn, fd=1, derP=derP)
 
         P.link_H[-1] = link_  # replace with extended-derH derPs
@@ -118,9 +117,8 @@ def form_PP_t(root, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps v
                         Val += _val; Rdn += _rdn
                 cP_ += [_P]
                 P_layer += link_map[_P]  # append linked __Ps to extended perimeter of P
-            # eval cP_:
-            if Val > PP_aves[fd] * Rdn:
-                PP_t[fd] += [sum2PP(root, cP_, base_rdn, fd)]
+
+            PP_t[fd] += [sum2PP(root, cP_, base_rdn, fd)]  # no if Val > PP_aves[fd] * Rdn:
 
     for fd, PP_ in enumerate(PP_t):   # after form_PP_t -> P.root_t
         sub_recursion(root, PP_, fd)  # eval rng+/ PPm or der+/ PPd

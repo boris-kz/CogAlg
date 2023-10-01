@@ -4,12 +4,15 @@
 Provide the function to display
 frame of blobs interactively.
 """
+import functools
 
-import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
 from types import SimpleNamespace
+
+# change signature of print
+print = functools.partial(print, flush=True)
 
 MIN_WINDOW_WIDTH = 640
 MIN_WINDOW_HEIGHT = 480
@@ -60,6 +63,7 @@ def visualize(frame, layer='r'):
         show_gradient=False,
         show_slices=False,
         show_links=False,
+        PP_fd=False,     # 0 or 1
     )
 
     fig, ax = plt.subplots()
@@ -102,9 +106,11 @@ def visualize(frame, layer='r'):
             return
         edge = blob.dlayers[0][0]
         if not edge.node_t: return
+        print(f"PP_fd = {state.PP_fd}", end="")
         y0, x0, *_ = blob.ibox
+
         state.blob_slices = []
-        for P in edge.node_t:
+        for P in get_P_(edge, state.PP_fd):        # show last layer
             y, x = P.yx
             y_, x_, *_ = np.array([*zip(*P.dert_)])
             L = len(x_)
@@ -133,7 +139,7 @@ def visualize(frame, layer='r'):
         if not edge.node_t: return
         y0, x0, *_ = blob.ibox
         state.P_links = []
-        for P in edge.node_t:
+        for P in get_P_(edge, state.PP_fd):
             for derP in P.link_H[0]:
                 (_y, _x), (y, x) = (derP._P.yx, derP.P.yx)
                 state.P_links += ax.plot([_x+x0,x+x0], [_y+y0,y+y0], 'ko-', linewidth=2, markersize=4)
@@ -183,22 +189,16 @@ def visualize(frame, layer='r'):
             state.img[:] = state.background[:]
             blob = state.blob_cls.get_instance(state.blob_id)
             if blob is None:
-                print("\r"f"│{' ' * 10}│{' ' * 6}│"
-                      f"{' ' * 10}│{' ' * 10}│{' ' * 10}│{' ' * 10}│"
-                      f"{' ' * 10}│{' ' * 10}│{' ' * 16}│{' ' * 10}│",
-                      end="")
-                sys.stdout.flush()
+                # print("\r"f"│{' ' * 10}│{' ' * 6}│"
+                #       f"{' ' * 10}│{' ' * 10}│{' ' * 10}│{' ' * 10}│"
+                #       f"{' ' * 10}│{' ' * 10}│{' ' * 16}│{' ' * 10}│",
+                #       end="")
+                print("\rNo blob", end="")
                 update_img()
                 return
 
             # ... print blobs properties.
-            print("\r"f"│{blob.id:^10}│{'+' if blob.sign else '-':^6}│"
-                  f"{blob.I:^10.2e}│{blob.Dy:^10.2e}│{blob.Dx:^10.2e}│{blob.G:^10.2e}│"
-                  f"{blob.M:^10.2e}│{blob.A:^10.2e}│"
-                  f"{'-'.join(map(str, blob.box)):^16}│"
-                  f"{blob.prior_forks:^10}│",
-                  end="")
-            sys.stdout.flush()
+            print("\r"f"blob {blob.id} ", end="")
 
             # paint over the blob ...
             state.img[state.img_slice][blob.box.slice()][blob.mask__] = WHITE
@@ -232,6 +232,8 @@ def visualize(frame, layer='r'):
             state.show_slices = not state.show_slices
         elif event.key == 'x':
             state.show_links = not state.show_links
+        elif event.key == 'c':
+            state.PP_fd = not state.PP_fd
         else:
             return
         update_img()
@@ -244,13 +246,14 @@ def visualize(frame, layer='r'):
     print("hit 'd' to toggle show gradient")
     print("hit 'z' to toggle show slices")
     print("hit 'x' to toggle show links")
-    print("blob:")
-    print(f"┌{'─'*10}┬{'─'*6}┬{'─'*10}┬{'─'*10}┬{'─'*10}┬{'─'*10}"
-          f"┬{'─'*10}┬{'─'*10}┬{'─'*16}┬{'─'*10}┐")
-    print(f"|{'id':^10}│{'sign':^6}│{'I':^10}│{'Dy':^10}│{'Dx':^10}│{'G':^10}│"
-          f"{'M':^10}│{'A':^10}│{'box':^16}│{'fork':^10}│")
-    print(f"├{'─' * 10}┼{'─' * 6}┼{'─' * 10}┼{'─' * 10}┼{'─' * 10}┼{'─' * 10}"
-          f"┼{'─' * 10}┼{'─' * 10}┼{'─' * 16}┼{'─' * 10}┤")
+    print("hit 'c' to toggle PP_fd")
+    # print("blob:")
+    # print(f"┌{'─'*10}┬{'─'*6}┬{'─'*10}┬{'─'*10}┬{'─'*10}┬{'─'*10}"
+    #       f"┬{'─'*10}┬{'─'*10}┬{'─'*16}┬{'─'*10}┐")
+    # print(f"|{'id':^10}│{'sign':^6}│{'I':^10}│{'Dy':^10}│{'Dx':^10}│{'G':^10}│"
+    #       f"{'M':^10}│{'A':^10}│{'box':^16}│{'fork':^10}│")
+    # print(f"├{'─' * 10}┼{'─' * 6}┼{'─' * 10}┼{'─' * 10}┼{'─' * 10}┼{'─' * 10}"
+    #       f"┼{'─' * 10}┼{'─' * 10}┼{'─' * 16}┼{'─' * 10}┤")
 
 
     plt.show()
@@ -270,3 +273,16 @@ def blank_image(shape, fill_val=None):
     if fill_val is None:
         fill_val = MASKING_VAL
     return np.full((height, width, 3), fill_val, 'uint8')
+
+def get_P_(edge, fd):
+    P_ = []
+    PP_ = [edge]
+    while PP_:
+        PP = PP_.pop()
+        if not PP.node_t: continue
+        if isinstance(PP.node_t[0], list):
+            PP_ += PP.node_t[fd]
+        else:  # is P_
+            P_ += PP.node_t
+
+    return P_
