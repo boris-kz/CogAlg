@@ -327,3 +327,95 @@ def sum_ptuple(Ptuple, ptuple, fneg=0):
                     _node = link.G1 if link.G0 is node else link.G0   # val + sum([_val * link_rel_val: max m|d decay]):
                     dval = _Val_[node_.index(_node)] * (link.valt[fd] / link.valt[2]) - ave * sum(_node.rdn_Ht[fd])
 
+def sum_aggH(T, t, base_rdn):
+
+    AggH, Val_Ht, Rdn_Ht = T; aggH, val_Ht, rdn_Ht = t
+
+    for i in 0,1:
+        for j, (Val, val) in enumerate(zip_longest(Val_Ht[i], val_Ht[i], fillvalue=None)):
+            if val != None:
+                if Val != None: Val_Ht[i][j] += val
+                else:           Val_Ht[i] += [val]
+        for j, (Rdn, rdn) in enumerate(zip_longest(Rdn_Ht[i], rdn_Ht[i], fillvalue=None)):
+            if rdn != None:
+                if Rdn != None: Rdn_Ht[i][j] += rdn
+                else:           Rdn_Ht[i] += [rdn]
+    if aggH:
+        if AggH:
+            for Layer, layer in zip_longest(AggH,aggH, fillvalue=[]):
+                if layer:
+                    if Layer:
+                        sum_subH(Layer, layer, base_rdn)
+                    else:
+                        AggH += [deepcopy(layer)]
+        else:
+            AggH[:] = deepcopy(aggH)
+
+def sum_subH(SubH, subH, base_rdn, fneg=0):
+
+    if SubH:
+        for Layer, layer in zip_longest(SubH,subH, fillvalue=[]):
+            if layer:
+                if Layer:
+                    if layer[0] and isinstance(Layer[0][0], list):  # _lay[0][0] is derH
+                        sum_derH(Layer, layer, base_rdn, fneg)
+                    else: sum_ext(Layer, layer)
+                else:
+                    SubH += [deepcopy(layer)]  # _lay[0][0] is mL
+    else:
+        SubH[:] = deepcopy(subH)
+
+
+def select_init_(Gt_, fd):  # local max selection for sparse graph init, if positive link
+
+    init_, non_max_ = [],[]  # pick max in direct links, no recursively mediated links max: discontinuous?
+
+    for node, val in Gt_:
+        if node in non_max_: continue  # can't init graph
+        if val<=0:  # no +ve links
+            if sum(node.val_Ht[fd]) > ave * sum(node.rdn_Ht[fd]):
+                init_+= [[node, 0]]  # single-node proto-graph
+            continue
+        fmax = 1
+        for link in node.link_H[-1]:
+            _node = link.G if link._G is node else link._G
+            if val > Gt_[_node.it[fd]][1]:
+                non_max_ += [_node]  # skip as next node
+            else:
+                fmax = 0; break  # break is not necessary?
+        if fmax:
+            init_ += [[node,val]]
+    return init_
+
+
+def segment_node_(init_, Gt_, fd, root_t_):  # root_t_ for fuzzy graphs if partial param sets: sub-forks?
+
+    graph_ = []  # initialize graphs with local maxes, eval their links to add other nodes:
+
+    for inode, ival in init_:
+        iroot_t = root_t_[inode.it[fd]]  # same order as Gt_, assign node roots to new graphs, init with max
+        graph = [[inode], ival, [iroot_t]]
+        inode.root_t[fd] += [graph]
+        _nodet_ = [[inode, ival, [iroot_t]]]  # current perimeter of the graph, init = graph
+
+        while _nodet_:  # search links outwards recursively to form overlapping graphs:
+            nodet_ = []
+            for _node, _val, _root_t in _nodet_:
+                for link in _node.link_H[-1]:
+                    node = link.G if link._G is _node else link._G
+                    if node in graph[0]: continue
+                    val = Gt_[node.it[fd]][1]
+                    root_t = root_t_[node.it[fd]]
+                    if val * (link.valt[fd] / link.maxt[fd]) > ave:  # node val * link decay
+                        if node.root_t[fd]:
+                            merge(graph, node.root_t[fd])  # or use dict link_map?
+                        else:
+                            graph[0] += [node]
+                            graph[1] += val
+                            graph[2] += [root_t]
+                            nodet_ += [node, val, root_t]  # new perimeter
+            _nodet_ = nodet_
+        graph_ += [graph]
+    return graph_
+
+

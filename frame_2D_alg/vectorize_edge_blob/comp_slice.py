@@ -70,7 +70,7 @@ def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip cluste
                         __P = _derP._P  # next layer of Ps
                         distance = np.hypot(__P.yx[1]-P.yx[1], __P.yx[0]-P.yx[0])   # distance between midpoints
                         if distance > rng:  # distance=S, mostly lateral, /= L for eval?
-                            comp_P(link_, __P,P, rn=len(__P.dert_)/len(P.dert_), fd=0, derP=distance)
+                            comp_P(link_,__P,P, rn=len(__P.dert_)/len(P.dert_), fd=0, derP=distance)
 
         P.link_H += [link_]  # add new link layer, in rng+ only
         P_ += [P]
