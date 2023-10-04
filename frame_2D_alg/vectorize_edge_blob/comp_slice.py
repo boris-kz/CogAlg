@@ -105,19 +105,18 @@ def form_PP_t(root, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps v
         for P in P_:
             if P.root_t[fd]: continue  # skip if already packed in some PP
             cP_ = [P]  # clustered Ps and their val,rdn s
-            P_layer = deque(link_map[P])  # recycle with breadth-first search, up and down:
+            perimeter = deque(link_map[P])  # recycle with breadth-first search, up and down:
             Val,Rdn = 0,0
-            while P_layer:
-                _P = P_layer.popleft()
+            while perimeter:
+                _P = perimeter.popleft()
                 if _P in cP_: continue
                 for derP in _P.link_H[-1]:
                     if derP._P in cP_: continue  # circular link? or derP._P in cP_?
                     _val, _rdn = derP.valt[fd], derP.rdnt[fd]
                     if _val > P_aves[fd]/2 * _rdn:  # no interference by -ve links? lower filter for link vs. P
                         Val += _val; Rdn += _rdn
-                cP_ += [_P]
-                P_layer += link_map[_P]  # append linked __Ps to extended perimeter of P
-
+                        cP_ += [_P]
+                        perimeter += link_map[_P]  # append linked __Ps to extended perimeter of P
             PP_t[fd] += [sum2PP(root, cP_, base_rdn, fd)]  # no if Val > PP_aves[fd] * Rdn:
 
     for fd, PP_ in enumerate(PP_t):   # after form_PP_t -> P.root_t

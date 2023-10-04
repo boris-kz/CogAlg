@@ -110,7 +110,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     rdn_Ht : list = z(([1],[1]))
     # node_T, root_T:
     node_t : list = z([])  # init G_-> Gm_,Gd_, nested in down-forking tree: node_ fork/ sub+
-    root_t : list = z([[],[]])  # up-reciprocal, nested in up-forking tree: root_ fork / agg+
+    roott : list = z([[],[]])  # up-reciprocal, nested in up-forking tree: root_ fork / agg+
     fback_t: list = z([[],[]])  # maps to node_tt: feedback [[aggH,valt,rdnt]] per node fork
     L : int = 0 # len base node_; from internal links:
     S : float = 0.0  # sparsity: average distance to link centers
