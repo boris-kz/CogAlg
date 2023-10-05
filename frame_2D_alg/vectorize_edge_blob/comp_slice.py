@@ -216,7 +216,6 @@ def comp_derH(_derH, derH, rn, fagg=0):  # derH is a list of der layers or sub-l
 
     dderH = []  # or = not-missing comparand if xor?
     Mval, Dval, Mrdn, Drdn = 0,0,1,1
-    if fagg: maxM, maxD = 0,0
 
     for _lay, lay in zip_longest(_derH, derH, fillvalue=[]):  # compare common lower der layers | sublayers in derHs
         if _lay and lay:  # also if lower-layers match: Mval > ave * Mrdn?
@@ -230,12 +229,15 @@ def comp_derH(_derH, derH, rn, fagg=0):  # derH is a list of der layers or sub-l
             if fagg:
                 Mtuple, Dtuple = ret[2:]
                 derLay[0] += [Mtuple,Dtuple]
-                maxm = sum(Mtuple); maxd = sum(Dtuple)
-                maxM += maxm; maxD += maxd
+                Decay_t = [0,0]; decay_t = []; L = len(mtuple)
+                for par_, max_, Dec in zip((mtuple,dtuple), (Mtuple,Dtuple), Decay_t):
+                    for par,max in zip(par_, max_):
+                        Dec += par/max  # may be weighted per param
+                    decay_t += [Dec/L]  # average decay per link param
             dderH += [derLay]
 
     ret = [dderH, [Mval,Dval], [Mrdn,Drdn]]  # new derLayer,= 1/2 combined derH
-    if fagg: ret += [[maxM,maxD]]
+    if fagg: ret += [decay_t]
     return ret
 
 

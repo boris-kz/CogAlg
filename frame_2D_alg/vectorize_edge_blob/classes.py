@@ -24,8 +24,8 @@ class CEdge(ClusterStructure):  # edge blob
     rdnt : list = z([1,1])
     # for agg+:
     aggH : list = z([[]])  # formed in Gs: [[subH, valt, rdnt]]: cross-fork composition layers
-    val_Ht : list = z([[0],[0]])  # Ht of link vals | rdns per fder
-    rdn_Ht : list = z([[1],[1]])
+    valHt : list = z([[0],[0]])  # Ht of link vals | rdns per fder
+    rdnHt : list = z([[1],[1]])
     rng = 1
     # initializing blob:
     blob : object = None
@@ -105,13 +105,12 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     ptuple : list = z([0,0,0,0,[0,0],0])  # default from P
     derH : list = z([[], [0,0], [1,1]])  # default from PP: [[tuplet,valt,rdnt]] from rng+| der+, sum min len?
     aggH : list = z([])  # [[sub_Ht, valt, rdnt]], subH: [[der_Ht, valt, rdnt]]; cross-fork composition layers
+    valHt : list = z(([0],[0]))  # H of link vals per fder
+    rdnHt : list = z(([1],[1]))
     link_H : list = z([[]])  # added per rng+ comp_G_
-    val_Ht : list = z(([0],[0]))  # H of link vals per fder
-    rdn_Ht : list = z(([1],[1]))
-    # node_T, root_T:
+    root : object = None  # ini graph, replace with mroot,droot for nodes in sub+, nest in up-forking tree: root_ fork / agg+
     node_t : list = z([])  # init G_-> Gm_,Gd_, nested in down-forking tree: node_ fork/ sub+
-    roott : list = z([[],[]])  # up-reciprocal, nested in up-forking tree: root_ fork / agg+
-    fback_t: list = z([[],[]])  # maps to node_tt: feedback [[aggH,valt,rdnt]] per node fork
+    fback_t : list = z([[],[]])  # maps to node_t: feedback [[aggH,valt,rdnt]] per node fork
     L : int = 0 # len base node_; from internal links:
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers
@@ -132,7 +131,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
 class CderG(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
     subH : list = z([])  # [[derH_t, valt, rdnt]]: top aggLev derived in comp_G
-    maxt : list = z([0,0])  # maxm, maxd
+    dect : list = z([0,0])  # m/maxm, d/maxd
     valt : list = z([0,0])  # m,d
     rdnt : list = z([1,1])
     _G : object = None  # comparand

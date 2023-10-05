@@ -144,3 +144,80 @@ def prune_graph_(graph_, fd):  # compute graph overlap to prune weak graphs, not
                 for node in graph[0]:
                     node.root_t[fd].remove(graph)
     return pruned_graph_
+
+
+def comp_G(link_, link, fd):
+
+    _G, G = link._G, link.G
+    maxM,maxD = 0,0  # max possible summed m|d, to compute relative summed m|d: V/maxV, link mediation coef
+    Mval,Dval = 0,0; Mrdn,Drdn = 1,1
+
+    # / P:
+    mtuple, dtuple, Mtuple, Dtuple = comp_ptuple(_G.ptuple, G.ptuple, rn=1, fagg=1)
+    maxm, maxd = sum(Mtuple), sum(Dtuple)
+    mval, dval = sum(mtuple), sum(abs(d) for d in dtuple)  # mval is signed, m=-min in comp x sign
+    mrdn = dval>mval; drdn = dval<=mval
+    derLay0 = [[mtuple,dtuple], [mval,dval], [mrdn,drdn]]
+    Mval+=mval; Dval+=dval; Mrdn += mrdn; Drdn += drdn; maxM+=maxm; maxD+=maxd
+    # / PP:
+    dderH, valt, rdnt, maxt = comp_derH(_G.derH[0], G.derH[0], rn=1, fagg=1)
+    mval,dval = valt; maxm,maxd = maxt
+    Mval+=dval; Dval+=mval; maxM+=maxm; maxD+=maxd
+    Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
+
+    derH = [[derLay0]+dderH, [Mval,Dval], [Mrdn,Drdn]]  # appendleft derLay0 from comp_ptuple
+    der_ext = comp_ext([_G.L,_G.S,_G.A],[G.L,G.S,G.A], [Mval,Dval],[Mrdn,Drdn],[maxM,maxD])
+    SubH = [der_ext, derH]  # two init layers of SubH, higher layers added by comp_aggH:
+    # / G:
+    if fd:  # else no aggH yet?
+        subH, valt, rdnt, maxt = comp_aggH(_G.aggH, G.aggH, rn=1)
+        SubH += subH  # append higher subLayers: list of der_ext | derH s
+        mval,dval = valt; maxm,maxd = maxt
+        Mval+=mval; Dval+=dval; maxM += maxm; maxD += maxd
+        Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
+        link_ += [link]
+
+    elif Mval > ave_Gm or Dval > ave_Gd:  # or sum?
+        link.subH = SubH; link.maxt = [maxM,maxD]; link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]  # complete proto-link
+        link_ += [link]
+
+def comp_aggH(_aggH, aggH, rn):  # no separate ext
+    SubH = []
+    maxM,maxD, Mval,Dval, Mrdn,Drdn = 0,0,0,0,1,1
+
+    for _lev, lev in zip_longest(_aggH, aggH, fillvalue=[]):  # compare common lower layer|sublayer derHs
+        if _lev and lev:  # also if lower-layers match: Mval > ave * Mrdn?
+            # compare dsubH only:
+            dsubH, valt,rdnt,maxt = comp_subH(_lev[0], lev[0], rn)
+            SubH += dsubH  # flatten to keep subH
+            mval,dval = valt; maxm,maxd = maxt
+            Mval += mval; Dval += dval; maxM += maxm; maxD += maxd
+            Mrdn += rdnt[0] + dval > mval; Drdn += rdnt[1] + mval <= dval
+
+    return SubH, [Mval,Dval],[Mrdn,Drdn],[maxM,maxD]
+
+def comp_derH(_derH, derH, rn, fagg=0):  # derH is a list of der layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
+
+    dderH = []  # or = not-missing comparand if xor?
+    Mval, Dval, Mrdn, Drdn = 0,0,1,1
+    if fagg: maxM, maxD = 0,0
+
+    for _lay, lay in zip_longest(_derH, derH, fillvalue=[]):  # compare common lower der layers | sublayers in derHs
+        if _lay and lay:  # also if lower-layers match: Mval > ave * Mrdn?
+
+            ret = comp_dtuple(_lay[0][1], lay[0][1], rn, fagg)  # compare dtuples only, mtuples are for evaluation
+            mtuple, dtuple = ret[:2]
+            mval = sum(mtuple); dval = sum(abs(d) for d in dtuple)
+            mrdn = dval > mval; drdn = dval < mval
+            derLay = [[mtuple,dtuple],[mval,dval],[mrdn,drdn]]
+            Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
+            if fagg:
+                Mtuple, Dtuple = ret[2:]
+                derLay[0] += [Mtuple,Dtuple]
+                maxm = sum(Mtuple); maxd = sum(Dtuple)
+                maxM += maxm; maxD += maxd
+            dderH += [derLay]
+
+    ret = [dderH, [Mval,Dval], [Mrdn,Drdn]]  # new derLayer,= 1/2 combined derH
+    if fagg: ret += [[maxM,maxD]]
+    return ret

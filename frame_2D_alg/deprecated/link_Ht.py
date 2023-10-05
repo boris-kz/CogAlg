@@ -1,9 +1,9 @@
 import numpy as np
 from copy import deepcopy, copy
 from itertools import zip_longest
-from .classes import Cgraph, CderG
-from .filters import aves, ave, ave_nsubt, ave_sub, ave_agg, G_aves, med_decay, ave_distance, ave_Gm, ave_Gd
-from .comp_slice import comp_angle, comp_ptuple, sum_ptuple, sum_derH, comp_derH, comp_aangle
+from frame_2D_alg.vectorize_edge_blob.classes import Cgraph, CderG
+from frame_2D_alg.vectorize_edge_blob.filters import aves, ave, ave_nsubt, ave_sub, ave_agg, G_aves, med_decay, ave_distance, ave_Gm, ave_Gd
+from frame_2D_alg.vectorize_edge_blob.comp_slice import comp_angle, comp_ptuple, sum_ptuple, sum_derH, comp_derH, comp_aangle
 # from .sub_recursion import feedback  # temporary
 
 '''
@@ -443,8 +443,8 @@ def sum_aggH(T, t, base_rdn):
 import numpy as np
 from itertools import zip_longest
 from copy import copy, deepcopy
-from .classes import CderP, CPP
-from .filters import ave, aves, vaves, ave_dangle, ave_daangle,med_decay, aveB, P_aves
+from frame_2D_alg.vectorize_edge_blob.classes import CderP, CPP
+from frame_2D_alg.vectorize_edge_blob.filters import ave, aves, vaves, ave_dangle, ave_daangle,med_decay, aveB, P_aves
 
 '''
 comp_slice traces edge blob axis by cross-comparing vertically adjacent Ps: slices across edge blob, along P.G angle.
@@ -731,9 +731,9 @@ def comp_aangle(_aangle, aangle):
 from itertools import zip_longest
 import numpy as np
 from copy import copy, deepcopy
-from .filters import PP_aves, ave_nsubt
-from .classes import CP, CPP
-from .comp_slice import comp_P, form_PP_t, sum_derH
+from frame_2D_alg.vectorize_edge_blob.filters import PP_aves, ave_nsubt
+from frame_2D_alg.vectorize_edge_blob.classes import CP, CPP
+from frame_2D_alg.vectorize_edge_blob.comp_slice import comp_P, form_PP_t, sum_derH
 from dataclasses import replace
 '''
 Nesting in dH, implicit or explicit, is added by each layer of comp, which forms dderH | dH.
