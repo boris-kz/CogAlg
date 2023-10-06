@@ -24,7 +24,8 @@ class CEdge(ClusterStructure):  # edge blob
     rdnt : list = z([1,1])
     # for agg+:
     aggH : list = z([[]])  # formed in Gs: [[subH, valt, rdnt]]: cross-fork composition layers
-    valHt : list = z([[0],[0]])  # Ht of link vals | rdns per fder
+    valHt : list = z([[0],[0]])  # Ht of link vals,rdns, decays per fder
+    decHt : list = z([[0],[0]])
     rdnHt : list = z([[1],[1]])
     rng = 1
     # initializing blob:
@@ -105,7 +106,8 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     ptuple : list = z([0,0,0,0,[0,0],0])  # default from P
     derH : list = z([[], [0,0], [1,1]])  # default from PP: [[tuplet,valt,rdnt]] from rng+| der+, sum min len?
     aggH : list = z([])  # [[sub_Ht, valt, rdnt]], subH: [[der_Ht, valt, rdnt]]; cross-fork composition layers
-    valHt : list = z(([0],[0]))  # H of link vals per fder
+    valHt : list = z([[0],[0]])  # Ht of link vals,rdns, decays per fder
+    decHt : list = z([[0],[0]])
     rdnHt : list = z(([1],[1]))
     link_H : list = z([[]])  # added per rng+ comp_G_
     root : object = None  # ini graph, replace with mroot,droot for nodes in sub+, nest in up-forking tree: root_ fork / agg+
