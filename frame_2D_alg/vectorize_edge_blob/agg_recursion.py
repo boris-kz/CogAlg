@@ -145,11 +145,10 @@ def segment_node_(root, Gt_, fd):
             for link in _G.link_H[-1]:
                 G = link.G if link._G is _G else link._G
                 if G in cG_: continue    # circular link
-                Gt = Gt_[G.it[fd]]; Val, Rdn = Gt[1], Gt[2]
-                val, rdn, decay = link.valt[fd], link.rdnt[fd], link.dect[fd]
-                rVal=(_Val+Val)*decay; rRdn=(_Rdn+Rdn)*decay  # * link decay coef -> relative Val,Rdn
+                Gt = Gt_[G.it[fd]]
+                Val,Rdn = Gt[1],Gt[2]; decay = link.dect[fd]  # * link decay coef -> relative Val,Rdn:
+                rVal=(_Val+Val)*decay; rRdn=(_Rdn+Rdn)*decay
                 if rVal > ave * rRdn:
-                    # add val and rdn from link too?
                     tVal += sum(G.valHt[fd]) * G.decHt[fd][-1] + Val  # internal+external vals
                     tRdn += sum(G.rdnHt[fd]) * G.decHt[fd][-1] + Rdn
                     cG_ += [G]; G.root[fd] = cG_
@@ -171,9 +170,9 @@ def sum2graph(root, cG_, fd):  # sum node and link params into graph, aggH in ag
         sum_derH(graph.derH, G.derH, base_rdn=1)
         sum_aggH(graph.aggH, G.aggH, base_rdn=1)
         sum_Hts(graph.valHt, graph.rdnHt, graph.decHt, G.valHt, G.rdnHt, G.decHt)
-        link_ = G.link_H[-1]
         subH = []; mval,dval, mrdn,drdn, mdec,ddec = 0,0, 0,0, 0,0
-        for derG in link_:
+
+        for derG in G.link_H[-1]:
             if derG.valt[fd] > G_aves[fd] * derG.rdnt[fd]:  # sum positive links only:
                 (_mval,_dval),(_mrdn,_drdn),(_mdec,_ddec) = derG.valt, derG.rdnt, derG.dect
                 if derG not in Link_:
@@ -184,13 +183,13 @@ def sum2graph(root, cG_, fd):  # sum node and link params into graph, aggH in ag
                 mval+=_mval; dval+=_dval; mrdn+=_mrdn; drdn+=_drdn; mdec+=_mdec; ddec+=_ddec
                 sum_subH(subH, derG.subH, base_rdn=1, fneg = G is derG.G)  # fneg: reverse link sign
                 sum_box(G.box, derG.G.box if derG._G is G else derG._G.box)
-        # add params of external G links:
+        # external G links params:
         if subH: G.aggH += [subH]
         G.valHt[0]+=[mval]; G.valHt[1]+=[dval]; G.rdnHt[0]+=[mrdn]; G.rdnHt[1]+=[drdn]
-        L = len(link_); G.decHt[0]+=[mdec/L]; G.decHt[1]+=[ddec/L]
+        L = max(1,len(G.link_H[-1])); G.decHt[0]+=[mdec/L]; G.decHt[1]+=[ddec/L]
         G.root[fd] = graph  # replace cG_
         graph.node_t += [G]  # converted to node_t by feedback
-    # add layer from links:
+    # + layer from links:
     graph.valHt[0]+=[Mval]; graph.valHt[1]+=[Dval]; graph.rdnHt[0]+=[Mrdn]; graph.rdnHt[1]+=[Drdn]
     L = len(cG_)
     for mdec,ddec in zip(graph.decHt[0],graph.decHt[1]):
@@ -260,13 +259,16 @@ def comp_G(link_, link, fd):
     Mdec += sum([par/max for par,max in zip(mtuple,Mtuple)]) / L
     Ddec += sum([par/max for par,max in zip(dtuple,Dtuple)]) / L
     Mval+=mval; Dval+=dval; Mrdn += mrdn; Drdn += drdn
-
     # / PP:
-    dderH, valt, rdnt, dect = comp_derH(_G.derH[0], G.derH[0], rn=1, fagg=1)
-    mdec,ddec = dect; Mdec = (Mdec+mdec)/2; Ddec = (Ddec+ddec)/2  # averages
-    mval,dval = valt; Mval+=dval; Dval+=mval
-    Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
-
+    _derH,derH = _G.derH,G.derH
+    if _derH[0] and derH[0]:  # empty in single-node Gs
+        L += min(len(_derH[0]),len(derH[0]))
+        dderH, valt, rdnt, dect = comp_derH(_derH[0], derH[0], rn=1, fagg=1)
+        mdec,ddec = dect; Mdec = (Mdec+mdec)/2; Ddec = (Ddec+ddec)/2  # averages
+        mval,dval = valt; Mval+=dval; Dval+=mval
+        Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
+    else:
+        dderH = []
     derH = [[derLay0]+dderH, [Mval,Dval], [Mrdn,Drdn], [Mdec, Ddec]]  # appendleft derLay0 from comp_ptuple
     der_ext = comp_ext([_G.L,_G.S,_G.A],[G.L,G.S,G.A], [Mval,Dval],[Mrdn,Drdn], [Mdec,Ddec])
     SubH = [der_ext, derH]  # two init layers of SubH, higher layers added by comp_aggH:

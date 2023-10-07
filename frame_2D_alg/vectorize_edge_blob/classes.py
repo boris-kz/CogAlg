@@ -106,9 +106,9 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     ptuple : list = z([0,0,0,0,[0,0],0])  # default from P
     derH : list = z([[], [0,0], [1,1]])  # default from PP: [[tuplet,valt,rdnt]] from rng+| der+, sum min len?
     aggH : list = z([])  # [[sub_Ht, valt, rdnt]], subH: [[der_Ht, valt, rdnt]]; cross-fork composition layers
-    valHt : list = z([[0],[0]])  # Ht of link vals,rdns, decays per fder
+    valHt : list = z([[0],[0]])  # Ht of link vals,rdns, decays / fder:
     decHt : list = z([[0],[0]])
-    rdnHt : list = z(([1],[1]))
+    rdnHt : list = z([[1],[1]])
     link_H : list = z([[]])  # added per rng+ comp_G_
     root : object = None  # ini graph, replace with mroot,droot for nodes in sub+, nest in up-forking tree: root_ fork / agg+
     node_t : list = z([])  # init G_-> Gm_,Gd_, nested in down-forking tree: node_ fork/ sub+
