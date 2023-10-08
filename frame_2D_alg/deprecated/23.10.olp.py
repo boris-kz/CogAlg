@@ -145,41 +145,47 @@ def prune_graph_(graph_, fd):  # compute graph overlap to prune weak graphs, not
                     node.root_t[fd].remove(graph)
     return pruned_graph_
 
-
 def comp_G(link_, link, fd):
 
     _G, G = link._G, link.G
-    maxM,maxD = 0,0  # max possible summed m|d, to compute relative summed m|d: V/maxV, link mediation coef
+    Mdec,Ddec = 0,0  # max possible summed m|d, to compute relative summed m|d: V/maxV, link mediation coef
     Mval,Dval = 0,0; Mrdn,Drdn = 1,1
 
     # / P:
     mtuple, dtuple, Mtuple, Dtuple = comp_ptuple(_G.ptuple, G.ptuple, rn=1, fagg=1)
-    maxm, maxd = sum(Mtuple), sum(Dtuple)
     mval, dval = sum(mtuple), sum(abs(d) for d in dtuple)  # mval is signed, m=-min in comp x sign
     mrdn = dval>mval; drdn = dval<=mval
     derLay0 = [[mtuple,dtuple], [mval,dval], [mrdn,drdn]]
-    Mval+=mval; Dval+=dval; Mrdn += mrdn; Drdn += drdn; maxM+=maxm; maxD+=maxd
+    L = len(mtuple)
+    Mdec += sum([par/max for par,max in zip(mtuple,Mtuple)]) / L
+    Ddec += sum([par/max for par,max in zip(dtuple,Dtuple)]) / L
+    Mval+=mval; Dval+=dval; Mrdn += mrdn; Drdn += drdn
     # / PP:
-    dderH, valt, rdnt, maxt = comp_derH(_G.derH[0], G.derH[0], rn=1, fagg=1)
-    mval,dval = valt; maxm,maxd = maxt
-    Mval+=dval; Dval+=mval; maxM+=maxm; maxD+=maxd
-    Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
-
-    derH = [[derLay0]+dderH, [Mval,Dval], [Mrdn,Drdn]]  # appendleft derLay0 from comp_ptuple
-    der_ext = comp_ext([_G.L,_G.S,_G.A],[G.L,G.S,G.A], [Mval,Dval],[Mrdn,Drdn],[maxM,maxD])
+    _derH,derH = _G.derH,G.derH
+    if _derH[0] and derH[0]:  # empty in single-node Gs
+        L += min(len(_derH[0]),len(derH[0]))
+        dderH, valt, rdnt, dect = comp_derH(_derH[0], derH[0], rn=1, fagg=1)
+        mdec,ddec = dect; Mdec = (Mdec+mdec)/2; Ddec = (Ddec+ddec)/2  # averages
+        mval,dval = valt; Mval+=dval; Dval+=mval
+        Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
+    else:
+        dderH = []
+    derH = [[derLay0]+dderH, [Mval,Dval], [Mrdn,Drdn], [Mdec, Ddec]]  # appendleft derLay0 from comp_ptuple
+    der_ext = comp_ext([_G.L,_G.S,_G.A],[G.L,G.S,G.A], [Mval,Dval],[Mrdn,Drdn], [Mdec,Ddec])
     SubH = [der_ext, derH]  # two init layers of SubH, higher layers added by comp_aggH:
     # / G:
     if fd:  # else no aggH yet?
-        subH, valt, rdnt, maxt = comp_aggH(_G.aggH, G.aggH, rn=1)
+        subH, valt, rdnt, dect = comp_aggH(_G.aggH, G.aggH, rn=1)
         SubH += subH  # append higher subLayers: list of der_ext | derH s
-        mval,dval = valt; maxm,maxd = maxt
-        Mval+=mval; Dval+=dval; maxM += maxm; maxD += maxd
+        mdec,ddec = dect; link.dect = [(Mdec+mdec)/2,(Ddec+ddec)/2]  # averages
+        mval,dval = valt; Mval+=mval; Dval+=dval
         Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
         link_ += [link]
 
     elif Mval > ave_Gm or Dval > ave_Gd:  # or sum?
-        link.subH = SubH; link.maxt = [maxM,maxD]; link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]  # complete proto-link
+        link.subH = SubH; link.dect = [Mdec,Ddec]; link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]  # complete proto-link
         link_ += [link]
+
 
 def comp_aggH(_aggH, aggH, rn):  # no separate ext
     SubH = []

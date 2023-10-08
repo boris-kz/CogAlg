@@ -134,7 +134,7 @@ def sum2PP(root, P_, base_rdn, fd):  # sum links in Ps and Ps in PP
     PP = CPP(fd=fd, root=root, node_t=P_)   # initial PP.box = (inf, inf, -inf, -inf)
     # accum:
     for P in P_:
-        P.root_t[fd] = PP   # assign root
+        P.root_t[fd] = PP
         sum_ptuple(PP.ptuple, P.ptuple)   # accum ptuple
         (y0,x0),(yn,xn) = P.dert_[0][:2], P.dert_[-1][:2]
         PP.box = PP.box.accumulate(y0,x0).accumulate(yn,xn)
@@ -191,7 +191,7 @@ def sum_derH(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers,
     for i in 0,1:
         Valt[i] += valt[i]
         Rdnt[i] += rdnt[i] + base_rdn
-        if len(T)>3: T[3][i] += t[3][i]  # Dect in agg+
+        if len(T)>3: T[3][i] += t[3][i]  # Maxt in agg+
     DerH[:] = [
         # sum der layers, dertuple is mtuple | dtuple, fneg*i: for dtuple only:
         [ [sum_dertuple(Dertuple,dertuple, fneg*i) for i,(Dertuple,dertuple) in enumerate(zip(Tuplet,tuplet))],
@@ -218,7 +218,7 @@ def comp_derH(_derH, derH, rn, fagg=0):  # derH is a list of der layers or sub-l
 
     dderH = []  # or not-missing comparand: xor?
     Mval, Dval, Mrdn, Drdn = 0,0,1,1
-    if fagg: Mdecay,Ddecay = 0,0
+    if fagg: maxM,maxD = 0,0
 
     for _lay, lay in zip_longest(_derH, derH, fillvalue=[]):  # compare common lower der layers | sublayers in derHs
         if _lay and lay:  # also if lower-layers match: Mval > ave * Mrdn?
@@ -231,14 +231,13 @@ def comp_derH(_derH, derH, rn, fagg=0):  # derH is a list of der layers or sub-l
             Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
             if fagg:
                 Mtuple, Dtuple = ret[2:]
-                derLay[0] += [Mtuple,Dtuple]
-                L = len(mtuple)
-                Mdecay += sum([par/max(1,M)] for par,M in zip(mtuple,Mtuple)) / L  # average decay per link param
-                Ddecay += sum([par/max(1,D)] for par,D in zip(dtuple,Dtuple)) / L
+                maxm = sum(Mtuple); maxd = sum(Dtuple)
+                maxM+= maxm; maxD+= maxd
+                derLay[0] += [maxm,maxd]  # or += [Mtuple,Dtuple] for future comp?
             dderH += [derLay]
+
     ret = [dderH, [Mval,Dval], [Mrdn,Drdn]]  # new derLayer,= 1/2 combined derH
-    if fagg:
-        L = len(derH); ret += [[Mdecay/L,Ddecay/L]]
+    if fagg: ret += [[maxM,maxD]]
     return ret
 
 
