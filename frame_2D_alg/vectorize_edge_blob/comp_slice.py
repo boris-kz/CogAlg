@@ -186,12 +186,10 @@ def feedback(root, fd):  # in form_PP_, append new der layers to root PP, single
 
 def sum_derH(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
-    DerH, Valt, Rdnt = T[:3]; derH, valt, rdnt = t[3]
-
+    DerH, Valt, Rdnt = T; derH, valt, rdnt = t
     for i in 0,1:
         Valt[i] += valt[i]
         Rdnt[i] += rdnt[i] + base_rdn
-        if len(T)>3: T[3][i] += t[3][i]  # Maxt in agg+
     DerH[:] = [
         # sum der layers, dertuple is mtuple | dtuple, fneg*i: for dtuple only:
         [ [sum_dertuple(Dertuple,dertuple, fneg*i) for i,(Dertuple,dertuple) in enumerate(zip(Tuplet,tuplet))],
