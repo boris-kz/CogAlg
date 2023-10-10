@@ -231,7 +231,7 @@ def comp_derH(_derH, derH, rn, fagg=0):  # derH is a list of der layers or sub-l
                 Mtuple, Dtuple = ret[2:]
                 maxm = sum(Mtuple); maxd = sum(Dtuple)
                 maxM+= maxm; maxD+= maxd
-                derLay[0] += [maxm,maxd]  # or += [Mtuple,Dtuple] for future comp?
+                derLay += [[maxm,maxd]]  # or += [Mtuple,Dtuple] for future comp?
             dderH += [derLay]
 
     ret = [dderH, [Mval,Dval], [Mrdn,Drdn]]  # new derLayer,= 1/2 combined derH
