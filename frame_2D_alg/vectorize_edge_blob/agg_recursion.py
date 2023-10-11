@@ -43,9 +43,9 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
         if edge.valt[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.rdnt[fd]:
             G_= []
             for PP in node_:  # convert CPPs to Cgraphs:
-                derH, valt, rdnt, maxt = PP.derH, PP.valt, PP.rdnt, [0,0]  # init aggH is empty:
+                derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt  # init aggH is empty:
                 for dderH in derH: dderH += [[0,0]]  # add maxt
-                G_ += [Cgraph( ptuple=PP.ptuple, derH=[derH,valt,rdnt,maxt], valHt=[[valt[0]],[valt[1]]], rdnHt=[[rdnt[0]],[rdnt[1]]],
+                G_ += [Cgraph( ptuple=PP.ptuple, derH=[derH,valt,rdnt,[0,0]], valHt=[[valt[0]],[valt[1]]], rdnHt=[[rdnt[0]],[rdnt[1]]],
                                L=PP.ptuple[-1], box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
             node_ = G_
             edge.valHt[0][0] = edge.valt[0]; edge.rdnHt[0][0] = edge.rdnt[0]  # copy
@@ -115,7 +115,7 @@ def sum_link_tree_(node_,fd):  # sum surrounding link values to define connected
                 Gt = Gt_[G.it[fd]]
                 Gval = Gt[1]; Grdn = Gt[2]
                 try: decay = link.valt[fd]/link.maxt[fd]  # val rng incr per loop, per node?
-                except: decay = 1  # /0
+                except ZeroDivisionError: decay = 1
                 Val += Gval * decay; Rdn += Grdn * decay  # link decay coef: m|d / max, base self/same
                 # prune links by rng Val-ave*Rdn?
             Gt_[i][1] = Val; Gt_[i][2] = Rdn  # unilateral update, computed separately for _G
@@ -139,7 +139,7 @@ def segment_node_(root, Gt_, fd):  # replace with root backprop, sorted in node,
     for iG, iVal, iRdn in Gt_:
         if iVal > ave * iRdn and not iG.root[fd]:
             try: dec = iG.valHt[fd][-1] / iG.maxHt[fd][-1]
-            except: dec = 1  # add internal layers Val *= current-layer decay to init graph totals:
+            except ZeroDivisionError: dec = 1  # add internal layers Val *= current-layer decay to init graph totals:
             tVal = iVal + sum(iG.valHt[fd]) * dec
             tRdn = iRdn + sum(iG.rdnHt[fd]) * dec
             cG_ = [iG]; iG.root[fd] = cG_  # clustered Gs
@@ -152,7 +152,7 @@ def segment_node_(root, Gt_, fd):  # replace with root backprop, sorted in node,
                     Gt = Gt_[G.it[fd]]; Val = Gt[1]; Rdn = Gt[2]
                     if Val > ave * Rdn:
                         try: decay = G.valHt[fd][-1] / G.maxHt[fd][-1]  # current link layer surround decay
-                        except: decay = 1  # /0
+                        except ZeroDivisionError: decay = 1
                         tVal += Val + sum(G.valHt[fd])*decay  # ext+ int*decay: proj match to distant nodes in higher graphs?
                         tRdn += Rdn + sum(G.rdnHt[fd])*decay
                         cG_ += [G]; G.root[fd] = cG_
@@ -200,7 +200,8 @@ def sum2graph(root, cG_, fd):  # sum node and link params into graph, aggH in ag
     return graph
 
 def sum_Hts(ValHt, RdnHt, MaxHt, valHt, rdnHt, maxHt):
-    # loop m,d Hs:
+    # loop m,d Hs, add combined decayed lower H/layer?
+
     for ValH,valH, RdnH,rdnH, MaxH,maxH in zip(ValHt,RdnHt, valHt,rdnHt, MaxHt,maxHt):
         ValH[:] = [V+v for V,v in zip_longest(ValH, valH, fillvalue=0)]
         MaxH[:] = [M+m for M,m in zip_longest(MaxH, maxH, fillvalue=0)]
