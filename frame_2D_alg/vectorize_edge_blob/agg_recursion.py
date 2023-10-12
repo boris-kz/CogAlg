@@ -247,10 +247,9 @@ def comp_G_(G_, fd=0, oG_=None, fin=1):  # cross-comp in G_ if fin, else comp be
 # draft
 def comp_G(link_, link, fd):
 
+    Mval,Dval, maxM,maxD, Mrdn,Drdn = 0,0, 0,0, 1,1
     _G, G = link._G, link.G
-    maxM,maxD = 0,0  # max possible m|d
-    Mval,Dval = 0,0; Mrdn,Drdn = 1,1
-
+    # keep separate P ptuple and PP derH, empty derH in single-P G, aggH in single-PP G:
     # / P:
     mtuple, dtuple, Mtuple, Dtuple = comp_ptuple(_G.ptuple, G.ptuple, rn=1, fagg=1)
     maxm, maxd = sum(Mtuple), sum(Dtuple)
@@ -278,7 +277,6 @@ def comp_G(link_, link, fd):
         mval,dval = valt; Mval+=dval; Dval+=mval
         Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
         link_ += [link]
-
     elif Mval > ave_Gm or Dval > ave_Gd:  # or sum?
         link.subH = SubH; link.maxt = [maxM,maxD]; link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]  # complete proto-link
         link_ += [link]

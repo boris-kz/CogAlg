@@ -10,14 +10,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from types import SimpleNamespace
-from collections import namedtuple
 from .visualizers import (
-    FrameVisualizer,
+    BlobVisualizer, layerT,
     WHITE, BLACK, RED, GREEN, BLUE,
     POSE2COLOR, BACKGROUND_COLOR,
 )
-
-layerT = namedtuple("layerT", "root,type")
 
 ROOT_TYPES = ["frame", "rblob", "edge", "PP"]
 
@@ -57,7 +54,7 @@ def visualize(frame):
     state = SimpleNamespace(
         visualizer=None,
         # history of roots
-        layers_stack=[layerT(frame, 'frame')],
+        layers_stack=None,
         # variables
         img=img,
         img_slice = None,
@@ -78,60 +75,11 @@ def visualize(frame):
         show_slices=False,
         show_links=False,
     )
-    state.visualizer = FrameVisualizer(state)   # start with frame of blobs
+    state.layers_stack = [layerT(frame, 'frame', BlobVisualizer(state))]    # start with frame of blobs
+    state.visualizer = state.layers_stack[0].visualizer
     state.visualizer.reset()    # first-time reset
 
     # declare callback sub-routines
-
-    # def update_blob_slices():
-    #     if state.blob_slices is not None:
-    #         for line, L_text in state.blob_slices:
-    #             line.remove()
-    #             L_text.remove()
-    #         state.blob_slices = None
-    #
-    #     blob = state.blob_cls.get_instance(state.blob_id)
-    #     if blob is None or not blob.dlayers or not blob.dlayers[0] or not state.show_slices:
-    #         return
-    #     edge = blob.dlayers[0][0]
-    #     if not edge.node_t: return
-    #     print(f"PP_fd = {state.PP_fd}", end="")
-    #     y0, x0, *_ = blob.ibox
-    #
-    #     state.blob_slices = []
-    #     for P in get_P_(edge, state.PP_fd):        # show last layer
-    #         y, x = P.yx
-    #         y_, x_, *_ = np.array([*zip(*P.dert_)])
-    #         L = len(x_)
-    #         if L > 1:
-    #             blob_slices_plot = ax.plot(x_+x0, y_+y0, 'bo-', linewidth=1, markersize=2)[0]
-    #         else:
-    #             s, c = P.axis
-    #             x_ = np.array([x-c, x, x+c])
-    #             y_ = np.array([y-s, y, y+s])
-    #             blob_slices_plot = ax.plot(x_ + x0, y_ + y0, 'b-', linewidth=1, markersize=2)[0]
-    #         state.blob_slices += [(
-    #             blob_slices_plot,
-    #             ax.text(x+x0, y+y0, str(L), color = 'b', fontsize = 12),
-    #         )]
-    #
-    # def update_P_links():
-    #     if state.P_links is not None:
-    #         for line in state.P_links:
-    #             line.remove()
-    #         state.P_links = None
-    #
-    #     blob = state.blob_cls.get_instance(state.blob_id)
-    #     if blob is None or not blob.dlayers or not blob.dlayers[0] or not state.show_links:
-    #         return
-    #     edge = blob.dlayers[0][0]
-    #     if not edge.node_t: return
-    #     y0, x0, *_ = blob.ibox
-    #     state.P_links = []
-    #     for P in get_P_(edge, state.PP_fd):
-    #         for derP in P.link_H[0]:
-    #             (_y, _x), (y, x) = (derP._P.yx, derP.P.yx)
-    #             state.P_links += ax.plot([_x+x0,x+x0], [_y+y0,y+y0], 'ko-', linewidth=2, markersize=4)
 
     def on_mouse_movement(event):
         """Highlight the blob the mouse is hovering on."""
@@ -146,15 +94,16 @@ def visualize(frame):
     def on_click(event):
         """Transition between layers."""
         if event.key == "control":
-            state.visualizer.go_deeper(fd=False)
+            ret = state.visualizer.go_deeper(fd=False)
         elif event.key == "shift":
-            state.visualizer.go_deeper(fd=True)
+            ret = state.visualizer.go_deeper(fd=True)
         else:
             # go back 1 layer
-            # if (len(state.layers_stack) > 1):
-            #     state.layers_stack.pop()
-            #     reset_state()
-            pass
+            ret = state.visualizer.go_back()
+        if ret is None:
+            return
+        state.visualizer = ret
+        state.visualizer.reset()
 
     def on_key_press(event):
         if event.key == 'd':
@@ -186,16 +135,3 @@ def blank_image(shape, fill_val=None):
     if fill_val is None:
         fill_val = BACKGROUND_COLOR
     return np.full((height, width, 3), fill_val, 'uint8')
-
-def get_P_(edge, fd):
-    P_ = []
-    PP_ = [edge]
-    while PP_:
-        PP = PP_.pop()
-        if not PP.node_t: continue
-        if isinstance(PP.node_t[0], list):
-            PP_ += PP.node_t[fd]
-        else:  # is P_
-            P_ += PP.node_t
-
-    return P_
