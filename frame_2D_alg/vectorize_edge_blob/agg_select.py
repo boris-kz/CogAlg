@@ -9,13 +9,67 @@ from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, sum_dertuple, comp_der
 
 '''
 Implement sparse param tree in aggH: new graphs represent only high m|d params + their root params.
-Compare layers in parallel: flip H on the side, comp even if other forks miss? 
-Incrementally parallel: flip HH,HHH.. in deeper processing? 
+Compare layers in parallel by flipping H, comp forks independently. Flip HH,HHH.. in deeper processing? 
 
-Eval forming graph type for >ave matching forks, of same types? 
-Or combine single-fork graphs into single variable-nfork graph?
+1st: cluster root params within param set, by match per param between previously cross-compared nodes
+2nd: cluster root nodes per above-average param cluster, formed in 1st step. 
+
+specifically, x-param comp-> p-clustering of root AggH( SubH( DerH( Vars, after all nodes cross comp, @xp rng 
+param xcomp in derivation order, nested for lower level of hierarchical xcomp?  
+
+param cluster nesting reflects root param set nesting (which is a superset of param clusters). 
+exclusively deeper param cluster has empty (unpacked) higher param nesting levels.
 '''
 
+# draft
+def comp_param_(aggH, fd):
+
+    part_P_ = []; VAl,RDn,MAx = 0,0,0  # Ps of par tuples
+    part_P = [];  Val,Rdn,Max = 0,0,0  # P of par tuples
+
+    _subH,_valHt,_rdnHt,_maxHt = aggH[0]
+    _val =_valHt[fd][-1]; _rdn =_rdnHt[fd][-1]; _max =_maxHt[fd][-1]
+
+    for subH,valHt,rdnHt,maxHt in aggH[1:]:  # top-down?
+
+        val = valHt[fd][-1]; rdn = rdnHt[fd][-1]; max = maxHt[fd][-1]
+        if _val > ave and val > ave:
+            # recursive comp, unpack, += nested sub_pP_:
+            sub_part_P = comp_param_(subH, fd)
+            sval, srdn, smax = sub_part_P[1:]
+            Val += min(_val,val) + sval
+            Rdn += min(_rdn,rdn) + srdn
+            Max += min(_max,max) + smax
+            part_P += [subH,sub_part_P]
+        else:
+            if Val:
+                part_P_ += [[part_P, Val, Rdn, Max]]
+                VAl += Val; RDn += Rdn; MAx += Max
+            part_P_= []; Val,Rdn,Max = 0,0,0  # reset
+
+        _subH,_val,_rdn,_max = subH,val,rdn,max
+
+    return [part_P_,VAl,RDn,MAx]
+
+'''
+    mtuple, dtuple, Mtuple, Dtuple = [], [], [], []
+    for i, _par in enumerate(ptuple):
+        for par in ptuple[i + 1:]:  # comparison starts from the next param
+
+            # for angle, use hypot first?
+            if isinstance(_par, list):
+                _par = np.hypot(_par[0], _par[1])
+            if isinstance(par, list):
+                par = np.hypot(par[0], par[1])
+
+            dpar = _par - par
+            # not sure here, i guess it should be varied for different params?
+            mpar = min(_par, par) - ave
+            dtuple += [dpar]; mtuple += [mpar]
+            Dtuple += [abs(_par) + abs(par)]; Mtuple += [max(_par, par)]
+
+    return mtuple, dtuple, Mtuple, Dtuple
+    '''
 # potentially relevant, not revised:
 # form link layers to back-propagate overlap of root graphs
 def form_mediation_layers(layer, layers, fder):  # layers are initialized with same nodes and incrementally mediated links

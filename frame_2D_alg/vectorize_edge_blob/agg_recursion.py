@@ -249,7 +249,7 @@ def comp_G(link_, link, fd):
 
     Mval,Dval, maxM,maxD, Mrdn,Drdn = 0,0, 0,0, 1,1
     _G, G = link._G, link.G
-    # keep separate P ptuple and PP derH, empty derH in single-P G, aggH in single-PP G:
+    # keep separate P ptuple and PP derH, empty derH in single-P G, + empty aggH in single-PP G:
     # / P:
     mtuple, dtuple, Mtuple, Dtuple = comp_ptuple(_G.ptuple, G.ptuple, rn=1, fagg=1)
     maxm, maxd = sum(Mtuple), sum(Dtuple)

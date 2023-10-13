@@ -1,11 +1,17 @@
 import os
+import numpy as np
 from collections import namedtuple
+from types import SimpleNamespace
 
 WHITE = 255, 255, 255
 BLACK = 0, 0, 0
 RED = 0, 0, 255
 GREEN = 0, 255, 0
 BLUE = 255, 0, 0
+GREY = 128, 128, 128
+DARK_RED = 0, 0, 128
+DARK_GREEN = 0, 128, 0
+DARK_BLUE = 128, 0, 0
 POSE2COLOR = {
     0:RED,
     1:GREEN,
@@ -20,7 +26,7 @@ class Visualizer:
     def __init__(self, state):
         self.state = state
 
-    def reset(self):
+    def clear_plots(self):
         if self.state.quiver is not None:
             self.state.quiver.remove()
             self.state.quiver = None
@@ -34,13 +40,19 @@ class Visualizer:
                 L_text.remove()
             self.state.blob_slices = None
 
+    def reset(self):
+        self.clear_plots()
+        self.state.img = self.state.background.copy()
+        self.state.element_id = -1
+        self.update_img()
+        self.update_info()
+
     def update_img(self):
         self.state.imshow_obj.set_data(self.state.img)
         self.state.fig.canvas.draw_idle()
 
     def update_element_id(self):
-        self.update_img()
-        self.update_info()
+        raise NotImplementedError
 
     def update_info(self):
         # clear screen
@@ -61,7 +73,6 @@ class Visualizer:
 
 class BlobVisualizer(Visualizer):
     def reset(self):
-        super().reset()
         blob_ = self.state.layers_stack[-1].root.rlayers[0]
         self.state.element_cls = blob_[0].__class__
         self.state.img_slice = blob_[0].root_ibox.slice()
@@ -73,15 +84,10 @@ class BlobVisualizer(Visualizer):
         for blob in blob_:
             local_idmap[blob.box.slice()][blob.mask__] = blob.id  # fill idmap with blobs' ids
             local_background[blob.box.slice()][blob.mask__] = blob.sign * 32  # fill image with blobs
-        self.state.img = self.state.background.copy()
-        self.state.element_id = -1
-        self.update_img()
-        self.update_info()
+        super().reset()
+
 
     def update_gradient(self):
-        if self.state.quiver is not None:
-            self.state.quiver.remove()
-            self.state.quiver = None
 
         blob = self.get_highlighted_element()
         if blob is None or not self.state.show_gradient: return
@@ -102,6 +108,7 @@ class BlobVisualizer(Visualizer):
             *self.state.gradient[:, self.state.gradient_mask])
 
     def update_img(self):
+        self.clear_plots()
         self.update_gradient()
         super().update_img()
 
@@ -109,17 +116,13 @@ class BlobVisualizer(Visualizer):
         # override color of the element
         self.state.img[:] = self.state.background[:]
         blob = self.get_highlighted_element()
-        if blob is None:
-            self.update_img()
-            return
+        if blob is None: return
 
         # paint over the blob ...
         self.state.img[self.state.img_slice][blob.box.slice()][blob.mask__] = WHITE
         # ... and its adjacents
         for adj_blob, pose in zip(*blob.adj_blobs):
             self.state.img[self.state.img_slice][adj_blob.box.slice()][adj_blob.mask__] = POSE2COLOR[pose]
-        # Finally, update the image
-        super().update_element_id()
 
     def update_info(self):
         super().update_info()
@@ -148,25 +151,37 @@ class BlobVisualizer(Visualizer):
               f"┴{'─' * 10}┴{'─' * 10}┴{'─' * 16}┘")
 
     def go_deeper(self, fd):
-        root_blob = self.get_highlighted_element()
-        if root_blob is None: return
+        blob = self.get_highlighted_element()
+        if blob is None: return
 
         if fd:
             # edge visualizer
-            if not root_blob.dlayers or not root_blob.dlayers[0]: return
-            edge = root_blob.dlayers[0][0]
+            if not blob.dlayers or not blob.dlayers[0]: return
+            edge = blob.dlayers[0][0]
             if not edge.node_t: return
             PP_ = [
-                # TODO : add dummy PP from edge
-                # TODO : add box and mask__ from blob box (1st layer dummy PP covers the whole edge)
+                SimpleNamespace(
+                    id=edge.id,
+                    fd=1,
+                    ptuple=[blob.I, blob.G, edge.M, edge.Ma, [blob.Dy, blob.Dx], blob.A],
+                    derH=edge.derH,
+                    valt=edge.valt,
+                    rdnt=edge.rdnt,
+                    mask__=blob.mask__,
+                    root=blob,
+                    node_t=edge.node_t,
+                    fback_t=edge.fback_t,
+                    rng=edge.rng,
+                    box=blob.box,
+                )
             ]
             visualizer = SliceVisualizer(self.state, PP_)
             self.state.layers_stack.append(layerT(edge, "edge", visualizer))
         else:
             # frame visualizer (r+blob)
-            if not root_blob.rlayers or not root_blob.rlayers[0]: return
+            if not blob.rlayers or not blob.rlayers[0]: return
             visualizer = self
-            self.state.layers_stack.append(layerT(root_blob, "rblob", visualizer))   # reuse this visualizer
+            self.state.layers_stack.append(layerT(blob, "rblob", visualizer))   # reuse this visualizer
 
         return visualizer
 
@@ -175,69 +190,64 @@ class SliceVisualizer(Visualizer):
     def __init__(self, state, PP_):
         super().__init__(state)
         self.PP_ = PP_
+        self.P__ = {PP.id:get_P_(PP) for PP in PP_}
 
     def reset(self):
+        self.state.element_cls = self.PP_[0].__class__
+        self.state.background[:] = BACKGROUND_COLOR
+        self.state.idmap[:] = -1
+        # Prepare ID map and background
+        local_idmap = self.state.idmap[self.state.img_slice]
+        local_background = self.state.background[self.state.img_slice]
+        for PP in self.PP_:
+            local_idmap[PP.box.slice()][PP.mask__] = PP.id  # fill idmap with PP's id
+            local_background[PP.box.slice()][PP.mask__] = DARK_GREEN
         super().reset()
 
-        # TODO : reset image and create PP id map
+    def update_blob_slices(self):
+        if not self.state.show_slices: return
+        if not self.P__: return
+        PP = self.get_highlighted_element()
+        if PP is None: return
+        y0 = self.state.img_slices[0].start
+        x0 = self.state.img_slices[1].start
+        for P in self.P__[PP.id]:
+            y, x = P.yx
+            s, c = P.axis
+            L = len(P.dert_)
+            y_, x_ = (np.multiply([[c], [s]], [[-1, 0, 1]]) + [[x], [y]]) if (L == 1) else np.array(P.dert_).T[:2]
 
-    # def update_blob_slices():
-    #     if state.blob_slices is not None:
-    #         for line, L_text in state.blob_slices:
-    #             line.remove()
-    #             L_text.remove()
-    #         state.blob_slices = None
-    #
-    #     blob = state.blob_cls.get_instance(state.blob_id)
-    #     if blob is None or not blob.dlayers or not blob.dlayers[0] or not state.show_slices:
-    #         return
-    #     edge = blob.dlayers[0][0]
-    #     if not edge.node_t: return
-    #     print(f"PP_fd = {state.PP_fd}", end="")
-    #     y0, x0, *_ = blob.ibox
-    #
-    #     state.blob_slices = []
-    #     for P in get_P_(edge, state.PP_fd):        # show last layer
-    #         y, x = P.yx
-    #         y_, x_, *_ = np.array([*zip(*P.dert_)])
-    #         L = len(x_)
-    #         if L > 1:
-    #             blob_slices_plot = ax.plot(x_+x0, y_+y0, 'bo-', linewidth=1, markersize=2)[0]
-    #         else:
-    #             s, c = P.axis
-    #             x_ = np.array([x-c, x, x+c])
-    #             y_ = np.array([y-s, y, y+s])
-    #             blob_slices_plot = ax.plot(x_ + x0, y_ + y0, 'b-', linewidth=1, markersize=2)[0]
-    #         state.blob_slices += [(
-    #             blob_slices_plot,
-    #             ax.text(x+x0, y+y0, str(L), color = 'b', fontsize = 12),
-    #         )]
-    #
-    # def update_P_links():
-    #     if state.P_links is not None:
-    #         for line in state.P_links:
-    #             line.remove()
-    #         state.P_links = None
-    #
-    #     blob = state.blob_cls.get_instance(state.blob_id)
-    #     if blob is None or not blob.dlayers or not blob.dlayers[0] or not state.show_links:
-    #         return
-    #     edge = blob.dlayers[0][0]
-    #     if not edge.node_t: return
-    #     y0, x0, *_ = blob.ibox
-    #     state.P_links = []
-    #     for P in get_P_(edge, state.PP_fd):
-    #         for derP in P.link_H[0]:
-    #             (_y, _x), (y, x) = (derP._P.yx, derP.P.yx)
-    #             state.P_links += ax.plot([_x+x0,x+x0], [_y+y0,y+y0], 'ko-', linewidth=2, markersize=4)
+            self.state.blob_slices += [(
+                self.state.ax.plot(x_+x0, y_+y0, 'b-', linewidth=1, markersize=2)[0],
+                self.state.ax.text(x+x0, y+y0, str(L), color = 'b', fontsize = 12),
+            )]
+
+    def update_P_links(self):
+        if not self.state.show_links: return
+        if not self.P__: return
+        PP = self.get_highlighted_element()
+        if PP is None: return
+        y0 = self.state.img_slices[0].start
+        x0 = self.state.img_slices[1].start
+        for P in self.P__[PP.id]:
+            for derP in P.link_H[-1]:
+                (_y, _x), (y, x) = (derP._P.yx, derP.P.yx)
+                self.state.P_links += self.state.ax.plot([_x+x0,x+x0], [_y+y0,y+y0], 'ko-', linewidth=2, markersize=4)
 
     def update_img(self):
-        # TODO : update slices and links from all PP deeper layers
+        self.clear_plots()
+        self.update_blob_slices()
+        self.update_P_links()
         super().update_img()
 
     def update_element_id(self):
-        # TODO : high-light PPs
-        super().update_element_id()
+        # override color of the element
+        self.state.img[:] = self.state.background[:]
+        PP = self.get_highlighted_element()
+        if PP is None: return
+
+        # paint over the blob ...
+        self.state.img[self.state.img_slice][PP.box.slice()][PP.mask__] = WHITE
 
     def update_info(self):
         print("hit 'z' to toggle show slices")

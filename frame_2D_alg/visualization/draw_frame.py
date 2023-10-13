@@ -21,25 +21,13 @@ ROOT_TYPES = ["frame", "rblob", "edge", "PP"]
 def visualize(frame):
     """
     Visualize frame after clustering.
-    Parameters
-    ----------
-    frame : CBlob
-        The frame of layer to visualize.
+    Transition of visualization layers:
+    frame ─→ blobs ─→ (r)blobs ─→ rblobs ...
+               │          └─────→  edge  ...
+               └────→   edge   ─→   rPP  ...
+                          └─────→   dPP  ...
     """
     print("Preparing for visualization ...", end="")
-
-    # TODO: re-write visualization code. requirements:
-    # - Separate display functions for blobs, edges, PPs, Ps
-    # - Simple transition : frame ─→ blobs ─→ (r)blobs ─→ rblobs ...
-    #                                  │          └─────→  edge  ...
-    #                                  └────→   edge   ─→   PP
-    # - Hover high-lights:
-    #   + Blobs : by masks
-    #   + edge  : by blob's mask
-    #   + PP    : by combined P's cells
-    # - Toggles:
-    #   + Blobs   : show gradients
-    #   + edge/PP : show slices/links
 
     # get frame size
     _, _, height, width = frame.box
@@ -90,30 +78,23 @@ def visualize(frame):
         if state.element_id != element_id:
             state.element_id = element_id
             state.visualizer.update_element_id()
+            state.visualizer.update_img()
+            state.visualizer.update_info()
 
     def on_click(event):
         """Transition between layers."""
-        if event.key == "control":
-            ret = state.visualizer.go_deeper(fd=False)
-        elif event.key == "shift":
-            ret = state.visualizer.go_deeper(fd=True)
-        else:
-            # go back 1 layer
-            ret = state.visualizer.go_back()
-        if ret is None:
-            return
+        if event.key == "control": ret = state.visualizer.go_deeper(fd=False)
+        elif event.key == "shift": ret = state.visualizer.go_deeper(fd=True)
+        else: ret = state.visualizer.go_back()  # go back 1 layer
+        if ret is None: return
         state.visualizer = ret
         state.visualizer.reset()
 
     def on_key_press(event):
-        if event.key == 'd':
-            state.show_gradient = not state.show_gradient
-        elif event.key == 'z':
-            state.show_slices = not state.show_slices
-        elif event.key == 'x':
-            state.show_links = not state.show_links
-        else:
-            return
+        if event.key == 'd': state.show_gradient = not state.show_gradient
+        elif event.key == 'z': state.show_slices = not state.show_slices
+        elif event.key == 'x': state.show_links = not state.show_links
+        else: return
         state.visualizer.update_img()
 
     fig.canvas.mpl_connect('motion_notify_event', on_mouse_movement)
@@ -126,12 +107,10 @@ def visualize(frame):
 def blank_image(shape, fill_val=None):
     '''Create an empty numpy array of desired shape.'''
 
-    if len(shape) == 2:
-        height, width = shape
+    if len(shape) == 2: height, width = shape
     else:
         y0, x0, yn, xn = shape
         height = yn - y0
         width = xn - x0
-    if fill_val is None:
-        fill_val = BACKGROUND_COLOR
+    if fill_val is None: fill_val = BACKGROUND_COLOR
     return np.full((height, width, 3), fill_val, 'uint8')
