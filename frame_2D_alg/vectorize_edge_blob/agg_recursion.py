@@ -148,7 +148,7 @@ def segment_node_(root, Gt_, fd):  # replace with root backprop, sorted in node,
                 _G = perimeter.pop(0)
                 for link in _G.link_H[-1]:
                     G = link.G if link._G is _G else link._G
-                    if G in cG_: continue   # circular link
+                    if G in cG_ or G not in [Gt[0] for Gt in Gt_]: continue   # circular link
                     Gt = Gt_[G.it[fd]]; Val = Gt[1]; Rdn = Gt[2]
                     if Val > ave * Rdn:
                         try: decay = G.valHt[fd][-1] / G.maxHt[fd][-1]  # current link layer surround decay

@@ -22,54 +22,53 @@ exclusively deeper param cluster has empty (unpacked) higher param nesting level
 '''
 
 # draft
-def comp_param_(aggH, fd):
+def cluster_params(parH, rVal,rRdn,rMax, fd, G=None):  # G for parH=aggH
 
-    part_P_ = []; VAl,RDn,MAx = 0,0,0  # Ps of par tuples
-    part_P = [];  Val,Rdn,Max = 0,0,0  # P of par tuples
-
-    _subH,_valHt,_rdnHt,_maxHt = aggH[0]
-    _val =_valHt[fd][-1]; _rdn =_rdnHt[fd][-1]; _max =_maxHt[fd][-1]
-
-    for subH,valHt,rdnHt,maxHt in aggH[1:]:  # top-down?
-
-        val = valHt[fd][-1]; rdn = rdnHt[fd][-1]; max = maxHt[fd][-1]
-        if _val > ave and val > ave:
-            # recursive comp, unpack, += nested sub_pP_:
-            sub_part_P = comp_param_(subH, fd)
-            sval, srdn, smax = sub_part_P[1:]
-            Val += min(_val,val) + sval
-            Rdn += min(_rdn,rdn) + srdn
-            Max += min(_max,max) + smax
-            part_P += [subH,sub_part_P]
+    part_P_ = []  # Ps of [subH, sub_part_P_t] tuples
+    part_ = []  # [[subH, sub_part_P_t]]
+    Val, Rdn, Max = 0, 0, 0
+    parH = copy(parH)
+    i=1
+    while parH:  # top-down
+        subH = parH.pop(); fsub=1
+        if G:  # parH is aggH
+            val=G.valHt[fd][-i]; rdn=G.rdnHt[fd][-i]; max=G.maxHt[fd][-i]; i+=1
+        elif isinstance(subH[0], list):  # not ext or ptuple
+            subH,val,rdn,max = subH
+        else: fsub=0  # subH is ext or ptuple
+        if fsub:
+            if val > ave:  # recursive eval,unpack
+                Val+=val; Rdn+=rdn; Max+=max  # summed with sub-values:
+                sub_part_P_t = cluster_params(subH, Val,Rdn,Max, fd)
+                part_ += [[subH, sub_part_P_t]]
+            else:
+                if Val:
+                    part_P_ += [[part_,Val,Rdn,Max]]
+                    rVal+=Val; rRdn+=Rdn; rMax+=Max  # root values
+                part_=[]; Val,Rdn,Max = 0,0,0  # reset
         else:
-            if Val:
-                part_P_ += [[part_P, Val, Rdn, Max]]
-                VAl += Val; RDn += Rdn; MAx += Max
-            part_P_= []; Val,Rdn,Max = 0,0,0  # reset
+            part_ += [[subH, cluster_vals(subH)]]  # ext or ptuple, params=vals, no sum Val,Rdn,Max?
+    # last term if no reset above:
+    if part_:
+        part_P_ += [[part_,Val,Rdn,Max]]
+        rVal+=Val; rRdn+=Rdn; rMax+=Max
 
-        _subH,_val,_rdn,_max = subH,val,rdn,max
+    return [part_P_,rVal,rRdn,rMax]  # root values
 
-    return [part_P_,VAl,RDn,MAx]
+# draft:
+def cluster_vals(ptuple):  # ext or ptuple, params=vals
 
-'''
-    mtuple, dtuple, Mtuple, Dtuple = [], [], [], []
-    for i, _par in enumerate(ptuple):
-        for par in ptuple[i + 1:]:  # comparison starts from the next param
+    parP_ = []
+    parP = [ptuple[0]] if ptuple[0]>ave else []  # need to use param type ave instead
+    for par in ptuple:
+        if par > ave: parP += [par]
+        else:
+            if parP: parP_ += [parP]  # terminate parP
+            parP = []
+    if parP: parP_ += [parP]  # terminate last parP
+    return parP_
 
-            # for angle, use hypot first?
-            if isinstance(_par, list):
-                _par = np.hypot(_par[0], _par[1])
-            if isinstance(par, list):
-                par = np.hypot(par[0], par[1])
 
-            dpar = _par - par
-            # not sure here, i guess it should be varied for different params?
-            mpar = min(_par, par) - ave
-            dtuple += [dpar]; mtuple += [mpar]
-            Dtuple += [abs(_par) + abs(par)]; Mtuple += [max(_par, par)]
-
-    return mtuple, dtuple, Mtuple, Dtuple
-    '''
 # potentially relevant, not revised:
 # form link layers to back-propagate overlap of root graphs
 def form_mediation_layers(layer, layers, fder):  # layers are initialized with same nodes and incrementally mediated links

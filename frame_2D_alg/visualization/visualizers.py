@@ -64,6 +64,7 @@ class Visualizer:
         raise NotImplementedError
 
     def go_back(self):
+        if len(self.state.layers_stack) == 1: return
         self.state.layers_stack.pop()
         return self.state.layers_stack[-1].visualizer
 
@@ -155,13 +156,15 @@ class BlobVisualizer(Visualizer):
         if blob is None: return
 
         if fd:
+            from vectorize_edge_blob.classes import CPP
             # edge visualizer
             if not blob.dlayers or not blob.dlayers[0]: return
             edge = blob.dlayers[0][0]
             if not edge.node_t: return
             PP_ = [
-                SimpleNamespace(
-                    id=edge.id,
+                # SimpleNamespace(
+                    # id=edge.id,
+                CPP(
                     fd=1,
                     ptuple=[blob.I, blob.G, edge.M, edge.Ma, [blob.Dy, blob.Dx], blob.A],
                     derH=edge.derH,
@@ -176,6 +179,7 @@ class BlobVisualizer(Visualizer):
                 )
             ]
             visualizer = SliceVisualizer(self.state, PP_)
+            self.state.img_slice = blob.ibox.slice()
             self.state.layers_stack.append(layerT(edge, "edge", visualizer))
         else:
             # frame visualizer (r+blob)
@@ -200,8 +204,12 @@ class SliceVisualizer(Visualizer):
         local_idmap = self.state.idmap[self.state.img_slice]
         local_background = self.state.background[self.state.img_slice]
         for PP in self.PP_:
-            local_idmap[PP.box.slice()][PP.mask__] = PP.id  # fill idmap with PP's id
-            local_background[PP.box.slice()][PP.mask__] = DARK_GREEN
+            try:
+                local_idmap[PP.box.slice()][PP.mask__] = PP.id  # fill idmap with PP's id
+                local_background[PP.box.slice()][PP.mask__] = DARK_GREEN
+            except IndexError as e:
+                print(PP.id, PP.mask__.shape, PP.mask__.sum(), PP.box)
+                while True: pass
         super().reset()
 
     def update_blob_slices(self):
@@ -209,16 +217,17 @@ class SliceVisualizer(Visualizer):
         if not self.P__: return
         PP = self.get_highlighted_element()
         if PP is None: return
-        y0 = self.state.img_slices[0].start
-        x0 = self.state.img_slices[1].start
+        y0 = self.state.img_slice[0].start
+        x0 = self.state.img_slice[1].start
+        self.state.blob_slices = []
         for P in self.P__[PP.id]:
             y, x = P.yx
             s, c = P.axis
             L = len(P.dert_)
-            y_, x_ = (np.multiply([[c], [s]], [[-1, 0, 1]]) + [[x], [y]]) if (L == 1) else np.array(P.dert_).T[:2]
+            y_, x_ = (np.multiply([[s], [c]], [[-1, 0, 1]]) + [[y], [x]]) if (L == 1) else np.array(P.dert_).T[:2]
 
             self.state.blob_slices += [(
-                self.state.ax.plot(x_+x0, y_+y0, 'b-', linewidth=1, markersize=2)[0],
+                *self.state.ax.plot(x_+x0, y_+y0, 'b-', linewidth=1, markersize=2),
                 self.state.ax.text(x+x0, y+y0, str(L), color = 'b', fontsize = 12),
             )]
 
@@ -227,8 +236,9 @@ class SliceVisualizer(Visualizer):
         if not self.P__: return
         PP = self.get_highlighted_element()
         if PP is None: return
-        y0 = self.state.img_slices[0].start
-        x0 = self.state.img_slices[1].start
+        y0 = self.state.img_slice[0].start
+        x0 = self.state.img_slice[1].start
+        self.state.P_links = []
         for P in self.P__[PP.id]:
             for derP in P.link_H[-1]:
                 (_y, _x), (y, x) = (derP._P.yx, derP.P.yx)
