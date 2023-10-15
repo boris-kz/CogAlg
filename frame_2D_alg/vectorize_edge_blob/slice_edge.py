@@ -1,5 +1,6 @@
 import sys
 import numpy as np
+from math import floor
 from collections import namedtuple, deque, defaultdict
 from itertools import product, combinations
 from .classes import CEdge, CP
@@ -161,7 +162,7 @@ def scan_direction(blob, P, fleft):  # leftward or rightward from y,x
 def interpolate2dert(blob, y, x):
 
     Y, X = blob.mask__.shape    # boundary
-    x0, y0 = int(x), int(y)     # floor
+    x0, y0 = floor(x), floor(y) # floor
     x1, y1 = x0 + 1, y0 + 1     # ceiling
     if x0 < 0 or x1 >= X or y0 < 0 or y1 >= Y: return None  # boundary check
     kernel = [  # cell weighing by inverse distance from float y,x:

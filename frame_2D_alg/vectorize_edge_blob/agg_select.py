@@ -6,6 +6,7 @@ from .classes import Cgraph, CderG, CPP
 from .filters import ave_L, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd, ave_dI, ave_G, ave_M, ave_Ma
 from .slice_edge import slice_edge, comp_angle
 from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, sum_dertuple, comp_derH, matchF
+from .agg_recursion import comp_G_, sum_link_tree_, sum2graph, feedback
 
 '''
 Implement sparse param tree in aggH: new graphs represent only high m|d params + their root params.
@@ -21,21 +22,47 @@ param cluster nesting reflects root param set nesting (which is a superset of pa
 exclusively deeper param cluster has empty (unpacked) higher param nesting levels.
 '''
 
+def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_
+
+    Val,Rdn = comp_G_(G_, fd)  # rng|der cross-comp all Gs, form link_H[-1] per G, sum in Val,Rdn
+    if Val > ave*Rdn > ave:
+        # else no clustering, same in agg_recursion?
+        pP_t = cluster_params(parH=root.aggH, rVal=0,rRdn=0,rMax=0, fd=fd, G=root)  # pP_t: part_P_t
+        root.valHt[fd] += [0 for pP in pP_t]; root.rdnHt[fd] += [1 for pP in pP_t]  # sum in form_graph_t feedback, +root.maxHt[fd]?
+
+        GG_pP_t = form_graph_t(root, G_, pP_t)  # eval sub+ and feedback per graph
+        # agg+ xcomp-> form_graph_t loop sub)agg+, vs. comp_slice:
+        # sub+ loop-> eval-> xcomp
+        for GG_ in GG_pP_t:  # comp_G_ eval: ave_m * len*rng - fixed cost, root update in form_t:
+            if sum(root.valHt[0][-1]) * (len(GG_)-1)*root.rng > G_aves[fd] * sum(root.rdnHt[0][-1]):
+                agg_recursion(rroot, root, GG_, fd=0)  # 1st xcomp in GG_
+
+        G_[:] = GG_pP_t
+
 # draft
 def cluster_params(parH, rVal,rRdn,rMax, fd, G=None):  # G for parH=aggH
 
-    part_P_ = []  # Ps of [subH, sub_part_P_t] tuples
-    part_ = []  # [[subH, sub_part_P_t]]
+    part_P_ = []  # pPs: nested clusters of >ave param tuples, as below:
+    part_ = []  # [[subH, sub_part_P_t], Val,Rdn,Max]
     Val, Rdn, Max = 0, 0, 0
     parH = copy(parH)
     i=1
-    while parH:  # top-down
-        subH = parH.pop(); fsub=1
+    while parH:  # aggH|subH|derH, top-down
+        subH = parH.pop(); fsub=1  # subH is ptuplet if parH is derH?
         if G:  # parH is aggH
             val=G.valHt[fd][-i]; rdn=G.rdnHt[fd][-i]; max=G.maxHt[fd][-i]; i+=1
-        elif isinstance(subH[0], list):  # not ext or ptuple
-            subH,val,rdn,max = subH
-        else: fsub=0  # subH is ext or ptuple
+        elif isinstance(subH[0][0], list):
+            subH,valt,rdnt,maxt = subH
+            val=valt[fd]; rdn=rdnt[fd]; max=maxt[fd]
+        else:  # extt in subH or ptuplet in derH:
+            valP_t = [[cluster_vals(ptuple) for ptuple in subH if sum(ptuple)>ave]]
+            if valP_t:  # += [mext_pP_, dext_pP_], or subH is ptuple in derH, params=vals
+                part_ += [valP_t]  # no sum vals to Val,Rdn,Max?
+            else:
+                if Val:  # empty valP_ terminates root pP
+                    part_P_ += [[part_,Val,Rdn,Max]]; rVal+=Val; rRdn+=Rdn; rMax+=Max  # root values
+                part_=[]; Val,Rdn,Max = 0,0,0  # reset
+            fsub=0
         if fsub:
             if val > ave:  # recursive eval,unpack
                 Val+=val; Rdn+=rdn; Max+=max  # summed with sub-values:
@@ -43,30 +70,27 @@ def cluster_params(parH, rVal,rRdn,rMax, fd, G=None):  # G for parH=aggH
                 part_ += [[subH, sub_part_P_t]]
             else:
                 if Val:
-                    part_P_ += [[part_,Val,Rdn,Max]]
-                    rVal+=Val; rRdn+=Rdn; rMax+=Max  # root values
+                    part_P_ += [[part_,Val,Rdn,Max]]; rVal+=Val; rRdn+=Rdn; rMax+=Max  # root values
                 part_=[]; Val,Rdn,Max = 0,0,0  # reset
-        else:
-            part_ += [[subH, cluster_vals(subH)]]  # ext or ptuple, params=vals, no sum Val,Rdn,Max?
-    # last term if no reset above:
     if part_:
-        part_P_ += [[part_,Val,Rdn,Max]]
-        rVal+=Val; rRdn+=Rdn; rMax+=Max
+        part_P_ += [[part_,Val,Rdn,Max]]; rVal+=Val; rRdn+=Rdn; rMax+=Max
 
     return [part_P_,rVal,rRdn,rMax]  # root values
 
-# draft:
+
 def cluster_vals(ptuple):  # ext or ptuple, params=vals
 
     parP_ = []
-    parP = [ptuple[0]] if ptuple[0]>ave else []  # need to use param type ave instead
-    for par in ptuple:
+    parP = [ptuple[0]] if ptuple[0] > ave else []  # init, need to use param type ave instead
+
+    for par in ptuple[1:]:
         if par > ave: parP += [par]
         else:
             if parP: parP_ += [parP]  # terminate parP
             parP = []
+
     if parP: parP_ += [parP]  # terminate last parP
-    return parP_
+    return parP_  # may be empty
 
 
 # potentially relevant, not revised:
@@ -155,8 +179,8 @@ def segment_node_(init_, Gt_, fd, root_t_):  # root_t_ for fuzzy graphs if parti
         graph_ += [graph]
     return graph_
 
-def prune_graph_(graph_, fd):  # compute graph overlap to prune weak graphs, not nodes: rdn doesn't change the structure
-                               # prune rootless nodes?
+def prune_graph_(root, graph_, fd):  # compute graph overlap to prune weak graphs, not nodes: rdn doesn't change the structure
+                                     # prune rootless nodes?
     for graph in graph_:
         for node in graph[0]:  # root rank = graph/node rdn:
             roots = sorted(node.root_t[fd], key=lambda root: root[1], reverse=True)  # sort by net val, if partial param sub-forks
@@ -167,10 +191,11 @@ def prune_graph_(graph_, fd):  # compute graph overlap to prune weak graphs, not
         pruned_graph_ = []
         for graph in graph_:
             if graph[1] > G_aves[fd]:  # rdn-adjusted Val for local sparsity, doesn't affect G val?
-                pruned_graph_ += [graph]
+                pruned_graph_ += [sum2graph(root, graph, fd)]
             else:
                 for node in graph[0]:
                     node.root_t[fd].remove(graph)
+
     return pruned_graph_
 
 
@@ -193,21 +218,7 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
             agg_recursion(None, edge, node_, fd=0)  # edge.node_t = graph_t, micro and macro recursive
 
 
-def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_
-
-    comp_G_(G_, fd)  # rng|der cross-comp all Gs, nD array? form link_H per G
-    root.valHt[fd] += [0]; root.rdnHt[fd] += [1]  # sum in form_graph_t feedback
-
-    GG_t = form_graph_t(root, G_)  # eval sub+ and feedback per graph
-    # agg+ xcomp-> form_graph_t loop sub)agg+, vs. comp_slice:
-    # sub+ loop-> eval-> xcomp
-    for GG_ in GG_t:  # comp_G_ eval: ave_m * len*rng - fixed cost, root update in form_t:
-        if root.valHt[0][-1] * (len(GG_)-1)*root.rng > G_aves[fd] * root.rdnHt[0][-1]:
-            agg_recursion(rroot, root, GG_, fd=0)  # 1st xcomp in GG_
-
-    G_[:] = GG_t
-
-def form_graph_t(root, G_):  # form mgraphs and dgraphs of same-root nodes
+def form_graph_t(root, pP_, G_):  # form mgraphs and dgraphs of same-root nodes
 
     graph_t = []
     for G in G_: G.root = [None,None]  # replace with mcG_|dcG_ in segment_node_, replace with Cgraphs in sum2graph

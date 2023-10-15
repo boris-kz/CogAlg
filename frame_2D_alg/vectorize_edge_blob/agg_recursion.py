@@ -202,7 +202,7 @@ def sum2graph(root, cG_, fd):  # sum node and link params into graph, aggH in ag
 def sum_Hts(ValHt, RdnHt, MaxHt, valHt, rdnHt, maxHt):
     # loop m,d Hs, add combined decayed lower H/layer?
 
-    for ValH,valH, RdnH,rdnH, MaxH,maxH in zip(ValHt,RdnHt, valHt,rdnHt, MaxHt,maxHt):
+    for ValH,valH, RdnH,rdnH, MaxH,maxH in zip(ValHt,valHt, RdnHt,rdnHt, MaxHt,maxHt):
         ValH[:] = [V+v for V,v in zip_longest(ValH, valH, fillvalue=0)]
         MaxH[:] = [M+m for M,m in zip_longest(MaxH, maxH, fillvalue=0)]
         RdnH[:] = [R+r for R,r in zip_longest(RdnH, rdnH, fillvalue=0)]

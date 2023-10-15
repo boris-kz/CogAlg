@@ -204,12 +204,8 @@ class SliceVisualizer(Visualizer):
         local_idmap = self.state.idmap[self.state.img_slice]
         local_background = self.state.background[self.state.img_slice]
         for PP in self.PP_:
-            try:
-                local_idmap[PP.box.slice()][PP.mask__] = PP.id  # fill idmap with PP's id
-                local_background[PP.box.slice()][PP.mask__] = DARK_GREEN
-            except IndexError as e:
-                print(PP.id, PP.mask__.shape, PP.mask__.sum(), PP.box)
-                while True: pass
+            local_idmap[PP.box.slice()][PP.mask__] = PP.id  # fill idmap with PP's id
+            local_background[PP.box.slice()][PP.mask__] = DARK_GREEN
         super().reset()
 
     def update_blob_slices(self):
