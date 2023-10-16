@@ -227,3 +227,100 @@ def comp_derH(_derH, derH, rn, fagg=0):  # derH is a list of der layers or sub-l
     ret = [dderH, [Mval,Dval], [Mrdn,Drdn]]  # new derLayer,= 1/2 combined derH
     if fagg: ret += [[maxM,maxD]]
     return ret
+
+def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_
+
+    Val,Rdn = comp_G_(G_, fd)  # rng|der cross-comp all Gs, form link_H[-1] per G, sum in Val,Rdn
+    if Val > ave*Rdn > ave:
+        # else no clustering, same in agg_recursion?
+        pP_v = cluster_params(parH=root.aggH, rVal=0,rRdn=0,rMax=0, fd=fd, G=root)  # pP_t: part_P_t
+        root.valHt[fd] += [0 for pP in pP_v]; root.rdnHt[fd] += [1 for pP in pP_v]  # sum in form_graph_t feedback, +root.maxHt[fd]?
+
+        GG_pP_t = form_graph_t(root, G_, pP_v)  # eval sub+ and feedback per graph
+        # agg+ xcomp-> form_graph_t loop sub)agg+, vs. comp_slice:
+        # sub+ loop-> eval-> xcomp
+        for GG_ in GG_pP_t:  # comp_G_ eval: ave_m * len*rng - fixed cost, root update in form_t:
+            if sum(root.valHt[0][-1]) * (len(GG_)-1)*root.rng > G_aves[fd] * sum(root.rdnHt[0][-1]):
+                agg_recursion(rroot, root, GG_, fd=0)  # 1st xcomp in GG_
+
+        G_[:] = GG_pP_t
+
+def merge_root_tree(Root_t, root_t):  # not-empty fork layer is root_t, each fork may be empty list:
+
+    for Root_, root_ in zip(Root_t, root_t):
+        for Root, root in zip(Root_, root_):
+            if root.root_t:  # not-empty root fork layer
+                if Root.root_t: merge_root_tree(Root.root_t, root.root_t)
+                else: Root.root_t[:] = root.root_t
+        Root_[:] = list( set(Root_+root_))  # merge root_, may be empty
+
+
+def select_init_(Gt_, fd):  # local max selection for sparse graph init, if positive link
+
+    init_, non_max_ = [],[]  # pick max in direct links, no recursively mediated links max: discontinuous?
+
+    for node, val in Gt_:
+        if node in non_max_: continue  # can't init graph
+        if val<=0:  # no +ve links
+            if sum(node.val_Ht[fd]) > ave * sum(node.rdn_Ht[fd]):
+                init_+= [[node, 0]]  # single-node proto-graph
+            continue
+        fmax = 1
+        for link in node.link_H[-1]:
+            _node = link.G if link._G is node else link._G
+            if val > Gt_[_node.it[fd]][1]:
+                non_max_ += [_node]  # skip as next node
+            else:
+                fmax = 0; break  # break is not necessary?
+        if fmax:
+            init_ += [[node,val]]
+    return init_
+
+def segment_node_(init_, Gt_, fd, root_t_):  # root_t_ for fuzzy graphs if partial param sets: sub-forks?
+
+    graph_ = []  # initialize graphs with local maxes, eval their links to add other nodes:
+
+    for inode, ival in init_:
+        iroot_t = root_t_[inode.it[fd]]  # same order as Gt_, assign node roots to new graphs, init with max
+        graph = [[inode], ival, [iroot_t]]
+        inode.root_t[fd] += [graph]
+        _nodet_ = [[inode, ival, [iroot_t]]]  # current perimeter of the graph, init = graph
+
+        while _nodet_:  # search links outwards recursively to form overlapping graphs:
+            nodet_ = []
+            for _node, _val, _root_t in _nodet_:
+                for link in _node.link_H[-1]:
+                    node = link.G if link._G is _node else link._G
+                    if node in graph[0]: continue
+                    val = Gt_[node.it[fd]][1]
+                    root_t = root_t_[node.it[fd]]
+                    if val * (link.valt[fd] / link.maxt[fd]) > ave:  # node val * link decay
+                        if node.root_t[fd]:
+                            merge(graph, node.root_t[fd])  # or use dict link_map?
+                        else:
+                            graph[0] += [node]
+                            graph[1] += val
+                            graph[2] += [root_t]
+                            nodet_ += [node, val, root_t]  # new perimeter
+            _nodet_ = nodet_
+        graph_ += [graph]
+    return graph_
+
+def prune_graph_(root, graph_, fd):  # compute graph overlap to prune weak graphs, not nodes: rdn doesn't change the structure
+                                     # prune rootless nodes?
+    for graph in graph_:
+        for node in graph[0]:  # root rank = graph/node rdn:
+            roots = sorted(node.root_t[fd], key=lambda root: root[1], reverse=True)  # sort by net val, if partial param sub-forks
+            # or grey-scale rdn = root_val / sum_higher_root_vals?
+            for rdn, graph in enumerate(roots):
+                graph[1] -= ave * rdn  # rdn to >val overlapping graphs per node, also >val forks, alt sparse param sets?
+                # nodes are shared by multiple max-initialized graphs, pruning here still allows for some overlap
+        pruned_graph_ = []
+        for graph in graph_:
+            if graph[1] > G_aves[fd]:  # rdn-adjusted Val for local sparsity, doesn't affect G val?
+                pruned_graph_ += [sum2graph(root, graph, fd)]
+            else:
+                for node in graph[0]:
+                    node.root_t[fd].remove(graph)
+
+    return pruned_graph_
