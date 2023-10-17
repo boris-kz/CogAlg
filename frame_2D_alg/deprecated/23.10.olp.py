@@ -324,3 +324,41 @@ def prune_graph_(root, graph_, fd):  # compute graph overlap to prune weak graph
                     node.root_t[fd].remove(graph)
 
     return pruned_graph_
+
+def cluster_params(parH, rVal,rRdn,rMax, fd, G=None):  # G for parH=aggH
+
+    part_P_ = []  # pPs: nested clusters of >ave param tuples, as below:
+    part_ = []  # [[subH, sub_part_P_t], Val,Rdn,Max]
+    Val, Rdn, Max = 0, 0, 0
+    parH = copy(parH)
+    i=1
+    while parH:  # aggH | subH | derH, top-down
+        subH = parH.pop(); fsub=1  # if parH is derH, subH is ptuplet
+        if G:  # parH is aggH
+            val=G.valHt[fd][-i]; rdn=G.rdnHt[fd][-i]; max=G.maxHt[fd][-i]; i+=1
+        elif isinstance(subH[0][0], list):  # subH is subH | derH
+            subH, valt, rdnt, maxt = subH   # unpack subHt
+            val=valt[fd]; rdn=rdnt[fd]; max=maxt[fd]
+        else:  # extt in subH or ptuplet in derH
+            valP_t = [[cluster_vals(ptuple) for ptuple in subH if sum(ptuple)>ave]]
+            if valP_t:
+                part_ += [valP_t]  # params=vals, no sum-> Val,Rdn,Max?
+            else:
+                if Val:  # empty valP_ terminates root pP
+                    part_P_ += [[part_,Val,Rdn,Max]]; rVal+=Val; rRdn+=Rdn; rMax+=Max  # root values
+                part_=[]; Val,Rdn,Max = 0,0,0  # reset
+            fsub=0
+        if fsub:
+            if val > ave:  # recursive eval,unpack
+                Val+=val; Rdn+=rdn; Max+=max  # summed with sub-values:
+                sub_part_P_t = cluster_params(subH, Val,Rdn,Max, fd)
+                part_ += [[subH, sub_part_P_t]]
+            else:
+                if Val:  # empty sub_pP_ terminates root pP
+                    part_P_ += [[part_,Val,Rdn,Max]]; rVal+=Val; rRdn+=Rdn; rMax+=Max  # root values
+                part_=[]; Val,Rdn,Max = 0,0,0  # reset
+    if part_:
+        part_P_ += [[part_,Val,Rdn,Max]]; rVal+=Val; rRdn+=Rdn; rMax+=Max
+
+    return [part_P_,rVal,rRdn,rMax]  # root values
+
