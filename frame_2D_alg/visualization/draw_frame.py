@@ -10,11 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from types import SimpleNamespace
-from .visualizers import (
-    BlobVisualizer, layerT,
-    WHITE, BLACK, RED, GREEN, BLUE,
-    POSE2COLOR, BACKGROUND_COLOR,
-)
+from .visualizers import BlobVisualizer
 
 ROOT_TYPES = ["frame", "rblob", "edge", "PP"]
 
@@ -32,52 +28,22 @@ def visualize(frame):
     # get frame size
     _, _, height, width = frame.box
 
-    # create display window
-    img = blank_image((height, width))
-    fig, ax = plt.subplots()
-    fig.canvas.set_window_title("Blob Visualization")
-    imshow_obj = ax.imshow(img)
-
-    # Prepare state object
+    # create visualizer
     state = SimpleNamespace(
-        visualizer=None,
-        # history of roots
-        layers_stack=None,
-        # variables
-        img=img,
-        img_slice = None,
-        background=blank_image((height, width)),
-        idmap=np.full((height, width), -1, 'int64'),
-        gradient=np.zeros((2, height, width), float),
-        gradient_mask=np.zeros((height, width), bool),
-        element_id=None, element_cls=None,
-        # plot object handles
-        fig=fig,
-        ax=ax,
-        imshow_obj=imshow_obj,
-        quiver=None,
-        blob_slices=None,
-        P_links=None,
-        # flags
-        show_gradient=False,
-        show_slices=False,
-        show_links=False,
+        visualizer=BlobVisualizer(frame, title="Visualization")
     )
-    state.layers_stack = [layerT(frame, 'frame', BlobVisualizer(state))]    # start with frame of blobs
-    state.visualizer = state.layers_stack[0].visualizer
-    state.visualizer.reset()    # first-time reset
+    fig, ax = visualizer.fig, visualizer.ax
+    state.visualizer.reset()
+
+    # TODO : cleaning up in transitions i.e:
 
     # declare callback sub-routines
 
     def on_mouse_movement(event):
         """Highlight the blob the mouse is hovering on."""
-        if event.xdata is None or event.ydata is None:
-            element_id = -1
-        else:
-            element_id = state.idmap[round(event.ydata), round(event.xdata)]
-        if state.element_id != element_id:
-            state.element_id = element_id
-            state.visualizer.update_element_id()
+        hovered_element = state.visualizer.get_hovered_element(event.xdata, event.ydata)
+        if hovered_element is not state.visualizer.hovered_element:
+            state.visualizer.update_hovered_element(hovered_element)
             state.visualizer.update_img()
             state.visualizer.update_info()
 
@@ -91,9 +57,10 @@ def visualize(frame):
         state.visualizer.reset()
 
     def on_key_press(event):
-        if event.key == 'd': state.show_gradient = not state.show_gradient
-        elif event.key == 'z': state.show_slices = not state.show_slices
-        elif event.key == 'x': state.show_links = not state.show_links
+        # TODO : check if visualizer has flag
+        if event.key == 'd': state.visualizer.show_gradient = not state.visualizer.show_gradient
+        elif event.key == 'z': state.visualizer.show_slices = not state.visualizer.show_slices
+        elif event.key == 'x': state.visualizer.show_links = not state.visualizer.show_links
         else: return
         state.visualizer.update_img()
 
@@ -102,15 +69,3 @@ def visualize(frame):
     fig.canvas.mpl_connect('key_press_event', on_key_press)
 
     plt.show()
-
-
-def blank_image(shape, fill_val=None):
-    '''Create an empty numpy array of desired shape.'''
-
-    if len(shape) == 2: height, width = shape
-    else:
-        y0, x0, yn, xn = shape
-        height = yn - y0
-        width = xn - x0
-    if fill_val is None: fill_val = BACKGROUND_COLOR
-    return np.full((height, width, 3), fill_val, 'uint8')

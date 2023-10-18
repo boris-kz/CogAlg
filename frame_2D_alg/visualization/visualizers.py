@@ -1,7 +1,7 @@
 import os
 import numpy as np
+import matplotlib.pyplot as plt
 from collections import namedtuple
-from types import SimpleNamespace
 
 WHITE = 255, 255, 255
 BLACK = 0, 0, 0
@@ -23,107 +23,134 @@ BACKGROUND_COLOR = 128  # Pixel at this value can be over-written
 layerT = namedtuple("layerT", "root,type,visualizer")
 
 class Visualizer:
-    def __init__(self, state):
-        self.state = state
+    def __init__(self, element_, root_visualizer=None,
+                 shape=None, title="Visualization"):
+        self.root_visualizer = root_visualizer
+        self.element_ = element_
+        self.element_cls = self.element_[0].__class__
+        self.hovered_element = None
+        self.element_stack = []
+        self.img = None
+        if self.root_visualizer is None:
+            height, width = shape
+            self.background = np.full((height, width, 3), BACKGROUND_COLOR, 'uint8')
+            self.idmap = np.full((height, width), -1, 'int64')
+            self.img_slice = None
 
-    def clear_plots(self):
-        if self.state.quiver is not None:
-            self.state.quiver.remove()
-            self.state.quiver = None
-        if self.state.P_links is not None:
-            for line in self.state.P_links:
-                line.remove()
-            self.state.P_links = None
-        if self.state.blob_slices is not None:
-            for line, L_text in self.state.blob_slices:
-                line.remove()
-                L_text.remove()
-            self.state.blob_slices = None
+            self.fig, self.ax = plt.subplots()
+            self.fig.canvas.set_window_title(title)
+            self.imshow_obj = self.ax.imshow(self.background)
+        else:
+            self.background = self.root_visualizer.background
+            self.idmap = self.root_visualizer.idmap
+            self.img_slice = self.root_visualizer.img_slice
+
+            self.fig = self.root_visualizer.fig
+            self.ax = self.root_visualizer.ax
+            self.imshow_obj = self.root_visualizer.imshow_obj
 
     def reset(self):
-        self.clear_plots()
-        self.state.img = self.state.background.copy()
-        self.state.element_id = -1
+        self.clear_plot()
+        self.img = self.background.copy()
+        self.hovered_element = None
         self.update_img()
         self.update_info()
 
     def update_img(self):
-        self.state.imshow_obj.set_data(self.state.img)
-        self.state.fig.canvas.draw_idle()
-
-    def update_element_id(self):
-        raise NotImplementedError
+        self.imshow_obj.set_data(self.img)
+        self.fig.canvas.draw_idle()
 
     def update_info(self):
         # clear screen
         os.system('cls' if os.name == 'nt' else 'clear')
         print("hit 'q' to exit")
 
+    def go_back(self):
+        if self.element_stack:
+            self.element_ = self.element_stack.pop()
+            return self
+        elif self.root_visualizer is not None:
+            return self.root_visualizer
+        # return None otherwise
+
+    def append_element_stack(self, new_element_):
+        self.element_stack.append(self.element_)
+        self.element_ = new_element_
+
+    def get_hovered_element(self, x, y):
+        if x is None or x is None: return None
+        else: return self.element_cls.get_instance(self.idmap[round(x), round(y)])
+
+    # to be replaced:
+    def update_hovered_element(self, hovered_element):
+        raise NotImplementedError
+
+    def clear_plot(self):
+        raise NotImplementedError
 
     def go_deeper(self, fd):
         raise NotImplementedError
 
-    def go_back(self):
-        if len(self.state.layers_stack) == 1: return
-        self.state.layers_stack.pop()
-        return self.state.layers_stack[-1].visualizer
-
-    def get_highlighted_element(self):
-        return self.state.element_cls.get_instance(self.state.element_id)
-
 
 class BlobVisualizer(Visualizer):
+
+    def __init__(self, frame, **kwargs):     # only for frame
+        super().__init__(element_=frame.rlayers[0], shape=frame.box[-2:], **kwargs)
+        # private fields
+        self.gradient = np.zeros((2, *self.background.shape[:2]), float)
+        self.gradient_mask = np.zeros(self.background.shape[:2], bool)
+        self.show_gradient = False
+        self.quiver = None
+
     def reset(self):
-        blob_ = self.state.layers_stack[-1].root.rlayers[0]
-        self.state.element_cls = blob_[0].__class__
-        self.state.img_slice = blob_[0].root_ibox.slice()
-        self.state.background[:] = BACKGROUND_COLOR
-        self.state.idmap[:] = -1
+        blob_ = self.element_
+        self.img_slice = blob_[0].root_ibox.slice()
         # Prepare blob ID map and background
-        local_idmap = self.state.idmap[self.state.img_slice]
-        local_background = self.state.background[self.state.img_slice]
+        self.background[:] = BACKGROUND_COLOR
+        self.idmap[:] = -1
+        local_idmap = self.idmap[self.img_slice]
+        local_background = self.background[self.img_slice]
         for blob in blob_:
             local_idmap[blob.box.slice()][blob.mask__] = blob.id  # fill idmap with blobs' ids
             local_background[blob.box.slice()][blob.mask__] = blob.sign * 32  # fill image with blobs
         super().reset()
 
-
     def update_gradient(self):
-
-        blob = self.get_highlighted_element()
-        if blob is None or not self.state.show_gradient: return
+        blob = self.hovered_element
+        if blob is None or not self.show_gradient: return
 
         # Reset gradient
-        self.state.gradient[:] = 1e-3
-        self.state.gradient_mask[:] = False
+        self.gradient[:] = 1e-3
+        self.gradient_mask[:] = False
 
         # Use indexing to get the gradient of the blob
         box_slice = blob.ibox.slice()
-        self.state.gradient[1][box_slice] = -blob.der__t.dy
-        self.state.gradient[0][box_slice] = blob.der__t.dx
-        self.state.gradient_mask[box_slice] = blob.mask__
+        self.gradient[1][box_slice] = -blob.der__t.dy
+        self.gradient[0][box_slice] = blob.der__t.dx
+        self.gradient_mask[box_slice] = blob.mask__
 
         # Apply quiver
-        self.state.quiver = self.state.ax.quiver(
-            *self.state.gradient_mask.nonzero()[::-1],
-            *self.state.gradient[:, self.state.gradient_mask])
+        self.quiver = self.ax.quiver(
+            *self.gradient_mask.nonzero()[::-1],
+            *self.gradient[:, self.gradient_mask])
 
     def update_img(self):
-        self.clear_plots()
         self.update_gradient()
         super().update_img()
 
-    def update_element_id(self):
+    def update_hovered_element(self, hovered_element):
+        blob = self.hovered_element = hovered_element
+
         # override color of the element
-        self.state.img[:] = self.state.background[:]
-        blob = self.get_highlighted_element()
+        self.img[:] = self.background[:]
+
         if blob is None: return
 
         # paint over the blob ...
-        self.state.img[self.state.img_slice][blob.box.slice()][blob.mask__] = WHITE
+        self.img[self.img_slice][blob.box.slice()][blob.mask__] = WHITE
         # ... and its adjacents
         for adj_blob, pose in zip(*blob.adj_blobs):
-            self.state.img[self.state.img_slice][adj_blob.box.slice()][adj_blob.mask__] = POSE2COLOR[pose]
+            self.img[self.img_slice][adj_blob.box.slice()][adj_blob.mask__] = POSE2COLOR[pose]
 
     def update_info(self):
         super().update_info()
@@ -132,7 +159,7 @@ class BlobVisualizer(Visualizer):
         print("ctrl + click to show deeper rblobs")
         print("shift + click to show edge PPs")
 
-        blob = self.get_highlighted_element()
+        blob = self.hovered_element
         if blob is None:
             print("No blob highlighted")
             return
@@ -151,8 +178,13 @@ class BlobVisualizer(Visualizer):
         print(f"└{'─' * 10}┴{'─' * 6}┴{'─' * 10}┴{'─' * 10}┴{'─' * 10}┴{'─' * 10}"
               f"┴{'─' * 10}┴{'─' * 10}┴{'─' * 16}┘")
 
+    def clear_plot(self):
+        if self.quiver is not None:
+            self.quiver.remove()
+            self.quiver = None
+
     def go_deeper(self, fd):
-        blob = self.get_highlighted_element()
+        blob = self.hovered_element
         if blob is None: return
 
         if fd:
@@ -162,8 +194,6 @@ class BlobVisualizer(Visualizer):
             edge = blob.dlayers[0][0]
             if not edge.node_t: return
             PP_ = [
-                # SimpleNamespace(
-                    # id=edge.id,
                 CPP(
                     fd=1,
                     ptuple=[blob.I, blob.G, edge.M, edge.Ma, [blob.Dy, blob.Dx], blob.A],
@@ -178,82 +208,85 @@ class BlobVisualizer(Visualizer):
                     box=blob.box,
                 )
             ]
-            visualizer = SliceVisualizer(self.state, PP_)
-            self.state.img_slice = blob.ibox.slice()
-            self.state.layers_stack.append(layerT(edge, "edge", visualizer))
+            self.img_slice = blob.ibox.slice()
+            return SliceVisualizer(element_=PP_, root_visualizer=self)
         else:
             # frame visualizer (r+blob)
             if not blob.rlayers or not blob.rlayers[0]: return
-            visualizer = self
-            self.state.layers_stack.append(layerT(blob, "rblob", visualizer))   # reuse this visualizer
-
-        return visualizer
+            self.append_element_stack(blob.rlayers[0])
+            return self
 
 
 class SliceVisualizer(Visualizer):
-    def __init__(self, state, PP_):
-        super().__init__(state)
-        self.PP_ = PP_
-        self.P__ = {PP.id:get_P_(PP) for PP in PP_}
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # private fields
+        self.P__ = None
+        self.show_slices = False
+        self.show_links = False
+        self.P_links = None
+        self.blob_slices = None
 
     def reset(self):
-        self.state.element_cls = self.PP_[0].__class__
-        self.state.background[:] = BACKGROUND_COLOR
-        self.state.idmap[:] = -1
+        self.P__ = {PP.id:get_P_(PP) for PP in self.element_}
         # Prepare ID map and background
-        local_idmap = self.state.idmap[self.state.img_slice]
-        local_background = self.state.background[self.state.img_slice]
-        for PP in self.PP_:
+        self.background[:] = BACKGROUND_COLOR
+        self.idmap[:] = -1
+        local_idmap = self.idmap[self.img_slice]
+        local_background = self.background[self.img_slice]
+        for PP in self.element_:
             local_idmap[PP.box.slice()][PP.mask__] = PP.id  # fill idmap with PP's id
             local_background[PP.box.slice()][PP.mask__] = DARK_GREEN
         super().reset()
 
     def update_blob_slices(self):
-        if not self.state.show_slices: return
+        if not self.show_slices: return
         if not self.P__: return
-        PP = self.get_highlighted_element()
+        PP = self.hovered_element
         if PP is None: return
-        y0 = self.state.img_slice[0].start
-        x0 = self.state.img_slice[1].start
-        self.state.blob_slices = []
+        y0 = self.img_slice[0].start
+        x0 = self.img_slice[1].start
+        self.blob_slices = []
         for P in self.P__[PP.id]:
             y, x = P.yx
             s, c = P.axis
             L = len(P.dert_)
             y_, x_ = (np.multiply([[s], [c]], [[-1, 0, 1]]) + [[y], [x]]) if (L == 1) else np.array(P.dert_).T[:2]
 
-            self.state.blob_slices += [(
-                *self.state.ax.plot(x_+x0, y_+y0, 'b-', linewidth=1, markersize=2),
-                self.state.ax.text(x+x0, y+y0, str(L), color = 'b', fontsize = 12),
+            self.blob_slices += [(
+                *self.ax.plot(x_+x0, y_+y0, 'b-', linewidth=1, markersize=2),
+                self.ax.text(x+x0, y+y0, str(L), color = 'b', fontsize = 12),
             )]
 
     def update_P_links(self):
-        if not self.state.show_links: return
+        if not self.show_links: return
         if not self.P__: return
-        PP = self.get_highlighted_element()
+        PP = self.hovered_element
         if PP is None: return
-        y0 = self.state.img_slice[0].start
-        x0 = self.state.img_slice[1].start
-        self.state.P_links = []
+        y0 = self.img_slice[0].start
+        x0 = self.img_slice[1].start
+        self.P_links = []
         for P in self.P__[PP.id]:
             for derP in P.link_H[-1]:
-                (_y, _x), (y, x) = (derP._P.yx, derP.P.yx)
-                self.state.P_links += self.state.ax.plot([_x+x0,x+x0], [_y+y0,y+y0], 'ko-', linewidth=2, markersize=4)
+                _P = derP if isinstance(derP, type(P)) else derP._P
+                (_y, _x), (y, x) = _P.yx, P.yx
+                self.P_links += self.ax.plot([_x+x0,x+x0], [_y+y0,y+y0], 'ko-', linewidth=2, markersize=4)
 
     def update_img(self):
-        self.clear_plots()
         self.update_blob_slices()
         self.update_P_links()
         super().update_img()
 
-    def update_element_id(self):
+    def update_hovered_element(self, hovered_element):
+        PP = self.hovered_element = hovered_element
+
         # override color of the element
-        self.state.img[:] = self.state.background[:]
-        PP = self.get_highlighted_element()
+        self.img[:] = self.background[:]
+
         if PP is None: return
 
         # paint over the blob ...
-        self.state.img[self.state.img_slice][PP.box.slice()][PP.mask__] = WHITE
+        self.img[self.img_slice][PP.box.slice()][PP.mask__] = WHITE
 
     def update_info(self):
         print("hit 'z' to toggle show slices")
@@ -261,16 +294,27 @@ class SliceVisualizer(Visualizer):
         print("ctrl + click to show deeper rPP")
         print("shift + click to show deeper dPP")
 
+    def clear_plot(self):
+        if self.P_links is not None:
+            for line in self.P_links:
+                line.remove()
+            self.P_links = None
+        if self.blob_slices is not None:
+            for line, L_text in self.blob_slices:
+                line.remove()
+                L_text.remove()
+            self.blob_slices = None
+
     def go_deeper(self, fd):
-        PP = self.get_highlighted_element()
+        PP = self.hovered_element
         if PP is None: return
         if not PP.node_t: return
         if not isinstance(PP.node_t, list): return  # stop if no deeper layer
         subPP_ = PP.node_t[fd]
         if not subPP_: return
-        visualizer = SliceVisualizer(self.state, subPP_)
-        self.state.layers_stack.append(layerT(PP, "PP", visualizer))
-        return visualizer
+        self.append_element_stack(subPP_)
+        return self
+
 
 def get_P_(PP):
     P_ = []

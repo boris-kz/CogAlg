@@ -362,3 +362,26 @@ def cluster_params(parH, rVal,rRdn,rMax, fd, G=None):  # G for parH=aggH
 
     return [part_P_,rVal,rRdn,rMax]  # root values
 
+def form_mediation_layers(layer, layers, fder):  # layers are initialized with same nodes and incrementally mediated links
+
+    # form link layers to back-propagate overlap of root graphs to segment node_, pruning non-max roots?
+    out_layer = []; out_val = 0   # new layer, val
+
+    for (node, _links, _nodes, Nodes) in layer:  # higher layers have incrementally mediated _links and _nodes
+        links, nodes = [], []  # per current-layer node
+        Val = 0
+        for _node in _nodes:
+            for link in _node.link_H[-(1+fder)]:  # mediated links
+                __node = link._G if link.G is _node else link.G
+                if __node not in Nodes:  # not in lower-layer links
+                    nodes += [__node]
+                    links += [link]  # to adjust link.val in suppress_overlap
+                    Val += link.valt[fder]
+        # add fork val of link layer:
+        node.val_Ht[fder] += [Val]
+        out_layer += [[node, links, nodes, Nodes+nodes]]  # current link mediation order
+        out_val += Val  # no permanent val per layer?
+
+    layers += [out_layer]
+    if out_val > ave:
+        form_mediation_layers(out_layer, layers, fder)

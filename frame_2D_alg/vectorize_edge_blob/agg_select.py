@@ -6,7 +6,7 @@ from .classes import Cgraph, CderG, CPP
 from .filters import ave_L, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd, ave_dI, ave_G, ave_M, ave_Ma
 from .slice_edge import slice_edge, comp_angle
 from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, sum_dertuple, comp_derH, matchF
-from .agg_recursion import comp_G_, sum_link_tree_, segment_node_, sum2graph, feedback
+from .agg_recursion import comp_G_, sum_link_tree_, sum2graph, feedback
 
 '''
 Implement sparse param tree in aggH: new graphs represent only high m|d params + their root params.
@@ -48,13 +48,12 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
 
 def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_
 
-    cluster_params(parH=root.aggH, rVal=0,rRdn=0,rMax=0, fd=fd, G=root)
-    # aggH-> pP_v: [part_P_,V,R,M] for compressed comp
-
+    cluster_params(parHv = [root.aggH,sum(root.valHt[fd]),sum(root.rdnHt[fd]),sum(root.maxHt[fd])], fd=fd)
+    # compress aggH-> pP_,V,R,M: select G V,R,M?
     Val,Rdn = comp_G_(G_, fd)  # rng|der cross-comp all Gs, form link_H[-1] per G, sum in Val,Rdn
-    if Val > ave*Rdn > ave:  # else no clustering?
+    if Val > ave * Rdn:  # else no clustering
         root.valHt[fd]+=[0]; root.rdnHt[fd] += [1]  # sum in form_graph_t feedback, +root.maxHt[fd]?
-
+        # pass Val,Rdn?
         GG_t = form_graph_t(root, G_)  # eval sub+ and feedback per graph
         # agg+ xcomp-> form_graph_t loop sub)agg+, vs. comp_slice:
         # sub+ loop-> eval-> xcomp
@@ -64,50 +63,53 @@ def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in 
 
         G_[:] = GG_t
 
+def cluster_params(parHv, fd):  # last v: value tuple valt,rdnt,maxt
 
-def cluster_params(parH, rVal,rRdn,rMax, fd, G=None):  # G for parH=aggH
-
+    parH, rVal, rRdn, rMax = parHv  # compressed valt,rdnt,maxt per aggH replace initial summed G vals
     part_P_ = []  # pPs: nested clusters of >ave param tuples, as below:
     part_ = []  # [[subH, sub_part_P_t], Val,Rdn,Max]
     Val, Rdn, Max = 0, 0, 0
     parH = copy(parH)
-    i=1
-    while parH:  # aggH | subH | derH (then subH is ptuplet), top-down
-        subH = parH.pop()
-        if G:  # parH is aggH
-            sub_cluster(subH, G.valHt[fd][-i],G.rdnHt[fd][-i],G.maxHt[fd][-i], part_P_,[part_,Val,Rdn,Max], rVal,rRdn,rMax, fd)
-            i+=1
-        elif isinstance(subH[0][0],list) and isinstance(subH[0][0][0],list):  # subH is derH, not extt
-            subH, valt, rdnt, maxt = subH  # initial derH is a tuple
-            sub_cluster(subH, valt[fd],rdnt[fd],maxt[fd], part_P_,[part_,Val,Rdn,Max], rVal,rRdn,rMax, fd)
-        else:
-            valP_t = [[cluster_vals(ptuple) for ptuple in subH if sum(ptuple)>ave]]  # extt in subH or ptuplet in derH
-            if valP_t:
-                part_ += [valP_t]  # params=vals, no sum-> Val,Rdn,Max?
-            else:
-                if Val:  # empty valP_ terminates root pP
-                    part_P_ += [[part_,Val,Rdn,Max]]; rVal+=Val; rRdn+=Rdn; rMax+=Max  # root values
-                part_=[]; Val,Rdn,Max = 0,0,0  # reset
+    while parH:  # aggHv | subHv | derHv (ptupletv_), top-down
+        subt = parH.pop()   # Hv | extt | ptupletv
+
+        if isinstance(subt[0][0],list):  # not extt
+            if isinstance(subt[0][0][0],list):
+                subH, valt, rdnt, maxt = subt  # subt is Hv
+                val, rdn, max = valt[fd],rdnt[fd],maxt[fd]
+                if val > ave:  # recursive eval,unpack
+                    Val+=val; Rdn+=rdn; Max+=max  # summed with sub-values:
+                    sub_part_P_t = cluster_params(subt, fd)
+                    part_ += [[subH, sub_part_P_t]]
+                else:
+                    if Val:  # empty sub_pP_ terminates root pP
+                        part_P_ += [[part_,Val,Rdn,Max]]; rVal+=Val; rRdn+=Rdn; rMax+=Max  # root params
+                        part_= [], Val,Rdn,Max = 0,0,0  # pP params
+                        # reset
+            else: cluster_ptuplet(subt, [part_P_,rVal,rRdn,rMax], [part_,Val,Rdn,Max], v=1)  # subt is ptupletv
+        else:     cluster_ptuplet(subt, [part_P_,rVal,rRdn,rMax], [part_,Val,Rdn,Max], v=0)  # subt is extt
     if part_:
         part_P_ += [[part_,Val,Rdn,Max]]; rVal+=Val; rRdn+=Rdn; rMax+=Max
 
     return [part_P_,rVal,rRdn,rMax]  # root values
 
 
-def sub_cluster(subH,val,rdn,max, part_P_, part_t, rVal,rRdn,rMax, fd):
-    part_, Val, Rdn, Max = part_t
+def cluster_ptuplet(ptuplet, part_P_v, part_v, v):  # ext or ptuple, params=vals
 
-    if val > ave:  # recursive eval,unpack
-        Val+=val; Rdn+=rdn; Max+=max  # summed with sub-values:
-        sub_part_P_t = cluster_params(subH, Val,Rdn,Max, fd)
-        part_ += [[subH, sub_part_P_t]]
+    part_P_,rVal,rRdn,rMax = part_P_v  # root params
+    part_,Val,Rdn,Max = part_v  # pP params
+    if v: ptuplet, valt,rdnt,maxt = ptuplet  # valt,rdnt,maxt
+
+    valP_t = [[cluster_vals(ptuple) for ptuple in ptuplet if sum(ptuple) > ave]]
+    if valP_t:
+        part_ += [valP_t]  # params=vals, no sum-> Val,Rdn,Max?
     else:
-        if Val:  # empty sub_pP_ terminates root pP
-            part_P_ += [[part_,Val,Rdn,Max]]; rVal+=Val; rRdn+=Rdn; rMax+=Max  # root values
-            part_t[:] = [[],0,0,0]  # reset
+        if Val:  # empty valP_ terminates root pP
+            part_P_ += [[part_, Val, Rdn, Max]]
+            part_P_v[1:] = rVal+Val, rRdn+Rdn, rMax+Max  # root values
+        part_v[:] = [],0,0,0  # reset
 
-def cluster_vals(ptuple):  # ext or ptuple, params=vals
-
+def cluster_vals(ptuple):
     parP_ = []
     parP = [ptuple[0]] if ptuple[0] > ave else []  # init, need to use param type ave instead
 
@@ -120,76 +122,34 @@ def cluster_vals(ptuple):  # ext or ptuple, params=vals
     if parP: parP_ += [parP]  # terminate last parP
     return parP_  # may be empty
 
+# very tentative, need to add pruning nodes from non-max roots and pruning weak graphs:
+def segment_node_(Gt_, fd):  # form proto-graph_
 
-def form_mediation_layers(layer, layers, fder):  # layers are initialized with same nodes and incrementally mediated links
+    extend_val = 0; graph_ = []
 
-    # form link layers to back-propagate overlap of root graphs to segment node_, pruning non-max roots?
-    out_layer = []; out_val = 0   # new layer, val
+    for G,Val,Rdn in Gt_:  # Gt from sum_link_tree_ + direct _links, _nodes, Nodes:
+        graph_ += [[G,Val,Rdn, G.link_H[-1], [link._G if link.G is G else link.G for link in G.link_H[-1]], []]]
 
-    for (node, _links, _nodes, Nodes) in layer:  # higher layers have incrementally mediated _links and _nodes
-        links, nodes = [], []  # per current-layer node
-        Val = 0
-        for _node in _nodes:
-            for link in _node.link_H[-(1+fder)]:  # mediated links
-                __node = link.G1 if link.G0 is _node else link.G0
-                if __node not in Nodes:  # not in lower-layer links
-                    nodes += [__node]
-                    links += [link]  # to adjust link.val in suppress_overlap
-                    Val += link.valt[fder]
-        # add fork val of link layer:
-        node.val_Ht[fder] += [Val]
-        out_layer += [[node, links, nodes, Nodes+nodes]]  # current link mediation order
-        out_val += Val  # no permanent val per layer?
+    while True:  # add incrementally mediated _links and _nodes to each node
+        extend_val = 0
+        for (node, Val, Rdn, _links, _nodes, Nodes) in graph_:
+            links, nodes = [],[]  # per current-layer node
+            for _node in _nodes:
+                for link in _node.link_H[-1]:  # mediated links
+                    __node = link._G if link.G is _node else link.G
+                    if __node not in Nodes:  # not in lower-layer links
+                        nodes += [__node]
+                        links += [link]  # to adjust link.val in suppress_overlap
+                        extend_val += link.valt[fd]  # * (__node Val - ave *__node Rdn)?
 
-    layers += [out_layer]
-    if out_val > ave:
-        form_mediation_layers(out_layer, layers, fder)
-
+            Nodes+=nodes  # current link mediation order
+        if extend_val < ave: break
 '''
-- sum_link_tree_: defines combined value of each node, to compute combined value of their links and to select max root
-- form_mediation_layers: add temporary +ve combined-value links to all connected nodes per top-layer node 
-  (these links represent overlapping clusters) 
-- segment_node_: via these links, top nodes send roots to bottom nodes, which then sort them to select single root/exemplar, 
-  and delete themselves from temporary links of other top-layer roots. 
+- add temporary +ve combined-value links to all connected nodes per top-layer node, to represent overlapping clusters 
+- via these links, top nodes send roots to bottom nodes, which then sort them to select single root/exemplar, 
+  and delete themselves from the links of other top-layer roots. 
 - prune weak top nodes, the rest represent non-overlapping clusters of their links.
-  this should be parallelizable?
 '''
-# replace with root backprop, as described above:
-def segment_node_(root, Gt_, fd):
-    link_map = defaultdict(list)
-    ave = G_aves[fd]
-    for G,_,_ in Gt_:
-        for derG in G.link_H[-1]:
-            if derG.valt[fd] > ave * derG.rdnt[fd]:  # or link val += node Val: prune +ve links to low Vals?
-                link_map[G] += [derG._G]  # keys:Gs, vals: linked _G_s
-                link_map[derG._G] += [G]
-    graph_ = []
-    # initialize proto-graphs with each node, eval links to add other nodes, skip added nodes next:
-    for iG, iVal, iRdn in Gt_:
-        if iVal > ave * iRdn and not iG.root[fd]:
-            try: dec = iG.valHt[fd][-1] / iG.maxHt[fd][-1]
-            except ZeroDivisionError: dec = 1  # add internal layers Val *= current-layer decay to init graph totals:
-            tVal = iVal + sum(iG.valHt[fd]) * dec
-            tRdn = iRdn + sum(iG.rdnHt[fd]) * dec
-            cG_ = [iG]; iG.root[fd] = cG_  # clustered Gs
-            perimeter = link_map[iG]       # recycle perimeter in breadth-first search, outward from iG:
-            while perimeter:
-                _G = perimeter.pop(0)
-                for link in _G.link_H[-1]:
-                    G = link.G if link._G is _G else link._G
-                    if G in cG_ or G not in [Gt[0] for Gt in Gt_]: continue   # circular link
-                    Gt = Gt_[G.it[fd]]; Val = Gt[1]; Rdn = Gt[2]
-                    if Val > ave * Rdn:
-                        try: decay = G.valHt[fd][-1] / G.maxHt[fd][-1]  # current link layer surround decay
-                        except ZeroDivisionError: decay = 1
-                        tVal += Val + sum(G.valHt[fd])*decay  # ext+ int*decay: proj match to distant nodes in higher graphs?
-                        tRdn += Rdn + sum(G.rdnHt[fd])*decay
-                        cG_ += [G]; G.root[fd] = cG_
-                        perimeter += [G]
-            if tVal > ave * tRdn:
-                graph_ += [sum2graph(root, cG_, fd)]  # convert to Cgraphs
-
-    return graph_
 
 def form_graph_t(root, G_):  # form mgraphs and dgraphs of same-root nodes
 
