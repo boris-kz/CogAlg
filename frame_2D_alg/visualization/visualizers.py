@@ -20,8 +20,6 @@ POSE2COLOR = {
 
 BACKGROUND_COLOR = 128  # Pixel at this value can be over-written
 
-layerT = namedtuple("layerT", "root,type,visualizer")
-
 class Visualizer:
     def __init__(self, element_, root_visualizer=None,
                  shape=None, title="Visualization"):
@@ -31,11 +29,11 @@ class Visualizer:
         self.hovered_element = None
         self.element_stack = []
         self.img = None
+        self.img_slice = None
         if self.root_visualizer is None:
             height, width = shape
             self.background = np.full((height, width, 3), BACKGROUND_COLOR, 'uint8')
             self.idmap = np.full((height, width), -1, 'int64')
-            self.img_slice = None
 
             self.fig, self.ax = plt.subplots()
             self.fig.canvas.set_window_title(title)
@@ -43,7 +41,6 @@ class Visualizer:
         else:
             self.background = self.root_visualizer.background
             self.idmap = self.root_visualizer.idmap
-            self.img_slice = self.root_visualizer.img_slice
 
             self.fig = self.root_visualizer.fig
             self.ax = self.root_visualizer.ax
@@ -53,10 +50,8 @@ class Visualizer:
         self.clear_plot()
         self.img = self.background.copy()
         self.hovered_element = None
-        self.update_img()
-        self.update_info()
 
-    def update_img(self):
+    def update_img(self, flags):
         self.imshow_obj.set_data(self.img)
         self.fig.canvas.draw_idle()
 
@@ -70,6 +65,7 @@ class Visualizer:
             self.element_ = self.element_stack.pop()
             return self
         elif self.root_visualizer is not None:
+            self.clear_plot()  # remove private plots
             return self.root_visualizer
         # return None otherwise
 
@@ -78,8 +74,8 @@ class Visualizer:
         self.element_ = new_element_
 
     def get_hovered_element(self, x, y):
-        if x is None or x is None: return None
-        else: return self.element_cls.get_instance(self.idmap[round(x), round(y)])
+        if x is None or y is None: return None
+        else: return self.element_cls.get_instance(self.idmap[round(y), round(x)])
 
     # to be replaced:
     def update_hovered_element(self, hovered_element):
@@ -117,7 +113,7 @@ class BlobVisualizer(Visualizer):
 
     def update_gradient(self):
         blob = self.hovered_element
-        if blob is None or not self.show_gradient: return
+        if blob is None: return
 
         # Reset gradient
         self.gradient[:] = 1e-3
@@ -134,9 +130,10 @@ class BlobVisualizer(Visualizer):
             *self.gradient_mask.nonzero()[::-1],
             *self.gradient[:, self.gradient_mask])
 
-    def update_img(self):
-        self.update_gradient()
-        super().update_img()
+    def update_img(self, flags):
+        self.clear_plot()
+        if flags.show_gradient: self.update_gradient()
+        super().update_img(flags)
 
     def update_hovered_element(self, hovered_element):
         blob = self.hovered_element = hovered_element
@@ -208,8 +205,8 @@ class BlobVisualizer(Visualizer):
                     box=blob.box,
                 )
             ]
-            self.img_slice = blob.ibox.slice()
-            return SliceVisualizer(element_=PP_, root_visualizer=self)
+            self.clear_plot()
+            return SliceVisualizer(img_slice=blob.ibox.slice(), element_=PP_, root_visualizer=self)
         else:
             # frame visualizer (r+blob)
             if not blob.rlayers or not blob.rlayers[0]: return
@@ -218,8 +215,9 @@ class BlobVisualizer(Visualizer):
 
 
 class SliceVisualizer(Visualizer):
-    def __init__(self, **kwargs):
+    def __init__(self, img_slice, **kwargs):
         super().__init__(**kwargs)
+        self.img_slice = img_slice  # all PPs have same frame of reference
         # private fields
         self.P__ = None
         self.show_slices = False
@@ -240,7 +238,6 @@ class SliceVisualizer(Visualizer):
         super().reset()
 
     def update_blob_slices(self):
-        if not self.show_slices: return
         if not self.P__: return
         PP = self.hovered_element
         if PP is None: return
@@ -259,7 +256,6 @@ class SliceVisualizer(Visualizer):
             )]
 
     def update_P_links(self):
-        if not self.show_links: return
         if not self.P__: return
         PP = self.hovered_element
         if PP is None: return
@@ -272,10 +268,11 @@ class SliceVisualizer(Visualizer):
                 (_y, _x), (y, x) = _P.yx, P.yx
                 self.P_links += self.ax.plot([_x+x0,x+x0], [_y+y0,y+y0], 'ko-', linewidth=2, markersize=4)
 
-    def update_img(self):
-        self.update_blob_slices()
-        self.update_P_links()
-        super().update_img()
+    def update_img(self, flags):
+        self.clear_plot()
+        if flags.show_slices: self.update_blob_slices()
+        if flags.show_links: self.update_P_links()
+        super().update_img(flags)
 
     def update_hovered_element(self, hovered_element):
         PP = self.hovered_element = hovered_element
@@ -309,7 +306,7 @@ class SliceVisualizer(Visualizer):
         PP = self.hovered_element
         if PP is None: return
         if not PP.node_t: return
-        if not isinstance(PP.node_t, list): return  # stop if no deeper layer
+        if not isinstance(PP.node_t[0], list): return  # stop if no deeper layer (PP.node_t filled with Ps)
         subPP_ = PP.node_t[fd]
         if not subPP_: return
         self.append_element_stack(subPP_)

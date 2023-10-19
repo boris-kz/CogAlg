@@ -30,21 +30,26 @@ def visualize(frame):
 
     # create visualizer
     state = SimpleNamespace(
-        visualizer=BlobVisualizer(frame, title="Visualization")
+        visualizer=BlobVisualizer(frame, title="Visualization"),
+        # flags:
+        flags=SimpleNamespace(
+            show_gradient=False,
+            show_slices=False,
+            show_links=False,
+        ),
     )
-    fig, ax = visualizer.fig, visualizer.ax
-    state.visualizer.reset()
-
-    # TODO : cleaning up in transitions i.e:
+    fig, ax = state.visualizer.fig, state.visualizer.ax
+    state.visualizer.reset()        # reset plot data
+    state.visualizer.update_img(state.flags)    # update plot image
+    state.visualizer.update_info()  # display on terminal
 
     # declare callback sub-routines
-
     def on_mouse_movement(event):
         """Highlight the blob the mouse is hovering on."""
         hovered_element = state.visualizer.get_hovered_element(event.xdata, event.ydata)
         if hovered_element is not state.visualizer.hovered_element:
             state.visualizer.update_hovered_element(hovered_element)
-            state.visualizer.update_img()
+            state.visualizer.update_img(state.flags)
             state.visualizer.update_info()
 
     def on_click(event):
@@ -55,14 +60,15 @@ def visualize(frame):
         if ret is None: return
         state.visualizer = ret
         state.visualizer.reset()
+        state.visualizer.update_img(state.flags)
+        state.visualizer.update_info()
 
     def on_key_press(event):
-        # TODO : check if visualizer has flag
-        if event.key == 'd': state.visualizer.show_gradient = not state.visualizer.show_gradient
-        elif event.key == 'z': state.visualizer.show_slices = not state.visualizer.show_slices
-        elif event.key == 'x': state.visualizer.show_links = not state.visualizer.show_links
+        if event.key == 'd': state.flags.show_gradient = not state.flags.show_gradient
+        elif event.key == 'z': state.flags.show_slices = not state.flags.show_slices
+        elif event.key == 'x': state.flags.show_links = not state.flags.show_links
         else: return
-        state.visualizer.update_img()
+        state.visualizer.update_img(state.flags)
 
     fig.canvas.mpl_connect('motion_notify_event', on_mouse_movement)
     fig.canvas.mpl_connect('button_release_event', on_click)

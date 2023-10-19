@@ -6,6 +6,8 @@ from .classes import Cgraph, CderG, CPP
 from .filters import ave_L, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd
 from .slice_edge import slice_edge, comp_angle
 from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, sum_dertuple, comp_derH, matchF
+
+
 '''
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
 in combination with spliced lower-composition patterns, etc, if only lower param-layers match.
@@ -54,7 +56,7 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
 
 def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_
 
-    comp_G_(G_, fd)  # rng|der cross-comp all Gs, nD array? form link_H per G
+    comp_G_(G_,fd)  # rng|der cross-comp all Gs, nD array? form link_H per G
     root.valHt[fd] += [0]; root.rdnHt[fd] += [1]  # sum in form_graph_t feedback
 
     GG_t = form_graph_t(root, G_)  # eval sub+ and feedback per graph
@@ -212,10 +214,13 @@ subH: [derH_t]: m,d derH, m,d ext added by agg+ as 1st tuplet
 aggH: [subH_t]: composition levels, ext per G, 
 '''
 
+# added version with val and rdn
 def comp_G_(G_, fd=0, oG_=None, fin=1):  # cross-comp in G_ if fin, else comp between G_ and other_G_, for comp_node_
 
+    Mval,Dval, Mrdn,Drdn = 0,0,0,0
     if not fd:  # cross-comp all Gs in extended rng, add proto-links regardless of prior links
         for G in G_: G.link_H += [[]]  # add empty link layer, may remove if stays empty
+
         if oG_:
             for oG in oG_: oG.link_H += [[]]
         # form new links:
@@ -234,7 +239,8 @@ def comp_G_(G_, fd=0, oG_=None, fin=1):  # cross-comp in G_ if fin, else comp be
         link_ = []
         for link in G.link_H[-1]:  # if fd: follow links, comp old derH, else follow proto-links, form new derH
             if fd and link.valt[1] < G_aves[1]*link.rdnt[1]: continue  # maybe weak after rdn incr?
-            comp_G(link_,link, fd)
+            mval,dval, mrdn,drdn = comp_G(link_,link, fd)
+            Mval+=mval;Dval+=dval; Mrdn+=mrdn;Drdn+=drdn
         G.link_H[-1] = link_
         '''
         same comp for cis and alt components?
@@ -243,6 +249,8 @@ def comp_G_(G_, fd=0, oG_=None, fin=1):  # cross-comp in G_ if fin, else comp be
                 comp_G(_cG, cG, fd)  # form new layer of links:
         combine cis,alt in aggH: alt represents node isolation?
         comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D? '''
+
+    return [Mval,Dval], [Mrdn,Drdn]
 
 # draft
 def comp_G(link_, link, fd):
@@ -280,6 +288,8 @@ def comp_G(link_, link, fd):
     elif Mval > ave_Gm or Dval > ave_Gd:  # or sum?
         link.subH = SubH; link.maxt = [maxM,maxD]; link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]  # complete proto-link
         link_ += [link]
+
+    return Mval,Dval, Mrdn,Drdn
 
 # draft:
 def comp_aggH(_aggH, aggH, rn):  # no separate ext
