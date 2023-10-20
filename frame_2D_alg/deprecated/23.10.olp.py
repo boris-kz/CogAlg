@@ -385,3 +385,68 @@ def form_mediation_layers(layer, layers, fder):  # layers are initialized with s
     layers += [out_layer]
     if out_val > ave:
         form_mediation_layers(out_layer, layers, fder)
+
+def cluster_params(parHv, fderlay, fd):  # last v: value tuple valt,rdnt,maxt
+
+    parH, rVal, rRdn, rMax = parHv  # compressed valt,rdnt,maxt per aggH replace initial summed G vals
+    part_P_ = []  # pPs: nested clusters of >ave param tuples, as below:
+    part_ = []  # [[subH, sub_part_P_t], Val,Rdn,Max]
+    Val, Rdn, Max = 0, 0, 0
+    parH = copy(parH)
+    while parH:  # aggHv | subHv | derHv (ptupletv_), top-down
+        subt = parH.pop()   # Hv | extt | ptupletv
+        if fderlay:
+            cluster_ptuplet(subt, [part_P_,rVal,rRdn,rMax], [part_,Val,Rdn,Max], v=1)  # subt is ptupletv
+        else:
+            for sub in subt:
+                if isinstance(sub[0][0],list):
+                    subH, valt, rdnt, maxt = sub  # subt is Hv
+                    val, rdn, max = valt[fd],rdnt[fd],maxt[fd]
+                    if val > ave:  # recursive eval,unpack
+                        Val+=val; Rdn+=rdn; Max+=max  # summed with sub-values
+                        # unpack tuple
+                        sub_part_P_t = cluster_params([sub[0], sub[1][fd], sub[2][fd],sub[3][fd]], fderlay=1, fd=fd)
+                        # each element in sub[0] is derLay
+                        part_ += [[subH, sub_part_P_t]]
+                    else:
+                        if Val:  # empty sub_pP_ terminates root pP
+                            part_P_ += [[part_,Val,Rdn,Max]]; rVal+=Val; rRdn+=Rdn; rMax+=Max  # root params
+                            part_= [], Val,Rdn,Max = 0,0,0  # pP params (reset)
+                else:
+                    cluster_ptuplet(sub, [part_P_,rVal,rRdn,rMax], [part_,Val,Rdn,Max], v=0)  # sub is extt
+    if part_:
+        part_P_ += [[part_,Val,Rdn,Max]]; rVal+=Val; rRdn+=Rdn; rMax+=Max
+
+    return [part_P_,rVal,rRdn,rMax]  # root values
+
+def sum_link_tree_(G_,fd):  # sum surrounding link values to define connected nodes, with indirectly incr rng, to parallelize:
+                            # link lower nodes via incr n of higher nodes, added till fully connected, n layers = med rng?
+    ave = G_aves[fd]
+    graph_ = []
+    for i, G in enumerate(G_):
+        G.it[fd] = i  # used here and segment_node_
+        graph_ += [[G, G.valHt[fd][-1],G.rdnHt[fd][-1]]]  # init val,rdn
+    # eval incr mediated links, sum decayed surround node Vals, while significant Val update:
+    _Val,_Rdn = 0,0
+    while True:
+        DVal,DRdn = 0,0
+        Val,Rdn = 0,0  # updated surround of all nodes
+        for i, (G,val,rdn, node_,perimeter) in enumerate(graph_):
+            for link in G.link_H[-1]:
+                if link.valt[fd] < ave * link.rdnt[fd]: continue  # skip negative links
+                _G = link.G if link._G is G else link._G
+                if _G not in G_: continue
+                _graph = graph_[_G.it[fd]]
+                _val = _graph[1]; _rdn = _graph[2]
+                try: decay = link.valt[fd]/link.maxt[fd]  # val rng incr per loop, per node?
+                except ZeroDivisionError: decay = 1
+                Val += _val * decay; Rdn += _rdn * decay  # link decay coef: m|d / max, base self/same
+                # prune links in segment_node_
+            graph_[i][1] = Val; graph_[i][2] = Rdn  # unilateral update, computed separately for _G
+            DVal += Val-_Val  # update / surround extension, signed
+            DRdn += Rdn-_Rdn
+
+        if DVal < ave*DRdn:  # even low-Dval extension may be valuable if Rdn decreases?
+            break
+        _Val,_Rdn = Val,Rdn
+    return graph_
