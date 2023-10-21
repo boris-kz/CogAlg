@@ -220,6 +220,7 @@ class SliceVisualizer(Visualizer):
         self.img_slice = img_slice  # all PPs have same frame of reference
         # private fields
         self.P__ = None
+        # replace with: self.PP2P_ = get_PP2P_(self.element_)
         self.show_slices = False
         self.show_links = False
         self.P_links = None
@@ -263,7 +264,7 @@ class SliceVisualizer(Visualizer):
         x0 = self.img_slice[1].start
         self.P_links = []
         for P in self.P__[PP.id]:
-            for derP in P.link_H[-1]:
+            for derP in P.link_H[PP.rng-1]:
                 _P = derP if isinstance(derP, type(P)) else derP._P
                 (_y, _x), (y, x) = _P.yx, P.yx
                 self.P_links += self.ax.plot([_x+x0,x+x0], [_y+y0,y+y0], 'ko-', linewidth=2, markersize=4)
