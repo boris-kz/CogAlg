@@ -16,7 +16,8 @@ from frame_blobs import boxT
 class CEdge(ClusterStructure):  # edge blob
 
     der__t_roots: object = None  # map to dir__t
-    node_t : list = z([])  # default P_, node_t in select PP_ or G_ fder forks
+    node_ : list = z([])  # default P_, node_t in select PP_ or G_ fder forks
+    Pt_ : list = z([])
     fback_t : list = z([[],[]])  # for consistency, only fder=0 is used
     # for comp_slice:
     derH : list = z([])  # formed in PPs, inherited in graphs
@@ -67,7 +68,7 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
 
 class CderP(ClusterStructure):  # tuple of derivatives in P link: binary tree with latuple root and vertuple forks
 
-    derH : list = z([])  # [[[mtuple,dtuple],[mval,dval],[mrdn,drdn]]], single in rng+
+    derH : list = z([])  # [[[mtuple,dtuple],[mval,dval],[mrdn,drdn]]], single ptuplet in rng+
     valt : list = z([0,0])
     rdnt : list = z([1,1])  # mrdn + uprdn if branch overlap?
     _P : object = None  # higher comparand
@@ -91,7 +92,8 @@ class CPP(CderP):
     rdnt : list = z([1,1])
     mask__ : object = None
     root : object = None  # edge / PP, PP / sub_PP: not shared between root forks
-    node_t : list = z([])  # init P_, -> node_tt if sub+: [rng+ [sub_PPm_,sub_PPd_], der+ [sub_PPm_,sub_PPd_]]
+    node_ : list = z([])  # init P_, -> node_tt if sub+: [rng+ [sub_PPm_,sub_PPd_], der+ [sub_PPm_,sub_PPd_]]
+    Pt_ : list = z([])
     fback_t : list = z([[],[]])  # maps to node_tt: [derH,valt,rdnt] per node fork
     rng : int = 1  # sum of rng+: odd forks in last layer?
     box : boxT = boxT(inf,inf,-inf,-inf)  # y0,x0,yn,xn
@@ -105,7 +107,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     fd: int = 0  # graph is defined by m|d value
     ptuple : list = z([0,0,0,0,[0,0],0])  # default from P
     derH : list = z([[],[0,0],[1,1],[0,0]])  # default from PP: [[tuplet,valt,rdnt,maxt]] from rng+| der+, sum min len?
-    aggH : list = z([])  # [[sub_Ht,valt,rdnt]], subH: [[der_Ht,valt,rdnt]]; 2-fork composition layers, compress-> pP_?
+    aggH : list = z([])  # [[subH,valt,rdnt,maxt]], subH: [[derH,valt,rdnt,maxt]]: 2-fork composition layers, -> pP_?
     valHt : list = z([[0],[0]])  # Ht of link vals,rdns, decays / fder:
     maxHt : list = z([[0],[0]])
     rdnHt : list = z([[1],[1]])
@@ -123,7 +125,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     alt_graph_ : list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
     alt_Graph : object = None  # conditional, summed and concatenated params of alt_graph_
     # temporary:
-    it : list = z([0,0])  # indices in root.node_t, maybe nested?
+    i : int = 0  # graph index in root node_
     compared_ : list = z([])
     Rdn : int = 0  # for accumulation or separate recursion count?
     # id_H : list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging

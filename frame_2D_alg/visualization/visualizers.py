@@ -199,7 +199,8 @@ class BlobVisualizer(Visualizer):
                     rdnt=edge.rdnt,
                     mask__=blob.mask__,
                     root=blob,
-                    node_t=edge.node_t,
+                    node_=edge.node_,
+                    Pt_=edge.Pt_,
                     fback_t=edge.fback_t,
                     rng=edge.rng,
                     box=blob.box,
@@ -263,11 +264,10 @@ class SliceVisualizer(Visualizer):
         y0 = self.img_slice[0].start
         x0 = self.img_slice[1].start
         self.P_links = []
-        for P in self.P__[PP.id]:
-            for derP in P.link_H[PP.rng-1]:
-                _P = derP if isinstance(derP, type(P)) else derP._P
-                (_y, _x), (y, x) = _P.yx, P.yx
-                self.P_links += self.ax.plot([_x+x0,x+x0], [_y+y0,y+y0], 'ko-', linewidth=2, markersize=4)
+        for derP in PP.link_:
+            _P, P = derP if isinstance(derP, tuple) else derP._P, derP.P
+            (_y, _x), (y, x) = _P.yx, P.yx
+            self.P_links += self.ax.plot([_x+x0,x+x0], [_y+y0,y+y0], 'ko-', linewidth=2, markersize=4)
 
     def update_img(self, flags):
         self.clear_plot()
