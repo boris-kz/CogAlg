@@ -5,7 +5,7 @@ from collections import deque, defaultdict
 from .classes import Cgraph, CderG, CPP
 from .filters import ave_L, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd, ave_dI, ave_G, ave_M, ave_Ma
 from .slice_edge import slice_edge, comp_angle
-from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, sum_dertuple, comp_derH, matchF
+from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, sum_dertuple, comp_derH, match_func
 from .agg_recursion import comp_aggH, comp_ext, sum_box, sum_Hts, sum_derH,sum_ext
 
 '''
@@ -29,8 +29,8 @@ Then combine graph with alt_graphs?
 
 def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition levels of cross-comp,clustering:
 
-    edge = slice_edge(blob, verbose)  # lateral kernel cross-comp -> P clustering
-    comp_P_(edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
+    edge, adj_Pt = slice_edge(blob, verbose)  # lateral kernel cross-comp -> P clustering
+    comp_P_(edge, adj_Pt)  # vertical, lateral-overlap P cross-comp -> PP clustering
     # PP cross-comp -> discontinuous graph clustering:
     for fd in 0,1:
         node_ = edge.node_t[fd]  # always PP_t
@@ -43,7 +43,7 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
                                L=PP.ptuple[-1], i=i, box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
             node_ = G_
             edge.valHt[0][0] = edge.valt[0]; edge.rdnHt[0][0] = edge.rdnt[0]  # copy
-            agg_recursion(None, edge, node_, fd=0)  # edge.node_t = graph_t, micro and macro recursive
+            agg_recursion(None, edge, node_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
 
 
 def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_
@@ -73,10 +73,10 @@ def cluster_params(parHv, fd):  # last v: value tuple valt,rdnt,maxt
     while parH:  # aggHv | subHv | derHv (ptv_), top-down
         subt = parH.pop()
         '''    subt = Hv: >4-level list, | ptv: 3-level list, | extt: 2-level list:
-        aggHv: [aggH = subHv_, valt, rdnt, maxt],
-        subHv: [subH = derHv_, valt, rdnt, maxt],
-        derHv: [derH = ptv_,   valt, rdnt, maxt] or extt, interlaced in subH
-        ptv: [[mtuple,dtuple], valt, rdnt, maxt] 
+        aggHv: [aggH=subHv_, valt, rdnt, maxt],
+        subHv: [subH=derHv_, valt, rdnt, maxt],
+        derHv: [derH=ptuple_tv_, valt, rdnt, maxt] or extt, mixed in subH
+        ptuple_tv: [[mtuple,dtuple], valt, rdnt, maxt] 
         '''
         if isinstance(subt[0][0],list):  # not extt
             if isinstance(subt[0][0][0],list):  # subt==Hv
@@ -182,6 +182,7 @@ def segment_node_(root, G_,fd):  # sum surrounding link values to define connect
                     med_val = (val+_val) * decay; Val += med_val; periVal += med_val
                     med_rdn = (rdn+_rdn) * decay; Rdn += med_rdn; periRdn += med_rdn
                     new_perimeter += [_node]
+                    node_ += [_node]
                 k = node.i; graph_[k][1] += periVal; graph_[k][2] += periRdn
 
             i = G.i; graph_[i][1] = Val; graph_[i][2] = Rdn
@@ -199,7 +200,7 @@ def segment_node_(root, G_,fd):  # sum surrounding link values to define connect
         for i, root in enumerate(node_):  # reciprocal graph to graph_ refs
             if i != max_root_i:
                 ipop_ += [root.i]  # index in graph_
-    ipop_.sort(reverse=True)  # to prevent missing indices while popping
+    ipop_.sort(reverse=True)  # prevent skipping indices while popping
     [graph_.pop(i) for i in ipop_]  # graphs don't overlap, no need to remove individual nodes
     # prune weak graphs:
     cgraph_ = []

@@ -189,7 +189,7 @@ class BlobVisualizer(Visualizer):
             # edge visualizer
             if not blob.dlayers or not blob.dlayers[0]: return
             edge = blob.dlayers[0][0]
-            if not edge.node_t: return
+            if not edge.node_: return
             PP_ = [
                 CPP(
                     fd=1,
@@ -200,7 +200,7 @@ class BlobVisualizer(Visualizer):
                     mask__=blob.mask__,
                     root=blob,
                     node_=edge.node_,
-                    Pt_=edge.Pt_,
+                    derP_=edge.derP_,
                     fback_t=edge.fback_t,
                     rng=edge.rng,
                     box=blob.box,
@@ -264,7 +264,7 @@ class SliceVisualizer(Visualizer):
         y0 = self.img_slice[0].start
         x0 = self.img_slice[1].start
         self.P_links = []
-        for derP in PP.link_:
+        for derP in PP.derP_:
             _P, P = derP if isinstance(derP, tuple) else derP._P, derP.P
             (_y, _x), (y, x) = _P.yx, P.yx
             self.P_links += self.ax.plot([_x+x0,x+x0], [_y+y0,y+y0], 'ko-', linewidth=2, markersize=4)
@@ -306,9 +306,9 @@ class SliceVisualizer(Visualizer):
     def go_deeper(self, fd):
         PP = self.hovered_element
         if PP is None: return
-        if not PP.node_t: return
-        if not isinstance(PP.node_t[0], list): return  # stop if no deeper layer (PP.node_t filled with Ps)
-        subPP_ = PP.node_t[fd]
+        if not PP.node_: return
+        if not isinstance(PP.node_[0], list): return  # stop if no deeper layer (PP.node_ filled with Ps)
+        subPP_ = PP.node_[fd]
         if not subPP_: return
         self.append_element_stack(subPP_)
         return self
@@ -319,10 +319,10 @@ def get_P_(PP):
     subPP_ = [PP]
     while subPP_:
         subPP = subPP_.pop()
-        if not subPP.node_t: continue
-        if isinstance(subPP.node_t[0], list):
-            subPP_ += subPP.node_t[0] + subPP.node_t[1]
+        if not subPP.node_: continue
+        if isinstance(subPP.node_[0], list):
+            subPP_ += subPP.node_[0]
         else:  # is P_
-            P_ += subPP.node_t
+            P_ += subPP.node_
 
     return P_

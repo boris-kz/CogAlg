@@ -17,7 +17,7 @@ class CEdge(ClusterStructure):  # edge blob
 
     der__t_roots: object = None  # map to dir__t
     node_ : list = z([])  # default P_, node_t in select PP_ or G_ fder forks
-    Pt_ : list = z([])
+    link_ : list = z([])
     fback_t : list = z([[],[]])  # for consistency, only fder=0 is used
     # for comp_slice:
     derH : list = z([])  # formed in PPs, inherited in graphs
@@ -52,7 +52,6 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     rdnt : list = z([1,1])
     dert_ : list = z([])  # array of pixel-level derts, ~ node_
     cells : set = z(set())  # pixel-level kernels adjacent to P axis, combined into corresponding derts projected on P axis.
-    link_H : list = z([[]])  # +ve rlink_, dlink_ H from lower sub+
     root_t : list = z([None,None])  # PPrm,PPrd, PPdm,PPdd that contain this P, single-layer
     axis : tuple = (0,1)  # prior slice angle, init sin=0,cos=1
     yx : tuple = None
@@ -93,7 +92,7 @@ class CPP(CderP):
     mask__ : object = None
     root : object = None  # edge / PP, PP / sub_PP: not shared between root forks
     node_ : list = z([])  # init P_, -> node_tt if sub+: [rng+ [sub_PPm_,sub_PPd_], der+ [sub_PPm_,sub_PPd_]]
-    Pt_ : list = z([])
+    link_ : list = z([])
     fback_t : list = z([[],[]])  # maps to node_tt: [derH,valt,rdnt] per node fork
     rng : int = 1  # sum of rng+: odd forks in last layer?
     box : boxT = boxT(inf,inf,-inf,-inf)  # y0,x0,yn,xn

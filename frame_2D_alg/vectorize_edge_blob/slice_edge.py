@@ -77,7 +77,7 @@ def trace_edge(blob, mask__, verbose=False):
     if verbose:
         step = 100 / len(max_)  # progress % percent per pixel
         progress = 0.0; print(f"\rTracing max... {round(progress)} %", end="");  sys.stdout.flush()
-    edge.node_t = []
+    edge.node_ = []
     Pt_ = []
     while max_:  # queue of (y,x,P)s
         y,x = max_.pop()
@@ -85,12 +85,12 @@ def trace_edge(blob, mask__, verbose=False):
         while maxQue:  # trace max_
             # initialize pivot dert
             y,x,_P = maxQue.popleft()
-            i = blob.i__[blob.ibox.slice()][y, x]
-            dy, dx, g = blob.der__t.get_pixel(y, x)
+            i = blob.i__[blob.ibox.slice()][y,x]
+            dy, dx, g = blob.der__t.get_pixel(y,x)
             ma = ave_dangle  # max value because P direction is the same as dert gradient direction
             assert g > 0, "g must be positive"
             P = form_P(blob, CP(yx=(y,x), axis=(dy/g, dx/g), cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
-            edge.node_t += [P]
+            edge.node_ += [P]
             if _P is not None:
                 Pt_ += [(_P, P)]  # add up links only
             # search in max_ path

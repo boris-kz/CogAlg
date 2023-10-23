@@ -5,7 +5,7 @@ from collections import deque, defaultdict
 from .classes import Cgraph, CderG, CPP
 from .filters import ave_L, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd
 from .slice_edge import slice_edge, comp_angle
-from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, sum_dertuple, comp_derH, matchF
+from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, sum_dertuple, comp_dtuple, match_func
 
 
 '''
@@ -37,8 +37,8 @@ Weak value vars are combined into higher var, so derivation fork can be selected
 
 def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition levels of cross-comp,clustering:
 
-    edge = slice_edge(blob, verbose)  # lateral kernel cross-comp -> P clustering
-    comp_P_(edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
+    edge, adj_Pt_ = slice_edge(blob, verbose)  # lateral kernel cross-comp -> P clustering
+    comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
     # PP cross-comp -> discontinuous graph clustering:
     for fd in 0,1:
         node_ = edge.node_t[fd]  # always PP_t
@@ -268,7 +268,7 @@ def comp_G(link_, link, fd):
     # / PP:
     _derH,derH = _G.derH,G.derH
     if _derH[0] and derH[0]:  # empty in single-node Gs
-        dderH, valt, rdnt, maxt = comp_derH(_derH[0], derH[0], rn=1, fagg=1)
+        dderH, valt, rdnt, maxt = comp_derH(_derH[0], derH[0], rn=1)
         maxM += maxt[0]; maxD += maxt[0]
         mval,dval = valt; Mval+=dval; Dval+=mval
         Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
@@ -313,9 +313,9 @@ def comp_subH(_subH, subH, rn):
 
     for _lay, lay in zip_longest(_subH, subH, fillvalue=[]):  # compare common lower layer|sublayer derHs
         if _lay and lay:  # also if lower-layers match: Mval > ave * Mrdn?
-            if _lay[0] and isinstance(_lay[0][0],list):  # _lay[0][0] is derHt
-
-                dderH, valt, rdnt, maxt = comp_derH(_lay[0], lay[0], rn, fagg=1)
+            if _lay[0] and isinstance(_lay[0][0],list):
+                # _lay[0] is derHv
+                dderH, valt, rdnt, maxt = comp_derH(_lay[0], lay[0], rn)
                 DerH += [[dderH, valt, rdnt, maxt]]  # flat derH
                 maxM += maxt[0]; maxD += maxt[1]
                 mval,dval = valt; Mval += mval; Dval += dval
@@ -324,6 +324,26 @@ def comp_subH(_subH, subH, rn):
                 DerH += [comp_ext(_lay[1],lay[1],[Mval,Dval],[Mrdn,Drdn],[maxM,maxD])]
                 # pack extt as ptuple
     return DerH, [Mval,Dval],[Mrdn,Drdn],[maxM,maxD]  # new layer,= 1/2 combined derH
+
+
+def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, each is ptuple_tv
+
+    dderH = []  # or not-missing comparand: xor?
+    Mval,Dval, Mrdn,Drdn, maxM,maxD = 0,0,1,1,0,0
+
+    for _lay, lay in zip_longest(_derH, derH, fillvalue=[]):  # compare common lower der layers | sublayers in derHs
+        if _lay and lay:  # also if lower-layers match: Mval > ave * Mrdn?
+            # compare dtuples only, mtuples are for evaluation:
+            mtuple, dtuple, Mtuple, Dtuple = comp_dtuple(_lay[0][1], lay[0][1], rn, fagg=1)
+            # sum params:
+            mval = sum(mtuple); dval = sum(abs(d) for d in dtuple)
+            mrdn = dval > mval; drdn = dval < mval
+            maxm = sum(Mtuple); maxd = sum(Dtuple)
+            Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn; maxM+= maxm; maxD+= maxd
+            ptuple_tv = [[mtuple,dtuple],[mval,dval],[mrdn,drdn],[maxm,maxd]]  # or += [Mtuple,Dtuple] for future comp?
+            dderH += [ptuple_tv]  # derLay
+
+    return dderH, [Mval,Dval],[Mrdn,Drdn],[maxM,maxD]  # new derLayer,= 1/2 combined derH
 
 
 def sum_aggH(AggH, aggH, base_rdn):
@@ -374,10 +394,10 @@ def comp_ext(_ext, ext, Valt, Rdnt, Maxt):  # comp ds:
     if isinstance(A,list):
         mA, dA = comp_angle(_A,A); adA=dA; max_mA = max_dA = .5  # = ave_dangle
     else:
-        mA = matchF(_A,A)- ave_dangle; dA = _A-A; adA = abs(dA); _aA=abs(_A); aA=abs(A)
+        mA = match_func(_A,A)- ave_dangle; dA = _A-A; adA = abs(dA); _aA=abs(_A); aA=abs(A)
         max_dA = _aA + aA; max_mA = max(_aA, aA)
-    mL = matchF(_L,L) - ave_L
-    mS = matchF(_S,S) - ave_L
+    mL = match_func(_L,L) - ave_L
+    mS = match_func(_S,S) - ave_L
 
     m = mL + mS + mA
     d = abs(dL) + abs(dS) + adA
