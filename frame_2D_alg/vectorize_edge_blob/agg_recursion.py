@@ -127,8 +127,8 @@ def sum_link_tree_(node_,fd):  # sum surrounding link values to define connected
             break
     return Gt_
 
-def segment_node_(root, Gt_, fd):  # replace with root backprop, sorted in node, to parallelize clustering?
-                                   # over layers stacked in link_tree_, -> single root?
+def segment_node_(root, Gt_, fd):  # fold in sum_link_tree_, as in agg_parP_
+
     link_map = defaultdict(list)   # make default for root.node_t?
     ave = G_aves[fd]
     for G,_,_ in Gt_:

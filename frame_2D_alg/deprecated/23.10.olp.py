@@ -450,3 +450,65 @@ def sum_link_tree_(G_,fd):  # sum surrounding link values to define connected no
             break
         _Val,_Rdn = Val,Rdn
     return graph_
+
+def segment_node_par(root, G_,fd):  # sum surrounding link values to define connected nodes, incrementally mediated
+
+    ave = G_aves[fd]
+    graph_ = []
+    for G in G_:
+        graph_ += [[G, G.valHt[fd][-1],G.rdnHt[fd][-1], [G],[G]]]  # init val,rdn, node_,perimeter
+    _Val, _Rdn = 0, 0
+
+    while True:  # eval incr mediated links, sum perimeter Vals, append node_, while significant Val update:
+        DVal,DRdn, Val,Rdn = 0,0, 0,0
+        # update surround per node:
+        for G, val,rdn, node_,perimeter in graph_:
+            new_perimeter = []
+            for node in perimeter:
+                periVal, periRdn = 0,0
+                for link in node.link_H[-1]:
+                    _node = link.G if link._G is G else link._G
+                    if _node not in G_ or _node in node_: continue
+                    j = _node.i; _val = graph_[j][1]; _rdn = graph_[j][2]
+                    # use relative link vals only:
+                    try: decay = link.valt[fd]/link.maxt[fd]  # link decay coef: m|d / max, base self/same
+                    except ZeroDivisionError: decay = 1
+                    # sum mediated vals per node and perimeter node:
+                    med_val = (val+_val) * decay; Val += med_val; periVal += med_val
+                    med_rdn = (rdn+_rdn) * decay; Rdn += med_rdn; periRdn += med_rdn
+                    new_perimeter += [_node]
+                    node_ += [_node]
+                k = node.i; graph_[k][1] += periVal; graph_[k][2] += periRdn
+
+            i = G.i; graph_[i][1] = Val; graph_[i][2] = Rdn
+            DVal += Val-_Val; DRdn += Rdn-_Rdn  # update / surround extension, signed
+            perimeter[:] = new_perimeter
+        if DVal < ave*DRdn:  # even low-Dval extension may be valuable if Rdn decreases?
+            break
+        _Val,_Rdn = Val,Rdn
+
+    # prune non-max overlapping graphs:
+    ipop_ = []
+    for graph in graph_:
+        node_ = graph[3]  # or Val-ave*Rdn:
+        max_root_i = np.argmax([graph_[node.i][1] for node in node_])  # max root: graph nodes = graph roots, bilateral assign
+        for i, root in enumerate(node_):  # reciprocal graph to graph_ refs
+            if i != max_root_i:
+                ipop_ += [root.i]  # index in graph_
+    ipop_.sort(reverse=True)  # prevent skipping indices while popping
+    [graph_.pop(i) for i in ipop_]  # graphs don't overlap, no need to remove individual nodes
+    # prune weak graphs:
+    cgraph_ = []
+    for graph in graph_:
+        if graph[1] > ave * graph[2]:  # Val > ave * Rdn
+            cgraph_ += [sum2graph(root, graph, fd)]
+    '''
+    graph-parallel to cluster broad range of G_, same stop in overlapping Gs:
+    graphs sum and buffer link tree Gs in their node_s, separate stopping
+
+    runtime overlap | stop test, reuse PU for continuing | new_node: added to node_ from Node_?
+    else: 
+    - graphs send their i,vals to roots of all Gs in their node_
+    - each G selects max val root, sends deletes to other root graphs
+    '''
+    return cgraph_

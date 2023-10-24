@@ -29,8 +29,8 @@ Then combine graph with alt_graphs?
 
 def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition levels of cross-comp,clustering:
 
-    edge, adj_Pt = slice_edge(blob, verbose)  # lateral kernel cross-comp -> P clustering
-    comp_P_(edge, adj_Pt)  # vertical, lateral-overlap P cross-comp -> PP clustering
+    edge, adj_Pt_ = slice_edge(blob, verbose)  # lateral kernel cross-comp -> P clustering
+    comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
     # PP cross-comp -> discontinuous graph clustering:
     for fd in 0,1:
         node_ = edge.node_t[fd]  # always PP_t
@@ -101,7 +101,7 @@ def cluster_ptuplet(ptuplet, part_P_v, part_v, v):  # ext or ptuple, params=vals
 
     part_P_,rVal,rRdn,rMax = part_P_v  # root params
     part_,Val,Rdn,Max = part_v  # pP params
-    if v: ptuplet, valt,rdnt,maxt = ptuplet  # valt,rdnt,maxt
+    if v: ptuplet, valt,rdnt,maxt = ptuplet
 
     valP_t = [[cluster_vals(ptuple) for ptuple in ptuplet if sum(ptuple) > ave]]
     if valP_t:
@@ -124,6 +124,7 @@ def cluster_vals(ptuple):
 
     if parP: parP_ += [parP]  # terminate last parP
     return parP_  # may be empty
+
 
 def form_graph_t(root, Valt,Rdnt, G_):  # form mgraphs and dgraphs of same-root nodes
 
@@ -156,18 +157,26 @@ def form_graph_t(root, Valt,Rdnt, G_):  # form mgraphs and dgraphs of same-root 
     return graph_t  # root.node_t'node_ -> node_t: incr nested with each agg+?
 
 # tentative
-def segment_node_(root, G_,fd):  # sum surrounding link values to define connected nodes, incrementally mediated
+def segment_node_(root, G_, fd):  # sum surrounding link values to define connected nodes, incrementally mediated
 
+    link_map = defaultdict(list)   # make default for root.node_t?
     ave = G_aves[fd]
     graph_ = []
+    # initialize proto-graphs with each node, eval links to add other nodes, skip added nodes next
     for G in G_:
-        graph_ += [[G, G.valHt[fd][-1],G.rdnHt[fd][-1], [G],[G]]]  # init val,rdn, node_,perimeter
-    _Val, _Rdn = 0, 0
-
-    while True:  # eval incr mediated links, sum perimeter Vals, append node_, while significant Val update:
+        graph_ += [[G, G.valHt[fd][-1], G.rdnHt[fd][-1], [G], [G]]]  # init val,rdn, node_,perimeter
+        # if using dict:
+        for derG in G.link_H[-1]:
+            if derG.valt[fd] > ave * derG.rdnt[fd]:  # or link val += node Val: prune +ve links to low Vals?
+                link_map[G] += [derG._G]  # keys:Gs, vals: linked _G_s
+                link_map[derG._G] += [G]
+    _Val,_Rdn = 0,0
+    # eval incr mediated links, sum perimeter Vals, append node_, while significant Val update:
+    while True:
         DVal,DRdn, Val,Rdn = 0,0, 0,0
         # update surround per node:
         for G, val,rdn, node_,perimeter in graph_:
+            # not updated:
             new_perimeter = []
             for node in perimeter:
                 periVal, periRdn = 0,0
@@ -192,29 +201,38 @@ def segment_node_(root, G_,fd):  # sum surrounding link values to define connect
             break
         _Val,_Rdn = Val,Rdn
 
-    # prune non-max overlapping graphs:
-    ipop_ = []
-    for graph in graph_:
-        node_ = graph[3]  # or Val-ave*Rdn:
-        max_root_i = np.argmax([graph_[node.i][1] for node in node_])  # max root: graph nodes = graph roots, bilateral assign
-        for i, root in enumerate(node_):  # reciprocal graph to graph_ refs
-            if i != max_root_i:
-                ipop_ += [root.i]  # index in graph_
-    ipop_.sort(reverse=True)  # prevent skipping indices while popping
-    [graph_.pop(i) for i in ipop_]  # graphs don't overlap, no need to remove individual nodes
-    # prune weak graphs:
-    cgraph_ = []
-    for graph in graph_:
-        if graph[1] > ave * graph[2]:  # Val > ave * Rdn
-            cgraph_ += [sum2graph(root, graph, fd)]
-    '''
-    + roots per G to form graph_ over broad range of G_ in parallel:
-    - graphs sum and buffer link tree Gs in their node_s,
-    - graphs send their i,vals to roots of all Gs in their node_,  
-    - each G selects max val root, sends deletes to other root graphs
-    '''
-    return cgraph_
+    return [sum2graph(root, graph, fd) for graph in graph_ if graph[1] > ave * graph[2]]  # Val > ave * Rdn
 
+''' use dict to avoid graph overlap:
+
+        if iVal > ave * iRdn and not iG.root[fd]:
+            try: dec = iG.valHt[fd][-1] / iG.maxHt[fd][-1]
+            except ZeroDivisionError: dec = 1  # add internal layers Val *= current-layer decay to init graph totals:
+            tVal = iVal + sum(iG.valHt[fd]) * dec
+            tRdn = iRdn + sum(iG.rdnHt[fd]) * dec
+            cG_ = [iG]; iG.root[fd] = cG_  # clustered Gs
+            perimeter = link_map[iG]       # recycle perimeter in breadth-first search, outward from iG:
+            while perimeter:
+                _G = perimeter.pop(0)
+                for link in _G.link_H[-1]:
+                    G = link.G if link._G is _G else link._G
+                    if G in cG_ or G not in [Gt[0] for Gt in Gt_]: continue   # circular link
+                    Gt = Gt_[G.it[fd]]; Val = Gt[1]; Rdn = Gt[2]
+                    if Val > ave * Rdn:
+                        try: decay = G.valHt[fd][-1] / G.maxHt[fd][-1]  # current link layer surround decay
+                        except ZeroDivisionError: decay = 1
+                        tVal += Val + sum(G.valHt[fd])*decay  # ext+ int*decay: proj match to distant nodes in higher graphs?
+                        tRdn += Rdn + sum(G.rdnHt[fd])*decay
+                        cG_ += [G]; G.root[fd] = cG_
+                        perimeter += [G]
+
+        graph-parallel to cluster broad range of G_, same stop in overlapping Gs:
+        graphs sum and buffer link tree Gs in their node_s, separate stopping
+        runtime overlap | stop test, reuse PU for continuing | new_node: added to node_ from Node_?
+        else: 
+        - graphs send their i,vals to roots of all Gs in their node_
+        - each G selects max val root, sends deletes to other root graphs
+        '''
 
 def sum2graph(root, cG_, fd):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
@@ -340,7 +358,7 @@ def comp_G(link_, link, fd):
     # / PP:
     _derH,derH = _G.derH,G.derH
     if _derH[0] and derH[0]:  # empty in single-node Gs
-        dderH, valt, rdnt, maxt = comp_derH(_derH[0], derH[0], rn=1, fagg=1)
+        dderH, valt, rdnt, maxt = comp_derH(_derH[0], derH[0], rn=1)
         maxM += maxt[0]; maxD += maxt[0]
         mval,dval = valt; Mval+=dval; Dval+=mval
         Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
@@ -385,3 +403,26 @@ def feedback(root, fd):  # called from form_graph_, append new der layers to roo
         if fback_ and (len(fback_) == len(rroot.node_t)):  # flat, all rroot nodes terminated and fed back
             # getting cyclic rroot here not sure why it can happen, need to check further
             feedback(rroot, fd)  # sum2graph adds aggH per rng, feedback adds deeper sub+ layers
+
+
+# more selective: only for parallel clustering?
+def select_init_(Gt_, fd):  # local max selection for sparse graph init, if positive link
+
+    init_, non_max_ = [],[]  # pick max in direct links, no recursively mediated links max: discontinuous?
+
+    for node, val in Gt_:
+        if node in non_max_: continue  # can't init graph
+        if val<=0:  # no +ve links
+            if sum(node.val_Ht[fd]) > ave * sum(node.rdn_Ht[fd]):
+                init_+= [[node, 0]]  # single-node proto-graph
+            continue
+        fmax = 1
+        for link in node.link_H[-1]:
+            _node = link.G if link._G is node else link._G
+            if val > Gt_[_node.it[fd]][1]:
+                non_max_ += [_node]  # skip as next node
+            else:
+                fmax = 0; break  # break is not necessary?
+        if fmax:
+            init_ += [[node,val]]
+    return init_
