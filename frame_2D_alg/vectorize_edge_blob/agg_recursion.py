@@ -5,7 +5,7 @@ from collections import deque, defaultdict
 from .classes import Cgraph, CderG, CPP
 from .filters import ave_L, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd
 from .slice_edge import slice_edge, comp_angle
-from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, sum_dertuple, comp_dtuple, match_func
+from .comp_slice import comp_P_, comp_derH, sum_derH, comp_ptuple, sum_ptuple, sum_dertuple, comp_dtuple, match_func
 
 
 '''
@@ -41,7 +41,7 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
     comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
     # PP cross-comp -> discontinuous graph clustering:
     for fd in 0,1:
-        node_ = edge.node_t[fd]  # always PP_t
+        node_ = edge.node_[fd]  # always PP_t
         if edge.valt[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.rdnt[fd]:
             G_= []
             for PP in node_:  # convert CPPs to Cgraphs:
@@ -51,7 +51,7 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
                                L=PP.ptuple[-1], box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
             node_ = G_
             edge.valHt[0][0] = edge.valt[0]; edge.rdnHt[0][0] = edge.rdnt[0]  # copy
-            agg_recursion(None, edge, node_, fd=0)  # edge.node_t = graph_t, micro and macro recursive
+            agg_recursion(None, edge, node_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
 
 
 def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_
@@ -98,36 +98,7 @@ def form_graph_t(root, G_):  # form mgraphs and dgraphs of same-root nodes
     return graph_t  # root.node_t'node_ -> node_t: incr nested with each agg+?
 
 
-def sum_link_tree_(node_,fd):  # sum surrounding link values to define connected nodes, with indirectly incr rng, to parallelize:
-                               # link lower nodes via incr n of higher nodes, added till fully connected, n layers = med rng?
-    ave = G_aves[fd]
-    Gt_ = []
-    for i, G in enumerate(node_):
-        G.it[fd] = i  # used here and segment_node_
-        Gt_ += [[G, G.valHt[fd][-1], G.rdnHt[fd][-1]]]  # init surround val,rdn
-    # iterative eval rng expansion by summing decayed surround node Vals, while significant Val update:
-    while True:
-        DVal = 0
-        for i, (_G,_Val,_Rdn) in enumerate(Gt_):
-            Val, Rdn = 0, 0  # updated surround
-            for link in _G.link_H[-1]:
-                if link.valt[fd] < ave * link.rdnt[fd]: continue  # skip negative links
-                G = link.G if link._G is _G else link._G
-                if G not in node_: continue
-                Gt = Gt_[G.it[fd]]
-                Gval = Gt[1]; Grdn = Gt[2]
-                try: decay = link.valt[fd]/link.maxt[fd]  # val rng incr per loop, per node?
-                except ZeroDivisionError: decay = 1
-                Val += Gval * decay; Rdn += Grdn * decay  # link decay coef: m|d / max, base self/same
-                # prune links by rng Val-ave*Rdn?
-            Gt_[i][1] = Val; Gt_[i][2] = Rdn  # unilateral update, computed separately for _G
-            DVal += abs(_Val-Val)  # _Val update / surround extension
-
-        if DVal < ave:  # also if low Val?
-            break
-    return Gt_
-
-def segment_node_(root, Gt_, fd):  # fold in sum_link_tree_, as in agg_parP_
+def segment_node_(root, Gt_, fd):  # fold sum_link_tree_, as in agg_parP_
 
     link_map = defaultdict(list)   # make default for root.node_t?
     ave = G_aves[fd]
@@ -315,7 +286,7 @@ def comp_subH(_subH, subH, rn):
         if _lay and lay:  # also if lower-layers match: Mval > ave * Mrdn?
             if _lay[0] and isinstance(_lay[0][0],list):
                 # _lay[0] is derHv
-                dderH, valt, rdnt, maxt = comp_derH(_lay[0], lay[0], rn)
+                dderH, valt, rdnt, maxt = comp_derHv(_lay[0], lay[0], rn)
                 DerH += [[dderH, valt, rdnt, maxt]]  # flat derH
                 maxM += maxt[0]; maxD += maxt[1]
                 mval,dval = valt; Mval += mval; Dval += dval
@@ -326,7 +297,7 @@ def comp_subH(_subH, subH, rn):
     return DerH, [Mval,Dval],[Mrdn,Drdn],[maxM,maxD]  # new layer,= 1/2 combined derH
 
 
-def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, each is ptuple_tv
+def comp_derHv(_derH, derH, rn):  # derH is a list of der layers or sub-layers, each is ptuple_tv
 
     dderH = []  # or not-missing comparand: xor?
     Mval,Dval, Mrdn,Drdn, maxM,maxD = 0,0,1,1,0,0
@@ -366,14 +337,14 @@ def sum_subH(SubH, subH, base_rdn, fneg=0):
             if layer:
                 if Layer:
                     if layer[0] and isinstance(Layer[0][0], list):  # _lay[0][0] is derH
-                        sum_derH(Layer, layer, base_rdn, fneg)
+                        sum_derHv(Layer, layer, base_rdn, fneg)
                     else: sum_ext(Layer, layer)
                 else:
                     SubH += [deepcopy(layer)]  # _lay[0][0] is mL
     else:
         SubH[:] = deepcopy(subH)
 
-def sum_derH(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
+def sum_derHv(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
     DerH, Valt,Rdnt,Maxt = T; derH, valt,rdnt,maxt = t
     for i in 0,1:
@@ -383,7 +354,7 @@ def sum_derH(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers,
           [V+v for V,v in zip(Valt,valt)], [R+r+base_rdn for R,r in zip(Rdnt,rdnt)], [M+m for M,m in zip(Maxt,maxt)],
         ]
         for [Tuplet, Valt,Rdnt,Maxt], [tuplet, valt,rdnt,maxt]
-        in zip_longest(DerH, derH, fillvalue=[([0,0,0,0,0,0],[0,0,0,0,0,0]), (0,0),(0,0),(0,0)])  # ptuplet, valt,rdnt.maxt
+        in zip_longest(DerH, derH, fillvalue=[([0,0,0,0,0,0],[0,0,0,0,0,0]), (0,0),(0,0),(0,0)])  # ptuple_tv
     ]
 
 def comp_ext(_ext, ext, Valt, Rdnt, Maxt):  # comp ds:

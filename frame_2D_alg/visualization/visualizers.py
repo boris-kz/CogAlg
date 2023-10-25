@@ -200,7 +200,7 @@ class BlobVisualizer(Visualizer):
                     mask__=blob.mask__,
                     root=blob,
                     node_=edge.node_,
-                    derP_=edge.derP_,
+                    link_=edge.link_,
                     fback_t=edge.fback_t,
                     rng=edge.rng,
                     box=blob.box,
@@ -264,7 +264,7 @@ class SliceVisualizer(Visualizer):
         y0 = self.img_slice[0].start
         x0 = self.img_slice[1].start
         self.P_links = []
-        for derP in PP.derP_:
+        for derP in PP.link_:
             _P, P = derP if isinstance(derP, tuple) else derP._P, derP.P
             (_y, _x), (y, x) = _P.yx, P.yx
             self.P_links += self.ax.plot([_x+x0,x+x0], [_y+y0,y+y0], 'ko-', linewidth=2, markersize=4)

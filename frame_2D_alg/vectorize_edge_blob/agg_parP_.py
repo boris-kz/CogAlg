@@ -5,8 +5,8 @@ from collections import deque, defaultdict
 from .classes import Cgraph, CderG, CPP
 from .filters import ave_L, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd, ave_dI, ave_G, ave_M, ave_Ma
 from .slice_edge import slice_edge, comp_angle
-from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, sum_dertuple, comp_derH, match_func
-from .agg_recursion import comp_aggH, comp_ext, sum_box, sum_Hts, sum_derH,sum_ext
+from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, comp_derH, sum_derH, sum_dertuple, match_func
+from .agg_recursion import comp_aggH, comp_ext, sum_box, sum_Hts, sum_derHv, comp_derHv, sum_ext
 
 '''
 Implement sparse param tree in aggH: new graphs represent only high m|d params + their root params.
@@ -37,8 +37,10 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
         if edge.valt[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.rdnt[fd]:
             G_= []
             for i, PP in enumerate(node_):  # convert CPPs to Cgraphs:
-                derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt  # init aggH is empty:
-                for dderH in derH: dderH += [[0,0]]  # add maxt
+                derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
+                # convert to ptuple_tv_, not sure:
+                derH[:] = [[[mtuple,dtuple],[sum(mtuple),sum(dtuple)],[],[]] for mtuple,dtuple in derH]
+                # init aggH is empty:
                 G_ += [Cgraph( ptuple=PP.ptuple, derH=[derH,valt,rdnt,[0,0]], valHt=[[valt[0]],[valt[1]]], rdnHt=[[rdnt[0]],[rdnt[1]]],
                                L=PP.ptuple[-1], i=i, box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
             node_ = G_
@@ -156,44 +158,56 @@ def form_graph_t(root, Valt,Rdnt, G_):  # form mgraphs and dgraphs of same-root 
 
     return graph_t  # root.node_t'node_ -> node_t: incr nested with each agg+?
 
+'''
+graphs add nodes if med_val = (val+_val) * decay > ave: connectivity is aggregate, individual link may be a fluke. 
+this is density-based clustering, but much more subtle than conventional versions.
+negative perimeter links may turn positive with increasing mediation: linked node val may grow faster than rdn
+positive links are core, it's density can't decrease, evaluate perimeter: negative or new links
+'''
 # tentative
 def segment_node_(root, G_, fd):  # sum surrounding link values to define connected nodes, incrementally mediated
 
-    link_map = defaultdict(list)   # make default for root.node_t?
     ave = G_aves[fd]
     graph_ = []
-    # initialize proto-graphs with each node, eval links to add other nodes, skip added nodes next
+    # initialize proto-graphs with each node | max, eval perimeter links to add other nodes
     for G in G_:
-        graph_ += [[G, G.valHt[fd][-1], G.rdnHt[fd][-1], [G], [G]]]  # init val,rdn, node_,perimeter
-        # if using dict:
-        for derG in G.link_H[-1]:
-            if derG.valt[fd] > ave * derG.rdnt[fd]:  # or link val += node Val: prune +ve links to low Vals?
-                link_map[G] += [derG._G]  # keys:Gs, vals: linked _G_s
-                link_map[derG._G] += [G]
+        graph_ += [[G, G.valHt[fd][-1], G.rdnHt[fd][-1], [G], [G.link_H[-1]]]]
+        # init graph = G,val,rdn,node_, perimeter: negative or new links
+    for G in G_:
+        for link in G.link_H[-1]:  # these are G-external links, not internal as in comp_slice
+            _G = link.G if link._G is G else link._G
+            # tentative convert link Gs to proto-graphs:
+            link.G = graph_[G.i]; link._G = graph_[_G.i]
     _Val,_Rdn = 0,0
     # eval incr mediated links, sum perimeter Vals, append node_, while significant Val update:
     while True:
-        DVal,DRdn, Val,Rdn = 0,0, 0,0
-        # update surround per node:
-        for G, val,rdn, node_,perimeter in graph_:
-            # not updated:
+        DVal,DRdn, Val,Rdn = 0,0,0,0
+        # update surround per graph:
+        for graph in graph_:
+            G, val, rdn, node_, perimeter = graph
             new_perimeter = []
-            for node in perimeter:
-                periVal, periRdn = 0,0
-                for link in node.link_H[-1]:
-                    _node = link.G if link._G is G else link._G
-                    if _node not in G_ or _node in node_: continue
-                    j = _node.i; _val = graph_[j][1]; _rdn = graph_[j][2]
-                    # use relative link vals only:
-                    try: decay = link.valt[fd]/link.maxt[fd]  # link decay coef: m|d / max, base self/same
-                    except ZeroDivisionError: decay = 1
-                    # sum mediated vals per node and perimeter node:
-                    med_val = (val+_val) * decay; Val += med_val; periVal += med_val
-                    med_rdn = (rdn+_rdn) * decay; Rdn += med_rdn; periRdn += med_rdn
-                    new_perimeter += [_node]
-                    node_ += [_node]
-                k = node.i; graph_[k][1] += periVal; graph_[k][2] += periRdn
-
+            periVal, periRdn = 0,0
+            for link in perimeter:
+                _graph = link.G if link._G is G else link._G
+                _G,_val,_rdn,_node_,_perimeter = _graph
+                if _G not in G_ or _G in node_: continue
+                # use relative link vals only:
+                try: decay = link.valt[fd]/link.maxt[fd]  # link decay coef: m|d / max, base self/same
+                except ZeroDivisionError: decay = 1
+                med_val = (val+_val) * decay
+                med_rdn = (rdn+_rdn) * decay
+                # tentative:
+                if med_val > ave * med_rdn:
+                    Val += med_val; periVal += med_val
+                    Rdn += med_rdn; periRdn += med_rdn
+                    new_perimeter = set(new_perimeter+_perimeter)
+                    # merge mediated _graph in graph:
+                    val+=_val; rdn+=_rdn; node_ = set(node_+_node_); perimeter = set(perimeter+_perimeter)
+                else:
+                    new_perimeter = set(new_perimeter + link)  # for re-evaluation?
+            # if links per node_link_: evaluate for inclusion in perimeter as a group?
+            # k = node.i; graph_[k][1] += periVal; graph_[k][2] += periRdn
+            # not updated:
             i = G.i; graph_[i][1] = Val; graph_[i][2] = Rdn
             DVal += Val-_Val; DRdn += Rdn-_Rdn  # update / surround extension, signed
             perimeter[:] = new_perimeter
@@ -203,36 +217,6 @@ def segment_node_(root, G_, fd):  # sum surrounding link values to define connec
 
     return [sum2graph(root, graph, fd) for graph in graph_ if graph[1] > ave * graph[2]]  # Val > ave * Rdn
 
-''' use dict to avoid graph overlap:
-
-        if iVal > ave * iRdn and not iG.root[fd]:
-            try: dec = iG.valHt[fd][-1] / iG.maxHt[fd][-1]
-            except ZeroDivisionError: dec = 1  # add internal layers Val *= current-layer decay to init graph totals:
-            tVal = iVal + sum(iG.valHt[fd]) * dec
-            tRdn = iRdn + sum(iG.rdnHt[fd]) * dec
-            cG_ = [iG]; iG.root[fd] = cG_  # clustered Gs
-            perimeter = link_map[iG]       # recycle perimeter in breadth-first search, outward from iG:
-            while perimeter:
-                _G = perimeter.pop(0)
-                for link in _G.link_H[-1]:
-                    G = link.G if link._G is _G else link._G
-                    if G in cG_ or G not in [Gt[0] for Gt in Gt_]: continue   # circular link
-                    Gt = Gt_[G.it[fd]]; Val = Gt[1]; Rdn = Gt[2]
-                    if Val > ave * Rdn:
-                        try: decay = G.valHt[fd][-1] / G.maxHt[fd][-1]  # current link layer surround decay
-                        except ZeroDivisionError: decay = 1
-                        tVal += Val + sum(G.valHt[fd])*decay  # ext+ int*decay: proj match to distant nodes in higher graphs?
-                        tRdn += Rdn + sum(G.rdnHt[fd])*decay
-                        cG_ += [G]; G.root[fd] = cG_
-                        perimeter += [G]
-
-        graph-parallel to cluster broad range of G_, same stop in overlapping Gs:
-        graphs sum and buffer link tree Gs in their node_s, separate stopping
-        runtime overlap | stop test, reuse PU for continuing | new_node: added to node_ from Node_?
-        else: 
-        - graphs send their i,vals to roots of all Gs in their node_
-        - each G selects max val root, sends deletes to other root graphs
-        '''
 
 def sum2graph(root, cG_, fd):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
@@ -297,7 +281,7 @@ def sum_subH(T, t , base_rdn, fneg=0):
             if layer:
                 if Layer:
                     if layer[0] and isinstance(Layer[0][0], list):  # _lay[0][0] is derH
-                        sum_derH(Layer, layer, base_rdn, fneg)
+                        sum_derHv(Layer, layer, base_rdn, fneg)
                     else: sum_ext(Layer, layer)
                 else:
                     SubH += [deepcopy(layer)]  # _lay[0][0] is mL

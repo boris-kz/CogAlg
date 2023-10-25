@@ -29,11 +29,10 @@ len prior root_ sorted by G is rdn of each root, to evaluate it for inclusion in
 def comp_P_(edge, adj_Pt_):  # cross-comp P_ in edge: high-gradient blob, sliced in Ps in the direction of G
 
     for _P, P in adj_Pt_:  # scan, comp contiguously uplinked Ps, rn: relative weight of comparand
-        comp_P(edge.link_, _P,P, rn=len(_P.dert_)/len(P.dert_), fd=0)
+        comp_P(edge.link_,_P,P, rn=len(_P.dert_)/len(P.dert_), fd=0)  # add edge.link_
 
-    P_ = edge.node_; edge.node_ = [[],[]]  # fill with sub_PPm_, sub_PPd_ in form_PP_t, ~ sub+ but rng+ only:
-    form_PP_t(edge, P_, base_rdn=2)  # replace edge.node_ with PP_t, may be nested by sub+
-
+    form_PP_t(edge, P_= edge.node_, base_rdn=2)
+    # replace edge.node_ with PP_t, may be nested by sub+
 
 def comp_P(link_,_P, P, rn, fd=1, derP=None):  #  derP if der+, reused as S if rng+
     aveP = P_aves[fd]
