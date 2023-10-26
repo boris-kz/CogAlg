@@ -1,6 +1,5 @@
 import sys
 import numpy as np
-from math import floor
 from collections import namedtuple, deque, defaultdict
 from itertools import product, combinations
 from .classes import CEdge, CP
@@ -20,14 +19,14 @@ and inverse gradient deviation of flat blobs. But the latter is implicit here: h
 A stable combination of a core flat blob with adjacent edge blobs is a potential object.
 '''
 
-ptupleT = namedtuple("ptupleT", "I G M Ma angle L")
+Tptuple = namedtuple("Tptuple", "I Dy Dx G M Ma L")
 octant = 0.3826834323650898
 
 def slice_edge(blob, verbose=False):
+
     max_mask__ = max_selection(blob)  # mask of local directional maxima of dy, dx, g
     # form slices (Ps) from max_mask__ and form links by tracing max_mask__:
-    edge, Pt_ = trace_edge(blob, max_mask__, verbose=verbose)
-    return edge, Pt_
+    blob.P_, blob.P_link_ = trace_edge(blob, max_mask__, verbose=verbose)
 
 def max_selection(blob):
 
@@ -42,11 +41,12 @@ def max_selection(blob):
     mdly__, mdlx__ = ~(up__ | dwn__), ~(lft__ | rgt__)
     # merge in 4 bilateral axes
     axes_mask__ = [
-        mdly__ & (rgt__ | lft__), (dwn__ & rgt__) | (up__ & lft__),  #  0,  45 deg
-        (dwn__ | up__) & mdlx__,  (dwn__ & lft__) | (up__ & rgt__),  # 90, 135 deg
+        mdly__ & (rgt__ | lft__), (dwn__ & rgt__) | (up__ & lft__),     #  0,  45 deg
+        (dwn__ | up__) & mdlx__,  (dwn__ & lft__) | (up__ & rgt__),     # 90, 135 deg
     ]
     max_mask__ = np.zeros_like(blob.mask__, dtype=bool)
-    # local max from cross-comp within axis, use kernel max for vertical sparsity?
+    # local max from cross-comp within axis,
+    # switch to max within kernel for omnidirectional sparsity
     for axis_mask__, (ydir, xdir) in zip(axes_mask__, ((0,1),(1,1),(1,0),(1,-1))):  # y,x direction per axis
         # axis AND mask:
         mask__ = axis_mask__ & blob.mask__
@@ -70,41 +70,72 @@ def max_selection(blob):
 
 def trace_edge(blob, mask__, verbose=False):
 
-    edge = CEdge(blob=blob)
-    blob.dlayers = [[edge]]
     max_ = {*zip(*mask__.nonzero())}  # convert mask__ into a set of (y,x)
 
     if verbose:
         step = 100 / len(max_)  # progress % percent per pixel
         progress = 0.0; print(f"\rTracing max... {round(progress)} %", end="");  sys.stdout.flush()
-    edge.node_ = []
-    Pt_ = []
-    while max_:  # queue of (y,x,P)s
-        y,x = max_.pop()
-        maxQue = deque([(y,x,None)])
-        while maxQue:  # trace max_
-            # initialize pivot dert
-            y,x,_P = maxQue.popleft()
-            i = blob.i__[blob.ibox.slice()][y,x]
-            dy, dx, g = blob.der__t.get_pixel(y,x)
-            ma = ave_dangle  # max value because P direction is the same as dert gradient direction
-            assert g > 0, "g must be positive"
-            P = form_P(blob, CP(yx=(y,x), axis=(dy/g, dx/g), cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
-            edge.node_ += [P]
-            if _P is not None:
-                Pt_ += [(_P, P)]  # add up links only
-            # search in max_ path
-            adjacents = max_ & {*product(range(y-1,y+2), range(x-1,x+2))}   # search neighbors
-            maxQue.extend(((_y, _x, P) for _y, _x in adjacents))
-            max_ -= adjacents   # set difference = first set AND not both sets: https://www.scaler.com/topics/python-set-difference/
-            max_ -= P.cells     # remove all maxes in the way
 
+    P_ = []
+    link_ = set()
+    remaining_max_ = set(max_)
+    max_olps = defaultdict(list)
+    while remaining_max_:  # queue of (y,x,P)s
+        y, x = remaining_max_.pop()
+        maxQue = deque([(y, x, None)])    # queue tp trace start with (y, x) from max_
+
+        while maxQue:
+            # initialize dert to form P
+            y, x, _P = maxQue.popleft()     # pop from queue
+            i = blob.i__[blob.ibox.slice()][y, x]   # get i
+            dy, dx, g = blob.der__t.get_pixel(y, x) # get dy, dx, g
+            ma = ave_dangle     # m is at maximum value because P direction is the same as dert gradient direction
+            assert g > 0, "g must be positive"
+            P = form_P(blob, CP(yx=(y, x), axis=(dy/g, dx/g), cells={(y,x)}, dert_=[(y, x, i, dy, dx, g, ma)]))
+            P_ += [P]
+            if _P is not None:
+                link_ |= {(_P, P)}
+            for olp_yx in P.cells & max_:
+                max_olps[olp_yx] += [P]
+
+            # search in max_ path
+            adjacents = remaining_max_ & {*product(range(y-1,y+2), range(x-1,x+2))}   # search neighbors
+            maxQue.extend(((_y, _x, P) for _y, _x in adjacents))
+            remaining_max_ -= adjacents   # set difference = first set AND not both sets: https://www.scaler.com/topics/python-set-difference/
             if verbose:
                 progress += step; print(f"\rTracing max... {round(progress)} %", end=""); sys.stdout.flush()
 
     if verbose: print("\r" + " " * 79, end=""); sys.stdout.flush(); print("\r", end="")
 
-    return edge, Pt_
+    # likely irrelevant:
+    olp_pairs = set()
+    for yx in max_olps:
+        for _P, P in combinations(max_olps[yx], r=2):  # loop thru the rest
+            assert _P.id < P.id
+            yx_dist = np.hypot(*np.subtract(P.yx, _P.yx))   # compute distance
+            axis_diff, axis_match = comp_angle(P.axis, _P.axis) # compute angle match
+            if yx_dist >= 1.0 or axis_match < ave_dangle - 0.1:
+                continue
+            olp_pairs |= {(_P, P)}
+    for merging_P_ in connected_groups(P_, olp_pairs):
+        # initialize merged P
+        y, x = np.mean([merging_P.yx for merging_P in merging_P_], axis=0)
+        summed_axis = np.sum([merging_P.axis for merging_P in merging_P_], axis=0)
+        axis = summed_axis / np.hypot(*summed_axis)
+        i, dy, dx, g = interpolate2dert(blob, y, x)
+        ma = ave_dangle
+        merged_P = form_P(blob, CP(yx=(y,x), axis=axis, cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
+
+        link_ -= combinations(merging_P_, r=2)      # remove links between merged Ps, if any
+        P_ = [P for P in P_ if P not in merging_P_] # remove merging_P_
+        P_ += [merged_P]   # add merged P to P_
+
+    return P_, link_
+
+def connected_groups(nodes, edges):
+    # TODO: implement connected_groups
+    # https://www.geeksforgeeks.org/connected-components-in-an-undirected-graph/
+    return []
 
 def form_P(blob, P):
 
@@ -115,16 +146,16 @@ def form_P(blob, P):
     L = len(P.dert_)
     M = ave_g*L - G
     G = np.hypot(Dy, Dx)  # recompute G
-    P.ptuple = ptupleT(I, G, M, Ma, (Dy,Dx), L)
+    P.ptuple = Tptuple(I, Dy, Dx, G, M, Ma, L)
     P.yx = P.dert_[L//2][:2]  # new center
 
     return P
 
 def scan_direction(blob, P, fleft):  # leftward or rightward from y,x
 
-    sin,cos = _dy,_dx = P.axis
-    _y, _x = P.yx  # pivot
-    r = cos*_y - sin*_x  # P axial line: cos*y - sin*x = r = constant
+    sin,cos = _dy,_dx = P.axis  # unpack axis
+    _y, _x = P.yx               # start with pivot
+    r = cos*_y - sin*_x  # from P line equation: cos*y - sin*x = r = constant
     _cy,_cx = round(_y), round(_x)  # keep initial cell
     y, x = (_y-sin,_x-cos) if fleft else (_y+sin, _x+cos)  # first dert in the direction of axis
 
@@ -163,7 +194,7 @@ def scan_direction(blob, P, fleft):  # leftward or rightward from y,x
 def interpolate2dert(blob, y, x):
 
     Y, X = blob.mask__.shape    # boundary
-    x0, y0 = floor(x), floor(y) # floor
+    x0, y0 = int(x), int(y)     # floor
     x1, y1 = x0 + 1, y0 + 1     # ceiling
     if x0 < 0 or x1 >= X or y0 < 0 or y1 >= Y: return None  # boundary check
     kernel = [  # cell weighing by inverse distance from float y,x:

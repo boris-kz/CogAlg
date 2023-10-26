@@ -512,3 +512,25 @@ def segment_node_par(root, G_,fd):  # sum surrounding link values to define conn
     - each G selects max val root, sends deletes to other root graphs
     '''
     return cgraph_
+
+def comp_ptuple(_ptuple, ptuple, rn, fagg=0):  # 0der params
+
+    I, G, M, Ma, (Dy, Dx), L = _ptuple
+    _I, _G, _M, _Ma, (_Dy, _Dx), _L = ptuple
+
+    dI = _I - I*rn;  mI = ave-dI
+    dG = _G - G*rn;  mG = min(_G, G*rn) - ave
+    dL = _L - L*rn;  mL = min(_L, L*rn) - ave
+    dM = _M - M*rn;  mM = match_func(_M, M*rn) - ave  # M, Ma may be negative
+    dMa= _Ma- Ma*rn; mMa = match_func(_Ma, Ma*rn) - ave
+    mAngle, dAngle = comp_angle((_Dy,_Dx), (Dy,Dx))
+
+    mtuple = [mI, mG, mM, mMa, mAngle, mL]
+    dtuple = [dI, dG, dM, dMa, dAngle, dL]
+    if fagg:
+        Mtuple = [max(_I,I), max(_G,G), max(_M,M), max(_Ma,Ma), 2, max(_L,L)]
+        Dtuple = [abs(_I)+abs(I), abs(_G)+abs(G), abs(_M)+abs(M), abs(_Ma)+abs(Ma), 2, abs(_L)+abs(L)]
+
+    ret = [mtuple, dtuple]
+    if fagg: ret += [Mtuple, Dtuple]
+    return ret
