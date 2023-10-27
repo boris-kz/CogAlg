@@ -56,10 +56,10 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
 
 def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_
 
-    comp_G_(G_,fd)  # rng|der cross-comp all Gs, nD array? form link_H per G
+    Valt,Rdnt, Glink__ = comp_G_(G_,fd)  # rng|der cross-comp all Gs, nD array? form link_ per G
     root.valHt[fd] += [0]; root.rdnHt[fd] += [1]  # sum in form_graph_t feedback
 
-    GG_t = form_graph_t(root, G_)  # eval sub+ and feedback per graph
+    GG_t = form_graph_t(root, Valt,Rdnt, G_, Glink__)  # eval sub+ and feedback per graph
     # agg+ xcomp-> form_graph_t loop sub)agg+, vs. comp_slice:
     # sub+ loop-> eval-> xcomp
     for GG_ in GG_t:  # comp_G_ eval: ave_m * len*rng - fixed cost, root update in form_t:
@@ -68,15 +68,16 @@ def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in 
 
     G_[:] = GG_t
 
-def form_graph_t(root, G_):  # form mgraphs and dgraphs of same-root nodes
+def form_graph_t(root, Valt,Rdnt, G_, Glink__):  # form mgraphs and dgraphs of same-root nodes
 
     graph_t = []
     for G in G_: G.root = [None,None]  # replace with mcG_|dcG_ in segment_node_, replace with Cgraphs in sum2graph
     for fd in 0,1:
-        Gt_ = sum_link_tree_(G_, fd)  # sum surround link values @ incr rng,decay
-        graph_t += [segment_node_(root, Gt_, fd)]  # add alt_graphs?
-
-    # eval sub+, not in segment_node_: full roott must be replaced per node within recursion
+        if Valt[fd] > ave * Rdnt[fd]:  # else no clustering
+            graph_t += [segment_node_(root, G_, Glink__,fd)]  # add alt_graphs?
+        else:
+            graph_t += [[]]  # or G_?
+            # eval sub+, not in segment_node_: full roott must be replaced per node within recursion
     for fd, graph_ in enumerate(graph_t): # breadth-first for in-layer-only roots
         root.valHt[fd]+=[0]; root.rdnHt[fd]+=[1]  # remove if stays 0?
 
@@ -97,80 +98,115 @@ def form_graph_t(root, G_):  # form mgraphs and dgraphs of same-root nodes
 
     return graph_t  # root.node_t'node_ -> node_t: incr nested with each agg+?
 
+'''
+Graphs add nodes if med_val = (val+_val) * decay > ave: connectivity is aggregate, individual link may be a fluke. 
+This is density-based clustering, but much more subtle than conventional versions.
+evaluate perimeter: negative or new links
+negative perimeter links may turn positive with increasing mediation: linked node val may grow faster than rdn
+positive links are within the graph, it's density can't decrease, so they don't change 
+'''
+# tentative
+def segment_node_(root, iG_, Glink__, fd):  # local external Glink_ per G is formed in comp_G_
 
-def segment_node_(root, Gt_, fd):  # fold sum_link_tree_, as in agg_parP_
+    # sum surrounding link values to define incrementally mediated connected nodes:
+    graph_, Gt_ = [],[]; ave = G_aves[fd]
 
-    link_map = defaultdict(list)   # make default for root.node_t?
-    ave = G_aves[fd]
-    for G,_,_ in Gt_:
-        for derG in G.link_H[-1]:
-            if derG.valt[fd] > ave * derG.rdnt[fd]:  # or link val += node Val: prune +ve links to low Vals?
-                link_map[G] += [derG._G]  # keys:Gs, vals: linked _G_s
-                link_map[derG._G] += [G]
-    graph_ = []
-    # initialize proto-graphs with each node, eval links to add other nodes, skip added nodes next:
-    for iG, iVal, iRdn in Gt_:
-        if iVal > ave * iRdn and not iG.root[fd]:
-            try: dec = iG.valHt[fd][-1] / iG.maxHt[fd][-1]
-            except ZeroDivisionError: dec = 1  # add internal layers Val *= current-layer decay to init graph totals:
-            tVal = iVal + sum(iG.valHt[fd]) * dec
-            tRdn = iRdn + sum(iG.rdnHt[fd]) * dec
-            cG_ = [iG]; iG.root[fd] = cG_  # clustered Gs
-            perimeter = link_map[iG]       # recycle perimeter in breadth-first search, outward from iG:
-            while perimeter:
-                _G = perimeter.pop(0)
-                for link in _G.link_H[-1]:
-                    G = link.G if link._G is _G else link._G
-                    if G in cG_ or G not in [Gt[0] for Gt in Gt_]: continue   # circular link
-                    Gt = Gt_[G.it[fd]]; Val = Gt[1]; Rdn = Gt[2]
-                    if Val > ave * Rdn:
-                        try: decay = G.valHt[fd][-1] / G.maxHt[fd][-1]  # current link layer surround decay
-                        except ZeroDivisionError: decay = 1
-                        tVal += Val + sum(G.valHt[fd])*decay  # ext+ int*decay: proj match to distant nodes in higher graphs?
-                        tRdn += Rdn + sum(G.rdnHt[fd])*decay
-                        cG_ += [G]; G.root[fd] = cG_
-                        perimeter += [G]
-            if tVal > ave * tRdn:
-                graph_ += [sum2graph(root, cG_, fd)]  # convert to Cgraphs
+    for G, Glink_ in zip(iG_,Glink__):
+        # internal ival,irdn are currently not used:
+        ival, irdn, perimeter = sum(G.valHt[fd]), sum(G.rdnHt[fd]), Glink_
 
-    return graph_
+        Gt = [G, 0,0, ival,irdn, perimeter]  # perimeter: negative or new links, separate termination per node?
+        grapht = [[Gt], 0,0, ival,irdn, copy(perimeter)]  # nodet_, Val,Rdn, iVal,iRdn, Perimeter
+        G.root[fd] = grapht
+        graph_ += [grapht]; Gt_ += [Gt]  # to access Gt by G.i
+
+    _tVal, _tRdn = 0,0
+    # eval incr mediated links, sum perimeter Vals, append node_, while significant Val update:
+    while True:
+        tVal, tRdn = 0,0  # iG_ loop totals
+        # update graph surround:
+        for grapht in graph_:
+            nodet_, Val,Vdn, iVal,iRdn, Perimeter = grapht
+            periVal, periRdn, inVal, inRdn = 0,0,0,0  # in: new in-graph values, net-positive
+            new_Perimeter = []
+            for link in Perimeter:
+                if link.G in grapht[0]:  # access Gt by G.i
+                    Gt = Gt_[link.G.i]; _Gt = Gt_[link._G.i]
+                else:
+                    Gt = Gt_[link._G.i]; _Gt = Gt_[link.G.i]
+                if _Gt[0] not in iG_ or _Gt in nodet_:
+                    continue
+                G, val, rdn, ival, irdn, perimeter = Gt  # not sure we actually need perimeter per node
+                _G,_val,_rdn,_ival,_irdn,_perimeter = _Gt
+                # use relative link vals only:
+                try: decay = link.valt[fd]/link.maxt[fd]  # link decay coef: m|d / max, base self/same
+                except ZeroDivisionError: decay = 1
+                med_val = (rdn+_val) * decay; periVal += med_val
+                med_rdn = (rdn+_rdn) * decay; periRdn += med_rdn
+                # tentative:
+                if med_val > ave * med_rdn:
+                    inVal += med_val; Gt[1] += med_val; _Gt[1] += med_val  # also sum per node
+                    inRdn += med_rdn; Gt[2] += med_val; _Gt[2] += med_val
+                    # merge _graph in graph:
+                    _nodet_,_Val,_Vdn,_iVal,_iRdn,_Perimeter = _G.root[fd]
+                    Val += _val; rdn += _rdn
+                    nodet_ = list(set(nodet_ + _Gt[0].root[fd][0]))  # append _nodet_
+                    Perimeter = list(set(Perimeter + _Perimeter))
+                    new_Perimeter = list(set(new_Perimeter + _Perimeter))
+                else:  # negative link, for reevaluation:
+                    new_Perimeter = list(set(new_Perimeter + [link]))
+            # separate node perimeter extension?
+            # update per graph extension, signed:
+            grapht[1] += inVal; tVal += inVal  # if eval per graph: DVal += inVal -_inVal?
+            grapht[2] += inRdn; tRdn += inRdn  # DRdn += inRdn -_inRdn
+
+        if (tVal-_tVal) < ave * (tRdn-_tRdn):  # even low-Val extension may be valuable if Rdn decreases?
+            break
+        _tVal,_tRdn = tVal,_tRdn
+
+    return [sum2graph(root, graph, fd) for graph in graph_ if graph[1] > ave * graph[2]]  # Val > ave * Rdn
+
 
 def sum2graph(root, cG_, fd):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
     graph = Cgraph(root=root, fd=fd, L=len(cG_))  # n nodes, transplant both node roots
-    SubH = []; maxM,maxD, Mval,Dval, Mrdn,Drdn = 0,0, 0,0, 0,0
+    SubH = [[],[0,0],[1,1],[0,0]]; maxM,maxD, Mval,Dval, Mrdn,Drdn = 0,0,0,0,0,0
     Link_= []
-    for G in cG_:
+    for i, (G,Glink_) in enumerate(cG_[3]):
         # sum nodes in graph:
         sum_box(graph.box, G.box)
         sum_ptuple(graph.ptuple, G.ptuple)
-        sum_derH(graph.derH, G.derH, base_rdn=1)
+        sum_derHv(graph.derH, G.derH, base_rdn=1)
         sum_aggH(graph.aggH, G.aggH, base_rdn=1)
         sum_Hts(graph.valHt, graph.rdnHt, graph.maxHt, G.valHt, G.rdnHt, G.maxHt)
-
-        subH=[]; mval,dval, mrdn,drdn, maxm,maxd = 0,0, 0,0, 0,0
-        for derG in G.link_H[-1]:
+        # sum external links:
+        subH=[[],[0,0],[1,1],[0,0]]; mval,dval, mrdn,drdn, maxm,maxd = 0,0, 0,0, 0,0
+        for derG in Glink_:
             if derG.valt[fd] > G_aves[fd] * derG.rdnt[fd]:  # sum positive links only:
-                (_mval,_dval),(_mrdn,_drdn),(_maxm,_maxd) = derG.valt, derG.rdnt, derG.maxt
+                _subH = derG.subH
+                (_mval,_dval),(_mrdn,_drdn),(_maxm,_maxd) = valt,rdnt,maxt = derG.valt, derG.rdnt, derG.maxt
                 if derG not in Link_:
-                    sum_subH(SubH, derG.subH, base_rdn=1)  # new aggLev, not from nodes: links overlap
+                    sum_subH(SubH, [_subH,valt,rdnt,maxt] , base_rdn=1)  # new aggLev, not from nodes: links overlap
                     Mval+=_mval; Dval+=_dval; Mrdn+=_mrdn; Drdn+=_drdn; maxM+=_maxm; maxD+=_maxd
                     graph.A[0] += derG.A[0]; graph.A[1] += derG.A[1]; graph.S += derG.S
                     Link_ += [derG]
                 mval+=_mval; dval+=_dval; mrdn+=_mrdn; drdn+=_drdn; maxm+=_maxm; maxd+=_maxd
-                sum_subH(subH, derG.subH, base_rdn=1, fneg = G is derG.G)  # fneg: reverse link sign
-                sum_box(G.box, derG.G.box if derG._G is G else derG._G.box)
+                sum_subH(subH, [_subH,valt,rdnt,maxt], base_rdn=1, fneg = G is derG.G)  # fneg: reverse link sign
+                sum_box(G.box, derG.G[0].box if derG._G[0] is G else derG._G[0].box)  # derG.G is proto-graph
         # from G links:
         if subH: G.aggH += [subH]
+        G.i = i
         G.valHt[0]+=[mval]; G.valHt[1]+=[dval]; G.rdnHt[0]+=[mrdn]; G.rdnHt[1]+=[drdn]
         G.maxHt[0]+=[maxm]; G.maxHt[1]+=[maxd]
         G.root[fd] = graph  # replace cG_
         graph.node_t += [G]  # converted to node_t by feedback
     # + link layer:
+    graph.link_ = Link_  # use in sub_recursion, as with PPs, no link_?
     graph.valHt[0]+=[Mval]; graph.valHt[1]+=[Dval]; graph.rdnHt[0]+=[Mrdn]; graph.rdnHt[1]+=[Drdn]
     graph.maxHt[0]+=[maxM]; graph.maxHt[1]+=[maxD]
 
     return graph
+
 
 def sum_Hts(ValHt, RdnHt, MaxHt, valHt, rdnHt, maxHt):
     # loop m,d Hs, add combined decayed lower H/layer?
@@ -185,15 +221,14 @@ subH: [derH_t]: m,d derH, m,d ext added by agg+ as 1st tuplet
 aggH: [subH_t]: composition levels, ext per G, 
 '''
 
-# added version with val and rdn
 def comp_G_(G_, fd=0, oG_=None, fin=1):  # cross-comp in G_ if fin, else comp between G_ and other_G_, for comp_node_
 
     Mval,Dval, Mrdn,Drdn = 0,0,0,0
     if not fd:  # cross-comp all Gs in extended rng, add proto-links regardless of prior links
-        for G in G_: G.link_H += [[]]  # add empty link layer, may remove if stays empty
+        for G in G_: G.link_ += [[]]  # add empty link layer, may remove if stays empty
 
         if oG_:
-            for oG in oG_: oG.link_H += [[]]
+            for oG in oG_: oG.link_ += [[]]
         # form new links:
         for i, G in enumerate(G_):
             if fin: _G_ = G_[i+1:]  # xcomp G_
@@ -205,14 +240,16 @@ def comp_G_(G_, fd=0, oG_=None, fin=1):  # cross-comp in G_ if fin, else comp be
                 if distance < ave_distance:  # close enough to compare
                     # * ((sum(_G.valHt[fd]) + sum(G.valHt[fd])) / (2*sum(G_aves)))):  # comp rng *= rel value of comparands?
                     G.compared_ += [_G]; _G.compared_ += [G]
-                    G.link_H[-1] += [CderG( G=G, _G=_G, S=distance, A=[dy,dx])]  # proto-links, in G only
+                    # old:
+                    G.link_ += [CderG( G=G, _G=_G, S=distance, A=[dy,dx])]  # proto-links, in G only
+    link__ = []
     for G in G_:
         link_ = []
-        for link in G.link_H[-1]:  # if fd: follow links, comp old derH, else follow proto-links, form new derH
+        for link in G.link_:  # if fd: follow links, comp old derH, else follow proto-links, form new derH
             if fd and link.valt[1] < G_aves[1]*link.rdnt[1]: continue  # maybe weak after rdn incr?
             mval,dval, mrdn,drdn = comp_G(link_,link, fd)
             Mval+=mval;Dval+=dval; Mrdn+=mrdn;Drdn+=drdn
-        G.link_H[-1] = link_
+        link__ = [link_]
         '''
         same comp for cis and alt components?
         for _cG, cG in ((_G, G), (_G.alt_Graph, G.alt_Graph)):
@@ -221,7 +258,7 @@ def comp_G_(G_, fd=0, oG_=None, fin=1):  # cross-comp in G_ if fin, else comp be
         combine cis,alt in aggH: alt represents node isolation?
         comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D? '''
 
-    return [Mval,Dval], [Mrdn,Drdn]
+    return [Mval,Dval], [Mrdn,Drdn], link__
 
 # draft
 def comp_G(link_, link, fd):
@@ -239,25 +276,28 @@ def comp_G(link_, link, fd):
     # / PP:
     _derH,derH = _G.derH,G.derH
     if _derH[0] and derH[0]:  # empty in single-node Gs
-        dderH, valt, rdnt, maxt = comp_derH(_derH[0], derH[0], rn=1)
+        dderH, valt, rdnt, maxt = comp_derHv(_derH[0], derH[0], rn=1)
         maxM += maxt[0]; maxD += maxt[0]
         mval,dval = valt; Mval+=dval; Dval+=mval
         Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
     else:
         dderH = []
-    derH = [[derLay0]+dderH, [Mval,Dval], [Mrdn,Drdn], [maxM, maxD]]  # appendleft derLay0 from comp_ptuple
+    derH = [[derLay0]+dderH, [Mval,Dval], [Mrdn,Drdn], [maxM,maxD]]  # appendleft derLay0 from comp_ptuple
     der_ext = comp_ext([_G.L,_G.S,_G.A],[G.L,G.S,G.A], [Mval,Dval],[Mrdn,Drdn], [maxM,maxD])
     SubH = [der_ext, derH]  # two init layers of SubH, higher layers added by comp_aggH:
     # / G:
     if fd:  # else no aggH yet?
         subH, valt, rdnt, maxt = comp_aggH(_G.aggH, G.aggH, rn=1)
-        SubH += subH  # append higher subLayers: list of der_ext | derH s
         maxM += maxt[0]; maxD += maxt[0]
         mval,dval = valt; Mval+=dval; Dval+=mval
         Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
+        link.subH = SubH+subH  # append higher subLayers: list of der_ext | derH s
+        link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]; link.maxt = [maxM,maxD]  # complete proto-link
         link_ += [link]
+
     elif Mval > ave_Gm or Dval > ave_Gd:  # or sum?
-        link.subH = SubH; link.maxt = [maxM,maxD]; link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]  # complete proto-link
+        link.subH = SubH
+        link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]; link.maxt = [maxM,maxD] # complete proto-link
         link_ += [link]
 
     return Mval,Dval, Mrdn,Drdn

@@ -513,6 +513,81 @@ def segment_node_par(root, G_,fd):  # sum surrounding link values to define conn
     '''
     return cgraph_
 
+def segment_node_(root, Gt_, fd):  # fold sum_link_tree_, as in agg_parP_
+
+    link_map = defaultdict(list)   # make default for root.node_t?
+    ave = G_aves[fd]
+    for G,_,_ in Gt_:
+        for derG in G.link_H[-1]:
+            if derG.valt[fd] > ave * derG.rdnt[fd]:  # or link val += node Val: prune +ve links to low Vals?
+                link_map[G] += [derG._G]  # keys:Gs, vals: linked _G_s
+                link_map[derG._G] += [G]
+    graph_ = []
+    # initialize proto-graphs with each node, eval links to add other nodes, skip added nodes next:
+    for iG, iVal, iRdn in Gt_:
+        if iVal > ave * iRdn and not iG.root[fd]:
+            try: dec = iG.valHt[fd][-1] / iG.maxHt[fd][-1]
+            except ZeroDivisionError: dec = 1  # add internal layers Val *= current-layer decay to init graph totals:
+            tVal = iVal + sum(iG.valHt[fd]) * dec
+            tRdn = iRdn + sum(iG.rdnHt[fd]) * dec
+            cG_ = [iG]; iG.root[fd] = cG_  # clustered Gs
+            perimeter = link_map[iG]       # recycle perimeter in breadth-first search, outward from iG:
+            while perimeter:
+                _G = perimeter.pop(0)
+                for link in _G.link_H[-1]:
+                    G = link.G if link._G is _G else link._G
+                    if G in cG_ or G not in [Gt[0] for Gt in Gt_]: continue   # circular link
+                    Gt = Gt_[G.it[fd]]; Val = Gt[1]; Rdn = Gt[2]
+                    if Val > ave * Rdn:
+                        try: decay = G.valHt[fd][-1] / G.maxHt[fd][-1]  # current link layer surround decay
+                        except ZeroDivisionError: decay = 1
+                        tVal += Val + sum(G.valHt[fd])*decay  # ext+ int*decay: proj match to distant nodes in higher graphs?
+                        tRdn += Rdn + sum(G.rdnHt[fd])*decay
+                        cG_ += [G]; G.root[fd] = cG_
+                        perimeter += [G]
+            if tVal > ave * tRdn:
+                graph_ += [sum2graph(root, cG_, fd)]  # convert to Cgraphs
+
+    return graph_
+
+def sum2graph(root, cG_, fd):  # sum node and link params into graph, aggH in agg+ or player in sub+
+
+    graph = Cgraph(root=root, fd=fd, L=len(cG_))  # n nodes, transplant both node roots
+    SubH = []; maxM,maxD, Mval,Dval, Mrdn,Drdn = 0,0, 0,0, 0,0
+    Link_= []
+    for G in cG_:
+        # sum nodes in graph:
+        sum_box(graph.box, G.box)
+        sum_ptuple(graph.ptuple, G.ptuple)
+        sum_derH(graph.derH, G.derH, base_rdn=1)
+        sum_aggH(graph.aggH, G.aggH, base_rdn=1)
+        sum_Hts(graph.valHt, graph.rdnHt, graph.maxHt, G.valHt, G.rdnHt, G.maxHt)
+
+        subH=[]; mval,dval, mrdn,drdn, maxm,maxd = 0,0, 0,0, 0,0
+        for derG in G.link_H[-1]:
+            if derG.valt[fd] > G_aves[fd] * derG.rdnt[fd]:  # sum positive links only:
+                (_mval,_dval),(_mrdn,_drdn),(_maxm,_maxd) = derG.valt, derG.rdnt, derG.maxt
+                if derG not in Link_:
+                    sum_subH(SubH, derG.subH, base_rdn=1)  # new aggLev, not from nodes: links overlap
+                    Mval+=_mval; Dval+=_dval; Mrdn+=_mrdn; Drdn+=_drdn; maxM+=_maxm; maxD+=_maxd
+                    graph.A[0] += derG.A[0]; graph.A[1] += derG.A[1]; graph.S += derG.S
+                    Link_ += [derG]
+                mval+=_mval; dval+=_dval; mrdn+=_mrdn; drdn+=_drdn; maxm+=_maxm; maxd+=_maxd
+                sum_subH(subH, derG.subH, base_rdn=1, fneg = G is derG.G)  # fneg: reverse link sign
+                sum_box(G.box, derG.G.box if derG._G is G else derG._G.box)
+        # from G links:
+        if subH: G.aggH += [subH]
+        G.valHt[0]+=[mval]; G.valHt[1]+=[dval]; G.rdnHt[0]+=[mrdn]; G.rdnHt[1]+=[drdn]
+        G.maxHt[0]+=[maxm]; G.maxHt[1]+=[maxd]
+        G.root[fd] = graph  # replace cG_
+        graph.node_t += [G]  # converted to node_t by feedback
+    # + link layer:
+    graph.valHt[0]+=[Mval]; graph.valHt[1]+=[Dval]; graph.rdnHt[0]+=[Mrdn]; graph.rdnHt[1]+=[Drdn]
+    graph.maxHt[0]+=[maxM]; graph.maxHt[1]+=[maxD]
+
+    return graph
+
+
 def comp_ptuple(_ptuple, ptuple, rn, fagg=0):  # 0der params
 
     I, G, M, Ma, (Dy, Dx), L = _ptuple
