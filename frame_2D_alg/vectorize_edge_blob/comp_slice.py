@@ -200,14 +200,14 @@ def sum_derH(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers,
     ]
 
 def sum_ptuple(Ptuple, ptuple, fneg=0):
-    I, G, M, Ma, (Dy, Dx), L = ptuple
     _I, _G, _M, _Ma, (_Dy, _Dx), _L = Ptuple
+    I, G, M, Ma, (Dy, Dx), L = ptuple
     if fneg: Ptuple[:] = (_I-I, _G-G, _M-M, _Ma-Ma, [_Dy-Dy,_Dx-Dx], _L-L)
     else:    Ptuple[:] = (_I+I, _G+G, _M+M, _Ma+Ma, [_Dy+Dy,_Dx+Dx], _L+L)
 
 def sum_dertuple(Ptuple, ptuple, fneg=0):
-    I, G, M, Ma, A, L = ptuple
     _I, _G, _M, _Ma, _A, _L = Ptuple
+    I, G, M, Ma, A, L = ptuple
     if fneg: Ptuple[:] = [_I-I, _G-G, _M-M, _Ma-Ma, _A-A, _L-L]
     else:    Ptuple[:] = [_I+I, _G+G, _M+M, _Ma+Ma, _A+A, _L+L]
     return   Ptuple
@@ -251,8 +251,8 @@ def match_func(_par, par):
 
 def comp_ptuple(_ptuple, ptuple, rn, fagg=0):  # 0der params
 
-    I, G, M, Ma, (Dy, Dx), L = _ptuple
-    _I, _G, _M, _Ma, (_Dy, _Dx), _L = ptuple
+    _I, _G, _M, _Ma, (_Dy, _Dx), _L = _ptuple
+    I, G, M, Ma, (Dy, Dx), L = ptuple
 
     dI = _I - I*rn;  mI = ave-dI
     dG = _G - G*rn;  mG = min(_G, G*rn) - ave

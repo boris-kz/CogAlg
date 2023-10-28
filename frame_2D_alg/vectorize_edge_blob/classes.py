@@ -137,6 +137,7 @@ class CderG(ClusterStructure):  # params of single-fork node_ cluster per pplaye
     maxt : list = z([0,0])  # max m, max d
     valt : list = z([0,0])  # m,d
     rdnt : list = z([1,1])
+    Valt : list = z([0,0])  # accum in node_connect
     _G : object = None  # comparand
     G: object = None  # comparand
     S : float = 0.0  # sparsity: average distance to link centers
