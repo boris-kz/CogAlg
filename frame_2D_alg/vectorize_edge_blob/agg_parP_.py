@@ -6,7 +6,7 @@ from .classes import Cgraph, CderG, CPP
 from .filters import ave_L, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd, ave_dI, ave_G, ave_M, ave_Ma
 from .slice_edge import slice_edge, comp_angle
 from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, comp_derH, sum_derH, sum_dertuple, match_func
-from .agg_recursion import comp_aggH, comp_ext, sum_box, sum_Hts, sum_derHv, comp_derHv, sum_ext, form_graph_t, comp_G_
+from .agg_recursion import comp_G_, comp_aggHv, comp_derHv, vectorize_root, form_graph_t, sum_Hts, sum_derHv, sum_ext
 
 '''
 Implement sparse param tree in aggH: new graphs represent only high m|d params + their root params.
@@ -27,32 +27,8 @@ Nodes are connected by m|d of different param sets in links, potentially cluster
 Then combine graph with alt_graphs?
 '''
 
-def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition levels of cross-comp,clustering:
-
-    edge, adj_Pt_ = slice_edge(blob, verbose)  # lateral kernel cross-comp -> P clustering
-    comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
-    # PP cross-comp -> discontinuous graph clustering:
-    for fd in 0,1:
-        node_ = edge.node_[fd]  # always PP_t
-        if edge.valt[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.rdnt[fd]:
-            G_= []
-            for i, PP in enumerate(node_):  # convert CPPs to Cgraphs:
-                derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
-                ptuple_tv_ = []; Maxt = [0,0]
-                for mtuple,dtuple in derH:
-                    ptuplet = [mtuple,dtuple]
-                    valt = [sum(mtuple),sum(dtuple)]
-                    # maxt = [sum(Mtuple),sum(Dtuple)]
-                    rdnt = [sum([0 if m>d else 1 for m,d in zip(mtuple,dtuple)]), sum([0 if d>m else 1 for m,d in zip(mtuple,dtuple)])]
-                    ptuple_tv_ += [[ptuplet, valt, rdnt, maxt]]
-                    Maxt[0] += maxt[0]; Maxt[1] += maxt[1]
-                derH[:] = ptuple_tv_
-                # init aggH is empty:
-                G_ += [Cgraph( ptuple=PP.ptuple, derH=[derH,valt,rdnt,Maxt], valHt=[[valt[0]],[valt[1]]], rdnHt=[[rdnt[0]],[rdnt[1]]],
-                               L=PP.ptuple[-1], i=i, box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
-            node_ = G_
-            edge.valHt[0][0] = edge.valt[0]; edge.rdnHt[0][0] = edge.rdnt[0]  # copy
-            agg_recursion(None, edge, node_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
+def root(blob, verbose):  # vectorization pipeline is 3 composition levels of cross-comp,clustering
+    vectorize_root(blob, verbose)
 
 
 def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_

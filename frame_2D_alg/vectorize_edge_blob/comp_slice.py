@@ -31,22 +31,22 @@ def comp_P_(edge, adj_Pt_):  # cross-comp P_ in edge: high-gradient blob, sliced
     for _P, P in adj_Pt_:  # scan, comp contiguously uplinked Ps, rn: relative weight of comparand
         comp_P(edge.link_, _P,P, rn=len(_P.dert_)/len(P.dert_), fd=0)
 
-    form_PP_t(edge, P_=edge.node_, base_rdn=2)  # replace edge.node_ with PP_t, may be nested by sub+
+    form_PP_t(edge, P_= edge.node_, base_rdn=2)
+    # replace edge.node_ with PP_t, may be nested by sub+
 
-
-def comp_P(link_,_P, P, rn, fd=1, derP=None):  #  derP if der+, reused as S if rng+
+def comp_P(link_, _P, P, rn, fd=1, derP=None):  #  derP if der+, reused as S if rng+
     aveP = P_aves[fd]
 
     if fd:  # der+: extend in-link derH, in sub+ only
         dderH, valt, rdnt = comp_derH(_P.derH, P.derH, rn)  # += fork rdn
         derP = CderP(derH = derP.derH+dderH, valt=valt, rdnt=rdnt, P=P,_P=_P, S=derP.S)  # dderH valt,rdnt for new link
-        mval,dval = valt[:2]; mrdn,drdn = rdnt  # exclude maxv
+        mval,dval = valt; mrdn,drdn = rdnt
 
     else:  # rng+: add derH
         mtuple,dtuple = comp_ptuple(_P.ptuple, P.ptuple, rn)
         mval = sum(mtuple); dval = sum(dtuple)
         mrdn = 1+(dval>mval); drdn = 1+(1-(dval>mval))  # or rdn = Dval/Mval?
-        derP = CderP(derH=[[mtuple,dtuple]], valt=[mval,dval], rdnt=[mrdn,drdn], P=P,_P=_P, S=derP)
+        derP = CderP( derH=[[mtuple,dtuple]], valt=[mval,dval], rdnt=[mrdn,drdn], P=P,_P=_P, S=derP)
 
     if mval > aveP*mrdn or dval > aveP*drdn:
         link_ += [derP]
@@ -111,13 +111,10 @@ def form_PP_t(root, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps v
             PP = sum2PP(root, cP_, derP_, base_rdn, fd)
             PP_t[fd] += [PP]  # no if Val > PP_aves[fd] * Rdn:
 
-            # after form_PP_t -> P.root_t
-            sub_recursion(root, PP, fd)  # eval rng+/ PPm or der+/ PPd
-
-    if root.fback_t:
-        for fd in 0,1:
-            if root.fback_t[fd]:
-                feedback(root, fd)  # after sub+ in all nodes, no single node feedback up multiple layers
+    for fd in 0,1:  # after form_PP_t -> P.root_t
+        sub_recursion(root, PP, fd)  # eval rng+/ PPm or der+/ PPd
+        if root.fback_t and root.fback_t[fd]:
+            feedback(root, fd)  # after sub+ in all nodes, no single node feedback up multiple layers
 
     root.node_ = PP_t  # PPs maybe nested in sub+, add_alt_PPs_?
 
@@ -217,14 +214,13 @@ def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, e
     dderH = []  # or not-missing comparand: xor?
     Mval, Dval, Mrdn, Drdn = 0,0,1,1
 
-    for _lay, lay in zip_longest(_derH, derH, fillvalue=[]):  # compare common lower der layers | sublayers in derHs
-        if _lay and lay:  # also if lower-layers match: Mval > ave * Mrdn?
-            # compare dtuples only:
-            mtuple, dtuple = comp_dtuple(_lay[1], lay[1], rn, fagg=0)
-            mval = sum(mtuple); dval = sum(abs(d) for d in dtuple)
-            mrdn = dval > mval; drdn = dval < mval
-            Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
-            dderH += [[mtuple, dtuple]]
+    for _lay, lay in zip(_derH, derH):  # compare common lower der layers | sublayers in derHs
+        # if lower-layers match: Mval > ave * Mrdn?
+        mtuple, dtuple = comp_dtuple(_lay[1], lay[1], rn, fagg=0)  # compare dtuples only
+        mval = sum(mtuple); dval = sum(abs(d) for d in dtuple)
+        mrdn = dval > mval; drdn = dval < mval
+        Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
+        dderH += [[mtuple, dtuple]]
 
     return dderH, [Mval,Dval], [Mrdn,Drdn]  # new derLayer,= 1/2 combined derH
 
