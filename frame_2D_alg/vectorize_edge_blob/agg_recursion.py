@@ -41,89 +41,91 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
     comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
     # PP cross-comp -> discontinuous graph clustering:
     for fd in 0,1:
-        node_ = edge.node_[fd]  # always PP_t
-        if edge.valt[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.rdnt[fd]:
-            G_= []
-            for PP in node_:  # convert CPPs to Cgraphs:
-                derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt  # init aggH is empty:
-                # convert derH to ptuple_tv_: [[ptuplet, valt, maxt, rdnt]]:
-                derH[:] = [
-                    [[mtuple, dtuple], [sum(mtuple), sum(dtuple)], maxt,
-                     [sum([0 if m > d else 1 for m, d in zip(mtuple, dtuple)]), sum([0 if d > m else 1 for m, d in zip(mtuple, dtuple)])]
-                  ] for (mtuple, dtuple), maxt in zip(derH, reform_maxt_(PP.node_))
-                ]
-                G_ += [Cgraph( ptuple=PP.ptuple, derH=[derH,valt,rdnt,[0,0]], valHt=[[valt[0]],[valt[1]]], rdnHt=[[rdnt[0]],[rdnt[1]]],
-                               L=PP.ptuple[-1], box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
-            for PP in node_:
-                for link in PP.link_:  # convert link_ to derGs:
-                    G = G_[node_.index(link.P.root_t[fd])]  # some link'P's root not in node_, is it due to sub+ where
-                    _G = G_[node_.index(link._P.root_t[fd])]
-                    derG = CderG( G=G, _G=_G, S=link.S, A=link.A)
-                    edge.link_ += [derG]
-            node_ = G_
-            edge.valHt[0][0] = edge.valt[0]; edge.rdnHt[0][0] = edge.rdnt[0]  # copy
-            agg_recursion(None, edge, node_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
+        node_ = edge.node_
+        if edge.valt[fd] * (len(node_)-1)*(edge.rng+1) <= G_aves[fd] * edge.rdnt[fd]:   continue
+        G_= []
+        for PP in node_:  # always PP_t, convert CPPs to Cgraphs:
+            derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt  # init aggH is empty:
+            # convert derH to ptuple_tv_: [[ptuplet, valt, maxt, rdnt]]:
+            derH[:] = [
+                [[mtuple,dtuple], maxtuplet, [sum(mtuple),sum(dtuple)],
+                 [sum([0 if m>d else 1 for m,d in zip(mtuple,dtuple)]), sum([0 if d > m else 1 for m, d in zip(mtuple,dtuple)])]
+                ] for (mtuple,dtuple), maxtuplet in zip(derH, reform_maxtuplet_([PP.node_]))
+            ]
+            G_ += [Cgraph( ptuple=PP.ptuple, derH=[derH,valt,rdnt,[0,0]], valHt=[[valt[0]],[valt[1]]], rdnHt=[[rdnt[0]],[rdnt[1]]],
+                           L=PP.ptuple[-1], box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
+        for PP in node_:
+            for link in PP.link_:  # convert link_ to derGs:
+                G = G_[node_.index(link.roott[fd])]  # some link'P's root not in node_, is it due to sub+ where
+                _G = G_[node_.index(link.roott[fd])]
+                derG = CderG( G=G, _G=_G, S=link.S, A=link.A)
+                edge.link_ += [derG]
+        node_ = G_
+        edge.valHt[0][0] = edge.valt[0]; edge.rdnHt[0][0] = edge.rdnt[0]  # copy
+        agg_recursion(None, edge, node_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
 
 # draft
-def reform_maxt_(node_):   # form maxt per derLayer in PP.derH, from PP.node_
-    maxt_ = []
+def reform_maxtuplet_(node_t_):   # form maxt per derLayer in PP.derH, from PP.node_
+    maxtuplet_ = []
+    '''
+    compute relative m|d per param in zip (dertuple,maxtuple): m/maxm or m/maxd,
+    sum them in Decay across derH) aggH, then decay = Decay / (len(dertuple)*len(derH)*len(aggH))
+    '''
+    while True:
+        # nesting is not revised:
+        sub_node_t_ = []  # deeper layer of node_
+        maxtuplet = [[0,0,0,0,0,0],[0,0,0,0,0,0]]  # current layer, 0 per param type
+        for node_t in node_t_:
+            # check for CP
+            if node_t[0] and isinstance(node_t[0],list) and (isinstance(node_t[0][0],CPP) or (node_t[1] and isinstance(node_t[1][0],CPP))):
+                # PP.node_ is [subPPm_,subPPd_], unpack each
+                for fd, PP_ in enumerate(node_t):  # [sub_PPm_,sub_PPd_]
+                    for PP in PP_:
+                        for link in PP.link_:  # get lower-der comp pairs and find their max
+                            _P, P = link._P, link.P
+                            rn = len(_P.dert_) / len(P.dert_)
+                            for i, (_par, par) in enumerate(zip(_P.ptuple, P.ptuple)):
+                                if hasattr(par, '__len__'): maxm = maxd = 2  # angle
+                                else:
+                                    maxm = max(abs(_par),abs(par*rn)); maxd = abs(_par)+abs(par*rn)
+                                maxtuplet[0][i] += maxm
+                                maxtuplet[1][i] += maxd
+                                if PP.node_[0] and isinstance(PP.node_[0],list) and (isinstance(PP.node_[0][0],CPP)
+                                    or (PP.node_[1] and isinstance(PP.node_[1][0],CPP))):
+                                    sub_node_t_ += [PP.node_]
+        maxtuplet_ += [maxtuplet]  # pack current layer maxt
 
-    while node_[0] and isinstance(node_[0],list) or node_[1] and isinstance(node_[1],list):
-        # PP.node_ is [subPPm_,subPPd_], unpack each
-        sub_PP_t = []
-        maxt = [0, 0]
-        for fd, PP_ in enumerate(node_):  # [sub_PPm_,sub_PPd_]
-            sub_PP_ = []
-            for PP in PP_:
-                for link in PP.link_:  # get lower-der comp pairs and find their max
-                    _P, P = link._P, link.P
-                    rn = len(_P.dert_) / len(P.dert_)
-                    for _par, par in zip(_P.ptuple, P.ptuple):
-                        if hasattr(_par, '__len__'): _par = np.hypot(*_par)  # angle, same as G?
-                        if hasattr(par, '__len__'): par = np.hypot(*par)  # angle
-                        npar = par * rn
-                        maxt[0] += max(abs(_par), abs(npar))
-                        maxt[1] += abs(_par) + abs(npar)
-                        if PP.node_ and isinstance(PP.node_[0], CPP):
-                            sub_PP_ += PP.node_
-                    maxt_ += [maxt]
-                if sub_PP_: PP_ = sub_PP_  # unpack next layer
-                else:      break
-            sub_PP_t += [sub_PP_]
-        node_ = sub_PP_t
-    # here add processing of node_= P_?
-    return maxt_
+        if sub_node_t_: node_t_ = sub_node_t_  # for next layer checking
+        else:           break
+    return maxtuplet_
 
 # tentative
 def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_
-    '''
-    if fd: link_,Valt,Rdnt = comp_G_(root.link_,fd)  # der+/ old link: scan link_
-    else:  link_,Valt,Rdnt = comp_G_(root.node_,fd)  # rng+/ new link: scan node_t[fd]?
-    unpack here:
-    '''
-    Mval,Dval, Mrdn,Drdn = 0,0,0,0; link_ = defaultdict(list)
+
+    Mval,Dval, Mrdn,Drdn = 0,0,0,0
+    link_ = defaultdict(list)
     if fd:
         for link in root.link_:
             if link.valt[1] < G_aves[1]*link.rdnt[1]: continue  # maybe weak after rdn incr?
-            mval,dval, mrdn,drdn = comp_G(link_,link._G,link.G, fd); Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
+            mval,dval, mrdn,drdn = comp_G(link_,link._G,link.G, fd)
+            Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
     else:
-        for i, _node in enumerate(root.node_):  # use original node_ for rng+?
+        for i, _node in enumerate(root.node_):  # original node_ for rng+
             for node in root.node_[i+1:]:
                 dy = _node.box[0]-node.box[0]; dx = _node.box[1]-node.box[1]
                 distance = np.hypot(dy, dx)  # Euclidean distance between centers of Gs
                 if distance < root.rng:  # close enough to compare
                     # * ((sum(_G.valHt[fd]) + sum(G.valHt[fd])) / (2*sum(G_aves)))):  # comp rng *= rel G value?
-                    mval,dval, mrdn,drdn = comp_G(link_,_node,node, fd); Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
+                    mval,dval, mrdn,drdn = comp_G(link_,_node,node, fd)
+                    Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
 
-    root.valHt[fd] += [0]; root.rdnHt[fd] += [1]  # sum in form_graph_t feedback
-
-    GG_t = form_graph_t(root, Valt,Rdnt, G_, link_)  # eval sub+ and feedback per graph
-    # agg+ xcomp-> form_graph_t loop sub)agg+, vs. comp_slice:
-    # sub+ loop-> eval-> xcomp
+    root.valHt[fd] += [0]; root.rdnHt[fd] += [1]
+    # sum in feedback:
+    GG_t = form_graph_t(root, [Mval,Dval],[Mrdn,Drdn], G_, link_)  # eval sub+ and feedback per graph
+    # agg+ xcomp-> form_graph_t loop sub)agg+, vs. comp_slice sub+ loop-> eval-> xcomp
     for GG_ in GG_t:  # comp_G_ eval: ave_m * len*rng - fixed cost, root update in form_t:
         if root.valHt[0][-1] * (len(GG_)-1)*root.rng > G_aves[fd] * root.rdnHt[0][-1]:
             agg_recursion(rroot, root, GG_, fd=0)  # 1st xcomp in GG_
-
     G_[:] = GG_t
 
 def form_graph_t(root, Valt,Rdnt, G_, link_):  # form mgraphs and dgraphs of same-root nodes
@@ -186,7 +188,7 @@ def node_connect(iG_, link_, fd):  # sum surround values to define node connecti
                 _G,_val,_rdn,_ival,_irdn,_rim = _Gt
                 try: decay = link.valt[fd]/link.maxt[fd]  # link decay coef: m|d / max, base self/same
                 except ZeroDivisionError: decay = 1
-                # * relative link vals:
+                # node vals * relative link val:
                 linkV = (val+_val) * decay; val+=linkV; _val+=linkV; rim_val += linkV  # bilateral accum
                 linkR = (rdn+_rdn) * decay; rdn+=linkR; _rdn+=linkR; rim_rdn += linkR
                 link.Vt[fd] = linkV  # for segment_node_

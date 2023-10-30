@@ -52,7 +52,7 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     rdnt : list = z([1,1])
     dert_ : list = z([])  # array of pixel-level derts, ~ node_
     cells : set = z(set())  # pixel-level kernels adjacent to P axis, combined into corresponding derts projected on P axis.
-    root_t : list = z([None,None])  # PPrm,PPrd, PPdm,PPdd that contain this P, single-layer
+    roott : list = z([None,None])  # PPrm,PPrd that contain this P, single-layer
     axis : tuple = (0,1)  # prior slice angle, init sin=0,cos=1
     yx : tuple = None
     ''' 
@@ -70,6 +70,7 @@ class CderP(ClusterStructure):  # tuple of derivatives in P link: binary tree wi
     derH : list = z([])  # [[[mtuple,dtuple],[mval,dval],[mrdn,drdn]]], single ptuplet in rng+
     valt : list = z([0,0])
     rdnt : list = z([1,1])  # mrdn + uprdn if branch overlap?
+    roott : list = z([None, None])  # PPdm,PPdd that contain this derP
     _P : object = None  # higher comparand
     P : object = None  # lower comparand
     S : float = 0.0  # sparsity: distance between centers
