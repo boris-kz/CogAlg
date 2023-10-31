@@ -127,7 +127,7 @@ def sum2PP(root, P_, derP_, base_rdn, fd):  # sum links in Ps and Ps in PP
     # accum derP:
     for derP in derP_:
         if derP.P not in P_ or derP._P not in P_: continue
-        if fd: derP.roott[fd] = PP
+        derP.roott[fd] = PP
         derH,valt,rdnt = derP.derH,derP.valt,derP.rdnt
         P = derP.P  # uplink
         sum_derH([P.derH,P.valt,P.rdnt], [derH,valt,rdnt], base_rdn, fneg=0)
@@ -137,7 +137,6 @@ def sum2PP(root, P_, derP_, base_rdn, fd):  # sum links in Ps and Ps in PP
     # accum P:
     celly_,cellx_ = [],[]
     for P in P_:
-        if not fd: P.roott[fd] = PP
         sum_ptuple(PP.ptuple, P.ptuple)  # accum ptuple
         for y, x in P.cells:
             PP.box = PP.box.accumulate(y, x)

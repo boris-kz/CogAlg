@@ -585,6 +585,18 @@ def comp_G_(G_, fd=0, oG_=None, fin=1):  # cross-comp in G_ if fin, else comp be
             Mval+=mval;Dval+=dval; Mrdn+=mrdn;Drdn+=drdn
             link_  += [link]  # we need to pack link too
         link__ += [link_]
+
+def comp_G_(root_link_, fd=0):  # cross-comp in G_, comp between G_ and other_G_ for comp_node_ is not implemented
+
+    Mval,Dval, Mrdn,Drdn = 0,0,0,0
+    link_ = defaultdict(list)
+
+    for link in root_link_:  # always form new link, maybe empty?
+        if fd and link.valt[1] < G_aves[1]*link.rdnt[1]:
+            continue  # maybe weak after rdn incr?
+
+        mval,dval, mrdn,drdn = comp_G(link_,link, fd)
+        Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
         '''
         same comp for cis and alt components?
         for _cG, cG in ((_G, G), (_G.alt_Graph, G.alt_Graph)):
@@ -593,4 +605,18 @@ def comp_G_(G_, fd=0, oG_=None, fin=1):  # cross-comp in G_ if fin, else comp be
         combine cis,alt in aggH: alt represents node isolation?
         comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D? '''
 
-    return [Mval,Dval], [Mrdn,Drdn], link__
+    return [Mval,Dval], [Mrdn,Drdn], link_
+
+
+def sum_derHv(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
+
+    DerH, Valt,Rdnt,Maxt = T; derH, valt,rdnt,maxt = t
+    for i in 0,1:
+        Valt[i] += valt[i]; Rdnt[i] += rdnt[i]+ base_rdn; Maxt[i] += maxt[i]
+    DerH[:] = [
+        [ [sum_dertuple(Dertuple,dertuple, fneg*i) for i,(Dertuple,dertuple) in enumerate(zip(Tuplet,tuplet))],
+          [V+v for V,v in zip(Valt,valt)], [R+r+base_rdn for R,r in zip(Rdnt,rdnt)], [M+m for M,m in zip(Maxt,maxt)],
+        ]
+        for [Tuplet,maxTuplet, Valt,Rdnt,Maxt], [tuplet,maxtuplet, valt,rdnt]
+        in zip_longest(DerH, derH, fillvalue=[([0,0,0,0,0,0],[0,0,0,0,0,0]), (0,0),(0,0),(0,0)])  # ptuple_tv
+    ]
