@@ -81,7 +81,7 @@ max n of tuples per der layer = summed n of tuples in all lower layers: 1, 1, 2,
 lay1: par     # derH per param in vertuple, layer is derivatives of all lower layers:
 lay2: [m,d]   # implicit nesting, brackets for clarity:
 lay3: [[m,d], [md,dd]]: 2 sLays,
-lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays:
+lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
 '''
 class CPP(CderP):
 
@@ -110,6 +110,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     aggH : list = z([])  # [[subH,valt,rdnt]], subH: [[derH,valt,rdnt,maxt]]: 2-fork composition layers, -> pP_?
     valHt : list = z([[0],[0]])  # Ht of link vals,rdns, decays / fder:
     rdnHt : list = z([[1],[1]])
+    decHt : list = z([[0],[0]])
     root : object = None  # ini graph, replace with mroot,droot for nodes in sub+, nest in up-forking tree: root_ fork / agg+
     link_ : list = z([])  # added per sub+, as in comp_slice
     node_ : list = z([])  # init G_-> Gm_,Gd_, nested in down-forking tree: node_ fork/ sub+

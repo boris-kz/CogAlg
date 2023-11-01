@@ -620,3 +620,42 @@ def sum_derHv(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers
         for [Tuplet,maxTuplet, Valt,Rdnt,Maxt], [tuplet,maxtuplet, valt,rdnt]
         in zip_longest(DerH, derH, fillvalue=[([0,0,0,0,0,0],[0,0,0,0,0,0]), (0,0),(0,0),(0,0)])  # ptuple_tv
     ]
+
+def reform_maxtuplet_(node_t_):  # form maxtuplet per derLayer in PP.derH from PP.node_
+
+    maxtuplet_ = [[[0,0,0,0,0,0],[0,0,0,0,0,0]]]  # maps to derH, default 0der from P.ptuple
+    S_ = [0]  # accum count per derLay, derivation+ / composition+, sum from nesting layers:
+
+    while True:  # unpack lower node_ layer
+        sub_node_t_ = []  # subPP_t or P_ per higher PP
+        for node_t in node_t_:
+            if node_t[0] and isinstance(node_t[0],list):  # node_t is not P_
+                for fd, PP_ in enumerate(node_t):  # [sub_PPm_,sub_PPd_]
+                    for PP in PP_:
+                        for link in PP.link_:  # get lower-der comp pairs and find their max
+                            _P, P = link._P, link.P
+                            rn = len(_P.dert_) / len(P.dert_)
+                            for i, (_par, par) in enumerate(zip(_P.ptuple, P.ptuple)):
+                                if hasattr(par,'__len__'):
+                                    maxm = maxd = 2  # angle
+                                else:
+                                    maxm = max(abs(_par),abs(par*rn)); maxd = abs(_par)+abs(par*rn)
+                                maxtuplet_[0][0][i] += maxm
+                                maxtuplet_[0][1][i] += maxd
+                            S_[0] += 1
+                            for j, (_tuplet, tuplet, maxtuplet) in enumerate( zip_longest(  # loop derLayers bottom-up:
+                                    reversed(_P.derH),reversed(P.derH),reversed(maxtuplet_[1:]),
+                                    fillvalue=[[0,0,0,0,0,0],[0,0,0,0,0,0]])):
+                                for i, (_par, par) in enumerate(zip(_tuplet, tuplet, maxtuplet)):
+                                    maxtuplet[j][0][i] += max(abs(_par),abs(par*rn))  # maxm
+                                    maxtuplet[j][1][i] += abs(_par) + abs(par*rn)  # maxd
+                                S_[j] += 1 if S_[j] else S_.append(1)
+
+                                if PP.node_[0] and isinstance(PP.node_[0],list):
+                                    sub_node_t_ += [PP.node_]
+        if sub_node_t_:
+            node_t_ = sub_node_t_  # deeper nesting layer
+        else:
+            break
+    return maxtuplet_, S_  # maps to derH
+

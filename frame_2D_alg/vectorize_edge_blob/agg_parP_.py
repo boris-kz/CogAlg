@@ -6,7 +6,7 @@ from .classes import Cgraph, CderG, CPP
 from .filters import ave_L, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd, ave_dI, ave_G, ave_M, ave_Ma
 from .slice_edge import slice_edge, comp_angle
 from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, comp_derH, sum_derH, sum_dertuple, match_func
-from .agg_recursion import comp_G_, comp_aggHv, comp_derHv, vectorize_root, form_graph_t, sum_Hts, sum_derHv, sum_ext
+from .agg_recursion import comp_G, comp_aggHv, comp_derHv, vectorize_root, form_graph_t, sum_Hts, sum_derHv, sum_ext
 
 '''
 Implement sparse param tree in aggH: new graphs represent only high m|d params + their root params.
@@ -50,51 +50,51 @@ def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in 
 
 def cluster_params(parHv, fd):  # last v: value tuple valt,rdnt,maxt
 
-    parH, rVal, rRdn, rMax = parHv  # compressed valt,rdnt,maxt per aggH replace initial summed G vals
+    parH, rVal, rRdn, rDec = parHv  # compressed valt,rdnt,maxt per aggH replace initial summed G vals
     part_P_ = []  # pPs: nested clusters of >ave param tuples, as below:
     part_ = []  # [[subH, sub_part_P_t], Val,Rdn,Max]
-    Val,Rdn,Max = 0,0,0; parH = copy(parH)
+    Val,Rdn,Dec = 0,0,0; parH = copy(parH)
 
     while parH:  # aggHv | subHv | derHv (ptv_), top-down
         subt = parH.pop()
         '''    subt = Hv: >4-level list, | ptv: 3-level list, | extt: 2-level list:
-        aggHv: [aggH=subHv_, valt, rdnt, maxt],
-        subHv: [subH=derHv_, valt, rdnt, maxt],
-        derHv: [derH=ptuple_tv_, valt, rdnt, maxt] or extt, mixed in subH
-        ptuple_tv: [[mtuple,dtuple], valt, rdnt, maxt] 
+        aggHv: [aggH=subHv_, valt, rdnt, dect],
+        subHv: [subH=derHv_, valt, rdnt, dect],
+        derHv: [derH=ptuple_tv_, valt, rdnt, dect] or extt, mixed in subH
+        ptuple_tv: [[mtuple,dtuple], valt, rdnt, dect] 
         '''
         if isinstance(subt[0][0],list):  # not extt
             if isinstance(subt[0][0][0],list):  # subt==Hv
-                subH, val, rdn, max = subt[0], subt[1][fd], subt[2][fd], subt[3][fd]
+                subH,val,rdn,dec = subt[0], subt[1][fd], subt[2][fd], subt[3][fd]
                 if val > ave:  # recursive eval,unpack
-                    Val+=val; Rdn+=rdn; Max+=max  # sum with sub-vals:
-                    sub_part_P_t = cluster_params([subH, val, rdn, max], fd)
+                    Val+=val; Rdn+=rdn; Dec+=dec  # sum with sub-vals:
+                    sub_part_P_t = cluster_params([subH,val,rdn,dec], fd)
                     part_ += [[subH, sub_part_P_t]]
                 else:
                     if Val:  # empty sub_pP_ terminates root pP
-                        part_P_ += [[part_,Val,Rdn,Max]]; rVal+=Val; rRdn+=Rdn; rMax+=Max  # root params
-                        part_= [], Val,Rdn,Max = 0,0,0  # pP params
+                        part_P_ += [[part_,Val,Rdn,Dec]]; rVal+=Val; rRdn+=Rdn; rDec+=Dec  # root params
+                        part_= [], Val,Rdn,Dec = 0,0,0  # pP params
                         # reset
-            else: cluster_ptuplet(subt, [part_P_,rVal,rRdn,rMax], [part_,Val,Rdn,Max], v=1)  # subt is derLay
-        else:     cluster_ptuplet(subt, [part_P_,rVal,rRdn,rMax], [part_,Val,Rdn,Max], v=0)  # subt is extt
+            else: cluster_ptuplet(subt, [part_P_,rVal,rRdn,rDec], [part_,Val,Rdn,Dec], v=1)  # subt is derLay
+        else:     cluster_ptuplet(subt, [part_P_,rVal,rRdn,rDec], [part_,Val,Rdn,Dec], v=0)  # subt is extt
     if part_:
-        part_P_ += [[part_,Val,Rdn,Max]]; rVal+=Val; rRdn+=Rdn; rMax+=Max
+        part_P_ += [[part_,Val,Rdn,Dec]]; rVal+=Val; rRdn+=Rdn; rDec+Dec
 
-    return [part_P_,rVal,rRdn,rMax]  # root values
+    return [part_P_,rVal,rRdn,rDec]  # root values
 
 def cluster_ptuplet(ptuplet, part_P_v, part_v, v):  # ext or ptuple, params=vals
 
-    part_P_,rVal,rRdn,rMax = part_P_v  # root params
-    part_,Val,Rdn,Max = part_v  # pP params
-    if v: ptuplet, valt,rdnt,maxt = ptuplet
+    part_P_,rVal,rRdn,rDec = part_P_v  # root params
+    part_,Val,Rdn,Dec = part_v  # pP params
+    if v: ptuplet, valt,rdnt,dect = ptuplet
 
     valP_t = [[cluster_vals(ptuple) for ptuple in ptuplet if sum(ptuple) > ave]]
     if valP_t:
         part_ += [valP_t]  # params=vals, no sum-> Val,Rdn,Max?
     else:
         if Val:  # empty valP_ terminates root pP
-            part_P_ += [[part_, Val, Rdn, Max]]
-            part_P_v[1:] = rVal+Val, rRdn+Rdn, rMax+Max  # root values
+            part_P_ += [[part_, Val, Rdn, Dec]]
+            part_P_v[1:] = rVal+Val, rRdn+Rdn, rDec+Dec  # root values
         part_v[:] = [],0,0,0  # reset
 
 def cluster_vals(ptuple):
@@ -127,9 +127,9 @@ def sum_aggH(AggH, aggH, base_rdn):
 
 def sum_subH(T, t , base_rdn, fneg=0):
 
-    SubH, Valt,Rdnt,Maxt = T; subH, valt,rdnt,maxt = t
+    SubH, Valt,Rdnt,Dect = T; subH, valt,rdnt,dect = t
     for i in 0,1:
-        Valt[i] += valt[i]; Rdnt[i] += rdnt[i]+ base_rdn; Maxt[i] += maxt[i]
+        Valt[i] += valt[i]; Rdnt[i] += rdnt[i]+ base_rdn; Dect[i] += dect[i]
     if SubH:
         for Layer, layer in zip_longest(SubH,subH, fillvalue=[]):
             if layer:
@@ -145,19 +145,19 @@ def sum_subH(T, t , base_rdn, fneg=0):
 
 def feedback(root, fd):  # called from form_graph_, append new der layers to root
 
-    AggH, ValHt, RdnHt, MaxHt = deepcopy(root.fback_t[fd].pop(0))  # init with 1st tuple
+    AggH, ValHt, RdnHt, DecHt = deepcopy(root.fback_t[fd].pop(0))  # init with 1st tuple
     while root.fback_t[fd]:
-        aggH, valHt, rdnHt, maxHt = root.fback_t[fd].pop(0)
+        aggH, valHt, rdnHt, decHt = root.fback_t[fd].pop(0)
         sum_aggH(AggH, aggH, base_rdn=0)
-        sum_Hts(ValHt,RdnHt,MaxHt, valHt,rdnHt,maxHt)
+        sum_Hts(ValHt,RdnHt,DecHt, valHt,rdnHt,decHt)
     sum_aggH(root.aggH,AggH, base_rdn=0)
-    sum_Hts(root.valHt,root.rdnHt,root.maxHt, ValHt,RdnHt,MaxHt)  # both forks sum in same root
+    sum_Hts(root.valHt,root.rdnHt,root.decHt, ValHt,RdnHt,DecHt)  # both forks sum in same root
 
     if isinstance(root, Cgraph) and root.root:  # root is not CEdge, which has no roots
         rroot = root.root
         fd = root.fd  # current node_ fd
         fback_ = rroot.fback_t[fd]
-        fback_ += [[AggH, ValHt, RdnHt, MaxHt]]
+        fback_ += [[AggH, ValHt, RdnHt, DecHt]]
         if fback_ and (len(fback_) == len(rroot.node_t)):  # flat, all rroot nodes terminated and fed back
             # getting cyclic rroot here not sure why it can happen, need to check further
             feedback(rroot, fd)  # sum2graph adds aggH per rng, feedback adds deeper sub+ layers
