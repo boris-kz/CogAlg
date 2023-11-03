@@ -118,7 +118,9 @@ def form_PP_t(root, root_link_, P_, base_rdn):  # form PPs of derP.valt[fd] + co
         if root.fback_t and root.fback_t[fd]:
             feedback(root, fd)  # after sub+ in all nodes, no single node feedback up multiple layers
 
-    root.node_ = PP_t  # PPs maybe nested in sub+, add_alt_PPs_?
+    if PP_t[0] and PP_t[1]: root.node_ = PP_t  # nested in sub+, add_alt_PPs_?
+    elif PP_t[0]: root.node_[1] = P_ # reassign P_
+    elif PP_t[1]: root.node_[0] = P_
 
 
 def sum2PP(root, P_, derP_, base_rdn, fd):  # sum links in Ps and Ps in PP
