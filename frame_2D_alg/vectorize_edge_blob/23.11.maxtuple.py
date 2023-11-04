@@ -166,3 +166,46 @@ def comp_derHv(_derH, derH, rn):  # derH is a list of der layers or sub-layers, 
 
     return dderH, [Mval,Dval],[Mrdn,Drdn],[maxM,maxD]  # new derLayer,= 1/2 combined derH
 
+def reform_dect_(node_t_):
+
+    Dect_ = [[0,0]]  # default 1st layer dect from ptuple
+    S_ = [0]  # accum count per derLay
+
+    while True:  # unpack lower node_ layer
+        sub_node_t_ = []  # subPP_t or P_ per higher PP
+        for node_t in node_t_:
+            if node_t[0] and isinstance(node_t[0],list) and (isinstance(node_t[0][0],CPP) or (node_t[1] and isinstance(node_t[1][0],CPP))):
+                for fd, PP_ in enumerate(node_t):  # node_t is [sub_PPm_,sub_PPd_]
+                    for PP in PP_:
+                        for link in PP.link_:  # get compared Ps and find param maxes
+                            _P, P = link._P, link.P
+                            S_[0] += 6  # 6 pars
+                            for _par, par in zip(_P.ptuple, P.ptuple):
+                                if hasattr(par,"__len__"):
+                                    Dect_[0][0] +=2; Dect_[0][1] +=2  # angle
+                                else:  # scalar
+                                    if _par and par:  # link decay coef: m|d / max, base self/same:
+                                        Dect_[0][0] += par/ (abs(_par)+abs(par)); Dect_[0][1] += par/ max(_par,par)
+                                    else:
+                                        Dect_[0][0] += 1; Dect_[0][1] += 1  # prevent /0
+                            for i, (_tuplet,tuplet, Dect) in enumerate(zip_longest(_P.derH,P.derH, Dect_[1:], fillvalue=None)):
+                                if _tuplet and tuplet:                              # loop derLays bottom-up
+                                    mdec, ddec = 0,0
+                                    for fd,(_ptuple,ptuple) in enumerate(zip(_tuplet,tuplet)):
+                                        for _par, par in zip(_ptuple,ptuple):
+                                            if fd: mdec += par/ max(_par,par) if _par and par else 1  # prevent /0
+                                            else:  ddec += par/ (abs(_par)+abs(par)) if _par and par else 1
+                                    if Dect:
+                                        Dect_[i][0] += mdec; Dect_[i][1] += mdec; S_[i] += 6  # accum 6 pars
+                                    else:
+                                        Dect_ += [[mdec,ddec]]; S_ += [6]  # extend both
+                        if PP.node_[0] and isinstance(PP.node_[0], list) and (isinstance(PP.node_[0][0], CPP)
+                            or (PP.node_[1] and isinstance(PP.node_[1][0], CPP))):
+                            sub_node_t_ += [PP.node_]
+        if sub_node_t_:
+            node_t_ = sub_node_t_  # deeper nesting layer
+        else:
+            break
+
+    # skip when S = 0
+    return [[Dect[0]/S, Dect[1]/S] if S>0 else Dect for Dect, S in zip(Dect_, S_)]  # normalize by n sum

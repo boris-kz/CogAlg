@@ -16,7 +16,8 @@ from frame_blobs import boxT
 class CEdge(ClusterStructure):  # edge blob
 
     der__t_roots: object = None  # map to dir__t
-    node_ : list = z([])  # default P_, node_t in select PP_ or G_ fder forks
+    P_: list = z([])
+    node_t : list = z(([],[]))  # default PP_t in select PP_ or G_ fder forks
     link_ : list = z([])
     fback_t : list = z([[],[]])  # for consistency, only fder=0 is used
     # for comp_slice:
@@ -92,7 +93,8 @@ class CPP(CderP):
     rdnt : list = z([1,1])
     mask__ : object = None
     root : object = None  # edge / PP, PP / sub_PP: not shared between root forks
-    node_ : list = z([])  # init P_, -> node_tt if sub+: [rng+ [sub_PPm_,sub_PPd_], der+ [sub_PPm_,sub_PPd_]]
+    P_: list = z([])
+    node_t : list = z(([],[]))  # default PP_t in select PP_ or G_ fder forks
     link_ : list = z([])
     fback_t : list = z([[],[]])  # maps to node_tt: [derH,valt,rdnt] per node fork
     rng : int = 1  # sum of rng+: odd forks in last layer?
@@ -106,13 +108,14 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
 
     fd: int = 0  # graph is defined by m|d value
     ptuple : list = z([0,0,0,0,[0,0],0])  # default from P
-    derH : list = z([[],[],[0,0],[1,1]])  # default from converted PP: [[tuplet,maxtuplet,valt,rdnt]]
+    derH : list = z([[],[0,0],[1,1],[0,0]])  # default from converted PP: [[tuplet,valt,rdnt,dect]]
     aggH : list = z([])  # [[subH,valt,rdnt]], subH: [[derH,valt,rdnt,maxt]]: 2-fork composition layers, -> pP_?
     valHt : list = z([[0],[0]])  # Ht of link vals,rdns, decays / fder:
     rdnHt : list = z([[1],[1]])
     decHt : list = z([[0],[0]])
     root : object = None  # ini graph, replace with mroot,droot for nodes in sub+, nest in up-forking tree: root_ fork / agg+
     link_ : list = z([])  # added per sub+, as in comp_slice
+    # or node_H:
     node_ : list = z([])  # init G_-> Gm_,Gd_, nested in down-forking tree: node_ fork/ sub+
     fback_t : list = z([[],[]])  # maps to node_t: feedback [[aggH,valt,rdnt]] per node fork
     L : int = 0 # len base node_; from internal links:
@@ -143,4 +146,5 @@ class CderG(ClusterStructure):  # params of single-fork node_ cluster per pplaye
     G: object = None  # comparand
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers
+    roott : list = z([None,None])
     # dir : bool  # direction of comparison if not G0,G1, only needed for comp link?

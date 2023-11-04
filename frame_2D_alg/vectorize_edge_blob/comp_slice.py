@@ -1,11 +1,10 @@
 import numpy as np
-from copy import copy, deepcopy
+from copy import deepcopy
 from itertools import zip_longest, combinations
 from collections import deque, defaultdict
 from .slice_edge import comp_angle
 from .classes import CderP, CPP
 from .filters import ave, aves, P_aves, PP_aves
-
 '''
 Vectorize is a terminal fork of intra_blob.
 
@@ -31,8 +30,7 @@ def comp_P_(edge, adj_Pt_):  # cross-comp P_ in edge: high-gradient blob, sliced
     for _P, P in adj_Pt_:  # scan, comp contiguously uplinked Ps, rn: relative weight of comparand
         comp_P(edge.link_, _P,P, rn=len(_P.dert_)/len(P.dert_), fd=0)
 
-    form_PP_t(edge, edge.link_, P_= edge.node_, base_rdn=2)
-    # replace edge.node_ with PP_t, may be nested by sub+
+    form_PP_t(edge, edge.link_, base_rdn=2)
 
 def comp_P(link_, _P, P, rn, fd=1, derP=None):  #  derP if der+, reused as S if rng+
     aveP = P_aves[fd]
@@ -71,7 +69,7 @@ def comp_der(ilink_):  # keep same Ps and links, increment link derH, then P der
     n_uplinks = defaultdict(int)
     for derP in ilink_: n_uplinks[derP.P] += 1
 
-    link_ = []     # extended-derH derPs
+    link_ = []  # extended-derH derPs
     for derP in ilink_:  # scan root PP links, no concurrent rng+
         P = derP.P; _P = derP._P
         if not P.derH or not _P.derH: continue
@@ -83,7 +81,7 @@ def comp_der(ilink_):  # keep same Ps and links, increment link derH, then P der
     return link_
 
 
-def form_PP_t(root, root_link_, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
+def form_PP_t(root, root_link_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
 
     PP_t = [[],[]]
     for fd in 0,1:
@@ -94,7 +92,7 @@ def form_PP_t(root, root_link_, P_, base_rdn):  # form PPs of derP.valt[fd] + co
                 link_map[derP.P] += [derP._P]  # keys:Ps, vals: linked _P_s, up and down
                 link_map[derP._P] += [derP.P]
                 derP_ += [derP]     # filtered derP
-        for P in P_:
+        for P in root.P_:
             if P.roott[fd]: continue  # skip if already packed in some PP
             cP_ = [P]  # clustered Ps and their val,rdn s
             perimeter = deque(link_map[P])  # recycle with breadth-first search, up and down:
@@ -113,19 +111,17 @@ def form_PP_t(root, root_link_, P_, base_rdn):  # form PPs of derP.valt[fd] + co
 
     for fd, PP_ in enumerate(PP_t):  # after form_PP_t -> P.roott
         for PP in PP_:
-            if PP.valt[fd]* (len(P_)-1)*PP.rng > PP_aves[fd]* PP.rdnt[fd]:  # val*len*rng: sum ave matches - fixed PP cost
+            if PP.valt[fd]* (len(PP.P_)-1)*PP.rng > PP_aves[fd]* PP.rdnt[fd]:  # val*len*rng: sum ave matches - fixed PP cost
                 sub_recursion(root, PP, fd)  # eval rng+/PPm or der+/PPd
         if root.fback_t and root.fback_t[fd]:
             feedback(root, fd)  # after sub+ in all nodes, no single node feedback up multiple layers
 
-    if PP_t[0] and PP_t[1]: root.node_ = PP_t  # nested in sub+, add_alt_PPs_?
-    elif PP_t[0]: root.node_[1] = P_ # reassign P_
-    elif PP_t[1]: root.node_[0] = P_
+    root.node_ = PP_t  # nested in sub+, add_alt_PPs_?
 
 
 def sum2PP(root, P_, derP_, base_rdn, fd):  # sum links in Ps and Ps in PP
 
-    PP = CPP(fd=fd, root=root, node_=P_, rng=root.rng +(1-fd))  # initial PP.box = (inf,inf,-inf,-inf)
+    PP = CPP(fd=fd, root=root, P_=P_, rng=root.rng +(1-fd))  # initial PP.box = (inf,inf,-inf,-inf)
     # accum derP:
     for derP in derP_:
         if derP.P not in P_ or derP._P not in P_: continue
@@ -158,15 +154,14 @@ Each call to comp_rng | comp_der forms dderH: new layer of derH. Both forks are 
 '''
 def sub_recursion(root, PP, fd):  # called in form_PP_, evaluate PP for rng+ and der+, add layers to select sub_PPs
 
-    P_ = PP.node_  # flat before sub+
     rng = PP.rng+(1-fd)
     # der+|rng+: reform old else form new links:
     link_ = comp_der(PP.link_) if fd else comp_rng(PP.link_, rng)
 
     PP.rdnt[fd] += (PP.valt[fd] - PP_aves[fd] * PP.rdnt[fd]) > (PP.valt[1-fd] - PP_aves[1-fd] * PP.rdnt[1-fd])
-    for P in P_: P.roott = [None,None]  # fill with sub_PPm_,sub_PPd_ between nodes and PP:
+    for P in PP.P_: P.roott = [None,None]  # fill with sub_PPm_,sub_PPd_ between nodes and PP:
 
-    form_PP_t(PP, link_, P_, base_rdn=PP.rdnt[fd])
+    form_PP_t(PP, link_, base_rdn=PP.rdnt[fd])
     root.fback_t[fd] += [[PP.derH, PP.valt, PP.rdnt]]  # merge in root.fback_t fork, else need fback_tree
 
 
@@ -179,10 +174,10 @@ def feedback(root, fd):  # in form_PP_, append new der layers to root PP, single
 
     if isinstance(root, CPP):  # root is not CEdge, which has no roots
         rroot = root.root  # single PP.root, can't be P
-        fd = root.fd  # current node_ fd
-        fback_ = rroot.fback_t[fd]
+        fd = root.fd  # node_ fd
+        node_, fback_ = rroot.node_t[fd], rroot.fback_t[fd]
         fback_ += [Fback]
-        if fback_ and (len(fback_) == len(rroot.node_)):  # still flat, all nodes terminated and fed back
+        if fback_ and (len(fback_)==len(node_)):  # all nodes terminated and fed back
             feedback(rroot, fd)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
 
 
@@ -227,7 +222,6 @@ def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, e
 
     return dderH, [Mval,Dval], [Mrdn,Drdn]  # new derLayer,= 1/2 combined derH
 
-
 def comp_dtuple(_ptuple, ptuple, rn, fagg=0):
 
     mtuple, dtuple = [],[]
@@ -244,10 +238,6 @@ def comp_dtuple(_ptuple, ptuple, rn, fagg=0):
     if fagg: ret += [Mtuple, Dtuple]
     return ret
 
-def match_func(_par, par):
-    match = min(abs(_par),abs(par))
-    return -match if (_par<0) != (par<0) else match    # match = neg min if opposite-sign comparands
-
 def comp_ptuple(_ptuple, ptuple, rn, fagg=0):  # 0der params
 
     _I, _G, _M, _Ma, (_Dy, _Dx), _L = _ptuple
@@ -262,15 +252,18 @@ def comp_ptuple(_ptuple, ptuple, rn, fagg=0):  # 0der params
 
     mtuple = [mI, mG, mM, mMa, mAngle, mL]
     dtuple = [dI, dG, dM, dMa, dAngle, dL]
+    ret = [mtuple, dtuple]
     if fagg:
         Mtuple = [max(_I,I), max(_G,G), max(_M,M), max(_Ma,Ma), 2, max(_L,L)]
         Dtuple = [abs(_I)+abs(I), abs(_G)+abs(G), abs(_M)+abs(M), abs(_Ma)+abs(Ma), 2, abs(_L)+abs(L)]
-
-    ret = [mtuple, dtuple]
-    if fagg: ret += [Mtuple, Dtuple]
+        ret += [Mtuple, Dtuple]
     return ret
 
+def match_func(_par, par):
+    match = min(abs(_par),abs(par))
+    return -match if (_par<0) != (par<0) else match    # match = neg min if opposite-sign comparands
 
+# old:
 def comp_ptuple_gen(_ptuple, ptuple, rn):  # 0der
 
     mtuple, dtuple, Mtuple = [],[],[]
