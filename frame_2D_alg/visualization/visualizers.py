@@ -188,7 +188,7 @@ class BlobVisualizer(Visualizer):
             # edge visualizer
             if not blob.dlayers or not blob.dlayers[0]: return
             edge = blob.dlayers[0][0]
-            if not edge.node_: return
+            if not edge.node_t: return
             PP_ = [
                 CPP(
                     fd=1,
@@ -198,7 +198,7 @@ class BlobVisualizer(Visualizer):
                     rdnt=edge.rdnt,
                     mask__=blob.mask__,
                     root=blob,
-                    node_=edge.node_,
+                    node_t=edge.node_t,
                     P_=edge.P_,
                     link_=edge.link_,
                     fback_t=edge.fback_t,
@@ -220,15 +220,12 @@ class SliceVisualizer(Visualizer):
         super().__init__(**kwargs)
         self.img_slice = img_slice  # all PPs have same frame of reference
         # private fields
-        self.P__ = None
-        # replace with: self.PP2P_ = get_PP2P_(self.element_)
         self.show_slices = False
         self.show_links = False
         self.P_links = None
         self.blob_slices = None
 
     def reset(self):
-        self.P__ = {PP.id:get_P_(PP) for PP in self.element_}
         # Prepare ID map and background
         self.background[:] = BACKGROUND_COLOR
         self.idmap[:] = -1
@@ -240,13 +237,12 @@ class SliceVisualizer(Visualizer):
         super().reset()
 
     def update_blob_slices(self):
-        if not self.P__: return
         PP = self.hovered_element
-        if PP is None: return
+        if PP is None or not PP.P_: return
         y0 = self.img_slice[0].start
         x0 = self.img_slice[1].start
         self.blob_slices = []
-        for P in self.P__[PP.id]:
+        for P in PP.P_:
             y, x = P.yx
             s, c = P.axis
             L = len(P.dert_)
@@ -258,9 +254,8 @@ class SliceVisualizer(Visualizer):
             )]
 
     def update_P_links(self):
-        if not self.P__: return
         PP = self.hovered_element
-        if PP is None: return
+        if PP is None or not PP.link_: return
         y0 = self.img_slice[0].start
         x0 = self.img_slice[1].start
         self.P_links = []
@@ -306,24 +301,9 @@ class SliceVisualizer(Visualizer):
     def go_deeper(self, fd):
         PP = self.hovered_element
         if PP is None: return
-        if not PP.node_: return
-        if not isinstance(PP.node_[0], list): return  # stop if no deeper layer (PP.node_ filled with Ps)
-        subPP_ = PP.node_[fd]
+        if not PP.node_t: return
+        if not isinstance(PP.node_t[0], list): return  # stop if no deeper layer (PP.node_t filled with Ps)
+        subPP_ = PP.node_t[fd]
         if not subPP_: return
         self.append_element_stack(subPP_)
         return self
-
-
-def get_P_(PP):
-    return PP.P_
-    # P_ = []
-    # subPP_ = [PP]
-    # while subPP_:
-    #     subPP = subPP_.pop()
-    #     if not subPP.node_: continue
-    #     if isinstance(subPP.node_[0], list):
-    #         subPP_ += subPP.node_[0]
-    #     else:  # is P_
-    #         P_ += subPP.node_
-    #
-    # return P_

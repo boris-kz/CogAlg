@@ -1,10 +1,11 @@
-from math import inf
+from math import inf, hypot
 from class_cluster import ClusterStructure, init_param as z
 from frame_blobs import boxT
-
+from collections import namedtuple
 '''
     Conventions:
-    postfix 't' denotes tuple, multiple ts is a nested tuple, 'T' for indefinite nesting
+    postfix 't' denotes tuple, multiple ts is a nested tuple, 
+    postfix 'T' is namedtuple
     postfix '_' denotes array name, vs. same-name elements
     prefix '_'  denotes prior of two same-name variables
     prefix 'f'  denotes flag
@@ -12,6 +13,18 @@ from frame_blobs import boxT
     capitalized variables are normally summed small-case variables,
     longer names are normally classes
 '''
+ptupleT = namedtuple("ptupleT", "I G M Ma angle L")
+ptupleT.__pos__ = lambda t: t
+ptupleT.__neg__ = lambda t: ptupleT(-t.I, -t.G, -t.M, -t.Ma, -t.angle, -t.L)
+ptupleT.__add__ = lambda _t, t: ptupleT(_t.I-t.I, _t.G-t.G, _t.M-t.M, _t.Ma-t.Ma, _t.angle-t.angle, _t.L-t.L)
+ptupleT.__sub__ = lambda _t, t: _t+(-t)
+
+angleT = namedtuple('angleT', 'dy dx')
+angleT.__abs__ = lambda a: hypot(a.dy, a.dx)
+angleT.__pos__ = lambda a: a
+angleT.__neg__ = lambda a: angleT(-a.dy,-a.dx)
+angleT.__add__ = lambda _a,a: angleT(_a.dy+a.dy, _a.dx+a.dx)
+angleT.__sub__ = lambda _a,a: _a+(-a)
 
 class CEdge(ClusterStructure):  # edge blob
 
@@ -47,7 +60,7 @@ class CEdge(ClusterStructure):  # edge blob
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
-    ptuple : tuple = (0,0,0,0,(0,0),0)  # latuple: I,G,M,Ma, angle(Dy,Dx), L
+    ptuple : ptupleT = ptupleT(0,0,0,0,angleT(0,0),0)  # latuple: I,G,M,Ma, angle(Dy,Dx), L
     derH : list = z([])  # [[tuplet,valt,rdnt]] vertical derivatives summed from P links
     valt : list = z([0,0])  # summed from the whole derH
     rdnt : list = z([1,1])
@@ -87,7 +100,7 @@ lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
 class CPP(CderP):
 
     fd : int = 0  # PP is defined by m|d value
-    ptuple : list = z([0,0,0,0,[0,0],0])   # summed P__ ptuples, = 0th derLay
+    ptuple : ptupleT = ptupleT(0,0,0,0,angleT(0,0),0)   # summed P__ ptuples, = 0th derLay
     derH : list = z([])  # [[mtuple,dtuple, mval,dval, mrdn,drdn]]: cross-fork composition layers
     valt : list = z([0,0])
     rdnt : list = z([1,1])
@@ -107,7 +120,7 @@ class CPP(CderP):
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
     fd: int = 0  # graph is defined by m|d value
-    ptuple : list = z([0,0,0,0,[0,0],0])  # default from P
+    ptuple : ptupleT = ptupleT(0,0,0,0,angleT(0,0),0)  # default from P
     derH : list = z([[],[0,0],[1,1],[0,0]])  # default from converted PP: [[tuplet,valt,rdnt,dect]]
     aggH : list = z([])  # [[subH,valt,rdnt]], subH: [[derH,valt,rdnt,maxt]]: 2-fork composition layers, -> pP_?
     valHt : list = z([[0],[0]])  # Ht of link vals,rdns, decays / fder:
@@ -133,6 +146,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     # id_H : list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
     # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
     # top Lay from links, lower Lays from nodes, hence nested tuple?
+
 
 class CderG(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 

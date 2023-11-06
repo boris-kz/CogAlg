@@ -1,9 +1,9 @@
 import sys
 import numpy as np
 from math import floor
-from collections import namedtuple, deque, defaultdict
-from itertools import product, combinations
-from .classes import CEdge, CP
+from collections import deque
+from itertools import product
+from .classes import CEdge, CP, ptupleT, angleT
 from .filters import ave_g, ave_dangle, ave_daangle
 
 '''
@@ -19,8 +19,6 @@ This process is very complex, so it must be selective. Selection should be by co
 and inverse gradient deviation of flat blobs. But the latter is implicit here: high-gradient areas are usually quite sparse.
 A stable combination of a core flat blob with adjacent edge blobs is a potential object.
 '''
-
-ptupleT = namedtuple("ptupleT", "I G M Ma angle L")
 octant = 0.3826834323650898
 
 def slice_edge(blob, verbose=False):
@@ -115,7 +113,7 @@ def form_P(blob, P):
     L = len(P.dert_)
     M = ave_g*L - G
     G = np.hypot(Dy, Dx)  # recompute G
-    P.ptuple = ptupleT(I, G, M, Ma, (Dy,Dx), L)
+    P.ptuple = ptupleT(I, G, M, Ma, angleT(Dy,Dx), L)
     P.yx = P.dert_[L//2][:2]  # new center
 
     return P

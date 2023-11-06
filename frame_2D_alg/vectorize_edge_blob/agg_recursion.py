@@ -1,12 +1,11 @@
 import numpy as np
 from copy import deepcopy, copy
 from itertools import zip_longest
-from collections import deque, defaultdict
-from .classes import Cgraph, CderG, CPP
+from collections import defaultdict
+from .classes import Cgraph, CderG
 from .filters import ave_L, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd
 from .slice_edge import slice_edge, comp_angle
-from .comp_slice import comp_P_, comp_derH, sum_derH, comp_ptuple, sum_ptuple, sum_dertuple, comp_dtuple, match_func
-
+from .comp_slice import comp_P_, comp_derH, sum_derH, comp_ptuple, sum_dertuple, comp_dtuple, match_func
 
 '''
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
@@ -46,7 +45,7 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
         for PP in node_:  # convert select CPPs to Cgraphs:
             if PP.valt[fd] * (len(node_)-1) * (PP.rng+1) <= G_aves[fd] * PP.rdnt[fd]: continue
             derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
-            decHt = reform_dect_(PP.node_t[0]+PP.node_t[1]) if PP.node_t[0]+PP.node_t[1] else [[1],[1]]
+            decHt = reform_dect_(PP.node_t[0]+PP.node_t[1]) if PP.link_ else [[1],[1]]
             derH[:] = [  # convert to ptuple_tv_: [[ptuplet,valt,rdnt,dect]]:
                 [[mtuple,dtuple],
                  [sum(mtuple),sum(dtuple)],
@@ -54,7 +53,8 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
                  [mdec,ddec]]
                 for (mtuple,dtuple), mdec,ddec in zip(derH, decHt[0],decHt[1])]
             G_ += [Cgraph( ptuple=PP.ptuple, derH=[derH,valt,rdnt,[0,0]], valHt=[[valt[0]],[valt[1]]], rdnHt=[[rdnt[0]],[rdnt[1]]],
-                           decHt=decHt, L=PP.ptuple[-1], box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
+                           decHt=decHt, L=PP.ptuple[-1], box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box),
+                           link_=PP.link_, node_t=PP.node_t)]
         if G_:
             node_ = G_
             edge.valHt[0][0] = edge.valt[0]; edge.rdnHt[0][0] = edge.rdnt[0]  # copy
@@ -115,8 +115,8 @@ def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in 
                 if distance < root.rng:  # <ave Euclidean distance between G centers; or rng * (_G_val+G_val)/ ave*2?
                     mval,dval, mrdn,drdn, mdec,ddec = comp_G(link_,_node,node, fd)
                     Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn; Mdec+=mdec; Ddec+=ddec
-    root.valHt[fd] += [0]; root.rdnHt[fd] += [1]
-    # sum in feedback:
+
+    root.valHt[fd] += [0]; root.rdnHt[fd] += [1]  # sum in feedback:
     GG_t = form_graph_t(root, [Mval,Dval],[Mrdn,Drdn], G_, link_)  # eval sub+, feedback per graph
     # agg+ xcomp-> form_graph_t loop sub)agg+, vs. comp_slice sub+ loop-> eval-> xcomp
     for GG_ in GG_t:  # comp_G_ eval: ave_m * len*rng - fixed cost, root update in form_t:
@@ -139,7 +139,7 @@ def form_graph_t(root, Valt,Rdnt, G_, link_):  # form mgraphs and dgraphs of sam
         root.valHt[fd]+=[0]; root.rdnHt[fd]+=[1]  # remove if stays 0?
 
         for graph in graph_:  # external to agg+ vs internal in comp_slice sub+
-            node_ = graph.node_t  # init flat
+            node_ = graph.node_t[fd]  # init flat?
             if sum(graph.valHt[fd]) * (len(node_)-1)*root.rng > G_aves[fd] * sum(graph.rdnHt[fd]):  # eval fd comp_G_ in sub+
                 agg_recursion(root, graph, node_, fd)  # replace node_ with node_t, recursive
             else:  # feedback after graph sub+:
@@ -155,33 +155,33 @@ def form_graph_t(root, Valt,Rdnt, G_, link_):  # form mgraphs and dgraphs of sam
 
     return graph_t  # root.node_t'node_ -> node_t: incr nested with each agg+?
 
-'''
-node_connect aggregates indirect links not individually but by their associated nodes, iteratively recomputing connectivity in multiple cycles, 
-effectively blending direct and indirect connectivity measures for each node over time.
-In each cycle, connectivity per node includes aggregated contributions from the previous cycles, propagated through the network. 
-'''
-def node_connect(iG_,link_,fd):  # sum surround values to define node connectivity, over incr.mediated links
-    Gt_ = []; ave = G_aves[fd]
 
+def node_connect(iG_,link_,fd):  # sum surround values to define node connectivity, over incr.mediated links
+    '''
+    aggregate indirect links by associated nodes (vs. individually), iteratively recompute connectivity in multiple cycles,
+    effectively blending direct and indirect connectivity measures for each node over time.
+    In each cycle, connectivity per node includes aggregated contributions from the previous cycles, propagated through the network.
+    Math: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/node_connect.png
+    '''
+    Gt_ =[]; ave = G_aves[fd]
     for G in iG_:
-        ival, irdn = sum(G.valHt[fd]), sum(G.rdnHt[fd])  # not used
         val,rdn = 0,0; rim = copy(link_[G])  # all links that contain G
         for link in rim:
             if link.valt[fd] > ave * link.rdnt[fd]:  # skip negative links
                 val += link.valt[fd]; rdn += link.rdnt[fd]  # sum direct link vals
-        Gt_ += [[G, rim,val,rdn, ival,irdn]]
-    _tVal, _tRdn = 0,0
+        Gt_ += [[G, rim,val,rdn]]
+    _tVal,_tRdn = 0,0
 
     while True:  # eval same Gs,links, but with cross-accumulated values
         tVal, tRdn = 0,0  # loop totals
-        for G,rim,val,rdn, ival,irdn in Gt_:  # also update links?
+        for G,rim,val,rdn in Gt_:
             rim_val, rim_rdn = 0,0
             for link in rim:
                 if link.valt[fd] < ave * link.rdnt[fd]: continue  # skip negative links
                 _G = link.G if link._G is G else link._G
                 if _G not in iG_: continue
                 _Gt = Gt_[G.i]
-                _G,_rim_,_val,_rdn,_ival,_irdn = _Gt
+                _G,_rim_,_val,_rdn = _Gt
                 decay = link.dect[fd]  # node vals * relative link val:
                 linkV = _val * decay; val+=linkV; rim_val+=linkV
                 linkR = _rdn * decay; rdn+=linkR; rim_rdn+=linkR
@@ -194,7 +194,7 @@ def node_connect(iG_,link_,fd):  # sum surround values to define node connectivi
 
     return Gt_
 
-def segment_node_(Gt_, fd):  # eval rim links with summed surround vals
+def segment_node_(root, Gt_, fd):  # eval rim links with summed surround vals
     '''
     Graphs add nodes if their (surround connectivity * relative value of link to internal node) is above average
     It's a density-based clustering, but much more subtle than conventional versions.
@@ -202,59 +202,59 @@ def segment_node_(Gt_, fd):  # eval rim links with summed surround vals
     igraph_ = []; ave = G_aves[fd]
 
     for Gt in Gt_:
-        G,rim,val,rdn,ival,irdn = Gt  # ival,irdn are currently not used
-        grapht = [[Gt],copy(rim),val,rdn, ival,irdn]  # nodet_,Rim,Val,Rdn, iVal,iRdn: negative or new links
+        G,rim,val,rdn = Gt[:4]  # ival,irdn are currently not used
+        grapht = [[Gt],copy(rim),val,rdn]  # init nodet_,Rim,Val,Rdn
         G.root[fd] = grapht; igraph_ += [grapht]
     _tVal,_tRdn = 0,0
-    _graph_ = copy(igraph_)  # for pruning while eval node rim links with surround vals for graph inclusion and merge:
+    _graph_ = igraph_  # prune while eval node rim links with surround vals for graph inclusion and merge:
     while True:
-        tVal,tRdn = 0,0  # iG_ loop totals
-        graph_ = []  # update graph surround:
-        for grapht in _graph_:
-            nodet_,Rim,Val,Rdn, iVal,iRdn = grapht
-            # new rim: neg+unknown, and in-graph: positive, values:
-            inVal,inRdn = 0,0
-            new_Rim = []  # new or negative
+        tVal,tRdn = 0,0  # loop totals
+        graph_ = []
+        for grapht in _graph_:  # extend graph Rim
+            nodet_,Rim,Val,Rdn = grapht
+            inVal,inRdn = 0,0  # in-graph: positive
+            new_Rim = []
             for link in Rim:
                 if link.Vt[fd] > 0:  # combined net val from node_connect, merge linked graphs:
                     if link.G in grapht[0]: _Gt = Gt_[link._G.i]
                     else:                   _Gt = Gt_[link.G.i]
                     if _Gt in nodet_: continue
-                    _nodet_,_Rim,_Val,_Rdn,_iVal,_iRdn = _Gt[0].root[fd]
-                    Val += _Val; inVal+=_Val;  iVal+=_iVal
-                    Rdn += _Rdn; inRdn+=_Rdn;  iRdn+=_iRdn
+                    _nodet_,_Rim,_Val,_Rdn = _Gt[0].root[fd]
+                    Val += _Val; inVal += _Val
+                    Rdn += _Rdn; inRdn += _Rdn
                     nodet_ += [__Gt for __Gt in _Gt[0].root[fd][0] if __Gt not in nodet_]
                     Rim = list(set(Rim + _Rim))
                     new_Rim = list(set(new_Rim + _Rim))
-            # graph extension:
+            # extend:
             grapht[2] += inVal; tVal += inVal  # DVal += inVal -_inVal?
             grapht[3] += inRdn; tRdn += inRdn  # DRdn += inRdn -_inRdn, signed
             # eval per graph:
             if len(new_Rim) * inVal > ave * inRdn:
-                graph_ += [nodet_,new_Rim,Val,Rdn, iVal,iRdn]  # eval new_Rim of this graph
+                graph_ += [nodet_,new_Rim,Val,Rdn]  # eval new_Rim of this graph
 
         if len(graph_) * (tVal-_tVal) <= ave * (tRdn-_tRdn):  # even low-Val extension may be valuable if Rdn decreases?
             break
         _graph_ = graph_
         _tVal,_tRdn = tVal,_tRdn
 
-    return [sum2graph(graph, fd) for graph in igraph_ if graph[2] > ave * graph[3]]  # Val > ave * Rdn
+    return [sum2graph(root, graph, fd) for graph in igraph_ if graph[2] > ave * graph[3]]  # Val > ave * Rdn
 
 
-def sum2graph(Gt_, fd):  # sum node and link params into graph, aggH in agg+ or player in sub+
+def sum2graph(root, Gt_, fd):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
-    graph = Cgraph(fd=fd, L=len(Gt_))  # n nodes, transplant both node roots
+    graph = Cgraph(fd=fd, L=len(Gt_))  # n nodes
     SubH = [[],[0,0],[1,1],[0,0]]
-    Mval,Dval, Mrdn,Drdn, Mdec,Ddec = 0,0, 1,1, 0,0
+    Mval,Dval, Mrdn,Drdn, Mdec,Ddec = 0,0,1,1,0,0
     link_ = []
-    for i, Gt in enumerate(Gt_):  # Gt: [G,rim,val,rdn, ival,irdn]
-        G = Gt[0]  # sum nodes in graph:
+    for i, Gt in enumerate(Gt_):
+        Gt += [root]  # Gt: [G,rim,val,rdn,root]
+        G = Gt[0]
+        # or sum links only?
         sum_box(graph.box, G.box)
-        sum_ptuple(graph.ptuple, G.ptuple)
+        graph.ptuple += G.ptuple
         sum_derHv(graph.derH, G.derH, base_rdn=1)
         sum_aggHv(graph.aggH, G.aggH, base_rdn=1)
-        sum_Hts(graph.valHt,graph.rdnHt,graph.decHt, G.valHt,G.rdnHt,G.decHt)
-        # sum unique node links:
+        # sum unique node links, excluding overlap in connec_t:
         for derG in Gt[1]:
             if derG.valt[fd] > G_aves[fd] * derG.rdnt[fd]:  # sum positive links only
                 _subH = derG.subH
@@ -266,9 +266,9 @@ def sum2graph(Gt_, fd):  # sum node and link params into graph, aggH in agg+ or 
                     graph.A[0] += derG.A[0]; graph.A[1] += derG.A[1]; graph.S += derG.S
                     link_ += [derG]
         G.i = i
-        graph.node_t[fd] += [G]  # or converted to node_t by feedback?
-        graph.connec_t[fd] += [[Gt[1:]]]  # node connectivity params [rim,val,rdn, ival,irdn]
-        # currently not used
+        graph.node_t[fd] += [G]
+        graph.connec_t[fd] += [[Gt[1:]]]  # node connectivity params: rim,val,rdn
+
     graph.link_ = link_  # use in sub_recursion, as with PPs, no link_?
     graph.valHt[0]+=[Mval]; graph.valHt[1]+=[Dval]
     graph.rdnHt[0]+=[Mrdn]; graph.rdnHt[1]+=[Drdn]

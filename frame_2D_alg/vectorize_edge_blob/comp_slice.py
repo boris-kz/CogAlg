@@ -116,7 +116,7 @@ def form_PP_t(root, root_link_, base_rdn):  # form PPs of derP.valt[fd] + connec
         if root.fback_t and root.fback_t[fd]:
             feedback(root, fd)  # after sub+ in all nodes, no single node feedback up multiple layers
 
-    root.node_ = PP_t  # nested in sub+, add_alt_PPs_?
+    root.node_t = PP_t  # nested in sub+, add_alt_PPs_?
 
 
 def sum2PP(root, P_, derP_, base_rdn, fd):  # sum links in Ps and Ps in PP
@@ -135,7 +135,7 @@ def sum2PP(root, P_, derP_, base_rdn, fd):  # sum links in Ps and Ps in PP
     # accum P:
     celly_,cellx_ = [],[]
     for P in P_:
-        sum_ptuple(PP.ptuple, P.ptuple)  # accum ptuple
+        PP.ptuple += P.ptuple  # accum ptuple
         for y, x in P.cells:
             PP.box = PP.box.accumulate(y, x)
             celly_ += [y]; cellx_ += [x]
@@ -174,10 +174,10 @@ def feedback(root, fd):  # in form_PP_, append new der layers to root PP, single
 
     if isinstance(root, CPP):  # root is not CEdge, which has no roots
         rroot = root.root  # single PP.root, can't be P
-        fd = root.fd  # node_ fd
-        node_, fback_ = rroot.node_t[fd], rroot.fback_t[fd]
+        fd = root.fd  # node_t fd
+        node_t, fback_ = rroot.node_t[fd], rroot.fback_t[fd]
         fback_ += [Fback]
-        if fback_ and (len(fback_)==len(node_)):  # all nodes terminated and fed back
+        if fback_ and (len(fback_)==len(node_t)):  # all nodes terminated and fed back
             feedback(rroot, fd)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
 
 
@@ -193,12 +193,6 @@ def sum_derH(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers,
         for [Mtuple, Dtuple], [mtuple, dtuple]
         in zip_longest(DerH, derH, fillvalue=[[0,0,0,0,0,0],[0,0,0,0,0,0]])  # mtuple,dtuple
     ]
-
-def sum_ptuple(Ptuple, ptuple, fneg=0):
-    _I, _G, _M, _Ma, (_Dy, _Dx), _L = Ptuple
-    I, G, M, Ma, (Dy, Dx), L = ptuple
-    if fneg: Ptuple[:] = (_I-I, _G-G, _M-M, _Ma-Ma, [_Dy-Dy,_Dx-Dx], _L-L)
-    else:    Ptuple[:] = (_I+I, _G+G, _M+M, _Ma+Ma, [_Dy+Dy,_Dx+Dx], _L+L)
 
 def sum_dertuple(Ptuple, ptuple, fneg=0):
     _I, _G, _M, _Ma, _A, _L = Ptuple
