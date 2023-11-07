@@ -209,3 +209,16 @@ def reform_dect_(node_t_):
 
     # skip when S = 0
     return [[Dect[0]/S, Dect[1]/S] if S>0 else Dect for Dect, S in zip(Dect_, S_)]  # normalize by n sum
+
+def sum_ptuple(Ptuple, ptuple, fneg=0):
+    _I, _G, _M, _Ma, (_Dy, _Dx), _L = Ptuple
+    I, G, M, Ma, (Dy, Dx), L = ptuple
+    if fneg: Ptuple[:] = (_I-I, _G-G, _M-M, _Ma-Ma, [_Dy-Dy,_Dx-Dx], _L-L)
+    else:    Ptuple[:] = (_I+I, _G+G, _M+M, _Ma+Ma, [_Dy+Dy,_Dx+Dx], _L+L)
+
+def sum_dertuple(Ptuple, ptuple, fneg=0):
+    _I, _G, _M, _Ma, _A, _L = Ptuple
+    I, G, M, Ma, A, L = ptuple
+    if fneg: Ptuple[:] = [_I-I, _G-G, _M-M, _Ma-Ma, _A-A, _L-L]
+    else:    Ptuple[:] = [_I+I, _G+G, _M+M, _Ma+Ma, _A+A, _L+L]
+    return   Ptuple

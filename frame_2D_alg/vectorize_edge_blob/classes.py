@@ -39,8 +39,8 @@ class CEdge(ClusterStructure):  # edge blob
     rdnt : list = z([1,1])
     # for agg+:
     aggH : list = z([])  # from Gs: [[subH,valt,rdnt]]: cross-fork composition layers
-    valHt : list = z([[0],[0]])  # Ht of link vals,rdns, decays per fder
-    maxHt : list = z([[0],[0]])
+    valHt : list = z([[0],[0]])  # Ht of link vals,rdns,decays per fder
+    decHt : list = z([[1],[1]])
     rdnHt : list = z([[1],[1]])
     rng = 1
     # initializing blob:
