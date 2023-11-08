@@ -45,7 +45,7 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
         for PP in node_:  # convert select CPPs to Cgraphs:
             if PP.valt[fd] * (len(node_)-1) * (PP.rng+1) <= G_aves[fd] * PP.rdnt[fd]: continue
             derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
-            decHt = reform_dect_(PP.node_t[0]+PP.node_t[1]) if PP.link_ else [[1],[1]]
+            decHt = reform_dect_(PP.node_t[0]+PP.node_t[1], PP.link_) if PP.link_ else [[1],[1]]
             derH[:] = [  # convert to ptuple_tv_: [[ptuplet,valt,rdnt,dect]]:
                 [[mtuple,dtuple],
                  [sum(mtuple),sum(dtuple)],
@@ -61,42 +61,44 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
             agg_recursion(None, edge, node_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
 
 
-def reform_dect_(node_):
+def reform_dect_(node_, link_):
 
     Dec_t = [[0],[0]]  # default 1st layer dect from ptuple
     S_ = [0]  # accum count per derLay
 
     while True:  # unpack lower node_ layer
-        sub_node_ = []  # subPP_
-        for PP in node_:
-            for link in PP.link_:  # get compared Ps and find param maxes
-                _P, P = link._P, link.P
-                S_[0] += 6  # 6 pars
-                for _par, par in zip(_P.ptuple, P.ptuple):
-                    if hasattr(par,"__len__"):
-                        Dec_t[0][0] +=2; Dec_t[1][0] +=2  # angle
-                    else:  # scalar
-                        if _par and par:  # link decay coef: m|d / max, base self/same:
-                            Dec_t[0][0] += par/ (abs(_par)+abs(par)); Dec_t[1][0] += par/ max(_par,par)
-                        else:
-                            Dec_t[0][0] += 1; Dec_t[1][0] += 1  # prevent /0
-                for i, (_tuplet,tuplet, mDec,dDec) in enumerate(zip_longest(_P.derH,P.derH, Dec_t[0][1:],Dec_t[1][1:], fillvalue=None)):
-                    if _tuplet and tuplet:                                   # loop derLays bottom-up
-                        mdec,ddec = 0,0
-                        for fd,(_ptuple,ptuple) in enumerate(zip(_tuplet,tuplet)):
-                            for _par, par in zip(_ptuple,ptuple):
-                                if fd: mdec += par/ max(_par,par) if _par and par else 1  # prevent /0
-                                else:  ddec += par/ (abs(_par)+abs(par)) if _par and par else 1
-                        if mDec:
-                            Dec_t[0][i]+=mdec; Dec_t[1][i]+=ddec; S_[i] += 6  # accum 6 pars
-                        else:
-                            Dec_t[0]+=[mdec]; Dec_t[1]+=[ddec]; S_ += [6]  # extend both
+        for link in link_:  # get compared Ps and find param maxes
+            _P, P = link._P, link.P
+            S_[0] += 6  # 6 pars
+            for _par, par in zip(_P.ptuple, P.ptuple):
+                if hasattr(par,"__len__"):
+                    Dec_t[0][0] +=2; Dec_t[1][0] +=2  # angle
+                else:  # scalar
+                    if _par and par:  # link decay coef: m|d / max, base self/same:
+                        Dec_t[0][0] += par/ (abs(_par)+abs(par)); Dec_t[1][0] += par/ max(_par,par)
+                    else:
+                        Dec_t[0][0] += 1; Dec_t[1][0] += 1  # prevent /0
+            for i, (_tuplet,tuplet, mDec,dDec) in enumerate(zip_longest(_P.derH,P.derH, Dec_t[0][1:],Dec_t[1][1:], fillvalue=None)):
+                if _tuplet and tuplet:                                   # loop derLays bottom-up
+                    mdec,ddec = 0,0
+                    for fd,(_ptuple,ptuple) in enumerate(zip(_tuplet,tuplet)):
+                        for _par, par in zip(_ptuple,ptuple):
+                            if fd: mdec += par/ max(_par,par) if _par and par else 1  # prevent /0
+                            else:  ddec += par/ (abs(_par)+abs(par)) if _par and par else 1
+                    if mDec:
+                        Dec_t[0][i]+=mdec; Dec_t[1][i]+=ddec; S_[i] += 6  # accum 6 pars
+                    else:
+                        Dec_t[0]+=[mdec]; Dec_t[1]+=[ddec]; S_ += [6]  # extend both
 
-            sub_node_ += PP.node_t[0] + PP.node_t[1]
-        if not sub_node_: break
-        node_ = sub_node_  # deeper nesting layer
+        sub_node_, sub_link_ = [],[]
+        for sub_PP in node_:
+            sub_link_ += list(set(sub_link_ + sub_PP.link_))
+            sub_node_ += sub_PP.node_t[0] + sub_PP.node_t[1]
+        if not sub_link_: break
+        link_ = sub_link_  # deeper nesting layer
+        node_ = sub_node_
     # decHt:
-    return [[mDec/S for mDec,S in zip(Dec_t[0],S_)], [dDec/S for dDec,S in zip(Dec_t[1],S_)]]  # normalize by n sum
+    return [[mDec / S for mDec, S in zip(Dec_t[0], S_)], [dDec / S for dDec, S in zip(Dec_t[1], S_)]]  # normalize by n sum
 
 
 def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_
@@ -244,13 +246,16 @@ def segment_node_(root, Gt_, fd):  # eval rim links with summed surround vals
 
     return [sum2graph(root, graph, fd) for graph in igraph_ if graph[2] > ave * graph[3]]  # Val > ave * Rdn
 
-# draft, need to sum Gt params instead?
-def sum2graph(root, Gt_, fd):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
+def sum2graph(root, grapht, fd):  # sum node and link params into graph, aggH in agg+ or player in sub+
+
+    Gt_,Rim,Val,Rdn = grapht
     graph = Cgraph(fd=fd, L=len(Gt_))  # n nodes
     SubH = [[],[0,0],[1,1],[0,0]]
-    Mval,Dval, Mrdn,Drdn, Mdec,Ddec = 0,0,1,1,0,0
-    link_ = []
+    Mval,Dval = [0,Val] if fd else [Val,0]
+    Mrdn,Drdn = [0,Rdn] if fd else [Rdn,0]
+    Mdec,Ddec = 0,0  # or also summed in segment_node?
+
     for i, Gt in enumerate(Gt_):
         Gt += [root]  # Gt: [G,rim,val,rdn,root]
         G = Gt[0]
@@ -259,22 +264,22 @@ def sum2graph(root, Gt_, fd):  # sum node and link params into graph, aggH in ag
         graph.ptuple += G.ptuple
         sum_derHv(graph.derH, G.derH, base_rdn=1)
         sum_aggHv(graph.aggH, G.aggH, base_rdn=1)
+        # this is partly redundant to Val, Rdn, we should compute all these things in segment_node?
         # sum unique node links, excluding overlap in connec_t:
         for derG in Gt[1]:
             if derG.valt[fd] > G_aves[fd] * derG.rdnt[fd]:  # sum positive links only
                 _subH = derG.subH
                 (_mval,_dval),(_mrdn,_drdn),(_mdec,_ddec) = valt,rdnt,dect = derG.valt,derG.rdnt,derG.dect
-                if derG not in link_:
+                if derG not in graph.link_:  # use in sub_recursion, as with PPs, no link_?
                     derG.roott[fd] = graph
                     sum_subHv(SubH, [_subH,valt,rdnt,dect], base_rdn=1)  # new aggLev, not from nodes: links overlap
                     Mval+=_mval; Dval+=_dval; Mrdn+=_mrdn; Drdn+=_drdn; Mdec+=_mdec; Ddec+=_ddec
                     graph.A[0] += derG.A[0]; graph.A[1] += derG.A[1]; graph.S += derG.S
-                    link_ += [derG]
+                    graph.link_ += [derG]
         G.i = i
         graph.node_t[fd] += [G]
         graph.connec_t[fd] += [Gt[1:]]  # node connectivity params: rim,val,rdn
 
-    graph.link_ = link_  # use in sub_recursion, as with PPs, no link_?
     graph.valHt[0]+=[Mval]; graph.valHt[1]+=[Dval]
     graph.rdnHt[0]+=[Mrdn]; graph.rdnHt[1]+=[Drdn]
     graph.decHt[0]+=[Mdec]; graph.decHt[1]+=[Ddec]
@@ -497,9 +502,6 @@ def feedback(root, fd):  # called from form_graph_, append new der layers to roo
 
     if isinstance(root, Cgraph) and root.connec_t[fd]:  # root is not CEdge, which has no roots
         rroot = root.connec_t[fd][0][-1]  # get root from 1st connect [rim,val,rdn,root]
-
-    if isinstance(root, Cgraph) and root.root:  # root is not CEdge, which has no roots
-        rroot = root.root
         fd = root.fd  # current node_ fd
         fback_ = rroot.fback_t[fd]
         fback_ += [[AggH, ValHt, RdnHt, DecHt]]
