@@ -222,3 +222,44 @@ def sum_dertuple(Ptuple, ptuple, fneg=0):
     if fneg: Ptuple[:] = [_I-I, _G-G, _M-M, _Ma-Ma, _A-A, _L-L]
     else:    Ptuple[:] = [_I+I, _G+G, _M+M, _Ma+Ma, _A+A, _L+L]
     return   Ptuple
+
+def node_connect(iG_,link_,fd):  # sum surround values to define node connectivity, over incr.mediated links
+    '''
+    aggregate indirect links by associated nodes (vs. individually), iteratively recompute connectivity in multiple cycles,
+    effectively blending direct and indirect connectivity measures for each node over time.
+    In each cycle, connectivity per node includes aggregated contributions from the previous cycles, propagated through the network.
+    Math: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/node_connect.png
+    '''
+    Gt_ =[]; ave = G_aves[fd]
+    for G in iG_:
+        valt,rdnt,dect = [0,0],[0,0], [0,0]; rim = copy(link_[G])  # all links that contain G
+        for link in rim:
+            if link.valt[fd] > ave * link.rdnt[fd]:  # skip negative links
+                for i in 0,1:
+                    valt[i] += link.valt[i]; rdnt[i] += link.rdnt[i]; dect[i] += link.dect[i]  # sum direct link vals
+        Gt_ += [[G, rim,valt,rdnt,dect]]
+    _tVal,_tRdn = 0,0
+
+    while True:  # eval same Gs,links, but with cross-accumulated node connectivity values
+        tVal, tRdn = 0,0  # loop totals
+        for G,rim,valt,rdnt,dect in Gt_:
+            rim_val, rim_rdn = 0,0
+            for link in rim:
+                if link.valt[fd] < ave * link.rdnt[fd]: continue  # skip negative links
+                _G = link.G if link._G is G else link._G
+                if _G not in iG_: continue
+                _Gt = Gt_[G.i]
+                _G,_rim_,_valt,_rdnt,_dect = _Gt
+                decay = link.dect[fd]  # node vals * relative link val:
+                for i in 0,1:
+                    linkV = _valt[i] * decay; valt[i]+=linkV; if fd==i: rim_val+=linkV
+                    linkR = _rdnt[i] * decay; rdnt[i]+=linkR; if fd==i: rim_rdn+=linkR
+                    dect[i] += link.dect[i]
+            tVal += rim_val
+            tRdn += rim_rdn
+        if tVal-_tVal <= ave * (tRdn-_tRdn):
+            break
+        _tVal,_tRdn = tVal,tRdn
+
+    return Gt_
+

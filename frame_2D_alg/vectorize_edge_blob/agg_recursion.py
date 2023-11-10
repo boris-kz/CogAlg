@@ -165,31 +165,43 @@ def node_connect(iG_,link_,fd):  # sum surround values to define node connectivi
     In each cycle, connectivity per node includes aggregated contributions from the previous cycles, propagated through the network.
     Math: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/node_connect.png
     '''
-    Gt_ =[]; ave = G_aves[fd]
+    _Gt_ = []; ave = G_aves[fd]
     for G in iG_:
         valt,rdnt,dect = [0,0],[0,0], [0,0]; rim = copy(link_[G])  # all links that contain G
         for link in rim:
             if link.valt[fd] > ave * link.rdnt[fd]:  # skip negative links
                 for i in 0,1:
                     valt[i] += link.valt[i]; rdnt[i] += link.rdnt[i]; dect[i] += link.dect[i]  # sum direct link vals
-        Gt_ += [[G, rim,valt,rdnt,dect]]
+        _Gt_ += [[G, rim,valt,rdnt,dect, len(rim)]]  # no norm here
     _tVal,_tRdn = 0,0
 
     while True:  # eval same Gs,links, but with cross-accumulated node connectivity values
         tVal, tRdn = 0,0  # loop totals
-        for G,rim,valt,rdnt,dect in Gt_:
+        Gt_ = []
+        for G, rim, ivalt, irdnt, idect, N in _Gt_:
+            valt, rdnt, dect = [0,0],[0,0],[0,0]
             rim_val, rim_rdn = 0,0
-            for link in rim:
+            for n, link in enumerate(rim):
                 if link.valt[fd] < ave * link.rdnt[fd]: continue  # skip negative links
                 _G = link.G if link._G is G else link._G
                 if _G not in iG_: continue
-                _Gt = Gt_[G.i]
+                _Gt = _Gt_[G.i]
                 _G,_rim_,_valt,_rdnt,_dect = _Gt
                 decay = link.dect[fd]  # node vals * relative link val:
                 for i in 0,1:
-                    linkV = _valt[i] * decay; valt[i]+=linkV; if fd==i: rim_val+=linkV
-                    linkR = _rdnt[i] * decay; rdnt[i]+=linkR; if fd==i: rim_rdn+=linkR
+                    linkV = _valt[i] * decay; valt[i]+=linkV
+                    if fd==i: rim_val+=linkV
+                    linkR = _rdnt[i] * decay; rdnt[i]+=linkR
+                    if fd==i: rim_rdn+=linkR
                     dect[i] += link.dect[i]
+            if rim:
+                n += 1  # normalize for rim accum to prevent overflow, there's got to be a better way:
+                for i in 0,1:
+                    ivalt[i] = (ivalt[i] + valt[i]/n) / 2
+                    irdnt[i] = (irdnt[i] + rdnt[i]/n) / 2
+                    idect[i] = (idect[i] + dect[i]/n) / 2
+            else: n = 0
+            Gt_ += [[G, rim, ivalt,irdnt,idect, N+n]]
             tVal += rim_val
             tRdn += rim_rdn
         if tVal-_tVal <= ave * (tRdn-_tRdn):
@@ -213,7 +225,7 @@ def segment_node_(root, Gt_, fd):  # eval rim links with summed surround vals
             if link.valt[fd] > G_aves[fd] * link.rdnt[fd]:
                 sum_subHv(subH, [link.subH,link.valt,link.rdnt,link.dect], base_rdn=1)
                 Link_ += [link]; A[0] += link.A[0]; A[1] += link.A[1]; S += link.S
-        grapht = [[Gt],copy(rim),copy(valt),copy(rdnt),copy(dect),A,S, subH,Link_]
+        grapht = [[Gt],copy(rim),copy(valt),copy(rdnt),copy(dect),A,S,subH,Link_]
         G.root[fd] = grapht; igraph_ += [grapht]
     _tVal,_tRdn = 0,0
     _graph_ = igraph_  # prune while eval node rim links with surround vals for graph inclusion and merge:
@@ -262,23 +274,22 @@ def sum2graph(root, grapht, fd):  # sum node and link params into graph, aggH in
     Gt_,Rim,(Mval,Dval),(Mrdn,Drdn),(Mdec,Ddec), A,S, subH,Link_ = grapht
 
     graph = Cgraph(fd=fd, L=len(Gt_),link_=Link_,A=A,S=S)  # n nodes
-    for link in Link_: link.roott[fd] = graph
-    graph.aggH += [subH]
-
+    for link in Link_:
+        link.roott[fd]=graph
     for i, Gt in enumerate(Gt_):
         Gt += [root]  # Gt: [G,rim,valt,rdnt,dect,root]
         G = Gt[0]
         G.i = i
         sum_box(graph.box, G.box)
         graph.node_t[fd] += [G]
-        graph.connec_t[fd] += [Gt[1:]]  # node connectivity params: rim,valt,rdnt,dect
-        if (Mval,Dval)[fd] > ave * (Mrdn,Drdn)[fd]:
-            # redundant to nodes, only link_ params are necessary for Cgraph
+        graph.connec_t[fd] += [Gt[1:]]  # node connectivity params: rim,valt,rdnt,dect,n
+        if (Mval,Dval)[fd] > ave * (Mrdn,Drdn)[fd]:  # redundant to nodes, only link_ params are necessary
             graph.ptuple += G.ptuple
             sum_derHv(graph.derH, G.derH, base_rdn=1)
             sum_aggHv(graph.aggH, G.aggH, base_rdn=1)
             sum_Hts(graph.valHt,graph.rdnHt,graph.decHt, G.valHt,G.rdnHt,G.decHt)
-    # add new derLay
+    # add derLay:
+    graph.aggH += [subH]
     Y,X,Y0,X0,Yn,Xn = graph.box
     graph.box[:2] = [(Y0+Yn)/2, (X0+Xn)/2]
     graph.valHt[0]+=[Mval]; graph.valHt[1]+=[Dval]
@@ -353,10 +364,9 @@ def comp_aggHv(_aggH, aggH, rn):  # no separate ext
     Mval,Dval, Mrdn,Drdn, Mdec,Ddec = 0,0,1,1,0,0
     SubH = []; S = min(len(_aggH),len(aggH))
 
-    for _lev, lev in zip_longest(_aggH, aggH, fillvalue=[]):  # compare common lower layer|sublayer derHs
-        if _lev and lev:  # also if lower-layers match: Mval > ave * Mrdn?
-            # compare dsubH only:
-            dsubH, valt,rdnt,dect, s = comp_subHv(_lev, lev, rn)  # no more valt and rdnt in subH now
+    for _lev, lev in zip_longest(_aggH, aggH, fillvalue=[]):  # compare common subHs, if lower-der match?
+        if _lev and lev:
+            dsubH, valt,rdnt,dect, s = comp_subHv(_lev[0], lev[0], rn)  # skip valt,rdnt,dect
             SubH += dsubH; S += s  # flatten to keep as subH
             Mdec += dect[0]; Ddec += dect[1]
             mval,dval = valt; Mval += mval; Dval += dval
@@ -451,16 +461,18 @@ def comp_ext(_ext, ext, Valt, Rdnt, Dect):  # comp ds:
 
     (_L,_S,_A),(L,S,A) = _ext,ext
     dL = _L-L
-    dS = _S/_L - S/L
+
     if isinstance(A,list):
         if any(A) and any(_A):
             mA,dA = comp_angle(_A,A); adA=dA
         else:
             mA,dA,adA = 0,0,0
         max_mA = max_dA = .5  # = ave_dangle
+        dS = _S/_L - S/L  # S is summed over L, dS is not summed over dL
     else:
         mA = match_func(_A,A)- ave_dangle; dA = _A-A; adA = abs(dA); _aA=abs(_A); aA=abs(A)
         max_dA = _aA + aA; max_mA = max(_aA, aA)
+        dS = _S - S
     mL = match_func(_L,L) - ave_L
     mS = match_func(_S,S) - ave_L
 
