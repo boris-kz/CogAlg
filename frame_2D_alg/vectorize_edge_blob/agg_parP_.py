@@ -56,6 +56,7 @@ def cluster_params(parHv, fd):  # last v: value tuple valt,rdnt,maxt
     Val,Rdn,Dec = 0,0,0; parH = copy(parH)
 
     while parH:  # aggHv | subHv | derHv (ptv_), top-down
+        # decode 1,1,2,4.. tuplets for same-type comp: ?
         subt = parH.pop()
         '''    subt = Hv: >4-level list, | ptv: 3-level list, | extt: 2-level list:
         aggHv: [aggH=subHv_, valt, rdnt, dect],

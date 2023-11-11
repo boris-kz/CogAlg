@@ -230,31 +230,43 @@ def node_connect(iG_,link_,fd):  # sum surround values to define node connectivi
     In each cycle, connectivity per node includes aggregated contributions from the previous cycles, propagated through the network.
     Math: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/node_connect.png
     '''
-    Gt_ =[]; ave = G_aves[fd]
+    _Gt_ = []; ave = G_aves[fd]
     for G in iG_:
         valt,rdnt,dect = [0,0],[0,0], [0,0]; rim = copy(link_[G])  # all links that contain G
         for link in rim:
             if link.valt[fd] > ave * link.rdnt[fd]:  # skip negative links
                 for i in 0,1:
                     valt[i] += link.valt[i]; rdnt[i] += link.rdnt[i]; dect[i] += link.dect[i]  # sum direct link vals
-        Gt_ += [[G, rim,valt,rdnt,dect]]
+        _Gt_ += [[G, rim,valt,rdnt,dect, len(rim)]]  # no norm here
     _tVal,_tRdn = 0,0
 
     while True:  # eval same Gs,links, but with cross-accumulated node connectivity values
         tVal, tRdn = 0,0  # loop totals
-        for G,rim,valt,rdnt,dect in Gt_:
+        Gt_ = []
+        for G, rim, ivalt, irdnt, idect, N in _Gt_:
+            valt, rdnt, dect = [0,0],[0,0],[0,0]
             rim_val, rim_rdn = 0,0
-            for link in rim:
+            for n, link in enumerate(rim):
                 if link.valt[fd] < ave * link.rdnt[fd]: continue  # skip negative links
                 _G = link.G if link._G is G else link._G
                 if _G not in iG_: continue
-                _Gt = Gt_[G.i]
+                _Gt = _Gt_[G.i]
                 _G,_rim_,_valt,_rdnt,_dect = _Gt
                 decay = link.dect[fd]  # node vals * relative link val:
                 for i in 0,1:
-                    linkV = _valt[i] * decay; valt[i]+=linkV; if fd==i: rim_val+=linkV
-                    linkR = _rdnt[i] * decay; rdnt[i]+=linkR; if fd==i: rim_rdn+=linkR
+                    linkV = _valt[i] * decay; valt[i]+=linkV
+                    if fd==i: rim_val+=linkV
+                    linkR = _rdnt[i] * decay; rdnt[i]+=linkR
+                    if fd==i: rim_rdn+=linkR
                     dect[i] += link.dect[i]
+            if rim:
+                n += 1  # normalize for rim accum to prevent overflow, there's got to be a better way:
+                for i in 0,1:
+                    ivalt[i] = (ivalt[i] + valt[i]/n) / 2
+                    irdnt[i] = (irdnt[i] + rdnt[i]/n) / 2
+                    idect[i] = (idect[i] + dect[i]/n) / 2
+            else: n = 0
+            Gt_ += [[G, rim, ivalt,irdnt,idect, N+n]]
             tVal += rim_val
             tRdn += rim_rdn
         if tVal-_tVal <= ave * (tRdn-_tRdn):
