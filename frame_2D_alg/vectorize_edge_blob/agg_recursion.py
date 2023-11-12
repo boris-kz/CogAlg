@@ -70,26 +70,36 @@ def reform_dect_(node_, link_):
         for link in link_:  # get compared Ps and find param maxes
             _P, P = link._P, link.P
             S_[0] += 6  # 6 pars
-            _mmax_,_dmax_ = [],[]  # maxt is one derLay below dect
+            _mmaxt,_dmaxt = [],[]
             for _par, par in zip(_P.ptuple, P.ptuple):
                 if hasattr(par,"__len__"):
-                    _mmax_+=[2]; _dmax_+=[2]  # angle
+                    _mmaxt += [2]; _dmaxt += [2]  # angle
                 else:  # scalar
-                    _mmax_ += [max(abs(_par),abs(par))]; _dmax_ += [(abs(_par)+abs(par))]
-            for i, (_tuplet,tuplet, mDec,dDec) in enumerate(zip_longest(_P.derH,P.derH, Dec_t[0][1:],Dec_t[1][1:], fillvalue=None)):
-                if _tuplet and tuplet:
-                    mmax_,dmax_ = [],[]; mdec,ddec = 0,0
-                    # bottom-up, tuplet is Lay|sLay|ssLay.: vmax/ 1,1,2,4. subsequent ders, empty if weak fork?:
-                    for fd,(_ptuple, ptuple, vmax) in enumerate(zip(_tuplet,tuplet,(_mmax_,_dmax_))):
-                        for _par, par in zip(_ptuple,ptuple):
-                            (mdec,ddec)[fd] += par/vmax if vmax else 1  # link decay = val/max, no/0 for no comp
-                            if fd: dmax_ += [abs(_par)+abs(par)] if _par and par else 0  # not compared
-                            else:  mmax_ += [max(abs(_par),abs(par))] if _par and par else 0
-                    if mDec:
-                        Dec_t[0][i]+=mdec; Dec_t[1][i]+=ddec; S_[i] += 6  # accum 6 pars
-                    else:
-                        Dec_t[0]+=[mdec]; Dec_t[1]+=[ddec]; S_ += [6]  # extend both
-                    _mmax_,_dmax_ = mmax_,dmax_
+                    _mmaxt += [max(abs(_par),abs(par))]; _dmaxt += [(abs(_par)+abs(par))]
+            _mmaxt_,_dmaxt_ = [_mmaxt],[_dmaxt]  # append with maxes from all lower dertuples, empty if no comp
+            L=0
+            # tentative:
+            while len(_P.derH) >= L and len(P.derH) >= L:  # len derLay = len low Lays: 1,1,2,4. tuplets, map to _vmaxt_
+                _Lay = _P.derH[L: 2*L]; Lay = P.derH[L: 2*L]
+                mmaxt_,dmaxt_ = [],[]; dect_ = []
+                for i, (_tuplet,tuplet, _mmaxt,_dmaxt, mDec,dDec) in enumerate(zip_longest(
+                        _Lay,Lay, _mmaxt_,_dmaxt_, Dec_t[0][L:],Dec_t[1][L:], fillvalue=None)):
+                    if _tuplet and tuplet:
+                        mmaxt,dmaxt = [],[]; dect = [0,0]
+                        for fd,(_ptuple, ptuple, vmax_) in enumerate(zip(_tuplet,tuplet,(_mmaxt,_dmaxt))):
+                            for _par, par, vmax in zip(_ptuple,ptuple, vmax_):
+                                dect[fd] += par/vmax if vmax else 1  # link decay = val/max, 0 if no prior comp
+                                if fd: dmaxt += [abs(_par)+abs(par) if _par and par else 0]  # was not compared
+                                else:  mmaxt += [max(abs(_par),abs(par)) if _par and par else 0]
+                        if mDec:
+                            Dec_t[0][L]+=dect[0]; Dec_t[1][L]+=dect[1]; S_[i] += 6  # accum 6 pars
+                        else:
+                            Dec_t[0]+=[dect[0]]; Dec_t[1]+=[dect[1]]; S_ += [6]  # extend both
+                        _mmaxt,_dmaxt = mmaxt,dmaxt
+                        mmaxt_+=[mmaxt]; dmaxt_+=[dmaxt]; dect_+= [dect]
+                        L += i+1
+                _mmaxt_,_dmaxt_ = mmaxt_,dmaxt_
+                # maxes from all lower dertuples
         sub_node_, sub_link_ = [],[]
         for sub_PP in node_:
             sub_link_ += list(set(sub_link_ + sub_PP.link_))
