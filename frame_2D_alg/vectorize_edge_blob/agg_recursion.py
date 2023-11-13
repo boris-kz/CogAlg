@@ -76,30 +76,26 @@ def reform_dect_(node_, link_):
                     _mmaxt += [2]; _dmaxt += [2]  # angle
                 else:  # scalar
                     _mmaxt += [max(abs(_par),abs(par))]; _dmaxt += [(abs(_par)+abs(par))]
-            _mmaxt_,_dmaxt_ = [_mmaxt],[_dmaxt]  # append with maxes from all lower dertuples, empty if no comp
-            L=0
-            # tentative:
-            while len(_P.derH) >= L and len(P.derH) >= L:  # len derLay = len low Lays: 1,1,2,4. tuplets, map to _vmaxt_
-                _Lay = _P.derH[L: 2*L]; Lay = P.derH[L: 2*L]
-                mmaxt_,dmaxt_ = [],[]; dect_ = []
-                for i, (_tuplet,tuplet, _mmaxt,_dmaxt, mDec,dDec) in enumerate(zip_longest(
-                        _Lay,Lay, _mmaxt_,_dmaxt_, Dec_t[0][L:],Dec_t[1][L:], fillvalue=None)):
+            mmaxt_,dmaxt_ = [_mmaxt],[_dmaxt]  # append with maxes from all lower dertuples, empty if no comp
+            L = 0
+            rn  = len(_P.dert_)/ len(P.dert_)
+            while len(_P.derH) > L and len(P.derH) > L:  # len derLay = len low Lays: 1,1,2,4. tuplets, map to _vmaxt_
+                hL = max(2*L,1)  # ini 0
+                _Lay,Lay, mDec_,dDec_ = _P.derH[L:hL],P.derH[L:hL],Dec_t[0][L:hL],Dec_t[1][L:hL]
+                for _tuplet,tuplet,_mmaxt,_dmaxt, mDec,dDec in zip_longest(_Lay,Lay,mmaxt_,dmaxt_,mDec_,dDec_, fillvalue=None):
+                    L += 1  # combined len of all lower layers = len next layer
                     if _tuplet and tuplet:
                         mmaxt,dmaxt = [],[]; dect = [0,0]
                         for fd,(_ptuple, ptuple, vmax_) in enumerate(zip(_tuplet,tuplet,(_mmaxt,_dmaxt))):
                             for _par, par, vmax in zip(_ptuple,ptuple, vmax_):
-                                dect[fd] += par/vmax if vmax else 1  # link decay = val/max, 0 if no prior comp
-                                if fd: dmaxt += [abs(_par)+abs(par) if _par and par else 0]  # was not compared
-                                else:  mmaxt += [max(abs(_par),abs(par)) if _par and par else 0]
+                                dect[fd] += par*rn/vmax if vmax else 1  # link decay = val/max, 0 if no prior comp
+                                if fd: dmaxt += [abs(_par)+abs(par*rn) if _par and par else 0]  # was not compared
+                                else:  mmaxt += [max(abs(_par),abs(par*rn)) if _par and par else 0]
                         if mDec:
-                            Dec_t[0][L]+=dect[0]; Dec_t[1][L]+=dect[1]; S_[i] += 6  # accum 6 pars
+                            Dec_t[0][L]+=dect[0]; Dec_t[1][L]+=dect[1]; S_[L] += 6  # accum 6 pars
                         else:
-                            Dec_t[0]+=[dect[0]]; Dec_t[1]+=[dect[1]]; S_ += [6]  # extend both
-                        _mmaxt,_dmaxt = mmaxt,dmaxt
-                        mmaxt_+=[mmaxt]; dmaxt_+=[dmaxt]; dect_+= [dect]
-                        L += i+1
-                _mmaxt_,_dmaxt_ = mmaxt_,dmaxt_
-                # maxes from all lower dertuples
+                            Dec_t[0] +=[dect[0]]; Dec_t[1] +=[dect[1]]; S_ += [6]  # extend both
+                        mmaxt_+=[mmaxt]; dmaxt_+=[dmaxt]  # from all lower layers
         sub_node_, sub_link_ = [],[]
         for sub_PP in node_:
             sub_link_ += list(set(sub_link_ + sub_PP.link_))
@@ -154,7 +150,7 @@ def form_graph_t(root, Valt,Rdnt, G_, link_):  # form mgraphs and dgraphs of sam
             node_ = graph.node_t[fd]  # init flat?
             if sum(graph.valHt[fd]) * (len(node_)-1)*root.rng > G_aves[fd] * sum(graph.rdnHt[fd]):  # eval fd comp_G_ in sub+
                 agg_recursion(root, graph, node_, fd)  # replace node_ with node_t, recursive
-            else:  # feedback after graph sub+:
+            else:  # feedback after graph sub+, not revised
                 root.fback_t[fd] += [[graph.aggH, graph.valHt, graph.rdnHt, graph.decHt]]
                 root.valHt[fd][-1] += graph.valHt[fd][-1]  # last layer, or all new layers via feedback?
                 root.rdnHt[fd][-1] += graph.rdnHt[fd][-1]  # merge forks into root fork
