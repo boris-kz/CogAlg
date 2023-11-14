@@ -3,21 +3,27 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
     edge, adj_Pt_ = slice_edge(blob, verbose)  # lateral kernel cross-comp -> P clustering
     comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
     # PP cross-comp -> discontinuous graph clustering:
-    for fd, node_ in enumerate(edge.node_):  # node_t
-        if edge.valt[fd] * (len(node_)-1)*(edge.rng+1) <= G_aves[fd] * edge.rdnt[fd]: continue
-        G_= []
-        for PP in node_:  # convert PP_t CPPs to Cgraphs:
+    for fd, node_ in enumerate(edge.node_t):
+        if edge.valt[fd] * (len(node_)-1) * (edge.rng+1) <= G_aves[fd] * edge.rdnt[fd]: continue
+        G_ = []
+        for PP in node_:  # convert select CPPs to Cgraphs:
+            if PP.valt[fd] * (len(node_)-1) * (PP.rng+1) <= G_aves[fd] * PP.rdnt[fd]: continue
             derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
-            derH[:] = [  # convert to ptuple_tv_: [[ptuplet, maxtuplet, valt, rdnt]]:
-                [[mtuple,dtuple], maxtuplet, [sum(mtuple),sum(dtuple)],
-                 [sum([0 if m>d else 1 for m,d in zip(mtuple,dtuple)]), sum([0 if d > m else 1 for m, d in zip(mtuple,dtuple)])]
-                ] for (mtuple,dtuple), maxtuplet in zip(derH, reform_maxtuplet_([PP.node_]))
-            ]
+            decHt = reform_dect_(PP.node_t[0]+PP.node_t[1], PP.link_) if PP.link_ else [[1],[1]]
+            derH[:] = [  # convert to ptuple_tv_: [[ptuplet,valt,rdnt,dect]]:
+                [[mtuple,dtuple],
+                 [sum(mtuple),sum(dtuple)],
+                 [sum([m<d for m,d in zip(mtuple,dtuple)]), sum([d<=m for m,d in zip(mtuple,dtuple)])],
+                 [mdec,ddec]]
+                for (mtuple,dtuple), mdec,ddec in zip(derH, decHt[0],decHt[1])]
             G_ += [Cgraph( ptuple=PP.ptuple, derH=[derH,valt,rdnt,[0,0]], valHt=[[valt[0]],[valt[1]]], rdnHt=[[rdnt[0]],[rdnt[1]]],
-                           L=PP.ptuple[-1], box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
-        node_ = G_
-        edge.valHt[0][0] = edge.valt[0]; edge.rdnHt[0][0] = edge.rdnt[0]  # copy
-        agg_recursion(None, edge, node_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
+                           decHt=decHt, L=PP.ptuple[-1], box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box),
+                           link_=PP.link_, node_t=PP.node_t)]
+        if G_:
+            node_ = G_
+            edge.valHt[0][0] = edge.valt[0]; edge.rdnHt[0][0] = edge.rdnt[0]  # copy
+            agg_recursion(None, edge, node_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
+
 
 def sum2graph(root, cG_, fd):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
@@ -166,49 +172,98 @@ def comp_derHv(_derH, derH, rn):  # derH is a list of der layers or sub-layers, 
 
     return dderH, [Mval,Dval],[Mrdn,Drdn],[maxM,maxD]  # new derLayer,= 1/2 combined derH
 
-def reform_dect_(node_t_):
 
-    Dect_ = [[0,0]]  # default 1st layer dect from ptuple
-    S_ = [0]  # accum count per derLay
+def reform_dect_(node_, link_):
+
+    Dec_t = [[],[]]  # default 1st layer dect from ptuple
+    S_ = []  # accum count per derLay
 
     while True:  # unpack lower node_ layer
-        sub_node_t_ = []  # subPP_t or P_ per higher PP
-        for node_t in node_t_:
-            if node_t[0] and isinstance(node_t[0],list) and (isinstance(node_t[0][0],CPP) or (node_t[1] and isinstance(node_t[1][0],CPP))):
-                for fd, PP_ in enumerate(node_t):  # node_t is [sub_PPm_,sub_PPd_]
-                    for PP in PP_:
-                        for link in PP.link_:  # get compared Ps and find param maxes
-                            _P, P = link._P, link.P
-                            S_[0] += 6  # 6 pars
-                            for _par, par in zip(_P.ptuple, P.ptuple):
-                                if hasattr(par,"__len__"):
-                                    Dect_[0][0] +=2; Dect_[0][1] +=2  # angle
-                                else:  # scalar
-                                    if _par and par:  # link decay coef: m|d / max, base self/same:
-                                        Dect_[0][0] += par/ (abs(_par)+abs(par)); Dect_[0][1] += par/ max(_par,par)
-                                    else:
-                                        Dect_[0][0] += 1; Dect_[0][1] += 1  # prevent /0
-                            for i, (_tuplet,tuplet, Dect) in enumerate(zip_longest(_P.derH,P.derH, Dect_[1:], fillvalue=None)):
-                                if _tuplet and tuplet:                              # loop derLays bottom-up
-                                    mdec, ddec = 0,0
-                                    for fd,(_ptuple,ptuple) in enumerate(zip(_tuplet,tuplet)):
-                                        for _par, par in zip(_ptuple,ptuple):
-                                            if fd: mdec += par/ max(_par,par) if _par and par else 1  # prevent /0
-                                            else:  ddec += par/ (abs(_par)+abs(par)) if _par and par else 1
-                                    if Dect:
-                                        Dect_[i][0] += mdec; Dect_[i][1] += mdec; S_[i] += 6  # accum 6 pars
-                                    else:
-                                        Dect_ += [[mdec,ddec]]; S_ += [6]  # extend both
-                        if PP.node_[0] and isinstance(PP.node_[0], list) and (isinstance(PP.node_[0][0], CPP)
-                            or (PP.node_[1] and isinstance(PP.node_[1][0], CPP))):
-                            sub_node_t_ += [PP.node_]
-        if sub_node_t_:
-            node_t_ = sub_node_t_  # deeper nesting layer
-        else:
-            break
+        for link in link_:  # get compared Ps and find param maxes
+            _P, P = link._P, link.P
+            _mmaxt,_dmaxt = [],[]
+            for _par, par in zip(_P.ptuple, P.ptuple):
+                if hasattr(par,"__len__"):
+                    _mmaxt += [2]; _dmaxt += [2]  # angle
+                else:  # scalar
+                    _mmaxt += [max(abs(_par),abs(par))]; _dmaxt += [(abs(_par)+abs(par))]
+            mmaxt_,dmaxt_ = [_mmaxt],[_dmaxt]  # append with maxes from all lower dertuples, empty if no comp
+            L = 0
+            rn  = len(_P.dert_)/ len(P.dert_)
+            while len(_P.derH) > L and len(P.derH) > L:  # len derLay = len low Lays: 1,1,2,4. tuplets, map to _vmaxt_
+                hL = max(2*L,1)  # init L=0
+                _Lay,Lay, mDec_,dDec_ = _P.derH[L:hL],P.derH[L:hL],Dec_t[0][L:hL],Dec_t[1][L:hL]
+                for _tuplet,tuplet,_mmaxt,_dmaxt, mDec,dDec in zip_longest(_Lay,Lay,mmaxt_,dmaxt_,mDec_,dDec_, fillvalue=None):
+                    if not _tuplet or not tuplet: continue
+                    mmaxt,dmaxt = [],[]; dect = [0,0]
+                    for fd,(_ptuple, ptuple, vmax_) in enumerate(zip(_tuplet,tuplet,(_mmaxt,_dmaxt))):
+                        for _par, par, vmax in zip(_ptuple,ptuple, vmax_):
+                            dect[fd] += par*rn/vmax if vmax else 1  # link decay = val/max, 0 if no prior comp
+                            if fd: dmaxt += [abs(_par)+abs(par*rn) if _par and par else 0]  # was not compared
+                            else:  mmaxt += [max(abs(_par),abs(par*rn)) if _par and par else 0]
+                    if mDec:
+                        Dec_t[0][L]+=dect[0]; Dec_t[1][L]+=dect[1]; S_[L] += 6  # accum 6 pars
+                    else:
+                        Dec_t[0] +=[dect[0]]; Dec_t[1] +=[dect[1]]; S_ += [6]  # extend both
+                    mmaxt_+=[mmaxt]; dmaxt_+=[dmaxt]  # from all lower layers
+                    L += 1  # combined len of all lower layers = len next layer
+        sub_node_, sub_link_ = [],[]
+        for sub_PP in node_:
+            sub_link_ += list(set(sub_link_ + sub_PP.link_))
+            sub_node_ += sub_PP.node_t[0] + sub_PP.node_t[1]
+        if not sub_link_: break
+        link_ = sub_link_  # deeper nesting layer
+        node_ = sub_node_
+    # decHt:
+    return [[mDec / S for mDec, S in zip(Dec_t[0], S_)], [dDec / S for dDec, S in zip(Dec_t[1], S_)]]  # normalize by n sum
 
-    # skip when S = 0
-    return [[Dect[0]/S, Dect[1]/S] if S>0 else Dect for Dect, S in zip(Dect_, S_)]  # normalize by n sum
+def get_maxtt(_ptuple, ptuple):  # 0der params
+
+    _I, _G, _M, _Ma, _, _L = _ptuple
+    I, G, M, Ma, _, L = ptuple
+
+    mmaxI, dmaxI = max(_I, I), _I + I
+    mmaxG, dmaxG = max(_G, G), _G + G
+    mmaxM, dmaxM = max(abs(_M), abs(M)), abs(_M) + abs(M)
+    mmaxMa, dmaxMa = max(abs(_Ma), abs(Ma)), abs(_Ma) + abs(Ma)
+    mmaxDa, dmaxDa = 2, 2
+    mmaxL, dmaxL = max(_L, L), _L + L
+
+    mmaxt = mmaxI, mmaxG, mmaxM, mmaxMa, mmaxDa, mmaxL
+    dmaxt = dmaxI, dmaxG, dmaxM, dmaxMa, dmaxDa, dmaxL
+    return mmaxt,dmaxt
+
+def get_dect(_tuplet, tuplet, _mmaxt, _dmaxt, rn):
+    # unpack:
+    (_mI, _mG, _mM, _mMa, _mDa, _mL), (_dI, _dG, _dM, _dMa, _dDa, _dL) = _tuplet
+    (mI, mG, mM, mMa, mDa, mL), (dI, dG, dM, dMa, dDa, dL) = tuplet
+    _mmaxI, _mmaxG, _mmaxM, _mmaxMa, _mmaxDa, _mmaxL = _mmaxt
+    _dmaxI, _dmaxG, _dmaxM, _dmaxMa, _dmaxDa, _dmaxL = _dmaxt
+    # compute link decay dec = val/max, 0 if no prior comp
+    mdect = [
+        (mI*rn/_mmaxI) if _mmaxI else 1,
+        (mG*rn/_mmaxG)if _mmaxG else 1,
+        (mM*rn/_mmaxM) if _mmaxM else 1,
+        (mMa*rn/_mmaxMa) if _mmaxMa else 1,
+        (mDa*rn/_mmaxDa) if _mmaxDa else 1,
+        (mL*rn/_mmaxL) if _mmaxL else 1 ]
+    ddect = [
+        (dI*rn/_dmaxI) if _dmaxI else 1,
+        (dG*rn/_dmaxG) if _dmaxG else 1,
+        (dM*rn/_dmaxM) if _dmaxM else 1,
+        (dMa*rn/_dmaxMa) if _dmaxMa else 1,
+        (dDa*rn/_dmaxDa) if _dmaxDa else 1,
+        (dL*rn/_dmaxL) if _dmaxL else 1 ]
+    # get maxtt
+    mmaxt = [
+        max(abs(_mI), abs(mI*rn)), max(abs(_mG), abs(mG*rn)), max(abs(_mM), abs(mM*rn)), max(abs(_mMa), abs(mMa*rn)), max(abs(_mDa), abs(mDa*rn)), max(abs(_mL), abs(mL*rn)),
+        max(abs(_dI), abs(dI*rn)), max(abs(_dG), abs(dG*rn)), max(abs(_dM), abs(dM*rn)), max(abs(_dMa), abs(dMa*rn)), max(abs(_dDa), abs(dDa*rn)), max(abs(_dL), abs(dL*rn)) ]
+    dmaxt = [
+        abs(_mI)+abs(mI), abs(_mG)+abs(mG), abs(_mM)+abs(mM), abs(_mMa)+abs(mMa), abs(_mDa)+abs(mDa), abs(_mL)+abs(mL),
+        abs(_dI)+abs(dI), abs(_dG)+abs(dG), abs(_dM)+abs(dM), abs(_dMa)+abs(dMa), abs(_dDa)+abs(dDa), abs(_dL)+abs(dL) ]
+
+    return (mmaxt, dmaxt), (sum(mdect), sum(ddect))
+
 
 def sum_ptuple(Ptuple, ptuple, fneg=0):
     _I, _G, _M, _Ma, (_Dy, _Dx), _L = Ptuple

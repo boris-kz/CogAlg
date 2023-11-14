@@ -65,8 +65,8 @@ def comp_rng(ilink_, rng):  # form new Ps and links, switch to rng+n to skip clu
 
 def comp_der(ilink_):  # keep same Ps and links, increment link derH, then P derH in sum2PP
 
-    # compute number of uplinks per P
-    n_uplinks = defaultdict(int)
+    # this is a node-mediated correlation clustering:
+    n_uplinks = defaultdict(int)  # number of uplinks per P
     for derP in ilink_: n_uplinks[derP.P] += 1
 
     link_ = []  # extended-derH derPs
@@ -223,7 +223,7 @@ def comp_dtuple(_ptuple, ptuple, rn, fagg=0):
 
     for _par, par, ave in zip(_ptuple, ptuple, aves):  # compare ds only
         npar = par * rn
-        mtuple += [match_func(_par, npar) - ave]
+        mtuple += [get_match(_par, npar) - ave]
         dtuple += [_par - npar]
         if fagg:
             Mtuple += [max(abs(_par),abs(npar))]
@@ -240,8 +240,8 @@ def comp_ptuple(_ptuple, ptuple, rn, fagg=0):  # 0der params
     dI = _I - I*rn;  mI = ave-dI
     dG = _G - G*rn;  mG = min(_G, G*rn) - ave
     dL = _L - L*rn;  mL = min(_L, L*rn) - ave
-    dM = _M - M*rn;  mM = match_func(_M, M*rn) - ave  # M, Ma may be negative
-    dMa= _Ma- Ma*rn; mMa = match_func(_Ma, Ma*rn) - ave
+    dM = _M - M*rn;  mM = get_match(_M, M*rn) - ave  # M, Ma may be negative
+    dMa= _Ma- Ma*rn; mMa = get_match(_Ma, Ma*rn) - ave
     mAngle, dAngle = comp_angle((_Dy,_Dx), (Dy,Dx))
 
     mtuple = [mI, mG, mM, mMa, mAngle, mL]
@@ -253,7 +253,7 @@ def comp_ptuple(_ptuple, ptuple, rn, fagg=0):  # 0der params
         ret += [Mtuple, Dtuple]
     return ret
 
-def match_func(_par, par):
+def get_match(_par, par):
     match = min(abs(_par),abs(par))
     return -match if (_par<0) != (par<0) else match    # match = neg min if opposite-sign comparands
 

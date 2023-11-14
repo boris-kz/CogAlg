@@ -5,7 +5,7 @@ from collections import deque, defaultdict
 from .classes import Cgraph, CderG, CPP
 from .filters import ave_L, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd, ave_dI, ave_G, ave_M, ave_Ma
 from .slice_edge import slice_edge, comp_angle
-from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, comp_derH, sum_derH, sum_dertuple, match_func
+from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, comp_derH, sum_derH, sum_dertuple, get_match
 from .agg_recursion import comp_G, comp_aggHv, comp_derHv, vectorize_root, form_graph_t, sum_Hts, sum_derHv, sum_ext
 
 '''
@@ -30,10 +30,9 @@ Then combine graph with alt_graphs?
 def root(blob, verbose):  # vectorization pipeline is 3 composition levels of cross-comp,clustering
     vectorize_root(blob, verbose)
 
-
 def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_
 
-    cluster_params(parHv = [root.aggH,sum(root.valHt[fd]),sum(root.rdnHt[fd]),sum(root.maxHt[fd])], fd=fd)
+    form_parP_(parHv = [root.aggH,sum(root.valHt[fd]),sum(root.rdnHt[fd]),sum(root.maxHt[fd])], fd=fd)
     # compress aggH-> pP_,V,R,M: select G V,R,M?
     Valt,Rdnt = comp_G_(G_,fd)  # rng|der cross-comp all Gs, form link_[-1] per G, sum in Val,Rdn
 
@@ -48,7 +47,7 @@ def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in 
 
     G_[:] = GG_t
 
-def cluster_params(parHv, fd):  # last v: value tuple valt,rdnt,maxt
+def form_parP_(parHv, fd):  # last v: value tuple valt,rdnt,maxt
 
     parH, rVal, rRdn, rDec = parHv  # compressed valt,rdnt,maxt per aggH replace initial summed G vals
     part_P_ = []  # pPs: nested clusters of >ave param tuples, as below:
@@ -56,9 +55,16 @@ def cluster_params(parHv, fd):  # last v: value tuple valt,rdnt,maxt
     Val,Rdn,Dec = 0,0,0; parH = copy(parH)
 
     while parH:  # aggHv | subHv | derHv (ptv_), top-down
-        # decode 1,1,2,4.. tuplets for same-type comp: ?
         subt = parH.pop()
-        '''    subt = Hv: >4-level list, | ptv: 3-level list, | extt: 2-level list:
+        '''    
+        decode 1,1,2,4.. tuplets for nested comp within m|d fork, not sure yet, as in:  
+        L = 0
+        rn  = len(_P.dert_)/ len(P.dert_)
+        while len(_P.derH) > L and len(P.derH) > L:  # len derLay = len low Lays: 1,1,2,4. tuplets, map to _vmaxt_
+            hL = max(2*L,1)  # init L=0
+            _Lay,Lay, mDec_,dDec_ = _P.derH[L:hL],P.derH[L:hL],Dec_t[0][L:hL],Dec_t[1][L:hL]
+        ...        
+        subt = Hv: >4-level list, | ptv: 3-level list, | extt: 2-level list:
         aggHv: [aggH=subHv_, valt, rdnt, dect],
         subHv: [subH=derHv_, valt, rdnt, dect],
         derHv: [derH=ptuple_tv_, valt, rdnt, dect] or extt, mixed in subH
@@ -69,27 +75,27 @@ def cluster_params(parHv, fd):  # last v: value tuple valt,rdnt,maxt
                 subH,val,rdn,dec = subt[0], subt[1][fd], subt[2][fd], subt[3][fd]
                 if val > ave:  # recursive eval,unpack
                     Val+=val; Rdn+=rdn; Dec+=dec  # sum with sub-vals:
-                    sub_part_P_t = cluster_params([subH,val,rdn,dec], fd)
+                    sub_part_P_t = form_parP_([subH,val,rdn,dec], fd)
                     part_ += [[subH, sub_part_P_t]]
                 else:
                     if Val:  # empty sub_pP_ terminates root pP
                         part_P_ += [[part_,Val,Rdn,Dec]]; rVal+=Val; rRdn+=Rdn; rDec+=Dec  # root params
                         part_= [], Val,Rdn,Dec = 0,0,0  # pP params
                         # reset
-            else: cluster_ptuplet(subt, [part_P_,rVal,rRdn,rDec], [part_,Val,Rdn,Dec], v=1)  # subt is derLay
-        else:     cluster_ptuplet(subt, [part_P_,rVal,rRdn,rDec], [part_,Val,Rdn,Dec], v=0)  # subt is extt
+            else: form_tuplet_pP_(subt, [part_P_,rVal,rRdn,rDec], [part_,Val,Rdn,Dec], v=1)  # subt is derLay
+        else:     form_tuplet_pP_(subt, [part_P_,rVal,rRdn,rDec], [part_,Val,Rdn,Dec], v=0)  # subt is extt
     if part_:
         part_P_ += [[part_,Val,Rdn,Dec]]; rVal+=Val; rRdn+=Rdn; rDec+Dec
 
     return [part_P_,rVal,rRdn,rDec]  # root values
 
-def cluster_ptuplet(ptuplet, part_P_v, part_v, v):  # ext or ptuple, params=vals
+def form_tuplet_pP_(ptuplet, part_P_v, part_v, v):  # ext or ptuple, params=vals
 
     part_P_,rVal,rRdn,rDec = part_P_v  # root params
     part_,Val,Rdn,Dec = part_v  # pP params
     if v: ptuplet, valt,rdnt,dect = ptuplet
 
-    valP_t = [[cluster_vals(ptuple) for ptuple in ptuplet if sum(ptuple) > ave]]
+    valP_t = [[form_val_pP_(ptuple) for ptuple in ptuplet if sum(ptuple) > ave]]
     if valP_t:
         part_ += [valP_t]  # params=vals, no sum-> Val,Rdn,Max?
     else:
@@ -98,7 +104,7 @@ def cluster_ptuplet(ptuplet, part_P_v, part_v, v):  # ext or ptuple, params=vals
             part_P_v[1:] = rVal+Val, rRdn+Rdn, rDec+Dec  # root values
         part_v[:] = [],0,0,0  # reset
 
-def cluster_vals(ptuple):
+def form_val_pP_(ptuple):
     parP_ = []
     parP = [ptuple[0]] if ptuple[0] > ave else []  # init, need to use param type ave instead
 
