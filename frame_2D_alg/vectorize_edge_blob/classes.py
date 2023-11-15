@@ -16,7 +16,7 @@ from collections import namedtuple
 ptupleT = namedtuple("ptupleT", "I G M Ma angle L")
 ptupleT.__pos__ = lambda t: t
 ptupleT.__neg__ = lambda t: ptupleT(-t.I, -t.G, -t.M, -t.Ma, -t.angle, -t.L)
-ptupleT.__add__ = lambda _t, t: ptupleT(_t.I-t.I, _t.G-t.G, _t.M-t.M, _t.Ma-t.Ma, _t.angle-t.angle, _t.L-t.L)
+ptupleT.__add__ = lambda _t, t: ptupleT(_t.I+t.I, _t.G+t.G, _t.M+t.M, _t.Ma+t.Ma, _t.angle+t.angle, _t.L+t.L)  # typo here
 ptupleT.__sub__ = lambda _t, t: _t+(-t)
 
 angleT = namedtuple('angleT', 'dy dx')
@@ -42,6 +42,7 @@ class CEdge(ClusterStructure):  # edge blob
     valHt : list = z([[0],[0]])  # Ht of link vals,rdns,decays per fder
     decHt : list = z([[1],[1]])
     rdnHt : list = z([[1],[1]])
+    decHt : list = z([[1],[1]])  # for feedback purpose
     rng = 1
     # initializing blob:
     blob : object = None
@@ -61,6 +62,7 @@ class CEdge(ClusterStructure):  # edge blob
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     ptuple : ptupleT = ptupleT(0,0,0,0,angleT(0,0),0)  # latuple: I,G,M,Ma, angle(Dy,Dx), L
+    rnpar_H : list = z([])
     derH : list = z([])  # [[tuplet,valt,rdnt]] vertical derivatives summed from P links
     valt : list = z([0,0])  # summed from the whole derH
     rdnt : list = z([1,1])

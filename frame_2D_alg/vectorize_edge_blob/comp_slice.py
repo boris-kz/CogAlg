@@ -248,7 +248,7 @@ def comp_ptuple(_ptuple, ptuple, rn, fagg=0):  # 0der params
     dtuple = [dI, dG, dM, dMa, dAngle, dL]
     ret = [mtuple, dtuple]
     if fagg:
-        Mtuple = [max(_I,I), max(_G,G), max(abs(_M),abs(M)), max(abs(_Ma),abs(Ma)), 2, max(_L,L)]
+        Mtuple = [max(_I,I), max(_G,G), max(_M,M), max(_Ma,Ma), 2, max(_L,L)]
         Dtuple = [abs(_I)+abs(I), abs(_G)+abs(G), abs(_M)+abs(M), abs(_Ma)+abs(Ma), 2, abs(_L)+abs(L)]
         ret += [Mtuple, Dtuple]
     return ret

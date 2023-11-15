@@ -49,7 +49,7 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
                 [[mtuple,dtuple],
                  [sum(mtuple),sum(dtuple)],
                  [sum([m<d for m,d in zip(mtuple,dtuple)]), sum([d<=m for m,d in zip(mtuple,dtuple)])],
-                 []] # empty PP.derH dects 
+                 []] # empty PP.derH dects
                 for mtuple,dtuple in derH]
             G_ += [Cgraph( ptuple=PP.ptuple, derH=[derH,valt,rdnt,[]], valHt=[[valt[0]],[valt[1]]], rdnHt=[[rdnt[0]],[rdnt[1]]], L=PP.ptuple[-1],
                            box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box), link_=PP.link_, node_t=PP.node_t)]
@@ -263,44 +263,40 @@ def comp_G(link_, _G, G, fd):
 
     Mval,Dval, Mrdn,Drdn, Mdec,Ddec = 0,0, 1,1, 0,0
     link = CderG( _G=_G, G=G)
-    S = 6  # min Dect summation span = len ptuple
     # keep separate P ptuple and PP derH, empty derH in single-P G, + empty aggH in single-PP G
     # / P:
     mtuple, dtuple, Mtuple, Dtuple = comp_ptuple(_G.ptuple, G.ptuple, rn=1, fagg=1)
     mval, dval = sum(mtuple), sum(abs(d) for d in dtuple)  # mval is signed, m=-min in comp x sign
     mrdn = dval>mval; drdn = dval<=mval
     dect = [0,0]
-    for fd, (ptuple,Ptuple) in enumerate(zip((mtuple,Mtuple),(dtuple,Dtuple))):
-        for par,max in zip(ptuple,Ptuple):
+    for fd, (ptuple,Ptuple) in enumerate(zip((mtuple,dtuple),(Mtuple,Dtuple))):  # the prior zipping elements are wrong
+        for i, (par,max) in enumerate(zip(ptuple,Ptuple)):
             dect[fd] += par/max if max else 1  # link decay coef: m|d / max, base self/same
-    derLay0 = [[mtuple,dtuple],[mval,dval],[mrdn,drdn],dect]
-    Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn; Mdec+=dect[0]; Ddec+=dect[1]
+    derLay0 = [[mtuple,dtuple],[mval,dval],[mrdn,drdn],[dect[0]/6, dect[1]/6]]
+    Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn; Mdec+=dect[0]/6; Ddec+=dect[1]/6
     # / PP:
     _derH,derH = _G.derH,G.derH
     if _derH[0] and derH[0]:  # empty in single-node Gs
-        S += len(derH[0]) * 6
         dderH, (mval,dval),(mrdn,drdn),(mdec,ddec) = comp_derHv(_derH[0], derH[0], rn=1)
-        Mval+=dval; Dval+=mval; Mdec+=mdec; Ddec+=ddec
+        Mval+=dval; Dval+=mval; Mdec=(Mdec+mdec)/2; Ddec=(Ddec+ddec)/2
         Mrdn+= mrdn+ dval>mval; Drdn+= drdn+ dval<=mval
     else: dderH = []
     derH = [[derLay0]+dderH, [Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec]]  # appendleft derLay0 from comp_ptuple
-    S+=3  # len ext
     der_ext = comp_ext([_G.L,_G.S,_G.A],[G.L,G.S,G.A], [Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec])
     SubH = [der_ext, derH]  # two init layers of SubH, higher layers added by comp_aggH:
     # / G:
     if fd:  # else no aggH yet?
-        subH, valt,rdnt,dect, s = comp_aggHv(_G.aggH, G.aggH, rn=1)
-        S += s
+        subH, valt,rdnt,dect = comp_aggHv(_G.aggH, G.aggH, rn=1)
         mval,dval = valt; Mval+=dval; Dval+=mval
         Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
         Mdec += dect[0]; Ddec += dect[1]
         link.subH = SubH+subH  # append higher subLayers: list of der_ext | derH s
-        link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]; link.dect = [Mdec/S,Ddec/S]  # complete proto-link
+        link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]; link.dect = [Mdec,Ddec]  # complete proto-link
         link_[G] += [link]
         link_[_G]+= [link]
     elif Mval > ave_Gm or Dval > ave_Gd:  # or sum?
         link.subH = SubH
-        link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]; link.dect = [Mdec/S,Ddec/S] # complete proto-link
+        link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]; link.dect = [Mdec,Ddec] # complete proto-link
         link_[G] += [link]
         link_[_G]+= [link]
         # dict: key=G, values=derGs
@@ -310,44 +306,47 @@ def comp_G(link_, _G, G, fd):
 def comp_aggHv(_aggH, aggH, rn):  # no separate ext
 
     Mval,Dval, Mrdn,Drdn, Mdec,Ddec = 0,0,1,1,0,0
-    SubH = []; S = min(len(_aggH),len(aggH))
-
+    SubH = []
+    i = 0
     for _lev, lev in zip_longest(_aggH, aggH, fillvalue=[]):  # compare common subHs, if lower-der match?
         if _lev and lev:
-            dsubH, valt,rdnt,dect, s = comp_subHv(_lev[0], lev[0], rn)  # skip valt,rdnt,dect
-            SubH += dsubH; S += s  # flatten to keep as subH
+            dsubH, valt,rdnt,dect = comp_subHv(_lev[0], lev[0], rn)  # skip valt,rdnt,dect
+            SubH += dsubH  # flatten to keep as subH
             Mdec += dect[0]; Ddec += dect[1]
             mval,dval = valt; Mval += mval; Dval += dval
             Mrdn += rdnt[0] + dval > mval; Drdn += rdnt[1] + mval <= dval
-
-    return SubH, [Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec], S
+    if i:
+        Mdec/= i; Ddec /= i
+    return SubH, [Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec]
 
 def comp_subHv(_subH, subH, rn):
 
     Mval,Dval, Mrdn,Drdn, Mdec,Ddec = 0,0,1,1,0,0
-    dsubH =[]; S = min(len(_subH),len(subH))
-
+    dsubH =[]
+    i = 0
     for _lay, lay in zip(_subH, subH):  # compare common lower layer|sublayer derHs
         # if lower-layers match: Mval > ave * Mrdn?
         if _lay[0] and isinstance(_lay[0][0],list):
-            S += min(len(_lay[0]),len(lay[0])) * 6  # _lay[0]: derH, 6: len dtuple
             dderH, valt,rdnt,dect = comp_derHv(_lay[0], lay[0], rn)
             dsubH += [[dderH, valt,rdnt,dect]]  # flat
             Mdec += dect[0]; Ddec += dect[1]
             mval,dval = valt; Mval += mval; Dval += dval
             Mrdn += rdnt[0] + dval > mval; Drdn += rdnt[1] + dval <= mval
+            i += 1
         else:  # _lay[0][0] is L, comp dext:
             dsubH += [comp_ext(_lay[1],lay[1],[Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec])]
-            S+=3  # pack extt as ptuple
-    return dsubH, [Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec], S  # new layer,= 1/2 combined derH
+    if i:
+        Mdec/= i; Ddec /= i  # normalize
+    return dsubH, [Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec]  # new layer,= 1/2 combined derH
 
 
 def comp_derHv(_derH, derH, rn):  # derH is a list of der layers or sub-layers, each is ptuple_tv
 
     Mval,Dval, Mrdn,Drdn, Mdec,Ddec = 0,0,1,1,0,0
     dderH =[]
+    i = 0
     for _lay, lay in zip(_derH, derH):  # compare common lower der layers | sublayers in derHs, if lower-layers match?
-        # comp dtuples, eval mtuples
+        i += 1 # comp dtuples, eval mtuples
         mtuple, dtuple, Mtuple, Dtuple = comp_dtuple(_lay[0][1], lay[0][1], rn, fagg=1)
         # sum params:
         mval = sum(mtuple); dval = sum(abs(d) for d in dtuple)
@@ -356,9 +355,10 @@ def comp_derHv(_derH, derH, rn):  # derH is a list of der layers or sub-layers, 
         for fd, (ptuple,Ptuple) in enumerate(zip((mtuple,Mtuple),(dtuple,Dtuple))):
             for par, max in zip(ptuple, Ptuple):
                 dect[fd] += par/max if max else 1  # link decay coef: m|d / max, base self/same
-        dderH += [[[mtuple,dtuple],[mval,dval],[mrdn,drdn],dect]]
-        Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn; Mdec+=dect[0]; Ddec+=dect[1]
-
+        dderH += [[[mtuple,dtuple],[mval,dval],[mrdn,drdn],[dect[0]/6,dect[1]/6]]]
+        Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn; Mdec+=dect[0]/6; Ddec+=dect[1]/6
+    if i:
+       Mdec /= i; Ddec /= i  # normalize
     return dderH, [Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec]  # new derLayer,= 1/2 combined derH
 
 
@@ -429,8 +429,8 @@ def comp_ext(_ext, ext, Valt, Rdnt, Dect):  # comp ds:
     Rdnt[0] += d>m; Rdnt[1] += d<=m
     _aL = abs(_L); aL = abs(L)
     _aS = abs(_S); aS = abs(S)
-    Dect[0] += mL/ max(aL,_aL) + (mS/ max(aS,_aS)) if aS or _aS else 1 + (mA/ max_mA) if max_mA else 1
-    Dect[1] += dL / (_aL+aL) + (dS / max(_aS+aS)) if aS or _aS else 1 + (dA / max_dA) if max_mA else 1
+    Dect[0] += (mL/ max(aL,_aL) + mS/ max(aS,_aS) if aS or _aS else 1 + (mA / max_mA) if max_mA else 1) /3  # ave dec of 3 vals
+    Dect[1] += (dL/ (_aL+aL) + dS / max(_aS+aS) if aS or _aS else 1 + (dA / max_dA) if max_mA else 1) /3
 
     return [[mL,mS,mA], [dL,dS,dA]]
 
