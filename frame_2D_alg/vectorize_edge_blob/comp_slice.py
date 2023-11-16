@@ -226,7 +226,7 @@ def comp_dtuple(_ptuple, ptuple, rn, fagg=0):
         mtuple += [get_match(_par, npar) - ave]
         dtuple += [_par - npar]
         if fagg:
-            Mtuple += [max(abs(_par),abs(npar))]
+            Mtuple += [max(par,npar)]
             Dtuple += [abs(_par)+abs(npar)]
     ret = [mtuple, dtuple]
     if fagg: ret += [Mtuple, Dtuple]
