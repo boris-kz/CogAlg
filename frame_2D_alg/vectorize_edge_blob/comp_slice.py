@@ -4,7 +4,7 @@ from itertools import zip_longest, combinations
 from collections import deque, defaultdict
 from .slice_edge import comp_angle
 from .classes import CderP, CPP
-from .filters import ave, aves, P_aves, PP_aves
+from .filters import ave, ave_dI, aves, P_aves, PP_aves
 '''
 Vectorize is a terminal fork of intra_blob.
 
@@ -201,21 +201,6 @@ def sum_dertuple(Ptuple, ptuple, fneg=0):
     else:    Ptuple[:] = [_I+I, _G+G, _M+M, _Ma+Ma, _A+A, _L+L]
     return   Ptuple
 
-def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, each = ptuple_tv
-
-    dderH = []  # or not-missing comparand: xor?
-    Mval, Dval, Mrdn, Drdn = 0,0,1,1
-
-    for _lay, lay in zip(_derH, derH):  # compare common lower der layers | sublayers in derHs
-        # if lower-layers match: Mval > ave * Mrdn?
-        mtuple, dtuple = comp_dtuple(_lay[1], lay[1], rn, fagg=0)  # compare dtuples only
-        mval = sum(mtuple); dval = sum(abs(d) for d in dtuple)
-        mrdn = dval > mval; drdn = dval < mval
-        Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
-        dderH += [[mtuple, dtuple]]
-
-    return dderH, [Mval,Dval], [Mrdn,Drdn]  # new derLayer,= 1/2 combined derH
-
 def comp_dtuple(_ptuple, ptuple, rn, fagg=0):
 
     mtuple, dtuple = [],[]
@@ -237,14 +222,14 @@ def comp_ptuple(_ptuple, ptuple, rn, fagg=0):  # 0der params
     _I, _G, _M, _Ma, (_Dy, _Dx), _L = _ptuple
     I, G, M, Ma, (Dy, Dx), L = ptuple
 
-    dI = _I - I*rn;  mI = ave-dI
-    dG = _G - G*rn;  mG = min(_G, G*rn) - ave
-    dL = _L - L*rn;  mL = min(_L, L*rn) - ave
-    dM = _M - M*rn;  mM = get_match(_M, M*rn) - ave  # M, Ma may be negative
-    dMa= _Ma- Ma*rn; mMa = get_match(_Ma, Ma*rn) - ave
+    dI = _I - I*rn;  mI = ave_dI - dI
+    dG = _G - G*rn;  mG = min(_G, G*rn) - aves[1]
+    dL = _L - L*rn;  mL = min(_L, L*rn) - aves[2]
+    dM = _M - M*rn;  mM = get_match(_M, M*rn) - aves[3]  # M, Ma may be negative
+    dMa= _Ma- Ma*rn; mMa = get_match(_Ma, Ma*rn) - aves[4]
     mAngle, dAngle = comp_angle((_Dy,_Dx), (Dy,Dx))
 
-    mtuple = [mI, mG, mM, mMa, mAngle, mL]
+    mtuple = [mI, mG, mM, mMa, mAngle-aves[5], mL]
     dtuple = [dI, dG, dM, dMa, dAngle, dL]
     ret = [mtuple, dtuple]
     if fagg:
@@ -276,6 +261,22 @@ def comp_ptuple_gen(_ptuple, ptuple, rn):  # 0der
         dtuple+=[d]
         Mtuple+=[maxv]
     return [mtuple, dtuple, Mtuple]
+
+
+def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, each = ptuple_tv
+
+    dderH = []  # or not-missing comparand: xor?
+    Mval, Dval, Mrdn, Drdn = 0,0,1,1
+
+    for _lay, lay in zip(_derH, derH):  # compare common lower der layers | sublayers in derHs
+        # if lower-layers match: Mval > ave * Mrdn?
+        mtuple, dtuple = comp_dtuple(_lay[1], lay[1], rn, fagg=0)  # compare dtuples only
+        mval = sum(mtuple); dval = sum(abs(d) for d in dtuple)
+        mrdn = dval > mval; drdn = dval < mval
+        Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
+        dderH += [[mtuple, dtuple]]
+
+    return dderH, [Mval,Dval], [Mrdn,Drdn]  # new derLayer,= 1/2 combined derH
 
 def sum_derH_gen(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
