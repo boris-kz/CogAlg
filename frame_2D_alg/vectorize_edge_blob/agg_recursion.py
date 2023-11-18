@@ -111,34 +111,39 @@ def form_graph_t(root, Valt,Rdnt, G_, link_):  # form mgraphs and dgraphs of sam
 
 
 def node_connect(iG_,link_,fd):  # node connectivity = sum surround link vals, incr.mediated: Graph Convolution of Correlations
-    '''
-    aggregate indirect links by associated nodes (vs. individually), iteratively recompute connectivity in multiple cycles,
-    effectively blending direct and indirect connectivity measures for each node over time.
-    In each cycle, connectivity per node includes aggregated contributions from the previous cycles, propagated through the network.
-    Math: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/node_connect.png
-    '''
-    Gt_ =[]; ave = G_aves[fd]
+    ave = G_aves[fd]
+    iGt_ = []
     for G in iG_:
-        valt,rdnt,dect = [0,0],[0,0],[0,0]; rim = copy(link_[G])  # all links that contain G
-        for link in rim:
+        valt,rdnt,dect = [0,0],[0,0],[0,0]
+        _rim_v_t, rim_v_t = [[],[]], [[],[]]
+        rim = []
+        for link in link_[G]:  # init all links that contain G
             if link.valt[fd] > ave * link.rdnt[fd]:  # skip negative links
+                link.Vt[fd] = link.valt[fd]
+                rim += [link]
                 for i in 0,1:
                     valt[i] += link.valt[i]; rdnt[i] += link.rdnt[i]; dect[i] += link.dect[i]  # sum direct link vals
-        Gt_ += [[G, rim,valt,rdnt,dect]]
-
-    _tVal,_tRdn = 0,0
-    _rim_ = [[0, 1] for _ in Gt_]
+                    _rim_v_t[i] += [link.valt[i]]; rim_v_t[i] += [0]  # init with direct connectivity vals
+        iGt_ += [[G, rim,valt,rdnt,dect, _rim_v_t, rim_v_t]]
+        _Gt_ = copy(iGt_)  # pruned for connectivity expansion below, this doesn't affect return iGt_
+    '''
+    Aggregate direct * indirect connectivity per node from indirect links via associated nodes, in multiple cycles. 
+    Each cycle adds contributions of previous cycles to linked-nodes connectivity, propagated through the network.
+    Math: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/node_connect.png 
+    '''
     while True:  # eval same Gs,links, but with cross-accumulated node connectivity values, indirectly extending their range
-        tVal, tRdn = 0,0  # loop totals
-        rim_ = []
-        for (G,rim,valt,rdnt,dect), (_rimV,_rimR) in zip(Gt_,_rim_):
+        Gt_ = []
+        Dval, Len = 0,0  # _Gt_ updates per loop
+        for Gt in Gt_:
+            G, rim, valt, rdnt, dect, _rim_v_t, rim_v_t = Gt
             rimV,rimR = 0,0
             for link in rim:
-                if link.valt[fd] < ave * link.rdnt[fd]: continue  # skip negative links
+                if link.Vt[fd] < ave: continue  # skip negative links, former link.valt[fd] < ave * link.rdnt[fd]
                 _G = link.G if link._G is G else link._G
-                if _G not in iG_: continue
+                if _G not in iG_: continue  # outside root graph
                 _Gt = Gt_[G.i]
-                _G,_rim_,_valt,_rdnt,_dect = _Gt
+                _G,_rim,_valt,_rdnt,_dect, _rim__v_t,rim__v_t = _Gt
+                # if G in _rim: continue  # always true, but need to exclude self-contribution?
                 decay = link.dect[fd]  # node vals * relative link val:
                 for i in 0,1:
                     linkV = _valt[i] * decay; valt[i] += linkV
@@ -146,15 +151,20 @@ def node_connect(iG_,link_,fd):  # node connectivity = sum surround link vals, i
                     linkR = _rdnt[i] * decay; rdnt[i] += linkR
                     if fd==i: rimR += linkR
                     dect[i] += link.dect[i]
-            tVal += rimV - _rimV
-            tRdn += rimR - _rimR
-            rim += [[rimV,rimR]]
-        if abs(tVal-_tVal) <= ave * (tRdn-_tRdn):
+                    rim_v_t[i] += [linkV]  # + rim_r_t[i] += [linkR]?
+                    link.Vt[i] = linkV
+            dval = sum(rim_v_t[fd]) - sum(_rim_v_t[fd])
+            L = len(rim); Len += L
+            if dval > ave * L:
+                _rim_v_t[:] = rim_v_t
+                rim_v_t[:] = [0 for _ in rim_v_t]
+                Dval += dval
+                Gt_ += Gt
+        if Dval <= ave * Len:  # may need to scale by rdn?
             break
-        _rim_= rim_
-        _tVal,_tRdn = tVal,tRdn
+        _Gt_ = Gt_  # exclude weakly incremented Gts from connectivity expansion
 
-    return Gt_
+    return iGt_
 
 def segment_node_(root, Gt_, fd):  # eval rim links with summed surround vals
     '''
@@ -231,7 +241,7 @@ def sum2graph(root, grapht, fd):  # sum node and link params into graph, aggH in
         graph.connec_t[fd] += [Gt[1:]]  # node connectivity params: rim,valt,rdnt,dect,n
         if (Mval,Dval)[fd] > ave * (Mrdn,Drdn)[fd]:  # redundant to nodes, only link_ params are necessary
             graph.ptuple += G.ptuple
-            sum_derHv(graph.derH, G.derH, base_rdn=1)
+            sum_derH([graph.derH,[0,0],[1,1]], [G.derH,[0,0],[1,1]], base_rdn=1)
             sum_aggHv(graph.aggH, G.aggH, base_rdn=1)
             sum_Hts(graph.valHt,graph.rdnHt,graph.decHt, G.valHt,G.rdnHt,G.decHt)
     # add derLay:
@@ -343,7 +353,9 @@ def comp_derHv(_derH, derH, rn):  # derH is a list of der layers or sub-layers, 
 
     for _lay, lay in zip(_derH, derH):  # compare common lower der layers | sublayers in derHs, if lower-layers match?
         # comp dtuples, eval mtuples
-        mtuple, dtuple, Mtuple, Dtuple = comp_dtuple(_lay[0][1], lay[0][1], rn, fagg=1)
+        if isinstance(lay[0][0], list):  _dlay = _lay[0][1]; dlay = lay[0][1]
+        else:                            _dlay = _lay[1]; dlay = lay[1]  # converted derlay with no valt and rdnt
+        mtuple, dtuple, Mtuple, Dtuple = comp_dtuple(_dlay, dlay, rn, fagg=1)
         # sum params:
         mval = sum(mtuple); dval = sum(abs(d) for d in dtuple)
         mrdn = dval > mval; drdn = dval < mval
@@ -394,6 +406,7 @@ def sum_derHv(T,t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers,
     DerH,Valt,Rdnt,Dect = T; derH,valt,rdnt,dect = t
     for i in 0,1:
         Valt[i] += valt[i]; Rdnt[i] += rdnt[i]+base_rdn; Dect[i] = (Dect[i] + dect[i])/2
+    # why fneg*i in sum_dertuple?
     DerH[:] = [
         [ [sum_dertuple(Dertuple,dertuple, fneg*i) for i,(Dertuple,dertuple) in enumerate(zip(Tuplet,tuplet))],
           [V+v for V,v in zip(Valt,valt)], [R+r+base_rdn for R,r in zip(Rdnt,rdnt)], [(D+d)/2 for D,d in zip(Dect,dect)]

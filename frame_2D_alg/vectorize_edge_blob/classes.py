@@ -123,7 +123,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
 
     fd: int = 0  # graph is defined by m|d value
     ptuple : ptupleT = ptupleT(0,0,0,0,angleT(0,0),0)  # default from P
-    derH : list = z([[],[0,0],[1,1],[0,0]])  # default from converted PP: [[tuplet,valt,rdnt,dect]]
+    derH : list = z([])  # not converted to [[tuplet,valt,rdnt,dect]]
     aggH : list = z([])  # [[subH,valt,rdnt]], subH: [[derH,valt,rdnt,maxt]]: 2-fork composition layers, -> pP_?
     valHt : list = z([[0],[0]])  # Ht of link vals,rdns, decays / fder:
     rdnHt : list = z([[1],[1]])
