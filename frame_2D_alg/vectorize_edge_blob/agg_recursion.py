@@ -123,9 +123,9 @@ def node_connect(iG_,link_,fd):  # node connectivity = sum surround link vals, i
                 rim += [link]
                 for i in 0,1:
                     valt[i] += link.valt[i]; rdnt[i] += link.rdnt[i]; dect[i] += link.dect[i]  # sum direct link vals
-                    _rim_v_t[i] += [link.valt[i]]; rim_v_t[i] += [0]  # init with direct connectivity vals
+                    _rim_v_t[i] += [link.valt[i]]; rim_v_t[i] += [0]  # init with direct connectivity vals only
         iGt_ += [[G, rim,valt,rdnt,dect, _rim_v_t, rim_v_t]]
-        _Gt_ = copy(iGt_)  # pruned for connectivity expansion below, this doesn't affect return iGt_
+        _Gt_ = copy(iGt_)  # for pruned connectivity expansion, not affecting return iGt_
     '''
     Aggregate direct * indirect connectivity per node from indirect links via associated nodes, in multiple cycles. 
     Each cycle adds contributions of previous cycles to linked-nodes connectivity, propagated through the network.
@@ -134,47 +134,49 @@ def node_connect(iG_,link_,fd):  # node connectivity = sum surround link vals, i
     while True:  # eval same Gs,links, but with cross-accumulated node connectivity values, indirectly extending their range
         Gt_ = []
         Dval, Len = 0,0  # _Gt_ updates per loop
-        for Gt in Gt_:
-            G, rim, valt, rdnt, dect, _rim_v_t, rim_v_t = Gt
-            rimV,rimR = 0,0
-            for link in rim:
-                if link.Vt[fd] < ave: continue  # skip negative links, former link.valt[fd] < ave * link.rdnt[fd]
+        for Gt in _Gt_:
+            G, rim, valt,rdnt,dect, _up_rim,_rim_v_t,rim_v_t = Gt
+            up_rim = []
+            rimV = 0  # rimR = 0?
+            for link, _linkV in zip(up_rim,_rim_v_t[fd]):
+                # only links with >ave update of linkVs should be re-evaluated
+                if link.Vt[fd] < ave: continue  # skip negative links, was link.valt[fd] < ave * link.rdnt[fd]
                 _G = link.G if link._G is G else link._G
                 if _G not in iG_: continue  # outside root graph
-                _Gt = Gt_[G.i]
-                _G,_rim,_valt,_rdnt,_dect, _rim__v_t,rim__v_t = _Gt
-                # if G in _rim: continue  # always true, but need to exclude self-contribution?
+                _Gt = _Gt_[G.i]   # but it may represent Gt indirectly?
+                _G,_rim,_valt,_rdnt,_dect, _,_ = _Gt
+                if _valt[fd] < ave: continue  # weak _G connect should not be added to G connect?
                 decay = link.dect[fd]  # node vals * relative link val:
                 for i in 0,1:
                     linkV = _valt[i] * decay; valt[i] += linkV
                     if fd==i: rimV += linkV
-                    linkR = _rdnt[i] * decay; rdnt[i] += linkR
-                    if fd==i: rimR += linkR
+                    linkR = _rdnt[i] * decay; rdnt[i] += linkR  # if fd==i: rimR += linkR
                     dect[i] += link.dect[i]
                     rim_v_t[i] += [linkV]  # + rim_r_t[i] += [linkR]?
                     link.Vt[i] = linkV
+                    if linkV-_linkV > ave:
+                        up_rim += [link]
+            _up_rim[:] = up_rim
             dval = sum(rim_v_t[fd]) - sum(_rim_v_t[fd])
             L = len(rim); Len += L
             if dval > ave * L:
                 _rim_v_t[:] = rim_v_t
-                rim_v_t[:] = [0 for _ in rim_v_t]
+                rim_v_t[:] = [[0 for _ in rim_v_t[0]], [0 for _ in rim_v_t[0]]]
                 Dval += dval
-                Gt_ += Gt
+                Gt_ += [Gt]
         if Dval <= ave * Len:  # may need to scale by rdn?
             break
-        _Gt_ = Gt_  # exclude weakly incremented Gts from connectivity expansion
+        _Gt_ = Gt_  # exclude weakly incremented Gts from next connectivity expansion loop
 
     return iGt_
 
-def segment_node_(root, Gt_, fd):  # eval rim links with summed surround vals
-    '''
-    Graphs add nodes if their (surround connectivity * relative value of link to internal node) is above average
-    It's a version of density-based clustering.
-    '''
+def segment_node_(root, Gt_, fd):  # eval rim links with summed surround vals for density-based clustering
+
+    # graph += [node] if >ave (surround connectivity * relative value of link to any internal node)
     igraph_ = []; ave = G_aves[fd]
 
     for Gt in Gt_:
-        G,rim,valt,rdnt,dect = Gt
+        G,rim,valt,rdnt,dect, _,_ = Gt
         subH = [[],[0,0],[1,1],[0,0]]
         Link_= []; A,S = [0,0],0
         for link in rim:
@@ -185,6 +187,7 @@ def segment_node_(root, Gt_, fd):  # eval rim links with summed surround vals
         G.root[fd] = grapht; igraph_ += [grapht]
     _tVal,_tRdn = 0,0
     _graph_ = igraph_  # prune while eval node rim links with surround vals for graph inclusion and merge:
+    # use dict link_?
     while True:
         tVal,tRdn = 0,0  # loop totals
         graph_ = []
@@ -301,6 +304,7 @@ def comp_G(link_, _G, G, fd):
         Mdec = (Mdec+dect[0])/2; Ddec = (Ddec+dect[1])/2
         link.subH = SubH+subH  # append higher subLayers: list of der_ext | derH s
         link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]; link.dect = [Mdec,Ddec]  # complete proto-link
+        # dict link_: key=G, values=derGs:
         link_[G] += [link]
         link_[_G]+= [link]
     elif Mval > ave_Gm or Dval > ave_Gd:  # or sum?
@@ -308,7 +312,7 @@ def comp_G(link_, _G, G, fd):
         link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]; link.dect = [Mdec,Ddec] # complete proto-link
         link_[G] += [link]
         link_[_G]+= [link]
-        # dict: key=G, values=derGs
+
     return Mval,Dval, Mrdn,Drdn, Mdec,Ddec
 
 # draft:

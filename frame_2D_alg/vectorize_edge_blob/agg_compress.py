@@ -54,22 +54,24 @@ def form_parP_(parHv, fd):  # last v: value tuple valt,rdnt,maxt
     part_ = []  # [[subH, sub_part_P_t], Val,Rdn,Max]
     Val,Rdn,Dec = 0,0,0; parH = copy(parH)
 
-    while parH:  # aggHv | subHv | derHv (ptv_), top-down
-        subt = parH.pop()
-        '''    
-        decode 1,1,2,4.. tuplets for nested comp within m|d fork, not sure yet, as in:  
-        L = 0
-        rn  = len(_P.dert_)/ len(P.dert_)
-        while len(_P.derH) > L and len(P.derH) > L:  # len derLay = len low Lays: 1,1,2,4. tuplets, map to _vmaxt_
-            hL = max(2*L,1)  # init L=0
-            _Lay,Lay, mDec_,dDec_ = _P.derH[L:hL],P.derH[L:hL],Dec_t[0][L:hL],Dec_t[1][L:hL]
-        ...        
+    while parH:  # aggHv( subHv( derHv( ptv_, top-down
+        '''
         subt = Hv: >4-level list, | ptv: 3-level list, | extt: 2-level list:
         aggHv: [aggH=subHv_, valt, rdnt, dect],
         subHv: [subH=derHv_, valt, rdnt, dect],
         derHv: [derH=ptuple_tv_, valt, rdnt, dect] or extt, mixed in subH
         ptuple_tv: [[mtuple,dtuple], valt, rdnt, dect] 
         '''
+        # partial draft:
+        _lay = parH[0]; L = 1
+        while len(parH) > L:  # len next Lay = len low Lays: 1,1,2,4.: for subH | derH, not aggH?
+            hL = 2*L
+            lay = parH[L:hL]  # [par_sH, valt, rdnt, dect]
+            if L: # else no _lay yet
+                comp_parH(_lay,lay)  # nested comp between and then within same-fork dertuples?
+            _lay = lay
+        # old:
+        subt = parH.pop()
         if isinstance(subt[0][0],list):  # not extt
             if isinstance(subt[0][0][0],list):  # subt==Hv
                 subH,val,rdn,dec = subt[0], subt[1][fd], subt[2][fd], subt[3][fd]
