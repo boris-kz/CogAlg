@@ -51,9 +51,8 @@ def form_parP_(parHv, fd):  # last v: value tuple valt,rdnt,maxt
 
     parH, rVal, rRdn, rDec = parHv  # compressed valt,rdnt,maxt per aggH replace initial summed G vals
     part_P_ = []  # pPs: nested clusters of >ave param tuples, as below:
-    part_ = []  # [[subH, sub_part_P_t], Val,Rdn,Max]
     Val,Rdn,Dec = 0,0,0; parH = copy(parH)
-
+    part_ = []
     while parH:  # aggHv( subHv( derHv( ptv_, top-down
         '''
         subt = Hv: >4-level list, | ptv: 3-level list, | extt: 2-level list:
@@ -67,29 +66,28 @@ def form_parP_(parHv, fd):  # last v: value tuple valt,rdnt,maxt
         while len(parH) > L:  # len next Lay = len low Lays: 1,1,2,4.: for subH | derH, not aggH?
             hL = 2*L
             lay = parH[L:hL]  # [par_sH, valt, rdnt, dect]
-            if L: # else no _lay yet
-                comp_parH(_lay,lay)  # nested comp between and then within same-fork dertuples?
-            _lay = lay
-        # old:
-        subt = parH.pop()
-        if isinstance(subt[0][0],list):  # not extt
-            if isinstance(subt[0][0][0],list):  # subt==Hv
-                subH,val,rdn,dec = subt[0], subt[1][fd], subt[2][fd], subt[3][fd]
-                if val > ave:  # recursive eval,unpack
-                    Val+=val; Rdn+=rdn; Dec+=dec  # sum with sub-vals:
-                    sub_part_P_t = form_parP_([subH,val,rdn,dec], fd)
-                    part_ += [[subH, sub_part_P_t]]
-                else:
-                    if Val:  # empty sub_pP_ terminates root pP
-                        part_P_ += [[part_,Val,Rdn,Dec]]; rVal+=Val; rRdn+=Rdn; rDec+=Dec  # root params
-                        part_= [], Val,Rdn,Dec = 0,0,0  # pP params
-                        # reset
-            else: form_tuplet_pP_(subt, [part_P_,rVal,rRdn,rDec], [part_,Val,Rdn,Dec], v=1)  # subt is derLay
-        else:     form_tuplet_pP_(subt, [part_P_,rVal,rRdn,rDec], [part_,Val,Rdn,Dec], v=0)  # subt is extt
+            # comp or unpack?:
+            if isinstance(subt[0][0],list):  # not extt
+                if isinstance(subt[0][0][0],list):  # subt==Hv
+                    subH,val,rdn,dec = subt[0], subt[1][fd], subt[2][fd], subt[3][fd]
+                    if val > ave:  # recursive eval,unpack
+                        Val+=val; Rdn+=rdn; Dec+=dec  # sum with sub-vals:
+                        sub_part_P_t = form_parP_([subH,val,rdn,dec], fd)
+                        part_ += [[subH, sub_part_P_t]]
+                    else:
+                        if Val:  # empty sub_pP_ terminates root pP
+                            part_P_ += [[part_,Val,Rdn,Dec]]; rVal+=Val; rRdn+=Rdn; rDec+=Dec  # root params
+                            part_= [], Val,Rdn,Dec = 0,0,0  # pP params
+                            # reset
+                else: form_tuplet_pP_(subt, [part_P_,rVal,rRdn,rDec], [part_,Val,Rdn,Dec], v=1)  # subt is derLay
+            else:     form_tuplet_pP_(subt, [part_P_,rVal,rRdn,rDec], [part_,Val,Rdn,Dec], v=0)  # subt is extt
     if part_:
         part_P_ += [[part_,Val,Rdn,Dec]]; rVal+=Val; rRdn+=Rdn; rDec+Dec
 
     return [part_P_,rVal,rRdn,rDec]  # root values
+
+def comp_parH(_lay,lay):  # nested comp between and then within same-fork dertuples?
+    pass
 
 def form_tuplet_pP_(ptuplet, part_P_v, part_v, v):  # ext or ptuple, params=vals
 
