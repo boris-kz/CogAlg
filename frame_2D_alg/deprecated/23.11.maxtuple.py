@@ -330,3 +330,94 @@ def node_connect(iG_,link_,fd):  # sum surround values to define node connectivi
 
     return Gt_
 
+def segment_node_(root, Gt_, root_link_, fd, root_fd):  # eval rim links with summed surround vals for density-based clustering
+
+    ave = G_aves[fd]
+    graph_ = []  # graph += [node] if >ave (surround connectivity * relative value of link to any internal node)
+    link_map = defaultdict(list)
+    derG_ = []
+    for derG in root_link_:
+        if derG.valt[fd] > ave * derG.rdnt[fd]:
+            link_map[derG.G] += [derG._G]  # key:Gt, vals: linked _Gts
+            link_map[derG._G] += [derG.G]
+            derG_ += [derG]  # filtered derG
+
+def segment_node_par(root, Gt_, fd, root_fd):  # eval rim links with summed surround vals for density-based clustering
+
+    # graph += [node] if >ave (surround connectivity * relative value of link to any internal node)
+    igraph_ = []; ave = G_aves[fd]
+
+    for Gt in Gt_:
+        G,rimt,valt,rdnt,dect, uprimt, *_ = Gt
+        subH = [[],[0,0],[1,1],[0,0]]
+        Link_= defaultdict(list)
+        A, S = [0,0],0
+        for link in rimt[fd][G]:
+            if link.valt[fd] > G_aves[fd] * link.rdnt[fd]:
+                sum_subHv(subH, [link.subH,link.valt,link.rdnt,link.dect], base_rdn=1)
+                Link_[G] += [link]; A[0] += link.A[0]; A[1] += link.A[1]; S += link.S
+        grapht = [[Gt],{node:list(link_) for node,link_ in rimt[fd].items()}, copy(valt),copy(rdnt),copy(dect),A,S,subH,Link_]
+        G.root[fd] = grapht; igraph_ += [grapht]
+    _tVal,_tRdn = 0,0
+    _graph_ = igraph_
+    while True:
+        tVal,tRdn = 0,0  # loop totals
+        graph_ = []
+        while _graph_:  # extend graph Rim
+            grapht = _graph_.pop()
+            nodet_,Rim, Valt,Rdnt,Dect, A,S, subH,link_ = grapht
+            inVal,inRdn = 0,0  # in-graph: positive
+            new_Rim = defaultdict(list)
+            for link in get_link_(Rim):  # unique links
+                if link.G is nodet_[0][0]:
+                    Gt = Gt_[link.G.it[root_fd]]; _Gt = Gt_[link._G.it[root_fd]] if Gt[0] in root.node_t[root_fd] else None
+                else:
+                    Gt = Gt_[link._G.it[root_fd]]; _Gt = Gt_[link.G.it[root_fd]] if Gt[0] in root.node_t[root_fd] else None
+                if _Gt is None: continue  # not in root.node_
+                if _Gt in nodet_: continue
+                # node match * surround M|D match: of potential in-graph position?
+                comb_val = link.valt[fd] + get_match(Gt[2][fd],_Gt[2][fd])
+                comb_rdn = link.rdnt[fd] + (Gt[3][fd] + _Gt[3][fd]) / 2
+                # merge nodes
+                if comb_val > ave*comb_rdn:
+                    # sum links
+                    _nodet_,_Rim,_Valt,_Rdnt,_Dect,_A,_S,_subH,_link_ = _Gt[0].root[fd]
+                    if _Gt[0].root[fd] in grapht: grapht.remove(_Gt[0].root[fd])   # remove overlapping root
+                    for _nodet in _nodet_: _nodet[0].root[fd] = grapht  # assign new merged root
+                    sum_subHv(subH, _subH, base_rdn=1)
+                    A[0] += _A[0]; A[1] += _A[1]; S += _S; link_.update(_link_)
+                    for i in 0,1:
+                        Valt[i] += _Valt[i]; Rdnt[i] += _Rdnt[i]; Dect[i] += _Dect[i]
+                    inVal += _Valt[fd]; inRdn += _Rdnt[fd]
+                    nodet_ += [__Gt for __Gt in _Gt[0].root[fd][0] if __Gt not in nodet_]
+                    Rim.update(_Rim)
+                    new_Rim.update(_Rim)
+            tVal += inVal; tRdn += inRdn  # signed?
+            if len(get_link_(new_Rim)) * inVal > ave * inRdn:
+                # eval new_Rim for extension:
+                graph_ += [[nodet_,new_Rim,Valt,Rdnt,Dect,A,S, subH, link_]]
+
+        if len(graph_) * (tVal-_tVal) <= ave * (tRdn-_tRdn):  # even low-Val extension may be valuable if Rdn decreases?
+            break
+        _graph_ = graph_
+        _tVal,_tRdn = tVal,_tRdn
+    # -> Cgraphs if Val > ave * Rdn:
+    return [sum2graph(root, graph, fd) for graph in graph_ if graph[2] > ave * graph[3]]
+
+
+def form_graph_t(root, Valt,Rdnt, G_, link_, fd):  # form mgraphs and dgraphs of same-root nodes
+
+    for G in G_: G.root = [None,None]  # replace with mcG_|dcG_ in segment_node_, replace with Cgraphs in sum2graph
+
+    Gt_ = node_connect(G_, link_, fd)  # AKA Graph Convolution of Correlations
+    graph_t = []
+    for i in 0,1:
+        if Valt[i] > ave * Rdnt[i]:  # else no clustering
+            graph_t += [segment_node_(root, Gt_, i, fd)]  # if fd: node-mediated Correlation Clustering; add alt_graphs?
+        else: graph_t += [[]]  # or G_?
+    for i, graph_ in enumerate(graph_t):
+        if graph_:
+            for graph in graph_:
+                if graph: sum2graph(root, graph, i)
+        else:
+            for G in G_: G.i_ += [None]  # no sub-root

@@ -141,7 +141,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     alt_graph_ : list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
     alt_Graph : object = None  # conditional, summed and concatenated params of alt_graph_
     # temporary:
-    i_ : list = z([])  # graph indices in root node_s, implicitly nested
+    it : list = z([])  # graph indices in root node_s, implicitly nested
     fback_t : list = z([[],[]])  # maps to node_t: feedback [[aggH,valt,rdnt]] per node fork
     compared_ : list = z([])
     Rdn : int = 0  # for accumulation or separate recursion count?
@@ -156,7 +156,7 @@ class CderG(ClusterStructure):  # params of single-fork node_ cluster per pplaye
     valt : list = z([0,0])  # m,d
     rdnt : list = z([1,1])
     dect : list = z([0,0])  # mdecay, ddecay
-    Vt : list = z([0,0])  # combined net vals, accum in node_connect
+    Vt : list = z([[0,0],[0,0]])  # combined net vals, accum in node_connect (we need 2 nested list here)
     _G : object = None  # comparand
     G: object = None  # comparand
     S : float = 0.0  # sparsity: average distance to link centers
