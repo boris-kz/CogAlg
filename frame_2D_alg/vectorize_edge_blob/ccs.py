@@ -34,18 +34,12 @@ class CCBase:
     def sub(self):
         raise NotImplementedError
 
-class RecBase:
-    def __init__(self, cc):
-        self.cc = cc
 
-    def evaluate(self):
-        raise NotImplementedError
-
-# Demonstration example of FrameBlobs and IntraBlob:
+# Demonstration example of FrameBlobs:
 class FrameBlobs(CCBase):
     UNFILLED = -1
     EXCLUDED = -2
-    cnodeT = blobT = namedtuple("blobT", "id sign dert fopen")
+    cnodeT = blobT = namedtuple("blobT", "id sign dert root fopen")
     cnodeT.G = property(lambda self: np.hypot(*self.dert[1:3]))   # G from Dy, Dx
 
     def xcmp(self):
@@ -94,6 +88,7 @@ class FrameBlobs(CCBase):
             blob = self.blobT(
                 id=idx,
                 sign=sign,
+                root=-1,
                 fopen=fopen,
                 dert=np.array([
                     self.i__[ks.mc][msk].sum(),     # I
@@ -103,11 +98,10 @@ class FrameBlobs(CCBase):
             idx += 1
 
     def sub(self):
-        self.intra = IntraBlob(self)
-        self.intra.evaluate()
+        pass
 
-class IntraBlob(RecBase):
-    pass
+    def intra(self, root_blob):
+        pass
 
 if __name__ == "__main__":
     image = imread("images/raccoon_eye.jpeg")

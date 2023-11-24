@@ -172,13 +172,12 @@ def segment_node_(root, Gt_, fd, root_fd):  # eval rim links with summed surroun
     for Gt in Gt_:
         G,rimt,valt,rdnt,dect, uprimt, *_ = Gt
         subH = [[],[0,0],[1,1],[0,0]]
-        Link_= defaultdict(list)
-        A, S = [0,0],0
+        Link_ = []; A,S = [0,0],0
         for link in rimt[fd][G]:
             if link.valt[fd] > G_aves[fd] * link.rdnt[fd]:
                 sum_subHv(subH, [link.subH,link.valt,link.rdnt,link.dect], base_rdn=1)
-                Link_[G] += [link]; A[0] += link.A[0]; A[1] += link.A[1]; S += link.S
-        grapht = [[Gt],{node:list(link_) for node,link_ in rimt[fd].items()}, copy(valt),copy(rdnt),copy(dect),A,S,subH,Link_]
+                Link_ += [link]; A[0] += link.A[0]; A[1] += link.A[1]; S += link.S
+        grapht = [[Gt],Link_, copy(valt),copy(rdnt),copy(dect),A,S,subH, copy(Link_)]
         G.root[fd] = grapht; igraph_ += [grapht]
 
     _graph_ = igraph_; _tVal,_tRdn = 0,0
@@ -187,9 +186,9 @@ def segment_node_(root, Gt_, fd, root_fd):  # eval rim links with summed surroun
         graph_ = []
         while _graph_:  # extend graph Rim
             grapht = _graph_.pop()
-            nodet_,Rim, Valt,Rdnt,Dect, A,S, subH,link_ = grapht
+            nodet_,Rim, Valt,Rdnt,Dect, A,S, subH,_upRim = grapht
             inVal,inRdn = 0,0  # in-graph: positive
-            new_Rim = defaultdict(list)
+            upRim = []
             for link in get_link_(Rim):  # unique links
                 if link.G is nodet_[0][0]:
                     Gt = Gt_[link.G.it[root_fd]]; _Gt = Gt_[link._G.it[root_fd]] if Gt[0] in root.node_t[root_fd] else None
@@ -202,22 +201,21 @@ def segment_node_(root, Gt_, fd, root_fd):  # eval rim links with summed surroun
                 comb_rdn = link.rdnt[fd] + (Gt[3][fd] + _Gt[3][fd]) / 2
                 if comb_val > ave*comb_rdn:
                     # merge node.root:
-                    _nodet_,_Rim,_Valt,_Rdnt,_Dect,_A,_S,_subH,_link_ = _Gt[0].root[fd]
+                    _nodet_,_Rim,_Valt,_Rdnt,_Dect,_A,_S,_subH,__upRim = _Gt[0].root[fd]
                     if _Gt[0].root[fd] in grapht:  # grapht is not graphts?
                         grapht.remove(_Gt[0].root[fd])   # remove overlapping root
                     for _nodet in _nodet_: _nodet[0].root[fd] = grapht  # assign new merged root
                     sum_subHv(subH, _subH, base_rdn=1)
-                    A[0] += _A[0]; A[1] += _A[1]; S += _S; link_.update(_link_)
+                    A[0] += _A[0]; A[1] += _A[1]; S += _S
+                    list(set(upRim +__upRim))  # not sure, also need to exclude Rim?
                     for i in 0,1:
                         Valt[i] += _Valt[i]; Rdnt[i] += _Rdnt[i]; Dect[i] += _Dect[i]
                     inVal += _Valt[fd]; inRdn += _Rdnt[fd]
                     nodet_ += [__Gt for __Gt in _Gt[0].root[fd][0] if __Gt not in nodet_]
-                    Rim.update(_Rim)
-                    new_Rim.update(_Rim)
-            tVal += inVal; tRdn += inRdn  # signed?
-            if len(get_link_(new_Rim)) * inVal > ave * inRdn:
-                # eval new_Rim for extension:
-                graph_ += [[nodet_,new_Rim,Valt,Rdnt,Dect,A,S, subH, link_]]
+            tVal += inVal
+            tRdn += inRdn  # signed?
+            if len(Rim) * inVal > ave * inRdn:
+                graph_ += [[nodet_,Rim, Valt,Rdnt,Dect,A,S, subH,upRim]]  # eval Rim for extension
 
         if len(graph_) * (tVal-_tVal) <= ave * (tRdn-_tRdn):  # even low-Val extension may be valuable if Rdn decreases?
             break

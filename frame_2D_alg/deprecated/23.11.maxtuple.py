@@ -330,7 +330,7 @@ def node_connect(iG_,link_,fd):  # sum surround values to define node connectivi
 
     return Gt_
 
-def segment_node_(root, Gt_, root_link_, fd, root_fd):  # eval rim links with summed surround vals for density-based clustering
+def segment_node_seq(root, Gt_, root_link_, fd, root_fd):  # eval rim links with summed surround vals for density-based clustering
 
     ave = G_aves[fd]
     graph_ = []  # graph += [node] if >ave (surround connectivity * relative value of link to any internal node)
@@ -342,7 +342,7 @@ def segment_node_(root, Gt_, root_link_, fd, root_fd):  # eval rim links with su
             link_map[derG._G] += [derG.G]
             derG_ += [derG]  # filtered derG
 
-def segment_node_par(root, Gt_, fd, root_fd):  # eval rim links with summed surround vals for density-based clustering
+def segment_node_(root, Gt_, fd, root_fd):  # eval rim links with summed surround vals for density-based clustering
 
     # graph += [node] if >ave (surround connectivity * relative value of link to any internal node)
     igraph_ = []; ave = G_aves[fd]
@@ -358,8 +358,8 @@ def segment_node_par(root, Gt_, fd, root_fd):  # eval rim links with summed surr
                 Link_[G] += [link]; A[0] += link.A[0]; A[1] += link.A[1]; S += link.S
         grapht = [[Gt],{node:list(link_) for node,link_ in rimt[fd].items()}, copy(valt),copy(rdnt),copy(dect),A,S,subH,Link_]
         G.root[fd] = grapht; igraph_ += [grapht]
-    _tVal,_tRdn = 0,0
-    _graph_ = igraph_
+
+    _graph_ = igraph_; _tVal,_tRdn = 0,0
     while True:
         tVal,tRdn = 0,0  # loop totals
         graph_ = []
@@ -378,11 +378,11 @@ def segment_node_par(root, Gt_, fd, root_fd):  # eval rim links with summed surr
                 # node match * surround M|D match: of potential in-graph position?
                 comb_val = link.valt[fd] + get_match(Gt[2][fd],_Gt[2][fd])
                 comb_rdn = link.rdnt[fd] + (Gt[3][fd] + _Gt[3][fd]) / 2
-                # merge nodes
                 if comb_val > ave*comb_rdn:
-                    # sum links
+                    # merge node.root:
                     _nodet_,_Rim,_Valt,_Rdnt,_Dect,_A,_S,_subH,_link_ = _Gt[0].root[fd]
-                    if _Gt[0].root[fd] in grapht: grapht.remove(_Gt[0].root[fd])   # remove overlapping root
+                    if _Gt[0].root[fd] in grapht:  # grapht is not graphts?
+                        grapht.remove(_Gt[0].root[fd])   # remove overlapping root
                     for _nodet in _nodet_: _nodet[0].root[fd] = grapht  # assign new merged root
                     sum_subHv(subH, _subH, base_rdn=1)
                     A[0] += _A[0]; A[1] += _A[1]; S += _S; link_.update(_link_)
