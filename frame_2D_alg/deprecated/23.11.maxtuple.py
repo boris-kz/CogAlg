@@ -421,3 +421,49 @@ def form_graph_t(root, Valt,Rdnt, G_, link_, fd):  # form mgraphs and dgraphs of
                 if graph: sum2graph(root, graph, i)
         else:
             for G in G_: G.i_ += [None]  # no sub-root
+
+def comp_G(link_, _G, G, fd):
+
+    Mval,Dval, Mrdn,Drdn, Mdec,Ddec = 0,0, 1,1, 0,0
+    link = CderG( _G=_G, G=G)
+    # keep separate P ptuple and PP derH, empty derH in single-P G, + empty aggH in single-PP G
+    # / P:
+    mtuple, dtuple, Mtuple, Dtuple = comp_ptuple(_G.ptuple, G.ptuple, rn=1, fagg=1)
+    mval, dval = sum(mtuple), sum(abs(d) for d in dtuple)  # mval is signed, m=-min in comp x sign
+    mrdn = dval>mval; drdn = dval<=mval
+    dect = [0,0]
+    for fd, (ptuple,Ptuple) in enumerate(zip((mtuple,dtuple),(Mtuple,Dtuple))):  # the prior zipping elements are wrong
+        for i, (par, max, ave) in enumerate(zip(ptuple, Ptuple, aves)):  # compute link decay coef: par/ max(self/same)
+            if fd: dect[fd] += par/max if max else 1
+            else:  dect[fd] += (par+ave)/ max if max else 1
+    derLay0 = [[mtuple,dtuple],[mval,dval],[mrdn,drdn],[dect[0]/6, dect[1]/6]]  # ave of 6 params
+    Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn; Mdec+=dect[0]/6; Ddec+=dect[1]/6
+    # / PP:
+    _derH,derH = _G.derH,G.derH
+    if _derH and derH:  # empty in single-node Gs
+        dderH, [mval,dval],[mrdn,drdn],[mdec,ddec]  = comp_derHv(_derH, derH, rn=1)
+        Mval+=dval; Dval+=mval; Mdec=(Mdec+mdec)/2; Ddec=(Ddec+ddec)/2
+        Mrdn+= mrdn+ dval>mval; Drdn+= drdn+ dval<=mval
+    else: dderH = []
+    derH = [[derLay0]+dderH, [Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec]]  # appendleft derLay0 from comp_ptuple
+    der_ext = comp_ext([_G.L,_G.S,_G.A],[G.L,G.S,G.A], [Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec])
+    SubH = [der_ext, derH]  # two init layers of SubH, higher layers added by comp_aggH:
+    # / G:
+    if fd:  # else no aggH yet?
+        subH, valt,rdnt,dect = comp_aggHv(_G.aggH, G.aggH, rn=1)
+        mval,dval = valt; Mval+=dval; Dval+=mval
+        Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
+        Mdec = (Mdec+dect[0])/2; Ddec = (Ddec+dect[1])/2
+        link.subH = SubH+subH  # append higher subLayers: list of der_ext | derH s
+        link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]; link.dect = [Mdec,Ddec]  # complete proto-link
+        # dict key:G,vals:derGs
+        link_[G] += [link]
+        link_[_G]+= [link]
+    elif Mval > ave_Gm or Dval > ave_Gd:  # or sum?
+        link.subH = SubH
+        link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]; link.dect = [Mdec,Ddec] # complete proto-link
+        link_[G] += [link]
+        link_[_G]+= [link]
+
+    return Mval,Dval, Mrdn,Drdn, Mdec,Ddec
+

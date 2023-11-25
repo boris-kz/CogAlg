@@ -124,13 +124,12 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     fd: int = 0  # graph is defined by m|d value
     ptuple : ptupleT = ptupleT(0,0,0,0,angleT(0,0),0)  # default from P
     derH : list = z([])  # not converted to [[tuplet,valt,rdnt,dect]]
-    aggH : list = z([])  # [[subH,valt,rdnt]], subH: [[derH,valt,rdnt,maxt]]: 2-fork composition layers, -> pP_?
+    aggH : list = z([])  # [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers, -> pP_?
     valHt : list = z([[0],[0]])  # Ht of link vals,rdns, decays / fder:
     rdnHt : list = z([[1],[1]])
     decHt : list = z([[0],[0]])
-    link_ : list = z([])  # added per sub+, as in comp_slice
-    node_t : list = z([[],[]])  # init Gm_-> Gm_,Gd_, nested in down-forking tree: node_ fork/ sub+; or node_H?
-    connec_t : list = z([[],[]])  # connectivity params per node, maps to node_t
+    link_ : list = z([])  # defines graph, added per sub+, as in comp_slice
+    nodet_H : list = z([[]])  # init Gm_,-> Gm_,Gd_, nested in down-forking tree: node_ fork/ sub+; or node_H?
     L : int = 0 # len base node_; from internal links:
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers
@@ -142,7 +141,8 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     alt_Graph : object = None  # conditional, summed and concatenated params of alt_graph_
     # temporary:
     it : list = z([])  # graph indices in root node_s, implicitly nested
-    fback_t : list = z([[],[]])  # maps to node_t: feedback [[aggH,valt,rdnt]] per node fork
+    root : object = None  # for feedback
+    fback_t : list = z([[],[]])  # maps to node_t: feedback [[aggH,valt,rdnt,dect]] per node fork
     compared_ : list = z([])
     Rdn : int = 0  # for accumulation or separate recursion count?
     # id_H : list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
