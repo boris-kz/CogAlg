@@ -63,9 +63,8 @@ def comp_rng(ilink_, rng):  # form new Ps and links, switch to rng+n to skip clu
 
     return link_
 
-def comp_der(ilink_):  # keep same Ps and links, increment link derH, then P derH in sum2PP
+def comp_der(ilink_):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
 
-    # this is a node-mediated correlation clustering:
     n_uplinks = defaultdict(int)  # number of uplinks per P
     for derP in ilink_: n_uplinks[derP.P] += 1
 
@@ -95,15 +94,16 @@ def form_PP_t(root, root_link_, base_rdn):  # form PPs of derP.valt[fd] + connec
         inP_ = []  # clustered Ps and their val,rdn s for all Ps
         for P in root.P_:
             if P in inP_: continue  # already packed in some PP
-            cP_ = [P]; inP_ += [P]  # clustered Ps and their val,rdn s
+            cP_ = [P]  # clustered Ps and their val,rdn s
             perimeter = deque(P_Ps[P])  # recycle with breadth-first search, up and down:
             while perimeter:
                 _P = perimeter.popleft()
-                if _P in inP_: continue
+                if _P in cP_: continue
                 cP_ += [_P]
                 perimeter += P_Ps[_P]  # append linked __Ps to extended perimeter of P
             PP = sum2PP(root, cP_, derP_, base_rdn, fd)
             PP_t[fd] += [PP]  # no if Val > PP_aves[fd] * Rdn:
+            inP_ += cP_  # update clustered Ps
 
     for fd, PP_ in enumerate(PP_t):  # after form_PP_t -> P.roott
         for PP in PP_:

@@ -42,7 +42,6 @@ class CEdge(ClusterStructure):  # edge blob
     valHt : list = z([[0],[0]])  # Ht of link vals,rdns,decays per fder
     decHt : list = z([[1],[1]])
     rdnHt : list = z([[1],[1]])
-    decHt : list = z([[1],[1]])  # for feedback purpose
     rng = 1
     # initializing blob:
     blob : object = None
