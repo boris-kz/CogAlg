@@ -121,7 +121,7 @@ class CPP(CderP):
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
     fd: int = 0  # graph is defined by m|d value
-    ptuple : ptupleT = ptupleT(0,0,0,0,angleT(0,0),0)  # default from P
+    ptuple : ptupleT = ptupleT(0,0,0,0,angleT(0,0),0)  # default P
     derH : list = z([])  # not converted to [[tuplet,valt,rdnt,dect]]
     aggH : list = z([])  # [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers, -> pP_?
     valHt : list = z([[0],[0]])  # Ht of link vals,rdns, decays / fder:
@@ -139,7 +139,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     alt_graph_ : list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
     alt_Graph : object = None  # conditional, summed and concatenated params of alt_graph_
     # temporary:
-    it : list = z([])  # graph indices in root node_s, implicitly nested
+    it : list = z([None,None])  # graph indices in root node_s, implicitly nested
     root : object = None  # for feedback
     fback_t : list = z([[],[]])  # maps to node_t: feedback [[aggH,valt,rdnt,dect]] per node fork
     compared_ : list = z([])
