@@ -467,3 +467,67 @@ def comp_G(link_, _G, G, fd):
 
     return Mval,Dval, Mrdn,Drdn, Mdec,Ddec
 
+def segment_node_(root, Gc_, fd, root_fd):  # eval rim links with summed surround vals for density-based clustering
+
+    # graph += [node] if >ave (surround connectivity * relative value of link to any internal node)
+    igraph_ = []; ave = G_aves[fd]
+
+    for i, Gc in enumerate(Gc_):
+        G,rimt,valt,rdnt,dect,_,_ = Gc
+        subH = [[],[0,0],[1,1],[0,0]]
+        Link_ = []; A,S = [0,0],0
+        for link in rimt[fd]:
+            if link.valt[fd] > G_aves[fd] * link.rdnt[fd]:
+                sum_subHv(subH, [link.subH,link.valt,link.rdnt,link.dect], base_rdn=1)
+                Link_ += [link]; A[0] += link.A[0]; A[1] += link.A[1]; S += link.S
+        grapht = [[Gc],Link_,copy(valt),copy(rdnt),copy(dect),A,S,subH, copy(Link_)]
+        G.root[fd] = grapht; igraph_ += [grapht]
+    _tVal,_tRdn = 0,0
+    _graph_ = igraph_
+
+    if isinstance(root,Cgraph): root_node_ = root.nodec_H[-1]      # root is Cgraph
+    else:                       root_node_ = root.node_t[root_fd]  # root is Cedge
+    while True:
+        tVal,tRdn = 0,0  # loop totals
+        graph_ = []
+        for grapht in _graph_:  # extend graph Rim
+            nodec_,Rim, Valt,Rdnt,Dect, A,S, subH,_upRim = grapht
+            inVal,inRdn = 0,0  # in-graph: positive
+            upRim = []
+            for link in Rim:  # unique links
+                if link.G is nodec_[0][0]:
+                    Gc = Gc_[link.G.it[root_fd]]; _Gc = Gc_[link._G.it[root_fd]] if Gc[0] in root_node_ else None
+                else:
+                    Gc = Gc_[link._G.it[root_fd]]; _Gc = Gc_[link.G.it[root_fd]] if Gc[0] in root_node_ else None
+                if _Gc is None: continue  # not in root.node_
+                if _Gc in nodec_: continue
+                # node match * surround M|D match: of potential in-graph position?
+                comb_val = link.valt[fd] + get_match(Gc[2][fd],_Gc[2][fd])
+                comb_rdn = link.rdnt[fd] + (Gc[3][fd] + _Gc[3][fd]) / 2
+                if comb_val > ave*comb_rdn:
+                    # merge node.root:
+                    _nodec_,_Rim,_Valt,_Rdnt,_Dect,_A,_S,_subH,__upRim = _Gc[0].root[fd]
+                    if _Gc[0].root[fd] in grapht:
+                        grapht.remove(_Gc[0].root[fd])   # remove overlapping root
+                    for _nodec in _nodec_: _nodec[0].root[fd] = grapht  # assign new merged root
+                    sum_subHv(subH, _subH, base_rdn=1)
+                    A[0] += _A[0]; A[1] += _A[1]; S += _S
+                    upRim = list(set(upRim +__upRim) -set(Rim))  # not sure, also need to exclude Rim?
+                    for i in 0,1:
+                        Valt[i] += _Valt[i]; Rdnt[i] += _Rdnt[i]; Dect[i] += _Dect[i]
+                    inVal += _Valt[fd]; inRdn += _Rdnt[fd]
+                    nodec_ += [__Gt for __Gt in _nodec_ if __Gt not in nodec_]
+            tVal += inVal
+            tRdn += inRdn  # signed?
+            if len(Rim) * inVal > ave * inRdn:
+                graph_ += [[nodec_,Rim, Valt,Rdnt,Dect,A,S, subH,upRim]]  # eval Rim for extension
+
+        if len(graph_) * (tVal-_tVal) <= ave * (tRdn-_tRdn):  # even low-Val extension may be valuable if Rdn decreases?
+            if not graph_:  graph_ = _graph_
+            # graph_ may empty, so if they are empty, use the prior loop _graph_? Otherwise they will be empty most of the time
+            break
+        else:
+            _graph_ = graph_
+            _tVal,_tRdn = tVal,_tRdn
+    # -> Cgraphs if Val > ave * Rdn:
+    return [sum2graph(root, graph, fd) for graph in graph_ if graph[2][fd] > ave * graph[3][fd]]

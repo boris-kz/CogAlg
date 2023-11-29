@@ -83,7 +83,7 @@ def trace_edge(blob, mask__, verbose=False):
         while maxQue:  # trace max_
             # initialize pivot dert
             y,x,_P = maxQue.popleft()
-            i = blob.i__[blob.ibox.slice()][y,x]
+            i = blob.i__[blob.ibox.slice][y,x]
             dy, dx, g = blob.der__t.get_pixel(y,x)
             ma = ave_dangle  # max value because P direction is the same as dert gradient direction
             assert g > 0, "g must be positive"
@@ -170,7 +170,7 @@ def interpolate2dert(blob, y, x):
         (y0, x1, (y1 - y) * (x - x0)),
         (y1, x0, (y - y0) * (x1 - x)),
         (y1, x1, (y - y0) * (x - x0))]
-    ider__t = (blob.i__[blob.ibox.slice()],) + blob.der__t
+    ider__t = (blob.i__[blob.ibox.slice],) + blob.der__t
 
     return (sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t)
 

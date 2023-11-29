@@ -106,7 +106,7 @@ class CPP(CderP):
     valt : list = z([0,0])
     rdnt : list = z([1,1])
     mask__ : object = None
-    root : object = None  # edge / PP, PP / sub_PP: not shared between root forks
+    root : list = z([None, None])  # edge / PP, PP / sub_PP: not shared between root forks
     P_: list = z([])
     node_t : list = z(([],[]))  # default PP_t in select PP_ or G_ fder forks
     link_ : list = z([])
@@ -128,19 +128,19 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     rdnHt : list = z([[1],[1]])
     decHt : list = z([[0],[0]])
     link_ : list = z([])  # defines graph, added per sub+, as in comp_slice
-    nodet_H : list = z([[]])  # init Gm_,-> Gm_,Gd_, nested in down-forking tree: node_ fork/ sub+; or node_H?
+    nodec_H : list = z([[]])  # init Gm_,-> Gm_,Gd_, nested in down-forking tree: node_ fork/ sub+; or node_H?
     L : int = 0 # len base node_; from internal links:
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers
     rng : int = 1
-    box : list = z([0,0,0,0,0,0])  # y,x, y0,yn, x0,xn
+    box : boxT = boxT(inf,inf,-inf,-inf)  # y0,x0,yn,,xn
     # tentative:
     nval : int = 0  # of open links: base alt rep
     alt_graph_ : list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
     alt_Graph : object = None  # conditional, summed and concatenated params of alt_graph_
     # temporary:
     it : list = z([None,None])  # graph indices in root node_s, implicitly nested
-    root : object = None  # for feedback
+    root : list = z([None, None])  # for feedback
     fback_t : list = z([[],[]])  # maps to node_t: feedback [[aggH,valt,rdnt,dect]] per node fork
     compared_ : list = z([])
     Rdn : int = 0  # for accumulation or separate recursion count?

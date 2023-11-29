@@ -98,10 +98,10 @@ def comp_r(blob):
     sdbox = blob.ibox.box2sub_box(fork_ibox)    # shrinked der__t box
 
     dy__, dx__, g__ = blob.der__t   # unpack der__t
-    i__ = blob.i__[eibox.slice()]   # expanded i__ for comparison
+    i__ = blob.i__[eibox.slice]   # expanded i__ for comparison
     # compare opposed pairs of rim pixels, project onto x, y:
-    new_dy__ = dy__[sdbox.slice()] + convolve2d(i__, ky, mode='valid')
-    new_dx__ = dx__[sdbox.slice()] + convolve2d(i__, kx, mode='valid')
+    new_dy__ = dy__[sdbox.slice] + convolve2d(i__, ky, mode='valid')
+    new_dx__ = dx__[sdbox.slice] + convolve2d(i__, kx, mode='valid')
     new_g__ = np.hypot(new_dy__, new_dx__)  # gradient, recomputed at each comp_r
 
     return dertT(new_dy__, new_dx__, new_g__), majority_mask__, fork_ibox

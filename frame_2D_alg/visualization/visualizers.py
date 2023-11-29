@@ -99,15 +99,15 @@ class BlobVisualizer(Visualizer):
 
     def reset(self):
         blob_ = self.element_
-        self.img_slice = blob_[0].root_ibox.slice()
+        self.img_slice = blob_[0].root_ibox.slice
         # Prepare blob ID map and background
         self.background[:] = BACKGROUND_COLOR
         self.idmap[:] = -1
         local_idmap = self.idmap[self.img_slice]
         local_background = self.background[self.img_slice]
         for blob in blob_:
-            local_idmap[blob.box.slice()][blob.mask__] = blob.id  # fill idmap with blobs' ids
-            local_background[blob.box.slice()][blob.mask__] = blob.sign * 32  # fill image with blobs
+            local_idmap[blob.box.slice][blob.mask__] = blob.id  # fill idmap with blobs' ids
+            local_background[blob.box.slice][blob.mask__] = blob.sign * 32  # fill image with blobs
         super().reset()
 
     def update_gradient(self):
@@ -119,7 +119,7 @@ class BlobVisualizer(Visualizer):
         self.gradient_mask[:] = False
 
         # Use indexing to get the gradient of the blob
-        box_slice = blob.ibox.slice()
+        box_slice = blob.ibox.slice
         self.gradient[1][box_slice] = -blob.der__t.dy
         self.gradient[0][box_slice] = blob.der__t.dx
         self.gradient_mask[box_slice] = blob.mask__
@@ -143,10 +143,10 @@ class BlobVisualizer(Visualizer):
         if blob is None: return
 
         # paint over the blob ...
-        self.img[self.img_slice][blob.box.slice()][blob.mask__] = WHITE
+        self.img[self.img_slice][blob.box.slice][blob.mask__] = WHITE
         # ... and its adjacents
         for adj_blob, pose in zip(*blob.adj_blobs):
-            self.img[self.img_slice][adj_blob.box.slice()][adj_blob.mask__] = POSE2COLOR[pose]
+            self.img[self.img_slice][adj_blob.box.slice][adj_blob.mask__] = POSE2COLOR[pose]
 
     def update_info(self):
         super().update_info()
@@ -207,7 +207,7 @@ class BlobVisualizer(Visualizer):
                 )
             ]
             self.clear_plot()
-            return SliceVisualizer(img_slice=blob.ibox.slice(), element_=PP_, root_visualizer=self)
+            return SliceVisualizer(img_slice=blob.ibox.slice, element_=PP_, root_visualizer=self)
         else:
             # frame visualizer (r+blob)
             if not blob.rlayers or not blob.rlayers[0]: return
@@ -232,8 +232,8 @@ class SliceVisualizer(Visualizer):
         local_idmap = self.idmap[self.img_slice]
         local_background = self.background[self.img_slice]
         for PP in self.element_:
-            local_idmap[PP.box.slice()][PP.mask__] = PP.id  # fill idmap with PP's id
-            local_background[PP.box.slice()][PP.mask__] = DARK_GREEN
+            local_idmap[PP.box.slice][PP.mask__] = PP.id  # fill idmap with PP's id
+            local_background[PP.box.slice][PP.mask__] = DARK_GREEN
         super().reset()
 
     def update_blob_slices(self):
@@ -279,7 +279,7 @@ class SliceVisualizer(Visualizer):
         if PP is None: return
 
         # paint over the blob ...
-        self.img[self.img_slice][PP.box.slice()][PP.mask__] = WHITE
+        self.img[self.img_slice][PP.box.slice][PP.mask__] = WHITE
 
     def update_info(self):
         print("hit 'z' to toggle show slices")

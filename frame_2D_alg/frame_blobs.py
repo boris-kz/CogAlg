@@ -52,7 +52,13 @@ dertT = namedtuple('dertT', 'dy, dx, g')  # 'T' for tuple
 dertT.get_pixel = lambda der__t, y, x: dertT(der__t.dy[y, x], der__t.dx[y, x], der__t.g[y, x])
 
 boxT = namedtuple('boxT', 'n, w, s, e')  # 'T' for tuple
-boxT.slice = lambda b: (slice(b.n,b.s), slice(b.w,b.e))  # box to array slice conversion
+# properties
+boxT.cy = property(lambda b: (b.n+b.s)/2)
+boxT.cx = property(lambda b: (b.w+b.e)/2)
+boxT.slice = property(lambda b: (slice(b.n,b.s), slice(b.w,b.e)))  # box to array slice conversion
+# operators
+boxT.__add__ = lambda b1,b2: boxT(min(b1.n,b2.n),min(b1.w,b2.w),max(b1.s,b2.s),max(b1.e,b2.e))  # add 2 boxes
+# methods
 boxT.accumulate = lambda b,y,x: boxT(min(b.n,y),min(b.w,x),max(b.s,y+1),max(b.e,x+1))  # box coordinate accumulation
 boxT.expand = lambda b,r,Y,X: boxT(max(0,b.n-r),max(0,b.w-r),min(Y,b.s+r),min(X,b.e+r))  # box expansion by margin r
 boxT.shrink = lambda b,r: boxT(b.n+r,b.w+r,b.s-r,b.e-r)  # box shrink by margin r
@@ -157,7 +163,7 @@ def flood_fill(root_blob, fork_data, verbose=False):
     # unpack and derive required fork data
     fork, fork_ibox, der__t, sign__, mask__ = fork_data
     height, width = der__t.g.shape  # = der__t shape
-    fork_i__ = root_blob.i__[fork_ibox.slice()]
+    fork_i__ = root_blob.i__[fork_ibox.slice]
     assert height, width == fork_i__.shape  # same shape as der__t
 
     idmap = np.full((height, width), UNFILLED, 'int32')  # blob's id per dert, initialized UNFILLED
@@ -214,8 +220,8 @@ def flood_fill(root_blob, fork_data, verbose=False):
                 # terminate blob
                 blob.ibox = fork_ibox.sub_box2box(blob.box)
                 blob.der__t = dertT(
-                    *(par__[blob.box.slice()] for par__ in der__t))
-                blob.mask__ = (idmap[blob.box.slice()] == blob.id)
+                    *(par__[blob.box.slice] for par__ in der__t))
+                blob.mask__ = (idmap[blob.box.slice] == blob.id)
                 blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses
                 blob.G = np.hypot(blob.Dy, blob.Dx)
                 if verbose:
