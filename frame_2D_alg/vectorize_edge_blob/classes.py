@@ -120,15 +120,24 @@ class CPP(CderP):
 
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
-    fd: int = 0  # graph is defined by m|d value
     ptuple : ptupleT = ptupleT(0,0,0,0,angleT(0,0),0)  # default P
-    derH : list = z([])  # not converted to [[tuplet,valt,rdnt,dect]]
-    aggH : list = z([])  # [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers, -> pP_?
-    valHt : list = z([[0],[0]])  # Ht of link vals,rdns, decays / fder:
-    rdnHt : list = z([[1],[1]])
-    decHt : list = z([[0],[0]])
-    link_ : list = z([])  # defines graph, added per sub+, as in comp_slice
-    nodec_H : list = z([[]])  # init Gm_,-> Gm_,Gd_, nested in down-forking tree: node_ fork/ sub+; or node_H?
+    derH : list = z([])  # from PP, not converted to [[tuplet,valt,rdnt,dect]]
+    #  generic graph-internal:
+    aggH : list = z([])  # [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
+    link_ : list = z([]) # internal and fork-specific, defines graph
+    node_ : list = z([]) # init Gm_ -> Gm_,Gd_ -> node_H: down-forking / sub+|agg+
+    fd: int = 0  # or fork if flat layers?
+    # combined from ptuple, derH, aggH, after extending aggH in comp_G, sum2graph:
+    valt : list = z([0],[0])
+    rdnt : list = z([1],[1])
+    dect : list = z([0],[0])
+    # graph-external:
+    rimt : list = z([0,0])  # directly connected nodes
+    erimt : list = z([0,0]) # the most mediated evaluated nodes
+    # summed from rim links:
+    evalt : list = z([0],[0])
+    erdnt : list = z([1],[1])
+    edect : list = z([0],[0])
     L : int = 0 # len base node_; from internal links:
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers
@@ -140,7 +149,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     alt_Graph : object = None  # conditional, summed and concatenated params of alt_graph_
     # temporary:
     it : list = z([None,None])  # graph indices in root node_s, implicitly nested
-    root : list = z([None, None])  # for feedback
+    roott : list = z([None, None])  # for feedback
     fback_t : list = z([[],[]])  # maps to node_t: feedback [[aggH,valt,rdnt,dect]] per node fork
     compared_ : list = z([])
     Rdn : int = 0  # for accumulation or separate recursion count?
@@ -155,10 +164,11 @@ class CderG(ClusterStructure):  # params of single-fork node_ cluster per pplaye
     valt : list = z([0,0])  # m,d
     rdnt : list = z([1,1])
     dect : list = z([0,0])  # mdecay, ddecay
-    Vt : list = z([[0,0],[0,0]])  # combined net vals, accum in node_connect (we need 2 nested list here)
-    _G : object = None  # comparand
-    G: object = None  # comparand
+    Vt : list = z([[0,0]])  # link.dect[fd] * (_G.vatHt[fd][-1] + G.valHt[fd][-1]), accum in node_connect?
+    _G : list = z([])  # comparand + connec params
+    G : list = z([])
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers
     roott : list = z([None,None])
     # dir : bool  # direction of comparison if not G0,G1, only needed for comp link?
+

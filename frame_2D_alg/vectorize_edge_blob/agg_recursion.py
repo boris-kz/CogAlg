@@ -46,7 +46,7 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
             if PP.valt[fd] * (len(node_)-1) * (PP.rng+1) <= G_aves[fd] * PP.rdnt[fd]: continue
             derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
             G_ += [Cgraph( ptuple=PP.ptuple, derH=derH, valHt=[[valt[0]],[valt[1]]], rdnHt=[[rdnt[0]],[rdnt[1]]], L=PP.ptuple[-1],
-                           box=PP.box, link_=PP.link_, nodet_H=[PP.node_t] )]
+                           box=PP.box, link_=PP.link_, nodec_H=[PP.node_t] )]
             i += 1  # G index in node_
         if G_:
             node_[:] = G_  # replace  PPs with Gs
@@ -100,7 +100,8 @@ def form_Gc_(compG, fd, G_,link_,Gc_, Vt):  # Mval,Dval,Mrdn,Drdn,Mdec,Ddec
             if node.it[fd]:  # in agg+ Gc_
                 fini=0; _,rimt,_valt,_rdnt,_dect,_,uprimt = Gc_[node.it[fd]]
             else:  # add new Gc
-                fini=1; rimt,_valt,_rdnt,_dect,uprimt = [[],[]],[0,0],[0,0],[0,0],[[],[]]; node.it[fd] = len(Gc_)
+                fini=1; rimt,_valt,_rdnt,_dect,uprimt = [[],[]],[0,0],[0,0],[0,0],[[],[]]
+                node.it[fd] = len(Gc_)
             for i in 0,1:
                 if valt[i] > G_aves[i] * rdnt[i]:
                     rimt[i] += [link]; uprimt[i] += [link]; fadd = 1

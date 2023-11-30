@@ -531,3 +531,14 @@ def segment_node_(root, Gc_, fd, root_fd):  # eval rim links with summed surroun
             _tVal,_tRdn = tVal,_tRdn
     # -> Cgraphs if Val > ave * Rdn:
     return [sum2graph(root, graph, fd) for graph in graph_ if graph[2][fd] > ave * graph[3][fd]]
+
+
+class CGc(ClusterStructure):  # graph + external connectivity params
+
+    G : object = None  # node proper
+    valt : list = z([0,0])  # m,d
+    rdnt : list = z([1,1])
+    dect : list = z([0,0])  # mdecay, ddecay
+    rimt : list = z([0,0])  # directly connected nodes
+    uprimt : list = z([0,0])  # the most mediated connected nodes
+    roott : object = None  # root per last-layer fork
