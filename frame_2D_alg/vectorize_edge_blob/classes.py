@@ -122,22 +122,22 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
 
     ptuple : ptupleT = ptupleT(0,0,0,0,angleT(0,0),0)  # default P
     derH : list = z([])  # from PP, not converted to [[tuplet,valt,rdnt,dect]]
-    #  generic graph-internal:
+    # graph-internal, generic:
     aggH : list = z([])  # [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
-    link_ : list = z([]) # internal and fork-specific, defines graph
-    node_ : list = z([]) # init Gm_ -> Gm_,Gd_ -> node_H: down-forking / sub+|agg+
-    fd: int = 0  # or fork if flat layers?
-    # combined from ptuple, derH, aggH, after extending aggH in comp_G, sum2graph:
-    valt : list = z([0],[0])
+    valt : list = z([0],[0])  # sum from ptuple, derH, aggH
     rdnt : list = z([1],[1])
     dect : list = z([0],[0])
-    # graph-external:
-    rimt : list = z([0,0])  # directly connected nodes
-    erimt : list = z([0,0]) # the most mediated evaluated nodes
-    # summed from rim links:
+    fd: int = 0  # fork if flat layers?
+    link_ : list = z([])  # internal, single-fork
+    node_tH : list = z([])  # add|nest per sub)agg+, n_forks per layer = 2^ n_lower_layers
+    # graph-external, +level per root sub+:
+    rim_tH : list = z([0,0])  # directly connected nodes, per fork ) layer
+    Rim_tH : list = z([0,0])  # the most mediated evaluated nodes
+    esubH : list = z([])  # external subH: [[daggH,valt,rdnt,dect]], summed from rim links
     evalt : list = z([0],[0])
     erdnt : list = z([1],[1])
     edect : list = z([0],[0])
+    # ext params:
     L : int = 0 # len base node_; from internal links:
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers

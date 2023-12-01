@@ -542,3 +542,28 @@ class CGc(ClusterStructure):  # graph + external connectivity params
     rimt : list = z([0,0])  # directly connected nodes
     uprimt : list = z([0,0])  # the most mediated connected nodes
     roott : object = None  # root per last-layer fork
+
+def form_Gc_(compG, fd, G_,link_,Gc_, Vt):  # Mval,Dval,Mrdn,Drdn,Mdec,Ddec
+
+    link, mval, dval, mrdn, drdn, mdec, ddec = compG
+    valt, rdnt, dect = [mval,dval],[mrdn,drdn],[mdec,ddec]
+
+    for i,v in enumerate([mval,dval,mrdn,drdn,mdec,ddec]):
+        Vt[i] += v
+    link.Vt[fd][0] = link.Vt[fd][1] = valt[fd]
+    fadd = 0
+    for node in link._G, link.G:
+        if node in G_:
+            if node.it[fd]:  # in agg+ Gc_
+                fini=0; _,rimt,_valt,_rdnt,_dect,_,uprimt = Gc_[node.it[fd]]
+            else:  # add new Gc
+                fini=1; rimt,_valt,_rdnt,_dect,uprimt = [[],[]],[0,0],[0,0],[0,0],[[],[]]
+                node.it[fd] = len(Gc_)
+            for i in 0,1:
+                if valt[i] > G_aves[i] * rdnt[i]:
+                    rimt[i] += [link]; uprimt[i] += [link]; fadd = 1
+                    _valt[i] += valt[i]; _rdnt[i] += rdnt[i]; _dect[i] += dect[i]
+            if fadd:
+                link_ += [link]
+                if fini: Gc_ += [[node,rimt,_valt,_rdnt,_dect,[None,None],uprimt]]
+    return Vt
