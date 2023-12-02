@@ -124,19 +124,19 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     derH : list = z([])  # from PP, not converted to [[tuplet,valt,rdnt,dect]]
     # graph-internal, generic:
     aggH : list = z([])  # [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
-    valt : list = z([0],[0])  # sum from ptuple, derH, aggH
-    rdnt : list = z([1],[1])
-    dect : list = z([0],[0])
+    valt : list = z(0,0)  # sum from ptuple, derH, aggH
+    rdnt : list = z(1,1)
+    dect : list = z(0,0)
     fd: int = 0  # fork if flat layers?
     link_ : list = z([])  # internal, single-fork
     node_tH : list = z([])  # add|nest per sub)agg+, n_forks per layer = 2^ n_lower_layers
     # graph-external, +level per root sub+:
-    rim_tH : list = z([0,0])  # directly connected nodes, per fork ) layer
-    Rim_tH : list = z([0,0])  # the most mediated evaluated nodes
+    rim_tH : list = z([])  # directly connected nodes, per fork ) layer
+    Rim_tH : list = z([])  # the most mediated evaluated nodes
     esubH : list = z([])  # external subH: [[daggH,valt,rdnt,dect]], summed from rim links
-    evalt : list = z([0],[0])
-    erdnt : list = z([1],[1])
-    edect : list = z([0],[0])
+    evalt : list = z(0,0)
+    erdnt : list = z(1,1)
+    edect : list = z(0,0)
     # ext params:
     L : int = 0 # len base node_; from internal links:
     S : float = 0.0  # sparsity: average distance to link centers
@@ -164,9 +164,11 @@ class CderG(ClusterStructure):  # params of single-fork node_ cluster per pplaye
     valt : list = z([0,0])  # m,d
     rdnt : list = z([1,1])
     dect : list = z([0,0])  # mdecay, ddecay
-    Vt : list = z([[0,0]])  # link.dect[fd] * (_G.vatHt[fd][-1] + G.valHt[fd][-1]), accum in node_connect?
-    _G : list = z([])  # comparand + connec params
-    G : list = z([])
+    Vt : list = z([0,0])  # link.dect[fd] * (_G.valt[fd] + G.valt[fd]), accum in node_connect?
+    Rt : list = z([0,0])
+    Dt : list = z([0,0])
+    _G : object = None  # comparand + connec params
+    G : object = None
     S : float = 0.0  # sparsity: average distance to link centers
     A : list = z([0,0])  # angle: average dy,dx to link centers
     roott : list = z([None,None])

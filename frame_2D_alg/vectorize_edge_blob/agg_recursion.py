@@ -112,13 +112,14 @@ def comp_G(_G, G, link, G_,link_, Valt, Rdnt, Dect, fd):
     SubH = [der_ext, derH]  # two init layers of SubH, higher layers added by comp_aggH:
     # / G:
     fadd = 0
-    if link:  # else no aggH yet?
+    if link.subH:  # then not empty aggH
         subH, valt,rdnt,dect = comp_aggHv(_G.aggH, G.aggH, rn=1)
         mval,dval = valt; Mval+=dval; Dval+=mval
         Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
         Mdec = (Mdec+dect[0])/2; Ddec = (Ddec+dect[1])/2
         link.subH = SubH+subH  # append higher subLayers: list of der_ext | derH s
-        fadd = 1
+        if Mval > ave_Gm or Dval > ave_Gd:
+            fadd = 1
     elif Mval > ave_Gm or Dval > ave_Gd:  # or sum?
         link.subH = SubH
         fadd = 1
