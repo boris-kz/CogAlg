@@ -45,12 +45,11 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
         for PP in node_:  # convert select CPPs to Cgraphs:
             if PP.valt[fd] * (len(node_)-1) * (PP.rng+1) <= G_aves[fd] * PP.rdnt[fd]: continue
             derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
-            G_ += [Cgraph( ptuple=PP.ptuple, derH=derH, valHt=[[valt[0]],[valt[1]]], rdnHt=[[rdnt[0]],[rdnt[1]]], L=PP.ptuple[-1],
-                           box=PP.box, link_=PP.link_, node_H=[PP.node_t] )]
+            G_ += [Cgraph(ptuple=PP.ptuple, derH=derH, valt=copy(valt), rdnt=copy(rdnt), L=PP.ptuple[-1],
+                          box=PP.box, link_=PP.link_, node_tH=[PP.node_t])]
             i += 1  # G index in node_
         if G_:
             node_[:] = G_  # replace  PPs with Gs
-            edge.valHt[0][0] = edge.valt[0]; edge.rdnHt[0][0] = edge.rdnt[0]  # copy
             agg_recursion(None, edge, node_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
 
 
@@ -68,14 +67,13 @@ def agg_recursion(rroot, root, G_, fd):  # + fpar for agg_parP_? compositional a
             for node in G_[i+1:]:
                 dy = _node.box.cy - node.box.cy; dx = _node.box.cx - node.box.cx
                 distance = np.hypot(dy, dx)  # distance between node centers, init ave_rng = 3:
-                if distance < 3 * ((_node.valHt[fd][-1] + node.valHt[fd][-1]) / ave * (_node.rdnHt[fd][-1] + node.rdnHt[fd][-1])):
-                    comp_G(link._G, link.G, CderG(_G=_node,G=node), G_,link_,Valt,Rdnt,Dect, fd)
+                if distance < 3 * ((_node.valt[fd] + node.valt[fd]) / ave * (_node.rdnt[fd] + node.rdnt[fd])):
+                    comp_G(_node, node, CderG(_G=_node,G=node), G_,link_,Valt,Rdnt,Dect, fd)
 
-    root.valHt[fd] += [0]; root.rdnHt[fd] += [1]  # sum in feedback:
     GG_t = form_graph_t(root, G_, Valt,Rdnt, fd)  # eval sub+, feedback per graph
     # agg+ xcomp-> form_graph_t loop sub)agg+, vs. comp_slice sub+ loop-> eval-> xcomp
     for GG_ in GG_t:  # comp_G_ eval: ave_m * len*rng - fixed cost, root update in form_t:
-        if root.valHt[0][-1] * (len(GG_)-1)*root.rng > G_aves[fd] * root.rdnHt[0][-1]:
+        if root.valt[0] * (len(GG_)-1)*root.rng > G_aves[fd] * root.rdnt[0]:
             agg_recursion(rroot, root, GG_, fd=0)  # 1st xcomp in GG_
 
     if isinstance(root, Cgraph):
@@ -84,7 +82,7 @@ def agg_recursion(rroot, root, G_, fd):  # + fpar for agg_parP_? compositional a
         root.node_t[:] = GG_t   # Cedge
 
 
-def comp_G(_G, G, link, G_,link_, Valt, Rdnt, Dect, fd):
+def comp_G(_G, G, link, G_,link_, Valt, Rdnt, Dect, ifd):
 
     Mval,Dval, Mrdn,Drdn, Mdec,Ddec = 0,0, 1,1, 0,0
     # keep separate P ptuple and PP derH, empty derH in single-P G, + empty aggH in single-PP G
@@ -124,30 +122,20 @@ def comp_G(_G, G, link, G_,link_, Valt, Rdnt, Dect, fd):
         link.subH = SubH
         fadd = 1
     if fadd:
-        # include link,
-        # not fully revised:
-        valt,rdnt,dect = [Mval,Dval],[Mrdn,Drdn],[Mdec, Ddec]
-        link.valt,link.rdnt,link.dect = valt,rdnt,dect  # complete proto-link
-        for i in 0,1:
-            Valt[i] += valt[i]; Rdnt[i] += rdnt[i]; Dect[i] += dect[i]
-            # to compute dv in node connect:
-            link.Vt[i] = dect[i] * (link._G.valt[i] + link.G.valt[i])
-        # params are not refactored yet:
-        for node in link._G, link.G:
-            if node in G_:
-                if node.it[fd]:
-                    _rimt,_valt,_rdnt,_dect,_Rimt = node.rim_tH[-1], node.val_tH[-1], node.rdn_tH[-1], node.dec_tH[-1], node.Rim_tH[-1]
-                else:
-                    _rimt,_valt,_rdnt,_dect,_Rimt = [[],[]],[0,0],[0,0],[0,0],[[],[]]
-                    node.rim_tH+=[_rimt]; node.val_tH+=[_valt]; node.rdn_tH+=[_rdnt]; node.dec_tH+=[_dect]; node.RimtH+=[_Rimt]
-                    node.it[fd] = 1  # new layer
-                for i in 0,1:
-                    _rimt[i] += [link]; _Rimt[i] += [link]
-                    _valt[i] += valt[i]; _rdnt[i] += rdnt[i]; _dect[i] += dect[i]
-        link_ += [link]
+        for typ, (Part, lpart, Lpart, part) in enumerate(zip(
+            [Valt,Rdnt,Dect],[link.valt,link.rdnt,link.dect],[link.Vt,link.Rt,link.Dt],[[Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec]])):
+            for fd, par in enumerate(part):
+                Part[fd]+=par; lpart[fd]=par; Lpart[fd]=par
+                # link.Vt,link.Rt,link.Dt and node external params are initialized for node_connect:
+                for node in link._G, link.G:
+                    if link.valt[fd] < G_aves[fd] * link.rdnt[fd]: continue  # exclude neg links
+                    [node.evalt, node.erdnt, node.edect][typ][fd] = par
+                    if typ: continue  # once per link
+                    node.rim_tH[-1][fd] += [link]
+                    node.Rim_tH[-1][fd] += [link]
+                    sum_subHv(node.esubH,link.subH, link.rdnt[fd])  # this should be fork-specific?
+        link_ += [link]  # in some graph
 
-
-# below is not revised:
 
 def form_graph_t(root, G_, Valt,Rdnt, fd):  # form mgraphs and dgraphs of same-root nodes
 
@@ -157,20 +145,20 @@ def form_graph_t(root, G_, Valt,Rdnt, fd):  # form mgraphs and dgraphs of same-r
         if Valt[i] > ave * Rdnt[i]:  # else no clustering
             graph_t[i] = segment_node_(root,G_,i,fd) # if fd: node-mediated Correlation Clustering
             # add alt_graphs?
-    # sub+, external to agg+ vs. internal in comp_slice sub+:
     for fd, graph_ in enumerate(graph_t):  # breadth-first for in-layer-only roots
-        root.valHt[fd]+=[0]; root.rdnHt[fd]+=[1]  # remove if stays 0?
+        root.valt[fd]+=[0]; root.rdnt[fd]+=[1]  # remove if stays 0?
         for graph in graph_:
-            if sum(graph.valHt[fd]) * (len(nodec_)-1)*root.rng > G_aves[fd] * sum(graph.rdnHt[fd]):  # eval fd comp_G_ in sub+
-                agg_recursion(root, graph,  graph.node_H[-1], fd)  # replace node_ with node_t, recursive
+            # eval sub+, external to agg+ vs. internal in comp_slice sub+:
+            # or eval aggH[-1][1][fd]: last subH only?
+            if graph.valt[fd] * (len(graph.node.tH[-1])-1)*root.rng > G_aves[fd] * graph.rdnt[fd]:
+                for G in graph.node.tH[-1]:  # still node_
+                    G.rim_tH += [[],[]]; G.Rim_tH += [[],[]]  # add layer
+                agg_recursion(root, graph,  graph.node_tH[-1], fd)  # replace node_ with node_t, recursive
             else:  # feedback after graph sub+, not revised
                 root.fback_t[fd] += [[graph.aggH, graph.valHt, graph.rdnHt, graph.decHt]]
-                root.valHt[fd][-1] += graph.valHt[fd][-1]  # last layer, or all new layers via feedback?
-                root.rdnHt[fd][-1] += graph.rdnHt[fd][-1]  # merge forks into root fork
-                root.decHt[fd][-1] += graph.decHt[fd][-1]
-            i = sum(graph.valHt[0]) > sum(graph.valHt[1])
-            root.rdnHt[i][-1] += 1  # add fork rdn to last layer, representing all layers after feedback
-
+                root.valt[fd] += graph.valt[fd]  # merge forks into root fork
+                root.rdnt[fd] += graph.rdnt[fd]
+                root.dect[fd] += graph.dect[fd]
         if root.fback_t and root.fback_t[fd]:  # recursive feedback after all G_ sub+
             feedback(root, fd)  # update root.root.. aggH, valHt,rdnHt
 
@@ -186,31 +174,34 @@ def node_connect(iG_,fd):  # node connectivity = sum surround link vals, incr.me
     while True:  # eval same Gs,links, but with cross-accumulated node connectivity values, indirectly extending their range
         G_ = []  # DVt, Lent = [0,0],[0,0]  # _Gt_ updates per loop, for more selective eval?
         for G in _G_:
-            if G.it[fd] == None:continue
-            valt,rdnt,dect,_uprimt = G.evaltH[-1], G.erdntH[-1], G.edectH[-1], G.erimtH[-1]
-            uprimt = [[],[]]  # for >ave updates; dVt = [0,0]  # dRt?
+            if G.it[fd] == None: continue
+            uprimt = [[],[]]  # >ave updates of direct links
             for i in 0,1:
+                # tentative:
+                val,rdn,dec = G.evalt[i],G.erdnt[i],G.edect[i]
                 ave = G_aves[i]
-                for link in _uprimt[i]:  # eval former >ave updates, +ve only?
-                    _G, j = (link.G, 1) if link._G is G else (link._G, 0)
-                    if _G not in G_: continue  # outside root graph
-                    _valt,_rdnt,_dect =  _G.evaltH[-1], _G.erdntH[-1], _G.edectH[-1]
-                    if _valt[i] < ave: continue  # _valt is updated after _linkV?
-                    decay = _dect[i]
-                    dect[i] += _dect[i]
-                    rdnt[i] += _rdnt[i] * decay  # for segment_node_, else if fd==i: rimR += linkR and link.Rt?
-                    linkV = _valt[i] * decay  # _node connect val * relative link val
-                    dv = linkV - valt[i]; valt[i] += dv  # not quite sure here
-                    if dv > ave * rdnt[i]:
-                        uprimt[i]+= [link]  # dVt[i] += dv; L = len(uprimt[i]); Lent[i] += L for more selective eval?
+                for link in G.Rim_tH[-1][i]:
+                    # formerly >ave updated direct links
+                    lval,lrdn,ldec = link.valt[i],link.rdnt[i],link.dect[i]
+                    _G = link._G if link.G is G else link.G
+                    _val,_rdn,_dec = _G.evalt[i],_G.erdnt[i],_G.edect[i]
+                    # default link update for segment_node_:
+                    linkV = ldec * (val+_val); V = link.Vt[i]; link.Vt[i] = linkV
+                    linkR = ldec * (rdn+_rdn); R = link.Rt[i]; link.Rt[i] = linkR
+                    linkD = ldec * (dec+_dec); D = link.Rt[i]; link.Dt[i] = linkD
+                    dv = linkV-V; dr = linkR-R; dd = linkD-D
+                    if dv > ave * dr:
+                        uprimt[i] += [link]  # dVt[i] += dv; L = len(uprimt[i]); Lent[i] += L for more selective eval
+                    if linkV > ave * linkR:
+                        G.evalt[i] += dv; G.erdnt[i] += dr; G.edect[i] += dd
             if any(uprimt):  # pruned for next loop
-                G.erimtH[-1] = uprimt
+                G.Rim_tH[-1] = uprimt
 
         if G_: _G_ = G_  # exclude weakly incremented Gs from next connectivity expansion loop
         else:   break
 
+# the below is not reviewed:
 
-# not updated
 def segment_node_(root, Gc_, fd, root_fd):  # eval rim links with summed surround vals for density-based clustering
 
     # graph += [node] if >ave (surround connectivity * relative value of link to any internal node)
