@@ -28,6 +28,7 @@ angleT.__sub__ = lambda _a,a: _a+(-a)
 
 class CEdge(ClusterStructure):  # edge blob
 
+    fd : int = 0
     der__t_roots: object = None  # map to dir__t
     P_: list = z([])
     node_t : list = z(([],[]))  # default PP_t in select PP_ or G_ fder forks
