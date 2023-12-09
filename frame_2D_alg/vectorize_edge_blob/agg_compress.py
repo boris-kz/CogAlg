@@ -34,18 +34,7 @@ def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in 
 
     form_parP_(parHv = [root.aggH,sum(root.valHt[fd]),sum(root.rdnHt[fd]),sum(root.maxHt[fd])], fd=fd)
     # compress aggH-> pP_,V,R,M: select G V,R,M?
-    Valt,Rdnt = comp_G_(G_,fd)  # rng|der cross-comp all Gs, form link_[-1] per G, sum in Val,Rdn
-
-    root.valHt[fd]+=[0]; root.rdnHt[fd] += [1]; root.maxHt[fd] += [0]
-    # combined forks sum in form_graph_t feedback
-    GG_t = form_graph_t(root, Valt,Rdnt, G_)  # eval sub+ and feedback per graph
-    # agg+ xcomp-> form_graph_t loop sub)agg+, vs. comp_slice:
-    # sub+ loop-> eval-> xcomp
-    for GG_ in GG_t:  # comp_G_ eval: ave_m * len*rng - fixed cost, root update in form_t:
-        if root.valHt[0][-1] * (len(GG_)-1)*root.rng > G_aves[fd] * root.rdnHt[0][-1]:
-            agg_recursion(rroot, root, GG_, fd=0)  # 1st xcomp in GG_
-
-    G_[:] = GG_t
+    ...
 
 def form_parP_(parHv, fd):  # last v: value tuple valt,rdnt,maxt
 
@@ -53,22 +42,25 @@ def form_parP_(parHv, fd):  # last v: value tuple valt,rdnt,maxt
     part_P_ = []  # pPs: nested clusters of >ave param tuples, as below:
     Val,Rdn,Dec = 0,0,0; parH = copy(parH)
     part_ = []
-    while parH:  # aggHv( subHv( derHv( ptv_, top-down
+    while parH:  # aggHv( subHv( derHv( partv_, top-down
         '''
-        subt = Hv: >4-level list, | ptv: 3-level list, | extt: 2-level list:
-        aggHv: [aggH=subHv_, valt, rdnt, dect],
-        subHv: [subH=derHv_, valt, rdnt, dect],
-        derHv: [derH=ptuple_tv_, valt, rdnt, dect] or extt, mixed in subH
-        ptuple_tv: [[mtuple,dtuple], valt, rdnt, dect] 
+        player may be:
+        aggHv: [3, aggH=subHv_, valt, rdnt, dect],
+        subHv: [2, subH=derHv_, valt, rdnt, dect],
+        derHv: [1, extt, derH=partv_, valt, rdnt, dect]
+        partv: [0, [mtuple, dtuple],  valt, rdnt, dect] 
         '''
         # partial draft:
-        _lay = parH[0]; L = 1
+        _lay = parH[0]
+        L = 1
         while len(parH) > L:  # len next Lay = len low Lays: 1,1,2,4.: for subH | derH, not aggH?
             hL = 2*L
             lay = parH[L:hL]  # [par_sH, valt, rdnt, dect]
             # comp or unpack?:
-            if isinstance(subt[0][0],list):  # not extt
-                if isinstance(subt[0][0][0],list):  # subt==Hv
+            if lay[0]:  # not partv
+                if lay[0]>1:  # not derHv
+                    if lay[0]>2:  # aggHv
+
                     subH,val,rdn,dec = subt[0], subt[1][fd], subt[2][fd], subt[3][fd]
                     if val > ave:  # recursive eval,unpack
                         Val+=val; Rdn+=rdn; Dec+=dec  # sum with sub-vals:
