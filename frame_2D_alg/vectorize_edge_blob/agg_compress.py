@@ -44,11 +44,11 @@ def form_parP_(parHv, fd):  # last v: value tuple valt,rdnt,maxt
     part_ = []
     while parH:  # aggHv( subHv( derHv( partv_, top-down
         '''
-        player may be:
-        aggHv: [3, aggH=subHv_, valt, rdnt, dect],
-        subHv: [2, subH=derHv_, valt, rdnt, dect],
-        derHv: [1, extt, derH=partv_, valt, rdnt, dect]
-        partv: [0, [mtuple, dtuple],  valt, rdnt, dect] 
+        p_set with depth id:
+        aggHv: [aggH=subHv_, valt, rdnt, dect],
+        subHv: [subH=derHv_, valt, rdnt, dect, 2],
+        derHv: [derH=partv_, valt, rdnt, dect, extt, 1]
+        partv: [[mtuple, dtuple],  valt, rdnt, dect, 0] 
         '''
         # partial draft:
         _lay = parH[0]
@@ -57,10 +57,10 @@ def form_parP_(parHv, fd):  # last v: value tuple valt,rdnt,maxt
             hL = 2*L
             lay = parH[L:hL]  # [par_sH, valt, rdnt, dect]
             # comp or unpack?:
-            if lay[0]:  # not partv
-                if lay[0]>1:  # not derHv
-                    if lay[0]>2:  # aggHv
-
+            if lay[-1]:  # part | derH | subH
+                if lay[-1]>1:  # derH | subH
+                    if lay[-1]>2:   # subH
+                        pass
                     subH,val,rdn,dec = subt[0], subt[1][fd], subt[2][fd], subt[3][fd]
                     if val > ave:  # recursive eval,unpack
                         Val+=val; Rdn+=rdn; Dec+=dec  # sum with sub-vals:
