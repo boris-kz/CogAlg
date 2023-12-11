@@ -37,31 +37,28 @@ def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in 
     ...
 
 def form_parP_(parHv, fd):  # last v: value tuple valt,rdnt,maxt
-
+    '''
+    p_sets with nesting depth, +HH / max lower H len:
+    aggHv: [aggH=subHv_, valt, rdnt, dect],
+    subHv: [subH=derHv_, valt, rdnt, dect, 2],
+    derHv: [derH=parttv_, valt, rdnt, dect, extt, 1]
+    parttv: [[mtuple, dtuple],  valt, rdnt, dect, 0]
+    '''
     parH, rVal, rRdn, rDec = parHv  # compressed valt,rdnt,maxt per aggH replace initial summed G vals
     part_P_ = []  # pPs: nested clusters of >ave param tuples, as below:
     Val,Rdn,Dec = 0,0,0; parH = copy(parH)
     part_ = []
     while parH:  # aggHv( subHv( derHv( partv_, top-down
-        '''
-        p_set with depth id:
-        aggHv: [aggH=subHv_, valt, rdnt, dect],
-        subHv: [subH=derHv_, valt, rdnt, dect, 2],
-        derHv: [derH=partv_, valt, rdnt, dect, extt, 1]
-        partv: [[mtuple, dtuple],  valt, rdnt, dect, 0] 
-        '''
-        # partial draft:
-        _lay = parH[0]
+        _play = parH[0]
+        parP = [_play]  # node_ + combined pars
         L = 1
         while len(parH) > L:  # len next Lay = len low Lays: 1,1,2,4.: for subH | derH, not aggH?
             hL = 2*L
-            lay = parH[L:hL]  # [par_sH, valt, rdnt, dect]
-            # comp or unpack?:
-            if lay[-1]:  # part | derH | subH
-                if lay[-1]>1:  # derH | subH
-                    if lay[-1]>2:   # subH
-                        pass
-                    subH,val,rdn,dec = subt[0], subt[1][fd], subt[2][fd], subt[3][fd]
+            play = parH[L:hL]  # [par_sH, valt, rdnt, dect
+            # unpack for depth-first xcomp | co-existence test:
+            if play[-1]:  # derH | subH
+                if play[-1]>1:  # subH
+                    subH,val,rdn,dec = play[0], play[1][fd], play[2][fd], play[3][fd]
                     if val > ave:  # recursive eval,unpack
                         Val+=val; Rdn+=rdn; Dec+=dec  # sum with sub-vals:
                         sub_part_P_t = form_parP_([subH,val,rdn,dec], fd)
@@ -71,12 +68,13 @@ def form_parP_(parHv, fd):  # last v: value tuple valt,rdnt,maxt
                             part_P_ += [[part_,Val,Rdn,Dec]]; rVal+=Val; rRdn+=Rdn; rDec+=Dec  # root params
                             part_= [], Val,Rdn,Dec = 0,0,0  # pP params
                             # reset
-                else: form_tuplet_pP_(subt, [part_P_,rVal,rRdn,rDec], [part_,Val,Rdn,Dec], v=1)  # subt is derLay
-            else:     form_tuplet_pP_(subt, [part_P_,rVal,rRdn,rDec], [part_,Val,Rdn,Dec], v=0)  # subt is extt
+                form_tuplet_pP_(play[-2], [part_P_, rVal, rRdn, rDec], [part_, Val, Rdn, Dec], v=0)  # extt
+            else: form_tuplet_pP_(play, [part_P_,rVal,rRdn,rDec], [part_,Val,Rdn,Dec], v=1)  # derLay
     if part_:
         part_P_ += [[part_,Val,Rdn,Dec]]; rVal+=Val; rRdn+=Rdn; rDec+Dec
 
     return [part_P_,rVal,rRdn,rDec]  # root values
+
 
 def comp_parH(_lay,lay):  # nested comp between and then within same-fork dertuples?
     pass
