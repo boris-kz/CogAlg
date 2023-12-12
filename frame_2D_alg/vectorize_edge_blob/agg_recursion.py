@@ -84,7 +84,7 @@ def form_graph_t(root, G_, Et, fd, nrng):  # root_fd, form mgraphs and dgraphs o
     graph_t = [[],[]]
     for i in 0,1:
         if Et[0][i] > ave * Et[1][i]:  # eValt > ave * eRdnt, else no clustering
-            graph_t[i] = segment_node_(root, G_, fd)  # if fd: node-mediated Correlation Clustering
+            graph_t[i] = segment_node_(root, G_, fd, nrng)  # if fd: node-mediated Correlation Clustering
             # add alt_graphs?
     for fd, graph_ in enumerate(graph_t):  # breadth-first for in-layer-only roots
         for graph in graph_:
@@ -138,7 +138,7 @@ def node_connect(_G_):  # node connectivity = sum surround link vals, incr.media
         else:  break
 
 
-def segment_node_(root, root_G_, fd):  # eval rim links with summed surround vals for density-based clustering
+def segment_node_(root, root_G_, fd, nrng):  # eval rim links with summed surround vals for density-based clustering
 
     # graph += [node] if >ave (surround connectivity * relative value of link to any internal node)
     igraph_ = []; ave = G_aves[fd]
@@ -165,7 +165,8 @@ def segment_node_(root, root_G_, fd):  # eval rim links with summed surround val
                 comb_rdn = link.rdnt[fd] + (G.Rt[fd] + _G.Rt[fd]) / 2
                 if comb_val > ave * comb_rdn:  # _G and its root are effectively connected
                     # merge _root:
-                    _G_,_Link_,_Valt,_Rdnt,_Dect,_Rim = _G.roott[fd]
+                    _grapht = _G.roott[fd]
+                    _G_,_Link_,_Valt,_Rdnt,_Dect,_Rim = _grapht
                     Link_[:] = list(set(Link_+_Link_)) + [link]
                     for g in _G_:
                         g.roott[fd] = grapht
@@ -173,6 +174,7 @@ def segment_node_(root, root_G_, fd):  # eval rim links with summed surround val
                     for i in 0,1:
                         Valt[i]+=_Valt[i]; Rdnt[i]+=_Rdnt[i]; Dect[i]+=_Dect[i]
                         inVal += _Valt[fd]; inRdn += _Rdnt[fd]
+                    if _grapht in igraph_: igraph_.remove(_grapht)
                     new_Rim += [l for l in _Rim if l not in new_Rim+Rim+Link_]
             # for next loop:
             if len(new_Rim) * inVal > ave * inRdn:
@@ -181,37 +183,40 @@ def segment_node_(root, root_G_, fd):  # eval rim links with summed surround val
         if graph_: _graph_ = graph_
         else: break
     # -> Cgraphs if Val > ave * Rdn:
-    return [sum2graph(root, graph, fd) for graph in igraph_ if graph[2][fd] > ave * (graph[3][fd])]
+    return [sum2graph(root, graph, fd, nrng) for graph in igraph_ if graph[2][fd] > ave * (graph[3][fd])]
 
 
-def sum2graph(root, grapht, fd):  # sum node and link params into graph, aggH in agg+ or player in sub+
+def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
-    G_,Link_, Vt,Rt,Dt = grapht[:-1]  # last-layer vals only
-    # depth 0:derLay, 1:derHv, 2:subHv
+    G_,Link_,Vt,Rt,Dt,_ = grapht  # last-layer vals only; depth 0:derLay, 1:derHv, 2:subHv
 
-    graph = Cgraph(fd=fd, node_tH=[G_], L=len(G_),link_=Link_,Vt=Vt, Rt=Rt, Dt=Dt)
+    graph = Cgraph(fd=fd, node_tH=[G_], L=len(G_),link_=Link_,Vt=Vt, Rt=Rt, Dt=Dt, rng=nrng)
     graph.roott[fd] = root
     for link in Link_:
         link.roott[fd]=graph
-    eH, valt,rdnt,dect = [],[0,0],[0,0],[0,0]  # grapht int = node int+ext
-    A0,A1,S = 0,0,0
+    eH, valt,rdnt,dect, evalt,erdnt,edect = [],[0,0],[0,0],[0,0], [0,0],[0,0],[0,0]  # grapht int = node int+ext
+    A0, A1, S = 0,0,0
     for G in G_:
-        for link in G.rim_tH[-1][fd]:
-            G.esubH += link.subH  # flat list of [derH, valt, rdnt, dect, extt, 1]s
+        for i, link in enumerate(G.rim_tH[-1][fd]):
+            if i: sum_derHv(G.esubH[-1],link.subH[-1], base_rdn=link.Rt[fd])
+            else: G.esubH += link.subH[-1]  # [derH, valt,rdnt,dect,extt, 1]
             for j in 0,1:
-                G.evalt[j]+=link.valt[j]; G.erdnt[j]+=link.rdnt[j]; G.edect[j]+=link.dect[j]
-                G.valt[j]+=link.valt[j]; G.rdnt[j]+=link.rdnt[j]; G.dect[j]+=link.dect[j]
+                G.evalt[j]+=link.Vt[j]; G.erdnt[j]+=link.Rt[j]; G.edect[j]+=link.Dt[j]
         graph.box += G.box
         graph.ptuple += G.ptuple
         sum_derH([graph.derH,[0,0],[1,1]], [G.derH,[0,0],[1,1]], base_rdn=1)
-        sum_subHv([eH,valt,rdnt,dect,2], [G.esubH,G.valt,G.rdnt,G.dect,2], base_rdn=1)
+        sum_subHv([eH,evalt,erdnt,edect,2], [G.esubH,G.evalt,G.erdnt,G.edect,2], base_rdn=G.erdnt[fd])
         sum_aggHv(graph.aggH, G.aggH, base_rdn=1)
-        A0+=G.A[0]; A1+=G.A[1]; S+=G.S
+        A0 += G.A[0]; A1 += G.A[1]; S += G.S
         for j in 0,1:
-            valt[j] += G.valt[j]; graph.rdnt[j] += G.rdnt[j]; graph.dect[j] += G.dect[j]
+            evalt[j] += G.evalt[j]; erdnt[j] += G.erdnt[j]; edect[j] += G.edect[j]
+            valt[j] += G.valt[j]; rdnt[j] += G.rdnt[j]; dect[j] += G.dect[j]
 
-    graph.aggH += [[eH,valt,rdnt,dect,2]]  # new derLay
-    graph.valt,graph.rdnt,graph.dect = valt,rdnt,dect
+    graph.aggH += [[eH,evalt,erdnt,edect,2]]  # new derLay
+    for i in 0,1:
+        graph.valt[i] = valt[i]+evalt[i]  # graph internals = G Internals + Externals
+        graph.rdnt[i] = rdnt[i]+erdnt[i]
+        graph.dect[i] = dect[i]+edect[i]
     graph.A = [A0,A1]; graph.S = S
     return graph
 
@@ -240,7 +245,8 @@ def comp_G(_G, G, link, Et):
         Mrdn+= mrdn+ dval>mval; Drdn+= drdn+ dval<=mval
     else: dderH = []
     der_ext = comp_ext([_G.L,_G.S,_G.A],[G.L,G.S,G.A], [Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec])
-    derHv = [derLay0+dderH, [Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec], der_ext, 1]  # appendleft derLay0 from comp_ptuple
+    # we need additional bracket on derLay0 to pack them into dderH
+    derHv = [[derLay0]+dderH, [Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec], der_ext, 1]  # appendleft derLay0 from comp_ptuple
     SubH = [derHv]  # init layers of SubH, higher layers added by comp_aggH:
     # / G:
     fadd = 0
@@ -354,8 +360,9 @@ def sum_subHv(T, t, base_rdn, fneg=0):
 
 def sum_derHv(T,t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
-    DerH, Valt, Rdnt, Dect, Extt_,_ = T; derH,valt,rdnt,dect,extt_,_ = t
-    for Extt, extt in zip(Extt_, extt_):
+    DerH, Valt, Rdnt, Dect, Extt_,_ = T
+    derH, valt, rdnt, dect, extt_,_ = t
+    for Extt, extt in zip(Extt_,extt_):
         sum_ext(Extt, extt)
     for i in 0,1:
         Valt[i] += valt[i]; Rdnt[i] += rdnt[i]+base_rdn; Dect[i] = (Dect[i] + dect[i])/2
@@ -363,7 +370,7 @@ def sum_derHv(T,t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers,
         [[sum_dertuple(Dertuple,dertuple, fneg*i) for i,(Dertuple,dertuple) in enumerate(zip(Tuplet,tuplet))],
           [V+v for V,v in zip(Valt,valt)], [R+r+base_rdn for R,r in zip(Rdnt,rdnt)], [(D+d)/2 for D,d in zip(Dect,dect)], 0
         ]
-        for [Tuplet,Valt,Rdnt,Dect,_,_], [tuplet,valt,rdnt,dect,_,_]  # ptuple_tv
+        for [Tuplet,Valt,Rdnt,Dect,_], [tuplet,valt,rdnt,dect,_]  # ptuple_tv
         in zip_longest(DerH, derH, fillvalue=[([0,0,0,0,0,0],[0,0,0,0,0,0]), (0,0),(0,0),(0,0),0])
     ]
 
