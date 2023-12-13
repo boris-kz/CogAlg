@@ -132,7 +132,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     # graph-external, +level per root sub+:
     rim_tH : list = z([[[],[]]])  # directly connected nodes, per fork ) layer
     Rim_tH : list = z([[[],[]]])  # the most mediated evaluated nodes
-    esubH : list = z([])  # external subH: [[daggH,valt,rdnt,dect]], summed from rim links
+    esubH : list = z([])  # external subH: [[daggH,valt,rdnt,dect]], summed from all der)rng rim links
     evalt : list = z([0,0])
     erdnt : list = z([1,1])
     edect : list = z([0,0])
@@ -162,7 +162,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
 
 class CderG(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
-    subH : list = z([])  # [[derH_t, valt, rdnt]]: top aggLev derived in comp_G
+    subH : list = z([])  # [[derH_t, valt, rdnt]]: top aggLev derived in comp_G, per rng, all der+
     valt : list = z([0,0])  # m,d
     rdnt : list = z([1,1])
     dect : list = z([0,0])  # mdecay, ddecay

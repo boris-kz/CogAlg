@@ -78,15 +78,14 @@ def form_parP_fixed(parHv, fd):  # last v: value tuple valt,rdnt,maxt
     return [part_P_,rVal,rRdn,rDec]  # root values
 
 
-def form_parP_(parHv, fd):
+def form_parP_(parHv, fd):  # for indefinite H nesting, add HH if max lower H len:
 
     parH, rVal, rRdn, rDec = parHv  # uncompressed summed G vals
-    part_P_ = []  # pPs: >ave param clusters, nested
-    Val,Rdn,Dec = 0,0,0  # compressed pset
+    parP_ = []  # pPs: >ave param clusters, nested
+    Val, Rdn, Dec = 0,0,0  # compressed pset
     parH = copy(parH)
     part_ = []
-    _player = parH[0]
-    parP = [_player]  # node_ + combined pars
+    _player = parH[0]  # parP = [_player]  # node_ + combined pars
     L = 1
     while len(parH) > L:  # get next player of len = sum(len lower lays): 1,1,2,4., not for top H?
         hL = 2 * L
@@ -95,18 +94,18 @@ def form_parP_(parHv, fd):
             subH,val,rdn,dec = play[0], play[1][fd], play[2][fd], play[3][fd]
             if val > ave:
                 Val+=val; Rdn+=rdn; Dec+=dec  # sum with sub-vals:
-                sub_part_P_t = form_parP_([subH,val,rdn,dec], fd)
-                part_ += [[subH, sub_part_P_t]]
+                sub_pP_t = form_parP_([subH,val,rdn,dec], fd)
+                part_ += [[subH, sub_pP_t]]
             else:
                 if Val:  # empty sub_pP_ terminates root pP
-                    part_P_ += [[part_,Val,Rdn,Dec]]; rVal+=Val; rRdn+=Rdn; rDec+=Dec  # root params
-                    part_= [], Val,Rdn,Dec = 0,0,0  # pP params
-                    # reset
-        else: form_tuplet_pP_(play, [part_P_,rVal,rRdn,rDec], [part_,Val,Rdn,Dec], v=1)  # derLay
+                    parP_ += [[part_,Val,Rdn,Dec]]; rVal+=Val; rRdn+=Rdn; rDec+=Dec  # root params
+                    part_ = [], Val, Rdn, Dec = 0,0,0  # pP params
+                    # reset parP
+        else: form_tuplet_pP_(play, [parP_,rVal,rRdn,rDec], [part_,Val,Rdn,Dec], v=1)  # derLay
     if part_:
-        part_P_ += [[part_,Val,Rdn,Dec]]; rVal+=Val; rRdn+=Rdn; rDec+Dec
+        parP_ += [[part_,Val,Rdn,Dec]]; rVal+=Val; rRdn+=Rdn; rDec+Dec
 
-    return [part_P_,rVal,rRdn,rDec]  # root values
+    return [parP_,rVal,rRdn,rDec]  # root values
 
 
 def comp_parH(_lay,lay):  # nested comp between and then within same-fork dertuples?
