@@ -3,7 +3,7 @@ import numpy as np
 from math import floor
 from collections import deque
 from itertools import product
-from .classes import CEdge, CP, ptupleT, angleT
+from .classes import Cgraph, CP, ptupleT, angleT
 from .filters import ave_g, ave_dangle, ave_daangle
 
 '''
@@ -68,7 +68,7 @@ def max_selection(blob):
 
 def trace_edge(blob, mask__, verbose=False):
 
-    edge = CEdge(blob=blob)
+    edge = Cgraph(blob=blob,node_tH=[[], []],roott=None)
     blob.dlayers = [[edge]]
     max_ = {*zip(*mask__.nonzero())}  # convert mask__ into a set of (y,x)
 

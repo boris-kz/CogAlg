@@ -3,10 +3,10 @@ from copy import deepcopy, copy
 from itertools import zip_longest
 from collections import deque, defaultdict
 from .classes import Cgraph, CderG, CPP
-from .filters import ave_L, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd, ave_dI, ave_G, ave_M, ave_Ma
+from .filters import ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd, ave_dI
 from .slice_edge import slice_edge, comp_angle
-from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, comp_derH, sum_derH, sum_dertuple, get_match
-from .agg_recursion import comp_G, comp_aggHv, comp_derHv, vectorize_root, form_graph_t, sum_Hts, sum_derHv, sum_ext
+from .comp_slice import comp_P_, comp_ptuple, comp_derH, sum_derH, sum_dertuple, get_match
+from .agg_recursion import comp_G, comp_aggHv, comp_derHv, vectorize_root, form_graph_t, sum_derHv, sum_ext
 
 '''
 Implement sparse param tree in aggH: new graphs represent only high m|d params + their root params.
@@ -28,15 +28,19 @@ Then combine graph with alt_graphs?
 '''
 
 def root(blob, verbose):  # vectorization pipeline is 3 composition levels of cross-comp,clustering
-    vectorize_root(blob, verbose)
+    edge = vectorize_root(blob, verbose)
+    # temporary
+    for fd, G_ in enumerate(edge.node_tH[-1]):
+        agg_recursion(None, edge, G_, fd)
+
 
 def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_
 
-    form_parP_(parHv = [root.aggH,sum(root.valHt[fd]),sum(root.rdnHt[fd]),sum(root.maxHt[fd])], fd=fd)
-    # compress aggH-> pP_,V,R,M: select G V,R,M?
+    form_pP_fixed(parHv = [root.aggH,sum(root.valt[fd]),sum(root.rdnt[fd]),sum(root.dect[fd])], fd=fd)
+    # compress aggH-> pP_,V,R,Y: select G V,R,Y?
     ...
 
-def form_parP_fixed(parHv, fd):  # last v: value tuple valt,rdnt,maxt
+def form_pP_fixed(parHv, fd):  # last v: value tuple valt,rdnt,maxt
     '''
     p_sets with nesting depth, +HH / max lower H len:
     aggHv: [aggH=subHv_, valt, rdnt, dect],
@@ -44,41 +48,43 @@ def form_parP_fixed(parHv, fd):  # last v: value tuple valt,rdnt,maxt
     derHv: [derH=parttv_, valt, rdnt, dect, extt, 1]
     parttv: [[mtuple, dtuple],  valt, rdnt, dect, 0]
     '''
-    parH, rVal, rRdn, rDec = parHv  # uncompressed summed G vals
-    part_P_ = []  # pPs: >ave param clusters, nested
+    parH, rV,rR,rY = parHv  # uncompressed summed G vals
+    pP_ = []  # pPs: >ave param clusters, nested
     # compressed param set:
-    Val,Rdn,Dec = 0,0,0
+    V,R,Y = 0,0,0
     parH = copy(parH)
     part_ = []
     while parH:  # aggHv( subHv( derHv( partv_, top-down
         _play = parH[0]
         parP = [_play]  # node_ + combined pars
         L = 1
-        while len(parH) > L:  # get next p_layer: len = sum(len lower lays): 1,1,2,4.: for subH | derH, not aggH?
+        while len(parH) > L:  # get next player: len = sum(len lower lays): 1,1,2,4.: for subH | derH, not aggH?
             hL = 2 * L
-            _play = parH[L:hL]  # [par_sH, valt, rdnt, dect]
-            # fixed-nesting version:
+            play = parH[L:hL]  # [par_sH, valt, rdnt, dect]
+            # fixed H nesting version:
             if play[-1]:  # derH | subH
                 if play[-1]>1:  # subH
                     subH,val,rdn,dec = play[0], play[1][fd], play[2][fd], play[3][fd]
                     if val > ave:  # recursive eval,unpack
-                        Val+=val; Rdn+=rdn; Dec+=dec  # sum with sub-vals:
-                        sub_part_P_t = form_parP_([subH,val,rdn,dec], fd)
-                        part_ += [[subH, sub_part_P_t]]
+                        V+=val; R+=rdn; Y+=dec  # sum with sub-vals:
+                        sub_pP_t = form_pP_fixed([subH,val,rdn,dec], fd)
+                        part_ += [[subH, sub_pP_t]]
                     else:
-                        if Val:  # empty sub_pP_ terminates root pP
-                            part_P_ += [[part_,Val,Rdn,Dec]]; rVal+=Val; rRdn+=Rdn; rDec+=Dec  # root params
+                        if V:  # empty sub_pP_ terminates root pP
+                            pP_ += [[part_,V,R,Y]]; rV+=V; rR+=R; rY+=Y  # root params
                             part_= [], Val,Rdn,Dec = 0,0,0  # pP params
                             # reset
-                form_tuplet_pP_(play[-2], [part_P_, rVal, rRdn, rDec], [part_, Val, Rdn, Dec], v=0)  # extt
-            else: form_tuplet_pP_(play, [part_P_,rVal,rRdn,rDec], [part_,Val,Rdn,Dec], v=1)  # derLay
+            else:
+                form_tuplet_pP_(play, [pP_,rV,rR,rY], [part_,V,R,Y], v=1)  # derLay
+            # add form_pP(parH, last_play, play)
+            last_play = play
+            L = hL
     if part_:
-        part_P_ += [[part_,Val,Rdn,Dec]]; rVal+=Val; rRdn+=Rdn; rDec+Dec
+        pP_ += [[part_,V,R,Y]]; rV+=V; rR+=R; rY+=Y
+    return [pP_,rV,rR,rY]  # root values
 
-    return [part_P_,rVal,rRdn,rDec]  # root values
 
-
-def form_parP_(parHv, fd):  # for indefinite H nesting, add HH if max lower H len:
+def form_pP_(parHv, fd):  # for indefinite H nesting, add HH if max lower H len:
 
     parH, rVal, rRdn, rDec = parHv  # uncompressed summed G vals
     parP_ = []  # pPs: >ave param clusters, nested
@@ -94,7 +100,7 @@ def form_parP_(parHv, fd):  # for indefinite H nesting, add HH if max lower H le
             subH,val,rdn,dec = play[0], play[1][fd], play[2][fd], play[3][fd]
             if val > ave:
                 Val+=val; Rdn+=rdn; Dec+=dec  # sum with sub-vals:
-                sub_pP_t = form_parP_([subH,val,rdn,dec], fd)
+                sub_pP_t = form_pP_([subH,val,rdn,dec], fd)
                 part_ += [[subH, sub_pP_t]]
             else:
                 if Val:  # empty sub_pP_ terminates root pP
@@ -102,6 +108,7 @@ def form_parP_(parHv, fd):  # for indefinite H nesting, add HH if max lower H le
                     part_ = [], Val, Rdn, Dec = 0,0,0  # pP params
                     # reset parP
         else: form_tuplet_pP_(play, [parP_,rVal,rRdn,rDec], [part_,Val,Rdn,Dec], v=1)  # derLay
+        L = hL
     if part_:
         parP_ += [[part_,Val,Rdn,Dec]]; rVal+=Val; rRdn+=Rdn; rDec+Dec
 

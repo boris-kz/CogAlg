@@ -44,3 +44,23 @@ def form_graph_t(root, G_, Et, fd):  # root_fd, form mgraphs and dgraphs of same
                 root.dect[root.fd] += graph.dect[fd]
         if root.fback_t and root.fback_t[fd]:  # recursive feedback after all G_ sub+
             feedback(root, fd)  # update root.root.. aggH, valHt,rdnHt
+
+
+def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition levels of cross-comp,clustering:
+
+    edge, adj_Pt_ = slice_edge(blob, verbose)  # lateral kernel cross-comp -> P clustering
+    comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
+    # PP cross-comp -> discontinuous graph clustering:
+    for fd, node_ in enumerate(edge.node_t):
+        if edge.valt[fd] * (len(node_)-1) * (edge.rng+1) <= G_aves[fd] * edge.rdnt[fd]: continue
+        G_,i = [],0
+        for PP in node_:  # convert select CPPs to Cgraphs:
+            if PP.valt[fd] * (len(node_)-1) * (PP.rng+1) <= G_aves[fd] * PP.rdnt[fd]: continue
+            derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
+            G_ += [Cgraph(ptuple=PP.ptuple, derH=derH, valt=copy(valt), rdnt=copy(rdnt), L=PP.ptuple[-1],
+                          box=PP.box, link_=PP.link_, node_tH=[PP.node_t])]
+            i += 1  # G index in node_
+        if G_:
+            node_[:] = G_  # replace  PPs with Gs
+            agg_recursion(None, edge, node_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
+

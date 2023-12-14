@@ -37,21 +37,22 @@ Weak value vars are combined into higher var, so derivation fork can be selected
 def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition levels of cross-comp,clustering:
 
     edge, adj_Pt_ = slice_edge(blob, verbose)  # lateral kernel cross-comp -> P clustering
-    comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
-    # PP cross-comp -> discontinuous graph clustering:
-    for fd, node_ in enumerate(edge.node_t):
-        if edge.valt[fd] * (len(node_)-1) * (edge.rng+1) <= G_aves[fd] * edge.rdnt[fd]: continue
-        G_,i = [],0
-        for PP in node_:  # convert select CPPs to Cgraphs:
-            if PP.valt[fd] * (len(node_)-1) * (PP.rng+1) <= G_aves[fd] * PP.rdnt[fd]: continue
-            derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
-            G_ += [Cgraph(ptuple=PP.ptuple, derH=derH, valt=copy(valt), rdnt=copy(rdnt), L=PP.ptuple[-1],
-                          box=PP.box, link_=PP.link_, node_tH=[PP.node_t])]
-            i += 1  # G index in node_
-        if G_:
-            node_[:] = G_  # replace  PPs with Gs
-            agg_recursion(None, edge, node_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
 
+    comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
+    edge.node_ = [edge.node_]  # convert node_t to node_tH
+
+    for fd, node_ in enumerate(edge.node_[-1]):  # node_ is generic for any nesting depth
+        if edge.valt[fd] * (len(node_)-1) * (edge.rng+1) <= G_aves[fd] * edge.rdnt[fd]:
+            continue  # else PP cross-comp -> discontinuous graph clustering:
+        G_ = []
+        for PP in node_:  # eval PP for agg+
+            if PP.valt[fd] * (len(node_)-1) * (PP.rng+1) <= G_aves[fd] * PP.rdnt[fd]: continue
+            PP.roott = [None, None]  # reset for agg+:
+            G_ += [PP]
+        if G_:
+            agg_recursion(None, edge, G_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
+
+    return edge
 
 def agg_recursion(rroot, root, G_, fd, nrng=1):  # + fpar for agg_parP_? compositional agg|sub recursion in root graph, cluster G_
 
@@ -74,8 +75,7 @@ def agg_recursion(rroot, root, G_, fd, nrng=1):  # + fpar for agg_parP_? composi
         if root.valt[0] * (len(GG_)-1)*root.rng > G_aves[fd] * root.rdnt[0]:  # xcomp G_ val
             agg_recursion(rroot, root, GG_, fd=0)  # 1st xcomp in GG_, root update in form_t, max rng=2
 
-    if isinstance(root, Cgraph): root.node_tH += [GG_t]  # Cgraph
-    else: root.node_t[fd][:] = GG_t   # Cedge
+    root.node_ += [GG_t]  # node_tH, Cgraph
 
 
 def form_graph_t(root, G_, Et, fd, nrng):  # root_fd, form mgraphs and dgraphs of same-root nodes
@@ -94,7 +94,7 @@ def form_graph_t(root, G_, Et, fd, nrng):  # root_fd, form mgraphs and dgraphs o
                 for G in graph.node_tH[-1]:  # node_
                     G.Vt, G.Rt, G.Dt = [0,0],[0,0],[0,0]
                     G.rim_tH += [[[],[]]]; G.Rim_tH += [[[],[]]]
-                agg_recursion(root, graph, graph.node_tH[-1], fd, nrng+1*(1-fd))  # rng++ if not fd
+                agg_recursion(root, graph, graph.node_[-1], fd, nrng+1*(1-fd))  # node_ is node_tH, rng++ if not fd
             else:
                 root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
                 feedback(root, root.fd)  # recursive update root.root.. aggH, valHt,rdnHt
@@ -199,8 +199,8 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
     for G in G_:
         if not G.esubH: G.esubH=[[]]
         for i, link in enumerate(G.rim_tH[-1][fd]):
-            if i: sum_derHv(G.esubH[-1][-1], link.subH[-1], base_rdn=link.Rt[fd])  # [derH,valt,rdnt,dect,extt,1]
-            else: G.esubH += [deepcopy(link.subH[-1])]  # link.subH: cross-der+ ) same rng, G.esubH: cross-rng?
+            if i: sum_derHv(G.esubH[-1], link.subH[-1], base_rdn=link.Rt[fd])  # [derH,valt,rdnt,dect,extt,1]
+            else: G.esubH += [deepcopy(link.subH[-1])]  # link.subH: cross-der+) same rng, G.esubH: cross-rng?
             for j in 0,1:
                 G.evalt[j]+=link.Vt[j]; G.erdnt[j]+=link.Rt[j]; G.edect[j]+=link.Dt[j]
         graph.box += G.box
@@ -448,7 +448,7 @@ def feedback(root, fd):  # called from form_graph_, append new der layers to roo
     for j in 0,1:
         root.valt[j] += Valt[j]; root.rdnt[j] += Rdnt[j]; root.dect[j] += Dect[j]  # both forks sum in same root
 
-    if isinstance(root, Cgraph):  # CEdge has no roots
+    if root.roott:  # Edge has no roots
         rroot = root.roott[fd]
         if rroot:
             fd = root.fd
