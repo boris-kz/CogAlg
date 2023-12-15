@@ -82,7 +82,7 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
 class CderP(ClusterStructure):  # tuple of derivatives in P link: binary tree with latuple root and vertuple forks
 
     derH : list = z([])  # [[[mtuple,dtuple],[mval,dval],[mrdn,drdn]]], single ptuplet in rng+
-    valt : list = z([0,0])
+    valt : list = z([0,0])  # replace with Vt?
     rdnt : list = z([1,1])  # mrdn + uprdn if branch overlap?
     roott : list = z([None, None])  # PPdm,PPdd that contain this derP
     _P : object = None  # higher comparand
@@ -117,6 +117,7 @@ class CPP(CderP):
     Rdn : int = 0  # for accumulation or separate recursion count?
     # fdiv = NoneType  # if div_comp?
 
+
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
     ptuple : ptupleT = ptupleT(0,0,0,0,angleT(0,0),0)  # default P
@@ -149,11 +150,11 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     alt_Graph : object = None  # conditional, summed and concatenated params of alt_graph_
 
     # temporary:
-    Vt : list = z([0,0])  # last layer only for node_connect and clustering
+    Vt : list = z([0,0])  # or just [], init with rim[0]? last layer only for node_connect and clustering
     Rt : list = z([0,0])
     Dt : list = z([0,0])
     it : list = z([None,None])  # graph indices in root node_s, implicitly nested
-    roott : list = z([None, None])  # for feedback
+    root : list = z([None, None])  # for feedback
     fback_t : list = z([[],[]])  # maps to node_t: feedback [[aggH,valt,rdnt,dect]] per node fork
     compared_ : list = z([])
     Rdn : int = 0  # for accumulation or separate recursion count?
@@ -171,13 +172,13 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
 class CderG(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
     subH : list = z([])  # [[derH_t, valt, rdnt]]: top aggLev derived in comp_G, per rng, all der+
-    valt : list = z([0,0])  # m,d
-    rdnt : list = z([1,1])
-    dect : list = z([0,0])  # mdecay, ddecay
+    # valt : list = z([0,0])  # m,d
+    # rdnt : list = z([1,1])
+    # dect : list = z([0,0])  # mdecay, ddecay
     # combined vals: link.dect[fd] * (_G.valt[fd] + G.valt[fd]), accum in node_connect:
-    Vt : list = z([0,0])  # last layer combined pars
-    Rt : list = z([0,0])
-    Dt : list = z([0,0])
+    Vt : list = z([])  # last layer, set in comp_G
+    Rt : list = z([])
+    Dt : list = z([])
     _G : object = None  # comparand + connec params
     G : object = None
     S : float = 0.0  # sparsity: average distance to link centers

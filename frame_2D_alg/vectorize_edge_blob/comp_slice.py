@@ -174,9 +174,9 @@ def feedback(root, fd):  # in form_PP_, append new der layers to root PP, single
         rroot = root.root  # single PP.root, can't be P
         fd = root.fd  # node_t fd
         fback_ = rroot.fback_t[fd]
-        node_t = rroot.node_[fd] if isinstance(rroot.node_[0],list) else node_t = rroot.node_  # node_ is updated to node_t in sub+
+        node_ = rroot.node_[fd] if isinstance(rroot.node_[0],list) else node_ = rroot.node_  # node_ is updated to node_t in sub+
         fback_ += [Fback]
-        if fback_ and (len(fback_)==len(node_t)):  # all nodes terminated and fed back
+        if fback_ and (len(fback_)==len(node_)):  # all nodes terminated and fed back
             feedback(rroot, fd)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
 
 
