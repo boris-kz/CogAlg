@@ -64,3 +64,19 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
             node_[:] = G_  # replace  PPs with Gs
             agg_recursion(None, edge, node_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
 
+def form_graph_t(root, G_, Et, fd, nrng):  # root_fd, form mgraphs and dgraphs of same-root nodes
+
+    _G_ = []  # init with not empty rims:
+    for G in G_:
+        if len(G.Rim_tH) != len(root.esubH):  # G was compared in this root
+            link_ = list(set(G.Rim_tH[-1][0] + G.Rim_tH[-1][1]))  # links are shared across both forks
+            if link_:  # not empty (it may empty if val's eval in comp_G is false)
+                link = link_[0]
+                G.Vt=copy(link.Vt); G.Rt=copy(link.Rt); G.Dt=copy(link.Dt)  # reset
+                for link in link_[1:]:
+                    for i in 0,1:
+                        G.Vt[i]+=link.Vt[i]; G.Rt[i]+=link.Vt[i]; G.Dt[i]+=link.Dt[i]
+            else:
+                G.Vt = [0,0]; G.Rt = [0,0]; G.Dt = [0,0]  # we still need to reset them? Else they will be using prior layer vals
+            _G_ += [G]
+    ...

@@ -120,21 +120,21 @@ class CPP(CderP):
 
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
+    fd: int = 0  # fork if flat layers?
     ptuple : ptupleT = ptupleT(0,0,0,0,angleT(0,0),0)  # default P
-    derH : list = z([])  # from PP, not converted to [[tuplet,valt,rdnt,dect]]
+    derH : list = z([])  # from PP, not derHv
     # graph-internal, generic:
     aggH : list = z([])  # [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
-    valt : list = z([0,0])  # sum from ptuple, derH, aggH
+    valt : list = z([0,0])  # sum ptuple, derH, aggH
     rdnt : list = z([1,1])
     dect : list = z([0,0])
-    fd: int = 0  # fork if flat layers?
     link_ : list = z([])  # internal, single-fork
     node_ : list = z([])  # add|nest per sub)agg+, n_forks per layer = 2^ n_lower_layers
     # graph-external, +level per root sub+:
     rim_tH : list = z([[[],[]]])  # directly connected nodes, per fork ) layer
     Rim_tH : list = z([[[],[]]])  # the most mediated evaluated nodes
-    esubH : list = z([])  # external subH: [[daggH,valt,rdnt,dect]], summed from all der)rng rim links
-    evalt : list = z([0,0])
+    esubH : list = z([])  # external subH: [[daggH,valt,rdnt,dect]] of all der)rng rim links
+    evalt : list = z([0,0])  # sum from esubH
     erdnt : list = z([1,1])
     edect : list = z([0,0])
     # ext params:
@@ -150,9 +150,9 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     alt_Graph : object = None  # conditional, summed and concatenated params of alt_graph_
 
     # temporary:
-    Vt : list = z([0,0])  # or just [], init with rim[0]? last layer only for node_connect and clustering
-    Rt : list = z([0,0])
-    Dt : list = z([0,0])
+    Vt : list = z([])  # last layer vals for node_connect and clustering
+    Rt : list = z([])
+    Dt : list = z([])
     it : list = z([None,None])  # graph indices in root node_s, implicitly nested
     root : list = z([None, None])  # for feedback
     fback_t : list = z([[],[]])  # maps to node_t: feedback [[aggH,valt,rdnt,dect]] per node fork
@@ -172,11 +172,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
 class CderG(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
     subH : list = z([])  # [[derH_t, valt, rdnt]]: top aggLev derived in comp_G, per rng, all der+
-    # valt : list = z([0,0])  # m,d
-    # rdnt : list = z([1,1])
-    # dect : list = z([0,0])  # mdecay, ddecay
-    # combined vals: link.dect[fd] * (_G.valt[fd] + G.valt[fd]), accum in node_connect:
-    Vt : list = z([])  # last layer, set in comp_G
+    Vt : list = z([])  # last layer vals from comp_G
     Rt : list = z([])
     Dt : list = z([])
     _G : object = None  # comparand + connec params

@@ -28,10 +28,12 @@ But we have recursively structured param sets packed in each level of these tree
 Diagram: 
 https://github.com/boris-kz/CogAlg/blob/76327f74240305545ce213a6c26d30e89e226b47/frame_2D_alg/Illustrations/generic%20graph.drawio.png
 -
-Clustering criterion is G.M|D, summed across >ave vars if selective comp (<ave vars are not compared, so they don't add costs).
+Clustering criterion is G M|D, summed across >ave vars if selective comp (<ave vars are not compared, so they don't add costs).
 Fork selection should be per var or co-derived der layer or agg level. 
 There are concepts that include same matching vars: size, density, color, stability, etc, but in different combinations.
 Weak value vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
+
+Clustering by variance: lend|borrow, contribution or counteraction to similarity | stability, such as metabolism? 
 '''
 
 def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition levels of cross-comp,clustering:
@@ -39,7 +41,7 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
     edge, adj_Pt_ = slice_edge(blob, verbose)  # lateral kernel cross-comp -> P clustering
 
     comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
-    edge.node_ = [edge.node_]  # convert node_t to node_tH
+    edge.node_ = [edge.node_]  # convert to node_tH
 
     for fd, node_ in enumerate(edge.node_[-1]):  # node_ is generic for any nesting depth
         if edge.valt[fd] * (len(node_)-1) * (edge.rng+1) <= G_aves[fd] * edge.rdnt[fd]:
@@ -61,7 +63,7 @@ def agg_recursion(rroot, root, G_, fd, nrng=1):  # + fpar for agg_parP_? composi
 
     if fd:  # der+
         for link in root.link_:  # reform links
-            if link.valt[1] < G_aves[1]*link.rdnt[1]: continue  # maybe weak after rdn incr?
+            if link.Vt[1] < G_aves[1]*link.Rt[1]: continue  # maybe weak after rdn incr?
             comp_G(link._G,link.G,link, Et, lenRoot)
     else:   # rng+
         for i, _G in enumerate(G_):  # form new link_ from original node_
@@ -82,17 +84,7 @@ def agg_recursion(rroot, root, G_, fd, nrng=1):  # + fpar for agg_parP_? composi
 
 def form_graph_t(root, G_, Et, fd, nrng):  # root_fd, form mgraphs and dgraphs of same-root nodes
 
-    _G_ = []  # init with not empty rims:
-    for G in G_:
-        if len(G.Rim_tH) != len(root.esubH):  # G was compared in this root
-            link = G.Rim_tH[-1][0]
-            G.Vt=copy(link.Vt); G.Rt=copy(link.Rt); G.Dt=copy(link.Dt)  # reset
-            for link in G.Rim_tH[-1][1:]:
-                for i in 0,1:
-                    G.Vt[i]+=link.Vt[i]; G.Rt[i]+=link.Vt[i]; G.Dt[i]+=link.Dt[i]
-            _G_ += [G]
-
-    node_connect(_G_)  # init _G_ for Graph Convolution of Correlations
+    node_connect(G_)  # Graph Convolution of Correlations over init _G_
     graph_t = [[],[]]
     for i in 0,1:
         if Et[0][i] > ave * Et[1][i]:  # eValt > ave * eRdnt, else no clustering
@@ -100,10 +92,9 @@ def form_graph_t(root, G_, Et, fd, nrng):  # root_fd, form mgraphs and dgraphs o
             # add alt_graphs?
     for fd, graph_ in enumerate(graph_t):  # breadth-first for in-layer-only roots
         for graph in graph_:
-            # sub+ if last layer val deviation,
-            # external to agg+ vs internal in comp_slice sub+
             if graph.Vt[fd] * (len(graph.node_[-1])-1)*root.rng > G_aves[fd] * graph.Rt[fd]:
-                agg_recursion(root, graph, graph.node_[-1], fd, nrng+1*(1-fd))  # node_ is node_tH, rng++ if not fd
+                # sub+, external to agg+, vs internal in comp_slice sub+:
+                agg_recursion(root, graph, graph.node_[-1], fd, nrng+1*(1-fd))  # node_tH, rng++ if not fd
             else:
                 root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
                 feedback(root, root.fd)  # recursive update root.root.. aggH, valHt,rdnHt
@@ -129,13 +120,13 @@ def node_connect(_G_):  # node connectivity = sum surround link vals, incr.media
                 for link in G.Rim_tH[-1][i]:
                     lval,lrdn,ldec = link.Vt[i],link.Rt[i],link.Dt[i]
                     _G = link._G if link.G is G else link.G
-                    _val,_rdn,_dec = _G.Vt,_G.Rt,_G.Dt
+                    _val,_rdn,_dec = _G.Vt[i],_G.Rt[i],_G.Dt[i]
                     # Vt.. for segment_node_:
                     V = ldec * (val+_val); dv = V-link.Vt[i]; link.Vt[i] = V
                     R = ldec * (rdn+_rdn); dr = R-link.Rt[i]; link.Rt[i] = R
                     D = ldec * (dec+_dec); dd = D-link.Dt[i]; link.Dt[i] = D
                     if dv > ave * dr:
-                        G.Vt[i]+=V; G.Rt[i]+=R; G.Dt[i]+=D  # last layer
+                        G.Vt[i]+=V; G.Rt[i]+=R; G.Dt[i]+=D  # add link last layer vals
                         uprimt[i] += [link]  # dVt[i] += dv; L = len(uprimt[i]); Lent[i] += L for more selective eval
                     if V > ave * R:
                         G.evalt[i] += dv; G.erdnt[i] += dr; G.edect[i] += dd
@@ -169,9 +160,9 @@ def segment_node_(root, root_G_, fd, nrng):  # eval rim links with summed surrou
                     G = link._G; _G = link.G
                 if _G in G_: continue
                 # connect by rel match of nodes * match of node Vs: surround M|Ds,
-                # Vt = node's depth inside graphs: position?
-                cval = link.valt[fd] + get_match(G.Vt[fd],_G.Vt[fd])  # same coef for int and ext match?
-                crdn = link.rdnt[fd] + (G.Rt[fd] + _G.Rt[fd]) / 2
+                # Vt = how deep is the node inside graphs: position?
+                cval = link.Vt[fd] + get_match(G.Vt[fd],_G.Vt[fd])  # same coef for int and ext match?
+                crdn = link.Rt[fd] + (G.Rt[fd] + _G.Rt[fd]) / 2
                 if cval > ave * crdn:  # _G and its root are effectively connected
                     # merge _root:
                     _grapht = _G.root[fd]  # roott
@@ -208,7 +199,7 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
     for G in G_:
         if not G.esubH: G.esubH=[[]]
         for i, link in enumerate(G.rim_tH[-1][fd]):
-            if i: sum_derHv(G.esubH[-1], link.subH[-1], base_rdn=link.Rt[fd])  # [derH,valt,rdnt,dect,extt,1]
+            if i: sum_derHv(G.esubH[-1], link.subH[-1], base_rdn=link.Rt[fd])  # [derH, valt,rdnt,dect,extt,1]
             else: G.esubH += [deepcopy(link.subH[-1])]  # link.subH: cross-der+) same rng, G.esubH: cross-rng?
             for j in 0,1:
                 G.evalt[j]+=link.Vt[j]; G.erdnt[j]+=link.Rt[j]; G.edect[j]+=link.Dt[j]
@@ -235,6 +226,7 @@ def comp_G(_G, G, link, Et, lenRoot):
 
     Mval,Dval, Mrdn,Drdn, Mdec,Ddec = 0,0, 1,1, 0,0
     # keep separate P ptuple and PP derH, empty derH in single-P G, + empty aggH in single-PP G
+
     # / P:
     mtuple, dtuple, Mtuple, Dtuple = comp_ptuple(_G.ptuple, G.ptuple, rn=1, fagg=1)
     mval, dval = sum(mtuple), sum(abs(d) for d in dtuple)  # mval is signed, m=-min in comp x sign
@@ -247,6 +239,7 @@ def comp_G(_G, G, link, Et, lenRoot):
             else:  dect[fd] += (par+ave)/ max if max else 1
     derLay0 = [[mtuple,dtuple],[mval,dval],[mrdn,drdn],[dect[0]/6,dect[1]/6], 0]  # ave of 6 params
     Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn; Mdec+=dect[0]/6; Ddec+=dect[1]/6
+
     # / PP:
     _derH,derH = _G.derH,G.derH
     if _derH and derH:  # empty in single-node Gs
@@ -268,6 +261,7 @@ def comp_G(_G, G, link, Et, lenRoot):
     der_ext = comp_ext([_G.L,_G.S,_G.A],[G.L,G.S,G.A], [Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec])
     derHv = [[derLay0]+dderH, [Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec], der_ext, 1]  # appendleft derLay0 from comp_ptuple
     SubH = [derHv]  # init layers of SubH, higher layers added by comp_aggH:
+
     # / G:
     fadd = 0
     if link.subH:  # old link: not empty aggH
@@ -276,26 +270,27 @@ def comp_G(_G, G, link, Et, lenRoot):
         Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
         Mdec = (Mdec+dect[0])/2; Ddec = (Ddec+dect[1])/2
         link.subH = SubH+subH  # append higher subLayers: list of der_ext | derH s
-
         if Mval > ave_Gm or Dval > ave_Gd:
             fadd = 1
     elif Mval > ave_Gm or Dval > ave_Gd:  # new link
         link.subH = SubH
         fadd = 1
     Valt,Rdnt,Dect = [Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec]
-    if fadd:
-        # add link
+
+    if fadd:  # add link
         for fd, (Val,Rdn,Dec) in enumerate(zip(Valt,Rdnt,Dect)):
             if Val > G_aves[fd] * Rdn:  # exclude neg links
-                for typ,par in enumerate((Val, Rdn, Dec)):
-                    Et[typ][fd] += par   # root G_ Vt,Rt,Dt -> eval form_graph_t
-                    for G in link._G, link.G:  # G Vt,Rt,Dt -> init node_connect
-                        [G.Vt,G.Rt,G.Dt][typ][fd] += par
-                        if G.rim_tH==lenRoot:  # initialize new rim with link:
-                            rim = [[],[link]] if fd else [[link],[]]
-                            G.rim_tH += [rim]; G.Rim_tH += [rim]
-                        else:
-                            G.rim_tH[-1][fd] += [link]; G.Rim_tH[-1][fd] += [link]
+                Et[0][fd]+=Val; Et[1][fd]+=Rdn; Et[2][fd]+=Dec  # to eval grapht in form_graph_t
+                for G in link._G, link.G:
+                    if len(G.rim_tH)==lenRoot:
+                        # init rim layer with link:
+                        G.Vt[fd], G.Rt[fd], G.Dt[fd] = Val,Rdn,Dec
+                        rimt = [[],[link]] if fd else [[link],[]]
+                        G.rim_tH += [rimt]; G.Rim_tH += [copy(rimt[0]),copy(rimt[1])]
+                    else:
+                        # accum rim layer with link:
+                        G.Vt[fd] += Val; G.Rt[fd] += Rdn; G.Dt[fd] += Dec
+                        G.rim_tH[-1][fd] += [link]; G.Rim_tH[-1][fd] += [link]
 
     link.Vt = Valt; link.Rt = Rdnt; link.Dt = Dect  # reset per comp_G
 
@@ -467,10 +462,7 @@ def feedback(root, fd):  # called from form_graph_, append new der layers to roo
         if rroot:
             fd = root.fd
             fback_ = rroot.fback_t[fd] + [[AggH,Valt,Rdnt,Dect]]
-            if isinstance(rroot, Cgraph):
-                L = len(rroot.node_[-1][fd]) if isinstance(rroot.node_[-1][0],list) else len(rroot.node_[-1])  # flat
-            else: L = len(rroot.node_t[fd])  # Cedge
-
+            L = len(rroot.node_[-1][fd]) if isinstance(rroot.node_[-1][0],list) else len(rroot.node_[-1])  # flat
             if fback_ and (len(fback_) == L):  # flat, all rroot nodes terminated and fed back
                 # getting cyclic rroot here not sure why it can happen, need to check further
                 feedback(rroot, fd)  # sum2graph adds aggH per rng, feedback adds deeper sub+ layers
