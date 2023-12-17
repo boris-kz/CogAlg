@@ -194,10 +194,9 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
     graph.root[fd] = root
     for link in Link_:
         link.roott[fd]=graph
-    eH, valt,rdnt,dect, evalt,erdnt,edect = [],[0,0],[0,0],[0,0], [0,0],[0,0],[0,0]  # grapht int = node int+ext
+    eH, valt,rdnt,dect, evalt,erdnt,edect = [], [0,0],[0,0],[0,0], [0,0],[0,0],[0,0]  # grapht int = node int+ext
     A0, A1, S = 0,0,0
     for G in G_:
-        if not G.esubH: G.esubH=[[]]
         for i, link in enumerate(G.rim_tH[-1][fd]):
             if i: sum_derHv(G.esubH[-1], link.subH[-1], base_rdn=link.Rt[fd])  # [derH, valt,rdnt,dect,extt,1]
             else: G.esubH += [deepcopy(link.subH[-1])]  # link.subH: cross-der+) same rng, G.esubH: cross-rng?
@@ -286,7 +285,7 @@ def comp_G(_G, G, link, Et, lenRoot):
                         # init rim layer with link:
                         G.Vt[fd], G.Rt[fd], G.Dt[fd] = Val,Rdn,Dec
                         rimt = [[],[link]] if fd else [[link],[]]
-                        G.rim_tH += [rimt]; G.Rim_tH += [copy(rimt[0]),copy(rimt[1])]
+                        G.rim_tH += [[rimt]]; G.Rim_tH += [[copy(rimt[0]),copy(rimt[1])]]
                     else:
                         # accum rim layer with link:
                         G.Vt[fd] += Val; G.Rt[fd] += Rdn; G.Dt[fd] += Dec

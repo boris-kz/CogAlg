@@ -112,13 +112,13 @@ def form_PP_t(root, root_link_, base_rdn):  # form PPs of derP.valt[fd] + connec
                 sub_recursion(root, PP, fd)  # eval rng+/PPm or der+/PPd
         if root.fback_t and root.fback_t[fd]:
             feedback(root, fd)  # after sub+ in all nodes, no single node feedback up multiple layers
-
+    # before agg+, it will be just P_? It will be clearer in this way
     root.node_ = PP_t  # nested in sub+, add_alt_PPs_?
 
 
 def sum2PP(root, P_, derP_, base_rdn, fd):  # sum links in Ps and Ps in PP
 
-    PP = Cgraph(fd=fd, root=root, P_=P_, rng=root.rng +(1-fd), node_=P_)  # initial PP.box = (inf,inf,-inf,-inf)
+    PP = Cgraph(fd=fd, root=root, P_=P_, rng=root.rng +(1-fd))  # initial PP.box = (inf,inf,-inf,-inf)
     # accum derP:
     for derP in derP_:
         if derP.P not in P_ or derP._P not in P_: continue
@@ -174,7 +174,7 @@ def feedback(root, fd):  # in form_PP_, append new der layers to root PP, single
         rroot = root.root  # single PP.root, can't be P
         fd = root.fd  # node_t fd
         fback_ = rroot.fback_t[fd]
-        node_ = rroot.node_[fd] if isinstance(rroot.node_[0],list) else node_ = rroot.node_  # node_ is updated to node_t in sub+
+        node_ = rroot.node_[fd] if isinstance(rroot.node_[0],list) else  rroot.node_  # node_ is updated to node_t in sub+
         fback_ += [Fback]
         if fback_ and (len(fback_)==len(node_)):  # all nodes terminated and fed back
             feedback(rroot, fd)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
