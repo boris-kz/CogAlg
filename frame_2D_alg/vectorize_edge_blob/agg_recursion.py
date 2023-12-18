@@ -84,7 +84,8 @@ def agg_recursion(rroot, root, G_, fd, nrng=1):  # + fpar for agg_parP_? composi
 
 def form_graph_t(root, G_, Et, fd, nrng):  # root_fd, form mgraphs and dgraphs of same-root nodes
 
-    node_connect(G_)  # Graph Convolution of Correlations over init _G_
+    _G_ = [G for G in G_ if len(G.rim_tH)>len(root.rim_tH)]
+    node_connect(_G_)  # Graph Convolution of Correlations over init _G_
     graph_t = [[],[]]
     for i in 0,1:
         if Et[0][i] > ave * Et[1][i]:  # eValt > ave * eRdnt, else no clustering
@@ -281,11 +282,13 @@ def comp_G(_G, G, link, Et, lenRoot):
             if Val > G_aves[fd] * Rdn:  # exclude neg links
                 Et[0][fd]+=Val; Et[1][fd]+=Rdn; Et[2][fd]+=Dec  # to eval grapht in form_graph_t
                 for G in link._G, link.G:
-                    if len(G.rim_tH)==lenRoot:
-                        # init rim layer with link:
-                        G.Vt[fd], G.Rt[fd], G.Dt[fd] = Val,Rdn,Dec
-                        rimt = [[],[link]] if fd else [[link],[]]
-                        G.rim_tH += [[rimt]]; G.Rim_tH += [[copy(rimt[0]),copy(rimt[1])]]
+                    if len(G.rim_tH)==lenRoot:  # init rim layer with link:
+                        if fd:
+                            G.Vt=[0,Val]; G.Rt=[0,Rdn]; G.Dt=[0,Dec]
+                            G.rim_tH += [[[],[link]]]; G.Rim_tH += [[[],[link]]]
+                        else:
+                            G.Vt=[Val,0]; G.Rt=[Rdn,0]; G.Dt=[Dec,0]
+                            G.rim_tH += [[[link],[]]]; G.Rim_tH += [[[link],[]]]
                     else:
                         # accum rim layer with link:
                         G.Vt[fd] += Val; G.Rt[fd] += Rdn; G.Dt[fd] += Dec

@@ -31,15 +31,22 @@ def root(blob, verbose):  # vectorization pipeline is 3 composition levels of cr
     edge = vectorize_root(blob, verbose)
     # temporary
     for fd, G_ in enumerate(edge.node_[-1]):
-        agg_recursion(None, edge, G_, fd)
+        if edge.aggH:
+            agg_recursion(None, edge, G_, fd)
 
 
 def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_
 
-    form_pP_fixed(parHv = [root.aggH,root.valt[fd],root.rdnt[fd],root.dect[fd]], fd=fd)  # sum is not needed here
+    pP, pV,pR, pY = root.aggH[0], root.aggH[0][1][fd], root.aggH[0][2][fd], root.aggH[0][3][fd]
+    pP_ = [[pP, pV, pR, pY]]
+    parHv = [root.aggH[1:],root.valt[fd]-pV,root.rdnt[fd]-pR,root.dect[fd]-pY]
+
+    if parHv[0]:
+        form_pP_(pP_=pP_, parHv=parHv, fd=fd)  # sum is not needed here
     # compress aggH -> pP_,V,R,Y: select G' V,R,Y?
     ...
 
+# not updated:
 def form_pP_(pP_, parHv, fd):  # fixed H nesting: aggH( subH( derH( parttv_ ))), pPs: >ave param clusters, nested
     '''
     p_sets with nesting depth, Hv is H, valt,rdnt,dect:
@@ -56,8 +63,8 @@ def form_pP_(pP_, parHv, fd):  # fixed H nesting: aggH( subH( derH( parttv_ ))),
     while len(parH) > L:  # get next player: len = sum(len lower lays): 1,1,2,4.: for subH | derH, not aggH?
         hL = 2 * L
         play_ = parH[L:hL]  # each player is [sub_pH, valt, rdnt, dect]
-        pP_ += [form_pP_(pP_, [play_,V,R,Y], fd)] if L > 2 else play_  # replace uncompressed layers
-
+        # add conditionally compressed layers:
+        pP_ += [form_pP_(pP_, [play_,V,R,Y], fd)] if L > 2 else [play_]
         for play in pP_:  # 3-H unpack:
             if play[-1]:  # derH | subH
                 if play[-1]>1:   # subH
@@ -69,19 +76,15 @@ def form_pP_(pP_, parHv, fd):  # fixed H nesting: aggH( subH( derH( parttv_ ))),
                     else:
                         if V:  # empty sub_pP_ terminates root pP
                             pP_ += [[part_,V,R,Y]]; rV+=V; rR+=R; rY+=Y  # root params
-                            part_= [],Val,Rdn,Dec = 0,0,0  # pP params
+                            part_,Val,Rdn,Dec = [],0,0,0  # pP params
                             # reset
                 else:
                     derH, val,rdn,dec,extt = play[0], play[1][fd], play[2][fd], play[3][fd], play[4]
                     form_tuplet_pP_(extt, [pP_,rV,rR,rY], [part_,V,R,Y], v=0)
                     sub_pP_t = form_pP_([], [derH,val,rdn,dec], fd)  # derH
-                    # spH = []; form_pP_(spH, _play, play)  # not sure here
-                    # part_ += [[spH, sub_pP_t]]
+                    part_ += [[derH, sub_pP_t]]
             else:
                 form_tuplet_pP_(play, [pP_,rV,rR,rY], [part_,V,R,Y], v=1)  # derLay
-                # pH = []; form_pP_(pH, _play, play)
-                # part_ += [[pH, []]]  # empty sub_Pp in tuplet
-        _play_ = play_
         L = hL
     if part_:
         pP_ += [[part_,V,R,Y]]; rV+=V; rR+=R; rY+=Y
