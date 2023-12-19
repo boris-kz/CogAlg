@@ -37,14 +37,25 @@ def root(blob, verbose):  # vectorization pipeline is 3 composition levels of cr
 
 def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_
 
-    pP, pV,pR, pY = root.aggH[0], root.aggH[0][1][fd], root.aggH[0][2][fd], root.aggH[0][3][fd]
-    pP_ = [[pP, pV, pR, pY]]
-    parHv = [root.aggH[1:],root.valt[fd]-pV,root.rdnt[fd]-pR,root.dect[fd]-pY]
-
-    if parHv[0]:
-        form_pP_(pP_=pP_, parHv=parHv, fd=fd)  # sum is not needed here
+    parHv = [root.aggH,root.valt[fd],root.rdnt[fd],root.dect[fd]]
+    form_pP_(pP_=[], parHv=parHv, fd=fd)  # sum is not needed here
     # compress aggH -> pP_,V,R,Y: select G' V,R,Y?
-    ...
+
+# to create 1st compressed layer
+def init_parHv(parH, V, R, Y, fd):
+
+    # 1st layer
+    pP, pV,pR, pY = parH[0], parH[0][1][fd], parH[0][2][fd], parH[0][3][fd]
+    pP_, part_ = [], []
+
+    # compress 1st layer - always single element
+    _,_,_, rV, rR, rY = compress_play_(pP_, [pP], part_, (0, 0, 0), (pV, pR, pY), fd)
+    pP_ = [[part_,rV,rR,rY]]
+
+    # rest of the layers
+    parHv = [parH[1:], V-pV, R-pR, Y-pY]
+
+    return pP_, parHv
 
 # not updated:
 def form_pP_(pP_, parHv, fd):  # fixed H nesting: aggH( subH( derH( parttv_ ))), pPs: >ave param clusters, nested
@@ -55,41 +66,69 @@ def form_pP_(pP_, parHv, fd):  # fixed H nesting: aggH( subH( derH( parttv_ ))),
     derHv: [derH=parttv_, valt, rdnt, dect, extt, 1]
     parttv: [[mtuple, dtuple],  valt, rdnt, dect, 0]
     '''
-    parH, rV,rR,rY = parHv  # uncompressed H vals
-    V,R,Y = 0,0,0  # compressed param sets:
+
+    # 1st layer initialization where pP_ is empty
+    if not pP_:
+        pP_, (parH, rV, rR, rY) = init_parHv(parHv[0], parHv[1], parHv[2], parHv[3], fd)
+    else:
+        parH, rV,rR,rY = parHv  # uncompressed H vals
+        V,R,Y = 0,0,0  # compressed param sets:
+
     parH = copy(parH); part_ = []
     _play_ = pP_[-1]  # node_ + combined pars
     L = 1
     while len(parH) > L:  # get next player: len = sum(len lower lays): 1,1,2,4.: for subH | derH, not aggH?
         hL = 2 * L
         play_ = parH[L:hL]  # each player is [sub_pH, valt, rdnt, dect]
-        # add conditionally compressed layers:
-        pP_ += [form_pP_(pP_, [play_,V,R,Y], fd)] if L > 2 else [play_]
-        for play in pP_:  # 3-H unpack:
-            if play[-1]:  # derH | subH
-                if play[-1]>1:   # subH
-                    sspH,val,rdn,dec = play[0], play[1][fd], play[2][fd], play[3][fd]
-                    if val > ave:  # recursive eval,unpack
-                        V+=val; R+=rdn; Y+=dec  # sum with sub-vals:
-                        sub_pP_t = form_pP_([], [sspH,val,rdn,dec], fd)
-                        part_ += [[sspH, sub_pP_t]]
-                    else:
-                        if V:  # empty sub_pP_ terminates root pP
-                            pP_ += [[part_,V,R,Y]]; rV+=V; rR+=R; rY+=Y  # root params
-                            part_,Val,Rdn,Dec = [],0,0,0  # pP params
-                            # reset
-                else:
-                    derH, val,rdn,dec,extt = play[0], play[1][fd], play[2][fd], play[3][fd], play[4]
-                    form_tuplet_pP_(extt, [pP_,rV,rR,rY], [part_,V,R,Y], v=0)
-                    sub_pP_t = form_pP_([], [derH,val,rdn,dec], fd)  # derH
-                    part_ += [[derH, sub_pP_t]]
-            else:
-                form_tuplet_pP_(play, [pP_,rV,rR,rY], [part_,V,R,Y], v=1)  # derLay
+        # add conditionally compressed layers within layer_:
+        pP_ += [form_pP_([], [play_,V,R,Y], fd)] if L > 2 else [play_]
+
+        # compress current play_
+        V,R,Y, rV, rR, rY = compress_play_(pP_, play_, part_, (V, R, Y ),(rV, rR, rY), fd)
+
+        # compare compressed layer
+        for _play in _play_:
+            for play in play_:
+                comp_pP(_play, play)
         L = hL
+
     if part_:
         pP_ += [[part_,V,R,Y]]; rV+=V; rR+=R; rY+=Y
+
     return [pP_,rV,rR,rY]  # root values
 
+
+def compress_play_(pP_, play_, part_, rVals, Vals,  fd):
+
+    V, R, Y = Vals
+    rV, rR, rY = rVals
+
+    for play in play_:  # 3-H unpack:
+        if play[-1]:  # derH | subH
+            if play[-1]>1:   # subH
+                sspH,val,rdn,dec = play[0], play[1][fd], play[2][fd], play[3][fd]
+                if val > ave:  # recursive eval,unpack
+                    V+=val; R+=rdn; Y+=dec  # sum with sub-vals:
+                    sub_pP_t = form_pP_([], [sspH,val,rdn,dec], fd)
+                    part_ += [[sspH, sub_pP_t]]
+                else:
+                    if V:  # empty sub_pP_ terminates root pP
+                        pP_ += [[part_,V,R,Y]]; rV+=V; rR+=R; rY+=Y  # root params
+                        part_,V,R,Y = [],0,0,0  # pP params
+                        # reset
+            else:
+                derH, val,rdn,dec,extt = play[0], play[1][fd], play[2][fd], play[3][fd], play[4]
+                form_tuplet_pP_(extt, [pP_,rV,rR,rY], [part_,V,R,Y], v=0)
+                sub_pP_t = form_pP_([], [derH,val,rdn,dec], fd)  # derH
+                part_ += [[derH, sub_pP_t]]
+        else:
+            form_tuplet_pP_(play, [pP_,rV,rR,rY], [part_,V,R,Y], v=1)  # derLay
+
+    return V, R, Y, rV, rR, rY
+
+
+def comp_pP(_play, play):
+    pass
 
 def form_pP_recursive(parHv, fd):  # indefinite H nesting: (..HHH( HH( H( parttv_))).., init HH = [H] if len H > max
 

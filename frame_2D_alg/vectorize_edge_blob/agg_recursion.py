@@ -79,7 +79,9 @@ def agg_recursion(rroot, root, G_, fd, nrng=1):  # + fpar for agg_parP_? composi
         if root.valt[0] * (len(GG_)-1)*root.rng > G_aves[fd] * root.rdnt[0]:  # xcomp G_ val
             agg_recursion(rroot, root, GG_, fd=0)  # 1st xcomp in GG_, root update in form_t, max rng=2
 
-    root.node_ += [GG_t]  # node_tH, Cgraph
+    root.node_ += [GG_t]  # append node_tH
+    root.fback_t[0] += [[root.aggH, root.valt,root.rdnt,root.dect]]
+    feedback(rroot, 0)  # recursive update root.root.. aggHv, always rng+ for agg+
 
 
 def form_graph_t(root, G_, Et, fd, nrng):  # root_fd, form mgraphs and dgraphs of same-root nodes
@@ -89,7 +91,7 @@ def form_graph_t(root, G_, Et, fd, nrng):  # root_fd, form mgraphs and dgraphs o
     graph_t = [[],[]]
     for i in 0,1:
         if Et[0][i] > ave * Et[1][i]:  # eValt > ave * eRdnt, else no clustering
-            graph_t[i] = segment_node_(root, G_, fd, nrng)  # if fd: node-mediated Correlation Clustering
+            graph_t[i] = segment_node_(root, _G_, fd, nrng)  # if fd: node-mediated Correlation Clustering
             # add alt_graphs?
     for fd, graph_ in enumerate(graph_t):  # breadth-first for in-layer-only roots
         for graph in graph_:
@@ -161,7 +163,7 @@ def segment_node_(root, root_G_, fd, nrng):  # eval rim links with summed surrou
                     G = link._G; _G = link.G
                 if _G in G_: continue
                 # connect by rel match of nodes * match of node Vs: surround M|Ds,
-                # Vt = how deep is the node inside graphs: position?
+                # Vt is positional, representing how deeply inside the graph is G
                 cval = link.Vt[fd] + get_match(G.Vt[fd],_G.Vt[fd])  # same coef for int and ext match?
                 crdn = link.Rt[fd] + (G.Rt[fd] + _G.Rt[fd]) / 2
                 if cval > ave * crdn:  # _G and its root are effectively connected
@@ -328,7 +330,6 @@ def comp_subHv(_subH, subH, rn):
         Mdec += dect[0]; Ddec += dect[1]
         mval,dval = valt; Mval += mval; Dval += dval
         Mrdn += rdnt[0] + dval > mval; Drdn += rdnt[1] + dval <= mval
-
     if dsubH:
         S = min(len(_subH),len(subH)); Mdec/= S; Ddec /= S  # normalize
 
@@ -350,7 +351,7 @@ def comp_derHv(_derH, derH, rn):  # derH is a list of der layers or sub-layers, 
             for (par, max, ave) in zip(ptuple, Ptuple, aves):  # different ave for comp_dtuple
                 if fd: dect[fd] += par/max if max else 1
                 else:  dect[fd] += (par+ave)/(max) if max else 1
-        for i in 0,1:  dect[i] /=6
+        dect[0]/=6; dect[1]/=6
         dderH += [[[mtuple,dtuple], [mval,dval],[mrdn,drdn],dect, 0]]
         Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
         Mdec+=dect[0]; Ddec+=dect[1]
@@ -455,16 +456,19 @@ def feedback(root, fd):  # called from form_graph_, append new der layers to roo
         sum_aggHv(AggH, aggH, base_rdn=0)
         for j in 0,1:
             Valt[j] += valt[j]; Rdnt[j] += rdnt[j]; Dect[j] += dect[j]
-    sum_aggHv(root.aggH,AggH, base_rdn=0)
-    for j in 0,1:
-        root.valt[j] += Valt[j]; root.rdnt[j] += Rdnt[j]; root.dect[j] += Dect[j]  # both forks sum in same root
+
+    if Valt[fd] > G_aves[fd] * Rdnt[fd]:  # or compress each level?
+        root.aggH += AggH  # higher levels are not affected
+        for j in 0,1:
+            root.valt[j] += Valt[j]; root.rdnt[j] += Rdnt[j]; root.dect[j] += Dect[j]  # both forks sum in same root
 
     if root.root:  # Edge has no roots
-        rroot = root.root[fd]  # roott
+        rroot = root.roott[fd]
         if rroot:
             fd = root.fd
             fback_ = rroot.fback_t[fd] + [[AggH,Valt,Rdnt,Dect]]
             L = len(rroot.node_[-1][fd]) if isinstance(rroot.node_[-1][0],list) else len(rroot.node_[-1])  # flat
-            if fback_ and (len(fback_) == L):  # flat, all rroot nodes terminated and fed back
+            # after all rroot nodes terminate and feed back:
+            if fback_ and (len(fback_) == L):
                 # getting cyclic rroot here not sure why it can happen, need to check further
                 feedback(rroot, fd)  # sum2graph adds aggH per rng, feedback adds deeper sub+ layers
