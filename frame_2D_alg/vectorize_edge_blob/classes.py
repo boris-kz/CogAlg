@@ -129,7 +129,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     rdnt : list = z([1,1])
     dect : list = z([0,0])
     link_ : list = z([])  # internal, single-fork
-    node_ : list = z([])  # add|nest per sub)agg+, n_forks per layer = 2^ n_lower_layers
+    node_H : list = z([])  # add|nest per sub)agg+ -> node_tH: n_forks per layer = 2^ n_lower_layers
     # graph-external, +level per root sub+:
     rim_tH : list = z([[[],[]]])  # directly connected nodes, per fork ) layer
     Rim_tH : list = z([[[],[]]])  # the most mediated evaluated nodes
@@ -143,11 +143,12 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     A : list = z([0,0])  # angle: average dy,dx to link centers
     rng : int = 1
     box : boxT = boxT(inf,inf,-inf,-inf)  # y0,x0,yn,,xn
-
     # tentative:
     nval : int = 0  # of open links: base alt rep
     alt_graph_ : list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
-    alt_Graph : object = None  # conditional, summed and concatenated params of alt_graph_
+    avalt : list = z([0,0])  # sum from alt graphs to complement G aves?
+    ardnt : list = z([1,1])
+    adect : list = z([0,0])
 
     # temporary:
     Vt : list = z([])  # last layer vals for node_connect and clustering
@@ -155,7 +156,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     Dt : list = z([])
     it : list = z([None,None])  # graph indices in root node_s, implicitly nested
     roott : list = z([None,None])  # for feedback
-    fback_t : list = z([[],[]])  # maps to node_t: feedback [[aggH,valt,rdnt,dect]] per node fork
+    fback_t : list = z([[],[],[]])  # feedback [[aggH,valt,rdnt,dect]] per node fork, maps to node_H
     compared_ : list = z([])
     Rdn : int = 0  # for accumulation or separate recursion count?
 

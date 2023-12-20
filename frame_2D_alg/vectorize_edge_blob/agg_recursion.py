@@ -49,7 +49,7 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
         G_ = []
         for PP in node_:  # eval PP for agg+
             if PP.valt[fd] * (len(node_)-1) * (PP.rng+1) <= G_aves[fd] * PP.rdnt[fd]: continue
-            PP.root = [None, None]  # roott
+            PP.roott = [None, None]  # roott
             G_ += [PP]
         if G_:
             agg_recursion(None, edge, G_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
@@ -80,8 +80,9 @@ def agg_recursion(rroot, root, G_, fd, nrng=1):  # + fpar for agg_parP_? composi
             agg_recursion(rroot, root, GG_, fd=0)  # 1st xcomp in GG_, root update in form_t, max rng=2
 
     root.node_ += [GG_t]  # append node_tH
-    root.fback_t[0] += [[root.aggH, root.valt,root.rdnt,root.dect]]
-    feedback(rroot, 0)  # recursive update root.root.. aggHv, always rng+ for agg+
+    if rroot:  # base fork
+        rroot.fback_t[2] += [[root.aggH, root.valt,root.rdnt,root.dect]]
+        feedback(rroot,2)  # recursive update root.root.. aggHv, fd=2 for agg+
 
 
 def form_graph_t(root, G_, Et, fd, nrng):  # root_fd, form mgraphs and dgraphs of same-root nodes
@@ -100,8 +101,7 @@ def form_graph_t(root, G_, Et, fd, nrng):  # root_fd, form mgraphs and dgraphs o
                 agg_recursion(root, graph, graph.node_[-1], fd, nrng+1*(1-fd))  # node_tH, rng++ if not fd
             else:
                 root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
-                feedback(root, root.fd)  # recursive update root.root.. aggH, valHt,rdnHt
-
+                feedback(root, root.fd, 0)  # recursive update root.root.. aggH, valHt,rdnHt
 
     return graph_t  # root.node_t'node_ -> node_t: incr nested with each agg+?
 
@@ -147,7 +147,7 @@ def segment_node_(root, root_G_, fd, nrng):  # eval rim links with summed surrou
 
     for G in root_G_:   # init per node, last-layer Vt,Vt,Dt:
         grapht = [[G],[], G.Vt,G.Rt,G.Dt, copy(G.rim_tH[-1][fd])]
-        G.root[fd] = grapht  # roott for feedback
+        G.roott[fd] = grapht  # roott for feedback
         igraph_ += [grapht]
     _graph_ = igraph_
     while True:
@@ -168,11 +168,11 @@ def segment_node_(root, root_G_, fd, nrng):  # eval rim links with summed surrou
                 crdn = link.Rt[fd] + (G.Rt[fd] + _G.Rt[fd]) / 2
                 if cval > ave * crdn:  # _G and its root are effectively connected
                     # merge _root:
-                    _grapht = _G.root[fd]  # roott
+                    _grapht = _G.roott[fd]
                     _G_,_Link_,_Valt,_Rdnt,_Dect,_Rim = _grapht
                     Link_[:] = list(set(Link_+_Link_)) + [link]
                     for g in _G_:
-                        g.root[fd] = grapht  # roott
+                        g.roott[fd] = grapht
                         if g not in G_: G_+=[g]
                     for i in 0,1:
                         Valt[i]+=_Valt[i]; Rdnt[i]+=_Rdnt[i]; Dect[i]+=_Dect[i]
@@ -193,8 +193,8 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
 
     G_,Link_,Vt,Rt,Dt,_ = grapht  # last-layer vals only; depth 0:derLay, 1:derHv, 2:subHv
 
-    graph = Cgraph(fd=fd, node_=[G_], L=len(G_),link_=Link_,Vt=Vt, Rt=Rt, Dt=Dt, rng=nrng)
-    graph.root[fd] = root
+    graph = Cgraph(fd=fd, node_H=[G_], L=len(G_),link_=Link_,Vt=Vt, Rt=Rt, Dt=Dt, rng=nrng)
+    graph.roott[fd] = root
     for link in Link_:
         link.roott[fd]=graph
     eH, valt,rdnt,dect, evalt,erdnt,edect = [], [0,0],[0,0],[0,0], [0,0],[0,0],[0,0]  # grapht int = node int+ext
@@ -221,8 +221,25 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
         graph.rdnt[i] = rdnt[i]+erdnt[i]
         graph.dect[i] = dect[i]+edect[i]
     graph.A = [A0,A1]; graph.S = S
+
+    if fd: add_alts(graph)  # after both m and d graphs are formed
+
     return graph
 
+
+def add_alts(dG):  # bilateral assign alt_graphs
+
+    for link in dG.link_:
+        mG = link.roott[0]
+        # dgraph.alt_graph_ +=
+        if mG not in dG.alt_graph_:
+            dG.alt_graph_ += [mG]
+            for fd in 0,1:
+                dG.avalt[fd] += mG.valt[fd]; dG.ardnt[fd] += mG.rdnt[fd]; dG.adect[fd] += mG.dect[fd]
+        if dG not in mG.alt_graph_:
+            mG.alt_graph_ += [dG]
+            for fd in 0,1:
+                mG.avalt[fd] += dG.valt[fd]; mG.ardnt[fd] += dG.rdnt[fd]; mG.adect[fd] += dG.dect[fd]
 
 def comp_G(_G, G, link, Et, lenRoot):
 
@@ -448,27 +465,27 @@ def comp_ext(_ext, ext, Valt, Rdnt, Dect):  # comp ds:
     return [[mL,mS,mA], [dL,dS,dA]]
 
 
-def feedback(root, fd):  # called from form_graph_, append new der layers to root
+def feedback(root, ifd):  # called from form_graph_, append new der layers to root
 
-    AggH, Valt, Rdnt, Dect = deepcopy(root.fback_t[fd].pop(0))  # init with 1st tuple
-    while root.fback_t[fd]:
-        aggH,valt,rdnt,dect = root.fback_t[fd].pop(0)
+    AggH, Valt, Rdnt, Dect = deepcopy(root.fback_t[ifd].pop(0))  # init with 1st tuple
+    while root.fback_t[ifd]:
+        aggH, valt, rdnt, dect = root.fback_t[ifd].pop(0)
         sum_aggHv(AggH, aggH, base_rdn=0)
         for j in 0,1:
-            Valt[j] += valt[j]; Rdnt[j] += rdnt[j]; Dect[j] += dect[j]
+            Valt[j] += valt[j]; Rdnt[j] += rdnt[j]; Dect[j] += dect[j]  # -> root.fback_t
 
+    fd = 0 if ifd == 2 else 0  # if ifd == 2: base fork, rng+
     if Valt[fd] > G_aves[fd] * Rdnt[fd]:  # or compress each level?
         root.aggH += AggH  # higher levels are not affected
         for j in 0,1:
             root.valt[j] += Valt[j]; root.rdnt[j] += Rdnt[j]; root.dect[j] += Dect[j]  # both forks sum in same root
 
-    if root.root:  # Edge has no roots
+    if root.roott:  # Edge has no roots
         rroot = root.roott[fd]
         if rroot:
-            fd = root.fd
-            fback_ = rroot.fback_t[fd] + [[AggH,Valt,Rdnt,Dect]]
-            L = len(rroot.node_[-1][fd]) if isinstance(rroot.node_[-1][0],list) else len(rroot.node_[-1])  # flat
-            # after all rroot nodes terminate and feed back:
-            if fback_ and (len(fback_) == L):
-                # getting cyclic rroot here not sure why it can happen, need to check further
-                feedback(rroot, fd)  # sum2graph adds aggH per rng, feedback adds deeper sub+ layers
+            rfd = rroot.fd
+            fback_ = rroot.fback_t[fd]  # map to node_:
+            rnode_ = rroot.node_[-1] if rfd==2 else rroot.node_[-1][rfd]  # in node_tH
+            if fback_ and (len(fback_) == len(rnode_)):
+                # after all rroot nodes terminate and feed back:
+                feedback(rroot, rfd)  # sum2graph adds aggH per rng, feedback adds deeper sub+ layers
