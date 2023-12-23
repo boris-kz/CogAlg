@@ -68,7 +68,7 @@ def max_selection(blob):
 
 def trace_edge(blob, mask__, verbose=False):
 
-    edge = Cgraph(blob=blob, root=None, node_=[[],[]])
+    edge = Cgraph(roott=blob, node_=[[],[]])
     blob.dlayers = [[edge]]
     max_ = {*zip(*mask__.nonzero())}  # convert mask__ into a set of (y,x)
 

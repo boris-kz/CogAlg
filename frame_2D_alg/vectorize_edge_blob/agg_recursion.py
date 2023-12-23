@@ -41,18 +41,11 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
     edge, adj_Pt_ = slice_edge(blob, verbose)  # lateral kernel cross-comp -> P clustering
 
     comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
-    edge.node_ = [edge.node_]  # convert to node_tH
 
-    for fd, node_ in enumerate(edge.node_[-1]):  # node_ is generic for any nesting depth
-        if edge.valt[fd] * (len(node_)-1) * (edge.rng+1) <= G_aves[fd] * edge.rdnt[fd]:
-            continue  # else PP cross-comp -> discontinuous graph clustering:
-        G_ = []
-        for PP in node_:  # eval PP for agg+
-            if PP.valt[fd] * (len(node_)-1) * (PP.rng+1) <= G_aves[fd] * PP.rdnt[fd]: continue
-            PP.roott = [None,None]
-            G_ += [PP]
-        if G_:
-            agg_recursion(None, edge, G_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
+    for fd, node_ in enumerate(edge.node_):  # node_t
+        if edge.valt[fd] * (len(node_)-1) * (edge.rng+1) > G_aves[fd] * edge.rdnt[fd]:
+            for PP in node_: PP.roott = [None,None]
+            agg_recursion(None, edge, node_, fd=0)  # PP cross-comp -> discontinuous clustering
 
     return edge
 
@@ -73,40 +66,38 @@ def agg_recursion(rroot, root, G_, fd, nrng=1):  # + fpar for agg_parP_? composi
                     link = CderG(_G=_G, G=G)
                     comp_G(_G, G, link, Et, lenRoot)
 
-    GG_t = form_graph_t(root, G_, Et, fd, nrng)  # root_fd, eval sub+, feedback per graph
-    # agg+ xcomp-> form_graph_t loop sub)agg+, vs. comp_slice sub+ loop-> eval-> xcomp
-    for GG_ in GG_t:
-        if root.valt[0] * (len(GG_)-1)*root.rng > G_aves[fd] * root.rdnt[0]:
-            # 1st xcomp in GG_, root update in form_t, max rng=2:
-            agg_recursion(rroot, root, GG_, fd=0)
+    form_graph_t(root, G_, Et, nrng)  # root_fd, eval sub+, feedback per graph
+    node_t = [root.node_] if isinstance(root.node_[0],Cgraph) else root.node_
 
-    if GG_t[0] or GG_t[1]:  # node_->node_t if no agg+, else sub+ is local to sub_G formed in agg+
-        root.node_[:] = [GG_t]
-    if rroot:  # base node_ agg+, fd=2
-        rroot.fback_t[2] += [[root.aggH,root.valt,root.rdnt,root.dect]]
-        feedback(rroot,2)  # update root.root..
+    for i, node_ in enumerate(node_t):
+        if root.valt[i] * (len(node_)-1)*root.rng > G_aves[i] * root.rdnt[i]:
+            # agg+ in base node_, rng=2, loop sub)agg+ per node, vs comp_slice sub+ loop-> eval-> xcomp
+            agg_recursion(rroot, root, node_, fd=0)
+            if rroot:
+                rroot.fback_t[i] += [[root.aggH,root.valt,root.rdnt,root.dect]]
+                feedback(rroot,i)  # update root.root..
 
-def form_graph_t(root, G_, Et, fd, nrng):  # form Gm_,Gd_ of same-root nodes
+
+def form_graph_t(root, G_, Et, nrng):  # form Gm_,Gd_ from same-root nodes
 
     _G_ = [G for G in G_ if len(G.rim_tH)>len(root.rim_tH)]  # prune unconnected Gs
 
     node_connect(_G_)  # Graph Convolution of Correlations over init _G_
-    graph_t = [[],[]]
-    for i in 0,1:
-        if Et[0][i] > ave * Et[1][i]:  # eValt > ave * eRdnt, else no clustering
-            graph_t[i] = segment_node_(root, _G_, fd, nrng)  # fd: node-mediated Correlation Clustering
-
-    for fd, graph_ in enumerate(graph_t):  # breadth-first for in-layer-only roots
-        for graph in graph_:
-            if isinstance(graph.node_[0], Cgraph): continue  # sub+ only for node_t:
-            if graph.Vt[fd] * (len(graph.node_[fd])-1)*root.rng > G_aves[fd] * graph.Rt[fd]:
-                # sub+, external to agg+, vs internal in comp_slice sub+:
-                agg_recursion(root, graph, graph.node_[fd], fd, nrng+1*(1-fd))  # rng++ if not fd
+    for fd in 0,1:
+        if Et[0][fd] > ave * Et[1][fd]:  # eValt > ave * eRdnt, else no clustering
+            graph_ = segment_node_(root, _G_, fd, nrng)  # fd: node-mediated Correlation Clustering
+            if not graph_: continue
+            for graph in graph_:
+                if graph.Vt[fd] * (len(graph.node_)-1)*root.rng > G_aves[fd] * graph.Rt[fd]:
+                    # sub+, external to agg+, vs internal in comp_slice sub+:
+                    agg_recursion(root, graph, graph.node_, fd, nrng+1*(1-fd))  # rng++ if not fd
+                else:
+                    root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
+                    feedback(root,root.fd)  # update root.root..
+            if isinstance(root.node_[0],Cgraph):
+                root.node_ = [[],graph_] if fd else [graph_,[]]
             else:
-                root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
-                feedback(root,root.fd)  # update root.root..
-
-    return graph_t
+                root.node_[fd][:] = graph_
 
 
 def node_connect(_G_):  # node connectivity = sum surround link vals, incr.mediated: Graph Convolution of Correlations
@@ -196,7 +187,7 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
 
     G_,Link_,Vt,Rt,Dt,_ = grapht  # last-layer vals only; depth 0:derLay, 1:derHv, 2:subHv
 
-    graph = Cgraph(fd=fd, node_H=[G_], L=len(G_),link_=Link_,Vt=Vt, Rt=Rt, Dt=Dt, rng=nrng)
+    graph = Cgraph(fd=fd, node_=G_, L=len(G_),link_=Link_,Vt=Vt, Rt=Rt, Dt=Dt, rng=nrng)
     graph.roott[fd] = root
     for link in Link_:
         link.roott[fd]=graph
@@ -468,29 +459,24 @@ def comp_ext(_ext, ext, Valt, Rdnt, Dect):  # comp ds:
     return [[mL,mS,mA], [dL,dS,dA]]
 
 
-def feedback(root, ifd):  # called from form_graph_, append new der layers to root
+def feedback(root, fd):  # called from form_graph_, append new der layers to root
 
-    AggH, Valt, Rdnt, Dect = deepcopy(root.fback_t[ifd].pop(0))
+    AggH, Valt, Rdnt, Dect = deepcopy(root.fback_t[fd].pop(0))
     # init with 1st tuple
-    while root.fback_t[ifd]:
-        aggH, valt, rdnt, dect = root.fback_t[ifd].pop(0)
+    while root.fback_t[fd]:
+        aggH, valt, rdnt, dect = root.fback_t[fd].pop(0)
         sum_aggHv(AggH, aggH, base_rdn=0)
-        for j in 0,1:
-            Valt[j] += valt[j]; Rdnt[j] += rdnt[j]; Dect[j] += dect[j]  # -> root.fback_t
+        for i in 0,1:
+            Valt[i] += valt[i]; Rdnt[i] += rdnt[i]; Dect[i] += dect[i]  # -> root.fback_t
 
-    fd = 1 if ifd==1 else 0  # 2->0
     if Valt[fd] > G_aves[fd] * Rdnt[fd]:  # or compress each level?
         root.aggH += AggH  # higher levels are not affected
-        for j in 0,1:
-            root.valt[j] += Valt[j]; root.rdnt[j] += Rdnt[j]; root.dect[j] += Dect[j]  # both forks sum in same root
+        for j in 0,1:  # sum both in same root fork
+            root.valt[fd] += Valt[j]; root.rdnt[fd] += Rdnt[j]; root.dect[fd] += Dect[j]
 
-    if root.roott:  # Edge has no roots
+    if isinstance(root.roott, Cgraph):  # not Edge
         rroot = root.roott[fd]
         if rroot:
-            rfd = ifd if ifd==2 else fd  # not sure
-            fback_ = rroot.fback_t[rfd]  # map to node_:
-            rnode_ = rroot.node_ if rfd==2 else rroot.node_[rfd]  # node_t
-
-            if fback_ and (len(fback_) == len(rnode_)):
-                # after all rroot nodes terminate and feed back:
-                feedback(rroot, ifd)  # sum2graph adds aggH per rng, feedback adds deeper sub+ layers
+            fback_ = rroot.fback_t[fd]  # always node_t for feedback
+            if fback_ and len(fback_) == len(rroot.node_[fd]):  # all nodes terminate and feed back
+                feedback(rroot, fd)  # sum2graph adds higher aggH, feedback adds deeper aggH layers

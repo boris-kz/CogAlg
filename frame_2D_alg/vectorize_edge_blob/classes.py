@@ -148,6 +148,9 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     avalt : list = z([0,0])  # sum from alt graphs to complement G aves?
     ardnt : list = z([1,1])
     adect : list = z([0,0])
+    # PP:
+    P_: list = z([])
+    mask__ : object = None
     # temporary:
     Vt : list = z([])  # last layer vals for node_connect and clustering
     Rt : list = z([])
@@ -157,12 +160,6 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     fback_t : list = z([[],[],[]])  # feedback [[aggH,valt,rdnt,dect]] per node fork, maps to node_H
     compared_ : list = z([])
     Rdn : int = 0  # for accumulation or separate recursion count?
-
-    # edge
-    P_: list = z([])
-    blob : object = None
-    # PP
-    mask__ : object = None
     # not used:
     depth : int = 0  # n sub_G levels over base node_, max across forks
     nval : int = 0  # of open links: base alt rep
