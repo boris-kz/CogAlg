@@ -180,3 +180,16 @@ def feedback(root, ifd):  # called from form_graph_, append new der layers to ro
             if fback_ and (len(fback_) == len(rnode_)):
                 # after all rroot nodes terminate and feed back:
                 feedback(rroot, ifd)  # sum2graph adds aggH per rng, feedback adds deeper sub+ layers
+
+def add_alts(Gd):
+    for link in Gd.link_:
+        Gm = link.roott[0]
+
+        if Gm not in Gd.dalt_graph_:
+            G.alt_graph_ += [Gm]
+            for fd in 0,1:
+                Gd.avalt[fd] += Gm.valt[fd]; Gd.ardnt[fd] += Gm.rdnt[fd]; Gd.adect[fd] += Gm.dect[fd]
+        if dG not in Gm.alt_graph_:
+            Gm.alt_graph_ += [Gd]
+            for fd in 0,1:
+                Gm.avalt[fd] += Gd.valt[fd]; Gm.ardnt[fd] += Gd.rdnt[fd]; Gm.adect[fd] += Gd.dect[fd]

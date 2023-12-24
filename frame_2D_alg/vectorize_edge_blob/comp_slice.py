@@ -170,7 +170,7 @@ def feedback(root, fd):  # in form_PP_, append new der layers to root PP, single
         sum_derH(Fback, root.fback_t[fd].pop(0), base_rdn=0)
     sum_derH([root.derH, root.valt, root.rdnt], Fback, base_rdn=0)  # both fder forks sum into a same root
 
-    if root.roott:  # skip if root is Edge, which has no roots
+    if isinstance(root.roott, Cgraph):  # skip if root is Edge
         rroot = root.roott  # single PP.root, can't be P
         fd = root.fd  # node_t fd
         fback_ = rroot.fback_t[fd]
