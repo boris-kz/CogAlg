@@ -41,19 +41,17 @@ def vectorize_root(blob, verbose):  # vectorization in 3 composition levels of x
 
     comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
 
-    for fd, node_ in enumerate(edge.node_):  # always node_t?
-        if edge.valt[fd] * (len(node_)-1) * (edge.rng+1) > G_aves[fd] * edge.rdnt[fd]:
+    for fd, node_ in enumerate(edge.node_):  # always node_t
+        if edge.valt[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.rdnt[fd]:
             for PP in node_: PP.roott = [None, None]
             agg_recursion(None, edge, node_, lenH=1, fd=0)
             # PP cross-comp -> discontinuous clustering, agg+ only, no Cgraph nodes
-
     return edge
 
 
 def agg_recursion(rroot, root, G_, lenH, fd, nrng=1):  # compositional agg|sub recursion in root graph, cluster G_
 
-    Et = [[0,0],[0,0],[0,0]]  # eValt, eRdnt, eDect(currently not used
-    # this eval is for sub+, there should be parallel eval for higher-composition agg+, rng+ only?
+    Et = [[0,0],[0,0],[0,0]]  # grapht link_' eValt, eRdnt, eDect(currently not used)
 
     if fd:  # der+
         for link in root.link_:  # reform links
@@ -68,12 +66,12 @@ def agg_recursion(rroot, root, G_, lenH, fd, nrng=1):  # compositional agg|sub r
                     comp_G(_G, G, link, Et, lenH)
 
     form_graph_t(root, G_, Et, nrng)  # root_fd, eval sub+, feedback per graph
-    if isinstance(root.node_[0],list):  # else no node_t was formed above, skip
+    if isinstance(G_[0],list):  # node_t was formed above
 
-        for i, node_ in enumerate(root.node_):
+        for i, node_ in enumerate(G_):
             if root.valt[i] * (len(node_)-1)*root.rng > G_aves[i] * root.rdnt[i]:
-                # agg+ in base node_, rng=2, loop sub)agg+ per node, vs comp_slice sub+ loop-> eval-> xcomp
-                agg_recursion(rroot, root, node_, lenH=1, fd=0)
+                # agg+/ node_( sub)agg+/ node, vs sub+ only in comp_slice
+                agg_recursion(rroot, root, node_, lenH=1, fd=0)  # der+ if fd, else rng+ =2
                 if rroot:
                     rroot.fback_t[i] += [[root.aggH,root.valt,root.rdnt,root.dect]]
                     feedback(rroot,i)  # update root.root..
@@ -84,21 +82,20 @@ def form_graph_t(root, G_, Et, nrng):  # form Gm_,Gd_ from same-root nodes
     _G_ = [G for G in G_ if len(G.rim_tH)>len(root.rim_tH)]  # prune Gs unconnected in current layer
 
     node_connect(_G_)  # Graph Convolution of Correlations over init _G_
+    node_t = []
     for fd in 0,1:
         if Et[0][fd] > ave * Et[1][fd]:  # eValt > ave * eRdnt, else no clustering, keep root.node_
             graph_ = segment_node_(root, _G_, fd, nrng)  # fd: node-mediated Correlation Clustering
             if not graph_: continue
-            for graph in graph_:
+            for graph in graph_:  # eval sub+ per node
                 if graph.Vt[fd] * (len(graph.node_)-1)*root.rng > G_aves[fd] * graph.Rt[fd]:
-                    # eval sub+ per node, external to agg+, vs. internal in comp_slice sub+:
-                    agg_recursion(root, graph, graph.node_, len(graph.esubH), fd, nrng+1*(1-fd))  # nrng+ if not fd
+                    agg_recursion(root, graph, graph.node_, len(graph.aggH[-1][0]), fd, nrng+1*(1-fd))  # nrng+ if not fd
                 else:
                     root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
                     feedback(root,root.fd)  # update root.root..
-            if isinstance(root.node_[0],Cgraph):
-                root.node_ = [[],graph_] if fd else [graph_,[]]
-            else:
-                root.node_[fd][:] = graph_
+            node_t += [graph_]  # may be empty
+        else: node_t += []
+    if any(node_t): G_[:] = node_t
 
 
 def node_connect(_G_):  # node connectivity = sum surround link vals, incr.mediated: Graph Convolution of Correlations
@@ -158,7 +155,7 @@ def segment_node_(root, root_G_, fd, nrng):  # eval rim links with summed surrou
                     G = link._G; _G = link.G
                 if _G in G_: continue
                 # connect by rel match of nodes * match of node Vs: surround M|Ds,
-                # Vt is positional, representing how deeply inside the graph is G
+                # V = how deeply inside the graph is G
                 cval = link.Vt[fd] + get_match(G.Vt[fd],_G.Vt[fd])  # same coef for int and ext match?
                 crdn = link.Rt[fd] + (G.Rt[fd] + _G.Rt[fd]) / 2
                 if cval > ave * crdn:  # _G and its root are effectively connected
@@ -172,13 +169,14 @@ def segment_node_(root, root_G_, fd, nrng):  # eval rim links with summed surrou
                     for i in 0,1:
                         Valt[i]+=_Valt[i]; Rdnt[i]+=_Rdnt[i]; Dect[i]+=_Dect[i]
                         inVal += _Valt[fd]; inRdn += _Rdnt[fd]
-                    if _grapht in igraph_: igraph_.remove(_grapht)
-                    new_Rim += [l for l in _Rim if l not in new_Rim+Rim+Link_]
+                    if _grapht in igraph_:
+                        igraph_.remove(_grapht)
+                    new_Rim += [link for link in _Rim if link not in new_Rim+Rim+Link_]
             # for next loop:
             if len(new_Rim) * inVal > ave * inRdn:
                 graph_ += [[G_,Link_, Valt,Rdnt,Dect, new_Rim]]
 
-        if graph_: _graph_ = graph_
+        if graph_: _graph_ = graph_  # selected graph expansion
         else: break
     # -> Cgraphs if Val > ave * Rdn:
     return [sum2graph(root, graph, fd, nrng) for graph in igraph_ if graph[2][fd] > ave * (graph[3][fd])]
@@ -220,12 +218,12 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
     if fd:
         for link in graph.link_:  # assign alt graphs from d graph, after both linked m and d graphs are formed
             mgraph = link.roott[0]
-
-            for fd, (G, alt_G) in enumerate((mgraph,graph), (graph,mgraph)):  # bilateral assign:
-                if G not in alt_G.alt_graph_:
-                    G.alt_graph_ += [alt_G]
-                    for i in 0,1:
-                        G.avalt[i] += alt_G.valt[i]; G.ardnt[i] += alt_G.rdnt[i]; G.adect[i] += alt_G.dect[i]
+            if mgraph:
+                for fd, (G, alt_G) in enumerate(((mgraph,graph), (graph,mgraph))):  # bilateral assign:
+                    if G not in alt_G.alt_graph_:
+                        G.alt_graph_ += [alt_G]
+                        for i in 0,1:
+                            G.avalt[i] += alt_G.valt[i]; G.ardnt[i] += alt_G.rdnt[i]; G.adect[i] += alt_G.dect[i]
 
     return graph
 
