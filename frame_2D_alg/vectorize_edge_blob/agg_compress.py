@@ -189,37 +189,91 @@ def form_val_pP_(ptuple):
     if parP: parP_ += [parP]  # terminate last parP
     return parP_  # may be empty
 
+# draft
+def sub_recursion(rroot, root, G_, lenH, fd, nrng=1):  # separate | interlaced fd recursion?
 
-def sum_aggH(AggH, aggH, base_rdn):
+    # rng+|der+ over same-root nodes, forming multiple (Gm_,Gd_) GG_tH:
+    GG_tH = []
+    val_t, rdn_t = [],[]
 
-    if aggH:
-        if AggH:
-            for Layer, layer in zip_longest(AggH,aggH, fillvalue=[]):
-                if layer:
-                    if Layer:
-                        sum_subH(Layer, layer, base_rdn)
-                    else:
-                        AggH += [deepcopy(layer)]
-        else:
-            AggH[:] = deepcopy(aggH)
+    while True:
+        # not revised:
+        Et = [[0,0],[0,0],[0,0]]  # grapht link_' eValt, eRdnt, eDect(currently not used)
+        if fd:  # der+
+            for link in root.link_:  # reform links
+                if link.Vt[1] < G_aves[1] * link.Rt[1]: continue  # maybe weak after rdn incr?
+                comp_G(link._G, link.G, link, Et, lenH)
+        else:  # rng+
+            for i, _G in enumerate(G_):  # form new link_ from original node_
+                for G in G_[i + 1:]:
+                    dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx
+                    if np.hypot(dy, dx) < 2 * nrng:  # max distance between node centers, init=2
+                        link = CderG(_G=_G, G=G)
+                        comp_G(_G, G, link, Et, lenH)
+
+        GG_t, valt, rdnt = form_graph_t(root, G_, Et, nrng)  # root_fd, eval sub+, feedback per graph
+        if GG_t:
+            GG_tH += GG_t
+        else: break  # maybe empty
+        for i in 0,1:
+            val_t[i] += [valt[i]]; rdn_t[i] += [rdnt[i]+1]  # 1 is process redundancy to lower sub+
+        if valt[fd] < G_aves[fd] * rdnt[fd]:
+            break
+        val_ = sorted(val_t[fd])  # max val in val_[0]?
+        out_tH = []
+        for i, val in enumerate(val_):
+            # rough pseudocode:
+            if val > G_aves[fd] * (rdn_t[fd]+i):  # also remove init rdn?
+                out_tH += GG_t[fd][i]
+            else:
+                break
+
+    return out_tH
 
 
-def sum_subH(T, t , base_rdn, fneg=0):
+# probably just form_graph_t that returns GG_t, valt, rdnt, without agg+ call?
+# not revised:
+def form_graph_t(root, G_, Et, nrng):
 
-    SubH, Valt,Rdnt,Dect = T; subH, valt,rdnt,dect = t
-    for i in 0,1:
-        Valt[i] += valt[i]; Rdnt[i] += rdnt[i]+ base_rdn; Dect[i] += dect[i]
-    if SubH:
-        for Layer, layer in zip_longest(SubH,subH, fillvalue=[]):
-            if layer:
-                if Layer:
-                    if layer[0] and isinstance(Layer[0][0], list):  # _lay[0][0] is derH
-                        sum_derHv(Layer, layer, base_rdn, fneg)
-                    else: sum_ext(Layer, layer)
+    _G_ = [G for G in G_ if len(G.rim_tH)>len(root.rim_tH)]  # prune Gs unconnected in current layer
+
+    node_connect(_G_)  # Graph Convolution of Correlations over init _G_
+    node_t = []
+    for fd in 0,1:
+        if Et[0][fd] > ave * Et[1][fd]:  # eValt > ave * eRdnt, else no clustering, keep root.node_
+            graph_ = segment_node_(root, _G_, fd, nrng)  # fd: node-mediated Correlation Clustering
+            if not graph_: continue
+            for graph in graph_:  # eval sub+ per node
+                if graph.Vt[fd] * (len(graph.node_[-1])-1)*root.rng > G_aves[fd] * graph.Rt[fd]:
+
+                    # current depth sub+
+                    agg_recursion(root, graph, graph.node_[-1], len(graph.aggH[-1][0]), fd, nrng+1*(1-fd))  # nrng+ if not fd
+
+                    # higher layer's sub+
+                    rroot = graph
+                    rfd = rroot.fd
+                    while isinstance(rroot.roott, list) and rroot.roott[rfd]:  # not blob
+                        rroot = rroot.roott[rfd]
+                        Val, Rdn = 0, 0
+                        if isinstance(rroot.node_[-1][0], list):  # node_ is node_t
+                            node_ = rroot.node_[-1][rfd]
+                        else:
+                            node_ = rroot.node_[-1]
+
+                        for node in node_:  # sum vals and rdns from all higher nodes
+                            Rdn += node.rdnt[rfd]
+                            Val += node.valt[rfd]
+                        # include rroot.Vt and Rt?
+                        if Val * (len(rroot.node_[-1])-1)*rroot.rng > G_aves[fd] * Rdn:
+                            # not sure about nrg here
+                            agg_recursion(root, graph, rroot.node_[-1], len(rroot.aggH[-1][0]), rfd, nrng+1*(1-rfd))  # nrng+ if not fd
+
                 else:
-                    SubH += [deepcopy(layer)]  # _lay[0][0] is mL
-    else:
-        SubH[:] = deepcopy(subH)
+                    root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
+                    feedback(root,root.fd)  # update root.root..
+            node_t += [graph_]  # may be empty
+        else: node_t += []
+    if any(node_t): G_[:] = node_t
 
 
 def feedback(root, fd):  # called from form_graph_, append new der layers to root

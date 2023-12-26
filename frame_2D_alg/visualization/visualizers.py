@@ -35,7 +35,11 @@ class Visualizer:
             self.idmap = np.full((height, width), -1, 'int64')
 
             self.fig, self.ax = plt.subplots()
-            self.fig.canvas.set_window_title(title)
+            try:
+                self.fig.canvas.set_window_title(title)
+            except AttributeError as e: # for compatibility with later versions of matplotlib
+                if "no attribute" not in str(e).lower(): raise e
+                self.fig.canvas.manager.set_window_title(title)
             self.imshow_obj = self.ax.imshow(self.background)
         else:
             self.background = self.root_visualizer.background

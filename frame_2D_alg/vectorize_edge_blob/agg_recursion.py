@@ -231,8 +231,8 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
 def comp_G(_G, G, link, Et, len_root_H):
 
     Mval,Dval, Mrdn,Drdn, Mdec,Ddec = 0,0, 1,1, 0,0
-    # keep separate P ptuple and PP derH, empty derH in single-P G, + empty aggH in single-PP G
 
+    # keep separate P ptuple and PP derH, empty derH in single-P G, + empty aggH in single-PP G:
     # / P:
     mtuple, dtuple, Mtuple, Dtuple = comp_ptuple(_G.ptuple, G.ptuple, rn=1, fagg=1)
     mval, dval = sum(mtuple), sum(abs(d) for d in dtuple)  # mval is signed, m=-min in comp x sign
@@ -275,7 +275,7 @@ def comp_G(_G, G, link, Et, len_root_H):
         mval,dval = valt; Mval+=dval; Dval+=mval
         Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
         Mdec = (Mdec+dect[0])/2; Ddec = (Ddec+dect[1])/2
-        link.subH = SubH+subH  # append higher subLayers: list of der_ext | derH s
+        link.subH = SubH+subH  # concat higher derHvs
         if Mval > ave_Gm or Dval > ave_Gd:
             fadd = 1
     elif Mval > ave_Gm or Dval > ave_Gd:  # new link
@@ -310,7 +310,7 @@ def comp_aggHv(_aggH, aggH, rn):  # no separate ext
     for _lev, lev in zip(_aggH, aggH):  # compare common subHs, if lower-der match?
         if _lev and lev:
             dsubH, valt,rdnt,dect = comp_subHv(_lev[0],lev[0], rn)
-            SubH += [dsubH, valt,rdnt,dect, 2] # flat
+            SubH += dsubH  # concat
             Mdec += dect[0]; Ddec += dect[1]
             mval,dval = valt; Mval += mval; Dval += dval
             Mrdn += rdnt[0] + dval > mval; Drdn += rdnt[1] + mval <= dval
@@ -327,7 +327,7 @@ def comp_subHv(_subH, subH, rn):
     for _lay, lay in zip(_subH, subH):  # compare common lower layer|sublayer derHs, if prior match?
 
         dderH, valt,rdnt,dect = comp_derHv(_lay[0],lay[0], rn)  # derHv: [derH, valt, rdnt, dect, extt, 1]:
-        dextt = [[comp_ext(_ext,ext,[Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec])] for _ext,ext in zip(_lay[-2],lay[-2])]
+        dextt = [comp_ext(_ext,ext,[Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec]) for _ext,ext in zip(_lay[-2],lay[-2])]
 
         dsubH += [[dderH, valt,rdnt,dect,dextt, 1]]  # flat
         Mdec += dect[0]; Ddec += dect[1]
@@ -446,7 +446,7 @@ def comp_ext(_ext, ext, Valt, Rdnt, Dect):  # comp ds:
     _aS = abs(_S); aS = abs(S)
 
     Dect[0] += (mL/ max(aL,_aL) + mS/ max(aS,_aS) if aS or _aS else 1 + (mA / max_mA) if max_mA else 1) /3  # ave dec of 3 vals
-    Dect[1] += (dL/ (_aL+aL) + dS / max(_aS+aS) if aS or _aS else 1 + (dA / max_dA) if max_mA else 1) /3
+    Dect[1] += (dL/ (_aL+aL) + dS / (_aS+aS) if aS or _aS else 1 + (dA / max_dA) if max_mA else 1) /3
 
     return [[mL,mS,mA], [dL,dS,dA]]
 
