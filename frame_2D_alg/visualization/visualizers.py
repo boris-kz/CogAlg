@@ -1,313 +1,209 @@
-import os
+import sys
 import numpy as np
-import matplotlib.pyplot as plt
+from math import floor
+from collections import deque
+from itertools import product
+from .classes import Cgraph, CP, ptupleT, angleT
+from .filters import ave_g, ave_dangle, ave_daangle
 
-WHITE = 255, 255, 255
-BLACK = 0, 0, 0
-RED = 0, 0, 255
-GREEN = 0, 255, 0
-BLUE = 255, 0, 0
-GREY = 128, 128, 128
-DARK_RED = 0, 0, 128
-DARK_GREEN = 0, 128, 0
-DARK_BLUE = 128, 0, 0
-POSE2COLOR = {
-    0:RED,
-    1:GREEN,
-    2:BLUE,
-}
+'''
+In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
+Potential object is proximate low-gradient (flat) blobs, with rough / thick boundary of adjacent high-gradient (edge) blobs.
+These edge blobs can be dimensionality-reduced to their long axis / median line: an effective outline of adjacent flat blob.
+-
+Median line can be connected points that are most equidistant from other blob points, but we don't need to define it separately.
+An edge is meaningful if blob slices orthogonal to median line form some sort of a pattern: match between slices along the line.
+These patterns effectively vectorize representation: they represent match and change between slice parameters along the blob.
+-
+This process is very complex, so it must be selective. Selection should be by combined value of gradient deviation of edge blobs
+and inverse gradient deviation of flat blobs. But the latter is implicit here: high-gradient areas are usually quite sparse.
+A stable combination of a core flat blob with adjacent edge blobs is a potential object.
+'''
+octant = 0.3826834323650898
 
-BACKGROUND_COLOR = 128  # Pixel at this value can be over-written
+def slice_edge(blob, verbose=False):
+    max_mask__ = max_selection(blob)  # mask of local directional maxima of dy, dx, g
+    # form slices (Ps) from max_mask__ and form links by tracing max_mask__:
+    edge, Pt_ = trace_edge(blob, max_mask__, verbose=verbose)
+    return edge, Pt_
 
-class Visualizer:
-    def __init__(self, element_, root_visualizer=None,
-                 shape=None, title="Visualization"):
-        self.root_visualizer = root_visualizer
-        self.element_ = element_
-        self.element_cls = self.element_[0].__class__
-        self.hovered_element = None
-        self.element_stack = []
-        self.img = None
-        self.img_slice = None
-        if self.root_visualizer is None:
-            height, width = shape
-            self.background = np.full((height, width, 3), BACKGROUND_COLOR, 'uint8')
-            self.idmap = np.full((height, width), -1, 'int64')
+def max_selection(blob):
 
-            self.fig, self.ax = plt.subplots()
-            try:
-                self.fig.canvas.set_window_title(title)
-            except AttributeError as e: # for compatibility with later versions of matplotlib
-                if "no attribute" not in str(e).lower(): raise e
-                self.fig.canvas.manager.set_window_title(title)
-            self.imshow_obj = self.ax.imshow(self.background)
+    Y, X = blob.mask__.shape
+    g__ = blob.der__t.g
+    # compute direction of gradient
+    with np.errstate(divide='ignore', invalid='ignore'):
+        sin__, cos__ = [blob.der__t.dy, blob.der__t.dx] / g__
+
+    # round angle to one of eight directions
+    up__, lft__, dwn__, rgt__ = (sin__< -octant), (cos__< -octant), (sin__> octant), (cos__> octant)
+    mdly__, mdlx__ = ~(up__ | dwn__), ~(lft__ | rgt__)
+    # merge in 4 bilateral axes
+    axes_mask__ = [
+        mdly__ & (rgt__ | lft__), (dwn__ & rgt__) | (up__ & lft__),  #  0,  45 deg
+        (dwn__ | up__) & mdlx__,  (dwn__ & lft__) | (up__ & rgt__),  # 90, 135 deg
+    ]
+    max_mask__ = np.zeros_like(blob.mask__, dtype=bool)
+    # local max from cross-comp within axis, use kernel max for vertical sparsity?
+    for axis_mask__, (ydir, xdir) in zip(axes_mask__, ((0,1),(1,1),(1,0),(1,-1))):  # y,x direction per axis
+        # axis AND mask:
+        mask__ = axis_mask__ & blob.mask__
+        y_, x_ = mask__.nonzero()
+        # neighbors:
+        yn1_, xn1_ = y_ + ydir, x_ + xdir
+        yn2_, xn2_ = y_ - ydir, x_ - xdir
+        # computed vals
+        axis1_ = (0 <= yn1_) & (yn1_ < Y) & (0 <= xn1_) & (xn1_ < X)
+        axis2_ = (0 <= yn2_) & (yn2_ < Y) & (0 <= xn2_) & (xn2_ < X)
+        # compare values
+        not_max_ = np.zeros_like(y_, dtype=bool)
+        not_max_[axis1_] |= (g__[y_[axis1_], x_[axis1_]] < g__[yn1_[axis1_], xn1_[axis1_]])
+        not_max_[axis2_] |= (g__[y_[axis2_], x_[axis2_]] < g__[yn2_[axis2_], xn2_[axis2_]])
+        # select maxes
+        mask__[y_[not_max_], x_[not_max_]] = False
+        # add to max_mask__
+        max_mask__ |= mask__
+
+    return max_mask__
+
+def trace_edge(blob, mask__, verbose=False):
+
+    edge = Cgraph(roott=blob, node_=[[],[]], box=blob.box, mask__=blob.mask__)
+    blob.dlayers = [[edge]]
+    max_ = {*zip(*mask__.nonzero())}  # convert mask__ into a set of (y,x)
+
+    if verbose:
+        step = 100 / len(max_)  # progress % percent per pixel
+        progress = 0.0; print(f"\rTracing max... {round(progress)} %", end="");  sys.stdout.flush()
+    edge.P_ = []
+    Pt_ = []
+    while max_:  # queue of (y,x,P)s
+        y,x = max_.pop()
+        maxQue = deque([(y,x,None)])
+        while maxQue:  # trace max_
+            # initialize pivot dert
+            y,x,_P = maxQue.popleft()
+            i = blob.i__[blob.ibox.slice][y,x]
+            dy, dx, g = blob.der__t.get_pixel(y,x)
+            ma = ave_dangle  # max value because P direction is the same as dert gradient direction
+            assert g > 0, "g must be positive"
+            P = form_P(blob, CP(yx=(y,x), axis=(dy/g, dx/g), cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
+            edge.P_ += [P]
+            if _P is not None:
+                Pt_ += [(_P, P)]  # add up links only
+            # search in max_ path
+            adjacents = max_ & {*product(range(y-1,y+2), range(x-1,x+2))}   # search neighbors
+            maxQue.extend(((_y, _x, P) for _y, _x in adjacents))
+            max_ -= adjacents   # set difference = first set AND not both sets: https://www.scaler.com/topics/python-set-difference/
+            max_ -= P.cells     # remove all maxes in the way
+
+            if verbose:
+                progress += step; print(f"\rTracing max... {round(progress)} %", end=""); sys.stdout.flush()
+
+    if verbose: print("\r" + " " * 79, end=""); sys.stdout.flush(); print("\r", end="")
+
+    return edge, Pt_
+
+def form_P(blob, P):
+
+    scan_direction(blob, P, fleft=1)  # scan left
+    scan_direction(blob, P, fleft=0)  # scan right
+    # init:
+    _, _, I, Dy, Dx, G, Ma = map(sum, zip(*P.dert_))
+    L = len(P.dert_)
+    M = ave_g*L - G
+    G = np.hypot(Dy, Dx)  # recompute G
+    P.ptuple = ptupleT(I, G, M, Ma, angleT(Dy,Dx), L)
+    P.yx = P.dert_[L//2][:2]  # new center
+
+    return P
+
+def scan_direction(blob, P, fleft):  # leftward or rightward from y,x
+
+    sin,cos = _dy,_dx = P.axis
+    _y, _x = P.yx  # pivot
+    r = cos*_y - sin*_x  # P axial line: cos*y - sin*x = r = constant
+    _cy,_cx = round(_y), round(_x)  # keep initial cell
+    y, x = (_y-sin,_x-cos) if fleft else (_y+sin, _x+cos)  # first dert in the direction of axis
+
+    while True:  # scan to blob boundary or angle miss
+
+        dert = interpolate2dert(blob, y, x)
+        if dert is None: break  # blob boundary
+        i, dy, dx, g = dert
+        cy, cx = round(y), round(x)  # nearest cell of (y, x)
+        if not blob.mask__[cy, cx]: break
+        if abs(cy-_cy) + abs(cx-_cx) == 2:  # mask of cell between (y,x) and (_y,_x)
+            my = (_cy+cy) / 2  # midpoint cell, P axis is above, below or over it
+            mx = (_cx+cx) / 2
+            _my_cos = sin * mx + r  # _my*cos at mx in P, to avoid division
+            my_cos = my * cos       # new cell
+            if cos < 0: my_cos, _my_cos = -my_cos, -_my_cos   # reverse sign for comparison because of cos
+            if abs(my_cos-_my_cos) > 1e-5:
+                adj_y, adj_x = (  # deviation from P axis: above/_y>y, below/_y<y, over/_y~=y, with reversed y:
+                    ((_cy, cx) if _cy < cy else (cy, _cx)) if _my_cos < my_cos else
+                    ((_cy, cx) if _cy > cy else (cy, _cx)))
+                if not blob.mask__[adj_y, adj_x]: break    # if the cell is masked, stop
+                P.cells |= {(adj_y, adj_x)}
+
+        mangle,dangle = comp_angle((_dy,_dx), (dy, dx))
+        if mangle < 0:  # terminate P if angle miss
+            break
+        P.cells |= {(cy, cx)}  # add current cell to overlap
+        _cy, _cx, _dy, _dx = cy, cx, dy, dx
+        if fleft:
+            P.dert_ = [(y,x,i,dy,dx,g,mangle)] + P.dert_  # append left
+            y -= sin; x -= cos  # next y,x
         else:
-            self.background = self.root_visualizer.background
-            self.idmap = self.root_visualizer.idmap
+            P.dert_ = P.dert_ + [(y,x,i,dy,dx,g,mangle)]  # append right
+            y += sin; x += cos  # next y,x
 
-            self.fig = self.root_visualizer.fig
-            self.ax = self.root_visualizer.ax
-            self.imshow_obj = self.root_visualizer.imshow_obj
+def interpolate2dert(blob, y, x):
 
-    def reset(self):
-        self.clear_plot()
-        self.img = self.background.copy()
-        self.hovered_element = None
+    Y, X = blob.mask__.shape    # boundary
+    x0, y0 = floor(x), floor(y) # floor
+    x1, y1 = x0 + 1, y0 + 1     # ceiling
+    if x0 < 0 or x1 >= X or y0 < 0 or y1 >= Y: return None  # boundary check
+    kernel = [  # cell weighing by inverse distance from float y,x:
+        # https://www.researchgate.net/publication/241293868_A_study_of_sub-pixel_interpolation_algorithm_in_digital_speckle_correlation_method
+        (y0, x0, (y1 - y) * (x1 - x)),
+        (y0, x1, (y1 - y) * (x - x0)),
+        (y1, x0, (y - y0) * (x1 - x)),
+        (y1, x1, (y - y0) * (x - x0))]
+    ider__t = (blob.i__[blob.ibox.slice],) + blob.der__t
 
-    def update_img(self, flags):
-        self.imshow_obj.set_data(self.img)
-        self.fig.canvas.draw_idle()
-
-    def update_info(self):
-        # clear screen
-        os.system('cls' if os.name == 'nt' else 'clear')
-        print("hit 'q' to exit")
-
-    def go_back(self):
-        if self.element_stack:
-            self.element_ = self.element_stack.pop()
-            return self
-        elif self.root_visualizer is not None:
-            self.clear_plot()  # remove private plots
-            return self.root_visualizer
-        # return None otherwise
-
-    def append_element_stack(self, new_element_):
-        self.element_stack.append(self.element_)
-        self.element_ = new_element_
-
-    def get_hovered_element(self, x, y):
-        if x is None or y is None: return None
-        else: return self.element_cls.get_instance(self.idmap[round(y), round(x)])
-
-    # to be replaced:
-    def update_hovered_element(self, hovered_element):
-        raise NotImplementedError
-
-    def clear_plot(self):
-        raise NotImplementedError
-
-    def go_deeper(self, fd):
-        raise NotImplementedError
+    return (sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t)
 
 
-class BlobVisualizer(Visualizer):
+def comp_angle(_angle, angle):  # rn doesn't matter for angles
 
-    def __init__(self, frame, **kwargs):     # only for frame
-        super().__init__(element_=frame.rlayers[0], shape=frame.box[-2:], **kwargs)
-        # private fields
-        self.gradient = np.zeros((2, *self.background.shape[:2]), float)
-        self.gradient_mask = np.zeros(self.background.shape[:2], bool)
-        self.show_gradient = False
-        self.quiver = None
+    # angle = [dy,dx]
+    (_sin, sin), (_cos, cos) = [*zip(_angle, angle)] / np.hypot(*zip(_angle, angle))
 
-    def reset(self):
-        blob_ = self.element_
-        self.img_slice = blob_[0].root_ibox.slice
-        # Prepare blob ID map and background
-        self.background[:] = BACKGROUND_COLOR
-        self.idmap[:] = -1
-        local_idmap = self.idmap[self.img_slice]
-        local_background = self.background[self.img_slice]
-        for blob in blob_:
-            local_idmap[blob.box.slice][blob.mask__] = blob.id  # fill idmap with blobs' ids
-            local_background[blob.box.slice][blob.mask__] = blob.sign * 32  # fill image with blobs
-        super().reset()
+    dangle = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
+    # cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
+    mangle = ave_dangle - abs(dangle)  # inverse match, not redundant if sum cross sign
 
-    def update_gradient(self):
-        blob = self.hovered_element
-        if blob is None: return
+    return [mangle, dangle]
 
-        # Reset gradient
-        self.gradient[:] = 1e-3
-        self.gradient_mask[:] = False
+def comp_aangle(_aangle, aangle):  # currently not used, just in case we need it later
 
-        # Use indexing to get the gradient of the blob
-        box_slice = blob.ibox.slice
-        self.gradient[1][box_slice] = -blob.der__t.dy
-        self.gradient[0][box_slice] = blob.der__t.dx
-        self.gradient_mask[box_slice] = blob.mask__
+    _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _aangle
+    sin_da0, cos_da0, sin_da1, cos_da1 = aangle
 
-        # Apply quiver
-        self.quiver = self.ax.quiver(
-            *self.gradient_mask.nonzero()[::-1],
-            *self.gradient[:, self.gradient_mask])
+    sin_dda0 = (cos_da0 * _sin_da0) - (sin_da0 * _cos_da0)
+    cos_dda0 = (cos_da0 * _cos_da0) + (sin_da0 * _sin_da0)
+    sin_dda1 = (cos_da1 * _sin_da1) - (sin_da1 * _cos_da1)
+    cos_dda1 = (cos_da1 * _cos_da1) + (sin_da1 * _sin_da1)
+    # for 2D, not reduction to 1D:
+    # aaangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
+    # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]
+    # dax = [-sin_dda0 + sin_dda1, cos_dda0 + cos_dda1]
+    gay = np.arctan2((-sin_dda0 - sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in y?
+    gax = np.arctan2((-sin_dda0 + sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in x?
 
-    def update_img(self, flags):
-        self.clear_plot()
-        if flags.show_gradient: self.update_gradient()
-        super().update_img(flags)
+    # daangle = sin_dda0 + sin_dda1?
+    daangle = np.arctan2(gay, gax)  # diff between aangles, probably wrong
+    maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
 
-    def update_hovered_element(self, hovered_element):
-        blob = self.hovered_element = hovered_element
-
-        # override color of the element
-        self.img[:] = self.background[:]
-
-        if blob is None: return
-
-        # paint over the blob ...
-        self.img[self.img_slice][blob.box.slice][blob.mask__] = WHITE
-        # ... and its adjacents
-        for adj_blob, pose in zip(*blob.adj_blobs):
-            self.img[self.img_slice][adj_blob.box.slice][adj_blob.mask__] = POSE2COLOR[pose]
-
-    def update_info(self):
-        super().update_info()
-
-        print("hit 'd' to toggle show gradient")
-        print("ctrl + click to show deeper rblobs")
-        print("shift + click to show edge PPs")
-
-        blob = self.hovered_element
-        if blob is None:
-            print("No blob highlighted")
-            return
-
-        print("blob:")
-        print(f"┌{'─'*10}┬{'─'*6}┬{'─'*10}┬{'─'*10}┬{'─'*10}┬{'─'*10}"
-              f"┬{'─'*10}┬{'─'*10}┬{'─'*16}┐")
-        print(f"│{'id':^10}│{'sign':^6}│{'I':^10}│{'Dy':^10}│{'Dx':^10}│{'G':^10}│"
-              f"{'M':^10}│{'A':^10}│{'box':^16}│")
-        print(f"├{'─' * 10}┼{'─' * 6}┼{'─' * 10}┼{'─' * 10}┼{'─' * 10}┼{'─' * 10}"
-              f"┼{'─' * 10}┼{'─' * 10}┼{'─' * 16}┤")
-        print("\r"f"│{blob.id:^10}│{'+' if blob.sign else '-':^6}│"
-              f"{blob.I:^10.2e}│{blob.Dy:^10.2e}│{blob.Dx:^10.2e}│{blob.G:^10.2e}│"
-              f"{blob.M:^10.2e}│{blob.A:^10.2e}│"
-              f"{'-'.join(map(str, blob.box)):^16}│")
-        print(f"└{'─' * 10}┴{'─' * 6}┴{'─' * 10}┴{'─' * 10}┴{'─' * 10}┴{'─' * 10}"
-              f"┴{'─' * 10}┴{'─' * 10}┴{'─' * 16}┘")
-
-    def clear_plot(self):
-        if self.quiver is not None:
-            self.quiver.remove()
-            self.quiver = None
-
-    def go_deeper(self, fd):
-        blob = self.hovered_element
-        if blob is None: return
-
-        if fd:
-            from vectorize_edge_blob.classes import CPP
-            # edge visualizer
-            if not blob.dlayers or not blob.dlayers[0]: return
-            edge = blob.dlayers[0][0]
-            if not edge.node_t: return
-            PP_ = [
-                CPP(
-                    fd=1,
-                    ptuple=[blob.I, blob.G, edge.M, edge.Ma, [blob.Dy, blob.Dx], blob.A],
-                    derH=edge.derH,
-                    valt=edge.valt,
-                    rdnt=edge.rdnt,
-                    mask__=blob.mask__,
-                    root=blob,
-                    node_t=edge.node_t,
-                    P_=edge.P_,
-                    link_=edge.link_,
-                    fback_t=edge.fback_t,
-                    rng=edge.rng,
-                    box=blob.box,
-                )
-            ]
-            self.clear_plot()
-            return SliceVisualizer(img_slice=blob.ibox.slice, element_=PP_, root_visualizer=self)
-        else:
-            # frame visualizer (r+blob)
-            if not blob.rlayers or not blob.rlayers[0]: return
-            self.append_element_stack(blob.rlayers[0])
-            return self
-
-
-class SliceVisualizer(Visualizer):
-    def __init__(self, img_slice, **kwargs):
-        super().__init__(**kwargs)
-        self.img_slice = img_slice  # all PPs have same frame of reference
-        # private fields
-        self.show_slices = False
-        self.show_links = False
-        self.P_links = None
-        self.blob_slices = None
-
-    def reset(self):
-        # Prepare ID map and background
-        self.background[:] = BACKGROUND_COLOR
-        self.idmap[:] = -1
-        local_idmap = self.idmap[self.img_slice]
-        local_background = self.background[self.img_slice]
-        for PP in self.element_:
-            local_idmap[PP.box.slice][PP.mask__] = PP.id  # fill idmap with PP's id
-            local_background[PP.box.slice][PP.mask__] = DARK_GREEN
-        super().reset()
-
-    def update_blob_slices(self):
-        PP = self.hovered_element
-        if PP is None or not PP.P_: return
-        y0 = self.img_slice[0].start
-        x0 = self.img_slice[1].start
-        self.blob_slices = []
-        for P in PP.P_:
-            y, x = P.yx
-            s, c = P.axis
-            L = len(P.dert_)
-            y_, x_ = (np.multiply([[s], [c]], [[-1, 0, 1]]) + [[y], [x]]) if (L == 1) else np.array(P.dert_).T[:2]
-
-            self.blob_slices += [(
-                *self.ax.plot(x_+x0, y_+y0, 'b-', linewidth=1, markersize=2),
-                self.ax.text(x+x0, y+y0, str(L), color = 'b', fontsize = 12),
-            )]
-
-    def update_P_links(self):
-        PP = self.hovered_element
-        if PP is None or not PP.link_: return
-        y0 = self.img_slice[0].start
-        x0 = self.img_slice[1].start
-        self.P_links = []
-        for derP in PP.link_:
-            _P, P = derP if isinstance(derP, tuple) else derP._P, derP.P
-            (_y, _x), (y, x) = _P.yx, P.yx
-            self.P_links += self.ax.plot([_x+x0,x+x0], [_y+y0,y+y0], 'ko-', linewidth=2, markersize=4)
-
-    def update_img(self, flags):
-        self.clear_plot()
-        if flags.show_slices: self.update_blob_slices()
-        if flags.show_links: self.update_P_links()
-        super().update_img(flags)
-
-    def update_hovered_element(self, hovered_element):
-        PP = self.hovered_element = hovered_element
-
-        # override color of the element
-        self.img[:] = self.background[:]
-
-        if PP is None: return
-
-        # paint over the blob ...
-        self.img[self.img_slice][PP.box.slice][PP.mask__] = WHITE
-
-    def update_info(self):
-        print("hit 'z' to toggle show slices")
-        print("hit 'x' to toggle show links")
-        print("ctrl + click to show deeper rPP")
-        print("shift + click to show deeper dPP")
-
-    def clear_plot(self):
-        if self.P_links is not None:
-            for line in self.P_links:
-                line.remove()
-            self.P_links = None
-        if self.blob_slices is not None:
-            for line, L_text in self.blob_slices:
-                line.remove()
-                L_text.remove()
-            self.blob_slices = None
-
-    def go_deeper(self, fd):
-        PP = self.hovered_element
-        if PP is None: return
-        if not PP.node_t: return
-        if not isinstance(PP.node_t[0], list): return  # stop if no deeper layer (PP.node_t filled with Ps)
-        subPP_ = PP.node_t[fd]
-        if not subPP_: return
-        self.append_element_stack(subPP_)
-        return self
+    return [maangle,daangle]

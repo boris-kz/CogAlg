@@ -6,7 +6,7 @@ from .classes import Cgraph, CderG, CPP
 from .filters import ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd, ave_dI
 from .slice_edge import slice_edge, comp_angle
 from .comp_slice import comp_P_, comp_ptuple, comp_derH, sum_derH, sum_dertuple, get_match
-from .agg_recursion import comp_G, comp_aggHv, comp_derHv, vectorize_root, form_graph_t, sum_derHv, sum_ext
+from .agg_recursion import comp_G, comp_aggHv, comp_derHv, sum_derHv, sum_ext, sum_subHv, sum_aggHv
 
 '''
 Implement sparse param tree in aggH: new graphs represent only high m|d params + their root params.
@@ -27,15 +27,204 @@ Nodes are connected by m|d of different param sets in links, potentially cluster
 Then combine graph with alt_graphs?
 '''
 
+
 def root(blob, verbose):  # vectorization pipeline is 3 composition levels of cross-comp,clustering
     edge = vectorize_root(blob, verbose)
     # temporary
     for fd, G_ in enumerate(edge.node_[-1]):
         if edge.aggH:
-            agg_recursion(None, edge, G_, fd)
+            agg_recursion(None, edge, G_, lenH=0, fd=0, nrng=1)
 
 
-def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_
+def vectorize_root(blob, verbose):  # vectorization in 3 composition levels of xcomp, cluster:
+
+    edge, adj_Pt_ = slice_edge(blob, verbose)  # lateral kernel cross-comp -> P clustering
+
+    comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
+
+    edge.node_ = [edge.node_]
+
+    for fd, node_ in enumerate(edge.node_[-1]):  # always node_t
+        if edge.valt[fd] * (len(node_) - 1) * (edge.rng + 1) > G_aves[fd] * edge.rdnt[fd]:
+            for PP in node_: PP.roott = [None, None]
+            agg_recursion(None, edge, node_, lenH=0, fd=0)
+            # PP cross-comp -> discontinuous clustering, agg+ only, no Cgraph nodes
+    return edge
+
+# draft:
+def agg_recursion(rroot, root, G_, lenH, fd, nrng=1):  # compositional agg|sub recursion in root graph, cluster G_
+
+    _GG_t, valt, rdnt = sub_recursion(rroot, root, G_, lenH, fd, nrng=1)
+    # = GG_tree, with deeper layers packed in forks, unpack width-first
+    GGG_t = []  # fork tree formed by agg+
+
+    while _GG_t:  # fork layer, recursive unpack lower forks
+        GG_t, GGG_t = [],[]
+        for fd, GG_ in enumerate(_GG_t):
+            # decode rng from forks?
+            if valt[fd] * (len(GG_)-1) *rng > G_aves[fd] * rdnt[fd]:
+                # agg+/ node_( sub)agg+/ node, vs sub+ only in comp_slice
+                GGG_t, Vt, Rt  = agg_recursion(rroot, root, GG_, lenH=0, fd=0)
+                # der+ if fd, else rng+ =2
+                if rroot:
+                    rroot.fback_t[fd] += [[root.aggH, root.valt, root.rdnt, root.dect]]
+                    feedback(rroot,fd)  # update root.root..
+                for i in 0,1:
+                    if Vt[i] > G_aves[i] * Rt[i]:
+                        GGG_t += [[i, GGG_t[fd][i]]]
+                        # sparse agglomerated current layer of forks across GG_tree
+                        GG_t += [[i, GG_t[fd][i],1]]  # i:fork, 1:packed sub_GG_t?
+                        # sparse lower layer of forks across GG_tree
+                    else:
+                        GGG_t += [[i, GG_t[fd][i]]]  # keep lower-composition GGs
+
+        _GG_t = GG_t  # for next loop
+
+    return GGG_t  # should be tree nesting lower forks, currently not implemented
+
+# draft
+def sub_recursion(rroot, root, G_, lenH, fd, nrng=1):  # interlaced fd recursion?
+
+    # rng+|der+ over same-root nodes, forming multiple Gm_,Gd_ per sub+ layer:
+
+    _G_t = [[G_,0]]  # next layer of the fork tree, 0 is rng+
+    G_tree = [[G_,0]]  # root of fork tree, keep for form_graph_tree
+
+    while _G_t:  # fork layer, recursive unpack lower forks
+        G_t = []
+        for fd, G_ in _G_t:
+            Et = [[0,0],[0,0],[0,0]]  # grapht link_' eValt, eRdnt, eDect(currently not used)
+            link_ = []
+            if fd:  # der+
+                for link in root.link_:  # reform links
+                    if link.Vt[1] < G_aves[1] * link.Rt[1]: continue  # maybe weak after rdn incr?
+                    comp_G(link._G, link.G, link, Et, lenH)
+                    link_ += [link_]
+            else:  # rng+
+                for i, _G in enumerate(G_):  # form new link_ from original node_
+                    for G in G_[i + 1:]:
+                        dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx
+                        if np.hypot(dy, dx) < 2 * nrng:  # max distance between node centers, init=2
+                            link = CderG(_G=_G, G=G)
+                            comp_G(_G, G, link, Et, lenH)
+                            link_ += [link_]
+            G_t += [[link_,fd]]  # not sure
+        _G_t = G_t  # new layer of G_tree
+        G_tree += [[G_t]]
+
+    GG_t = []
+    GG_tH = [GG_t]
+    val_t, rdn_t = [],[]
+    # not revised:
+    for i in 0,1:
+        val_t[i] += [valt[i]]; rdn_t[i] += [rdnt[i]+1]  # 1 is process redundancy to lower sub+
+        if valt[fd] < G_aves[fd] * rdnt[fd]:
+            break
+    val_ = sorted(val_t[fd])  # max val in val_[0]?
+    val_tH = []
+    for i, val in enumerate(val_):
+        # rough pseudocode:
+        if val > G_aves[fd] * (rdn_t[fd]+i):  # also remove init rdn?
+            val_tH += GG_t[fd][i]
+        else:
+            break
+    GG_tree, valt,rdnt = form_graph_tree(root, val_tH, nrng)  # root_fd, eval sub+, feedback per graph
+
+    return GG_tree
+
+
+def form_graph_tree(root, G_tree, nrng):  # root_fd, eval sub+, feedback per graph
+
+    GG_tree, valt, rdnt = [],0,0
+
+    return GG_tree, valt, rdnt
+
+
+# not revised:
+def form_graph_t(root, G_, Et, nrng):
+
+    _G_ = [G for G in G_ if len(G.rim_tH)>len(root.rim_tH)]  # prune Gs unconnected in current layer
+
+    node_connect(_G_)  # Graph Convolution of Correlations over init _G_
+    node_t = []
+    for fd in 0,1:
+        if Et[0][fd] > ave * Et[1][fd]:  # eValt > ave * eRdnt, else no clustering, keep root.node_
+            graph_ = segment_node_(root, _G_, fd, nrng)  # fd: node-mediated Correlation Clustering
+            if not graph_: continue
+            for graph in graph_:  # eval sub+ per node
+                if graph.Vt[fd] * (len(graph.node_[-1])-1)*root.rng > G_aves[fd] * graph.Rt[fd]:
+
+                    # current depth sub+
+                    agg_recursion(root, graph, graph.node_[-1], len(graph.aggH[-1][0]), fd, nrng+1*(1-fd))  # nrng+ if not fd
+
+                    # higher layer's sub+
+                    rroot = graph
+                    rfd = rroot.fd
+                    while isinstance(rroot.roott, list) and rroot.roott[rfd]:  # not blob
+                        rroot = rroot.roott[rfd]
+                        Val, Rdn = 0, 0
+                        if isinstance(rroot.node_[-1][0], list):  # node_ is node_t
+                            node_ = rroot.node_[-1][rfd]
+                        else:
+                            node_ = rroot.node_[-1]
+
+                        for node in node_:  # sum vals and rdns from all higher nodes
+                            Rdn += node.rdnt[rfd]
+                            Val += node.valt[rfd]
+                        # include rroot.Vt and Rt?
+                        if Val * (len(rroot.node_[-1])-1)*rroot.rng > G_aves[fd] * Rdn:
+                            # not sure about nrg here
+                            agg_recursion(root, graph, rroot.node_[-1], len(rroot.aggH[-1][0]), rfd, nrng+1*(1-rfd))  # nrng+ if not fd
+
+                else:
+                    root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
+                    feedback(root,root.fd)  # update root.root..
+            node_t += [graph_]  # may be empty
+        else: node_t += []
+    if any(node_t): G_[:] = node_t
+
+
+def feedback(root, fd):  # called from form_graph_, append new der layers to root
+
+    AggH, ValHt, RdnHt, DecHt = deepcopy(root.fback_t[fd].pop(0))  # init with 1st tuple
+    while root.fback_t[fd]:
+        aggH, valHt, rdnHt, decHt = root.fback_t[fd].pop(0)
+        sum_aggH(AggH, aggH, base_rdn=0)
+    sum_aggH(root.aggH,AggH, base_rdn=0)
+
+    if isinstance(root, Cgraph) and root.root:  # root is not CEdge, which has no roots
+        rroot = root.root
+        fd = root.fd  # current node_ fd
+        fback_ = rroot.fback_t[fd]
+        fback_ += [[AggH, ValHt, RdnHt, DecHt]]
+        if fback_ and (len(fback_) == len(rroot.node_t)):  # flat, all rroot nodes terminated and fed back
+            # getting cyclic rroot here not sure why it can happen, need to check further
+            feedback(rroot, fd)  # sum2graph adds aggH per rng, feedback adds deeper sub+ layers
+
+
+# more selective: only for parallel clustering?
+def select_init_(Gt_, fd):  # local max selection for sparse graph init, if positive link
+
+    init_, non_max_ = [],[]  # pick max in direct links, no recursively mediated links max: discontinuous?
+
+    for node, val in Gt_:
+        if node in non_max_: continue  # can't init graph
+        if val<=0:  # no +ve links
+            if sum(node.val_Ht[fd]) > ave * sum(node.rdn_Ht[fd]):
+                init_+= [[node, 0]]  # single-node proto-graph
+            continue
+        fmax = 1
+        for link in node.link_:
+            _node = link.G if link._G is node else link._G
+            if val > Gt_[_node.it[fd]][1]:
+                non_max_ += [_node]  # skip as next node
+            else:
+                fmax = 0; break  # break is not necessary?
+        if fmax:
+            init_ += [[node,val]]
+    return init_
+
+def agg_recursion_cpr(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_
 
     parHv = [root.aggH,root.valt[fd],root.rdnt[fd],root.dect[fd]]
     form_pP_(pP_=[], parHv=parHv, fd=fd)  # sum is not needed here
@@ -188,130 +377,3 @@ def form_val_pP_(ptuple):
 
     if parP: parP_ += [parP]  # terminate last parP
     return parP_  # may be empty
-
-# draft
-def sub_recursion(rroot, root, G_, lenH, fd, nrng=1):  # separate | interlaced fd recursion?
-
-    # rng+|der+ over same-root nodes, forming multiple (Gm_,Gd_) GG_tH:
-    GG_tH = []
-    val_t, rdn_t = [],[]
-
-    while True:
-        # not revised:
-        Et = [[0,0],[0,0],[0,0]]  # grapht link_' eValt, eRdnt, eDect(currently not used)
-        if fd:  # der+
-            for link in root.link_:  # reform links
-                if link.Vt[1] < G_aves[1] * link.Rt[1]: continue  # maybe weak after rdn incr?
-                comp_G(link._G, link.G, link, Et, lenH)
-        else:  # rng+
-            for i, _G in enumerate(G_):  # form new link_ from original node_
-                for G in G_[i + 1:]:
-                    dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx
-                    if np.hypot(dy, dx) < 2 * nrng:  # max distance between node centers, init=2
-                        link = CderG(_G=_G, G=G)
-                        comp_G(_G, G, link, Et, lenH)
-
-        GG_t, valt, rdnt = form_graph_t(root, G_, Et, nrng)  # root_fd, eval sub+, feedback per graph
-        if GG_t:
-            GG_tH += GG_t
-        else: break  # maybe empty
-        for i in 0,1:
-            val_t[i] += [valt[i]]; rdn_t[i] += [rdnt[i]+1]  # 1 is process redundancy to lower sub+
-        if valt[fd] < G_aves[fd] * rdnt[fd]:
-            break
-        val_ = sorted(val_t[fd])  # max val in val_[0]?
-        out_tH = []
-        for i, val in enumerate(val_):
-            # rough pseudocode:
-            if val > G_aves[fd] * (rdn_t[fd]+i):  # also remove init rdn?
-                out_tH += GG_t[fd][i]
-            else:
-                break
-
-    return out_tH
-
-
-# probably just form_graph_t that returns GG_t, valt, rdnt, without agg+ call?
-# not revised:
-def form_graph_t(root, G_, Et, nrng):
-
-    _G_ = [G for G in G_ if len(G.rim_tH)>len(root.rim_tH)]  # prune Gs unconnected in current layer
-
-    node_connect(_G_)  # Graph Convolution of Correlations over init _G_
-    node_t = []
-    for fd in 0,1:
-        if Et[0][fd] > ave * Et[1][fd]:  # eValt > ave * eRdnt, else no clustering, keep root.node_
-            graph_ = segment_node_(root, _G_, fd, nrng)  # fd: node-mediated Correlation Clustering
-            if not graph_: continue
-            for graph in graph_:  # eval sub+ per node
-                if graph.Vt[fd] * (len(graph.node_[-1])-1)*root.rng > G_aves[fd] * graph.Rt[fd]:
-
-                    # current depth sub+
-                    agg_recursion(root, graph, graph.node_[-1], len(graph.aggH[-1][0]), fd, nrng+1*(1-fd))  # nrng+ if not fd
-
-                    # higher layer's sub+
-                    rroot = graph
-                    rfd = rroot.fd
-                    while isinstance(rroot.roott, list) and rroot.roott[rfd]:  # not blob
-                        rroot = rroot.roott[rfd]
-                        Val, Rdn = 0, 0
-                        if isinstance(rroot.node_[-1][0], list):  # node_ is node_t
-                            node_ = rroot.node_[-1][rfd]
-                        else:
-                            node_ = rroot.node_[-1]
-
-                        for node in node_:  # sum vals and rdns from all higher nodes
-                            Rdn += node.rdnt[rfd]
-                            Val += node.valt[rfd]
-                        # include rroot.Vt and Rt?
-                        if Val * (len(rroot.node_[-1])-1)*rroot.rng > G_aves[fd] * Rdn:
-                            # not sure about nrg here
-                            agg_recursion(root, graph, rroot.node_[-1], len(rroot.aggH[-1][0]), rfd, nrng+1*(1-rfd))  # nrng+ if not fd
-
-                else:
-                    root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
-                    feedback(root,root.fd)  # update root.root..
-            node_t += [graph_]  # may be empty
-        else: node_t += []
-    if any(node_t): G_[:] = node_t
-
-
-def feedback(root, fd):  # called from form_graph_, append new der layers to root
-
-    AggH, ValHt, RdnHt, DecHt = deepcopy(root.fback_t[fd].pop(0))  # init with 1st tuple
-    while root.fback_t[fd]:
-        aggH, valHt, rdnHt, decHt = root.fback_t[fd].pop(0)
-        sum_aggH(AggH, aggH, base_rdn=0)
-    sum_aggH(root.aggH,AggH, base_rdn=0)
-
-    if isinstance(root, Cgraph) and root.root:  # root is not CEdge, which has no roots
-        rroot = root.root
-        fd = root.fd  # current node_ fd
-        fback_ = rroot.fback_t[fd]
-        fback_ += [[AggH, ValHt, RdnHt, DecHt]]
-        if fback_ and (len(fback_) == len(rroot.node_t)):  # flat, all rroot nodes terminated and fed back
-            # getting cyclic rroot here not sure why it can happen, need to check further
-            feedback(rroot, fd)  # sum2graph adds aggH per rng, feedback adds deeper sub+ layers
-
-
-# more selective: only for parallel clustering?
-def select_init_(Gt_, fd):  # local max selection for sparse graph init, if positive link
-
-    init_, non_max_ = [],[]  # pick max in direct links, no recursively mediated links max: discontinuous?
-
-    for node, val in Gt_:
-        if node in non_max_: continue  # can't init graph
-        if val<=0:  # no +ve links
-            if sum(node.val_Ht[fd]) > ave * sum(node.rdn_Ht[fd]):
-                init_+= [[node, 0]]  # single-node proto-graph
-            continue
-        fmax = 1
-        for link in node.link_:
-            _node = link.G if link._G is node else link._G
-            if val > Gt_[_node.it[fd]][1]:
-                non_max_ += [_node]  # skip as next node
-            else:
-                fmax = 0; break  # break is not necessary?
-        if fmax:
-            init_ += [[node,val]]
-    return init_
