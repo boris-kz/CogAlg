@@ -445,8 +445,15 @@ def comp_ext(_ext, ext, Valt, Rdnt, Dect):  # comp ds:
     _aL = abs(_L); aL = abs(L)
     _aS = abs(_S); aS = abs(S)
 
-    Dect[0] += (mL/ max(aL,_aL) + mS/ max(aS,_aS) if aS or _aS else 1 + (mA / max_mA) if max_mA else 1) /3  # ave dec of 3 vals
-    Dect[1] += (dL/ (_aL+aL) + dS / (_aS+aS) if aS or _aS else 1 + (dA / max_dA) if max_mA else 1) /3
+    # ave dec = ave (ave dec, ave dec of L,S,A):
+    Dect[0] = ((mL / max(aL,_aL) if aL or _aL else 1 +
+                mS / max(aS,_aS) if aS or _aS else 1 +
+                mA / max_mA if max_mA else 1) /3
+                + Dect[0]) / 2
+    Dect[1] = ((dL / (_aL+aL) if aL+_aL else 1 +
+                dS / (_aS+aS) if aS+_aS else 1 +
+                dA / max_dA if max_mA else 1) /3
+                + Dect[1]) / 2
 
     return [[mL,mS,mA], [dL,dS,dA]]
 
