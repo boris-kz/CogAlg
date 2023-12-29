@@ -152,9 +152,9 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     P_: list = z([])
     mask__ : object = None
     # temporary:
-    Vt : list = z([])  # last layer vals for node_connect and clustering
-    Rt : list = z([])
-    Dt : list = z([])
+    Vt : list = z([0,0])  # last layer vals for node_connect and clustering
+    Rt : list = z([1,1])
+    Dt : list = z([0,0])
     it : list = z([None,None])  # graph indices in root node_s, implicitly nested
     roott : list = z([None,None])  # for feedback
     fback_t : list = z([[],[],[]])  # feedback [[aggH,valt,rdnt,dect]] per node fork, maps to node_H
@@ -171,9 +171,9 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
 class CderG(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
     subH : list = z([])  # [[derH_t, valt, rdnt]]: top aggLev derived in comp_G, per rng, all der+
-    Vt : list = z([])  # last layer vals from comp_G
-    Rt : list = z([])
-    Dt : list = z([])
+    Vt : list = z([0,0])  # last layer vals from comp_G
+    Rt : list = z([1,1])
+    Dt : list = z([0,0] )
     _G : object = None  # comparand + connec params
     G : object = None
     S : float = 0.0  # sparsity: average distance to link centers

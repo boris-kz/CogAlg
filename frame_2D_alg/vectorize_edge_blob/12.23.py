@@ -193,3 +193,59 @@ def add_alts(Gd):
             Gm.alt_graph_ += [Gd]
             for fd in 0,1:
                 Gm.avalt[fd] += Gd.valt[fd]; Gm.ardnt[fd] += Gd.rdnt[fd]; Gm.adect[fd] += Gd.dect[fd]
+
+
+def sub_recursion_width(rroot, root, G_, lenH, fd, nrng=1):  # interlaced fd recursion?
+
+    # rng+,der+ over same-root nodes, forming multiple Gm_,Gd_ per sub+ layer:
+    Vt,Rt,Dt = root.Vt,root.Rt,root.Dt
+
+    _G_t = [[G_,0,Vt,Rt]]  # next layer of the fork tree, 0 is rng+
+    _G_tree = [[G_,0,Vt,Rt]]  # root of fork tree, keep for form_graph_tree
+
+    while _G_t:  # fork layer, recursive unpack lower forks
+        G_t = []
+        for _G_,fork, Vt,Rt in _G_t:
+            for fd in 0,1:
+                if Vt[fd] < ave_Gm * Rt[fd]:  # nrng if rng+
+                    G_t += [cross_comp(root.link_ if fd else _G_, lenH, [Vt,Rt,Dt], nrng*[1-fd])]
+        _G_t = G_t  # new layer of G_tree
+        _G_tree += [[G_t]]
+
+    val_t, rdn_t = [],[]
+    for i in 0,1:
+        val_t[i] += [Vt[i]]; rdn_t[i] += [Rt[i]+1]  # 1 is process redundancy to lower sub+
+        if Vt[fd] < G_aves[fd] * Rt[fd]:
+            break
+    # pseudo:
+    val_,rdn_, G_tree = sorted((val_t[fd],rdn_t[fd],_G_tree))
+    # sort by val only, max val in val_[0]?
+
+    for i, val in enumerate(val_):
+        if val < G_aves[fd] * (rdn_t[fd]+i):  # also remove init rdn?
+            G_tree = G_tree[:i]
+            break
+
+    GG_tree = form_graph_tree(root, G_tree, nrng)  # root_fd, eval sub+, feedback per graph
+    return GG_tree, Vt, Rt
+    # or
+        GG_tree, Vt, Rt = [], [0, 0], [1, 1]
+        val_t, rdn_t = [[],[]],[[],[]]
+        for G_,fork, vt,rt in _G_tree:
+            v, r = vt[fork], rt[fork]
+            val_t[fork] += [v]; rdn_t[fork] += [r+1]  # 1 is process redundancy to lower sub+
+            Vt[fork] += v; Rt[fork] += r
+
+        if Vt[ifd] > G_aves[ifd] * Rt[ifd]:  # this should be evaluated based on sum of V and R across all G_ts?
+            # sort by val only, max val in val_[0]?
+            sort_indices = np.argsort(val_t[ifd])[::-1]  # [::-1] to reverse it
+            val_ = [val_t[ifd][index] for index in sort_indices]
+            rdn_ = [rdn_t[ifd][index] for index in sort_indices]
+            G_tree = [_G_tree[index] for index in sort_indices]
+
+            for i, (val, rdn) in enumerate(zip(val_, rdn_)):
+                if val < G_aves[fd] * (rdn+i):  # also remove init rdn?
+                    G_tree = G_tree[:i]
+                    break
+            GG_tree = form_graph_tree(root, G_tree, nrng)  # root_fd, eval sub+, feedback per graph
+        return GG_tree, Vt, Rt
