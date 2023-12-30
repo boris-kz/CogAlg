@@ -50,10 +50,10 @@ def vectorize_root(blob, verbose):  # vectorization in 3 composition levels of x
             # PP cross-comp -> discontinuous clustering, agg+ only, no Cgraph nodes
 
 # draft:
-def agg_recursion(rroot, root, G_, lenH, fd, nrng=0):  # compositional agg|sub recursion in root graph, cluster G_
+def agg_recursion(rroot, root, lenH, fd, nrng=0):  # compositional agg|sub recursion in root graph, cluster G_
 
-    G_t, Vt, Rt = rng_der_recursion(rroot, root, G_, lenH, fd=0, nrng=1)  # G_tree, unpack in forks
-    GG_t, Vt, Rt = prune_n_cluster(G_t, Vt, Rt)
+    rd_recursion(rroot, root, lenH, nrng=1)  # G_tree, unpack in forks
+    _GG_t = form_graph_tree(root, nrng)
     GGG_t = []  # replacement fork tree from agg+
     rng=2
 
@@ -81,28 +81,24 @@ def agg_recursion(rroot, root, G_, lenH, fd, nrng=0):  # compositional agg|sub r
     return GGG_t  # should be tree nesting lower forks
 
 
-def rng_der_recursion(rroot, root, _G_t, lenH, nrng=1):  # rng,der incr over same-root nodes -> Gm_,Gd_ tree
+def rd_recursion(rroot, root, lenH, nrng=1):  # rng,der incr over same G_,link_ -> fork tree
 
-    for _G_,fork,_Vt,_Rt,_Dt in _G_t:  # fork layer, recursive unpack lower forks
+    for fd, Q, V,R,D in zip((0,1),(root.node_,root.link_), root.Vt,root.Rt,root.Dt):  # recursive rng+,der+
 
-        Vt, Rt, Dt = [0,0],[0,0],[0,0]
-        G_t = []
-        for fd in 0,1:
-            if fd and rroot == None:  # no link_ and der+ in base fork
-                continue
-            if _Vt[fd] < ave_Gm * _Rt[fd]:  # nrng if rng+, else 0:
-                link_,(vt,rt,dt) = cross_comp(root.link_ if fd else _G_, lenH, [_Vt,_Rt,_Dt], nrng*(1-fd))
-                if link_:  # not empty links
-                    G_ = list(set([link.G for link in link_] + [link._G for link in link_]))
-                    for i in 0,1:
-                        Vt[i]+=vt[i]; Rt[i]+=rt[i]; Dt[i]+=dt[i]
-                    G_t += [[G_,fd,Vt,Rt,Dt,[]]]
-        if G_t:
-            _G_t[-1][:] = G_t
-            if sum(Vt) < ave_Gm * sum(Rt):
-                rng_der_recursion(rroot, root, G_t, lenH, nrng=1)
+        Vt, Rt, Dt = root.Vt, root.Rt, root.Dt
+        ave = G_aves[fd]
+        if fd and rroot == None: continue # no link_ and der+ in base fork
 
-    return G_t, Vt, Rt
+        if V < ave * R:  # nrng if rng+, else 0:
+            if not fd: nrng += 1
+            link_,(vt,rt,dt) = cross_comp(Q, lenH, [Vt,Rt,Dt], nrng*(1-fd))
+            for i in 0,1:
+                Vt[i]+=vt[i]; Rt[i]+=rt[i]; Dt[i]+=dt[i]
+            # or eval per fd?
+            if sum(Vt) < (ave_Gm+ave_Gd) * sum(Rt):
+                # adds to root Et + rim_tH, evals per G:
+                rd_recursion(rroot, root, lenH, nrng)
+
 
 def prune_n_cluster(_G_t,_Vt,_Rt):
 

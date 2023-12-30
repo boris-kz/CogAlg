@@ -249,3 +249,61 @@ def sub_recursion_width(rroot, root, G_, lenH, fd, nrng=1):  # interlaced fd rec
                     break
             GG_tree = form_graph_tree(root, G_tree, nrng)  # root_fd, eval sub+, feedback per graph
         return GG_tree, Vt, Rt
+
+
+def rng_der_recursion(rroot, root, _Qt, lenH, nrng=1):  # rng,der incr over same-root nodes -> G_,link_ tree
+
+    for _Q,fork,_Vt,_Rt,_Dt in _Qt:  # Qt is G_,link_: fork layer, recursive unpack lower forks
+        # _ denotes higher layer
+        Vt, Rt, Dt = [0,0],[0,0],[0,0]
+        Qt = []
+        for fd in 0,1:
+            if fd and rroot == None:  # no link_ and der+ in base fork
+                continue
+            if _Vt[fd] < ave_Gm * _Rt[fd]:  # nrng if rng+, else 0:
+                link_,(vt,rt,dt) = cross_comp(root.link_ if fd else _Q, lenH, [_Vt,_Rt,_Dt], nrng*(1-fd))
+                if link_:  # not empty links
+                    G_ = list(set([link.G for link in link_] + [link._G for link in link_]))
+                    for i in 0,1:
+                        Vt[i]+=vt[i]; Rt[i]+=rt[i]; Dt[i]+=dt[i]
+                    Qt += [[G_,fd,Vt,Rt,Dt,[]]]
+        for i in 0,1:
+            _Vt[i]+=Vt[i]; _Rt[i]+=Rt[i]; _Dt[i]+=Dt[i]  # include lower-layer vals?
+        if Qt:
+            _Qt[-1][:] = Qt
+            if sum(Vt) < ave_Gm * sum(Rt):
+                rng_der_recursion(rroot, root, Qt, lenH, nrng=1)
+
+    return _Qt
+
+def agg_recursion(rroot, root, G_, lenH, fd, nrng=0):  # compositional agg|sub recursion in root graph, cluster G_
+
+    G_t, Vt, Rt = rng_der_recursion(rroot, root, G_, lenH, fd=0, nrng=1)  # G_tree, unpack in forks
+
+    _GG_t,_Vt,_Rt = prune_n_cluster(G_t, Vt, Rt)  # if access tree is rearranged or flattened
+    GGG_t = []  # replacement fork tree from agg+
+    rng=2
+
+    while _GG_t:  # fork layer, recursive unpack lower forks
+        GG_t, GGG_t = [],[]
+        for fd, GG_ in enumerate(_GG_t):
+            if not fd: rng+=2
+            if Vt[fd] * (len(GG_)-1) *rng > G_aves[fd] * Rt[fd]:
+                # agg+/ node_( sub)agg+/ node, vs sub+ only in comp_slice
+                GGG_t, Vt, Rt  = agg_recursion(rroot, root, GG_, lenH=0, fd=0)
+                if rroot:
+                    rroot.fback_t[fd] += [[root.aggH, root.valt, root.rdnt, root.dect]]
+                    feedback(rroot,fd)  # update root.root..
+                for i in 0,1:
+                    if Vt[i] > G_aves[i] * Rt[i]:
+                        GGG_t += [[i, GGG_t[fd][i]]]
+                        # sparse agglomerated current layer of forks across GG_tree
+                        GG_t += [[i, GG_t[fd][i],1]]  # i:fork, 1:packed sub_GG_t?
+                        # sparse lower layer of forks across GG_tree
+                    else:
+                        GGG_t += [[i, GG_t[fd][i]]]  # keep lower-composition GGs
+
+        _GG_t = GG_t  # for next loop
+
+    return GGG_t  # should be tree nesting lower forks
+
