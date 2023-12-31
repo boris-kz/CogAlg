@@ -307,3 +307,32 @@ def agg_recursion(rroot, root, G_, lenH, fd, nrng=0):  # compositional agg|sub r
 
     return GGG_t  # should be tree nesting lower forks
 
+
+def prune_n_cluster(_G_t,_Vt,_Rt):
+
+    # trace and assign fork redundancy through unique root->fork sequence, sorted?
+    # or pairwise rdn only, else width-first to get whole-layer rdn?
+
+    # old:
+    val_t, rdn_t = [[],[]],[[],[]]
+    for G_,fork, vt,rt,dt in _G_t:
+        v, r = vt[fork], rt[fork]
+        val_t[fork] += [v]; rdn_t[fork] += [r+1]  # 1 is process redundancy to lower sub+
+        Vt[fork] += v; Rt[fork] += r
+
+    if Vt[ifd] > G_aves[ifd] * Rt[ifd]:  # this should be evaluated based on sum of V and R across all G_ts?
+        # sort by val only, max val in val_[0]?
+        sort_indices = np.argsort(val_t[ifd])[::-1]  # [::-1] to reverse it
+        val_ = [val_t[ifd][index] for index in sort_indices]
+        rdn_ = [rdn_t[ifd][index] for index in sort_indices]
+        G_tree = [_G_tree[index] for index in sort_indices]
+
+        # prune weak G_s before clustering:
+        for i, (val, rdn) in enumerate(zip(val_, rdn_)):
+            if val < G_aves[fd] * (rdn+i):  # also remove init rdn?
+                G_tree = G_tree[:i]
+                break
+
+        GG_tree = form_graph_tree(root, G_tree, nrng)  # root_fd, eval sub+, feedback per graph
+    return GG_tree, Vt, Rt
+
