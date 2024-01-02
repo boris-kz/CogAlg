@@ -46,20 +46,21 @@ def vectorize_root(blob, verbose):  # vectorization in 3 composition levels of x
     for fd, node_ in enumerate(edge.node_[-1]):  # always node_t
         if edge.valt[fd] * (len(node_) - 1) * (edge.rng + 1) > G_aves[fd] * edge.rdnt[fd]:
             for PP in node_: PP.roott = [None,None]
-            agg_recursion(None, edge, lenH=0, fd=0)
+            agg_recursion(None, edge, lenH=0, lenHH=0, fd=0)
             # PP cross-comp -> discontinuous clustering, agg+ only, no Cgraph nodes
 
 # draft:
-def agg_recursion(rroot, root, lenH, fd, nrng=0):  # compositional agg|sub recursion in root graph, cluster G_
+def agg_recursion(rroot, root, lenH, lenHH, fd, nrng=0):  # compositional agg|sub recursion in root graph, cluster G_
 
     Et = [[0,0],[0,0],[0,0]]
-    for G in root.node[-1][fd]:  # root.aggH is appended later, implicitly nested as rim_tH?
-        G.rim_tH = [G.rim_tH]  # convert to ftree HH, conditional append in rd_recursion
-
+    if isinstance(root.node_[-1][0], list):
+        node_ = root.node_[-1][fd]  # agg+ / GG_ from sub+
+    else:
+        node_ = root.node_[-1]  # sub+ / G_ from sum2graph
     # init lenH = lenHH[-1] = 0:
     rd_recursion(rroot, root, 0, Et, fd, nrng=1)
     # may convert root.node_[-1] to node_t:
-    _GG_t = form_graph_t(root, root.node_[-1], Et, nrng)
+    _GG_t = form_graph_t(root, node_, Et, nrng)
     GGG_t = []  # agg+ fork tree
     rng = 2
 
@@ -87,7 +88,7 @@ def agg_recursion(rroot, root, lenH, fd, nrng=0):  # compositional agg|sub recur
     return GGG_t  # should be tree nesting lower forks
 
 
-def rd_recursion(rroot, root, lenH, Et, fd, nrng=1):  # rng,der incr over same G_,link_ -> fork tree, represented in rim_tH
+def rd_recursion(rroot, root, lenH, Et, fd, nrng=1):  # rng,der incr over same G_,link_ -> fork tree, represented in rim_t
 
     Vt, Rt, Dt = Et
     for fd, Q, V,R,D in zip((0,1),(root.node_,root.link_), Vt,Rt,Dt):  # recursive rng+,der+
@@ -103,11 +104,11 @@ def rd_recursion(rroot, root, lenH, Et, fd, nrng=1):  # rng,der incr over same G
                 Vt[i]+=v; Rt[i]+=rt[i]; Dt[i]+=d
                 if v >= ave * r:
                     # draft, not sure:
-                    if len(Q[0].rim_tH)==lenH:  # init fork tree if empty:
-                        for G in Q: G.rim_tH += [[link_]]
+                    if len(Q[0].rim_t)==lenH:  # init fork tree if empty:
+                        for G in Q: G.rim_t += [[link_]]
 
                     if i: root.link_+= link_  # rng+ links
-                    # adds to root Et + rim_tH, and Et per G:
+                    # adds to root Et + rim_t, and Et per G:
                     rd_recursion(rroot, root, lenH, [vt,rt,dt], nrng)
 
 def cross_comp(Q, lenH, nrng):
@@ -120,12 +121,12 @@ def cross_comp(Q, lenH, nrng):
                 dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx
                 if np.hypot(dy, dx) < 2 * nrng:  # max distance between node centers, init=2
                     link = CderG(_G=_G, G=G)
-                    comp_G(_G, G, link, et, lenH)
+                    comp_G(link, et, lenH)
                     link_ += [link]
     else:  # der+
         for link in Q:  # inp_= root.link_, reform links
             if link.Vt[1] < G_aves[1] * link.Rt[1]: continue  # maybe weak after rdn incr?
-            comp_G(link._G, link.G, link, et, lenH)
+            comp_G(link, et, lenH)
             link_ += [link]
 
     return link_, et
@@ -134,7 +135,7 @@ def cross_comp(Q, lenH, nrng):
 # not revised:
 def form_graph_t(root, G_, Et, nrng):
 
-    _G_ = [G for G in G_ if len(G.rim_tH)>len(root.rim_tH)]  # prune Gs unconnected in current layer
+    _G_ = [G for G in G_ if len(G.rim_t)>len(root.rim_t)]  # prune Gs unconnected in current layer
 
     node_connect(_G_)  # Graph Convolution of Correlations over init _G_
     node_t = []
