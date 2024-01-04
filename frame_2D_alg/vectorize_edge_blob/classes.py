@@ -131,7 +131,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     link_ : list = z([])  # internal, single-fork
     node_ : list = z([])  # base node_ replaced by node_t in both agg+ and sub+, deeper node-mediated unpacking in agg+
     # graph-external, +level per root sub+:
-    rim_t : list = z([])  # direct links, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
+    rim_t : list = z([[],0])  # direct links,depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
     Rim_t : list = z([])  # links to the most mediated evaluated nodes
     esubH : list = z([])  # external subH: [[daggH,valt,rdnt,dect]] of all der)rng rim links
     evalt : list = z([0,0])  # sum from esubH

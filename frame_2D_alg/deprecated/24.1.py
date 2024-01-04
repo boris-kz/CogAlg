@@ -1,3 +1,4 @@
+'''
             for G in link._G, link.G:
                 # draft
                 if len_root_HH > -1:  # agg_compress, increase nesting
@@ -22,3 +23,4 @@
                     else:
                         G.Vt[fd] += Val; G.Rt[fd] += Rdn; G.Dt[fd] += Dec  # accum rim layer with link
                         G.rim_t[0][-1][fd] += [link]; G.rim_t[0][-1][fd] += [link]  # append rim_tH
+'''
