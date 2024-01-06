@@ -33,7 +33,7 @@ def root(blob, verbose):  # vectorization pipeline is 3 composition levels of cr
     # temporary
     for fd, G_ in enumerate(edge.node_[-1]):
         if edge.aggH:
-            agg_recursion_cpr(None, edge, G_, fd=0, nrng=1, lenH=0)
+            agg_recursion_cpr(None, edge, G_, nrng=1, lenH=0)
 
 
 def vectorize_root(blob, verbose):  # vectorization in 3 composition levels of xcomp, cluster:
@@ -45,31 +45,28 @@ def vectorize_root(blob, verbose):  # vectorization in 3 composition levels of x
     for fd, node_ in enumerate(edge.node_):  # always node_t
         if edge.valt[fd] * (len(node_) - 1) * (edge.rng + 1) > G_aves[fd] * edge.rdnt[fd]:
             for PP in node_: PP.roott = [None, None]
-            agg_recursion(None, edge, fd=0)
+            agg_recursion(None, edge, nrng=1)  # fd = not nrng
             # PP cross-comp -> discontinuous clustering, agg+ only, no Cgraph nodes
 
-# draft:
-def agg_recursion(rroot, root, fd, nrng=0, lenHH=None):  # compositional agg|sub recursion in root graph, cluster G_
+
+def agg_recursion(rroot, root, nrng=0, lenHH=None):  # compositional agg|sub recursion in root graph, cluster G_
 
     Et = [[0,0],[0,0],[0,0]]
-    if isinstance(root.node_[0], list):
-        node_ = root.node_[fd]  # agg+ / GG_ from sub+
-    else:
-        node_ = root.node_  # sub+ / G_ from sum2graph
-    lenH = 0  # init lenHH[-1] = 0
-    rd_recursion(rroot, root, lenH, lenHH, Et, fd, nrng=1)
-    # may convert root.node_[-1] to node_t:
-    _GG_t = form_graph_t(root, node_, lenH, Et, nrng)
-    GGG_t = []  # agg+ fork tree
-    rng = 2
+    lenH = None  # no empty append lenHH[-1] = 0?
 
-    while _GG_t:  # fork layer, recursive unpack lower forks
+    nrng = rd_recursion(rroot, root, lenH, lenHH, Et, nrng)  # may increment nrng
+
+    _GG_t = form_graph_t(root, lenH, lenHH, Et, nrng)  # may convert root.node_[-1] to node_t
+    GGG_t = []  # add agg+ fork tree:
+
+    while _GG_t:  # unpack fork layers?
         GG_t, GGG_t = [],[]
         for fd, GG_ in enumerate(_GG_t):
-            if not fd: rng+=2
-            if root.Vt[fd] * (len(GG_)-1)*rng > G_aves[fd] * root.Rt[fd]:
-                # agg+/ node_( sub)agg+/ node, vs sub+ only in comp_slice
-                GGG_t, Vt, Rt  = agg_recursion(rroot, root, fd=0)
+            # nrng+ from rd+?:
+            if not fd: nrng+=1
+            if root.Vt[fd] * (len(GG_)-1)*nrng*2 > G_aves[fd] * root.Rt[fd]:
+                # agg+/ node_t, vs. sub+/ node_:
+                GGG_t, Vt, Rt  = agg_recursion(rroot, root, nrng=1)
                 if rroot:
                     rroot.fback_t[fd] += [[root.aggH, root.valt, root.rdnt, root.dect]]
                     feedback(rroot,fd)  # update root.root..
@@ -93,7 +90,8 @@ def rd_recursion(rroot, root, lenH, lenHH, Et, nrng=1):  # rng,der incr over sam
     for fd, Q, V,R,D in zip((0,1),(root.node_,root.link_), Vt,Rt,Dt):  # recursive rng+,der+
 
         ave = G_aves[fd]
-        if fd and rroot == None: continue  # no link_ and der+ in base fork
+        if fd and rroot == None:
+            continue  # no link_ and der+ in base fork
         if V >= ave * R:  # true for init 0 V,R; nrng if rng+, else 0:
             if not fd:
                 nrng += 1
@@ -112,34 +110,47 @@ def rd_recursion(rroot, root, lenH, lenHH, Et, nrng=1):  # rng,der incr over sam
                 if v >= ave * r:
                     if i: root.link_+= link_  # rng+ links
                     # adds to root Et + rim_t, and Et per G:
-                    rd_recursion(rroot, root, lenH, [vt,rt,dt], nrng)
+                    rd_recursion(rroot, root, lenH, lenHH, [vt,rt,dt], nrng)
+    return nrng
 
 
 def cross_comp(Q, lenH, lenHH, nrng):
 
     et = [[0,0],[0,0],[0,0]]
-    link_ = []
-    if nrng:  # rng+
+    link_ = []; fd = not nrng
+
+    if fd:  # der+
+        for link in Q:  # inp_= root.link_, reform links
+            if link.Vt[1] > G_aves[1] * link.Rt[1]:  # may be weak after rdn incr?
+                comp_G(link, et, lenH, lenHH)
+    else:  # rng+
         for i, _G in enumerate(Q):  # inp_= G_, form new link_ from original node_
             for G in Q[i+1:]:
                 dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx
                 if np.hypot(dy, dx) < 2 * nrng:  # max distance between node centers, init=2
                     link = CderG(_G=_G, G=G)
-                    if comp_G(link, et, lenH, lenHH):  # returns fadd
-                        link_ += [link]
-    else:  # der+
-        for link in Q:  # inp_= root.link_, reform links
-            if link.Vt[1] < G_aves[1] * link.Rt[1]: continue  # maybe weak after rdn incr?
-            if comp_G(link, et, lenH, lenHH):
-                link_ += [link]
-
+                    comp_G(link, et, lenH, lenHH)
+                    # if comp_G(link, et, lenH, lenHH)[fd]:  # returns faddt
+                    #    link_ += [link]
     return link_, et
 
 
-# not revised:
-def form_graph_t(root, G_, lenH, Et, nrng):
+def form_graph_t(root, lenH, lenHH, Et, nrng):
 
-    _G_ = [G for G in G_ if G.rim_t[0][-1][-1] > root.rim_t[0][-1][-1]]  # prune Gs unconnected in current layer
+    rdepth = (lenH != None) + (lenHH != None)
+    G_ = root.node_[not nrng] if isinstance(root.node_[0],list) else root.node_
+    _G_ = []
+    # not revised below:
+    for G in G_:  # select Gs connected in current layer
+        if G.rim_t[-1] > rdepth:  # if G is updated in comp_G, their depth should > rdepth
+          _G_ += [G]
+        else:
+            if lenHH:  # check if lenHH is incremented
+                if (G.rim_t[0] > lenHH):
+                    _G_ += [G]
+            else:  # check if lenH is incremented
+                if (G.rim_t[0] > lenH):
+                    _G_ += [G]
 
     node_connect(_G_)  # Graph Convolution of Correlations over init _G_
     node_t = []
@@ -173,7 +184,6 @@ def form_graph_t(root, G_, lenH, Et, nrng):
                         if Val * (len(rroot.node_[-1])-1)*rroot.rng > G_aves[fd] * Rdn:
                             # not sure about nrg here
                             agg_recursion(root, graph, rroot.node_[-1], len(rroot.aggH[-1][0]), rfd, nrng+1*(1-rfd))  # nrng+ if not fd
-
                 else:
                     root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
                     feedback(root,root.fd)  # update root.root..
