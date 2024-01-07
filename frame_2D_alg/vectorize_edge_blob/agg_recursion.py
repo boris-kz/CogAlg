@@ -48,40 +48,40 @@ def vectorize_root(blob, verbose):  # vectorization in 3 composition levels of x
 
             for PP in node_: PP.roott = [None, None]
             # discontinuous PP cross-comp, cluster -> G_t
-            agg_recursion(None, edge, node_, fd=0)  # agg+, no Cgraph nodes
+            agg_recursion(None, edge, node_, nrng=1)  # agg+, no Cgraph nodes
 
     return edge
 
 
-def agg_recursion(rroot, root, G_, fd, nrng=1, lenH=None, lenHH=None):  # lenH = len(root.aggH[-1][0]), lenHH: same in agg_compress
+def agg_recursion(rroot, root, node_, nrng=1, lenH=None, lenHH=None):  # lenH = len(root.aggH[-1][0]), lenHH: same in agg_compress
 
-    # compositional agg|sub recursion in root graph
     Et = [[0,0],[0,0],[0,0]]  # grapht link_' eValt, eRdnt, eDect(currently not used)
+    fd = not nrng  # compositional agg|sub recursion in root graph:
 
     if fd:  # der+
         for link in root.link_:  # reform links
             if link.Vt[1] > G_aves[1]*link.Rt[1]:  # maybe weak after rdn incr?
                 comp_G(link, Et, lenH, lenHH)
     else:   # rng+
-        for _G, G in combinations(G_, r=2):  # form new link_ from original node_
+        for _G, G in combinations(node_, r=2):  # form new link_ from original node_
             dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx
             if np.hypot(dy,dx) < 2 * nrng:  # max distance between node centers, init=2
                 link = CderG(_G=_G, G=G)
                 comp_G(link, Et, lenH, lenHH)
 
-    form_graph_t(root, G_, Et, nrng)  # root_fd, eval sub+, feedback per graph
-    if isinstance(G_[0],list):  # node_t was formed above
+    form_graph_t(root, node_, Et, nrng)  # root_fd, eval sub+, feedback per graph
+    if isinstance(node_[0],list):  # node_t was formed above
 
-        for i, node_ in enumerate(G_):
-            if root.valt[i] * (len(node_)-1)*root.rng > G_aves[i] * root.rdnt[i]:
+        for i, G_ in enumerate(node_):
+            if root.valt[i] * (len(G_)-1)*root.rng > G_aves[i] * root.rdnt[i]:
                 # agg+/ node_( sub)agg+/ node, vs sub+ only in comp_slice
-                agg_recursion(rroot, root, node_, fd=0)  # der+ if fd, else rng+ =2
+                agg_recursion(rroot, root, G_, nrng=1)  # der+ if fd, else rng+ =2
                 if rroot:
                     rroot.fback_t[i] += [[root.aggH,root.valt,root.rdnt,root.dect]]
                     feedback(rroot,i)  # update root.root..
 
 
-def form_graph_t(root, G_, Et, nrng):  # form Gm_,Gd_ from same-root nodes
+def form_graph_t(root, G_, Et, nrng, lenH=None, lenHH=None):  # form Gm_,Gd_ from same-root nodes
 
     # select Gs connected in current layer:
     _G_ = [G for G in G_ if len(G.rim_t[0])>len(root.rim_t[0])]
@@ -94,7 +94,11 @@ def form_graph_t(root, G_, Et, nrng):  # form Gm_,Gd_ from same-root nodes
             for graph in graph_:
                 # eval sub+ per node
                 if graph.Vt[fd] * (len(graph.node_)-1)*root.rng > G_aves[fd] * graph.Rt[fd]:
-                    agg_recursion(root, graph, graph.node_, fd, nrng+1*(1-fd), len(graph.aggH[-1][0]))  # nrng+ if not fd
+                    node_ = graph.node_  # flat in sub+
+                    if lenH: lenH = len(node_[0].esubH[-lenH:])  # in agg_compress
+                    else:    lenH = len(graph.aggH[-1][0])  # in agg_recursion
+                    nrng = nrng+1 if not fd else 0
+                    agg_recursion(root, graph, node_, nrng, lenH, lenHH)
                 else:
                     root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
                     feedback(root,root.fd)  # update root.root..
@@ -299,13 +303,11 @@ def comp_G(link, Et, lenH=None, lenHH=None):  # lenH in sub+|rd+, lenHH in agg_c
         link.subH = SubH
 
     link.Vt,link.Rt,link.Dt = Valt,Rdnt,Dect = [Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec]  # reset per comp_G
-    faddt = [0,0]
 
     for fd, (Val,Rdn,Dec) in enumerate(zip(Valt,Rdnt,Dect)):
         if Val > G_aves[fd] * Rdn:
             # eval grapht in form_graph_t:
             Et[0][fd] += Val; Et[1][fd] += Rdn; Et[2][fd] += Dec
-            faddt[fd] = 1  # new rim += [+ve link]
         else: continue
         for G in link._G, link.G:
             rdepth = (lenHH != None) + (lenH != None)  # rim_tHH: depth=2, rim_tH: depth=1, rim_t: depth=0
@@ -328,8 +330,6 @@ def comp_G(link, Et, lenH=None, lenHH=None):  # lenH in sub+|rd+, lenHH in agg_c
                 for _ in range(depth): rim_t = rim_t[0][-1]
                 rim_t[0][fd] += [link]
                 G.Vt[fd] += Val; G.Rt[fd] += Rdn; G.Dt[fd] += Dec
-
-    return faddt  # may not be needed
 
 
 def comp_aggHv(_aggH, aggH, rn):  # no separate ext

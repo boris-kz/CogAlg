@@ -1,11 +1,15 @@
+from __future__ import annotations
+
+from numbers import Real
+from typing import NamedTuple
 from math import inf, hypot
-from class_cluster import ClusterStructure, init_param as z
+
+from class_cluster import CBase, init_param as z
 from frame_blobs import boxT
-from collections import namedtuple
 '''
     Conventions:
     postfix 't' denotes tuple, multiple ts is a nested tuple, 
-    postfix 'T' is namedtuple
+    postfix 'T' is namedtuple (?)
     postfix '_' denotes array name, vs. same-name elements
     prefix '_'  denotes prior of two same-name variables
     prefix 'f'  denotes flag
@@ -13,20 +17,38 @@ from collections import namedtuple
     capitalized variables are normally summed small-case variables,
     longer names are normally classes
 '''
-ptupleT = namedtuple("ptupleT", "I G M Ma angle L")
-ptupleT.__pos__ = lambda t: t
-ptupleT.__neg__ = lambda t: ptupleT(-t.I, -t.G, -t.M, -t.Ma, -t.angle, -t.L)
-ptupleT.__add__ = lambda _t, t: ptupleT(_t.I+t.I, _t.G+t.G, _t.M+t.M, _t.Ma+t.Ma, _t.angle+t.angle, _t.L+t.L)  # typo here
-ptupleT.__sub__ = lambda _t, t: _t+(-t)
 
-angleT = namedtuple('angleT', 'dy dx')
-angleT.__abs__ = lambda a: hypot(a.dy, a.dx)
-angleT.__pos__ = lambda a: a
-angleT.__neg__ = lambda a: angleT(-a.dy,-a.dx)
-angleT.__add__ = lambda _a,a: angleT(_a.dy+a.dy, _a.dx+a.dx)
-angleT.__sub__ = lambda _a,a: _a+(-a)
 
-class CEdge(ClusterStructure):  # edge blob
+class angleT(NamedTuple):
+    dy: Real
+    dx: Real
+
+    # operators:
+    def __abs__(self) -> angleT: return hypot(self.dy, self.dx)
+    def __pos__(self) -> angleT: return self
+    def __neg__(self) -> angleT: return angleT(-self.dy, -self.dx)
+    def __add__(self, other: angleT) -> angleT: return angleT(self.dy + other.dy, self.dx + other.dx)
+    def __sub__(self, other: angleT) -> angleT: return self + (-other)
+
+
+class ptupleT(NamedTuple):
+    I: Real
+    G: Real
+    M: Real
+    Ma: Real
+    angle: angleT
+    L: Real
+
+    # operators:
+    def __pos__(self) -> ptupleT: return self
+    def __neg__(self) -> ptupleT: return ptupleT(-self.I, -self.G, -self.M, -self.Ma, -self.angle, -self.L)
+
+    def __sub__(self, other: ptupleT) -> ptupleT: return self + (-other)
+
+    def __add__(self, other: ptupleT) -> ptupleT:
+        return ptupleT(self.I+other.I, self.G+other.G, self.M+other.M, self.Ma+other.Ma, self.angle+other.angle, self.L+other.L)
+
+class CEdge(CBase):  # edge blob
 
     fd : int = 0
     der__t_roots: object = None  # map to dir__t
@@ -57,7 +79,7 @@ class CEdge(ClusterStructure):  # edge blob
     # adj_blobs: list = z([])  # adjacent blobs
 
 
-class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
+class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     ptuple : ptupleT = ptupleT(0,0,0,0,angleT(0,0),0)  # latuple: I,G,M,Ma, angle(Dy,Dx), L
     rnpar_H : list = z([])
@@ -79,7 +101,7 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     Ddx : int = 0
     '''
 
-class CderP(ClusterStructure):  # tuple of derivatives in P link: binary tree with latuple root and vertuple forks
+class CderP(CBase):  # tuple of derivatives in P link: binary tree with latuple root and vertuple forks
 
     derH : list = z([])  # [[[mtuple,dtuple],[mval,dval],[mrdn,drdn]]], single ptuplet in rng+
     valt : list = z([0,0])  # replace with Vt?
@@ -118,7 +140,7 @@ class CPP(CderP):
     # fdiv = NoneType  # if div_comp?
 
 
-class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
+class Cgraph(CBase):  # params of single-fork node_ cluster per pplayers
 
     fd: int = 0  # fork if flat layers?
     ptuple : ptupleT = ptupleT(0,0,0,0,angleT(0,0),0)  # default P
@@ -168,7 +190,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     # top Lay from links, lower Lays from nodes, hence nested tuple?
 
 
-class CderG(ClusterStructure):  # params of single-fork node_ cluster per pplayers
+class CderG(CBase):  # params of single-fork node_ cluster per pplayers
 
     subH : list = z([])  # [[derH_t, valt, rdnt]]: top aggLev derived in comp_G, per rng, all der+
     Vt : list = z([0,0])  # last layer vals from comp_G

@@ -1,4 +1,4 @@
-from class_cluster import ClusterStructure, NoneType, comp_param, Cdert
+from class_cluster import CBase, NoneType, comp_param, Cdert
 from frame_blobs import *
 from frame_bblobs import *
 

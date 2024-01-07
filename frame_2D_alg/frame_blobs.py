@@ -28,15 +28,17 @@
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs.png
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs_intra_blob.drawio
 '''
+from __future__ import annotations
 
 import sys
-from typing import Union
+from collections import deque
+from numbers import Real
+from typing import Any, NamedTuple, Tuple
+from time import time
 
 import numpy as np
-from time import time
-from collections import deque, namedtuple
 from visualization.draw_frame import visualize
-from class_cluster import ClusterStructure, init_param as z
+from class_cluster import CBase, init_param as z
 from utils import kernel_slice_3x3 as ks    # use in comp_pixel
 
 # hyper-parameters, set as a guess, latter adjusted by feedback:
@@ -48,24 +50,58 @@ ave_mP = 100
 UNFILLED = -1
 EXCLUDED = -2
 
-dertT = namedtuple('dertT', 'dy, dx, g')  # 'T' for tuple
-dertT.get_pixel = lambda der__t, y, x: dertT(der__t.dy[y, x], der__t.dx[y, x], der__t.g[y, x])
 
-boxT = namedtuple('boxT', 'n, w, s, e')  # 'T' for tuple
-# properties
-boxT.cy = property(lambda b: (b.n+b.s)/2)
-boxT.cx = property(lambda b: (b.w+b.e)/2)
-boxT.slice = property(lambda b: (slice(b.n,b.s), slice(b.w,b.e)))  # box to array slice conversion
-# operators
-boxT.__add__ = lambda b1,b2: boxT(min(b1.n,b2.n),min(b1.w,b2.w),max(b1.s,b2.s),max(b1.e,b2.e))  # add 2 boxes
-# methods
-boxT.accumulate = lambda b,y,x: boxT(min(b.n,y),min(b.w,x),max(b.s,y+1),max(b.e,x+1))  # box coordinate accumulation
-boxT.expand = lambda b,r,Y,X: boxT(max(0,b.n-r),max(0,b.w-r),min(Y,b.s+r),min(X,b.e+r))  # box expansion by margin r
-boxT.shrink = lambda b,r: boxT(b.n+r,b.w+r,b.s-r,b.e-r)  # box shrink by margin r
-boxT.sub_box2box = lambda b,sb: boxT(b.n+sb.n,b.w+sb.w,sb.s+b.n,sb.e+b.w)  # sub_box to box transform
-boxT.box2sub_box = lambda b1, b2: boxT(b2.n-b1.n, b2.w-b1.w, b2.s-b1.n, b2.e-b1.w)  # box to sub_box transform
+class dertT(NamedTuple):
+    dy: Any
+    dx: Any
+    g: Any
 
-class CBlob(ClusterStructure):
+    def get_pixel(self, y: Real, x: Real) -> dertT:
+        return dertT(self.dy[y, x], self.dx[y, x], self.g[y, x])
+
+
+class boxT(NamedTuple):
+    n: Real
+    w: Real
+    s: Real
+    e: Real
+
+    # properties
+    @property
+    def cy(self) -> Real: return (self.n + self.s) / 2
+    @property
+    def cx(self) -> Real: return (self.w + self.e) / 2
+    @property
+    def slice(self) -> Tuple[slice, slice]: return slice(self.n, self.s), slice(self.w, self.e)
+
+    # operators:
+    def __add__(self, other: boxT) -> boxT:
+        """Add 2 boxes."""
+        return boxT(min(self.n, other.n), min(self.w, other.w), max(self.s, other.s), max(self.e, other.e))
+
+    # methods
+    def accumulate(self, y: Real, x: Real) -> boxT:
+        """Box coordinate accumulation."""
+        return boxT(min(self.n, y), min(self.w, x), max(self.s, y+1), max(self.e, x+1))
+
+    def expand(self, r: int, h: Real, w: Real) -> boxT:
+        """Box expansion by margin r."""
+        return boxT(max(0, self.n-r), max(0, self.w-r), min(h, self.s+r),min(w, self.e+r))
+
+    def shrink(self, r: int) -> boxT:
+        """Box shrink by margin r."""
+        return boxT(self.n+r, self.w+r, self.s-r, self.e-r)
+
+    def sub_box2box(self, sb: boxT) -> boxT:
+        """sub_box to box transform."""
+        return boxT(self.n+sb.n, self.w+sb.w, sb.s+self.n, sb.e+self.w)
+
+    def box2sub_box(self, b: boxT) -> boxT:
+        """box to sub_box transform."""
+        return boxT(b.n-self.n, b.w-self.w, b.s-self.n, b.e-self.w)
+
+
+class CBlob(CBase):
     # comp_pixel:
     sign : bool = None
     I : float = 0.0
@@ -120,7 +156,7 @@ def frame_blobs_root(i__, intra=False, render=False, verbose=False):
     Y, X = i__.shape[:2]
     der__t = comp_pixel(i__)
     sign__ = ave - der__t.g > 0   # sign is positive for below-average g
-    frame = CBlob(i__=i__, box=boxT(0, 0, Y, X), rlayers=[[]])
+    frame = CBlob(i__=i__, der__t=der__t, box=boxT(0, 0, Y, X), rlayers=[[]])
     fork_data = '', boxT(1,1,Y-1,X-1), der__t, sign__, None  # fork, fork_ibox, der__t, sign__, mask__
     # https://en.wikipedia.org/wiki/Flood_fill:
     frame.rlayers[0], idmap, adj_pairs = flood_fill(frame, fork_data, verbose=verbose)
@@ -270,7 +306,7 @@ if __name__ == "__main__":
     from utils import imread
     # Parse arguments
     argument_parser = argparse.ArgumentParser()
-    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//toucan_small.jpg')
+    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_eye.jpeg')
     argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=1)
     argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=0)
     argument_parser.add_argument('-c', '--clib', help='use C shared library', type=int, default=0)

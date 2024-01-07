@@ -2,7 +2,7 @@
 Cross-compare blobs with incrementally mediated adjacency, forming blobs of blobs
 '''
 
-from class_cluster import ClusterStructure, comp_param
+from class_cluster import CBase, comp_param
 from frame_blobs import CBlob
 from frame_2D_alg.vectorize_edge_blob.comp_slice import ave, ave_daangle, ave_dx, ave_Ma, ave_inv # facing error when comp-slice_ import from comp_blob, hence shift it here.
 from intra_blob import intra_blob_root
@@ -22,7 +22,7 @@ ave_A = 10
 
 param_names = ["I", "G", "M", "A"]
 
-class CderBlob(ClusterStructure):  # set of derivatives per blob param
+class CderBlob(CBase):  # set of derivatives per blob param
 
     p = int  # last compared blob param
     s = int  # p summed in rng
@@ -128,7 +128,7 @@ def form_bblob_(derBlob_):
     for derBlob in derBlob_:
         if derBlob.mB>0:  # positve derp only?
             if "bblob" not in locals():
-                bblob = CBlob(dert__ = [])
+                bblob = CBlob(der__t = [])
                 bblob_.append(bblob)
             accum_bblob(bblob, derBlob)
         else:
@@ -140,7 +140,7 @@ def form_bblob_(derBlob_):
 
 def accum_bblob(bblob, derBlob):
 
-    bblob.dert__.append(derBlob)
+    bblob.der__t.append(derBlob)
     bblob.L += 1
     bblob.I += derBlob.I
     bblob.G += derBlob.G
@@ -388,14 +388,14 @@ def visualize_cluster_(bblob_, blob_, frame):
     colour_list.append([128, 128, 128])  # silver2
 
     # initialization
-    ysize, xsize = frame.dert__[0].shape
+    ysize, xsize = frame.der__t[0].shape
     blob_img = np.zeros((ysize, xsize,3)).astype('uint8')
     cluster_img = np.zeros((ysize, xsize,3)).astype('uint8')
     img_separator = np.zeros((ysize,3,3)).astype('uint8')
 
     # create mask
-    blob_mask = np.zeros_like(frame.dert__[0]).astype('uint8')
-    cluster_mask = np.zeros_like(frame.dert__[0]).astype('uint8')
+    blob_mask = np.zeros_like(frame.der__t[0]).astype('uint8')
+    cluster_mask = np.zeros_like(frame.der__t[0]).astype('uint8')
 
     blob_colour_index = 1
     cluster_colour_index = 1
