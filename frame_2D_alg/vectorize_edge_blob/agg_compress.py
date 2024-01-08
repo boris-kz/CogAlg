@@ -1,6 +1,6 @@
 import numpy as np
 from copy import deepcopy, copy
-from itertools import zip_longest
+from itertools import zip_longest, combinations
 from collections import deque, defaultdict
 from .classes import Cgraph, CderG, CPP
 from .filters import ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd, ave_dI
@@ -54,7 +54,8 @@ def agg_compress(rroot, root, node_, nrng=0, lenHH=None):  # compositional agg|s
     Et = [[0,0],[0,0],[0,0]]
     lenH = None  # no empty append lenHH[-1] = 0?
 
-    nrng = rd_recursion(rroot, root, node_, Et, nrng, lenH, lenHH)  # may increment nrng
+    nrng = rd_recursion(rroot, root, node_, Et, nrng, lenH, lenHH)  # rng+, adds rim_ as rim_t[-1][0]
+    rd_recursion(rroot, root, node_, Et, 0, lenH, lenHH)  # rng+, adds rim_ as rim_t[-1][1]
 
     _GG_t = form_graph_t(root, node_, lenH, lenHH, Et, nrng)  # may convert root.node_[-1] to node_t
     GGG_t = []  # add agg+ fork tree:
@@ -83,7 +84,6 @@ def agg_compress(rroot, root, node_, nrng=0, lenHH=None):  # compositional agg|s
 
     return GGG_t  # should be tree nesting lower forks
 
-
 # draft:
 def rd_recursion(rroot, root, Q, Et, nrng=1, lenH=None, lenHH=None):  # rng,der incr over same G_,link_ -> fork tree, represented in rim_t
 
@@ -91,31 +91,37 @@ def rd_recursion(rroot, root, Q, Et, nrng=1, lenH=None, lenHH=None):  # rng,der 
     et = [[0,0],[0,0],[0,0]]  # grapht link_' eValt, eRdnt, eDect(currently not used)
 
     if fd:  # der+
+        G_ = []
         for link in Q:  # inp_= root.link_, reform links
             if (len(link.G.rim_t[0])==lenH  # the link was formed in prior rd+
                 and link.Vt[1] > G_aves[1]*link.Rt[1]):  # >rdn incr
-                comp_G(link, Et, lenH, lenHH)
+                comp_G(link, Et, lenH, lenHH, fcpr=1)
+                if link.G not in G_: G_ += [link.G];
+                if link._G not in G_: G_ += [link._G]
     else:  # rng+
-        for _G, G in combinations(Q, r=2):  # form new link_ from original node_
+        G_ = Q
+        for _G, G in combinations(G_, r=2):  # form new link_ from original node_
             dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx
             dist = np.hypot(dy, dx)
             # max distance between node centers, init=2
             if 2*nrng > dist > 2*(nrng-1):  # G,_G are within rng and were not compared in prior rd+
                 link = CderG(_G=_G, G=G)
-                comp_G(link, et, lenH, lenHH)
+                comp_G(link, et, lenH, lenHH, fcpr=1)
 
-    if et[fd][fd] > ave_Gm * et[fd][fd]:  # single layer  # accum per recursive fd
+    if et[0][fd] > ave_Gm * et[1][fd]:  # single layer accum
         for Part, part in zip(Et, et):
-            for i, par in part:
-                Part[i] += par  # Vt[i]+=v; Rt[i]+=rt[i]; Dt[i]+=d
-        for G in Q:
+            for i, par in enumerate(part):
+                # Vt[i]+=v; Rt[i]+=rt[i]; Dt[i]+=d:
+                Part[i] += par
+        for G in G_:
             for link in G.rim_t[-1][fd]:  # sum esubH layer
-                if len(link.subH[-1]) == lenH:
-                    sum_subHv(G.esubH[-1], link.subH[-1], base_rdn=link.Rt[fd])  # [derH, valt,rdnt,dect,extt,1]
-                else:
-                    G.esubH += [deepcopy(link.subH[-1])]  # link.subH: cross-der+) same rng, G.esubH: cross-rng?
+                if len(link.subH[-1][fd]) == (lenH or 0):  # convert None to integer
+                    if len(G.rim_t[-1][fd]) == (lenH or 0):  # G has current rim
+                        sum_subHv(G.esubH[-1], link.subH[-1], base_rdn=link.Rt[fd])  # [derH, valt,rdnt,dect,extt,1]
+                    else:
+                        G.esubH += [deepcopy(link.subH[-1])]  # link.subH: cross-der+) same rng, G.esubH: cross-rng?
 
-        rd_recursion(rroot, root, Q, Et, 0 if fd else nrng+1, lenH, lenHH)
+        rd_recursion(rroot, root, Q, Et, 0 if fd else nrng+1, lenH+1, lenHH)
 
     return nrng
 
