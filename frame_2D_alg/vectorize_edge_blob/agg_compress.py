@@ -95,7 +95,7 @@ def rd_recursion(rroot, root, Q, Et, nrng=1, lenH=None, lenHH=None):  # rng,der 
         for link in Q:  # inp_= root.link_, reform links
             if (len(link.G.rim_t[0])==lenH  # the link was formed in prior rd+
                 and link.Vt[1] > G_aves[1]*link.Rt[1]):  # >rdn incr
-                comp_G(link, Et, lenH, lenHH, fcpr=1)
+                comp_G(link, Et, lenH, lenHH, fmin=0, fdcpr=1)
                 if link.G not in G_: G_ += [link.G];
                 if link._G not in G_: G_ += [link._G]
     else:  # rng+
@@ -106,7 +106,7 @@ def rd_recursion(rroot, root, Q, Et, nrng=1, lenH=None, lenHH=None):  # rng,der 
             # max distance between node centers, init=2
             if 2*nrng > dist > 2*(nrng-1):  # G,_G are within rng and were not compared in prior rd+
                 link = CderG(_G=_G, G=G)
-                comp_G(link, et, lenH, lenHH, fcpr=1)
+                comp_G(link, et, lenH, lenHH, fmin=0, fdcpr=0)
 
     if et[0][fd] > ave_Gm * et[1][fd]:  # single layer accum
         for Part, part in zip(Et, et):
