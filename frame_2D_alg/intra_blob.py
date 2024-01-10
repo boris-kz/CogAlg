@@ -6,7 +6,7 @@
 import numpy as np
 from scipy.signal import convolve2d
 from itertools import zip_longest
-from frame_blobs import assign_adjacents, flood_fill, dertT
+from frame_blobs import assign_adjacents, flood_fill, Cder__t
 from vectorize_edge_blob.agg_recursion import vectorize_root
 from utils import kernel_slice_3x3 as ks
 '''
@@ -104,7 +104,7 @@ def comp_r(blob):
     new_dx__ = dx__[sdbox.slice] + convolve2d(i__, kx, mode='valid')
     new_g__ = np.hypot(new_dy__, new_dx__)  # gradient, recomputed at each comp_r
 
-    return dertT(new_dy__, new_dx__, new_g__), majority_mask__, fork_ibox
+    return Cder__t(new_dy__, new_dx__, new_g__), majority_mask__, fork_ibox
 
 
 def compute_kernel(rng):

@@ -3,7 +3,7 @@ import numpy as np
 from math import floor
 from collections import deque
 from itertools import product
-from .classes import Cgraph, CP, ptupleT, angleT
+from .classes import Cgraph, CP, Cptuple, Cangle
 from .filters import ave_g, ave_dangle, ave_daangle
 
 '''
@@ -113,7 +113,7 @@ def form_P(blob, P):
     L = len(P.dert_)
     M = ave_g*L - G
     G = np.hypot(Dy, Dx)  # recompute G
-    P.ptuple = ptupleT(I, G, M, Ma, angleT(Dy,Dx), L)
+    P.ptuple = Cptuple(I, G, M, Ma, Cangle(Dy, Dx), L)
     P.yx = P.dert_[L//2][:2]  # new center
 
     return P
