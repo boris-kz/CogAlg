@@ -350,3 +350,49 @@ class CderG(CBase):  # params of single-fork node_ cluster per pplayers
     A : list = z([0,0])  # angle: average dy,dx to link centers
     roott : list = z([None,None])
     # dir : bool  # direction of comparison if not G0,G1, only needed for comp link?
+
+
+def sum_subHv(T, t, base_rdn, fneg=0):
+
+    SubH,Valt,Rdnt,Dect,_ = T; subH,valt,rdnt,dect,_ = t
+    for i in 0,1:
+        Valt[i] += valt[i]; Rdnt[i] += rdnt[i]+base_rdn; Dect[i] = (Dect[i]+dect[i])/2
+    if SubH:
+        for Layer, layer in zip_longest(SubH,subH, fillvalue=[]):
+            if layer:
+                if Layer:
+                    sum_derHv(Layer, layer, base_rdn, fneg)
+                else:
+                    SubH += [deepcopy(layer)]  # _lay[0][0] is mL
+    else:
+        SubH[:] = deepcopy(subH)
+
+
+def sum_aggHv(AggH, aggH, base_rdn):
+
+    if aggH:
+        if AggH:
+            for Layer, layer in zip_longest(AggH,aggH, fillvalue=[]):
+                if layer:
+                    if Layer:
+                        sum_subHv(Layer, layer, base_rdn)
+                    else:
+                        AggH += [deepcopy(layer)]
+        else:
+            AggH[:] = deepcopy(aggH)
+
+def sum_derHv(T,t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
+
+    DerH, Valt, Rdnt, Dect, Extt_,_ = T
+    derH, valt, rdnt, dect, extt_,_ = t
+    for Extt, extt in zip(Extt_,extt_):
+        sum_ext(Extt, extt)
+    for i in 0,1:
+        Valt[i] += valt[i]; Rdnt[i] += rdnt[i]+base_rdn; Dect[i] = (Dect[i] + dect[i])/2
+    DerH[:] = [
+        [[sum_dertuple(Dertuple,dertuple, fneg*i) for i,(Dertuple,dertuple) in enumerate(zip(Tuplet,tuplet))],
+          [V+v for V,v in zip(Valt,valt)], [R+r+base_rdn for R,r in zip(Rdnt,rdnt)], [(D+d)/2 for D,d in zip(Dect,dect)], 0
+        ]
+        for [Tuplet,Valt,Rdnt,Dect,_], [tuplet,valt,rdnt,dect,_]  # ptuple_tv
+        in zip_longest(DerH, derH, fillvalue=[([0,0,0,0,0,0],[0,0,0,0,0,0]), (0,0),(0,0),(0,0),0])
+    ]

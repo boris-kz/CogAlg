@@ -26,6 +26,8 @@ class Cmd(NamedTuple):     # m | d tuple
     d: Any
     def __add__(self, other: Cmd | Tuple[Any, Any]) -> Cmd:
         return Cmd(self.m + other[0], self.d + other[1])
+    def __sub__(self, other: Cmd | Tuple[Any, Any]) -> Cmd:
+        return Cmd(self.m - other[0], self.d - other[1])
 
 class Cangle(NamedTuple):
     dy: Real
@@ -66,7 +68,6 @@ class Cptuple(NamedTuple):
     # operators:
     def __pos__(self) -> Cptuple: return self
     def __neg__(self) -> Cptuple: return Cptuple(-self.I, -self.G, -self.M, -self.Ma, -self.angle, -self.L)
-
     def __sub__(self, other: Cptuple) -> Cptuple: return self + (-other)
     def __add__(self, other: Cptuple) -> Cptuple:
         return Cptuple(self.I+other.I, self.G+other.G, self.M+other.M, self.Ma+other.Ma, self.angle+other.angle, self.L+other.L)
@@ -100,11 +101,11 @@ class Cptuple(NamedTuple):
             mtuple += [get_match(_par, npar) - ave]
             dtuple += [_par - npar]
 
-        ddertuple = Cmd(m=Cptuple(*mtuple), d=Cptuple(*dtuple))
+        ddertuplet = Cmd(m=Cptuple(*mtuple), d=Cptuple(*dtuple))
         valt = Cmd(m=sum(mtuple), d=sum(abs(d) for d in dtuple))
         rdnt = Cmd(m=valt.d > valt.m, d=valt.d < valt.m)
 
-        return ddertuple, valt, rdnt
+        return ddertuplet, valt, rdnt
 
 
 class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_tv
@@ -115,18 +116,16 @@ class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_
 
     def __add__(self, other: CderH) -> CderH:
         return CderH((
-            # sum der layers, dertuple is mtuple | dtuple, fneg*i: for dtuple only:
-            Cmd((Mtuple + mtuple), (Dtuple + dtuple))
-            for (Mtuple, Dtuple), (mtuple, dtuple)
-            in zip_longest(self, other, fillvalue=(Cptuple(), Cptuple()))  # mtuple,dtuple
+            # sum der layers, dertuple is mtuple | dtuple
+            Dertuplet + dertuplet for Dertuplet, dertuplet
+            in zip_longest(self, other, fillvalue=Cmd(Cptuple(), Cptuple()))  # mtuple,dtuple
         ))
 
     def __sub__(self, other: CderH) -> CderH:
         return CderH((
-            # sum der layers, dertuple is mtuple | dtuple, fneg*i: for dtuple only:
-            Cmd((Mtuple - mtuple), (Dtuple - dtuple))
-            for (Mtuple, Dtuple), (mtuple, dtuple)
-            in zip_longest(self, other, fillvalue=(Cptuple(), Cptuple()))  # mtuple,dtuple
+            # sum der layers, dertuple is mtuple | dtuple
+            Dertuplet - dertuplet for Dertuplet, dertuplet
+            in zip_longest(self, other, fillvalue=Cmd(Cptuple(), Cptuple()))  # mtuple,dtuple
         ))
 
     def comp(self, other: CderH, rn: Real) -> Tuple[CderH, Cmd, Cmd]:
@@ -211,7 +210,7 @@ class Cgraph(CBase):  # params of single-fork node_ cluster per pplayers
     link_: list = z([])  # internal, single-fork
     node_: list = z([])  # base node_ replaced by node_t in both agg+ and sub+, deeper node-mediated unpacking in agg+
     # graph-external, +level per root sub+:
-    rim_t: list = z([[],0])  # direct links,depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
+    rim_t: list = z([[[],[]],0])  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
     Rim_t: list = z([])  # links to the most mediated evaluated nodes
     esubH: list = z([])  # external subH: [[daggH,valt,rdnt,dect]] of all der)rng rim links
     evalt: list = z([0,0])  # sum from esubH
