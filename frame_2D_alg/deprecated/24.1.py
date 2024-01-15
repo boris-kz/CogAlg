@@ -396,3 +396,17 @@ def sum_derHv(T,t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers,
         for [Tuplet,Valt,Rdnt,Dect,_], [tuplet,valt,rdnt,dect,_]  # ptuple_tv
         in zip_longest(DerH, derH, fillvalue=[([0,0,0,0,0,0],[0,0,0,0,0,0]), (0,0),(0,0),(0,0),0])
     ]
+
+def unpack_rim(rim_t, fd):  # if init rim_t is [[[],[]],0]
+
+    if rim_t[1] == 2:  # depth=2 is rim_tH in agg++(agg_cpr)
+        rim_t = rim_t[0][-1]  # last rim_t
+    if rim_t[1] == 1:
+        if isinstance(rim_t[0][-1],list):  # rim_t[0] is [rim_t2, rim_t2, ...], so we still need [-1] to select the last rim_t
+              rim = rim_t[0][-1][fd][-1]  # rim_t in agg++
+        else: rim = rim_t[0][-1][fd]  # rimtH in agg+
+    else:
+        rim = rim_t[fd]  # base rimt
+
+    return rim
+

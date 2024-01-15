@@ -6,7 +6,7 @@ from .classes import Cgraph, CderG
 from .filters import ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd, ave_dI
 from .slice_edge import slice_edge, comp_angle
 from .comp_slice import comp_P_, comp_ptuple, comp_derH, sum_derH, sum_dertuple, get_match
-from .agg_recursion import form_graph_t, comp_G, comp_aggHv, comp_derHv, sum_derHv, sum_ext, sum_subHv, sum_aggHv
+from .agg_recursion import node_connect, segment_node_, comp_G, comp_aggHv, comp_derHv, sum_derHv, sum_ext, sum_subHv, sum_aggHv
 
 '''
 Implement sparse param tree in aggH: new graphs represent only high m|d params + their root params.
@@ -58,7 +58,7 @@ def agg_compress(rroot, root, node_, nrng=0, lenHH=0):  # compositional agg|sub 
     if root.link_ and isinstance(root.link_[0], CderG) :  # CderP in edge before agg+
         rd_recursion(rroot, root, root.link_, Et, 0, lenH, lenHH)  # der+, adds link_, rim_ as rim_t[-1][1]
 
-    _GG_t = form_graph_t(root, node_, Et, nrng, lenH, lenHH)  # may convert root.node_[-1] to node_t
+    _GG_t = form_graph_t_cpr(root, node_, Et, nrng, lenH, lenHH)  # may convert root.node_[-1] to node_t
     GGG_t = []  # add agg+ fork tree:
 
     while _GG_t:  # unpack fork layers?
@@ -123,7 +123,39 @@ def rd_recursion(rroot, root, Q, Et, nrng=1, lenH=None, lenHH=None):  # rng,der 
 
         rd_recursion(rroot, root, link_ if fd else G_, Et, 0 if fd else nrng+1, (lenH or 0)+1, lenHH)
 
-    return link_, nrng
+    return nrng
+
+
+def form_graph_t_cpr(root, G_, Et, nrng, lenH=None, lenHH=None):  # form Gm_,Gd_ from same-root nodes
+
+    fd = not nrng
+    _G_ = []
+    for G in G_:  # select Gs connected in current layer:
+        if lenHH: rim_tH = G.rim_t[-1][fd]  # sub+'H
+        else:     rim_tH = G.rim_t[fd]  # rim_
+        if len(rim_tH) > lenH: _G_ += [G]
+
+    node_connect(_G_, lenHH!=None)  # Graph Convolution of Correlations over init _G_
+    node_t = []
+    for fd in 0,1:
+        if Et[0][fd] > ave * Et[1][fd]:  # eValt > ave * eRdnt: cluster
+            graph_ = segment_node_(root, _G_, fd, nrng, lenH, lenHH)  # fd: node-mediated Correlation Clustering
+            for graph in graph_:
+                # eval sub+ per node
+                if graph.Vt[fd] * (len(graph.node_)-1)*root.rng > G_aves[fd] * graph.Rt[fd]:
+                    node_ = graph.node_  # flat in sub+
+                    if lenH: lenH = len(node_[0].esubH[-lenH:])  # in agg_compress
+                    else:    lenH = len(graph.aggH[-1][0])  # in agg_recursion
+                    nrng = 0 if fd else nrng+1
+                    agg_compress(root, graph, node_, nrng, lenH, lenHH)
+                else:
+                    root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
+                    feedback(root,root.fd)  # update root.root..
+            node_t += [graph_]  # may be empty
+        else:
+            node_t += [[]]
+    if any(node_t):
+        G_[:] = node_t  # else keep root.node_
 
 
 def feedback(root, fd):  # called from form_graph_, append new der layers to root
