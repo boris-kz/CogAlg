@@ -6,7 +6,7 @@ from .classes import Cgraph, CderG
 from .filters import ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd, ave_dI
 from .slice_edge import slice_edge, comp_angle
 from .comp_slice import comp_P_, comp_ptuple, comp_derH, sum_derH, sum_dertuple, get_match
-from .agg_recursion import node_connect, segment_node_, comp_G, comp_aggHv, comp_derHv, sum_derHv, sum_ext, sum_subHv, sum_aggHv
+from .agg_recursion import unpack_rim, node_connect, segment_node_, comp_G, comp_aggHv, comp_derHv, sum_derHv, sum_ext, sum_subHv, sum_aggHv
 
 '''
 Implement sparse param tree in aggH: new graphs represent only high m|d params + their root params.
@@ -115,9 +115,7 @@ def rd_recursion(rroot, root, Q, Et, nrng=1, lenH=None, lenHH=None):  # rng,der 
                 Part[i] += par
         if fd:
             for G in G_:
-                if lenHH: rim = G.rim_t[0][-1][0][-1][fd][-1]  # if sub+
-                else:     rim = G.rim_t[0][-1][fd][-1]  # only rd+
-                for link in rim:
+                for link in unpack_rim(G.rim_t, fd):
                     if len(link.subH[0][-1]) > (lenH or 0):  # link.subH was appended in this rd cycle
                         link_ += [link]  # for next rd cycle
 
@@ -147,7 +145,6 @@ def form_graph_t_cpr(root, G_, Et, nrng, lenH=None, lenHH=None):  # form Gm_,Gd_
                     node_ = graph.node_  # flat in sub+
                     if lenH: lenH = len(node_[0].esubH[-lenH:])  # in agg_compress
                     else:    lenH = len(graph.aggH[-1][0])  # in agg_recursion
-                    nrng = 0 if fd else nrng+1
                     agg_compress(root, graph, node_, nrng, lenH, lenHH)
                 else:
                     root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]

@@ -210,9 +210,10 @@ class Cgraph(CBase):  # params of single-fork node_ cluster per pplayers
     link_: list = z([])  # internal, single-fork
     node_: list = z([])  # base node_ replaced by node_t in both agg+ and sub+, deeper node-mediated unpacking in agg+
     # graph-external, +level per root sub+:
-    rim_t: None  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
-    Rim_t: None  # links to furthest mediated evaluated nodes
-    esubH: None  # external subH: [[daggH,valt,rdnt,dect]] of all der)rng rim links
+    rim_t: object = None  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
+    Rim_t: object = None  # links to furthest mediated evaluated nodes
+    # use None for checking?
+    esubH: list = z([])  # external subH: [[daggH,valt,rdnt,dect]] of all der)rng rim links
     evalt: list = z([0,0])  # sum from esubH
     erdnt: list = z([1,1])
     edect: list = z([0,0])
@@ -231,7 +232,7 @@ class Cgraph(CBase):  # params of single-fork node_ cluster per pplayers
     P_: list = z([])
     mask__: object = None
     # temporary:
-    lenHH: None  # added in agg_compress
+    lenHH: object = None  # added in agg_compress
     Vt: Cmd = Cmd(0, 0)  # last layer | last fork tree vals for node_connect and clustering
     Rt: Cmd = Cmd(1, 1)
     Dt: Cmd = Cmd(0, 0)
