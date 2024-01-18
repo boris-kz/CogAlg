@@ -224,7 +224,7 @@ def sum2graph(root, grapht, fd, nrng, lenH=None):  # sum node and link params in
     eH, valt,rdnt,dect, evalt,erdnt,edect = [], [0,0],[0,0],[0,0], [0,0],[0,0],[0,0]  # grapht int = node int+ext
     A0, A1, S = 0,0,0
     for G in G_:
-        sum_link_subHe(G, fd, lenH)
+        sum_link_lay(G, fd, lenH)
         graph.box += G.box
         graph.ptuple += G.ptuple
         sum_derH([graph.derH,[0,0],[1,1]], [G.derH,[0,0],[1,1]], base_rdn=1)
@@ -254,9 +254,11 @@ def sum2graph(root, grapht, fd, nrng, lenH=None):  # sum node and link params in
     return graph
 
 # draft:
-def sum_link_subHe(G, fd, lenH):  # lenH corresponds to len link subH in agg+ or link.subH[-1] in agg++
+def sum_link_lay(G, fd, lenH):  # lenH corresponds to len link subH in agg+ or link.subH[-1] in agg++
 
-    for link in unpack_rim(G.rim_t, fd):
+    esubLay = []  # accum from links
+
+    for link in unpack_rim(G.rim_t[1:], fd):  # rim
         subH = link.subH
         lenHH = G.lenHH
         if lenHH:  # not None | 0
@@ -264,18 +266,20 @@ def sum_link_subHe(G, fd, lenH):  # lenH corresponds to len link subH in agg+ or
                 subH = subH[-1][fd][-1]  # last rd+/ agg++'sub+
             else:
                 continue
-        if len(subH) > (lenH or 0):  # was appended in last xcomp, rd+ | base sub+
+        if len(subH) > (lenH or 0):  # was appended in last xcomp, rd+| base sub+
+            # nesting in subHv[0] is derH | subH|rdHt | rdH+subH:
             if not isinstance(subH[0], CderH):
-                if not isinstance(subH[0][0], CderH):  # not CderH: subH must be rdH?
-                    for ssubH in subH[-1]:
-                        # extend to handle ext in sum_subHe?:
-                        sum_subHv(G.esubH[-1], ssubH, base_rdn=link.Rt[fd])  # sum all layers of rdH in esubH[-1]
-                else:
-                    sum_subHv(G.esubH[-1], subH[-1], base_rdn=link.Rt[fd])  # single layer of agg+'sub+, no rd+
+                lenLay = len(subH)/2  # derH_ produced by last xcomp, each xcomp doubles len subH
+                if not isinstance(subH[0][0], CderH):  # subH ( rdH
+                    for ssub_lay in subH[lenLay:]:
+                        sum_derHv(esubLay, ssub_lay, base_rdn=link.Rt[fd])  # sum all layers of rdH in esubH[-1]
+                else:  # base subH
+                    sum_derHv(esubLay, subH[lenLay:], base_rdn=link.Rt[fd])  # single layer of agg+'sub+, no rd+
             else:
-                sum_subHv(G.esubH[-1], subH, base_rdn=link.Rt[fd])  # single layer of agg+'sub+, no rd+
+                sum_subHv(esubLay, subH, base_rdn=link.Rt[fd])  # single layer of agg+'sub+, no rd+
 
             G.evalt[fd] += link.Vt[fd]; G.erdnt[fd] += link.Rt[fd]; G.edect[fd] += link.Dt[fd]
+    G.esubH += [esubLay]
     '''
     link subH is appended per xcomp of either fork, with fd represented in root, nesting:
     agg+:  None | subH | subHH/ sub+, same for G.esubH, Cmd dertuples
