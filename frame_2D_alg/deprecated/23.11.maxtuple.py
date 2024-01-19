@@ -454,7 +454,7 @@ def comp_G(link_, _G, G, fd):
         mval,dval = valt; Mval+=dval; Dval+=mval
         Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
         Mdec = (Mdec+dect[0])/2; Ddec = (Ddec+dect[1])/2
-        link.subH = SubH+subH  # append higher subLayers: list of der_ext | derH s
+        link.subH += SubH+subH  # append higher subLayers: list of der_ext | derH s
         link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]; link.dect = [Mdec,Ddec]  # complete proto-link
         # dict key:G,vals:derGs
         link_[G] += [link]
