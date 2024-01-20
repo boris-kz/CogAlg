@@ -4,7 +4,7 @@ Provide a base class for mutable params struct in CogAlg.
 
 from copy import deepcopy
 from itertools import count
-from dataclasses import dataclass, field, astuple
+from dataclasses import astuple, dataclass, field, fields
 
 import weakref
 
@@ -46,6 +46,42 @@ class CBase:
 
     def unpack(self):
         return astuple(self)
+
+
+# ----------------------------------------------------------------------------
+# CbaseLite class
+@dataclass
+class CBaseLite:
+    def __init_subclass__(cls, **kwargs):
+        """Save the need to use dataclass decorator on subclasses."""
+        super().__init_subclass__(**kwargs)
+        dataclass()(cls)
+
+    def __add__(self, other):
+        return self.__class__(*((_value + value) for _value, value in zip(self, other)))
+
+    def __sub__(self, other):
+        return self.__class__(*((_value - value) for _value, value in zip(self, other)))
+
+    def __iter__(self):
+        return (getattr(self, key) for key in self.__dataclass_fields__)
+
+    def __len__(self):
+        return len(fields(self))
+
+    def __getitem__(self, item):
+        try:
+            return getattr(self, fields(self)[item].name)
+        except AttributeError as e:  # 'tuple' object has no attribute 'name'
+            return [getattr(self, f.name) for f in fields(self)[item]]
+
+    def __setitem__(self, item, value):
+        try:
+            setattr(self, fields(self)[item].name, value)
+        except AttributeError as e:  # 'tuple' object has no attribute 'name'
+            for f, v in zip(fields(self)[item], value):
+                setattr(self, f.name, v)
+
 
 
 # ----------------------------------------------------------------------------

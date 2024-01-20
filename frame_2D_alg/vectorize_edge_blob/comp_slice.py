@@ -1,10 +1,11 @@
 import numpy as np
+from collections import deque, defaultdict
 from copy import deepcopy
 from itertools import zip_longest, combinations
-from collections import deque, defaultdict
-from .slice_edge import comp_angle
-from .classes import CderP, CderH, Cmd, Cgraph, get_match
+from typing import List, Tuple
+from .classes import get_match, CderH, CderP, Cgraph, Cmd, CP
 from .filters import ave, ave_dI, aves, P_aves, PP_aves
+from .slice_edge import comp_angle
 '''
 Vectorize is a terminal fork of intra_blob.
 
@@ -25,7 +26,7 @@ Connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possib
 len prior root_ sorted by G is rdn of each root, to evaluate it for inclusion in PP, or starting new P by ave*rdn.
 '''
 
-def comp_P_(edge, adj_Pt_):  # cross-comp P_ in edge: high-gradient blob, sliced in Ps in the direction of G
+def comp_P_(edge: Cgraph, adj_Pt_: List[Tuple[CP, CP]]):  # cross-comp P_ in edge: high-gradient blob, sliced in Ps in the direction of G
 
     for _P, P in adj_Pt_:  # scan, comp contiguously uplinked Ps, rn: relative weight of comparand
         _P.comp(P, edge.link_, rn=len(_P.dert_)/len(P.dert_))
@@ -109,7 +110,7 @@ def sum2PP(root, P_, derP_, base_rdn, fd):  # sum links in Ps and Ps in PP
         derH,valt,rdnt = derP.derH,derP.valt,derP.rdnt
 
         P = derP.P  # uplink
-        P.derH += derH; P.valt += valt; P.rdnt += rdnt + (base_rdn, base_rdn)
+        P.derH += derH; P.valt += valt; P.rdnt += rdnt + (base_rdn, base_rdn)   # P.derH is combined with derP.derH of every fork and depth
 
         _P = derP._P  # bilateral accum downlink, reverse d signs:
         _P.derH -= derH; _P.valt += valt; _P.rdnt += rdnt + (base_rdn, base_rdn)
