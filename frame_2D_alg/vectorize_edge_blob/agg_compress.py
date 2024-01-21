@@ -2,7 +2,7 @@ import numpy as np
 from copy import deepcopy, copy
 from itertools import zip_longest, combinations
 from collections import deque, defaultdict
-from .classes import Cgraph, CderG
+from .classes import Cgraph, CderG, Cmd
 from .filters import ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd, ave_dI
 from .slice_edge import slice_edge, comp_angle
 from .comp_slice import comp_P_, comp_ptuple, comp_derH, sum_derH, sum_dertuple, get_match
@@ -86,7 +86,7 @@ def agg_compress(rroot, root, node_, nrng=0, lenHH=0):  # compositional agg|sub 
     return GGG_t  # should be tree nesting lower forks
 
 # draft:
-def rd_recursion(rroot, root, Q, Et, nrng=1, lenH=None, lenHH=None):  # rng,der incr over same G_,link_ -> fork tree, represented in rim_t
+def rd_recursion(rroot, root, Q, Et, nrng=1, lenH=0, lenHH=0):  # rng,der incr over same G_,link_ -> fork tree, represented in rim_t
 
     fd = not nrng; link_ = []; ave = G_aves[fd]  # this ave can be rmeoved now?
     et = [[0,0],[0,0],[0,0]]  # grapht link_' eValt, eRdnt, eDect(currently not used)
@@ -95,12 +95,14 @@ def rd_recursion(rroot, root, Q, Et, nrng=1, lenH=None, lenHH=None):  # rng,der 
         G_ = []
         for link in Q:  # inp_= root.link_, reform links
             if link.Vt[1] > G_aves[1]*link.Rt[1]:  # >rdn incr
+                if isinstance(link.subH, Cmd): link.subH = [link.subH]  # add first lenHH nesting
                 comp_G(link, Et, lenH, lenHH,  fdcpr=1)
                 if link.G not in G_: G_ += [link.G]
                 if link._G not in G_: G_ += [link._G]
     else:  # rng+
         G_ = Q
         for _G, G in combinations(G_, r=2):  # form new link_ from original node_
+            _G.lenHH = lenHH; G.lenHH = lenHH  # update their lenHH here?
             dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx
             dist = np.hypot(dy, dx)
             # max distance between node centers, init=2
@@ -115,11 +117,19 @@ def rd_recursion(rroot, root, Q, Et, nrng=1, lenH=None, lenHH=None):  # rng,der 
                 Part[i] += par
         if fd:
             for G in G_:
-                for link in unpack_rim(G.rim_t, fd):
+                for link in unpack_rim(G.rim_t, fd, lenHH):
                     if len(link.subH[0][-1]) > (lenH or 0):  # link.subH was appended in this rd cycle
                         link_ += [link]  # for next rd cycle
+        else:
+            pruned_G_ = []
+            for G in G_:
+                if G.rim_t:
+                    rim_t = G.rim_t
+                    if lenHH: rim_t = rim_t[-1]  # agg++
+                    if len(rim_t[fd]) > lenH:
+                        pruned_G_ += [G]  # remove if empty rim_t
 
-        rd_recursion(rroot, root, link_ if fd else G_, Et, 0 if fd else nrng+1, (lenH or 0)+1, lenHH)
+        rd_recursion(rroot, root, link_ if fd else pruned_G_, Et, 0 if fd else nrng+1, (lenH or 0)+1, lenHH)
 
     return nrng
 
@@ -143,12 +153,14 @@ def form_graph_t_cpr(root, G_, Et, nrng, lenH=None, lenHH=None):  # form Gm_,Gd_
                 # eval sub+ per node
                 if graph.Vt[fd] * (len(graph.node_)-1)*root.rng > G_aves[fd] * graph.Rt[fd]:
                     node_ = graph.node_  # flat in sub+
-                    if lenH: lenH = len(node_[0].esubH[-lenH:])  # in agg_compress
-                    else:    lenH = len(graph.aggH[-1][0])  # in agg_recursion
-                    agg_compress(root, graph, node_, nrng, lenH, lenHH)
+                    for node in node_:
+                        if (node.lenHH == None):  node.rim_t = [node.rim_t]  # we need this 1st conversion for lenHH >0
+                        node.rim_t += [[[[]],[[]]]]  # init for next depth
+                        node.lenHH = (node.lenHH or 0)+1  # increase lenHH here?
+                    agg_compress(root, graph, node_, nrng, node.lenHH)
                 else:
                     root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
-                    feedback(root,root.fd)  # update root.root..
+                    # feedback(root,root.fd)  # update root.root..
             node_t += [graph_]  # may be empty
         else:
             node_t += [[]]
