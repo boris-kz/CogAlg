@@ -183,8 +183,8 @@ class CderP(CBase):  # tuple of derivatives in P link: binary tree with latuple 
     def comp(self, link_: List[CderP], rn: Real):
         dderH, valt, rdnt = self._P.derH.comp(self.P.derH, rn=rn)
         if valt.m > ave_Pd * rdnt.m or valt.d > ave_Pd * rdnt.d:
-            derH = self.derH + dderH
-            link_ += [CderP(derH=derH, valt=valt, rdnt=rdnt, _P=self._P, P=self.P, S=self.S)]
+            self.derH += dderH; self.valt = valt; self.rdmt = rdnt  # update derP not form new one
+            link_ += [self]
 
 '''
 max n of tuples per der layer = summed n of tuples in all lower layers: 1, 1, 2, 4, 8..:
@@ -251,7 +251,7 @@ class CderG(CBase):  # params of single-fork node_ cluster per pplayers
 
     _G: Cgraph  # comparand + connec params
     G: Cgraph
-    subH: list = z([])  # [[derH_t, valt, rdnt]]: top aggLev derived in comp_G, per rng, all der+
+    daggH: list = z([])  # optionally nested dderH ) dsubH daggH: top aggLev derived in comp_G, per rng, all der+
     Vt: Cmd = z(Cmd(0,0))  # last layer vals from comp_G
     Rt: Cmd = z(Cmd(1,1))
     Dt: Cmd = z(Cmd(0,0))

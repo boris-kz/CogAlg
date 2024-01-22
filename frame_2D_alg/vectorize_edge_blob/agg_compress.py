@@ -52,7 +52,7 @@ def vectorize_root(blob, verbose):  # vectorization in 3 composition levels of x
 def agg_compress(rroot, root, node_, nrng=0, lenHH=0):  # compositional agg|sub recursion in root graph, cluster G_
 
     Et = [[0,0],[0,0],[0,0]]
-    lenH = None  # no empty append lenHH[-1] = 0?
+    lenH = 0  # no empty append lenHH[-1] = 0?
 
     nrng = rd_recursion(rroot, root, node_, Et, nrng, lenH, lenHH)  # rng+, adds rim_ as rim_t[-1][0]
     if root.link_ and isinstance(root.link_[0], CderG):  # else CderP in edge before agg+
@@ -85,56 +85,8 @@ def agg_compress(rroot, root, node_, nrng=0, lenHH=0):  # compositional agg|sub 
 
     return GGG_t  # should be tree nesting lower forks
 
-# draft:
-def rd_recursion(rroot, root, Q, Et, nrng=1, lenH=0, lenHH=0):  # rng,der incr over same G_,link_ -> fork tree, represented in rim_t
 
-    fd = not nrng; link_ = []; ave = G_aves[fd]  # this ave can be rmeoved now?
-    et = [[0,0],[0,0],[0,0]]  # grapht link_' eValt, eRdnt, eDect(currently not used)
-
-    if fd:  # der+
-        G_ = []
-        for link in Q:  # inp_= root.link_, reform links
-            if link.Vt[1] > G_aves[1]*link.Rt[1]:  # >rdn incr
-                if isinstance(link.subH, Cmd): link.subH = [link.subH]  # add first lenHH nesting
-                comp_G(link, Et, lenH, lenHH,  fdcpr=1)
-                if link.G not in G_: G_ += [link.G]
-                if link._G not in G_: G_ += [link._G]
-    else:  # rng+
-        G_ = Q
-        for _G, G in combinations(G_, r=2):  # form new link_ from original node_
-            _G.lenHH = lenHH; G.lenHH = lenHH  # update their lenHH here?
-            dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx
-            dist = np.hypot(dy, dx)
-            # max distance between node centers, init=2
-            if 2*nrng > dist > 2*(nrng-1):  # G,_G are within rng and were not compared in prior rd+
-                link = CderG(_G=_G, G=G)
-                comp_G(link, et, lenH, lenHH, fdcpr=0)
-
-    if et[0][fd] > ave_Gm * et[1][fd]:  # single layer accum
-        for Part, part in zip(Et, et):
-            for i, par in enumerate(part):
-                # Vt[i]+=v; Rt[i]+=rt[i]; Dt[i]+=d:
-                Part[i] += par
-        if fd:
-            for G in G_:
-                for link in unpack_rim(G.rim_t, fd, lenHH):
-                    if len(link.subH[0][-1]) > (lenH or 0):  # link.subH was appended in this rd cycle
-                        link_ += [link]  # for next rd cycle
-        else:
-            pruned_G_ = []
-            for G in G_:
-                if G.rim_t:
-                    rim_t = G.rim_t
-                    if lenHH: rim_t = rim_t[-1]  # agg++
-                    if len(rim_t[fd]) > lenH:
-                        pruned_G_ += [G]  # remove if empty rim_t
-
-        rd_recursion(rroot, root, link_ if fd else pruned_G_, Et, 0 if fd else nrng+1, (lenH or 0)+1, lenHH)
-
-    return nrng
-
-
-def form_graph_t_cpr(root, G_, Et, nrng, lenH=None, lenHH=None):  # form Gm_,Gd_ from same-root nodes
+def form_graph_t_cpr(root, G_, Et, nrng, lenH=0, lenHH=0):  # form Gm_,Gd_ from same-root nodes
 
     fd = not nrng
     _G_ = []
@@ -142,9 +94,9 @@ def form_graph_t_cpr(root, G_, Et, nrng, lenH=None, lenHH=None):  # form Gm_,Gd_
         if G.rim_t:  # without depth, rim_t is init as an empty list
             if lenHH: rim_tH = G.rim_t[-1][fd]  # sub+'H
             else:     rim_tH = G.rim_t[fd]  # rim_
-            if len(rim_tH) > (lenH or 0): _G_ += [G]
+            if len(rim_tH) > lenH: _G_ += [G]
 
-    node_connect(_G_, lenHH!=None)  # Graph Convolution of Correlations over init _G_
+    node_connect(_G_, lenHH)  # Graph Convolution of Correlations over init _G_
     node_t = []
     for fd in 0,1:
         if Et[0][fd] > ave * Et[1][fd]:  # eValt > ave * eRdnt: cluster
@@ -154,9 +106,8 @@ def form_graph_t_cpr(root, G_, Et, nrng, lenH=None, lenHH=None):  # form Gm_,Gd_
                 if graph.Vt[fd] * (len(graph.node_)-1)*root.rng > G_aves[fd] * graph.Rt[fd]:
                     node_ = graph.node_  # flat in sub+
                     for node in node_:
-                        if (node.lenHH == None):  node.rim_t = [node.rim_t]  # we need this 1st conversion for lenHH >0
-                        node.rim_t += [[[[]],[[]]]]  # init for next depth
-                        node.lenHH = (node.lenHH or 0)+1  # increase lenHH here?
+                        if (node.lenHH == 0):  node.rim_t = [node.rim_t]  # we need this 1st conversion for lenHH >0
+                        node.lenHH += 1  # increase lenHH here?
                     agg_compress(root, graph, node_, nrng, node.lenHH)
                 else:
                     root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
