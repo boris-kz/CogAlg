@@ -210,8 +210,8 @@ class Cgraph(CBase):  # params of single-fork node_ cluster per pplayers
     # graph-external, +level per root sub+:
     rim_t: object = None  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
     Rim_t: object = None  # links to furthest mediated evaluated nodes
-    # use None for checking?
-    esubH: list = z([])  # external subH: [[daggH,valt,rdnt,dect]] of all der)rng rim links
+    fHH: int = 0  # true if extH is daggH, also add for aggH?
+    extH: list = z([])  # G-external daggH( dsubH( dderH, summed from rim links
     evalt: list = z([0,0])  # sum from esubH
     erdnt: list = z([1,1])
     edect: list = z([0,0])
