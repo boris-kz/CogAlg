@@ -24,7 +24,7 @@ Weak value vars are combined into higher var, so derivation fork can be selected
 
 Clustering by variance: lend|borrow, contribution or counteraction to similarity | stability, such as metabolism? 
 -
-G is graph:
+graph G:
 Agg+ cross-comps top Gs and forms higher-order Gs, adding up-forking levels to their node graphs.
 Sub+ re-compares nodes within Gs, adding intermediate Gs, down-forking levels to root Gs, and up-forking levels to node Gs.
 -
@@ -53,10 +53,10 @@ def vectorize_root(blob, verbose):  # vectorization in 3 composition levels of x
     return edge
 
 
-def agg_recursion(rroot, root, node_, nrng=0, lenHH=-1):  # compositional agg|sub recursion in root graph, cluster G_
+def agg_recursion(rroot, root, node_, lenHH=-1, nrng=0):  # compositional agg|sub recursion in root graph, cluster G_
 
     Et = [[0,0],[0,0],[0,0]]
-    lenH = -1  # no empty append lenHH[-1] = 0?
+    lenH = -1
 
     nrng = rd_recursion(rroot, root, node_, Et, nrng, lenH, lenHH)  # rng+, adds rim_ as rim_t[-1][0]
     if root.link_ and isinstance(root.link_[0], CderG):  # else CderP in edge before agg+
@@ -71,8 +71,8 @@ def agg_recursion(rroot, root, node_, nrng=0, lenHH=-1):  # compositional agg|su
 
             if not fd: nrng+=1  # also nrng+ in rd+
             if root.Vt[fd] * (len(GG_)-1)*nrng*2 > G_aves[fd] * root.Rt[fd]:
-                # agg+/ node_t, vs. sub+/ node_:
-                GGG_t, Vt, Rt  = agg_recursion(rroot, root, root.node[fd], nrng=1)
+                # agg+ / node_t, vs. sub+ / node_:
+                GGG_t, Vt, Rt  = agg_recursion(rroot, root, root.node[fd], lenHH+1, nrng=1)
                 if rroot:
                     rroot.fback_t[fd] += [[root.aggH, root.valt, root.rdnt, root.dect]]
                     feedback(rroot,fd)  # update root.root..
@@ -107,8 +107,8 @@ def form_graph_t(root, G_, Et, nrng, lenH=-1, lenHH=-1):  # form Gm_,Gd_ from sa
             graph_ = segment_node_(root, _G_, fd, nrng, lenH)  # fd: node-mediated Correlation Clustering
             for graph in graph_:
                 if graph.Vt[fd] * (len(graph.node_)-1)*root.rng > G_aves[fd] * graph.Rt[fd]:
-                    graph.fsub = 1
-                    agg_recursion(root, graph, graph.node_, nrng)
+                    graph.fHH = 1  # sub+:
+                    agg_recursion(root, graph, graph.node_, lenHH, nrng)
                 else:
                     root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
                     # feedback(root,root.fd)  # update root.root..
@@ -162,20 +162,15 @@ def unpack_rim(rim_t, fd, lenHH):
     # rim_t in agg+:  None| [mrim, drim]  | rimtH,
     # rim_t in agg++: None| [mrim_,drim_] | rim_tH
 
-    rim_depth = get_depth(rim_t, 1)
-
-    if rim_depth == 3:
-        rim = rim_t[-1][fd][-1]  # in rim_tH
-    elif rim_depth == 2:
-        if lenHH==0: rim = rim_t[fd][-1]  # in rim_t, agg++
-        else:        rim = rim_t[-1][fd]  # in rimtH, agg+
-    elif rim_depth == 1:
-        rim = rim_t[fd]  # in rimt
-    else:
-        rim = []  # depth = 0, empty rim
+    if lenHH > -1:
+        rim = rim_t[-1][fd]
+        if isinstance(rim[0],list):  # not CderG, rim is rim_
+            rim = rim[-1]
+    else: rim = rim_t[fd]  # rimt
 
     return rim
 
+# not used:
 def get_depth(rim_t, fneg=0):  # https://stackoverflow.com/questions/6039103/counting-depth-or-the-deepest-level-a-nested-list-goes-to
 
     list_depth = ((max(map(get_depth, rim_t))+1 if rim_t else 1) if isinstance(rim_t, list) else 0)   # -1 if input is not a list
@@ -362,35 +357,89 @@ def append_rim(link, dsubH, Val,Rdn,Dec, fd, lenH, lenHH):
 
     for G in link._G, link.G:
         rim_t = G.rim_t
-        if rim_t:
-            if G.fHH:  # rim_t= rim_tH
-                if len(rim_t) < lenHH:  # rim_tH += rim_t
-                    if fd:
-                        dsubH = [dsubH]  # convert dsubH to daggH?
-                        rim_t += [[[],[link]]]  # add rimt ! rim_t: no der+ yet
-                    else:
-                        rim_t += [[[link],[]]]
-                else:  # append last rim_t[fd]
-                    if len(rim_t[-1][fd]) < lenH:  # append rim_ vs. rim
-                        if lenH==2:  # 1st der+,
-                            # this is done in rd_recursion?:
-                            if fd: dsubH = [dsubH]  # convert dderH to dsubH?
-                            rim_t[:] = [[rim_t[0]],[rim_t[1]]]  # convert rimt to rim_t
-                        rim_t[fd][-1] += [link]  # init empty
-                    else:
-                        rim_t[fd] += [link]  # rimt
-            else:  # rimt | rim_t
-                # same as above, make function:
-                if len(rim_t[-1][fd]) < lenH:  # append rim_ vs. rim
-                    if lenH == 2:  # 1st der+,
-                        dsubH = [dsubH]  # convert dsubH to daggH?
-                        rim_t[:] = [[rim_t[0]], [rim_t[1]]]  # convert rimt to rim_t
-                    rim_t[fd][-1] += [link]  # init empty
-                else:
-                    rim_t[fd] += [link]  # rimt
+        if not rim_t: rim_t = [[],[]]  # must include link
 
-            if fd: link.daggH += [dsubH]  # new layer with added nesting
-            G.Vt[fd] += Val; G.Rt[fd] += Rdn; G.Dt[fd] += Dec
+        if G.fHH:  # append existing G.rim_tH[-1] rimtH | rim_tH:
+            if lenHH==-1:  # 1st sub+
+                rim_t[:] = [rim_t]  # convert rimt|rim_t to rimtH|rim_tH
+            if lenH == 0:  # 1st der+
+                rim_t[-1][:] = [[rim_t[-1][0]],[rim_t[-1][1]]]  # convert last rimt to rim_t
+            if len(rim_t)-1 == lenHH:
+                if lenH == -1: rim_t += [[[],[]]]  # add rimt
+                else:          rim_t += [[[[]],[[]]]]  # add rim_t
+            if lenH == -1:
+                rim_t[-1][fd] += [link]  # rimtH
+            else:
+                rim_t[-1][fd][-1] += [link]  # rim_tH
+        else:
+            # G.rimt | rim_t
+            if lenH == -1: rim_t[fd] += [link]  # rimt
+            else:
+                if lenH == 0:  # 1st der+
+                    rim_t[:] = [[rim_t[0]],[rim_t[1]]]  # convert rimt to rim_t
+                if len(rim_t[fd]) - 1 == lenH:
+                    rim_t[fd] += [[]]  # add der+ layer
+                rim_t[fd][-1] += [link]
+
+        if fd: # empty link.daggH in rng+
+            if lenH == 0: dsubH = [dsubH]  # convert dderH to dsubH
+            if lenHH==-1: dsubH = [dsubH]  # convert dsubH to daggH
+            link.daggH += [dsubH]
+
+        G.Vt[fd] += Val; G.Rt[fd] += Rdn; G.Dt[fd] += Dec
+
+# not revised:
+def rd_recursion(rroot, root, Q, Et, nrng=1, lenH=0, lenHH=0):  # rng,der incr over same G_,link_ -> fork tree, represented in rim_t
+
+    fd = not nrng; link_ = []
+    et = [[0,0],[0,0],[0,0]]  # grapht link_' eValt, eRdnt, eDect(currently not used)
+    '''
+    link.subH[-1][fd] += [layer] per rng+|der+, after fd recursion is terminated: 
+    G.subH[-1][fd] += consecutive same-fd link layers in single clustering layer
+    '''
+    if fd:  # der+
+        G_ = []
+        for link in Q:  # inp_= root.link_, reform links
+            if link.Vt[1] > G_aves[1] * link.Rt[1]:  # >rdn incr
+                comp_G(link, Et, lenH+1, lenHH)
+                if link.G not in G_: G_ += [link.G]
+                if link._G not in G_: G_ += [link._G]
+    else:  # rng+
+        G_ = Q
+        for _G, G in combinations(G_, r=2):  # form new link_ from original node_
+            dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx
+            dist = np.hypot(dy, dx)
+            # max distance between node centers, init=2
+            if 2*nrng > dist > 2*(nrng-1):  # G,_G are within rng and were not compared in prior rd+
+                link = CderG(_G=_G, G=G)
+                comp_G(link, et, lenH, lenHH)
+
+    if et[0][fd] > ave_Gm * et[1][fd]:  # single layer accum
+        for Part, part in zip(Et, et):
+            for i, par in enumerate(part):  # Vt[i]+=v; Rt[i]+=rt[i]; Dt[i]+=d:
+                Part[i] += par
+        if fd:
+            for G in G_:
+                for link in unpack_rim(G.rim_t, fd, lenHH):
+                    if len(link.subH[0][-1]) > lenH:  # link.subH was appended in this rd cycle
+                        link_ += [link]  # for next rd cycle
+        else:
+            pruned_G_ = []
+            for G in G_:
+                if G.rim_t:
+                    rim_t = G.rim_t
+                    if lenHH>=0:
+                        G_lenH = len(rim_t[-1][fd])  # agg++ : G.rim_t is rim_tH or rimtH
+                    if lenH>=0:  # G.rim_t is rim_t
+                        G_lenH = len(rim_t[fd])
+                    else:  # lenH == 0: G.rim_t is rimt
+                        G_lenH = len(rim_t[fd])
+                    if G_lenH > lenH:
+                        pruned_G_ += [G]  # remove if empty rim_t
+
+        rd_recursion(rroot, root, link_ if fd else pruned_G_, Et, 0 if fd else nrng+1, lenH+1, lenHH)
+
+    return nrng
 
 
 def comp_aggHv(_aggH, aggH, rn):  # no separate ext
@@ -410,7 +459,7 @@ def comp_aggHv(_aggH, aggH, rn):  # no separate ext
 
     return SubH, [Mval,Dval],[Mrdn,Drdn],[Mdec,Ddec]
 
-# pending update on subHv_t
+
 def comp_subHv(_subH, subH, rn):
 
     Mval,Dval, Mrdn,Drdn, Mdec,Ddec = 0,0,1,1,0,0
@@ -466,7 +515,7 @@ def sum_aggHv(AggH, aggH, base_rdn):
         else:
             AggH[:] = deepcopy(aggH)
 
-# pending update on subHv_t
+
 def sum_subHv(T, t, base_rdn, fneg=0):
 
     if t:
@@ -500,7 +549,6 @@ def sum_derHv(T,t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers,
                 for [Tuplet,Valt,Rdnt,Dect], [tuplet,valt,rdnt,dect]  # ptuple_tv
                 in zip_longest(DerH, derH, fillvalue=[([0,0,0,0,0,0],[0,0,0,0,0,0]), (0,0),(0,0),(0,0)])
             ]
-
         else:
             T[:] = deepcopy(t)
 
@@ -573,59 +621,3 @@ def feedback(root, fd):  # called from form_graph_, append new der layers to roo
             fback_ = rroot.fback_t[fd]  # always node_t for feedback
             if fback_ and len(fback_) == len(rroot.node_[fd]):  # all nodes sub+ terminated
                 feedback(rroot, fd)  # sum2graph adds higher aggH, feedback adds deeper aggH layers
-
-
-# draft:
-def rd_recursion(rroot, root, Q, Et, nrng=1, lenH=0, lenHH=0):  # rng,der incr over same G_,link_ -> fork tree, represented in rim_t
-
-    fd = not nrng; link_ = []; ave = G_aves[fd]  # this ave can be rmeoved now?
-    et = [[0,0],[0,0],[0,0]]  # grapht link_' eValt, eRdnt, eDect(currently not used)
-    '''
-    link.subH[-1][fd] += [layer] per rng+|der+, after fd recursion is terminated: 
-    G.subH[-1][fd] += consecutive same-fd link layers in single clustering layer
-    '''
-    if fd:  # der+
-        G_ = []
-        for link in Q:  # inp_= root.link_, reform links
-            if link.Vt[1] > G_aves[1] * link.Rt[1]:  # >rdn incr
-                if lenH==1:  # 1st der+: dderH-> dsubH
-                    link.subH = [link.subH]
-                comp_G(link, Et, lenH+1, lenHH)
-                if link.G not in G_: G_ += [link.G]
-                if link._G not in G_: G_ += [link._G]
-    else:  # rng+
-        G_ = Q
-        for _G, G in combinations(G_, r=2):  # form new link_ from original node_
-            dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx
-            dist = np.hypot(dy, dx)
-            # max distance between node centers, init=2
-            if 2*nrng > dist > 2*(nrng-1):  # G,_G are within rng and were not compared in prior rd+
-                link = CderG(_G=_G, G=G)
-                comp_G(link, et, lenH, lenHH)
-
-    if et[0][fd] > ave_Gm * et[1][fd]:  # single layer accum
-        for Part, part in zip(Et, et):
-            for i, par in enumerate(part):  # Vt[i]+=v; Rt[i]+=rt[i]; Dt[i]+=d:
-                Part[i] += par
-        if fd:
-            for G in G_:
-                for link in unpack_rim(G.rim_t, fd, lenHH):
-                    if len(link.subH[0][-1]) > lenH:  # link.subH was appended in this rd cycle
-                        link_ += [link]  # for next rd cycle
-        else:
-            pruned_G_ = []
-            for G in G_:
-                if G.rim_t:
-                    rim_t = G.rim_t
-                    if lenHH>=0:
-                        G_lenH = len(rim_t[-1][fd])  # agg++ : G.rim_t is rim_tH or rimtH
-                    if lenH>=0:  # G.rim_t is rim_t
-                        G_lenH = len(rim_t[fd])
-                    else:  # lenH == 0: G.rim_t is rimt
-                        G_lenH = len(rim_t[fd])
-                    if G_lenH > lenH:
-                        pruned_G_ += [G]  # remove if empty rim_t
-
-        rd_recursion(rroot, root, link_ if fd else pruned_G_, Et, 0 if fd else nrng+1, lenH+1, lenHH)
-
-    return nrng

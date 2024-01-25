@@ -646,3 +646,21 @@ def sum_links_last_lay(G, fd, lenH):  # esubLay += last_lay/ link, lenH correspo
     agg+:  None | subH | subHH/ sub+, same for G.esubH, Cmd dertuples
     agg++: None | subH | subHH/ rd+, subHHH/ sub+
     '''
+
+def unpack_rim(rim_t, fd, lenHH):
+    # rim_t in agg+:  None| [mrim, drim]  | rimtH,
+    # rim_t in agg++: None| [mrim_,drim_] | rim_tH
+
+    rim_depth = get_depth(rim_t, 1)
+
+    if rim_depth == 3:
+        rim = rim_t[-1][fd][-1]  # in rim_tH
+    elif rim_depth == 2:
+        if lenHH==0: rim = rim_t[fd][-1]  # in rim_t, agg++
+        else:        rim = rim_t[-1][fd]  # in rimtH, agg+
+    elif rim_depth == 1:
+        rim = rim_t[fd]  # in rimt
+    else:
+        rim = []  # depth = 0, empty rim
+
+    return rim
