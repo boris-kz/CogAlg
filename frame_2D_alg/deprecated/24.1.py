@@ -664,3 +664,63 @@ def unpack_rim(rim_t, fd, lenHH):
         rim = []  # depth = 0, empty rim
 
     return rim
+
+def sum_links_last_lay(G, fd, lenH, lenHH):  # eLay += last_lay/ link, lenHH: daggH, lenH: dsubH
+
+    eLay = []  # accum from links' dderH or dsubH; rim_t,link.daggH nesting per depth:
+
+    for link in unpack_rim(G.rim_t, fd, lenHH):  # links in rim
+        if link.daggH:
+            dsubH = []
+            daggH = link.daggH
+            if G.fHH:  # from sub+
+                if len(daggH) > lenHH:
+                    if lenH: dsubH = daggH[-1]
+                    else: dderH = daggH[-1]
+            elif lenH >0: dsubH = daggH  # from der+
+            else: dderH = daggH  # from non-recursive comp_G
+            if dsubH:
+                if len(dsubH) > lenH:
+                    for dderH in dsubH[ int(len(dsubH)/2): ]:  # derH_/ last xcomp: len subH *= 2
+                        sum_derHv(eLay, dderH, base_rdn=link.Rt[fd])  # sum all derHs of link layer=rdH into esubH[-1]
+            else:  # empty dsubH
+                sum_derHv(eLay, dderH, base_rdn=link.Rt[fd])
+
+        G.evalt[fd] += link.Vt[fd]; G.erdnt[fd] += link.Rt[fd]; G.edect[fd] += link.Dt[fd]
+    G.extH += [eLay]
+
+
+def append_rim(link, dsubH, Val,Rdn,Dec, fd, lenH, lenHH):
+
+    for G in link._G, link.G:
+        if not G.rim_t: G.rim_t = [[],[]]  # must include link
+        rim_t = G.rim_t
+
+        if G.fHH:  # append existing G.rim_tH[-1] rimtH | rim_tH:
+            if lenHH==-1 and rim_t:  # 1st sub+
+                rim_t[:] = [rim_t]  # convert rimt|rim_t to rimtH|rim_tH
+            if lenH == 0:  # 1st der+
+                rim_t[-1][:] = [[rim_t[-1][0]],[rim_t[-1][1]]]  # convert last rimt to rim_t
+            if len(rim_t)-1 == lenHH:
+                if lenH == -1: rim_t += [[[],[]]]  # add rimt
+                else:          rim_t += [[[[]],[[]]]]  # add rim_t
+            if lenH == -1:
+                rim_t[-1][fd] += [link]  # rimtH
+            else:
+                rim_t[-1][fd][-1] += [link]  # rim_tH
+        else:
+            # G.rimt | rim_t
+            if lenH == -1: rim_t[fd] += [link]  # rimt
+            else:
+                if lenH == 0:  # 1st der+
+                    rim_t[:] = [[rim_t[0]],[rim_t[1]]]  # convert rimt to rim_t
+                if len(rim_t[fd]) - 1 == lenH:
+                    rim_t[fd] += [[]]  # add der+ layer
+                rim_t[fd][-1] += [link]
+
+        if fd: # empty link.daggH in rng+
+            if lenH == 0: dsubH = [dsubH]  # convert dderH to dsubH
+            if lenHH== 0: dsubH = [dsubH]  # convert dsubH to daggH (-1 is default, so we need 0 here)
+            link.daggH += [dsubH]
+
+        G.Vt[fd] += Val; G.Rt[fd] += Rdn; G.Dt[fd] += Dec
