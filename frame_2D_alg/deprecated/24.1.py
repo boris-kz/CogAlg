@@ -724,3 +724,50 @@ def append_rim(link, dsubH, Val,Rdn,Dec, fd, lenH, lenHH):
             link.daggH += [dsubH]
 
         G.Vt[fd] += Val; G.Rt[fd] += Rdn; G.Dt[fd] += Dec
+'''
+    for fd, (Val,Rdn,Dec) in enumerate(zip(Valt,Rdnt,Dect)):
+        if Val > G_aves[fd] * Rdn:
+            # eval fork grapht in form_graph_t:
+            Et[0][fd] += Val; Et[1][fd] += Rdn; Et[2][fd] += Dec
+            G.Vt[fd] += Val;  G.Rt[fd] += Rdn;  G.Dt[fd] += Dec
+            for G in link.G, link._G:
+                rim_t = G.rim_t
+                if lenHH>0: rim_t = rim_t[-1]  # get rimt|rim_t from rimtH|rim_tH
+                if lenH >0:  # der+
+                    if len(rim_t[fd]) == lenH:
+                        rim_t[fd] += [[link]]   # add new rim
+                    else:
+                        rim_t[fd][-1] += [link]  # rim_t
+                else:
+                    rim_t[fd] += [link]  # rimt
+'''
+def get_depth(rim_t, fneg=0):  # https://stackoverflow.com/questions/6039103/counting-depth-or-the-deepest-level-a-nested-list-goes-to
+
+    list_depth = ((max(map(get_depth, rim_t))+1 if rim_t else 1) if isinstance(rim_t, list) else 0)   # -1 if input is not a list
+
+    return list_depth - 1 if fneg else list_depth
+
+def nest_rim(link):
+
+    for G in link._G, link.G:
+        rim_t = G.rim_t
+        if not rim_t: G.rim_t = [[],[]]  # must include link
+        if G.fHH:
+            if lenHH==0:  # 1st sub+
+                if len(G.rim_t)==2 and (G.rim_t[0] and isinstance(G.rim_t[0][0],CderG)) or (G.rim_t[1] and isinstance(G.rim_t[1][0],CderG)):
+                    G.rim_t = [G.rim_t]  # convert rimt|rim_t to rimtH|rim_tH
+            rim_t = G.rim_t[-1]  # for next der+ checking (if there's any)
+
+        if lenH == 0:  # 1st der+
+            if len(rim_t)==2 and (rim_t[0] and isinstance(rim_t[0][0],CderG)) or (rim_t[1] and isinstance(rim_t[1][0],CderG)):
+                rim_t[:] = [[rim_t[0]],[rim_t[1]]]  # convert last rimt to rim_t
+
+def unpack_rim(G, fd):  # rim_t =  [] | rimt|rim_t | rim_tH
+
+    rim_t = G.rim_t
+    if G.fHH: rim_t = rim_t[-1]  # nested rimtH | rim_tH
+    rim = rim_t[fd]  # unpack mrim or drim
+    # not sure:
+    if rim and isinstance(rim[0],list):  rim = rim[-1]  # not CderG, rim is rim_
+    return rim
+
