@@ -119,6 +119,9 @@ class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_
             in zip_longest(self, other, fillvalue=self.empty_layer())  # mtuple,dtuple
         ))
 
+    def __iadd__(self, other):
+        return self + other
+
     def __sub__(self, other: CderH) -> CderH:
         return CderH((
             # sum der layers, dertuple is mtuple | dtuple
@@ -239,9 +242,8 @@ class Cgraph(CBase):  # params of single-fork node_ cluster per pplayers
     fback_t: list = z([[],[],[]])  # feedback [[aggH,valt,rdnt,dect]] per node fork, maps to node_H
     compared_: list = z([])
     Rdn: int = 0  # for accumulation or separate recursion count?
-    # not used:
-    depth: int = 0  # n sub_G levels over base node_, max across forks
-    nval: int = 0  # of open links: base alt rep
+    # depth: int = 0  # n sub_G levels over base node_, max across forks
+    # nval: int = 0  # of open links: base alt rep
     # id_H: list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
     # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
     # top Lay from links, lower Lays from nodes, hence nested tuple?
