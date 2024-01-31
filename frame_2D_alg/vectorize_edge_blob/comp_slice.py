@@ -103,22 +103,21 @@ def form_PP_t(root, root_link_, base_rdn):  # form PPs of derP.valt[fd] + connec
 def sum2PP(root, P_, derP_, base_rdn, fd):  # sum links in Ps and Ps in PP
 
     PP = Cgraph(fd=fd, roott=root, P_=P_, rng=root.rng +(1-fd))  # initial PP.box = (inf,inf,-inf,-inf)
-    # accum derP:
+
     for derP in derP_:
+        # accum links:
         if derP.P not in P_ or derP._P not in P_: continue
         derP.roott[fd] = PP
         derH,valt,rdnt = derP.derH,derP.valt,derP.rdnt
-
         P = derP.P  # uplink
-        P.derH += derH; P.valt += valt; P.rdnt += rdnt + (base_rdn, base_rdn)   # P.derH is combined with derP.derH of every fork and depth
-
+        P.derH += derH; P.valt += valt; P.rdnt += rdnt + (base_rdn, base_rdn)  # P.derH sums link derH s
         _P = derP._P  # bilateral accum downlink, reverse d signs:
         _P.derH -= derH; _P.valt += valt; _P.rdnt += rdnt + (base_rdn, base_rdn)
-
         PP.link_ += [derP]
-    # accum P:
+
     celly_,cellx_ = [],[]
     for P in P_:
+        # accum Ps:
         PP.ptuple += P.ptuple  # accum ptuple
         for y, x in P.cells:
             PP.box = PP.box.accumulate(y, x)
@@ -127,6 +126,7 @@ def sum2PP(root, P_, derP_, base_rdn, fd):  # sum links in Ps and Ps in PP
         PP.derH += P.derH
         PP.valt += P.valt
         PP.rdnt += P.rdnt + (base_rdn, base_rdn)
+
     y0, x0, yn, xn = PP.box
     PP.mask__ = np.zeros((yn-y0, xn-x0), bool)
     celly_ = np.array(celly_); cellx_ = np.array(cellx_)

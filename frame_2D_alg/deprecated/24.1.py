@@ -439,6 +439,42 @@ def agg_recursion(rroot, root, node_, nrng=1, lenH=0, lenHH=None):  # lenH = len
                     feedback(rroot,i)  # update root.root..
 
 
+def agg_recursion_old(rroot, root, node_, nrng=1, fagg=0, rfd=0):  # cross-comp and sub-cluster Gs in root graph node_:
+
+    Et = [[0,0],[0,0],[0,0]]
+
+    # agg+: der=1 xcomp of new Gs if fagg, else sub+: der+ xcomp of old Gs:
+    nrng = rng_recursion(rroot, root, root.link_ if rfd else node_, Et, nrng, rfd)  # rng+ appends rim, link.derH
+
+    GG_t = form_graph_t(root, node_, Et, nrng, fagg=fagg)  # may convert root.node_[-1] to node_t
+    GGG_t = []  # add agg+ fork tree:
+
+    while GG_t:  # unpack fork layers?
+        # not sure:
+        _GG_t, GGG_t = [],[]
+        for fd, GG_ in enumerate(_GG_t):
+            if not fd: nrng+=1
+            if root.Vt[fd] * (len(GG_)-1) * nrng*2 > G_aves[fd] * root.Rt[fd]:
+                # agg+ / node_t, vs. sub+ / node_:
+                GGG_t, Vt, Rt  = agg_recursion(rroot, root, GG_, nrng=1, fagg=1, rfd=fd)  # for agg+, lenHH stays constant
+                '''
+                if rroot:
+                    rroot.fback_t[fd] += [[root.aggH, root.valt, root.rdnt, root.dect]]
+                    feedback(rroot,fd)  # update root.root..
+                for i in 0,1:
+                    if Vt[i] > G_aves[i] * Rt[i]:
+                        GGG_t += [[i, GGG_t[fd][i]]]
+                        # sparse agglomerated current layer of forks across GG_tree
+                        GG_t += [[i, GG_t[fd][i],1]]  # i:fork, 1:packed sub_GG_t?
+                        # sparse lower layer of forks across GG_tree
+                    else:
+                        GGG_t += [[i, GG_t[fd][i]]]  # keep lower-composition GGs
+                '''
+            GG_t = _GG_t  # for next loop
+
+    return GGG_t  # should be tree nesting lower forks
+
+
 def form_graph_t(root, G_, Et, nrng, lenH=0, lenHH=None):  # form Gm_,Gd_ from same-root nodes
 
     # select Gs connected in current layer:
