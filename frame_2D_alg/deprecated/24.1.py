@@ -807,3 +807,30 @@ def unpack_rim(G, fd):  # rim_t =  [] | rimt|rim_t | rim_tH
     if rim and isinstance(rim[0],list):  rim = rim[-1]  # not CderG, rim is rim_
     return rim
 
+
+def form_graph_t(root, G_, Et, nrng, fagg=0):  # form Gm_,Gd_ from same-root nodes
+
+    node_connect(G_)  # Graph Convolution of Correlations over init _G_
+    node_t = []
+    for fd in 0, 1:
+        if Et[0][fd] > ave * Et[1][fd]:  # eValt > ave * eRdnt: cluster
+            graph_ = segment_node_(root, G_, fd, nrng)  # fd: node-mediated Correlation Clustering
+            for graph in graph_:
+                # add graph link_ in the evaluation instead of node? Because we need link in der+ sub later
+                if graph.Vt[fd] * (len(graph.node_)-1)*root.rng * len(graph.link_) > G_aves[fd] * graph.Rt[fd]:
+                    for node in graph.node_:
+                        if node.rimH and isinstance(node.rimH[0],CderG):  # 1st sub+: convert rim to rimH
+                            node.rimH = [node.rimH]
+                        node.rimH += [[]]  # the simplest method is to add new rim layer here?
+                    agg_recursion(root, graph, graph.node_, nrng, fagg=0)
+                else:
+                    root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
+                    # feedback(root,root.fd)  # update root.root..
+            node_t += [graph_]  # may be empty
+        else:
+            node_t += [[]]
+    if fagg:
+        return node_t
+    elif any(node_t):
+        G_[:] = node_t  # else keep root.node_  (replacement only in sub+?)
+
