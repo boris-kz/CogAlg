@@ -222,7 +222,7 @@ class Cgraph(CBase):  # params of single-fork node_ cluster
     evalt: list = z([0,0])  # sum from esubH
     erdnt: list = z([1,1])
     edect: list = z([0,0])
-    # ext params:
+    ext: list = z(Cangle,0,0)  # replacing the below:
     L: int = 0 # len base node_; from internal links:
     S: float = 0.0  # sparsity: average distance to link centers
     A: list = z([0,0])  # angle: average dy,dx to link centers
