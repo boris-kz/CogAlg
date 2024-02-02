@@ -50,7 +50,6 @@ ave_mP = 100
 UNFILLED = -1
 EXCLUDED = -2
 
-
 class Cder__t(NamedTuple):
     dy: Any
     dx: Any
@@ -59,13 +58,11 @@ class Cder__t(NamedTuple):
     def get_pixel(self, y: Real, x: Real) -> Tuple[Real, Real, Real]:
         return self.dy[y, x], self.dx[y, x], self.g[y, x]
 
-
 class Cbox(NamedTuple):
     n: Real
     w: Real
     s: Real
     e: Real
-
     # properties
     @property
     def cy(self) -> Real: return (self.n + self.s) / 2
@@ -73,12 +70,10 @@ class Cbox(NamedTuple):
     def cx(self) -> Real: return (self.w + self.e) / 2
     @property
     def slice(self) -> Tuple[slice, slice]: return slice(self.n, self.s), slice(self.w, self.e)
-
     # operators:
     def __add__(self, other: Cbox) -> Cbox:
         """Add 2 boxes."""
         return Cbox(min(self.n, other.n), min(self.w, other.w), max(self.s, other.s), max(self.e, other.e))
-
     # methods
     def accumulate(self, y: Real, x: Real) -> Cbox:
         """Box coordinate accumulation."""

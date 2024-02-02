@@ -113,14 +113,16 @@ def sum2PP(root, P_, derP_, base_rdn, fd):  # sum links in Ps and Ps in PP
         P.derH += derH; P.valt += valt; P.rdnt += rdnt + (base_rdn, base_rdn)  # P.derH sums link derH s
         _P = derP._P  # bilateral accum downlink, reverse d signs:
         _P.derH -= derH; _P.valt += valt; _P.rdnt += rdnt + (base_rdn, base_rdn)
+        PP.A += derP.A
+        PP.S += derP.S
         PP.link_ += [derP]
 
     celly_,cellx_ = [],[]
     for P in P_:
         # accum Ps:
         PP.ptuple += P.ptuple  # accum ptuple
-        for y, x in P.cells:
-            PP.box = PP.box.accumulate(y, x)
+        for y,x in P.cells:
+            PP.box = PP.box.accumulate(y,x)
             celly_ += [y]; cellx_ += [x]
         # unilateral sum:
         PP.derH += P.derH

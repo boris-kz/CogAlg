@@ -14,7 +14,7 @@ from .filters import ave_dangle, ave_dI, ave_Pd, ave_Pm, aves
     prefix 'C'  denotes class
     postfix 't' denotes tuple, multiple ts is a nested tuple
     postfix '_' denotes array name, vs. same-name elements
-    prefix '_'  denotes prior of two same-name variables
+    prefix '_'  denotes prior or not-self of two same-name variables
     prefix 'f'  denotes flag
     1-3 letter names are normally scalars, except for P and similar classes, 
     capitalized variables are normally summed small-case variables,
@@ -102,6 +102,36 @@ class Cdertuple(Cptuple):
         return ddertuplet, valt, rdnt
 
 
+class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
+
+    ptuple: Cptuple = z(Cptuple())  # latuple: I,G,M,Ma, angle(Dy,Dx), L
+    rnpar_H: list = z([])
+    derH: CderH = z(CderH())  # [(mtuple, ptuple)...] vertical derivatives summed from P links
+    valt: Cmd = z(Cmd(0, 0))  # summed from the whole derH
+    rdnt: Cmd = z(Cmd(1, 1))
+    dert_: list = z([])  # array of pixel-level derts, ~ node_
+    cells: set = z(set())  # pixel-level kernels adjacent to P axis, combined into corresponding derts projected on P axis.
+    roott: list = z([None,None])  # PPrm,PPrd that contain this P, single-layer
+    axis: Cangle = Cangle(0, 1)  # prior slice angle, init sin=0,cos=1
+    yx: tuple = None
+    ''' 
+    link_H: list = z([[]])  # all links per comp layer, rng+ or der+
+    dxdert_: list = z([])  # only in Pd
+    Pd_: list = z([])  # only in Pm
+    Mdx: int = 0  # if comp_dx
+    Ddx: int = 0
+    '''
+
+    # it's conditional in comp_rng, and we need to pass A,S, so it should be in comp_slice?
+    def comp(self, other: CP, link_: List[CderP], rn: Real, S: Real = None):
+
+        dertuplet, valt, rdnt = self.ptuple.comp(other.ptuple, rn=rn)
+
+        if valt.m > ave_Pm * rdnt.m or valt.d > ave_Pm * rdnt.d:
+            derH = CderH([dertuplet])
+            link_ += [CderP(derH=derH, valt=valt, rdnt=rdnt, _P=self, P=other, S=S)]
+
+
 class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_tv
     __slots__ = []
 
@@ -143,35 +173,6 @@ class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_
         return dderH, valt, rdnt  # new derLayer,= 1/2 combined derH
 
 
-class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
-
-    ptuple: Cptuple = z(Cptuple())  # latuple: I,G,M,Ma, angle(Dy,Dx), L
-    rnpar_H: list = z([])
-    derH: CderH = z(CderH())  # [(mtuple, ptuple)...] vertical derivatives summed from P links
-    valt: Cmd = z(Cmd(0, 0))  # summed from the whole derH
-    rdnt: Cmd = z(Cmd(1, 1))
-    dert_: list = z([])  # array of pixel-level derts, ~ node_
-    cells: set = z(set())  # pixel-level kernels adjacent to P axis, combined into corresponding derts projected on P axis.
-    roott: list = z([None,None])  # PPrm,PPrd that contain this P, single-layer
-    axis: Cangle = Cangle(0, 1)  # prior slice angle, init sin=0,cos=1
-    yx: tuple = None
-    ''' 
-    add L,S,A from links?
-    optional:
-    link_H: list = z([[]])  # all links per comp layer, rng+ or der+
-    dxdert_: list = z([])  # only in Pd
-    Pd_: list = z([])  # only in Pm
-    Mdx: int = 0  # if comp_dx
-    Ddx: int = 0
-    '''
-
-    def comp(self, other: CP, link_: List[CderP], rn: Real, S: Real = None):
-        dertuplet, valt, rdnt = self.ptuple.comp(other.ptuple, rn=rn)
-        if valt.m > ave_Pm * rdnt.m or valt.d > ave_Pm * rdnt.d:
-            derH = CderH([dertuplet])
-            link_ += [CderP(derH=derH, valt=valt, rdnt=rdnt, _P=self, P=other, S=S)]
-
-
 class CderP(CBase):  # tuple of derivatives in P link: binary tree with latuple root and vertuple forks
 
     _P: CP  # higher comparand
@@ -186,10 +187,10 @@ class CderP(CBase):  # tuple of derivatives in P link: binary tree with latuple 
 
     def comp(self, link_: List[CderP], rn: Real):
         dderH, valt, rdnt = self._P.derH.comp(self.P.derH, rn=rn, n=len(self.derH))
+
         if valt.m > ave_Pd * rdnt.m or valt.d > ave_Pd * rdnt.d:
             self.derH |= dderH; self.valt = valt; self.rdmt = rdnt  # update derP not form new one
             link_ += [self]
-
 '''
 max n of tuples per der layer = summed n of tuples in all lower layers: 1, 1, 2, 4, 8..:
 lay1: par     # derH per param in vertuple, layer is derivatives of all lower layers:
@@ -198,9 +199,11 @@ lay3: [[m,d], [md,dd]]: 2 sLays,
 lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
 '''
 
-
-class Cgraph(CBase):  # params of single-fork node_ cluster per pplayers
-
+class Cgraph(CBase):  # params of single-fork node_ cluster
+    '''
+    We may need nested ext: top level summed from link_, lower levels from nodes, per level of node_ hierarchy.
+    That's parallel to aggH( subH, so we should have ext packed in each subLay and aggLev, same as in derH?
+    '''
     fd: int = 0  # fork if flat layers?
     ptuple: Cptuple = z(Cptuple())  # default P
     derH: CderH = z(CderH())  # from PP, not derHv
