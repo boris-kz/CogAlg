@@ -101,37 +101,6 @@ class Cdertuple(Cptuple):
 
         return ddertuplet, valt, rdnt
 
-
-class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
-
-    ptuple: Cptuple = z(Cptuple())  # latuple: I,G,M,Ma, angle(Dy,Dx), L
-    rnpar_H: list = z([])
-    derH: CderH = z(CderH())  # [(mtuple, ptuple)...] vertical derivatives summed from P links
-    valt: Cmd = z(Cmd(0, 0))  # summed from the whole derH
-    rdnt: Cmd = z(Cmd(1, 1))
-    dert_: list = z([])  # array of pixel-level derts, ~ node_
-    cells: set = z(set())  # pixel-level kernels adjacent to P axis, combined into corresponding derts projected on P axis.
-    roott: list = z([None,None])  # PPrm,PPrd that contain this P, single-layer
-    axis: Cangle = Cangle(0, 1)  # prior slice angle, init sin=0,cos=1
-    yx: tuple = None
-    ''' 
-    link_H: list = z([[]])  # all links per comp layer, rng+ or der+
-    dxdert_: list = z([])  # only in Pd
-    Pd_: list = z([])  # only in Pm
-    Mdx: int = 0  # if comp_dx
-    Ddx: int = 0
-    '''
-
-    # it's conditional in comp_rng, and we need to pass A,S, so it should be in comp_slice?
-    def comp(self, other: CP, link_: List[CderP], rn: Real, S: Real = None):
-
-        dertuplet, valt, rdnt = self.ptuple.comp(other.ptuple, rn=rn)
-
-        if valt.m > ave_Pm * rdnt.m or valt.d > ave_Pm * rdnt.d:
-            derH = CderH([dertuplet])
-            link_ += [CderP(derH=derH, valt=valt, rdnt=rdnt, _P=self, P=other, S=S)]
-
-
 class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_tv
     __slots__ = []
 
@@ -173,6 +142,37 @@ class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_
         return dderH, valt, rdnt  # new derLayer,= 1/2 combined derH
 
 
+
+class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
+
+    ptuple: Cptuple = z(Cptuple())  # latuple: I,G,M,Ma, angle(Dy,Dx), L
+    rnpar_H: list = z([])
+    derH: CderH = z(CderH())  # [(mtuple, ptuple)...] vertical derivatives summed from P links
+    valt: Cmd = z(Cmd(0, 0))  # summed from the whole derH
+    rdnt: Cmd = z(Cmd(1, 1))
+    dert_: list = z([])  # array of pixel-level derts, ~ node_
+    cells: set = z(set())  # pixel-level kernels adjacent to P axis, combined into corresponding derts projected on P axis.
+    roott: list = z([None,None])  # PPrm,PPrd that contain this P, single-layer
+    axis: Cangle = Cangle(0, 1)  # prior slice angle, init sin=0,cos=1
+    yx: tuple = None
+    ''' 
+    link_H: list = z([[]])  # all links per comp layer, rng+ or der+
+    dxdert_: list = z([])  # only in Pd
+    Pd_: list = z([])  # only in Pm
+    Mdx: int = 0  # if comp_dx
+    Ddx: int = 0
+    '''
+
+    # it's conditional in comp_rng, and we need to pass A,S, so it should be in comp_slice?
+    def comp(self, other: CP, link_: List[CderP], rn: Real, S: Real = None):
+
+        dertuplet, valt, rdnt = self.ptuple.comp(other.ptuple, rn=rn)
+
+        if valt.m > ave_Pm * rdnt.m or valt.d > ave_Pm * rdnt.d:
+            derH = CderH([dertuplet])
+            link_ += [CderP(derH=derH, valt=valt, rdnt=rdnt, _P=self, P=other, S=S)]
+
+
 class CderP(CBase):  # tuple of derivatives in P link: binary tree with latuple root and vertuple forks
 
     _P: CP  # higher comparand
@@ -182,7 +182,7 @@ class CderP(CBase):  # tuple of derivatives in P link: binary tree with latuple 
     rdnt: Cmd = z(Cmd(1, 1))  # mrdn + uprdn if branch overlap?
     roott: list = z([None, None])  # PPdm,PPdd that contain this derP
     S: float = 0.0  # sparsity: distance between centers
-    A: Cangle = None  # angle: dy,dx between centers
+    A: Cangle = z([0,1])  # angle: dy,dx between centers
     # roott: list = z([None, None])  # for der++, if clustering is per link
 
     def comp(self, link_: List[CderP], rn: Real):
@@ -222,10 +222,7 @@ class Cgraph(CBase):  # params of single-fork node_ cluster
     evalt: list = z([0,0])  # sum from esubH
     erdnt: list = z([1,1])
     edect: list = z([0,0])
-    ext: list = z(Cangle,0,0)  # replacing the below:
-    L: int = 0 # len base node_; from internal links:
-    S: float = 0.0  # sparsity: average distance to link centers
-    A: list = z([0,0])  # angle: average dy,dx to link centers
+    ext: list = z([0,0,Cangle(0,0)])  # L,S,A: L len base node_, S sparsity: average link len, A angle: average link dy,dx
     rng: int = 1
     box: Cbox = Cbox(inf,inf,-inf,-inf)  # y0,x0,yn,,xn
     # tentative:
@@ -245,6 +242,7 @@ class Cgraph(CBase):  # params of single-fork node_ cluster
     fback_t: list = z([[],[],[]])  # feedback [[aggH,valt,rdnt,dect]] per node fork, maps to node_H
     compared_: list = z([])
     Rdn: int = 0  # for accumulation or separate recursion count?
+
     # depth: int = 0  # n sub_G levels over base node_, max across forks
     # nval: int = 0  # of open links: base alt rep
     # id_H: list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
