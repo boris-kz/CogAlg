@@ -1,9 +1,7 @@
-from __future__ import annotations
-
 from itertools import count, zip_longest
 from math import inf, hypot
 from numbers import Real
-from typing import Any, List, NamedTuple, Tuple
+from typing import Any, NamedTuple
 
 from class_cluster import CBase, CBaseLite, init_param as z
 from frame_blobs import Cbox
@@ -21,21 +19,23 @@ from .filters import ave_dangle, ave_dI, ave_Pd, ave_Pm, aves
     longer names are normally classes
 '''
 
-class Cangle(NamedTuple):
+class Cvec2d(NamedTuple):
     dy: Real
     dx: Real
     # operators:
-    def __abs__(self) -> Real: return hypot(self.dy, self.dx)
-    def __pos__(self) -> Cangle: return self
-    def __neg__(self) -> Cangle: return Cangle(-self.dy, -self.dx)
-    def __add__(self, other: Cangle) -> Cangle: return Cangle(self.dy + other.dy, self.dx + other.dx)
-    def __sub__(self, other: Cangle) -> Cangle: return self + (-other)
+    def __abs__(self): return hypot(self.dy, self.dx)
+    def __pos__(self): return self
+    def __neg__(self): return self.__class__(-self.dy, -self.dx)
+    def __add__(self, other): return self.__class__(self.dy + other.dy, self.dx + other.dx)
+    def __sub__(self, other): return self + (-other)
 
-    def normalize(self) -> Cangle:
+    def normalize(self):
         dist = abs(self)
-        return Cangle(self.dy / dist, self.dx / dist)
+        return self.__class__(self.dy / dist, self.dx / dist)
 
-    def comp(self, other: Cangle) -> Cmd:  # rn doesn't matter for angles
+
+class Cangle(Cvec2d):
+    def comp(self, other):  # rn doesn't matter for angles
 
         # angle = [dy,dx]
         _sin, sin = self.normalize()
@@ -62,10 +62,10 @@ class Cptuple(CBaseLite):
     L: Real = 0
 
     # operators:
-    def __pos__(self) -> Cptuple: return self
-    def __neg__(self) -> Cptuple: return self.__class__(-self.I, -self.G, -self.M, -self.Ma, -self.angle, -self.L)
+    def __pos__(self): return self
+    def __neg__(self): return self.__class__(-self.I, -self.G, -self.M, -self.Ma, -self.angle, -self.L)
 
-    def comp(self, other: Cptuple, rn: Real) -> Tuple[Cmd, Cmd, Cmd]:
+    def comp(self, other, rn):
 
         dI  = self.I  - other.I*rn;  mI  = ave_dI - dI
         dG  = self.G  - other.G*rn;  mG  = min(self.G, other.G*rn) - aves[1]
@@ -87,7 +87,7 @@ class Cdertuple(Cptuple):
 
     angle: Real = 0
 
-    def comp(self, other: Cdertuple, rn: Real) -> Tuple[Cmd, Cmd, Cmd]:    # comp_dertuple
+    def comp(self, other, rn):    # comp_dertuple
 
         mtuple, dtuple = [], []
         for _par, par, ave in zip(self, other, aves):  # compare ds only
@@ -108,10 +108,10 @@ class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_
     def empty_layer(cls):
         return Cmd(Cdertuple(), Cdertuple())
 
-    def __or__(self, other: CderH) -> CderH:
+    def __or__(self, other):    # |: concatenate operator
         return CderH([*self, *other])
 
-    def __add__(self, other: CderH) -> CderH:
+    def __add__(self, other):
         return CderH((
             # sum der layers, dertuple is mtuple | dtuple
             Dertuplet + dertuplet for Dertuplet, dertuplet
@@ -121,14 +121,14 @@ class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_
     def __iadd__(self, other):
         return self + other
 
-    def __sub__(self, other: CderH) -> CderH:
+    def __sub__(self, other):
         return CderH((
             # sum der layers, dertuple is mtuple | dtuple
             Dertuplet - dertuplet for Dertuplet, dertuplet
             in zip_longest(self, other, fillvalue=self.empty_layer())  # mtuple,dtuple
         ))
 
-    def comp(self, other: CderH, rn: Real, n: Real = inf) -> Tuple[CderH, Cmd, Cmd]:
+    def comp(self, other, rn, n=inf):
 
         dderH = CderH([])  # or not-missing comparand: xor?
         valt, rdnt = Cmd(0, 0), Cmd(1, 1)
@@ -142,7 +142,6 @@ class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_
         return dderH, valt, rdnt  # new derLayer,= 1/2 combined derH
 
 
-
 class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     ptuple: Cptuple = z(Cptuple())  # latuple: I,G,M,Ma, angle(Dy,Dx), L
@@ -153,8 +152,8 @@ class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param
     dert_: list = z([])  # array of pixel-level derts, ~ node_
     cells: set = z(set())  # pixel-level kernels adjacent to P axis, combined into corresponding derts projected on P axis.
     roott: list = z([None,None])  # PPrm,PPrd that contain this P, single-layer
-    axis: Cangle = Cangle(0, 1)  # prior slice angle, init sin=0,cos=1
-    yx: tuple = None
+    axis: Cangle = Cangle(0, 0)  # prior slice angle, init sin=0,cos=1
+    yx: Cvec2d = None
     ''' 
     link_H: list = z([[]])  # all links per comp layer, rng+ or der+
     dxdert_: list = z([])  # only in Pd
@@ -163,14 +162,13 @@ class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param
     Ddx: int = 0
     '''
 
-    # it's conditional in comp_rng, and we need to pass A,S, so it should be in comp_slice?
-    def comp(self, other: CP, link_: List[CderP], rn: Real, S: Real = None):
+    def comp(self, other, link_, rn, A, S):
 
         dertuplet, valt, rdnt = self.ptuple.comp(other.ptuple, rn=rn)
 
         if valt.m > ave_Pm * rdnt.m or valt.d > ave_Pm * rdnt.d:
             derH = CderH([dertuplet])
-            link_ += [CderP(derH=derH, valt=valt, rdnt=rdnt, _P=self, P=other, S=S)]
+            link_ += [CderP(derH=derH, valt=valt, rdnt=rdnt, _P=self, P=other, A=A, S=S)]
 
 
 class CderP(CBase):  # tuple of derivatives in P link: binary tree with latuple root and vertuple forks
@@ -182,10 +180,10 @@ class CderP(CBase):  # tuple of derivatives in P link: binary tree with latuple 
     rdnt: Cmd = z(Cmd(1, 1))  # mrdn + uprdn if branch overlap?
     roott: list = z([None, None])  # PPdm,PPdd that contain this derP
     S: float = 0.0  # sparsity: distance between centers
-    A: Cangle = z([0,1])  # angle: dy,dx between centers
+    A: Cangle = Cangle(0,0)  # angle: dy,dx between centers
     # roott: list = z([None, None])  # for der++, if clustering is per link
 
-    def comp(self, link_: List[CderP], rn: Real):
+    def comp(self, link_, rn):
         dderH, valt, rdnt = self._P.derH.comp(self.P.derH, rn=rn, n=len(self.derH))
 
         if valt.m > ave_Pd * rdnt.m or valt.d > ave_Pd * rdnt.d:
@@ -200,10 +198,7 @@ lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
 '''
 
 class Cgraph(CBase):  # params of single-fork node_ cluster
-    '''
-    We may need nested ext: top level summed from link_, lower levels from nodes, per level of node_ hierarchy.
-    That's parallel to aggH( subH, so we should have ext packed in each subLay and aggLev, same as in derH?
-    '''
+
     fd: int = 0  # fork if flat layers?
     ptuple: Cptuple = z(Cptuple())  # default P
     derH: CderH = z(CderH())  # from PP, not derHv
@@ -212,10 +207,9 @@ class Cgraph(CBase):  # params of single-fork node_ cluster
     valt: Cmd = z(Cmd(0, 0))  # sum ptuple, derH, aggH
     rdnt: Cmd = z(Cmd(1, 1))
     dect: Cmd = z(Cmd(0, 0))
-    link_: List[CderP | CderG] = z([])  # internal, single-fork
+    link_: list = z([])  # internal, single-fork
     node_: list = z([])  # base node_ replaced by node_t in both agg+ and sub+, deeper node-mediated unpacking in agg+
     # graph-external, +level per root sub+:
-    fHH: int = 0  # aggH + [daggH]: add nesting per agg+?
     rimH: list = z([])  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
     RimH: list = z([])  # links to the most mediated nodes
     extH: list = z([])  # G-external daggH( dsubH( dderH, summed from rim links

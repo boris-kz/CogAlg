@@ -3,7 +3,7 @@ import numpy as np
 from math import floor
 from collections import deque
 from itertools import product
-from .classes import Cgraph, CP, Cptuple, Cangle
+from .classes import Cgraph, CP, Cptuple, Cvec2d, Cangle
 from .filters import ave_g, ave_dangle, ave_daangle
 
 '''
@@ -87,7 +87,7 @@ def trace_edge(blob, mask__, verbose=False):
             dy, dx, g = blob.der__t.get_pixel(y,x)
             ma = ave_dangle  # max value because P direction is the same as dert gradient direction
             assert g > 0, "g must be positive"
-            P = form_P(blob, CP(yx=(y,x), axis=(dy/g, dx/g), cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
+            P = form_P(blob, CP(yx=Cvec2d(y,x), axis=Cangle(dy/g, dx/g), cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
             edge.P_ += [P]
             if _P is not None:
                 Pt_ += [(_P, P)]  # add up links only
@@ -114,7 +114,7 @@ def form_P(blob, P):
     M = ave_g*L - G
     G = np.hypot(Dy, Dx)  # recompute G
     P.ptuple = Cptuple(I, G, M, Ma, Cangle(Dy, Dx), L)
-    P.yx = P.dert_[L//2][:2]  # new center
+    P.yx = Cvec2d(*P.dert_[L//2][:2])  # new center
 
     return P
 

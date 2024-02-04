@@ -26,6 +26,33 @@ Connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possib
 len prior root_ sorted by G is rdn of each root, to evaluate it for inclusion in PP, or starting new P by ave*rdn.
 '''
 
+
+def comp_P(link_, _P, P, rn, derP=None, S=None, V=0):  #  derP if der+, S if rng+
+
+    if derP is not None:  # der+: extend in-link derH, in sub+ only
+        dderH, valt, rdnt = comp_derH(_P.derH, P.derH, rn=rn)  # += fork rdn
+        derH = derP.derH | dderH; S = derP.S  # dderH valt,rdnt for new link
+        aveP = P_aves[1]
+
+    elif S is not None:  # rng+: add derH
+        mtuple, dtuple = comp_ptuple(_P.ptuple, P.ptuple, rn, fagg=0)
+        valt = Cmd(sum(mtuple), sum(abs(d) for d in dtuple))
+        rdnt = Cmd(1+(valt.d>valt.m), 1+(1-(valt.d>valt.m)))   # or rdn = Dval/Mval?
+        derH = CderH([Cmd(mtuple, dtuple)])
+        aveP = P_aves[0]
+        V += valt[0] + sum(mtuple)
+    else:
+        raise ValueError("either derP (der+) or S (rng+) should be specified")
+
+    A = Cangle(*(_P.yx - P.yx))
+    derP = CderP(derH=derH, valt=valt, rdnt=rdnt, P=P,_P=_P, S=S, A=A)
+
+    if valt.m > aveP*rdnt.m or valt.d > aveP*rdnt.d:
+        link_ += [derP]
+
+    return V
+
+# not needed?:
 def comp_P_(edge: Cgraph, adj_Pt_: List[Tuple[CP, CP]]):  # cross-comp P_ in edge: high-gradient blob, sliced in Ps in the direction of G
 
     for _P, P in adj_Pt_:  # scan, comp contiguously uplinked Ps, rn: relative weight of comparand
@@ -35,27 +62,29 @@ def comp_P_(edge: Cgraph, adj_Pt_: List[Tuple[CP, CP]]):  # cross-comp P_ in edg
 
     form_PP_t(edge, edge.link_, base_rdn=2)
 
-# rng+ and der+ are called from sub_recursion:
+# draft
+def comp_rng(ilink_, rng=1):  # form new links with recursive rng+, same cluster, comparison is bilateral, secondary eval per pair
 
-def comp_rng(ilink_, rng):  # form new Ps and links
+    link_ = []
+    while True:
+        V = 0
+        for _derP, derP in combinations(ilink_, 2):  # scan last-layer link pairs
+            _P = _derP.P; P = derP.P
+            if _derP.P is not derP._P: continue  # same as derP._P is _derP._P or derP.P is _derP.P
+            __P = _derP._P  # next layer of Ps
+            distance = np.hypot(__P.yx[1]-P.yx[1],__P.yx[0]-P.yx[0])   # distance between midpoints
 
-    link_ = []  # rng+ links
-    '''
-    replace with recursive call to comp_P_, eval should be per original cluster because comparison is bilateral: 
-    nodes with higher prior match should keep searching over all surrounding nodes, even those with low prior match
-    '''
-    for _derP, derP in combinations(ilink_, 2):  # scan last-layer link pairs
-        _P = _derP.P; P = derP.P
-        if _derP.P is not derP._P: continue  # same as derP._P is _derP._P or derP.P is _derP.P
-        __P = _derP._P  # next layer of Ps
-        distance = np.hypot(__P.yx[1]-P.yx[1],__P.yx[0]-P.yx[0])   # distance between midpoints
-        if distance < rng:  # distance=S, mostly lateral, /= L for eval?
-            if P.valt[0] + __P.valt[0] > ave * (P.rdnt[0] + _P.rdnt[0]):  # add pairwise eval
-                comp_P(link_, __P, P, rn=len(__P.dert_)/len(P.dert_), derP=distance, fd=0)  # derP is distance here
+            if rng-1 < distance <= rng:  # distance=S, mostly lateral, /= L for eval?
+                if rng==1 or P.valt[0]+__P.valt[0] > ave * (P.rdnt[0]+_P.rdnt[0]):  # pairwise eval
+                    comp_P(link_, __P, P, rn=len(__P.dert_)/len(P.dert_), fd=0, derP=distance, V=V)
+
+        if V < ave * len(ilink_) * 6:  # 6: len mtuple?
+            break
+        else: rng+=1
 
     return link_
 
-
+# rng+ and der+ are called from sub_recursion:
 def comp_der(ilink_):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
 
     n_uplinks = defaultdict(int)  # number of uplinks per P
@@ -182,7 +211,7 @@ def feedback(root, fd):  # in form_PP_, append new der layers to root PP, single
         if fback_ and (len(fback_)==len(node_)):  # all nodes terminated and fed back
             feedback(rroot, fd)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
 
-def comp_P(link_, _P, P, rn, fd=1, derP=None):  #  derP if der+, reused as S if rng+
+def comp_P(link_, _P, P, rn, fd=1, derP=None, S=None, V=0):  #  derP if der+, S if rng+
     aveP = P_aves[fd]
 
     if fd:  # der+: extend in-link derH, in sub+ only
