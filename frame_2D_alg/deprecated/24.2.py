@@ -174,3 +174,101 @@ def comp_ext(_ext, ext, Valt, Rdnt, Dect):  # comp ds:
 
     return [[mL,mS,mA], [dL,dS,dA]]
 
+'''
+Each call to comp_rng | comp_der forms dderH: new layer of derH. Both forks are merged in feedback to contain complexity
+(deeper layers are appended by feedback, if nested we need fback_tree: last_layer_nforks = 2^n_higher_layers)
+'''
+def sub_recursion(root, PP, fd):  # called in form_PP_, evaluate PP for rng+ and der+, add layers to select sub_PPs
+    rng = PP.rng+(1-fd)
+
+    if fd: link_ = comp_der(PP.link_)  # der+: reform old links
+    else:  link_ = comp_rng(PP.link_, rng)  # rng+: form new links, should be recursive?
+
+    rdn = (PP.valt[fd] - PP_aves[fd] * PP.rdnt[fd]) > (PP.valt[1-fd] - PP_aves[1-fd] * PP.rdnt[1-fd])
+    PP.rdnt += (0, rdn) if fd else (rdn, 0)     # a little cumbersome, will be revised later
+    for P in PP.P_: P.root = [None,None]  # fill with sub_PPm_,sub_PPd_ between nodes and PP:
+
+    form_PP_t(PP, link_, base_rdn=PP.rdnt[fd])
+    root.fback_t[fd] += [[PP.derH, PP.valt, PP.rdnt]]  # merge in root.fback_t fork, else need fback_tree
+
+
+def der_recursion(root, PP):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
+
+    n_uplinks = defaultdict(int)  # number of uplinks per P
+    for derP in PP.link_: n_uplinks[derP.P] += 1  # currently not used?
+
+    rng_recursion(PP.link_, PP.rng)  # extend PP.link_ and derHs with same-der rng+ comps
+
+    form_PP_t(PP, PP.link_, base_rdn=PP.rdnt[1])  # der+ is mediated through form_PP_t
+    root.fback += [[PP.derH, PP.valt, PP.rdnt]]  # feedback from PPds, no forking?
+
+
+def comp_P_(edge: Cgraph, adj_Pt_: List[Tuple[CP, CP]]):  # cross-comp P_ in edge: high-gradient blob, sliced in Ps in the direction of G
+
+    for _P, P in adj_Pt_:  # scan, comp contiguously uplinked Ps, rn: relative weight of comparand
+        # initial comp is rng+
+        distance = np.hypot(_P.yx[1]-P.yx[1],_P.yx[0]-P.yx[0])
+        comp_P(edge.link_, _P, P, rn=len(_P.dert_)/len(P.dert_), derP=distance, fd=0)
+
+    form_PP_t(edge, edge.link_, base_rdn=2)
+
+def comp_P(link_, _P, P, rn, derP=None, S=None, V=0):  #  derP if der+, S if rng+
+
+    if derP is not None:  # der+: extend in-link derH, in sub+ only
+        dderH, valt, rdnt = comp_derH(_P.derH, P.derH, rn=rn)  # += fork rdn
+        derH = derP.derH | dderH; S = derP.S  # dderH valt,rdnt for new link
+        aveP = P_aves[1]
+
+    elif S is not None:  # rng+: add derH
+        mtuple, dtuple = comp_ptuple(_P.ptuple, P.ptuple, rn, fagg=0)
+        valt = Cmd(sum(mtuple), sum(abs(d) for d in dtuple))
+        rdnt = Cmd(1+(valt.d>valt.m), 1+(1-(valt.d>valt.m)))   # or rdn = Dval/Mval?
+        derH = CderH([Cmd(mtuple, dtuple)])
+        aveP = P_aves[0]
+        V += valt[0] + sum(mtuple)
+    else:
+        raise ValueError("either derP (der+) or S (rng+) should be specified")
+
+    A = Cangle(*(_P.yx - P.yx))
+    derP = CderP(derH=derH, valt=valt, rdnt=rdnt, P=P,_P=_P, S=S, A=A)
+
+    if valt.m > aveP*rdnt.m or valt.d > aveP*rdnt.d:
+        link_ += [derP]
+
+    return V
+
+
+def form_PP_t(root, root_link_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
+
+    PP_t = [[],[]]
+    for fd in 0,1:
+        P_Ps = defaultdict(list)
+        derP_ = []
+        for derP in root_link_:
+            if derP.valt[fd] > P_aves[fd] * derP.rdnt[fd]:
+                P_Ps[derP.P] += [derP._P]  # key:P, vals:linked _Ps, up and down
+                P_Ps[derP._P] += [derP.P]
+                derP_ += [derP]  # filtered derP
+        inP_ = []  # clustered Ps and their val,rdn s for all Ps
+        for P in root.P_:
+            if P in inP_: continue  # already packed in some PP
+            cP_ = [P]  # clustered Ps and their val,rdn s
+            perimeter = deque(P_Ps[P])  # recycle with breadth-first search, up and down:
+            while perimeter:
+                _P = perimeter.popleft()
+                if _P in cP_: continue
+                cP_ += [_P]
+                perimeter += P_Ps[_P]  # append linked __Ps to extended perimeter of P
+            PP = sum2PP(root, cP_, derP_, base_rdn, fd)
+            PP_t[fd] += [PP]  # no if Val > PP_aves[fd] * Rdn:
+            inP_ += cP_  # update clustered Ps
+
+    for fd, PP_ in enumerate(PP_t):  # after form_PP_t -> P.roott
+        for PP in PP_:
+            if PP.valt[1] * len(PP.link_) > PP_aves[1] * PP.rdnt[1]:  # val*len*rng: sum ave matches - fixed PP cost
+                der_recursion(root, PP, fd)  # eval rng+/PPm or der+/PPd
+        if root.fback_t and root.fback_t[fd]:
+            feedback(root, fd)  # after sub+ in all nodes, no single node feedback up multiple layers
+
+    root.node_ = PP_t  # nested in sub+, add_alt_PPs_?
+

@@ -190,6 +190,7 @@ class CderP(CBase):  # tuple of derivatives in P link: binary tree with latuple 
             self.derH |= dderH; self.valt = valt; self.rdmt = rdnt  # update derP not form new one
             link_ += [self]
 '''
+len layers with ext: 2, 3, 6, 12, 24... 
 max n of tuples per der layer = summed n of tuples in all lower layers: 1, 1, 2, 4, 8..:
 lay1: par     # derH per param in vertuple, layer is derivatives of all lower layers:
 lay2: [m,d]   # implicit nesting, brackets for clarity:
@@ -227,16 +228,16 @@ class Cgraph(CBase):  # params of single-fork node_ cluster
     # PP:
     P_: list = z([])
     mask__: object = None
-    # temporary:
+    # temporary, replace with Et:
     Vt: Cmd = z(Cmd(0, 0))  # last layer | last fork tree vals for node_connect and clustering
     Rt: Cmd = z(Cmd(1, 1))
     Dt: Cmd = z(Cmd(0, 0))
-    it: list = z([None,None])  # graph indices in root node_s, implicitly nested
-    roott: list = z([None,None])  # for feedback
-    fback_t: list = z([[],[],[]])  # feedback [[aggH,valt,rdnt,dect]] per node fork, maps to node_H
+    root: list = z([None])  # for feedback
+    fback_: list = z([[],[],[]])  # feedback [[aggH,valt,rdnt,dect]] per node layer, maps to node_H
     compared_: list = z([])
     Rdn: int = 0  # for accumulation or separate recursion count?
 
+    # it: list = z([None,None])  # graph indices in root node_s, implicitly nested
     # depth: int = 0  # n sub_G levels over base node_, max across forks
     # nval: int = 0  # of open links: base alt rep
     # id_H: list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
