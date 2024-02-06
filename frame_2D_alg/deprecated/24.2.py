@@ -192,17 +192,6 @@ def sub_recursion(root, PP, fd):  # called in form_PP_, evaluate PP for rng+ and
     root.fback_t[fd] += [[PP.derH, PP.valt, PP.rdnt]]  # merge in root.fback_t fork, else need fback_tree
 
 
-def der_recursion(root, PP):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
-
-    n_uplinks = defaultdict(int)  # number of uplinks per P
-    for derP in PP.link_: n_uplinks[derP.P] += 1  # currently not used?
-
-    rng_recursion(PP.link_, PP.rng)  # extend PP.link_ and derHs with same-der rng+ comps
-
-    form_PP_t(PP, PP.link_, base_rdn=PP.rdnt[1])  # der+ is mediated through form_PP_t
-    root.fback += [[PP.derH, PP.valt, PP.rdnt]]  # feedback from PPds, no forking?
-
-
 def comp_P_(edge: Cgraph, adj_Pt_: List[Tuple[CP, CP]]):  # cross-comp P_ in edge: high-gradient blob, sliced in Ps in the direction of G
 
     for _P, P in adj_Pt_:  # scan, comp contiguously uplinked Ps, rn: relative weight of comparand
@@ -272,3 +261,74 @@ def form_PP_t(root, root_link_, base_rdn):  # form PPs of derP.valt[fd] + connec
 
     root.node_ = PP_t  # nested in sub+, add_alt_PPs_?
 
+def sum_aggH(AggH, aggH, base_rdn):
+
+    if aggH:
+        if AggH:
+            for Layer, layer in zip_longest(AggH,aggH, fillvalue=[]):
+                if layer[-1] == 1:  # derHv with depth == 1
+                    sum_derHv(Layer, layer, base_rdn)
+                else:  # subHv
+                    sum_subHv(Layer, layer, base_rdn)
+        else:
+            AggH[:] = deepcopy(aggH)
+
+
+def sum_aggHv(T, t, base_rdn):
+
+    if t:
+        if T:
+            AggH,Valt,Rdnt,Dect,_ = T; aggH,valt,rdnt,dect,_ = t
+            for i in 0,1:
+                Valt[i] += valt[i]; Rdnt[i] += rdnt[i]+base_rdn; Dect[i] = (Dect[i]+dect[i])/2
+            if AggH:
+                for Layer, layer in zip_longest(AggH,aggH, fillvalue=[]):
+                    if layer[-1] == 1:  # derHv with depth == 1
+                        sum_derHv(Layer, layer, base_rdn)
+                    else:  # subHv
+                        sum_subHv(Layer, layer, base_rdn)
+            else:
+                AggH[:] = deepcopy(aggH)
+            sum_ext(Ext,ext)
+        else:
+           T[:] = deepcopy(t)
+
+
+def sum_subHv(T, t, base_rdn, fneg=0):
+
+    if t:
+        if T:
+            SubH,Valt,Rdnt,Dect,Ext,_ = T; subH,valt,rdnt,dect,ext,_ = t
+            for i in 0,1:
+                Valt[i] += valt[i]; Rdnt[i] += rdnt[i]+base_rdn; Dect[i] = (Dect[i]+dect[i])/2
+            if SubH:
+                for Layer, layer in zip_longest(SubH,subH, fillvalue=[]):
+                    sum_derHv(Layer, layer, base_rdn, fneg)  # _lay[0][0] is mL
+                    sum_ext(Layer[-2], layer[-2])
+            else:
+                SubH[:] = deepcopy(subH)
+            sum_ext(Ext,ext)
+        else:
+            T[:] = deepcopy(t)
+
+
+def sum_derHv(T,t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
+
+    if t:
+        if T:
+            DerH, Valt, Rdnt, Dect, Extt_,_ = T; derH, valt, rdnt, dect, extt_,_ = t
+            for Extt, extt in zip(Extt_,extt_):
+                sum_ext(Extt, extt)
+            for i in 0,1:
+                Valt[i] += valt[i]; Rdnt[i] += rdnt[i]+base_rdn; Dect[i] = (Dect[i] + dect[i])/2
+            DerH[:] = [
+                [[sum_dertuple(Dertuple,dertuple, fneg*i) for i,(Dertuple,dertuple) in enumerate(zip(Tuplet,tuplet))],
+                  [V+v for V,v in zip(Valt,valt)], [R+r+base_rdn for R,r in zip(Rdnt,rdnt)], [(D+d)/2 for D,d in zip(Dect,dect)], 0
+                ]
+                for [Tuplet,Valt,Rdnt,Dect,_], [tuplet,valt,rdnt,dect,_]  # ptuple_tv
+                in zip_longest(DerH, derH, fillvalue=[([0,0,0,0,0,0],[0,0,0,0,0,0]), (0,0),(0,0),(0,0),0])
+            ]
+            sum_ext(Extt_, extt_)
+
+        else:
+            T[:] = deepcopy(t)

@@ -3,7 +3,7 @@ import numpy as np
 from math import floor
 from collections import deque
 from itertools import product
-from .classes import Cgraph, CP, Cptuple, Cvec2d, Cangle
+from .classes import CderP, Cgraph, CP, Cptuple, Cvec2d, Cangle
 from .filters import ave_g, ave_dangle, ave_daangle
 
 '''
@@ -21,11 +21,16 @@ A stable combination of a core flat blob with adjacent edge blobs is a potential
 '''
 octant = 0.3826834323650898
 
+
 def slice_edge(blob, verbose=False):
+
     max_mask__ = max_selection(blob)  # mask of local directional maxima of dy, dx, g
     # form slices (Ps) from max_mask__ and form links by tracing max_mask__:
     edge, Pt_ = trace_edge(blob, max_mask__, verbose=verbose)
-    return edge, Pt_
+
+    edge.link_ = [CderP(_P=Pt[0], P=Pt[1]) for Pt in Pt_]  # init links with adjacent P pairs
+    return edge
+
 
 def max_selection(blob):
 
@@ -68,7 +73,7 @@ def max_selection(blob):
 
 def trace_edge(blob, mask__, verbose=False):
 
-    edge = Cgraph(roott=blob, node_=[[],[]], box=blob.box, mask__=blob.mask__)
+    edge = Cgraph(root=blob, node_=[[],[]], box=blob.box, mask__=blob.mask__)
     blob.dlayers = [[edge]]
     max_ = {*zip(*mask__.nonzero())}  # convert mask__ into a set of (y,x)
 
