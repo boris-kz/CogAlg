@@ -45,12 +45,11 @@ class Cangle(Cvec2d):
         # cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
         mangle = ave_dangle - abs(dangle)  # inverse match, not redundant if sum cross sign
 
-        return Cmd(mangle, dangle)
+        return Ct(mangle, dangle)
 
-class Cmd(CBaseLite):     # m | d tuple
+class Ct(CBaseLite):     # tuple
     m: Any
     d: Any
-
 
 class Cptuple(CBaseLite):
 
@@ -77,9 +76,9 @@ class Cptuple(CBaseLite):
         mtuple = Cdertuple(mI, mG, mM, mMa, mAngle-aves[5], mL)
         dtuple = Cdertuple(dI, dG, dM, dMa, dAngle, dL)
 
-        dertuplet = Cmd(mtuple, dtuple)
-        valt = Cmd(sum(mtuple), sum(abs(d) for d in dtuple))
-        rdnt = Cmd(1+(valt.d>valt.m), 1+(1-(valt.d>valt.m)))   # or rdn = Dval/Mval?
+        dertuplet = Ct(mtuple, dtuple)
+        valt = Ct(sum(mtuple), sum(abs(d) for d in dtuple))
+        rdnt = Ct(1+(valt.d>valt.m), 1+(1-(valt.d>valt.m)))   # or rdn = Dval/Mval?
 
         return dertuplet, valt, rdnt
 
@@ -95,9 +94,9 @@ class Cdertuple(Cptuple):
             mtuple += [get_match(_par, npar) - ave]
             dtuple += [_par - npar]
 
-        ddertuplet = Cmd(Cdertuple(*mtuple), Cdertuple(*dtuple))
-        valt = Cmd(sum(mtuple), sum(abs(d) for d in dtuple))
-        rdnt = Cmd(valt.d > valt.m, valt.d < valt.m)
+        ddertuplet = Ct(Cdertuple(*mtuple), Cdertuple(*dtuple))
+        valt = Ct(sum(mtuple), sum(abs(d) for d in dtuple))
+        rdnt = Ct(valt.d > valt.m, valt.d < valt.m)
 
         return ddertuplet, valt, rdnt
 
@@ -106,7 +105,7 @@ class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_
 
     @classmethod
     def empty_layer(cls):
-        return Cmd(Cdertuple(), Cdertuple())
+        return Ct(Cdertuple(), Cdertuple())
 
     def __or__(self, other):    # |: concatenate operator
         return CderH([*self, *other])
@@ -131,7 +130,7 @@ class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_
     def comp(self, other, rn, n=inf):
 
         dderH = CderH([])  # or not-missing comparand: xor?
-        valt, rdnt = Cmd(0, 0), Cmd(1, 1)
+        valt, rdnt = Ct(0, 0), Ct(1, 1)
 
         for i, _lay, lay in zip(count(), self, other):  # compare common lower der layers | sublayers in derHs
             if i >= n: break
@@ -147,15 +146,15 @@ class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param
     ptuple: Cptuple = z(Cptuple())  # latuple: I,G,M,Ma, angle(Dy,Dx), L
     rnpar_H: list = z([])
     derH: CderH = z(CderH())  # [(mtuple, ptuple)...] vertical derivatives summed from P links
-    valt: Cmd = z(Cmd(0, 0))  # summed from the whole derH
-    rdnt: Cmd = z(Cmd(1, 1))
+    valt: Ct = z(Ct(0,0))  # summed from the whole derH
+    rdnt: Ct = z(Ct(1,1))
     dert_: list = z([])  # array of pixel-level derts, ~ node_
     cells: set = z(set())  # pixel-level kernels adjacent to P axis, combined into corresponding derts projected on P axis.
     roott: list = z([None,None])  # PPrm,PPrd that contain this P, single-layer
-    axis: Cangle = Cangle(0, 0)  # prior slice angle, init sin=0,cos=1
-    yx: Cvec2d = None
+    axis: Cangle = Cangle(0,0)  # prior slice angle, init sin=0,cos=1
+    yx: Ct = z(Ct(0,0))
+    uplink_H: list = z([[]])  # add uplinks per comp layer, rng+)der+
     ''' 
-    link_H: list = z([[]])  # all links per comp layer, rng+ or der+
     dxdert_: list = z([])  # only in Pd
     Pd_: list = z([])  # only in Pm
     Mdx: int = 0  # if comp_dx
@@ -176,8 +175,8 @@ class CderP(CBase):  # tuple of derivatives in P link: binary tree with latuple 
     _P: CP  # higher comparand
     P: CP  # lower comparand
     derH: CderH = z(CderH())  # [[[mtuple,dtuple],[mval,dval],[mrdn,drdn]]], single ptuplet in rng+
-    valt: Cmd = z(Cmd(0, 0))  # replace with Vt?
-    rdnt: Cmd = z(Cmd(1, 1))  # mrdn + uprdn if branch overlap?
+    valt: Ct = z(Ct(0, 0))  # replace with Vt?
+    rdnt: Ct = z(Ct(1, 1))  # mrdn + uprdn if branch overlap?
     roott: list = z([None, None])  # PPdm,PPdd that contain this derP
     S: float = 0.0  # sparsity: distance between centers
     A: Cangle = Cangle(0,0)  # angle: dy,dx between centers
@@ -205,9 +204,9 @@ class Cgraph(CBase):  # params of single-fork node_ cluster
     derH: CderH = z(CderH())  # from PP, not derHv
     # graph-internal, generic:
     aggH: list = z([])  # [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
-    valt: Cmd = z(Cmd(0, 0))  # sum ptuple, derH, aggH
-    rdnt: Cmd = z(Cmd(1, 1))
-    dect: Cmd = z(Cmd(0, 0))
+    valt: Ct = z(Ct(0, 0))  # sum ptuple, derH, aggH
+    rdnt: Ct = z(Ct(1, 1))
+    dect: Ct = z(Ct(0, 0))
     link_: list = z([])  # internal, single-fork
     node_: list = z([])  # base node_ replaced by node_t in both agg+ and sub+, deeper node-mediated unpacking in agg+
     # graph-external, +level per root sub+:
@@ -222,18 +221,18 @@ class Cgraph(CBase):  # params of single-fork node_ cluster
     box: Cbox = Cbox(inf,inf,-inf,-inf)  # y0,x0,yn,,xn
     # tentative:
     alt_graph_: list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
-    avalt: Cmd = z(Cmd(0, 0))  # sum from alt graphs to complement G aves?
-    ardnt: Cmd = z(Cmd(1, 1))
-    adect: Cmd = z(Cmd(0, 0))
+    avalt: Ct = z(Ct(0, 0))  # sum from alt graphs to complement G aves?
+    ardnt: Ct = z(Ct(1, 1))
+    adect: Ct = z(Ct(0, 0))
     # PP:
     P_: list = z([])
     mask__: object = None
     # temporary, replace with Et:
-    Vt: Cmd = z(Cmd(0, 0))  # last layer | last fork tree vals for node_connect and clustering
-    Rt: Cmd = z(Cmd(1, 1))
-    Dt: Cmd = z(Cmd(0, 0))
+    Vt: Ct = z(Ct(0, 0))  # last layer | last fork tree vals for node_connect and clustering
+    Rt: Ct = z(Ct(1, 1))
+    Dt: Ct = z(Ct(0, 0))
     root: list = z([None])  # for feedback
-    fback_: list = z([[],[],[]])  # feedback [[aggH,valt,rdnt,dect]] per node layer, maps to node_H
+    fback_: list = z([])  # feedback [[aggH,valt,rdnt,dect]] per node layer, maps to node_H
     compared_: list = z([])
     Rdn: int = 0  # for accumulation or separate recursion count?
 
@@ -250,9 +249,9 @@ class CderG(CBase):  # params of single-fork node_ cluster per pplayers
     _G: Cgraph  # comparand + connec params
     G: Cgraph
     daggH: list = z([])  # optionally nested dderH ) dsubH ) daggH: top aggLev derived in comp_G
-    Vt: Cmd = z(Cmd(0,0))  # last layer vals from comp_G
-    Rt: Cmd = z(Cmd(1,1))
-    Dt: Cmd = z(Cmd(0,0))
+    Vt: Ct = z(Ct(0,0))  # last layer vals from comp_G
+    Rt: Ct = z(Ct(1,1))
+    Dt: Ct = z(Ct(0,0))
     S: float = 0.0  # sparsity: average distance to link centers
     A: Cangle = None  # angle: average dy,dx to link centers
     roott: list = z([None,None])
@@ -262,3 +261,8 @@ class CderG(CBase):  # params of single-fork node_ cluster per pplayers
 def get_match(_par, par):
     match = min(abs(_par),abs(par))
     return -match if (_par<0) != (par<0) else match    # match = neg min if opposite-sign comparands
+
+
+def add_(a_,b_):  # sum iterables
+    return [a + b for a, b in zip(a_, b_)]
+
