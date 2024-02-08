@@ -34,6 +34,19 @@ class Cvec2d(NamedTuple):
         return self.__class__(self.dy / dist, self.dx / dist)
 
 
+class Ct(CBaseLite):     # tuple
+    m: Any
+    d: Any
+
+    def __abs__(self): return hypot(self.m, self.d)
+    def __pos__(self): return self
+    def __neg__(self): return self.__class__(-self.m, -self.d)
+
+    def normalize(self):
+        dist = abs(self)
+        return self.__class__(self.m / dist, self.d / dist)
+
+
 class Cangle(Cvec2d):
     def comp(self, other):  # rn doesn't matter for angles
 
@@ -47,9 +60,6 @@ class Cangle(Cvec2d):
 
         return Ct(mangle, dangle)
 
-class Ct(CBaseLite):     # tuple
-    m: Any
-    d: Any
 
 class Cptuple(CBaseLite):
 
@@ -100,8 +110,13 @@ class Cdertuple(Cptuple):
 
         return ddertuplet, valt, rdnt
 
-class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_tv
-    __slots__ = []
+class CderH(CBase):  # derH is a list of der layers or sub-layers, each = ptuple_tv
+
+    H: list = z([])
+    valt: Ct = z(Ct(0,0))
+    rdnt: Ct = z(Ct(1,1))
+    dect: Ct = z(Ct(0,0))
+    depth: int = 0
 
     @classmethod
     def empty_layer(cls):
@@ -111,11 +126,19 @@ class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_
         return CderH([*self, *other])
 
     def __add__(self, other):
-        return CderH((
-            # sum der layers, dertuple is mtuple | dtuple
-            Dertuplet + dertuplet for Dertuplet, dertuplet
-            in zip_longest(self, other, fillvalue=self.empty_layer())  # mtuple,dtuple
-        ))
+        # sum der layers, dertuple is mtuple | dtuple
+        # this may not work for ext
+        H = [Dertuplet + dertuplet for Dertuplet, dertuplet in zip_longest(self.H, other.H, fillvalue=self.empty_layer())]  # mtuple,dtuple
+
+        valt = self.valt + other.valt
+        rdnt = self.rdnt + other.rdnt
+        rdnt[0] += valt[1] > valt[0]; rdnt[1] += valt[0] > valt[1];
+        dect = self.dect + other.dect
+        dect[0] /= 2; dect[1] /= 2;
+
+
+        return CderH(H=H, valt=valt, rdnt=rdnt, dect=dect)
+
 
     def __iadd__(self, other):
         return self + other
@@ -153,7 +176,7 @@ class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param
     roott: list = z([None,None])  # PPrm,PPrd that contain this P, single-layer
     axis: Cangle = Cangle(0,0)  # prior slice angle, init sin=0,cos=1
     yx: Ct = z(Ct(0,0))
-    uplink_H: list = z([[]])  # add uplinks per comp layer, rng+)der+
+    link_: list = z([])  # add uplinks per comp layer, rng+)der+
     ''' 
     dxdert_: list = z([])  # only in Pd
     Pd_: list = z([])  # only in Pm
@@ -265,4 +288,3 @@ def get_match(_par, par):
 
 def add_(a_,b_):  # sum iterables
     return [a + b for a, b in zip(a_, b_)]
-

@@ -34,7 +34,7 @@ def slice_edge(blob, verbose=False):
         step = 100 / len(max_)  # progress % percent per pixel
         progress = 0.0; print(f"\rTracing max... {round(progress)} %", end="");  sys.stdout.flush()
     edge.P_ = []
-    Pt_ = []
+    Pt_ = []  # not used?
     while max_:  # queue of (y,x,P)s
         y,x = max_.pop()
         maxQue = deque([(y,x,None)])
@@ -48,6 +48,8 @@ def slice_edge(blob, verbose=False):
             P = form_P(blob, CP(yx=Cvec2d(y,x), axis=Cangle(dy/g, dx/g), cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
             edge.P_ += [P]
             if _P is not None:
+                dY,dX = _P.yx - P.yx
+                P.link_H[0] += [_P,P, np.hypot(dY,dX), Cangle(dY,dX)]  # proto-link with S,A
                 Pt_ += [(_P, P)]  # add up links only
             # search in max_ path
             adjacents = max_ & {*product(range(y-1,y+2), range(x-1,x+2))}   # search neighbors
