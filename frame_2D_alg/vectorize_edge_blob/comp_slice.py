@@ -1,6 +1,6 @@
 import numpy as np
 from collections import deque, defaultdict
-from copy import deepcopy
+from copy import deepcopy, copy
 from itertools import zip_longest, combinations
 from typing import List, Tuple
 from .classes import get_match, CderH, CderP, Cgraph, Ct, CP, Cangle
@@ -30,44 +30,54 @@ len prior root_ sorted by G is rdn of each root, to evaluate it for inclusion in
   # root function:
 def der_recursion(root, PP):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
 
-    # n_uplinks = defaultdict(int)  # number of uplinks per P
+    # n_uplinks = defaultdict(int)  # number of uplinks per P, not used?
     # for derP in PP.link_: n_uplinks[derP.P] += 1
 
-    rng_recursion(PP, PP.rng)  # extend PP.link_, derHs by same-der rng+ comp
+    if PP.derH.H:
+        for P in PP.P_:
+            link_ = P.link_
+            if link_:
+                if len(PP.derH.H) == 1:
+                    link_[:] = [link_]  # link_H -> link_HH
+                if PP.rng > 1: last_link_ = link_[-1][-1]  # last link_ in link_H in link_HH
+                else:          last_link_ = link_[-1]  # last link_ = link_HH[-1], no rng++
+                P.link_ += [last_link_]  # prelink_ for rng++, always called?
+
+    rng_recursion(PP, rng=1)  # extend PP.link_, derHs by same-der rng+ comp
     form_PP_t(PP, PP.link_, base_rdn=PP.rdnt[1])  # der+ is mediated by form_PP_t
     if root: root.fback_ += [[PP.derH, PP.valt, PP.rdnt]]  # feedback from PPds only
 
 
-def rng_recursion(PP, rng=1, der=1):  # similar to agg+ rng_recursion, but contiguously link mediated
+def rng_recursion(PP, rng=1):  # similar to agg+ rng_recursion, but contiguously link mediated
     _P_ = PP.P_
 
     while True:
-        P_ = []; V = 0; rng += 1
+        P_ = []; V = 0
         for P in _P_:
-            link_ = P.link_  # recursive unpack:
-            if der>1: link_ = link_.pop
-            if rng>1: link_ = link_.pop
-            for link in link_.pop:  # prelink, append back if confirmed:
-                mlink = comp_P(link)
-                if mlink:  # return confirmed links only
-                    V += mlink.Vt[0]
-                    link_ += [link]
-                    _P = link._P  # uplinks, can't be cyclic
-                    if len(_P.derH) < len(P.derH):  # if der+: compare same der layers only
+            prelink_ = []  # temporary new prelinks
+            _prelink_ = P.link_.pop  # P.link_ nesting doesn't matter for prelink_, it's always P.link_[-1]
+            for prelink in _prelink_:
+                mlink = comp_P(prelink)  # return link if match
+                if mlink:
+                    V += mlink.vt[0]
+                    link_ = P.link_[-1] if PP.derH.H else P.link_  # before der++
+                    if rng > 1:
+                        if rng == 2: link_[:] = [link_]  # link_ -> link_H
+                        link_ = link_[-1]  # rng layer
+                    if len(link_)<rng: link_ += [[mlink]]  # new link_
+                    else:              link_ += [mlink]
+                    _P = mlink._P  # uplinks can't be cyclic
+                    if len(_P.derH.H) < len(P.derH.H):  # if der+: compare same der layers only
                         continue
                     dy,dx = _P.yx-P.yx; distance = np.hypot(dy,dx)  # distance between P midpoints, /= L for eval?
                     if rng-1 > distance >= rng:
                         continue
-                    if P.valt[0]+_P.valt[0] < ave * (P.rdnt[0]+_P.rdnt[0]):
-                        continue
-                    link_ += [_P,P, distance, [dy,dx]]  # add prelink for next cycle
-                    # recursive nesting, len link_H should increase with rng, add this for der+ too:
-                    if len(P.link_) < rng: link_ = [link_]
-                    P.link_ += [link_]
-                    # recycle P to get higher __Ps:
-                    if P not in P_: P_ += [P]
-        # extended Ps val:
-        if V > ave * len(P_) * 6:  # len mtuple
+                    prelink_ += [[_P,P, distance, [dy,dx]]]  # for next cycle
+            if prelink_:
+                P.link_ += [prelink_]  # temporary, appended and popped regardless of nesting
+                P_ += [P]  # next loop
+        rng += 1
+        if V > ave * len(P_) * 6:  #  extended Ps val, 6: len mtuple
             _P_ = P_
         else:
             break
@@ -80,9 +90,10 @@ def comp_P(link):
     else:                      _P, P, S, A = link  # list in rng+
     rn = len(_P.dert_) / len(P.dert_)
 
-    if _P.derH and P.derH:
+    if _P.derH.H and P.derH.H:
         # der+: append link derH, init in rng++ from form_PP_t
-        dderH, valt, rdnt = comp_derH(_P.derH, P.derH, rn=rn)  # += fork rdn
+        dderH = comp_derH(_P.derH, P.derH, rn=rn)  # += fork rdn
+        valt = dderH.valt; rdnt = dderH.rdnt
         aveP = P_aves[1]
         fd=1
     else:
@@ -96,7 +107,8 @@ def comp_P(link):
         if fd:
             link.derH += dderH; link.valt+=valt; link.Vt+=valt; link.rdnt+=rdnt; link.Rt=rdnt
         else:
-            link = CderH(derH=[[mtuple, dtuple]], valt=valt, Vt=valt, rdnt=rdnt, Rt=rdnt, S=S, A=A)
+            derH = CderH(H=[[mtuple, dtuple]], valt=valt, rdnt=rdnt)
+            link = CderP(P=P, _P=_P, derH=derH, vt=copy(valt), rt=copy(rdnt), S=S, A=A)
 
         return link
 
@@ -138,8 +150,8 @@ def form_PP_t(root, root_link_, base_rdn):  # form PPs of derP.valt[fd] + connec
 
 def sum2PP(root, P_, derP_, base_rdn, fd):  # sum links in Ps and Ps in PP
 
-    PP = Cgraph(fd=fd, root=root, P_=P_, rng=root.rng +(1-fd))  # initial PP.box = (inf,inf,-inf,-inf)
-
+    PP = Cgraph(fd=fd, root=root, P_=P_, rng=root.rng+1, der=root.der+fd)  # or der = len(root.derH.H) no need for added arg?
+    # initial PP.box = (inf,inf,-inf,-inf)
     for derP in derP_:
         # accum links:
         if derP.P not in P_ or derP._P not in P_: continue

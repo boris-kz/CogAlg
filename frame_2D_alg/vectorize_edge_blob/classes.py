@@ -176,7 +176,7 @@ class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param
     roott: list = z([None,None])  # PPrm,PPrd that contain this P, single-layer
     axis: Cangle = Cangle(0,0)  # prior slice angle, init sin=0,cos=1
     yx: Ct = z(Ct(0,0))
-    link_: list = z([])  # add uplinks per comp layer, rng+)der+
+    link_: list = z([])  # uplinks per comp layer, nest in rng+)der+
     ''' 
     dxdert_: list = z([])  # only in Pd
     Pd_: list = z([])  # only in Pm
@@ -198,8 +198,8 @@ class CderP(CBase):  # tuple of derivatives in P link: binary tree with latuple 
     _P: CP  # higher comparand
     P: CP  # lower comparand
     derH: CderH = z(CderH())  # [[[mtuple,dtuple],[mval,dval],[mrdn,drdn]]], single ptuplet in rng+
-    valt: Ct = z(Ct(0, 0))  # replace with Vt?
-    rdnt: Ct = z(Ct(1, 1))  # mrdn + uprdn if branch overlap?
+    vt: Ct = z(Ct(0, 0))
+    rt: Ct = z(Ct(1, 1))  # mrdn + uprdn if branch overlap?
     roott: list = z([None, None])  # PPdm,PPdd that contain this derP
     S: float = 0.0  # sparsity: distance between centers
     A: Cangle = Cangle(0,0)  # angle: dy,dx between centers
@@ -230,7 +230,7 @@ class Cgraph(CBase):  # params of single-fork node_ cluster
     valt: Ct = z(Ct(0, 0))  # sum ptuple, derH, aggH
     rdnt: Ct = z(Ct(1, 1))
     dect: Ct = z(Ct(0, 0))
-    link_: list = z([])  # internal, single-fork
+    link_: list = z([])  # internal, single-fork, incrementally nested
     node_: list = z([])  # base node_ replaced by node_t in both agg+ and sub+, deeper node-mediated unpacking in agg+
     # graph-external, +level per root sub+:
     rimH: list = z([])  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+

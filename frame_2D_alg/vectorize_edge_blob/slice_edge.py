@@ -49,7 +49,8 @@ def slice_edge(blob, verbose=False):
             edge.P_ += [P]
             if _P is not None:
                 dY,dX = _P.yx - P.yx
-                P.link_H[0] += [_P,P, np.hypot(dY,dX), Cangle(dY,dX)]  # proto-link with S,A
+                if not P.link_: P.link_ = [[],[]]  # add prelink_
+                P.link_[-1] += [_P,P, np.hypot(dY,dX), Cangle(dY,dX)]  # prelink with S,A
                 Pt_ += [(_P, P)]  # add up links only
             # search in max_ path
             adjacents = max_ & {*product(range(y-1,y+2), range(x-1,x+2))}   # search neighbors
