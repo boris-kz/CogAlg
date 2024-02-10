@@ -3,7 +3,7 @@ import numpy as np
 from math import floor
 from collections import deque
 from itertools import product
-from .classes import CderP, Cgraph, CP, Cptuple, Cvec2d, Cangle
+from .classes import CderP, Cgraph, CP, Cptuple, Ct
 from .filters import ave_g, ave_dangle, ave_daangle
 
 '''
@@ -45,13 +45,13 @@ def slice_edge(blob, verbose=False):
             dy, dx, g = blob.der__t.get_pixel(y,x)
             ma = ave_dangle  # max value because P direction is the same as dert gradient direction
             assert g > 0, "g must be positive"
-            P = form_P(blob, CP(yx=Cvec2d(y,x), axis=Cangle(dy/g, dx/g), cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
+            P = form_P(blob, CP(yx=Ct(y,x), axis=Ct(dy/g, dx/g), cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
             edge.P_ += [P]
             if _P is not None:
                 dY,dX = _P.yx - P.yx
-                if not P.link_: P.link_ = [[],[]]  # add prelink_
-                P.link_[-1] += [_P,P, np.hypot(dY,dX), Cangle(dY,dX)]  # prelink with S,A
-                Pt_ += [(_P, P)]  # add up links only
+                if not P.link_: P.link_ = [[],[]]  # to add prelinks:
+                P.link_[-1] += [_P]
+                # Pt_ += [(_P, P)]  # if using combinations
             # search in max_ path
             adjacents = max_ & {*product(range(y-1,y+2), range(x-1,x+2))}   # search neighbors
             maxQue.extend(((_y, _x, P) for _y, _x in adjacents))
@@ -116,8 +116,8 @@ def form_P(blob, P):
     L = len(P.dert_)
     M = ave_g*L - G
     G = np.hypot(Dy, Dx)  # recompute G
-    P.ptuple = Cptuple(I, G, M, Ma, Cangle(Dy, Dx), L)
-    P.yx = Cvec2d(*P.dert_[L//2][:2])  # new center
+    P.ptuple = Cptuple(I, G, M, Ma, Ct(Dy, Dx), L)
+    P.yx = Ct(*P.dert_[L//2][:2])  # new center
 
     return P
 
@@ -188,6 +188,20 @@ def comp_angle(_angle, angle):  # rn doesn't matter for angles
     mangle = ave_dangle - abs(dangle)  # inverse match, not redundant if sum cross sign
 
     return [mangle, dangle]
+
+
+def sum_angle(_angle, angle, average=0):
+
+
+    angle0 = (_angle[0] * angle[1]) + (angle[0] * _angle[1])  # sin(a + b) = sin a cos b + sin b cos a
+    angle1 = (_angle[1] * angle[1]) - (_angle[0] * angle[0])  # cos(a + b) = cos(a)cos(b) – sin(a)sin(b).
+
+    if average:
+        angle0 /= 2
+        angle1 /= 2
+
+    return [angle0, angle1]
+
 
 def comp_aangle(_aangle, aangle):  # currently not used, just in case we need it later
 

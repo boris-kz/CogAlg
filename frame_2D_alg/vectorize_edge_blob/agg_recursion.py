@@ -1,7 +1,7 @@
 import numpy as np
 from copy import deepcopy, copy
 from itertools import combinations, zip_longest
-from .classes import add_, CderP, Cgraph, CderG, Ct, CderH, Cangle
+from .classes import add_, CderP, Cgraph, CderG, Ct, CderH
 from .filters import aves, ave_mL, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd
 from .slice_edge import slice_edge, comp_angle
 from .comp_slice import der_recursion, comp_derH, sum_derH, comp_ptuple, sum_dertuple, comp_dtuple, get_match
@@ -10,18 +10,18 @@ from .comp_slice import der_recursion, comp_derH, sum_derH, comp_ptuple, sum_der
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
 in combination with spliced lower-composition patterns, etc, if only lower param-layers match.
 This may form closed edge patterns around flat core blobs, which defines stable objects. 
-Graphs are formed from blobs that match over <max distance. 
+Graphs are formed from blobs that match over < max distance. 
 -
 They are also assigned adjacent alt-fork graphs, which borrow predictive value from the graph. 
-Primary value is match, so difference patterns don't have independent value. 
-They borrow value from proximate or average match patterns, to the extent that they cancel their projected match. 
-But alt match patterns borrow already borrowed value, which may be too tenuous to track, we can use the average instead.
+Primary value is match, diff.patterns borrow value from proximate match patterns, canceling their projected match. 
+But alt match patterns borrow already borrowed value, which may be too tenuous to track, we use average borrowed value.
 -
 Clustering criterion is G M|D, summed across >ave vars if selective comp (<ave vars are not compared, so they don't add costs).
 Fork selection should be per var or co-derived der layer or agg level. 
+Clustering in each fork and ave is exclusive, else there is no way to define cluster.  
+
 There are concepts that include same matching vars: size, density, color, stability, etc, but in different combinations.
 Weak value vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
-
 Clustering by variance: lend|borrow, contribution or counteraction to similarity | stability, such as metabolism? 
 -
 graph G:
@@ -54,7 +54,7 @@ def vectorize_root(blob):  # vectorization in 3 composition levels of xcomp, clu
 
 def agg_recursion(rroot, root, node_, nrng=1, fagg=0):  # lenH = len(root.aggH[-1][0]), lenHH: same in agg_compress
 
-    Et = [[0,0],[0,0],[0,0]]  # grapht link_ Valt,Rdnt,Dect(currently not used)
+    Et = [[0,0],[0,0],[0,0]]  # G-external vals summed from grapht link_ Valt, Rdnt, Dect(currently not used)
 
     # agg+ der=1 xcomp of new Gs if fagg, else sub+: der+ xcomp of old Gs:
     nrng = rng_recursion(rroot, root, combinations(node_,r=2) if fagg else root.link_, Et, nrng)  # rng+ appends rim, link.derH
@@ -90,7 +90,7 @@ def rng_recursion(rroot, root, Q, Et, nrng=1):  # rng++/ G_, der+/ link_ if call
             if 2*nrng >= dist > 2*(nrng-1):  # G,_G are within rng and were not compared at prior rng
                 # pairwise eval in rng++, or directional?
                 if nrng==1 or (G.Vt[0]+_G.Vt[0]) > ave * (G.Rt[0]+_G.Rt[0]):
-                    link = CderG(_G=_G, G=G, A=Cangle(dy,dx), S=dist)
+                    link = CderG(_G=_G, G=G, A=Ct(dy,dx), S=dist)
                     comp_G(link, et)
             else:
                 _G_.add((_G, G))  # for next rng+
@@ -115,7 +115,7 @@ def comp_rim(_link_, link, nrng):  # for next rng+:
 
                 # compare direction of link to all links in link.G.rimH[-1] and link._G.rimH[-1]:
                 if comp_angle(link.A,_link.A)[0] > ave:
-                    _link_.add(CderG(G=G, _G=_G, A=Cangle(dy,dx), S=dist))  # to compare in rng+
+                    _link_.add(CderG(G=G, _G=_G, A=Ct(dy,dx), S=dist))  # to compare in rng+
 
 
 def form_graph_t(root, G_, Et, nrng, fagg=0):  # form Gm_,Gd_ from same-root nodes
@@ -418,7 +418,7 @@ def comp_ext(_ext, ext):  # comp ds:
     dL = _L-L
     Mval, Dval, Mrdn, Drdn = 0,0,1,1
 
-    if isinstance(A,Cangle):
+    if isinstance(A,Ct):
         if any(A) and any(_A):
             mA,dA = comp_angle(_A,A); adA=dA
         else:
