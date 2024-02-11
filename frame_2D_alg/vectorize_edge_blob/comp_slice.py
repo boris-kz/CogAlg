@@ -44,11 +44,11 @@ def der_recursion(root, PP):  # node-mediated correlation clustering: keep same 
                 if len(PP.derH.H) ==1: link_[:] = [link_]  # init link_H -> link_HH
                 if PP.rng > 1: last_link_ = link_[-1][-1]  # link_) link_H) link_HH
                 else:          last_link_ = link_[-1]  # link_) link_HH, no rng++
-                P.link_ += [last_link_]   # add prelink_ for rng++, always called?
+                P.link_ += [last_link_]   # use as prelink_ for rng++:
 
     rng_recursion(PP, rng=1)  # extend PP.link_, derHs by same-der rng+ comp
     form_PP_t(PP, PP.P_, base_rdn=PP.rdnt[1])  # der+ is mediated by form_PP_t
-    if root: root.fback_ += [[PP.derH, PP.valt, PP.rdnt]]  # feedback from PPds only
+    if root: root.fback_ += [[PP.derH, PP.valt, PP.rdnt]]  # feedback from PPds
 
 
 def rng_recursion(PP, rng=1):  # similar to agg+ rng_recursion, but contiguously link mediated, because
@@ -59,24 +59,22 @@ def rng_recursion(PP, rng=1):  # similar to agg+ rng_recursion, but contiguously
         for P in iP_:
             if not P.link_: continue
             __P_ = []  # temporary prelinks per P
-            _P_ = P.link_.pop()  # P.link_ nesting doesn't matter
+            _P_ = P.link_.pop()  # P.link_ nesting doesn't matter (how about prelinks for deeper der+?)
             for _P in _P_:
                 dy,dx = _P.yx-P.yx; distance = np.hypot(dy,dx)  # distance between P midpoints, /= L for eval?
-                if not (rng > distance >= rng-1):  # always false?
-                    continue
+                if (rng > distance or rng-1 <= distance): continue
+                if len(_P.derH.H)!=len(P.derH.H): continue  # compare same der layers only
+                __P_ += [_P]  # for next cycle
                 mlink = comp_P([_P,P, distance,[dy,dx]])  # return link if match
                 if mlink:
                     V += mlink.vt[0]
                     link_ = P.link_[-1][-1] if PP.derH.depth==2 else P.link_[-1]  # if der++, else 1st rng++
                     if rng > 1:
                         if rng == 2: link_[:] = [link_[:]]  # link_ -> link_H, [:]s to copy?
-                        if len(link_) < rng: link_ += [[mlink]]  # new link_
-                        link_ = link_[-1]  # rng layer
-                    else:
-                        link_ += [mlink]
-                    __P = mlink._P  # uplinks can't be cyclic
-                    if len(__P.derH.H)==len(P.derH.H):  # if der+: compare same der layers only
-                        __P_ += [__P]  # for next cycle
+                        if len(link_) < rng: link_ += [[]]  # new link_
+                        link_ = link_[-1]
+                    link_ += [mlink]  # unpacked last rng layer += link
+                    __P_ += [mlink._P]  # uplinks can't be cyclic
             if __P_:
                 P.link_ += [__P_]  # temporary, appended and popped regardless of nesting
                 P_ += [P]  # for next loop
@@ -84,6 +82,7 @@ def rng_recursion(PP, rng=1):  # similar to agg+ rng_recursion, but contiguously
         if V > ave * len(P_) * 6:  #  implied val of all __P_s, 6: len mtuple
             iP_ = P_
         else:
+            for P in P_: P.link_.pop()
             break
     PP.rng=rng
 
@@ -104,15 +103,17 @@ def comp_P(link):
         # rng+: add link derH
         mtuple, dtuple = comp_ptuple(_P.ptuple, P.ptuple, rn, fagg=0)
         valt = Ct(sum(mtuple), sum(abs(d) for d in dtuple))
-        rdnt = Ct(1+(valt.d>valt[0]), 1+(1-(valt[1]>valt[1])))  # or rdn = Dval/Mval?
+        rdnt = Ct(1+(valt[1]>valt[0]), 1+(1-(valt[1]>valt[0])))  # or rdn = Dval/Mval?
         aveP = P_aves[0]
         fd=0
     if valt[0] > aveP*rdnt[0]:  # always rng+
         if fd:
-            link.derH += dderH; link.valt+=valt; link.Vt+=valt; link.rdnt+=rdnt; link.Rt=rdnt
+            if link.derH.depth==0:  # add nesting dertv-> derH:
+                link.derH.H = [link.derH.H], link.derH.depth==1
+            link.derH += dderH; link.vt=valt; link.rt=rdnt
         else:
-            derH = CderH(H=[[mtuple, dtuple]], valt=valt, rdnt=rdnt)
-            link = CderP(P=P, _P=_P, derH=derH, vt=copy(valt), rt=copy(rdnt), S=S, A=A)
+            derH = CderH(H=[mtuple, dtuple], valt=valt, rdnt=rdnt, depth=0)  # dertv
+            link = CderP(P=P,_P=_P, derH=derH, vt=valt[:], rt=rdnt[:], S=S, A=A)
 
         return link
 
@@ -125,9 +126,8 @@ def form_PP_t(root, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps v
         Link_ = []
         for P in P_:  # not PP.link_: P uplinks are unique, only G links overlap
             link_ = P.link_
-            if link_:  # unpack last layer:
-                if root.derH.depth==2: link_ = P.link_[-1]  # last der layer
-                if root.rng > 1: link_ = link_[-1]  # last rng layer
+            if link_:
+                while isinstance(link_[-1], list): link_ = link_[-1]  # unpack last link layer
                 for derP in link_:
                     P_Ps[P] += [derP._P]; Link_ += [derP]  # not needed for PPs?
         inP_ = []  # clustered Ps and their val,rdn s for all Ps
@@ -156,14 +156,14 @@ def form_PP_t(root, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps v
 
 def sum2PP(root, P_, derP_, base_rdn, fd):  # sum links in Ps and Ps in PP
 
-    PP = Cgraph(fd=fd, root=root, P_=P_, rng=root.rng+1)  # initial PP.box = (inf,inf,-inf,-inf)
+    PP = Cgraph(fd=fd, root=root, P_=P_, rng=root.rng+1)  # initial PP.box = (0,0,inf,inf,-inf,-inf)
     # += uplinks:
     S,A = 0, Ct(0,0)
     for derP in derP_:
         if derP.P not in P_ or derP._P not in P_: continue
-        # no accum P.ptuple
         derP.P.derH += derP.derH  # +base_rdn?
         derP._P.derH -= derP.derH  # reverse d signs downlink
+        PP.Vt += derP.vt; PP.Rt += derP.rt; PP.Dt += derP.dt
         PP.link_ += [derP]; derP.roott[fd] = PP
         S += derP.S; A += derP.A
     PP.ext = Ct(len(P_), S, A)  # all from links
@@ -173,7 +173,7 @@ def sum2PP(root, P_, derP_, base_rdn, fd):  # sum links in Ps and Ps in PP
         PP.ptuple += P.ptuple
         PP.derH += P.derH
         for y,x in P.cells:
-            PP.box += Ct(y,x); celly_+=[y]; cellx_+=[x]
+            PP.box.extend(y,x); celly_+=[y]; cellx_+=[x]
     # pixmap:
     y0,x0,yn,xn = PP.box
     PP.mask__ = np.zeros((yn-y0, xn-x0), bool)

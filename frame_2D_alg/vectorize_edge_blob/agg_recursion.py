@@ -18,7 +18,7 @@ But alt match patterns borrow already borrowed value, which may be too tenuous t
 -
 Clustering criterion is G M|D, summed across >ave vars if selective comp (<ave vars are not compared, so they don't add costs).
 Fork selection should be per var or co-derived der layer or agg level. 
-Clustering in each fork and ave is exclusive, else there is no way to define cluster.  
+Exclusive clustering per (fork,ave), the nodes may overlap between clusters of different forks.  
 
 There are concepts that include same matching vars: size, density, color, stability, etc, but in different combinations.
 Weak value vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
@@ -250,7 +250,7 @@ def sum2graph(root, grapht, fd, nrng, fagg):  # sum node and link params into gr
     for G in G_:
         graph.ext[0] += 1
         sum_last_lay(G, fd)
-        graph.box += G.box
+        graph.box.extend(G.box)
         graph.ptuple += G.ptuple
         sum_derH([graph.derH,[0,0],[1,1]], [G.derH,[0,0],[1,1]], base_rdn=1)
         sum_Hv([extH,evalt,erdnt,edect,2], [G.extH,G.evalt,G.erdnt,G.edect,2], base_rdn=G.erdnt[fd])

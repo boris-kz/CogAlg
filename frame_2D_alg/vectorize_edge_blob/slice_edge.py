@@ -48,7 +48,6 @@ def slice_edge(blob, verbose=False):
             P = form_P(blob, CP(yx=Ct(y,x), axis=Ct(dy/g, dx/g), cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
             edge.P_ += [P]
             if _P is not None:
-                dY,dX = _P.yx - P.yx
                 if not P.link_: P.link_ = [[],[]]  # to add prelinks:
                 P.link_[-1] += [_P]
                 # Pt_ += [(_P, P)]  # if using combinations

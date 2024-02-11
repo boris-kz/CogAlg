@@ -35,12 +35,12 @@ from collections import deque
 from numbers import Real
 from typing import Any, NamedTuple, Tuple
 from time import time
-
+from copy import copy
 import numpy as np
 from visualization.draw_frame import visualize
 from class_cluster import CBase, init_param as z
 from utils import kernel_slice_3x3 as ks    # use in comp_pixel
-
+# from vectorize_edge.classes import Ct
 # hyper-parameters, set as a guess, latter adjusted by feedback:
 ave = 30  # base filter, directly used for comp_r fork
 ave_a = 1.5  # coef filter for comp_a fork
@@ -58,7 +58,7 @@ class Cder__t(NamedTuple):
     def get_pixel(self, y: Real, x: Real) -> Tuple[Real, Real, Real]:
         return self.dy[y, x], self.dx[y, x], self.g[y, x]
 
-class Cbox(NamedTuple):
+class Cbox(NamedTuple, Ct):
     n: Real
     w: Real
     s: Real
@@ -71,10 +71,13 @@ class Cbox(NamedTuple):
     @property
     def slice(self) -> Tuple[slice, slice]: return slice(self.n, self.s), slice(self.w, self.e)
     # operators:
-    def __add__(self, other: Cbox) -> Cbox:
+    def extend(self, other: Cbox) -> Cbox:
         """Add 2 boxes."""
         return Cbox(min(self.n, other.n), min(self.w, other.w), max(self.s, other.s), max(self.e, other.e))
     # methods
+    def __add__(self, other): return [a+b for a,b in zip(self.param, other.param)] if self.param else copy(other.param)
+    def __sub__(self, other): return [a-b for a,b in zip(self.param, other.param)] if self.param else copy(other.param)
+
     def accumulate(self, y: Real, x: Real) -> Cbox:
         """Box coordinate accumulation."""
         return Cbox(min(self.n, y), min(self.w, x), max(self.s, y + 1), max(self.e, x + 1))
