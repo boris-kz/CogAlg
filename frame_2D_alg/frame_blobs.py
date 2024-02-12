@@ -58,7 +58,7 @@ class Cder__t(NamedTuple):
     def get_pixel(self, y: Real, x: Real) -> Tuple[Real, Real, Real]:
         return self.dy[y, x], self.dx[y, x], self.g[y, x]
 
-class Cbox(NamedTuple, Ct):
+class Cbox(NamedTuple):
     n: Real
     w: Real
     s: Real
@@ -74,9 +74,10 @@ class Cbox(NamedTuple, Ct):
     def extend(self, other: Cbox) -> Cbox:
         """Add 2 boxes."""
         return Cbox(min(self.n, other.n), min(self.w, other.w), max(self.s, other.s), max(self.e, other.e))
+
     # methods
-    def __add__(self, other): return [a+b for a,b in zip(self.param, other.param)] if self.param else copy(other.param)
-    def __sub__(self, other): return [a-b for a,b in zip(self.param, other.param)] if self.param else copy(other.param)
+    def __add__(self, other): return [a+b for a,b in zip(self, other)] if self else copy(other)
+    def __sub__(self, other): return [a-b for a,b in zip(self, other)] if self else copy(other)
 
     def accumulate(self, y: Real, x: Real) -> Cbox:
         """Box coordinate accumulation."""

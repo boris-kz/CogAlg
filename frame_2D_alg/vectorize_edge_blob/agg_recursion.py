@@ -42,6 +42,7 @@ def vectorize_root(blob):  # vectorization in 3 composition levels of xcomp, clu
     edge = slice_edge(blob)  # lateral kernel cross-comp -> P clustering
     der_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
 
+    # this is rng++, pack it in agg_recursion with nrng=1: a version of der++?
     for fd, node_ in enumerate(edge.node_):  # always node_t
         if edge.valt[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.rdnt[fd]:
 
@@ -82,10 +83,11 @@ def rng_recursion(rroot, root, Q, Et, nrng=1):  # rng++/ G_, der+/ link_ if call
             if link.Vt[1] > G_aves[1] * link.Rt[1]:  # >rdn incr
                 comp_G(link, Et)
                 comp_rim(_link_, link, nrng)  # add matching-direction rim links for next rng+
-    else:  # rng+, only before sub+
+    # not sure, this forking needs to be updated as in comp_slice?
+    else:  # rng+, before sub+
         Gt_ = Q
-        for (_G, G) in Gt_:  # form new link_ from original node_
-            dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx
+        for (_G, G) in Gt_:  # prelinks to form new link_
+            dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx  # compute distance between node centers:
             dist = np.hypot(dy, dx)
             if 2*nrng >= dist > 2*(nrng-1):  # G,_G are within rng and were not compared at prior rng
                 # pairwise eval in rng++, or directional?

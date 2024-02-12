@@ -45,7 +45,7 @@ def slice_edge(blob, verbose=False):
             dy, dx, g = blob.der__t.get_pixel(y,x)
             ma = ave_dangle  # max value because P direction is the same as dert gradient direction
             assert g > 0, "g must be positive"
-            P = form_P(blob, CP(yx=Ct(y,x), axis=Ct(dy/g, dx/g), cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
+            P = form_P(blob, CP(yx=Ct([y,x]), axis=Ct([dy/g, dx/g]), cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
             edge.P_ += [P]
             if _P is not None:
                 if not P.link_: P.link_ = [[],[]]  # to add prelinks:
@@ -115,8 +115,8 @@ def form_P(blob, P):
     L = len(P.dert_)
     M = ave_g*L - G
     G = np.hypot(Dy, Dx)  # recompute G
-    P.ptuple = Cptuple(I, G, M, Ma, Ct(Dy, Dx), L)
-    P.yx = Ct(*P.dert_[L//2][:2])  # new center
+    P.ptuple = Cptuple(I, G, M, Ma, Ct([Dy, Dx]), L)
+    P.yx = Ct(P.dert_[L//2][:2])  # new center
 
     return P
 

@@ -19,6 +19,8 @@ This process is a reduced-dimensionality (2D->1D) version of cross-comp and clus
 
 PP clustering in vertical (along axis) dimension is contiguous and exclusive because 
 Ps are relatively lateral (cross-axis), their internal match doesn't project vertically. 
+Primary clustering by match between Ps over incremental distance (rng++), followed by forming
+secondary overlapping clusters of match of incremental-derivation (der++) difference between Ps. 
 
 As we add higher dimensions (3D and time), this dimensionality reduction is done in salient high-aspect blobs
 (likely edges in 2D or surfaces in 3D) to form more compressed "skeletal" representations of full-dimensional patterns.
@@ -126,10 +128,9 @@ def form_PP_t(root, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps v
         Link_ = []
         for P in P_:  # not PP.link_: P uplinks are unique, only G links overlap
             link_ = P.link_
-            if link_:
-                while isinstance(link_[-1], list): link_ = link_[-1]  # unpack last link layer
-                for derP in link_:
-                    P_Ps[P] += [derP._P]; Link_ += [derP]  # not needed for PPs?
+            while link_ and isinstance(link_[-1], list): link_ = link_[-1]  # unpack last link layer
+            for derP in link_:
+                P_Ps[P] += [derP._P]; Link_ += [derP]  # not needed for PPs?
         inP_ = []  # clustered Ps and their val,rdn s for all Ps
         for P in root.P_:
             if P in inP_: continue  # already packed in some PP
@@ -158,7 +159,7 @@ def sum2PP(root, P_, derP_, base_rdn, fd):  # sum links in Ps and Ps in PP
 
     PP = Cgraph(fd=fd, root=root, P_=P_, rng=root.rng+1)  # initial PP.box = (0,0,inf,inf,-inf,-inf)
     # += uplinks:
-    S,A = 0, Ct(0,0)
+    S,A = 0, Ct([0,0])
     for derP in derP_:
         if derP.P not in P_ or derP._P not in P_: continue
         derP.P.derH += derP.derH  # +base_rdn?
@@ -166,14 +167,14 @@ def sum2PP(root, P_, derP_, base_rdn, fd):  # sum links in Ps and Ps in PP
         PP.Vt += derP.vt; PP.Rt += derP.rt; PP.Dt += derP.dt
         PP.link_ += [derP]; derP.roott[fd] = PP
         S += derP.S; A += derP.A
-    PP.ext = Ct(len(P_), S, A)  # all from links
+    PP.ext = Ct([len(P_), S, A])  # all from links
     # += Ps:
     celly_,cellx_ = [],[]
     for P in P_:
         PP.ptuple += P.ptuple
         PP.derH += P.derH
         for y,x in P.cells:
-            PP.box.extend(y,x); celly_+=[y]; cellx_+=[x]
+            PP.box.extend_box(y,x); celly_+=[y]; cellx_+=[x]
     # pixmap:
     y0,x0,yn,xn = PP.box
     PP.mask__ = np.zeros((yn-y0, xn-x0), bool)
