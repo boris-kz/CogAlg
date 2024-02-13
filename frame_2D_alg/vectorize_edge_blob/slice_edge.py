@@ -48,8 +48,8 @@ def slice_edge(blob, verbose=False):
             P = form_P(blob, CP(yx=Ct([y,x]), axis=Ct([dy/g, dx/g]), cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
             edge.P_ += [P]
             if _P is not None:
-                if not P.link_: P.link_ = [[],[]]  # to add prelinks:
-                P.link_[-1] += [_P]
+                if not P.link_: P.link_ = [[]]  # to add prelinks:
+                P.link_[0] += [_P]
                 # Pt_ += [(_P, P)]  # if using combinations
             # search in max_ path
             adjacents = max_ & {*product(range(y-1,y+2), range(x-1,x+2))}   # search neighbors

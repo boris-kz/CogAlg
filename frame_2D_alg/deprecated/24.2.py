@@ -362,3 +362,21 @@ def rng_recursion(PP, rng=1):  # similar to agg+ rng_recursion, but contiguously
         else:
             break
     PP.rng=rng
+
+class Ct(list):     # tuple operations
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args)
+        self.extend(kwargs.values())
+
+    def __abs__(self): return hypot(self.p1, self.p1)
+    def __pos__(self): return self
+    def __neg__(self): return self.__class__(-self.p1, -self.p2, -self.p3)
+
+    def __add__(self, other): return Ct([a+b for a,b in zip(self, other)]) if self else copy(other)
+    def __sub__(self, other): return Ct([a-b for a,b in zip(self, other)]) if self else copy(other)
+
+    def normalize(self):
+        dist = abs(self)
+        return self.__class__(self.p1 / dist, self.p2 / dist)
+

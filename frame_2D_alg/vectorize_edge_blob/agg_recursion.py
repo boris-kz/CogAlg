@@ -60,7 +60,7 @@ def agg_recursion(rroot, root, node_, nrng=1, fagg=0):  # lenH = len(root.aggH[-
     # agg+ der=1 xcomp of new Gs if fagg, else sub+: der+ xcomp of old Gs:
     nrng = rng_recursion(rroot, root, combinations(node_,r=2) if fagg else root.link_, Et, nrng)  # rng+ appends rim, link.derH
 
-    form_graph_t(root, node_, Et, nrng, fagg)  # root_fd, eval sub+, feedback per graph
+    form_graph_t(root, node_, Et, nrng, fagg)  # root_fd, eval der++ and feedback per Gd, not sub-recursion in Gms
 
     if node_ and isinstance(node_[0], list):
         for fd, G_ in enumerate(node_):
@@ -80,19 +80,26 @@ def rng_recursion(rroot, root, Q, Et, nrng=1):  # rng++/ G_, der+/ link_ if call
 
     if fd:  # der+, but recursion is still rng+
         for link in Q:  # inp_= root.link_, reform links
+            G = link.G; _G = link._G
+            if _G in G.compared_: continue  # test G only
             if link.Vt[1] > G_aves[1] * link.Rt[1]:  # >rdn incr
+                G.compared_+=[_G]; _G.compared_+=[G]
                 comp_G(link, Et)
-                comp_rim(_link_, link, nrng)  # add matching-direction rim links for next rng+
+                comp_rim(_link_, link, nrng)
+                # add matching-direction rim links for next rng+
     # not sure, this forking needs to be updated as in comp_slice?
     else:  # rng+, before sub+
         Gt_ = Q
         for (_G, G) in Gt_:  # prelinks to form new link_
+            if _G in G.compared_: continue  # test G only
             dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx  # compute distance between node centers:
             dist = np.hypot(dy, dx)
-            if 2*nrng >= dist > 2*(nrng-1):  # G,_G are within rng and were not compared at prior rng
+            if 2*nrng >= dist > 2*(nrng-1):  # G,_G are within comp rng and not compared at prior rng
                 # pairwise eval in rng++, or directional?
+                # or combined eval: > 2*nrng * ((G.val+_G.val) / ave_rval)?
                 if nrng==1 or (G.Vt[0]+_G.Vt[0]) > ave * (G.Rt[0]+_G.Rt[0]):
                     link = CderG(_G=_G, G=G, A=Ct(dy,dx), S=dist)
+                    G.compared_+=[_G]; _G.compared_+=[G]
                     comp_G(link, et)
             else:
                 _G_.add((_G, G))  # for next rng+
