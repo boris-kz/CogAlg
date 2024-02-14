@@ -380,3 +380,16 @@ class Ct(list):     # tuple operations
         dist = abs(self)
         return self.__class__(self.p1 / dist, self.p2 / dist)
 
+class Cangle(NamedTuple):  # not sure it's needed
+
+    dy: Real
+    dx: Real
+    # operators:
+    def __abs__(self): return hypot(self.dy, self.dx)
+    def __pos__(self): return self
+    def __neg__(self): return self.__class__(-self.dy, -self.dx)
+    def __add__(self, other): return self + other  # .__class__(self.dy + other.dy, self.dx + other.dx) ?
+    def __sub__(self, other): return self + (-other)
+
+
+

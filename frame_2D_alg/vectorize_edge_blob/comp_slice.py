@@ -3,7 +3,7 @@ from collections import deque, defaultdict
 from copy import deepcopy, copy
 from itertools import zip_longest, combinations
 from typing import List, Tuple
-from .classes import add_, get_match, CderH, CderP, Cgraph, Ct, CP
+from .classes import add_, sub_, acc_, get_match, CderH, CderP, Cgraph
 from .filters import ave, ave_dI, aves, P_aves, PP_aves
 from .slice_edge import comp_angle
 
@@ -22,7 +22,6 @@ Ps are relatively lateral (cross-axis), their internal match doesn't project ver
 
 Primary clustering by match between Ps over incremental distance (rng++), followed by forming overlapping
 Secondary clusters of match of incremental-derivation (der++) difference between Ps. 
-der++ is tested in PPds formed by rng++, likely if max_rng=1: match correlates with low difference
 
 As we add higher dimensions (3D and time), this dimensionality reduction is done in salient high-aspect blobs
 (likely edges in 2D or surfaces in 3D) to form more compressed "skeletal" representations of full-dimensional patterns.
@@ -66,19 +65,19 @@ def rng_recursion(PP, rng=1):  # similar to agg+ rng_recursion, but contiguously
             _P_ = P.link_.pop()  # P.link_ nesting doesn't matter
             for _P in _P_:
                 if len(_P.derH.H)!= len(P.derH.H): continue  # compare same der layers only
-                dy,dx = _P.yx-P.yx
+                dy,dx = np.subtract(_P.yx, P.yx)
                 distance = np.hypot(dy,dx)  # distance between P midpoints, /= L for eval?
                 if distance > rng: continue  # | rng * ((P.val+_P.val) / ave_rval)?
                 __P_ += [_P]  # for next rng+
                 mlink = comp_P([_P,P, distance,[dy,dx]])  # return link if match
                 if mlink:
-                    V += mlink.vt[0]  # unpack last rng link layer:
+                    V += mlink.vt[0]  # unpack last link layer:
                     link_ = P.link_[-1] if PP.derH.depth else P.link_  # der++: derH.depth==1 or derH.H is list
                     if rng > 1:
-                        if rng == 2: link_[:] = [link_[:]]  # link_ -> link_H, [:]s to copy?
+                        if rng == 2: link_[:] = [link_[:]]  # link_ -> link_H
                         if len(link_) < rng: link_ += [[]]  # new link_
-                        link_ = link_[-1]
-                    link_ += [mlink]  # append unpacked last rng layer
+                        link_ = link_[-1]  # last rng layer
+                    link_ += [mlink]
                     __P_ += [mlink._P]  # uplinks can't be cyclic
             if __P_:
                 P.link_ += [__P_]  # temporary, appended and popped regardless of nesting
@@ -90,7 +89,9 @@ def rng_recursion(PP, rng=1):  # similar to agg+ rng_recursion, but contiguously
             for P in P_: P.link_.pop()
             break
     PP.rng=rng
-
+    '''
+    der++ is tested in PPds formed by rng++, no der++ inside rng++: high diff @ rng++ termination only?
+    '''
 
 def comp_P(link):
 
@@ -167,10 +168,12 @@ def sum2PP(root, P_, derP_, base_rdn, fd):  # sum links in Ps and Ps in PP
         if derP.P not in P_ or derP._P not in P_: continue
         derP.P.derH += derP.derH  # +base_rdn?
         derP._P.derH -= derP.derH  # reverse d signs downlink
-        add_(PP.Vt,derP.vt); add_(PP.Rt,derP.rt)
         PP.link_ += [derP]; derP.roott[fd] = PP
-        S += derP.S; add_(A,derP.A)
-        PP.ext = [len(P_), S, A]  # all from links
+        np.add(PP.Vt,derP.vt)
+        np.add(PP.Rt,derP.rt)
+        np.add(A,derP.A)
+        S += derP.S
+    PP.ext = [len(P_), S, A]  # all from links
     # += Ps:
     celly_,cellx_ = [],[]
     for P in P_:
@@ -192,7 +195,7 @@ def feedback(root):  # in form_PP_, append new der layers to root PP, single vs.
     derH, valt, rdnt = CderH(),[0,0],[0,0]
     while root.fback_:
         _derH, _valt, _rdnt = root.fback_.pop(0)
-        derH += _derH; add_(valt,_valt); add_(rdnt,_rdnt)
+        derH += _derH; acc_(valt,_valt); acc_(rdnt,_rdnt)
 
     root.derH += derH; add_(root.valt,_valt); add_(root.rdnt,_rdnt)
 
@@ -297,7 +300,7 @@ def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, e
         Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
         dderH += [[mtuple, dtuple]]
 
-    return CderH(H=dderH, valt=Ct(Mval,Dval), rdnt=Ct(Mrdn,Drdn),depth=0)  # new derLayer,= 1/2 combined derH
+    return CderH(H=dderH, valt=[Mval,Dval], rdnt=[Mrdn,Drdn], depth=0)  # new derLayer,= 1/2 combined derH
 
 
 def sum_derH_gen(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
