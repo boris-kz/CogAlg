@@ -390,6 +390,3 @@ class Cangle(NamedTuple):  # not sure it's needed
     def __neg__(self): return self.__class__(-self.dy, -self.dx)
     def __add__(self, other): return self + other  # .__class__(self.dy + other.dy, self.dx + other.dx) ?
     def __sub__(self, other): return self + (-other)
-
-
-

@@ -91,7 +91,7 @@ def rng_recursion(rroot, root, Q, Et, nrng=1):  # rng++/ G_, der+/ link_ if call
             if _G in G.compared_: continue
             dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx  # compute distance between node centers:
             dist = np.hypot(dy, dx)
-            if (G.val+_G.val)/ (dist/ave_distance) > ave*(G.rdn+_G.rdn):  # combined val and distance eval
+            if (G.Vt[0]+_G.Vt[0])/ (dist/ave_distance) > ave*(G.Rt[0]+_G.Rt[0]):  # combined val and distance eval
                 # pairwise eval in rng++, or directional?
                 if nrng==1 or (G.Vt[0]+_G.Vt[0]) > ave * (G.Rt[0]+_G.Rt[0]):
                     link = CderG(_G=_G, G=G, A=[dy,dx], S=dist)
@@ -302,7 +302,7 @@ def sum_last_lay(G, fd):  # eLay += last layer of link.daggH (dsubH|ddaggH)
 
     if eLay: G.extH += [eLay]
 
-
+# not updated
 def comp_G(link, Et):
 
     _G, G = link._G, link.G
@@ -320,7 +320,7 @@ def comp_G(link, Et):
             if fd: dect[1] += abs(par)/ abs(max) if max else 1
             else:  dect[0] += (par+ave)/ (max+ave) if max else 1
     dect[0] = dect[0]/6; dect[1] = dect[1]/6  # ave of 6 params
-    Valt = np.add(Valt, valt); Rdnt = np.add(Rdnt, rdnt); Dect = np.divide(np.add(Dect,dect), 2)
+    Valt = np.add(Valt,valt); Rdnt = np.add(Rdnt,rdnt); Dect = np.divide(np.add(Dect,dect), 2)
     dertv = CderH(H=[mtuple,dtuple], valt=valt,rdnt=rdnt,dect=dect,depth=0)  # no ext in dertvs
 
     # / PP:
@@ -329,19 +329,10 @@ def comp_G(link, Et):
     for Ext,ext in zip(Extt,extt): sum_ext(Ext,ext)
 
     dderH = [dertv, extt]
-    if _G.derH and _G.derH:  # empty in single-P Gs?
-        for _lay, lay in zip(_G.derH.H,_G.derH.H):
-            mtuple,dtuple, Mtuple,Dtuple = comp_dtuple(_lay[1], lay[1], rn=1, fagg=1)
-            valt = [sum(mtuple),sum(abs(d) for d in dtuple)]
-            rdnt = [valt[1] > valt[0], valt[1] <= valt[0]]
-            dect = [0,0]
-            for fd, (ptuple,Ptuple) in enumerate(zip((mtuple,dtuple),(Mtuple,Dtuple))):
-                for (par, max, ave) in zip(ptuple, Ptuple, aves):  # different ave for comp_dtuple
-                    if fd: dect[1] += abs(par)/ abs(max) if max else 1
-                    else:  dect[0] += (par+ave)/ (max+ave) if max else 1
-            dect[0] = dect[0]/6; dect[1] = dect[1]/6  # ave of 6 params
-            Valt = np.add(Valt,valt); Rdnt = np.add(Rdnt,rdnt); Dect = np.divide(np.add(Dect,dect), 2)
-            dderH += [CderH(H=[mtuple,dtuple], valt=valt,rdnt=rdnt,dect=dect,depth=0)]  # new dderH layer
+    if _G.derH.H and G.derH.H:  # empty in single-P Gs?
+        ddertv = comp_derH(_G.derH, G.derH)
+        Valt = np.add(Valt,ddertv.valt); Rdnt = np.add(Rdnt,ddertv.rdnt); Dect = np.divide(np.add(Dect,ddertv.dect), 2)
+        dderH += [ddertv]  # new dderH layer
     dderH = CderH(H=dderH,valt=copy(Valt),rdnt=copy(Rdnt),dect=copy(Dect), depth=1)
     # / G:
 

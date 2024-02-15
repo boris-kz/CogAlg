@@ -66,14 +66,15 @@ class CderH(CBase):  # derH is a list of der layers or sub-layers, each = ptuple
     def __add__(self, other):  # sum der layers, dertuple is mtuple | dtuple
 
         if other.H and other.H[0] and isinstance(other.H[0][0], list):
-            H = [[ [P+p for P,p in zip(Dertuple,dertuple)]  for Dertuple, dertuple in zip(Dertuplet, dertuplet)]
+            # added list, prevent np converting them into array, instead of list
+            H = [[ list(np.add(Dertuple,dertuple))  for Dertuple, dertuple in zip(Dertuplet, dertuplet)]
                  for Dertuplet, dertuplet in zip_longest(self.H, other.H, fillvalue=self.empty_layer())]  # mtuple,dtuple
         else:
-            H = [[P+p for P,p in zip(Dertuple,dertuple)] for Dertuple, dertuple in zip_longest(self.H, other.H, fillvalue=[0,0,0,0,0,0])]  # mtuple,dtuple
+            H = [ list(np.add(Dertuple,dertuple)) for Dertuple, dertuple in zip_longest(self.H, other.H, fillvalue=[0,0,0,0,0,0])]  # mtuple,dtuple
 
-        valt = add_(self.valt, other.valt)
-        rdnt = add_(self.rdnt, other.rdnt); rdnt[0] += valt[1] > valt[0]; rdnt[1] += valt[0] > valt[1]
-        dect = add_(self.dect, other.dect, rn=2)
+        valt = np.add(self.valt, other.valt)
+        rdnt = np.add(self.rdnt, other.rdnt); rdnt[0] += valt[1] > valt[0]; rdnt[1] += valt[0] > valt[1]
+        dect = np.divide(np.add(self.dect, other.dect),2)
 
         return CderH(H=H, valt=valt, rdnt=rdnt, dect=dect)
 
@@ -84,29 +85,17 @@ class CderH(CBase):  # derH is a list of der layers or sub-layers, each = ptuple
 
         # subtract der layers, dertuple is mtuple | dtuple
         if other.H and other.H[0] and isinstance(other.H[0][0], list):
-            H = [[ [P-p for P,p in zip(Dertuple,dertuple)]  for Dertuple, dertuple in zip(Dertuplet, dertuplet)]
+            H = [[ list(np.subtract(Dertuple,dertuple))  for Dertuple, dertuple in zip(Dertuplet, dertuplet)]
                  for Dertuplet, dertuplet in zip_longest(self.H, other.H, fillvalue=self.empty_layer())]  # mtuple,dtuple
         else:
-            H = [[P-p for P,p in zip(Dertuple,dertuple)] for Dertuple, dertuple in zip_longest(self.H, other.H, fillvalue=[0,0,0,0,0,0])]  # mtuple,dtuple
+            H = [list(np.subtract(Dertuple,dertuple)) for Dertuple, dertuple in zip_longest(self.H, other.H, fillvalue=[0,0,0,0,0,0])]  # mtuple,dtuple
 
-        valt = sub_(self.valt, other.valt)
-        rdnt = sub_(self.rdnt, other.rdnt); rdnt[0] -= valt[1] > valt[0]; rdnt[1] -= valt[0] > valt[1]
-        dect = self.dect; dect[0] *= 2; dect[1] *= 2; dect = sub_(self.dect, other.dect)
+        valt = np.subtract(self.valt, other.valt)
+        rdnt = np.subtract(self.rdnt, other.rdnt); rdnt[0] -= valt[1] > valt[0]; rdnt[1] -= valt[0] > valt[1]
+        dect = np.subtract(np.multiply(self.dect,2), other.dect)
 
         return CderH(H=H, valt=valt, rdnt=rdnt, dect=dect)
 
-    def comp(self, other, rn, n=inf):
-
-        dderH = CderH([])  # or not-missing comparand: xor?
-        valt, rdnt = [0,0], [1,1]
-
-        for i, _lay, lay in zip(count(), self, other):  # compare common lower der layers | sublayers in derHs
-            if i >= n: break
-            # if lower-layers match: Mval > ave * Mrdn?
-            dertuplet, _valt, _rdnt = _lay.d.comp(lay.d, rn)  # compare dtuples only
-            dderH += [dertuplet]; valt += _valt; rdnt += _rdnt
-
-        return dderH, valt, rdnt  # new derLayer,= 1/2 combined derH
 
 
 class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
