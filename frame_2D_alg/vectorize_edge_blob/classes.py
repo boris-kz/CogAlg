@@ -52,52 +52,6 @@ class Cptuple(CBaseLite):
         return tuplet, valt, rdnt
 
 
-class CderH(CBase):  # derH is a list of der layers or sub-layers, each = ptuple_tv
-
-    H: list = z([])
-    valt: list = z([0,0])
-    rdnt: list = z([1,1])
-    dect: list = z([0,0])
-    depth: int = 0
-
-    @classmethod
-    def empty_layer(cls): return list([[0,0,0,0,0,0], [0,0,0,0,0,0]])
-
-    def __add__(self, other):  # sum der layers, dertuple is mtuple | dtuple
-
-        if other.H and other.H[0] and isinstance(other.H[0][0], list):
-            # added list, prevent np converting them into array, instead of list
-            H = [[ list(np.add(Dertuple,dertuple))  for Dertuple, dertuple in zip(Dertuplet, dertuplet)]
-                 for Dertuplet, dertuplet in zip_longest(self.H, other.H, fillvalue=self.empty_layer())]  # mtuple,dtuple
-        else:
-            H = [ list(np.add(Dertuple,dertuple)) for Dertuple, dertuple in zip_longest(self.H, other.H, fillvalue=[0,0,0,0,0,0])]  # mtuple,dtuple
-
-        valt = np.add(self.valt, other.valt)
-        rdnt = np.add(self.rdnt, other.rdnt); rdnt[0] += valt[1] > valt[0]; rdnt[1] += valt[0] > valt[1]
-        dect = np.divide(np.add(self.dect, other.dect),2)
-
-        return CderH(H=H, valt=valt, rdnt=rdnt, dect=dect)
-
-    def __iadd__(self, other): return self + other
-    def __isub__(self, other): return self - other
-
-    def __sub__(self, other):
-
-        # subtract der layers, dertuple is mtuple | dtuple
-        if other.H and other.H[0] and isinstance(other.H[0][0], list):
-            H = [[ list(np.subtract(Dertuple,dertuple))  for Dertuple, dertuple in zip(Dertuplet, dertuplet)]
-                 for Dertuplet, dertuplet in zip_longest(self.H, other.H, fillvalue=self.empty_layer())]  # mtuple,dtuple
-        else:
-            H = [list(np.subtract(Dertuple,dertuple)) for Dertuple, dertuple in zip_longest(self.H, other.H, fillvalue=[0,0,0,0,0,0])]  # mtuple,dtuple
-
-        valt = np.subtract(self.valt, other.valt)
-        rdnt = np.subtract(self.rdnt, other.rdnt); rdnt[0] -= valt[1] > valt[0]; rdnt[1] -= valt[0] > valt[1]
-        dect = np.subtract(np.multiply(self.dect,2), other.dect)
-
-        return CderH(H=H, valt=valt, rdnt=rdnt, dect=dect)
-
-
-
 class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     ptuple: Cptuple = z(Cptuple())  # latuple: I,G,M,Ma, angle(Dy,Dx), L
@@ -258,3 +212,65 @@ def comp_angle(self, other):  # angle = [dy,dx], rn doesn't matter
 def normalize(self):
     dist = abs(self)
     return self.__class__(self.dy / dist, self.dx / dist)
+
+
+# draft
+class CderH(CBase):  # derH is a list of der layers or sub-layers, each = ptuple_tv
+
+    H: list = z([])
+    valt: list = z([0,0])
+    rdnt: list = z([1,1])
+    dect: list = z([0,0])
+    depth: int = 0
+
+    @classmethod
+    def empty_layer(cls): return list([[0,0,0,0,0,0], [0,0,0,0,0,0]])
+
+    def __add__(Hv, hv, irdn, fneg=0, fagg=0):
+        if hv:
+            if Hv:
+                H, Valt, Rdnt, Dect, Extt, Depth = Hv
+                h, valt, rdnt, dect, extt, depth = hv
+                Valt[:] = np.add(Valt,valt)
+                Rdnt[:] = np.add( np.add(Rdnt,rdnt), [irdn,irdn])
+                Rdnt[0] += Valt[1] > Valt[0]
+                Rdnt[1] += Valt[0] > Valt[1]
+                if fagg:
+                    Dect[:] = np.divide( np.add(Dect,dect), 2)
+                fC=0
+                if isinstance(H, CderH):
+                    fC=1
+                    if isinstance(h, list):  # convert dertv to derH:
+                        h = [CderH(H=h, valt=copy(hv.valt), rdnt=copy(hv.rdnt), dect=copy(hv.dect), ext=copy(hv.ext), depth=0)]
+                elif isinstance(h, CderH):
+                    fC=1; H = [CderH(H=H, valt=copy(Hv.valt), rdnt=copy(Hv.rdnt), dect=copy(Hv.dect), ext=copy(Hv.ext), depth=0)]
+
+                if fC:  # both derH_:
+                    H = [DerH + derH for DerH, derH in zip_longest(H,h)]
+                else:  # both dertuplets:
+                    H = [list(np.add(Dertuple,dertuple)) for Dertuple, dertuple in zip(H,h)]  # mtuple,dtuple
+            else:
+                Hv[:] = deepcopy(hv)
+        return Hv
+
+    def __iadd__(self, other): return self + other
+    def __isub__(self, other): return self - other
+
+    def __sub__(self, other):
+
+        # pending update, same with __add__ above
+        # subtract der layers, dertuple is mtuple | dtuple
+        if other.H and other.H[0] and isinstance(other.H[0][0], list):
+            H = [[ list(np.subtract(Dertuple,dertuple))  for Dertuple, dertuple in zip(Dertuplet, dertuplet)]
+                 for Dertuplet, dertuplet in zip_longest(self.H, other.H, fillvalue=self.empty_layer())]  # mtuple,dtuple
+        else:
+            H = [list(np.subtract(Dertuple,dertuple)) for Dertuple, dertuple in zip_longest(self.H, other.H, fillvalue=[0,0,0,0,0,0])]  # mtuple,dtuple
+
+        valt = np.subtract(self.valt, other.valt)
+        rdnt = np.subtract(self.rdnt, other.rdnt); rdnt[0] -= valt[1] > valt[0]; rdnt[1] -= valt[0] > valt[1]
+        dect = np.subtract(np.multiply(self.dect,2), other.dect)
+
+        return CderH(H=H, valt=valt, rdnt=rdnt, dect=dect)
+
+
+

@@ -91,17 +91,16 @@ def rng_recursion(rroot, root, Q, Et, nrng=1):  # rng++/ G_, der+/ link_ if call
             if _G in G.compared_: continue
             dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx  # compute distance between node centers:
             dist = np.hypot(dy, dx)
-            if (G.Vt[0]+_G.Vt[0])/ (dist/ave_distance) > ave*(G.Rt[0]+_G.Rt[0]):  # combined val and distance eval
-                # pairwise eval in rng++, or directional?
-                if nrng==1 or (G.Vt[0]+_G.Vt[0]) > ave * (G.Rt[0]+_G.Rt[0]):
-                    link = CderG(_G=_G, G=G, A=[dy,dx], S=dist)
-                    G.compared_+=[_G]; _G.compared_+=[G]
-                    comp_G(link, et)
+            # combined pairwise eval (directional val?) per rng+:
+            if nrng==1 or ((G.Vt[0]+_G.Vt[0])/ (dist/ave_distance) > ave*(G.Rt[0]+_G.Rt[0])):
+                link = CderG(_G=_G, G=G, A=[dy,dx], S=dist)
+                G.compared_+=[_G]; _G.compared_+=[G]
+                comp_G(link, et)
             else:
                 _G_.add((_G, G))  # for next rng+
 
     if et[0][0] > ave_Gm * et[1][0]:  # rng+ eval per arg cluster because comp is bilateral, 2nd test per new pair
-        for Part, part in zip(Et,et): np.add(Part,part)  # Vt[i]+=v; Rt[i]+=rt[i]; Dt[i]+=d
+        for Part, part in zip(Et,et): Part[:] = np.add(Part,part)  # Vt[i]+=v; Rt[i]+=rt[i]; Dt[i]+=d
         _Q = _link_ if fd else list(_G_)
         if _Q:
             nrng = rng_recursion(rroot, root, _Q, Et, nrng+1)  # eval rng+ for der+ too
@@ -302,7 +301,7 @@ def sum_last_lay(G, fd):  # eLay += last layer of link.daggH (dsubH|ddaggH)
 
     if eLay: G.extH += [eLay]
 
-# not updated
+  # draft
 def comp_G(link, Et):
 
     _G, G = link._G, link.G
@@ -310,6 +309,7 @@ def comp_G(link, Et):
     # keep separate P ptuple and PP derH, empty derH in single-P G, + empty aggH in single-PP G:
 
     # / P:
+    # we can replace it with comp_derH too?
     mtuple, dtuple, Mtuple, Dtuple = comp_ptuple(_G.ptuple, G.ptuple, rn=1, fagg=1)
     valt = [sum(mtuple), sum(abs(d) for d in dtuple)]  # mval is signed, m=-min in comp x sign
     rdnt = [valt[1]>valt[0], valt[1]<=valt[0]]
@@ -328,12 +328,13 @@ def comp_G(link, Et):
     Valt = np.add(Valt, valt); Rdnt = np.add(Rdnt, rdnt); Dect = np.divide(np.add(Dect,dect), 2)
     for Ext,ext in zip(Extt,extt): sum_ext(Ext,ext)
 
-    dderH = [dertv, extt]
+    dderH = [dertv]
     if _G.derH.H and G.derH.H:  # empty in single-P Gs?
-        ddertv = comp_derH(_G.derH, G.derH)
-        Valt = np.add(Valt,ddertv.valt); Rdnt = np.add(Rdnt,ddertv.rdnt); Dect = np.divide(np.add(Dect,ddertv.dect), 2)
-        dderH += [ddertv]  # new dderH layer
-    dderH = CderH(H=dderH,valt=copy(Valt),rdnt=copy(Rdnt),dect=copy(Dect), depth=1)
+        ddertv_, valt, rdnt, dect = comp_derH(_G.derH, G.derH)
+        Valt = np.add(Valt,valt); Rdnt = np.add(Rdnt,rdnt); Dect = np.divide(np.add(Dect,dect), 2)
+        dderH += ddertv_
+        # add ext per layer?
+    dderH = CderH(H=dderH,valt=copy(Valt),rdnt=copy(Rdnt),dect=copy(Dect), ext = extt, depth=1)
     # / G:
 
     if _G.aggH and G.aggH:
@@ -444,7 +445,7 @@ def comp_ext(_ext, ext):  # comp ds:
     return [[mL,mS,mA], [dL,dS,dA]],[Mval, Dval],[Mrdn, Drdn],[Mdec, Ddec]
 
 
-# tentative
+# replaced by += overload for CderH in classes
 def sum_Hv(Hv, hv, base_rdn, fneg=0):
 
     if hv:
@@ -486,7 +487,7 @@ def sum_ext(Ext, ext):  # ext: m|d L,S,A
 
     for i,(Par,par) in enumerate(zip(Ext,ext)):
 
-        if isinstance(Par,list): np.add(Par,par)  # sum angle
+        if isinstance(Par,list): Par[:] = np.add(Par,par)  # sum angle
         else: Ext[i] = Par+par
 
 
