@@ -1,5 +1,6 @@
 from itertools import (repeat, accumulate, chain, starmap, tee)
 from types import SimpleNamespace
+import ctypes
 
 import numbers
 import numpy as np
@@ -45,33 +46,9 @@ SIGN_MAPS = {
 # ----------------------------------------------------------------------------
 # General purpose functions
 
-def generate_sobel(shape, axis):
-    """
-    shape must be odd: eg. (5,5)
-    axis is the direction, with 0 to positive x and 1 to positive y
-    example usage:
-    y_3x3 = generate_sobel((3,3),1)
-    x_3x3 = generate_sobel((3,3),0)
-    y_5x5 = generate_sobel((5,5),1)
-    x_5x5 = generate_sobel((5,5),0)
-    y_7x7 = generate_sobel((7,7),1)
-    x_7x7 = generate_sobel((7,7),0)
-    y_9x9 = generate_sobel((9,9),1)
-    x_9x9 = generate_sobel((9,9),0)
-    y_17x17 = generate_sobel((17,17),1)
-    x_17x17 = generate_sobel((17,17),0)
-    """
-    k = np.zeros(shape)
-    p = [(j,i) for j in range(shape[0])
-           for i in range(shape[1])
-           if not (i == (shape[1] -1)/2. and j == (shape[0] -1)/2.)]
-
-    for j, i in p:
-        j_ = int(j - (shape[0] -1)/2.)
-        i_ = int(i - (shape[1] -1)/2.)
-        k[j,i] = (i_ if axis==0 else j_)/float(i_*i_ + j_*j_)
-
-    return k
+def get_instance(obj_id):
+    """Get python object by id."""
+    return ctypes.cast(int(obj_id), ctypes.py_object).value
 
 
 def is_close(x1, x2):
@@ -390,3 +367,51 @@ def print_deep_blob_forking(deep_layers):
     for i, deep_layer in enumerate(deep_layers):
         if len(deep_layer)>0:
             check_deep_blob(deep_layer,i)
+
+# ----------------------------------------------------------------------------
+# Box operation: box is the tuple (y0, x0, yn, xn)
+
+def box2slice(box):
+    """Convert box to 2d array slice."""
+    y0, x0, yn, xn = box
+    return slice(y0, yn), slice(x0, xn)
+
+def box2center(box):
+    """Return box center"""
+    y0, x0, yn, xn = box
+    return (y0 + yn) / 2, (x0 + xn) / 2
+
+def extend_box(box, _box):
+    """Add 2 boxes."""
+    y0, x0, yn, xn = box
+    _y0, _x0, _yn, _xn = _box
+    return min(y0, _y0), min(x0, _x0), max(yn, _yn), max(xn, _xn)
+
+
+def accum_box(box, y, x):
+    """Box coordinate accumulation."""
+    y0, x0, yn, xn = box
+    return min(y0, y), min(x0, x), max(yn, y+1), max(xn, x+1)
+
+
+def expand_box(box, h, w, r=1):
+    """Box expansion by margin r."""
+    y0, x0, yn, xn = box
+    return max(0, y0-r), max(0, x0-r), min(h, yn+r), min(w, xn+r)
+
+def shrink_box(box, r=1):
+    """Box shrink by margin r."""
+    y0, x0, yn, xn = box
+    return y0+r, x0+r, yn-r, xn-r
+
+def sub_box2box(box, _box):
+    """sub_box to box transform."""
+    y0, x0, yn, xn = box
+    _y0, _x0, _yn, _xn = _box
+    return y0+_y0, x0+_x0, y0+_yn, x0+_xn
+
+def box2sub_box(box, _box):
+    """box to sub_box transform."""
+    y0, x0, yn, xn = box
+    _y0, _x0, _yn, _xn = _box
+    return _y0-y0, _x0-x0, _yn-y0, _xn-x0

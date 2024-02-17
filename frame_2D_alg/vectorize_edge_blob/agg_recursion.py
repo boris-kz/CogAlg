@@ -306,37 +306,21 @@ def comp_G(link, Et):
 
     _G, G = link._G, link.G
     Valt, Rdnt, Dect, Extt = [0,0], [1,1], [0,0], []
-    # keep separate P ptuple and PP derH, empty derH in single-P G, + empty aggH in single-PP G:
-
+    # separate P ptuple and PP derH, empty derH in single-P G, + empty aggH in single-PP G:
     # / P:
-    # we can replace it with comp_derH too?
-    mtuple, dtuple, Mtuple, Dtuple = comp_ptuple(_G.ptuple, G.ptuple, rn=1, fagg=1)
-    valt = [sum(mtuple), sum(abs(d) for d in dtuple)]  # mval is signed, m=-min in comp x sign
-    rdnt = [valt[1]>valt[0], valt[1]<=valt[0]]
-    dect = [0,0]
-    for fd, (ptuple,Ptuple) in enumerate(zip((mtuple,dtuple),(Mtuple,Dtuple))):
-        for i, (par, max, ave) in enumerate(zip(ptuple, Ptuple, aves)):
-            # compute link decay coef: par/ max(self/same)
-            if fd: dect[1] += abs(par)/ abs(max) if max else 1
-            else:  dect[0] += (par+ave)/ (max+ave) if max else 1
-    dect[0] = dect[0]/6; dect[1] = dect[1]/6  # ave of 6 params
+    dertv, valt, rdnt, dect = comp_derH(_G.ptuple, G.ptuple, rn=1, fagg=1)
     Valt = np.add(Valt,valt); Rdnt = np.add(Rdnt,rdnt); Dect = np.divide(np.add(Dect,dect), 2)
-    dertv = CderH(H=[mtuple,dtuple], valt=valt,rdnt=rdnt,dect=dect,depth=0)  # no ext in dertvs
-
     # / PP:
     extt,valt,rdnt,dect = comp_ext(_G.ext,G.ext)
     Valt = np.add(Valt, valt); Rdnt = np.add(Rdnt, rdnt); Dect = np.divide(np.add(Dect,dect), 2)
     for Ext,ext in zip(Extt,extt): sum_ext(Ext,ext)
-
     dderH = [dertv]
     if _G.derH.H and G.derH.H:  # empty in single-P Gs?
-        ddertv_, valt, rdnt, dect = comp_derH(_G.derH, G.derH)
+        ddertv_, valt, rdnt, dect = comp_derH(_G.derH, G.derH, rn=1, fagg=1)
         Valt = np.add(Valt,valt); Rdnt = np.add(Rdnt,rdnt); Dect = np.divide(np.add(Dect,dect), 2)
         dderH += ddertv_
-        # add ext per layer?
     dderH = CderH(H=dderH,valt=copy(Valt),rdnt=copy(Rdnt),dect=copy(Dect), ext = extt, depth=1)
     # / G:
-
     if _G.aggH and G.aggH:
         H = [dderH]
         dHv = comp_Hv(CderH(_G.aggH,_G.valt,_G.rdnt,_G.dect,2), CderH(G.aggH,G.valt,G.rdnt,G.dect,2), rn=1, depth=2)

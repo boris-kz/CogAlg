@@ -6,9 +6,12 @@
 import numpy as np
 from scipy.signal import convolve2d
 from itertools import zip_longest
-from frame_blobs import assign_adjacents, flood_fill, Cder__t
+from frame_blobs import assign_adjacents, flood_fill
 from vectorize_edge_blob.agg_recursion import vectorize_root
-from utils import kernel_slice_3x3 as ks
+from utils import (
+    kernel_slice_3x3 as ks,
+    box2slice, expand_box, shrink_box, box2sub_box,
+)
 '''
     Conventions:
     postfix 't' denotes tuple, multiple ts is a nested tuple
@@ -40,10 +43,10 @@ def intra_blob_root(root_blob, render, verbose):  # recursive evaluation of cros
                 blob.rdn = root_blob.rdn + 1.5  # sub_blob root values
                 if verbose: print('fork: r')
                 new_der__t, new_mask__, fork_ibox = ret  # unpack comp_r output
-                sign__ = ave * (blob.rdn + 1) - new_der__t.g > 0  # m__ = ave - g__
-                fork_data = 'r', fork_ibox, new_der__t, sign__, new_mask__ # for flood_fill
+                _, _, g__ = new_der__t
+                sign__ = ave * (blob.rdn + 1) - g__ > 0  # m__ = ave - g__
                 # form sub_blobs:
-                sub_blobs, idmap, adj_pairs = flood_fill(blob, fork_data, verbose=verbose)
+                sub_blobs, idmap, adj_pairs = flood_fill(blob, 'r', fork_ibox, new_der__t, sign__, new_mask__, verbose=verbose)
                 '''
                 adjust per average sub_blob, depending on which fork is weaker, or not taken at all:
                 sub_blob.rdn += 1 -|+ min(sub_blob_val, alt_blob_val) / max(sub_blob_val, alt_blob_val):
@@ -54,7 +57,7 @@ def intra_blob_root(root_blob, render, verbose):  # recursive evaluation of cros
                 '''
                 assign_adjacents(adj_pairs)
 
-                sublayers = blob.rlayers
+                sublayers = blob.rlayers = []
                 sublayers += [sub_blobs]  # next level sub_blobs, then add deeper layers of sub_blobs:
                 sublayers += intra_blob_root(blob, render, verbose)  # recursive eval cross-comp per blob
                 spliced_layers[:] += [spliced_layer + sublayer for spliced_layer, sublayer in
@@ -65,7 +68,7 @@ def intra_blob_root(root_blob, render, verbose):  # recursive evaluation of cros
             blob.rdn = root_blob.rdn + 1.5  # comp cost * fork rdn, sub_blob root values
             blob.prior_forks += 'v'
             if verbose: print('fork: v')
-            vectorize_root(blob, verbose=verbose)
+            vectorize_root(blob)
         # ---> end v fork
     return spliced_layers
 
@@ -77,7 +80,7 @@ def comp_r(blob):
 
     # expand ibox to reduce shrink if possible
     y0, x0, yn, xn = blob.ibox
-    y0e, x0e, yne, xne = eibox = blob.ibox.expand(rng, *blob.i__.shape) # 'e' stands for 'expanded'
+    y0e, x0e, yne, xne = eibox = expand_box(blob.ibox, *blob.i__.shape, rng) # 'e' stands for 'expanded'
     pad = ((y0-y0e, yne-yn), (x0-x0e, xne-xn))  # pad of emask__: expanded size per side
 
     # compute majority mask, at this point, mask__ can't be None
@@ -94,17 +97,17 @@ def comp_r(blob):
     blob.rng = rng
 
     # compute shrink box of der__t, if shrink = 0 on all size, sdbox size is the same as blob.ibox
-    fork_ibox = eibox.shrink(rng)  # fork_ibox, with size = that of der__t after comparison
-    sdbox = blob.ibox.box2sub_box(fork_ibox)    # shrinked der__t box
+    fork_ibox = shrink_box(eibox, rng)  # fork_ibox, with size = that of der__t after comparison
+    sdbox = box2sub_box(blob.ibox, fork_ibox)    # shrinked der__t box
 
     dy__, dx__, g__ = blob.der__t   # unpack der__t
-    i__ = blob.i__[eibox.slice]   # expanded i__ for comparison
+    i__ = blob.i__[box2slice(eibox)]   # expanded i__ for comparison
     # compare opposed pairs of rim pixels, project onto x, y:
-    new_dy__ = dy__[sdbox.slice] + convolve2d(i__, ky, mode='valid')
-    new_dx__ = dx__[sdbox.slice] + convolve2d(i__, kx, mode='valid')
+    new_dy__ = dy__[box2slice(sdbox)] + convolve2d(i__, ky, mode='valid')
+    new_dx__ = dx__[box2slice(sdbox)] + convolve2d(i__, kx, mode='valid')
     new_g__ = np.hypot(new_dy__, new_dx__)  # gradient, recomputed at each comp_r
 
-    return Cder__t(new_dy__, new_dx__, new_g__), majority_mask__, fork_ibox
+    return (new_dy__, new_dx__, new_g__), majority_mask__, fork_ibox
 
 
 def compute_kernel(rng):

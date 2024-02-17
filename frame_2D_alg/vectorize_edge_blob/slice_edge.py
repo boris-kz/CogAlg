@@ -3,8 +3,10 @@ import numpy as np
 from math import floor
 from collections import deque
 from itertools import product
-from .classes import Cgraph, CP, Cptuple
+from types import SimpleNamespace
 from .filters import ave_g, ave_dangle, ave_daangle
+
+from utils import box2slice
 
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
@@ -25,8 +27,12 @@ octant = 0.3826834323650898
 def slice_edge(blob, verbose=False):
 
     mask__ = max_selection(blob)  # mask of local directional maxima of dy, dx, g
+    i__ = blob.i__[box2slice(blob.ibox)]
+    dy__, dx__, g__ = blob.der__t
 
-    edge = Cgraph(root=blob, node_=[[],[]], box=blob.box, mask__=blob.mask__)
+    edge = SimpleNamespace(
+        root=blob, node_=[[],[]], box=blob.box, mask__=blob.mask__,
+        derH=new_derH())
     blob.dlayers = [[edge]]
     max_ = {*zip(*mask__.nonzero())}  # convert mask__ into a set of (y,x)
 
@@ -41,14 +47,15 @@ def slice_edge(blob, verbose=False):
         while maxQue:  # trace max_
             # initialize pivot dert
             y,x,_P = maxQue.popleft()
-            i = blob.i__[blob.ibox.slice][y,x]
-            dy, dx, g = blob.der__t.get_pixel(y,x)
+            i, dy, dx, g = i__[y,x], dy__[y,x], dx__[y,x], g__[y,x]
             ma = ave_dangle  # max value because P direction is the same as dert gradient direction
             assert g > 0, "g must be positive"
-            P = form_P(blob, CP(yx=[y,x], axis=[dy/g, dx/g], cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
+            P = form_P(blob, SimpleNamespace(
+                yx=[y,x], axis=[dy/g, dx/g], cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)],
+                derH=new_derH()))
             edge.P_ += [P]
             if _P is not None:
-                if not P.link_: P.link_ = [[]]  # to add prelinks:
+                if not hasattr(P, 'link_'): P.link_ = [[]]  # to add prelinks:
                 P.link_[0] += [_P]
                 # Pt_ += [(_P, P)]  # if using combinations
             # search in max_ path
@@ -69,10 +76,10 @@ def slice_edge(blob, verbose=False):
 def max_selection(blob):
 
     Y, X = blob.mask__.shape
-    g__ = blob.der__t.g
+    dy__, dx__, g__ = blob.der__t
     # compute direction of gradient
     with np.errstate(divide='ignore', invalid='ignore'):
-        sin__, cos__ = [blob.der__t.dy, blob.der__t.dx] / g__
+        sin__, cos__ = [dy__, dx__] / g__
 
     # round angle to one of eight directions
     up__, lft__, dwn__, rgt__ = (sin__< -octant), (cos__< -octant), (sin__> octant), (cos__> octant)
@@ -115,7 +122,7 @@ def form_P(blob, P):
     L = len(P.dert_)
     M = ave_g*L - G
     G = np.hypot(Dy, Dx)  # recompute G
-    P.ptuple = Cptuple(I, G, M, Ma, [Dy, Dx], L)
+    P.ptuple = [I, G, M, Ma, [Dy, Dx], L]
     P.yx = P.dert_[L // 2][:2]  # new center
 
     return P
@@ -172,7 +179,7 @@ def interpolate2dert(blob, y, x):
         (y0, x1, (y1 - y) * (x - x0)),
         (y1, x0, (y - y0) * (x1 - x)),
         (y1, x1, (y - y0) * (x - x0))]
-    ider__t = (blob.i__[blob.ibox.slice],) + blob.der__t
+    ider__t = (blob.i__[box2slice(blob.ibox)],) + blob.der__t
 
     return (sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t)
 
@@ -223,3 +230,7 @@ def comp_aangle(_aangle, aangle):  # currently not used, just in case we need it
     maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
 
     return [maangle,daangle]
+
+
+def new_derH(H=[], valt=[0,0], rdnt=[1,1], dect=[0,0], depth=0):
+    return SimpleNamespace(H=H, valt=valt, rdnt=rdnt, dect=dect, depth=depth)
