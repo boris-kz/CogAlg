@@ -732,3 +732,68 @@ def comp_derH(_derH, derH, rn=1, fagg=0):  # derH is a list of der layers or sub
 
     return derLay, Vt,Rt,Dt  # to sum in each G Et
 
+
+def form_PP_t(root, P_, irdn):  # form PPs of derP.valt[fd] + connected Ps val
+
+    PP_t = [[],[]]
+    for fd in 0,1:
+        P_Ps = defaultdict(list)  # key: P, val: _Ps
+        Link_ = []
+        for P in P_:  # not PP.link_: P uplinks are unique, only G links overlap
+            for derP in unpack_last_link_(P.link_):
+                P_Ps[P] += [derP._P]; Link_ += [derP]  # not needed for PPs?
+        inP_ = []  # clustered Ps and their val,rdn s for all Ps
+        for P in root.P_:
+            if P in inP_: continue  # already packed in some PP
+            cP_ = [P]  # clustered Ps and their val,rdn s
+            perimeter = deque(P_Ps[P])  # recycle with breadth-first search, up and down:
+            while perimeter:
+                _P = perimeter.popleft()
+                if _P in cP_: continue
+                cP_ += [_P]
+                perimeter += P_Ps[_P]  # append linked __Ps to extended perimeter of P
+            PP = sum2PP(root, cP_, Link_, irdn, fd)
+            PP_t[fd] += [PP]  # no if Val > PP_aves[fd] * Rdn:
+            inP_ += cP_  # update clustered Ps
+
+    for PP in PP_t[1]:  # eval der+ / PPd only, after form_PP_t -> P.root
+        if PP.Vt[1] * len(PP.link_) > PP_aves[1] * PP.Rt[1]:
+            # node-mediated correlation clustering:
+            der_recursion(root, PP, fd=1)
+        if root.fback_:
+            feedback(root)  # after der+ in all nodes, no single node feedback
+
+    root.node_ = PP_t  # nested in der+, add_alt_PPs_?
+
+
+def sum2PP(root, P_, derP_, irdn, fd):  # sum links in Ps and Ps in PP
+
+    PP = Cgraph(fd=fd, root=root, P_=P_, rng=root.rng+1)  # initial PP.box = (inf,inf,-inf,-inf)
+    # += uplinks:
+    S,A = 0, [0,0]
+    for derP in derP_:
+        if derP.P not in P_ or derP._P not in P_: continue
+        derP.P.derH.rdn[fd] += irdn; derP.P.derH += derP.derH
+        derP._P.derH.rdn[fd]+= irdn; derP._P.derH -= derP.derH  # reverse d signs downlink
+        PP.link_ += [derP]; derP.roott[fd] = PP
+        PP.Vt = np.add(PP.Vt,derP.vt)
+        PP.Rt = np.add(np.add(PP.Rt,derP.rt), [irdn,irdn])
+        derP.A = np.add(A,derP.A); S += derP.S
+    PP.ext = [len(P_), S, A]  # all from links
+    depth = root.derH.depth or fd  # =1 at 1st der+
+    PP.derH.depth = depth
+    # += Ps:
+    celly_,cellx_ = [],[]
+    for P in P_:
+        P.derH.depth = depth  # or copy from links
+        PP.ptuple += P.ptuple
+        PP.derH += P.derH
+        for y,x in P.cells:
+            PP.box = PP.box.accumulate(y,x); celly_+=[y]; cellx_+=[x]
+    # pixmap:
+    y0,x0,yn,xn = PP.box
+    PP.mask__ = np.zeros((yn-y0, xn-x0), bool)
+    celly_ = np.array(celly_); cellx_ = np.array(cellx_)
+    PP.mask__[(celly_-y0, cellx_-x0)] = True
+
+    return PP
