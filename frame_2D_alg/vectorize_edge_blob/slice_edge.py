@@ -3,8 +3,8 @@ import numpy as np
 from math import floor
 from collections import deque
 from itertools import product
-from types import SimpleNamespace
 from .filters import ave_g, ave_dangle, ave_daangle
+from .classes import CP, Cedge, CderH, Cptuple
 
 from utils import box2slice
 
@@ -30,9 +30,7 @@ def slice_edge(blob, verbose=False):
     i__ = blob.i__[box2slice(blob.ibox)]
     dy__, dx__, g__ = blob.der__t
 
-    edge = SimpleNamespace(
-        root=blob, node_=[[],[]], box=blob.box, mask__=blob.mask__,
-        derH=new_derH())
+    edge = Cedge(root=blob, node_=[[],[]], box=blob.box, mask__=blob.mask__, derH=CderH())
     blob.dlayers = [[edge]]
     max_ = {*zip(*mask__.nonzero())}  # convert mask__ into a set of (y,x)
 
@@ -50,12 +48,9 @@ def slice_edge(blob, verbose=False):
             i, dy, dx, g = i__[y,x], dy__[y,x], dx__[y,x], g__[y,x]
             ma = ave_dangle  # max value because P direction is the same as dert gradient direction
             assert g > 0, "g must be positive"
-            P = form_P(blob, SimpleNamespace(
-                yx=[y,x], axis=[dy/g, dx/g], cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)],
-                derH=new_derH()))
+            P = form_P(blob, CP(yx=[y,x], axis=[dy/g, dx/g], cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)], derH=CderH(), link_=[[]]))
             edge.P_ += [P]
             if _P is not None:
-                if not hasattr(P, 'link_'): P.link_ = [[]]  # to add prelinks:
                 P.link_[0] += [_P]
                 # Pt_ += [(_P, P)]  # if using combinations
             # search in max_ path
@@ -122,7 +117,7 @@ def form_P(blob, P):
     L = len(P.dert_)
     M = ave_g*L - G
     G = np.hypot(Dy, Dx)  # recompute G
-    P.ptuple = [I, G, M, Ma, [Dy, Dx], L]
+    P.ptuple = Cptuple(I=I, G=G, M=M, Ma=Ma, angle=[Dy, Dx], L=L)
     P.yx = P.dert_[L // 2][:2]  # new center
 
     return P
@@ -196,19 +191,6 @@ def comp_angle(_angle, angle):  # rn doesn't matter for angles
     return [mangle, dangle]
 
 
-def sum_angle(_angle, angle, average=0):
-
-
-    angle0 = (_angle[0] * angle[1]) + (angle[0] * _angle[1])  # sin(a + b) = sin a cos b + sin b cos a
-    angle1 = (_angle[1] * angle[1]) - (_angle[0] * angle[0])  # cos(a + b) = cos(a)cos(b) – sin(a)sin(b).
-
-    if average:
-        angle0 /= 2
-        angle1 /= 2
-
-    return [angle0, angle1]
-
-
 def comp_aangle(_aangle, aangle):  # currently not used, just in case we need it later
 
     _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _aangle
@@ -230,7 +212,3 @@ def comp_aangle(_aangle, aangle):  # currently not used, just in case we need it
     maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
 
     return [maangle,daangle]
-
-
-def new_derH(H=[], valt=[0,0], rdnt=[1,1], dect=[0,0], depth=0):
-    return SimpleNamespace(H=H, valt=valt, rdnt=rdnt, dect=dect, depth=depth)
