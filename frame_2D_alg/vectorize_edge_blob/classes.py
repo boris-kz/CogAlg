@@ -21,52 +21,54 @@ from .filters import ave_dangle, ave_dI, ave_Pd, ave_Pm, aves
     longer names are normally classes
 '''
 
-# drafts:
+# not revised:
 
-def add_(T, t):  # unpack tuples (formally lists) down to numericals and sum them
+def add_(HE, He):  # unpack tuples (formally lists) down to numericals and sum them
 
-    if t:
-        if T:
-            for i, (Par,par) in enumerate(zip_longest(T,t, fillvalue=None)):  # always lists, maybe ext,Et in the end?
-                if par:
-                    if Par:
-                        if isinstance(Par,list) and isinstance(par,list):
+    if He:
+        if HE:
+            for i, (Lay,lay) in enumerate(zip_longest(HE, He, fillvalue=None)):  # always list He
+                if lay:
+                    if Lay:
+                        if isinstance(Lay[2][0],list):  # and isinstance(lay[2][0],list):
                             # and par[0]==Par[0]: if same typ, or always aligned unless compressed: cpr version?
-                            T[i] = add_(Par[2:], par[2:])  # unpack and sum params
+                            HE[i] = add_(Lay[1:], lay[1:])  # unpack and sum Ets and Hs
                         else:
-                            T[i] = Par+par  # both numerical
+                            HE[i] = np.add(Lay,lay)  # both have numericals in Hs
                     else:
-                        T += [deepcopy(par)]  # skip deepcopy if numerical?
-            return T
+                        HE += [deepcopy(lay)]  # skip deepcopy if numerical?
+            return HE
         else:
-            return deepcopy(t)
+            return deepcopy(He)
 '''
 add negate(t)
 '''
 
-def comp_(dertv, T, t, typ=0):  # unpack tuples (formally lists) down to numericals and compare them
+def comp_(_H,H):  # unpack tuples (formally lists) down to numericals and compare them
 
-    # dertv,T,t can be ext | dertv | derH | subH | aggH, compare only ds in shared levels
+    Et = 0,0,0,0,0,0  # Vm,Vd, Rm,Rd, Dm,Dd
+    dH = []
+    for _lay,lay in zip(_H,H):  # md_| ext | derH | subH | aggH, compare shared layers
 
-    for Par, par in zip_longest(T, t, fillvalue=None):
+        if isinstance(_lay[0], str):  # nested H, must be same for lay
+            et, dlay = comp_(_lay,lay)  # unpack and comp params
+        else:
+            # lay Hs are md_s, numerical comp:
+            vm,vd,rm,rd,dm,dd = 0,0,0,0,0,0
+            dlay = []
+            for _d,d in zip(_lay[2][1::2], lay[2][1::2]):  # compare ds in md_ or ext
+                diff = _d-d
+                match = min(abs(_d),abs(d))
+                if (_d<0) != (d<0): match *= -1  # if only one comparand is negative
+                vm += match; vd += diff
+                dlay += [match,diff]  # flat list
 
-        if Par and par and Par[0] == par[0]:  # maybe None to align, else check same type?
-            if isinstance(Par,list) and isinstance(par,list):
+            et = [vm,vd,rm,rd,dm,dd]
+        for E,e in Et,et: E+=2
+        dH += [dlay]
 
-                if typ =='angle':  # also separate comp -> distance for box?
-                    dertv += [comp_angle(Par, par)]
-                else:  # compare ds, same for ext, exclude Et in par[1]:
-                    Par_ = [P for i,P in enumerate(Par[3:]) if i%2]  # [3:] to skip 1st m
-                    par_ = [p for i,p in enumerate(par[3:]) if i%2]
-                    dertv += [comp_(Par_, par_, par[0])]  # unpack and comp params, not sure about nesting
-            else:  # numerical
-                diff = Par-par
-                match = min(abs(Par),abs(par))
-                if (Par<0) != (par<0): match *= -1  # if only one comparand is negative
-                dertv[1][0] += match; dertv[1][1] += diff
-                dertv += [match,diff]  # flat list
+    return Et, dH
 
-    return dertv
 
 def comp_angle(_A, A):  # angle = [dy,dx], rn doesn't matter
 
