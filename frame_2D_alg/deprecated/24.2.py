@@ -797,3 +797,31 @@ def sum2PP(root, P_, derP_, irdn, fd):  # sum links in Ps and Ps in PP
     PP.mask__[(celly_-y0, cellx_-x0)] = True
 
     return PP
+'''
+        if T.typ == 'derH':
+            if t.H:
+                if T.H:
+                    H, Valt, Rdnt, Dect, Extt, Depth = T.H, T.valt, T.rdnt, T.dect, T.ext, t.depth
+                    h, valt, rdnt, dect, extt, depth = t.H, t.valt, t.rdnt, t.dect, t.ext, t.depth
+                    Valt[:] = np.add(Valt,valt)
+                    Rdnt[:] = np.add( np.add(Rdnt,rdnt), [T.irdn,t.irdn])
+                    Rdnt[0] += Valt[1] > Valt[0]
+                    Rdnt[1] += Valt[0] > Valt[1]
+                    if T.fagg:
+                        Dect[:] = np.divide( np.add(Dect,dect), 2)
+                    fC=0
+                    if isinstance(H[0], z):
+                        fC=1
+                        if isinstance(h[0], list):  # convert dertv to derH:
+                            h = [CderH(H=h, valt=copy(t.valt), rdnt=copy(t.rdnt), dect=copy(t.dect), ext=copy(t.ext), depth=0)]
+                    elif isinstance(h[0], z):
+                        fC=1; H = [CderH(H=H, valt=copy(T.valt), rdnt=copy(T.rdnt), dect=copy(T.dect), ext=copy(T.ext), depth=0)]
+
+                    if fC:  # both derH_:
+                        add_(H, h)
+                        # H[:(len(h))] = [DerH + derH for DerH, derH in zip_longest(H,h)]  # if different length or always same? (could be different length)
+                    else:  # both dertuplets:
+                        H[:] = [list(np.add(Dertuple,dertuple)) for Dertuple, dertuple in zip(H,h)]  # mtuple,dtuple
+                else:
+                    T.H[:] = deepcopy(t.H)
+'''
