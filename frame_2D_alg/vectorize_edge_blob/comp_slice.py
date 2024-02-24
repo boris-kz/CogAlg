@@ -3,7 +3,7 @@ from collections import deque, defaultdict
 from copy import deepcopy, copy
 from itertools import zip_longest, combinations
 from typing import List, Tuple
-from .classes import add_, comp_, negate, sub_, acc_, get_match, CPP, Cptuple, CderP, z
+from .classes import add_, comp_, negate, get_match, CPP, Cptuple, CderP, z
 from .filters import ave, ave_dI, aves, P_aves, PP_aves
 from .slice_edge import comp_angle
 from utils import box2slice, accum_box, sub_box2box
@@ -39,7 +39,7 @@ len prior root_ sorted by G is root.rdn, to eval for inclusion in PP or start ne
 def der_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
 
     if fd:  # add prelinks per P if not initial call:
-        for P in PP.P_: P.link_ += [unpack_last_link_(P.link_)]
+        for P in PP.P_: P.link_ += copy([unpack_last_link_(P.link_)])
 
     rng_recursion(PP, rng=1, fd=fd)  # extend PP.link_, derHs by same-der rng+ comp
     form_PP_t(PP, PP.P_, iRt = PP.Rt)  # der+ is mediated by form_PP_t
@@ -57,15 +57,13 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contig
             _prelink_ = P.link_.pop()  # old prelinks per P
             for _link in _prelink_:
                 _P = _link._P if fd else _link
-                # derH[1] is derH.H
-                if len(_P.derH[1])!= len(P.derH[1]): continue  # compare same der layers only
                 dy,dx = np.subtract(_P.yx, P.yx)
                 distance = np.hypot(dy,dx)  # distance between P midpoints, /= L for eval?
                 if distance < rng:  # | rng * ((P.val+_P.val) / ave_rval)?
                     mlink = comp_P(_link if fd else [_P,P, distance,[dy,dx]], fd)  # return link if match
                     if mlink:
                         V += mlink.vt[0]  # unpack last link layer:
-                        link_ = P.link_[-1] if PP.derH[0] == 'derH' else P.link_  # der++ if derH.depth==1
+                        link_ = P.link_[-1] if PP.He and PP.He[0] else P.link_  # der++ if PP.He[0] depth==1
                         if rng > 1:
                             if rng == 2: link_[:] = [link_[:]]  # link_ -> link_H
                             if len(link_) < rng: link_ += [[]]  # new link_
@@ -87,7 +85,6 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contig
     der++ is tested in PPds formed by rng++, no der++ inside rng++: high diff @ rng++ termination only?
     '''
 
-# der+ not updated yet
 def comp_P(link, fd):
 
     if isinstance(link,z): _P, P = link._P, link.P  # in der+
@@ -97,27 +94,24 @@ def comp_P(link, fd):
     if _P.He and P.He:
         # der+: append link derH, init in rng++ from form_PP_t
         (vm,vd,rm,rd),H = comp_(_P.He, P.He, rn=rn)
-        vt= [vm, vd]; rt = [rm, rd]
-        rt[0] += vd > vm; rt[1] += vm > vd
+        rm += vd > vm; rd += vm > vd
         aveP = P_aves[1]
     else:
         # rng+: add link derH
         H = comp_ptuple(_P.ptuple, P.ptuple, rn)
-        vt = [sum(H[::2]), sum(abs(d) for d in H[1::2])]
-        rt = [1+(vt[1]>vt[0]), 1+(1-(vt[1]>vt[0]))]
+        vm = sum(H[::2]); vd = sum(abs(d) for d in H[1::2])
+        rm = 1 + vd > vm; rd = 1 + vm > vd
         aveP = P_aves[0]
 
-    if vt[0] > aveP*rt[0]:  # always rng+
+    if vm > aveP*rm:  # always rng+
         if fd:
             He = link.He
-            if He[0] == 'md_':  # add nesting md_-> derH:
-                He = link.He = ['derH',copy(He[1]),[He]]
-            He[1][:] = np.add(He[1],[vm,vd,rm,rd])
-            He[2] += [H]
-            link.vt=np.add(link.vt,vt); link.rt=np.add(link.rt,rt)
+            if not He[0]: He = link.He = [1,*He[1],[He]]  # nest md_ to derH
+            He[1] = np.add(He[1], [vm,vd,rm,rd])
+            He[2] += [[0, [vm,vd,rm,rd], H]]
+            link.vt = np.add(link.vt,[vm,vd]); link.rt = np.add(link.rt,[rm,rd])
         else:
-            md_ = ['md_',[*vt,*rt], H]
-            link = CderP(typ='derP', P=P,_P=_P, He=md_, vt=copy(vt), rt=copy(rt), S=S, A=A, roott=[[],[]])
+            link = CderP(typ='derP', P=P,_P=_P, He=[0,[vm,vd,rm,rd],H], vt=[vm,vd], rt=[rm,rd], S=S, A=A, roott=[[],[]])
 
         return link
 
@@ -166,8 +160,9 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
     S,A = 0, [0,0]
     for derP in derP_:
         if derP.P not in P_ or derP._P not in P_: continue
-        add_(derP.P.He, derP.He, iRt)
-        add_(derP._P.He, deepcopy(negate(derP._P.He)), iRt)  # reverse d signs downlink
+        if derP.He:
+            add_(derP.P.He, derP.He, iRt)
+            add_(derP._P.He, negate(deepcopy(derP.He)), iRt)
         PP.link_ += [derP]; derP.roott[fd] = PP
         PP.Vt = np.add(PP.Vt,derP.vt)
         PP.Rt = np.add( np.add(PP.Rt,derP.rt), iRt)
@@ -177,7 +172,7 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
     celly_,cellx_ = [],[]
     for P in P_:
         PP.ptuple += P.ptuple
-        PP.derH[1:] = add_(PP.He, P.He)
+        add_(PP.He, P.He)
         for y,x in P.cells:
             PP.box = accum_box(PP.box, y, x); celly_+=[y]; cellx_+=[x]
     # pixmap:
