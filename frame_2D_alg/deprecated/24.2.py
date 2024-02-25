@@ -717,13 +717,12 @@ def comp_derH(_derH, derH, rn=1, fagg=0):  # derH is a list of der layers or sub
         mtuple,dtuple, Mtuple,Dtuple = comp_dtuple(_lay.H[1], lay.H[1], rn=rn, fagg=1)
         valt = [sum(mtuple),sum(abs(d) for d in dtuple)]
         rdnt = [valt[1] > valt[0], valt[1] <= valt[0]]
-        dect = [0,0]
-        for fd, (ptuple,Ptuple) in enumerate(zip((mtuple,dtuple),(Mtuple,Dtuple))):
-            for (par, max, ave) in zip(ptuple, Ptuple, aves):  # different ave for comp_dtuple
-                if fagg:
+        if fagg:
+            dect = [0,0]
+            for fd, (ptuple,Ptuple) in enumerate(zip((mtuple,dtuple),(Mtuple,Dtuple))):
+                for (par, max, ave) in zip(ptuple, Ptuple, aves):  # different ave for comp_dtuple
                     if fd: dect[1] += abs(par)/ abs(max) if max else 1
                     else:  dect[0] += (par+ave)/ (max+ave) if max else 1
-        if fagg:
             dect[0] = dect[0]/6; dect[1] = dect[1]/6  # ave of 6 params
 
         Vt = np.add(Vt,valt); Rt = np.add(Rt,rdnt)
@@ -731,6 +730,24 @@ def comp_derH(_derH, derH, rn=1, fagg=0):  # derH is a list of der layers or sub
         derLay += [CderH(H=[mtuple,dtuple], valt=valt,rdnt=rdnt,dect=dect, depth=0)]  # dertvs
 
     return derLay, Vt,Rt,Dt  # to sum in each G Et
+
+def comp_dtuple(_dT, dT, aves, rn):  # compare dtuples, include comp_ext and comp_ptuple?
+
+    # same as numerical comp in comp_
+    mtuple, dtuple, max_tuple = [],[],[]
+    for _par, par, ave in zip(_dT, dT, aves):
+        par *= rn
+        match = min(abs(_par), abs(par))
+        if (_par<0) != (par<0): match = -match
+        mtuple += match - ave
+        dtuple += [_par - par]
+        max_tuple += max(abs(_par),abs(par))  # to compute dec: relative match if comp d
+
+    tuplet = [mtuple,dtuple]
+    valt = [sum(mtuple), sum(abs(d) for d in dtuple)]
+    rdnt = [valt.d > valt.m, valt.d < valt.m]
+
+    return tuplet, max_tuple, valt, rdnt
 
 
 def form_PP_t(root, P_, irdn):  # form PPs of derP.valt[fd] + connected Ps val

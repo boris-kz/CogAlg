@@ -22,12 +22,11 @@ from .filters import ave_dangle, ave_dI, ave_Pd, ave_Pm, aves
 
 def add_(HE, He, irdnt=[]):  # unpack tuples (formally lists) down to numericals and sum them
 
-    if He:
-        if HE:
+    if He:  # to be summed
+        if HE:  # to sum in
             ddepth = He[0] - HE[0]  # HE[0] is nesting depth, nest to He depth: md_-> derH-> subH-> aggH:
             while ddepth > 0:
-                He = [He[0]+1, *He[1], [He]]
-                ddepth -= 1
+                HE[:] = [HE[0]+1, [*HE[1]], [deepcopy(HE)]]; ddepth -= 1
 
             if isinstance(He[2][0], list):
                 for Lay,lay in zip_longest(HE[2], He[2], fillvalue=[]):  # always list He
@@ -37,7 +36,7 @@ def add_(HE, He, irdnt=[]):  # unpack tuples (formally lists) down to numericals
                                 add_(Lay, lay, irdnt)  # unpack and sum Ets and Hs
                             else:
                                 Lay[2] = np.add(Lay[2],lay[2])  # both have numericals in H
-                            np.add(Lay[1],lay[1])  # sum Et, always numerical
+                            Lay[1] = np.add(Lay[1],lay[1])  # sum Et, always numerical
                             if irdnt:
                                 Lay[1][2] += irdnt[0]; Lay[1][3] += irdnt[1]
                         else:
@@ -45,50 +44,49 @@ def add_(HE, He, irdnt=[]):  # unpack tuples (formally lists) down to numericals
             else:
                 HE[2] = np.add(HE[2], He[2])  # sum flat lists: [m,d,m,d,m,d...]
         else:
-            HE[:] = deepcopy(He)  # copy the 1st He into empty HE
+            HE[:] = deepcopy(He)  # copy the 1st He to empty HE
         if irdnt:
             HE[1][2] += irdnt[0]; HE[1][3] += irdnt[1]
 
 
-def comp_(_He,He, rn=1, fagg=0):  # unpack tuples (formally lists) down to numericals and compare them
+def comp_(_He,He, ave, rn=1, fagg=0):  # unpack tuples (formally lists) down to numericals and compare them
 
-    ddepth = abs(_He[0] - He[0])
+    _depth,depth = _He[0], He[0]
+    ddepth = abs(_depth - depth)
+
     if ddepth:  # unpack the deeper He: md_<-derH <-subH <-aggH:
-        uHe = [_He,He][He >_He]
+        uHe = [_He,He][_depth>depth]
         while ddepth > 0:
-            uHe = uHe[2][0]  # unpack 1st layer of deeper He to compare
-            ddepth -= 1
-        [_He,He][He >_He] = uHe
+            uHe = uHe[2][0]; ddepth -= 1  # comp 1st layer of deeper He:
+        _cHe,cHe = [uHe,He] if _depth>depth else [_He,uHe]
+    else: _cHe,cHe = _He,He
 
-    if isinstance(_He[2][0], list):  # _lay is He_, must be same for lay?
+    if isinstance(_cHe[2][0], list):  # _lay is He_, same for lay: they are aligned above
         Et = 0,0,0,0,0,0  # Vm,Vd, Rm,Rd, Dm,Dd
         dH = []
-        for _lay,lay in zip(_He[2],He[2]):  # md_| ext | derH | subH | aggH, compare shared layers
-            et, dlay = comp_(_lay,lay, rn)  # unpack and comp bottom ds,
-            # assuming all layers have the same nesting?
+        for _lay,lay in zip(_cHe[2],cHe[2]):  # md_| ext | derH | subH | aggH, compare shared layers
+            et, dlay = comp_(_lay,lay, rn)  # unpack and comp bottom ds, eval nesting per layer
             Et = [E+e for E,e in zip(Et,et)]
             dH += [dlay]
     else:  # H is md_, numerical comp:
-        vm,vd,rm,rd,dm,dd = 0,0,0,0,0,0
+        vm,vd,rm,rd, decm,decd = 0,0,0,0, 0,0
         dH = []
-        for _d,d in zip(_He[2][1::2], He[2][1::2]):  # compare ds in md_ or ext
+        for _d,d in zip(_cHe[2][1::2], cHe[2][1::2]):  # compare ds in md_ or ext
             d *= rn  # normalize by accum span
             diff = _d-d
             match = min(abs(_d),abs(d))
-            if (_d<0) != (d<0): match *= -1  # if only one comparand is negative
-            vm += match; vd += diff
-            dH += [match,diff]  # flat
-            ''' old version:
+            if (_d<0) != (d<0): match = -match  # if only one comparand is negative
             if fagg:
-                dect = [0,0]
-                for fd, (ptuple,Ptuple) in enumerate(zip((mtuple,dtuple),(Mtuple,Dtuple))):
-                    for (par, max, ave) in zip(ptuple, Ptuple, aves):  # different ave for comp_dtuple
-                        if fd: dect[1] += abs(par)/ abs(max) if max else 1
-                        else:  dect[0] += (par+ave)/ (max+ave) if max else 1
-            dect[0] = dect[0]/6; dect[1] = dect[1]/6  # ave of 6 params
-            '''
+                maxm = max(abs(_d), abs(d))
+                decm += abs(match) / maxm if maxm else 1  # match / max possible match
+                maxd = abs(_d) + abs(d)
+                decd += abs(diff) / maxd if maxd else 1  # diff / max possible diff
+            vm += match - ave
+            vd += diff
+            dH += [match,diff]  # flat
         Et = [vm,vd,rm,rd]
-        if fagg: Et = [dm,dd]
+        if fagg:
+            L = len(dH); Et += [decm/L, decd/L]  # ave of compared dtuple
 
     return Et, dH
 
@@ -124,7 +122,7 @@ class z(SimpleNamespace):
         if T.typ == 'ptuple':
             for param in list(T.__dict__)[1:]:  # [1:] to skip typ
                 V = getattr(T, param); v = getattr(t, param)
-                if isinstance(V, list): setattr(T, param, np.add(V,v))
+                if isinstance(V, list): setattr(T, param, [A + a for A, a in zip(V,v)])
                 else:                   setattr(T, param, V+v)
         return T
 
@@ -133,7 +131,8 @@ def init_default(instance, params_set, default_value):
     for param, value in zip(params_set, default_value):
         if getattr(instance, param) is None: setattr(instance, param, deepcopy(value))  # deepcopy prevent list has a same reference
 
-# predefined set of params for each instances
+# C inits SimpleNamespace instance with typ-specific param set:
+
 def Cptuple(typ='ptuple',I=None, G=None, M=None, Ma=None, angle=None, L=None):
 
     params_set = ('I', 'G', 'M', 'Ma', 'angle', 'L')
@@ -187,7 +186,6 @@ def CPP(typ='PP',
         Dt = None,
         root = None,  # for feedback
         fback_ = None): # feedback [[aggH,valt,rdnt,dect]] per node layer, maps to node_H
-
 
     params_set = ('fd','ptuple', 'He',
                   'valt', 'rdnt', 'dect', 'link_', 'node_',
@@ -282,7 +280,7 @@ def Cgraph(typ='graph',
 
     return instance
 
-# old, only to check for consistency:
+# separate classes:
 '''
 class Cptuple(CBaseLite):
 
@@ -482,18 +480,3 @@ class CderH(CBase):  # derH is a list of der layers or sub-layers, each = ptuple
 def get_match(_par, par):
     match = min(abs(_par),abs(par))
     return -match if (_par<0) != (par<0) else match    # match = neg min if opposite-sign comparands
-
-
-def comp_d(self, other, rn):  # compare tuples, include comp_ext and comp_ptuple?
-
-    mtuple, dtuple = [], []
-    for _par, par, ave in zip(self, other, aves):
-        npar = par * rn
-        mtuple += [get_match(_par, npar) - ave]
-        dtuple += [_par - npar]
-
-    tuplet = [mtuple,dtuple]
-    valt = [sum(mtuple), sum(abs(d) for d in dtuple)]
-    rdnt = [valt.d > valt.m, valt.d < valt.m]
-
-    return tuplet, valt, rdnt
