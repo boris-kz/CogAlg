@@ -1,10 +1,11 @@
 import numpy as np
 from copy import deepcopy, copy
 from itertools import combinations, zip_longest
-from .classes import CderP, Cgraph, CderG, CderH
+from .classes import CderP, Cgraph, CderG, add_, comp_
 from .filters import aves, ave_mL, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd
 from .slice_edge import slice_edge, comp_angle
-from .comp_slice import der_recursion, comp_derH, sum_derH, comp_ptuple, sum_dertuple, comp_dtuple, get_match
+from .comp_slice import der_recursion, comp_ptuple
+from utils import box2center
 
 '''
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
@@ -16,9 +17,9 @@ They are also assigned adjacent alt-fork graphs, which borrow predictive value f
 Primary value is match, diff.patterns borrow value from proximate match patterns, canceling their projected match. 
 But alt match patterns borrow already borrowed value, which may be too tenuous to track, we use average borrowed value.
 -
-Clustering criterion is G M|D, summed across >ave vars if selective comp (<ave vars are not compared, so they don't add costs).
-Fork selection should be per var or co-derived der layer or agg level. 
-Exclusive clustering per (fork,ave), the nodes may overlap between clusters of different forks.  
+Clustering criterion is M|D, summed across >ave vars if selective comp (<ave vars are not compared and don't add costs).
+Fork selection should be per var| der layer| agg level. Clustering is exclusive per fork,ave, overlapping between fork,aves.  
+(same fork,ave fuzzy clustering is possible if centroid-based, connectivity-based clusters merge)
 
 There are concepts that include same matching vars: size, density, color, stability, etc, but in different combinations.
 Weak value vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
@@ -44,8 +45,8 @@ def vectorize_root(blob):  # vectorization in 3 composition levels of xcomp, clu
 
     for fd, node_ in enumerate(edge.node_):  # always node_t
         if edge.valt[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.rdnt[fd]:
-
-            for PP in node_: PP.root = None
+            for i, PP in enumerate(node_):  # CPP -> CG:
+                node_[i] = Cgraph(PP=PP); PP.root = None
             # discontinuous PP rng+ cross-comp, cluster -> G_t
             agg_recursion(None, edge, node_, nrng=1, fagg=1)  # agg+, no Cgraph nodes
 
@@ -54,7 +55,7 @@ def vectorize_root(blob):  # vectorization in 3 composition levels of xcomp, clu
 
 def agg_recursion(rroot, root, node_, nrng=1, fagg=0):  # lenH = len(root.aggH[-1][0]), lenHH: same in agg_compress
 
-    Et = [[0,0],[0,0],[0,0]]  # G-external vals summed from grapht link_ Valt, Rdnt, Dect(currently not used)
+    Et = [0,0,0,0,0,0]  # need real init too: G-external vals summed from grapht link_ Et
 
     # agg+ der=1 xcomp of new Gs if fagg, else sub+: der+ xcomp of old Gs:
     nrng = rng_recursion(rroot, root, combinations(node_,r=2) if fagg else root.link_, Et, nrng)  # rng+ appends rim, link.derH
@@ -89,7 +90,7 @@ def rng_recursion(rroot, root, Q, Et, nrng=1):  # rng++/ G_, der+/ link_ if call
         Gt_ = Q  # prelinks for init or recursive rng+, form new link_, or make it general?
         for (_G, G) in Gt_:
             if _G in G.compared_: continue
-            dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx  # compute distance between node centers:
+            dy, dx = box2center(G.box)  # compute distance between node centers:
             dist = np.hypot(dy, dx)
             # combined pairwise eval (directional val?) per rng+:
             if nrng==1 or ((G.Vt[0]+_G.Vt[0])/ (dist/ave_distance) > ave*(G.Rt[0]+_G.Rt[0])):
@@ -302,26 +303,31 @@ def sum_last_lay(G, fd):  # eLay += last layer of link.daggH (dsubH|ddaggH)
     if eLay: G.extH += [eLay]
 
   # draft
-def comp_G(link, Et):
+def comp_G(link):
 
-    _G, G = link._G, link.G
-    Valt, Rdnt, Dect, Extt = [0,0], [1,1], [0,0], []
-    # separate P ptuple and PP derH, empty derH in single-P G, + empty aggH in single-PP G:
+    _G, G = link._G, link.G  # comp: default P.ptuple and G.ext, PP.He if>1 P, G.HHe if>1 PP:
     # / P:
-    dertv, valt, rdnt, dect = comp_derH(_G.ptuple, G.ptuple, rn=1, fagg=1)
-    Valt = np.add(Valt,valt); Rdnt = np.add(Rdnt,rdnt); Dect = np.divide(np.add(Dect,dect), 2)
+    pEt, md_ = comp_ptuple(_G.ptuple, G.ptuple, rn=1, fagg=1)  # evaluation tuple: valt, rdnt, dect
     # / PP:
-    extt,valt,rdnt,dect = comp_ext(_G.ext,G.ext)
-    Valt = np.add(Valt, valt); Rdnt = np.add(Rdnt, rdnt); Dect = np.divide(np.add(Dect,dect), 2)
-    for Ext,ext in zip(Extt,extt): sum_ext(Ext,ext)
-    dderH = [dertv]
-    if _G.derH.H and G.derH.H:  # empty in single-P Gs?
-        ddertv_, valt, rdnt, dect = comp_derH(_G.derH, G.derH, rn=1, fagg=1)
-        Valt = np.add(Valt,valt); Rdnt = np.add(Rdnt,rdnt); Dect = np.divide(np.add(Dect,dect), 2)
-        dderH += ddertv_
-    dderH = CderH(H=dderH,valt=copy(Valt),rdnt=copy(Rdnt),dect=copy(Dect), ext = extt, depth=1)
+    eEt, extt = comp_ext(_G.ext, G.ext, rn=1)  # we need real rn
+    Et = [E+e for E,e in zip(pEt[:4],eEt[:4])] + [(E+e)/2 for E,e in zip(pEt[4:],eEt[4:])]
+    # default dH:
+    dH = [[0,pEt,md_],[0,eEt,extt]]
+    # if >1 P Gs:
+    if _G.He and G.He:
+        depth, et, dHe = comp_(_G.He, G.He, rn=1, fagg=1)
+        Bt = copy(Et)  # base Et
+        Et = [E+e for E,e in zip(Et[:4],et[:4])] + [(E+e)/2 for E,e in zip(Et[4:],et[4:])]
+        dH = [[1,Bt,dH],[depth,*Et,dHe]]
     # / G:
     if _G.aggH and G.aggH:
+        depth, et, dHe = comp_(_G.He, G.He, rn=1, fagg=1)
+        # same as above, not sure:
+        Bt = copy(Et)  # base Et
+        Et = [E+e for E,e in zip(Et[:4],et[:4])] + [(E+e)/2 for E,e in zip(Et[4:],et[4:])]
+        dH = [[2,Bt,dH],[depth,*Et,dHe]]
+
+    # below not updated:
         H = [dderH]
         dHv = comp_Hv(CderH(_G.aggH,_G.valt,_G.rdnt,_G.dect,2), CderH(G.aggH,G.valt,G.rdnt,G.dect,2), rn=1, depth=2)
         dH = dHv.H; valt=dHv.valt; rdnt = dHv.rdnt; ext = dHv.ext
@@ -351,121 +357,23 @@ def comp_G(link, Et):
                         rimH += [link]  # rim
 
 
-def comp_Hv(_Hv, Hv, rn,depth):  # for derH, subH, or aggH
+def comp_ext(_ext, ext, rn):  # primary ext only
+    _L,_S,_A = _ext
+    L,S,A = [p/rn for p in ext]  # normalize
 
-    DHv = CderH(depth=depth)
+    mA, dA = comp_angle(_A, A)
+    mS, dS = min(_S,S)-ave_mL, _S/_L - S/L  # S is summed over L, dS is not summed over dL
+    mL, dL = min(_L,L)-ave_mL, _L -L
+    M = mL + mS + mA
+    D = abs(dL) + abs(dS) + dA
+    mrdn = M > D
+    drdn = D<= M
+    # all comparands are positive: maxm = maxd
+    Lmax = max(L,_L); Smax = max(S,_S); Amax = .5  # max_mA = max_dA = ave_dangle
+    mdec = (mL / Lmax + mS / Smax + mA / Amax) /3
+    ddec = (dL / Lmax + dS / Smax + dA / Amax) /3
 
-    for _lev, lev in zip_longest(_Hv.H, Hv.H, fillvalue=0):  # compare common subHs, if lower-der match?
-        if _lev and lev:
-            if lev[-1] == 0:  # ptuplet
-                mtuple,dtuple, Mtuple,Dtuple = comp_dtuple(_lev[0][1], lev[0][1], rn, fagg=1)
-                mval = sum(mtuple); dval = sum(abs(d) for d in dtuple)
-                mrdn = dval > mval; drdn = dval < mval
-                dect = [0,0]
-                for fd, (ptuple,Ptuple) in enumerate(zip((mtuple,dtuple),(Mtuple,Dtuple))):
-                    for (par, max, ave) in zip(ptuple, Ptuple, aves):
-                        if fd: dect[1] += abs(par)/abs(max) if max else 1
-                        else:  dect[0] += (par+ave)/abs(max)+ave if max else 1
-                dect[0]/=6; dect[1]/=6
-                valt = [mval, dval]; rdnt = [mrdn, drdn]
-                dhv = CderH([mtuple,dtuple],valt,rdnt,dect,0)
-                DHv.H += [dhv]
-                DHv.valt=np.add(DHv.valt,dhv.valt); DHv.rdnt=np.add(DHv.rdnt ,dhv.rdnt); DHv.dect=np.add(DHv.dect,dhv.dect)
-            elif lev[-1] == 1:  # derHv
-                dHv = comp_Hv(_lev,lev, rn, 1)
-                DHv += [dHv]
-                DHv.valt=np.add(DHv.valt,dhv.valt); DHv.rdnt=np.add(DHv.rdnt ,dhv.rdnt); DHv.dect=np.add(DHv.dect,dhv.dect)
-            elif lev[-1] == 2:  # subHv
-                dHv = comp_Hv(_lev,lev, rn, 2)
-                DHv.H += dHv.H  # concat
-                DHv.valt=np.add(DHv.valt,dhv.valt); DHv.rdnt=np.add(DHv.rdnt ,dhv.rdnt); DHv.dect=np.add(DHv.dect,dhv.dect)
-            else:  # ext
-                dext,valt,rdnt,dect = comp_ext(_lev[1],lev[1])  # comp dext only
-                DHv.H += [dext]
-                DHv.valt = np.add(DHv.valt,valt)
-                DHv.rdnt = np.add(DHv.rdnt,rdnt); DHv.rdnt[0] += valt[1] > valt[0]; DHv.rdnt[1] += valt[0] > valt[1]
-                DHv.dect = np.divide(np.add(DHv.dect,dect), 2)
-    if DHv.H:
-        S = min(len(_Hv.H),len(Hv.H)); DHv.dect[0]/= S; DHv.dect[1]/= S   # normalize
-
-    return DHv
-
-
-def comp_ext(_ext, ext):  # comp ds:
-
-    (_L,_S,_A),(L,S,A) = _ext,ext
-    dL = _L-L
-    Mval, Dval, Mrdn, Drdn = 0,0,1,1
-
-    if isinstance(A,list):
-        if any(A) and any(_A):
-            mA,dA = comp_angle(_A,A); adA=dA
-        else:
-            mA,dA,adA = 0,0,0
-        max_mA = max_dA = .5  # = ave_dangle
-        dS = _S/_L - S/L  # S is summed over L, dS is not summed over dL
-    else:
-        mA = get_match(_A,A)- ave_dangle; dA = _A-A; adA = abs(dA); _aA=abs(_A); aA=abs(A)
-        max_dA = _aA + aA; max_mA = max(_aA, aA)
-        dS = _S - S
-    mL = get_match(_L,L) - ave_mL
-    mS = get_match(_S,S) - ave_mL
-
-    m = mL+mS+mA; d = abs(dL)+ abs(dS)+ adA
-    Mval += m; Dval += d
-    Mrdn += d>m; Drdn += d<=m
-    _aL = abs(_L); aL = abs(L)
-    _aS = abs(_S); aS = abs(S)
-
-    # ave dec = ave (ave dec, ave L,S,A dec):
-    Mdec = (mL / max(aL,_aL) if aL or _aL else 1 +
-                mS / max(aS,_aS) if aS or _aS else 1 +
-                mA / max_mA if max_mA else 1) /3
-
-    Ddec = (dL / (_aL+aL) if aL+_aL else 1 +
-                dS / (_aS+aS) if aS+_aS else 1 +
-                dA / max_dA if max_mA else 1) /3
-
-    return [[mL,mS,mA], [dL,dS,dA]],[Mval, Dval],[Mrdn, Drdn],[Mdec, Ddec]
-
-
-# replaced by += overload for CderH in classes
-def sum_Hv(Hv, hv, base_rdn, fneg=0):
-
-    if hv:
-        if Hv:
-            H,Valt,Rdnt,Dect,Depth = Hv; h,valt,rdnt,dect,depth = hv
-            for i in 0,1:
-                Valt += valt; Rdnt += rdnt; Dect[0] = (Dect[0]+dect[0])/2; Dect[1] = (Dect[1]+dect[1])/2
-            sum_H(H, h, depth, base_rdn)
-        else:
-           Hv[:] = deepcopy(hv)
-
-
-def sum_H(H, h, depth, base_rdn, fneg=0):
-
-    if h:
-        if H:
-            for Layer, layer in zip_longest(H,h, fillvalue=None):
-                if layer:
-                    if Layer:
-                        if isinstance(layer[-1], list):  # extt
-                            for Ext,ext in zip (Layer, layer):
-                                sum_ext(Ext,ext)
-                        elif layer[-1] == 0:  # derHv
-                            Tuplet,Valt,Rdnt,Dect,_ = Layer; tuplet,valt,rdnt,dect,_ = layer
-                            for i in 0,1:
-                                sum_dertuple(Tuplet[i],tuplet[i], fneg*i)
-                            Valt += valt; Rdnt += rdnt; Dect += dect
-                        else:  # subHv| aggHv
-                             sum_Hv(Layer, layer, base_rdn, fneg)
-                    elif Layer != None:
-                        Layer[:] = deepcopy(layer)
-                    else:
-                        H.append(deepcopy(layer))
-        else:
-            H[:] = deepcopy(h)
-
+    return [M,D,mrdn,drdn,mdec,ddec], [mL,dL,mS,dS,mA,dA]
 
 def sum_ext(Ext, ext):  # ext: m|d L,S,A
 
@@ -477,6 +385,7 @@ def sum_ext(Ext, ext):  # ext: m|d L,S,A
 
 def feedback(root):  # called from form_graph_, append new der layers to root
 
+    # convert to Et:
     AggH, Valt, Rdnt, Dect = deepcopy(root.fback_.pop(0))  # init
     while root.fback_:
         aggH, valt, rdnt, dect = root.fback_.pop(0)

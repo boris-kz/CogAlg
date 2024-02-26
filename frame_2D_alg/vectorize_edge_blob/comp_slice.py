@@ -94,13 +94,13 @@ def comp_P(link, fd):
     if _P.He and P.He:
         # der+: append link derH, init in rng++ from form_PP_t
         (vm,vd,rm,rd),H = comp_(_P.He, P.He, rn=rn)
-        rm += vd > vm; rd += vm > vd
+        rm += vd > vm; rd += vm >= vd
         aveP = P_aves[1]
     else:
         # rng+: add link derH
         H = comp_ptuple(_P.ptuple, P.ptuple, rn)
         vm = sum(H[::2]); vd = sum(abs(d) for d in H[1::2])
-        rm = 1 + vd > vm; rd = 1 + vm > vd
+        rm = 1 + vd > vm; rd = 1 + vm >= vd
         aveP = P_aves[0]
 
     if vm > aveP*rm:  # always rng+
@@ -186,7 +186,7 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
 
 def feedback(root):  # in form_PP_, append new der layers to root PP, single vs. root_ per fork in agg+
 
-    HE, Valt, Rdnt = [],[],[]  # root update
+    HE, Valt, Rdnt = deepcopy(root.fback_.pop(0))  # root update
     while root.fback_:
         He, valt, rdnt = root.fback_.pop(0)
         Valt = [V+v for V,v in zip(Valt, valt)]; Rdnt = [R+r for R,r in zip(Rdnt, rdnt)]
@@ -202,22 +202,23 @@ def feedback(root):  # in form_PP_, append new der layers to root PP, single vs.
         if fback_ and (len(fback_)==len(node_)):  # all nodes terminated and fed back
             feedback(rroot)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
 
-
+# this is replaced by comp_?
 def comp_dtuple(_ptuple, ptuple, rn, fagg=0):
 
     mtuple, dtuple = [],[]
     if fagg: Mtuple, Dtuple = [],[]
 
     for _par, par, ave in zip(_ptuple, ptuple, aves):  # compare ds only
-        npar = par * rn
-        mtuple += [get_match(_par, npar) - ave]
-        dtuple += [_par - npar]
+        par *= rn
+        mtuple += [get_match(_par, par) - ave]
+        dtuple += [_par - par]
         if fagg:
-            Mtuple += [max(abs(par),abs(npar))]
-            Dtuple += [abs(_par)+abs(npar)]
+            Mtuple += [max(abs(par),abs(par))]
+            Dtuple += [abs(_par)+abs(par)]
     ret = [mtuple, dtuple]
     if fagg: ret += [Mtuple, Dtuple]
     return ret
+
 
 def comp_ptuple(_ptuple, ptuple, rn, fagg=0):  # 0der params
 
@@ -235,7 +236,18 @@ def comp_ptuple(_ptuple, ptuple, rn, fagg=0):  # 0der params
 
     if fagg:
         Ret = [max(_I,I), abs(_I)+abs(I),max(_G,G),abs(_G)+abs(G), max(_M,M), abs(_M)+abs(M), max(_Ma,Ma), abs(_Ma)+abs(Ma), 2, 2, max(_L,L),abs(_L)+abs(L)]
-        ret = [ret, Ret]
+        # ret = [ret, Ret]
+        # ?
+        mval, dval = sum(ret[::2]),sum(ret[1::2])
+        mrdn, drdn = dval>mval, mval>dval
+        mdec, ddec = 0, 0
+        for fd, (ptuple,Ptuple) in enumerate(zip((ret[::2],ret[1::2]),(Ret[::2],Ret[1::2]))):
+            for i, (par, maxv, ave) in enumerate(zip(ptuple, Ptuple, aves)):
+                # compute link decay coef: par/ max(self/same)
+                if fd: ddec += abs(par)/ abs(maxv) if maxv else 1
+                else:  mdec += (par+ave)/ (maxv+ave) if maxv else 1
+        mdec /= 6; ddec /= 6  # ave of 6 params
+        ret = [mval, dval, mrdn, drdn, mdec, ddec], ret
     return ret
 
 

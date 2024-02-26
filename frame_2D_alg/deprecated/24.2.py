@@ -842,3 +842,90 @@ def sum2PP(root, P_, derP_, irdn, fd):  # sum links in Ps and Ps in PP
                 else:
                     T.H[:] = deepcopy(t.H)
 '''
+
+def comp_Hv(_Hv, Hv, rn,depth):  # for derH, subH, or aggH
+
+    DHv = CderH(depth=depth)
+
+    for _lev, lev in zip_longest(_Hv.H, Hv.H, fillvalue=0):  # compare common subHs, if lower-der match?
+        if _lev and lev:
+            if lev[-1] == 0:  # ptuplet
+                mtuple,dtuple, Mtuple,Dtuple = comp_dtuple(_lev[0][1], lev[0][1], rn, fagg=1)
+                mval = sum(mtuple); dval = sum(abs(d) for d in dtuple)
+                mrdn = dval > mval; drdn = dval < mval
+                dect = [0,0]
+                for fd, (ptuple,Ptuple) in enumerate(zip((mtuple,dtuple),(Mtuple,Dtuple))):
+                    for (par, max, ave) in zip(ptuple, Ptuple, aves):
+                        if fd: dect[1] += abs(par)/abs(max) if max else 1
+                        else:  dect[0] += (par+ave)/abs(max)+ave if max else 1
+                dect[0]/=6; dect[1]/=6
+                valt = [mval, dval]; rdnt = [mrdn, drdn]
+                dhv = CderH([mtuple,dtuple],valt,rdnt,dect,0)
+                DHv.H += [dhv]
+                DHv.valt=np.add(DHv.valt,dhv.valt); DHv.rdnt=np.add(DHv.rdnt ,dhv.rdnt); DHv.dect=np.add(DHv.dect,dhv.dect)
+            elif lev[-1] == 1:  # derHv
+                dHv = comp_Hv(_lev,lev, rn, 1)
+                DHv += [dHv]
+                DHv.valt=np.add(DHv.valt,dhv.valt); DHv.rdnt=np.add(DHv.rdnt ,dhv.rdnt); DHv.dect=np.add(DHv.dect,dhv.dect)
+            elif lev[-1] == 2:  # subHv
+                dHv = comp_Hv(_lev,lev, rn, 2)
+                DHv.H += dHv.H  # concat
+                DHv.valt=np.add(DHv.valt,dhv.valt); DHv.rdnt=np.add(DHv.rdnt ,dhv.rdnt); DHv.dect=np.add(DHv.dect,dhv.dect)
+            else:  # ext
+                dext,valt,rdnt,dect = comp_ext(_lev[1],lev[1])  # comp dext only
+                DHv.H += [dext]
+                DHv.valt = np.add(DHv.valt,valt)
+                DHv.rdnt = np.add(DHv.rdnt,rdnt); DHv.rdnt[0] += valt[1] > valt[0]; DHv.rdnt[1] += valt[0] > valt[1]
+                DHv.dect = np.divide(np.add(DHv.dect,dect), 2)
+    if DHv.H:
+        S = min(len(_Hv.H),len(Hv.H)); DHv.dect[0]/= S; DHv.dect[1]/= S   # normalize
+
+    return DHv
+
+def comp_G(link, Et):
+
+    _G, G = link._G, link.G
+    Valt, Rdnt, Dect, Extt = [0,0], [1,1], [0,0], []
+    # separate P ptuple and PP derH, empty derH in single-P G, + empty aggH in single-PP G:
+    # / P:
+    dertv, valt, rdnt, dect = comp_derH(_G.ptuple, G.ptuple, rn=1, fagg=1)
+    Valt = np.add(Valt,valt); Rdnt = np.add(Rdnt,rdnt); Dect = np.divide(np.add(Dect,dect), 2)
+    # / PP:
+    extt,valt,rdnt,dect = comp_ext(_G.ext,G.ext)
+    Valt = np.add(Valt, valt); Rdnt = np.add(Rdnt, rdnt); Dect = np.divide(np.add(Dect,dect), 2)
+    for Ext,ext in zip(Extt,extt): sum_ext(Ext,ext)
+    dderH = [dertv]
+    if _G.derH.H and G.derH.H:  # empty in single-P Gs?
+        ddertv_, valt, rdnt, dect = comp_derH(_G.derH, G.derH, rn=1, fagg=1)
+        Valt = np.add(Valt,valt); Rdnt = np.add(Rdnt,rdnt); Dect = np.divide(np.add(Dect,dect), 2)
+        dderH += ddertv_
+    dderH = CderH(H=dderH,valt=copy(Valt),rdnt=copy(Rdnt),dect=copy(Dect), ext = extt, depth=1)
+    # / G:
+    if _G.aggH and G.aggH:
+        H = [dderH]
+        dHv = comp_Hv(CderH(_G.aggH,_G.valt,_G.rdnt,_G.dect,2), CderH(G.aggH,G.valt,G.rdnt,G.dect,2), rn=1, depth=2)
+        dH = dHv.H; valt=dHv.valt; rdnt = dHv.rdnt; ext = dHv.ext
+        # aggH is subH before agg+
+        Valt = np.add(Valt, valt)
+        Rdnt[0] += rdnt[0] + (valt[1]>valt[0]); Rdnt[1] += rdnt[1] + (valt[1]<=valt[0])
+        Dect = np.divide(np.add(Dect,dect), 2)
+        # flat, appendleft:
+        daggH = CderH(H+dH+[Extt], copy(Valt),copy(Rdnt),copy(Dect),2)
+    else:
+        daggH = dderH
+    link.daggH += [daggH]
+
+    link.Vt,link.Rt,link.Dt = Valt,Rdnt,Dect  # reset per comp_G
+
+    for fd, (Val,Rdn,Dec) in enumerate(zip(Valt,Rdnt,Dect)):
+        if Val > G_aves[fd] * Rdn:
+            Et[0][fd] += Val; Et[1][fd] += Rdn; Et[2][fd] += Dec  # to eval grapht in form_graph_t
+            G.Vt[fd] += Val;  G.Rt[fd] += Rdn;  G.Dt[fd] += Dec
+            if not fd:
+                for G in link.G, link._G:
+                    rimH = G.rimH
+                    if rimH and isinstance(rimH[0],list):  # rim is converted to rimH in 1st sub+
+                        if len(rimH) == len(G.RimH): rimH += [[]]  # no new rim layer yet
+                        rimH[-1] += [link]  # rimH
+                    else:
+                        rimH += [link]  # rim
