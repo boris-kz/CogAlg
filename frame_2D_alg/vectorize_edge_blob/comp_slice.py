@@ -42,8 +42,8 @@ def der_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep
         for P in PP.P_: P.link_ += [copy(unpack_last_link_(P.link_))]
 
     rng_recursion(PP, rng=1, fd=fd)  # extend PP.link_, derHs by same-der rng+ comp
-    form_PP_t(PP, PP.P_, iRt = PP.Rt)  # der+ is mediated by form_PP_t
-    if root: root.fback_ += [[PP.He, PP.valt, PP.rdnt]]  # feedback from PPds
+    form_PP_t(PP, PP.P_, iRt = PP.Et[2:4])  # der+ is mediated by form_PP_t
+    if root: root.fback_ += [[PP.He, PP.et]]  # feedback from PPds
 
 
 def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contiguously link mediated, because
@@ -62,7 +62,7 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contig
                 if distance < rng:  # | rng * ((P.val+_P.val) / ave_rval)?
                     mlink = comp_P(_link if fd else [_P,P, distance,[dy,dx]], fd)  # return link if match
                     if mlink:
-                        V += mlink.vt[0]  # unpack last link layer:
+                        V += mlink.et[0]  # unpack last link layer:
                         link_ = P.link_[-1] if PP.He and PP.He[0] else P.link_  # der++ if PP.He[0] depth==1
                         if rng > 1:
                             if rng == 2: link_[:] = [link_[:]]  # link_ -> link_H
@@ -93,7 +93,7 @@ def comp_P(link, fd):
 
     if _P.He and P.He:
         # der+: append link derH, init in rng++ from form_PP_t
-        (vm,vd,rm,rd),H = comp_(_P.He, P.He, rn=rn)
+        depth,(vm,vd,rm,rd),H = comp_(_P.He, P.He, rn=rn)
         rm += vd > vm; rd += vm >= vd
         aveP = P_aves[1]
     else:
@@ -102,6 +102,7 @@ def comp_P(link, fd):
         vm = sum(H[::2]); vd = sum(abs(d) for d in H[1::2])
         rm = 1 + vd > vm; rd = 1 + vm >= vd
         aveP = P_aves[0]
+        depth = 0
 
     if vm > aveP*rm:  # always rng+
         if fd:
@@ -109,9 +110,9 @@ def comp_P(link, fd):
             if not He[0]: He = link.He = [1,[*He[1]],[He]]  # nest md_ as derH
             He[1] = np.add(He[1],[vm,vd,rm,rd])
             He[2] += [[0, [vm,vd,rm,rd], H]]  # nesting, Et, H
-            link.vt = np.add(link.vt,[vm,vd]); link.rt = np.add(link.rt,[rm,rd])
+            link.et = [V+v for V, v in zip(link.et,[vm,vd, rm,rd])]
         else:
-            link = CderP(typ='derP', P=P,_P=_P, He=[0,[vm,vd,rm,rd],H], vt=[vm,vd], rt=[rm,rd], S=S, A=A, roott=[[],[]])
+            link = CderP(typ='derH' if depth else 'md_', P=P,_P=_P, He=[0,[vm,vd,rm,rd],H], et=[vm,vd,rm,rd], S=S, A=A, roott=[[],[]])
 
         return link
 
@@ -143,7 +144,7 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
             inP_ += cP_  # update clustered Ps
 
     for PP in PP_t[1]:  # eval der+ / PPd only, after form_PP_t -> P.root
-        if PP.Vt[1] * len(PP.link_) > PP_aves[1] * PP.Rt[1]:
+        if PP.Et[1] * len(PP.link_) > PP_aves[1] * PP.Et[3]:
             # node-mediated correlation clustering:
             der_recursion(root, PP, fd=1)
         if root.fback_:
@@ -154,7 +155,7 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
 
 def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
 
-    PP = CPP(typ='PP',fd=fd,root=root,P_=P_,rng=root.rng+1, Vt=[0,0],Rt=[1,1],Dt=[0,0], link_=[], box=[0,0,0,0],  # not inf,inf,-inf,-inf?
+    PP = CPP(typ='PP',fd=fd,root=root,P_=P_,rng=root.rng+1, Et=[0,0,1,1], link_=[], box=[0,0,0,0],  # not inf,inf,-inf,-inf?
            ptuple = z(typ='ptuple',I=0, G=0, M=0, Ma=0, angle=[0,0], L=0), He=[])
     # += uplinks:
     S,A = 0, [0,0]
@@ -164,13 +165,14 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
             add_(derP.P.He, derP.He, iRt)
             add_(derP._P.He, negate(deepcopy(derP.He)), iRt)
         PP.link_ += [derP]; derP.roott[fd] = PP
-        PP.Vt = [V+v for V,v in zip(PP.Vt, derP.vt)]
-        PP.Rt = [R+r+ir for R,r,ir in zip(PP.Rt, derP.rt, iRt)]
+        PP.Et = [V+v for V,v in zip(PP.Et, derP.et)]
+        PP.Et[2:4] = [R+ir for R,ir in zip(PP.Et[2:4], iRt)]
         derP.A = np.add(A,derP.A); S += derP.S
     PP.ext = [len(P_), S, A]  # all from links
     # += Ps:
     celly_,cellx_ = [],[]
     for P in P_:
+        PP.area += P.L
         PP.ptuple += P.ptuple
         add_(PP.He, P.He)
         for y,x in P.cells:
@@ -186,38 +188,21 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
 
 def feedback(root):  # in form_PP_, append new der layers to root PP, single vs. root_ per fork in agg+
 
-    HE, Valt, Rdnt = deepcopy(root.fback_.pop(0))  # root update
+    HE, eT= deepcopy(root.fback_.pop(0))
     while root.fback_:
-        He, valt, rdnt = root.fback_.pop(0)
-        Valt = [V+v for V,v in zip(Valt, valt)]; Rdnt = [R+r for R,r in zip(Rdnt, rdnt)]
+        He, et = root.fback_.pop(0)
+        eT = [V+v for V,v in zip(eT, et)]
         add_(HE, He)
     add_(root.He, HE if HE[0] else HE[2][-1])  # sum md_ or last md_ in H
-    root.valt = [V+v for V,v in zip(root.valt, Valt)]; root.rdnt = [R+r for R,r in zip(root.rdnt, Rdnt)]
+    root.et = [V+v for V,v in zip(root.et, eT)]
 
-    if root.typ != "edge":  # skip if root is Edge
+    if root.typ != 'edge':  # skip if root is Edge
         rroot = root.root  # single PP.root, can't be P
         fback_ = rroot.fback_
         node_ = rroot.node_[1] if rroot.node_ and isinstance(rroot.node_[0],list) else rroot.P_  # node_ is updated to node_t in sub+
-        fback_ += [(HE, Valt, Rdnt)]
+        fback_ += [(HE, eT)]
         if fback_ and (len(fback_)==len(node_)):  # all nodes terminated and fed back
             feedback(rroot)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
-
-# this is replaced by comp_?
-def comp_dtuple(_ptuple, ptuple, rn, fagg=0):
-
-    mtuple, dtuple = [],[]
-    if fagg: Mtuple, Dtuple = [],[]
-
-    for _par, par, ave in zip(_ptuple, ptuple, aves):  # compare ds only
-        par *= rn
-        mtuple += [get_match(_par, par) - ave]
-        dtuple += [_par - par]
-        if fagg:
-            Mtuple += [max(abs(par),abs(par))]
-            Dtuple += [abs(_par)+abs(par)]
-    ret = [mtuple, dtuple]
-    if fagg: ret += [Mtuple, Dtuple]
-    return ret
 
 
 def comp_ptuple(_ptuple, ptuple, rn, fagg=0):  # 0der params

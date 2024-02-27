@@ -65,17 +65,18 @@ def comp_(_He,He, rn=1, fagg=0):  # unpack tuples (formally lists) down to numer
     else: _cHe,cHe = _He,He
 
     if isinstance(_cHe[2][0], list):  # _lay is He_, same for lay: they are aligned above
-        Et = 0,0,0,0,0,0  # Vm,Vd, Rm,Rd, Dm,Dd
+        Et = [0,0,0,0,0,0]  # Vm,Vd, Rm,Rd, Dm,Dd
         dH = []
-        for _lay,lay in zip(_cHe[2],cHe[2]):  # md_| ext | derH | subH | aggH, compare shared layers
-            dpth, et, dlay = comp_(_lay,lay, rn, fagg)  # unpack and comp bottom ds, eval nesting per layer
-            Et = [E+e for E,e in zip(Et[:4],et[:4])]
-            if fagg: Et += [(E+e)/2 for E,e in zip(Et[4:],et[4:])]  # dect
+        for _lay,lay in zip(_cHe[2],cHe[2]):
+            # md_| ext| derH| subH| aggH, eval layer nesting, unpack,comp ds in shared lower layers:
+            dpth, et, dlay = comp_(_lay,lay, rn, fagg)
+            Et[:4] = [E+e for E,e in zip(Et[:4],et[:4])]
+            if fagg: Et[4:] += [(E+e)/2 for E,e in zip(Et[4:],et[4:])]  # dect
             dH += [[dpth, et, dlay]]
     else:  # H is md_, numerical comp:
         vm,vd,rm,rd, decm,decd = 0,0,0,0, 0,0
         dH = []
-        for _d,d in zip(_cHe[2][1::2], cHe[2][1::2]):  # compare ds in md_ or ext
+        for i, (_d,d) in enumerate(zip(_cHe[2][1::2], cHe[2][1::2])):  # compare ds in md_ or ext
             d *= rn  # normalize by accum span
             diff = _d-d
             match = min(abs(_d),abs(d))
@@ -85,7 +86,7 @@ def comp_(_He,He, rn=1, fagg=0):  # unpack tuples (formally lists) down to numer
                 decm += abs(match) / maxm if maxm else 1  # match / max possible match
                 maxd = abs(_d) + abs(d)
                 decd += abs(diff) / maxd if maxd else 1  # diff / max possible diff
-            vm += match - aves[i]
+            vm += match - aves[i]  # fixed param set?
             vd += diff
             dH += [match,diff]  # flat
         Et = [vm,vd,rm,rd]
@@ -146,10 +147,10 @@ def Cptuple(typ='ptuple',I=None, G=None, M=None, Ma=None, angle=None, L=None):
     return  instance
 
 
-def Cedge(typ='edge',root=None, node_=None, box=None, mask__=None, Rt=None, valt=None, rdnt=None, He=None, fback_=None):
-    params_set = ('root', 'node_', 'box', 'mask__', 'Rt', 'valt', 'rdnt', 'He', 'fback_')
-    default_value = (None,[[],[]],[inf,inf,-inf,-inf],None,[1,1],[0,0],[1,1], [], [])
-    instance = z(typ=typ, root=root, node_=node_, box=box, mask__=mask__, Rt=Rt, valt=valt, rdnt=rdnt, He=He, fback_=fback_)
+def Cedge(typ='edge',root=None, node_=None, box=None, mask__=None, Et=None, et=None, He=None, fback_=None):
+    params_set = ('root', 'node_', 'box', 'mask__', 'Et', 'et', 'He', 'fback_')
+    default_value = (None,[[],[]],[inf,inf,-inf,-inf],None,[], [], [], [])
+    instance = z(typ=typ, root=root, node_=node_, box=box, mask__=mask__, Et=Et, et=et, He=He, fback_=fback_)
     init_default(instance, params_set, default_value)
     return instance
 
@@ -160,10 +161,10 @@ def CP(typ='P', yx=None, axis=None, cells=None, dert_=None, He=None, link_=None)
     init_default(instance, params_set, default_value)
     return instance
 
-def CderP(typ='derP', P=None,_P=None, He=None, vt=None, rt=None, S=None, A=None, roott=None):
-    params_set = ('P', '_P', 'He', 'vt', 'rt', 'S', 'A', 'roott')
-    default_value = (None,None,[],[0,0],[1,1], 0, 0, [[],[]])
-    instance = z(typ=typ, P=P, _P=_P, He=He, vt=vt, rt=rt, S=S, A=A, roott=roott)
+def CderP(typ='derP', P=None,_P=None, He=None, et=None, S=None, A=None, roott=None):
+    params_set = ('P', '_P', 'He', 'et', 'S', 'A', 'roott')
+    default_value = (None,None,[],[], 0, 0, [[],[]])
+    instance = z(typ=typ, P=P, _P=_P, He=He, et=et, S=S, A=A, roott=roott)
     init_default(instance, params_set, default_value)
     return instance
 
@@ -172,9 +173,7 @@ def CPP(typ='PP',
         ptuple = None,  # default P
         He = None,  # md_| derH
         # graph-internal, generic:
-        valt = None,  # sum ptuple, derH, aggH
-        rdnt = None,
-        dect = None,
+        et = None,  # sum ptuple, derH, aggH
         link_ = None,  # internal, single-fork, incrementally nested
         node_ = None,  # base node_ replaced by node_t in both agg+ and sub+, deeper node-mediated unpacking in agg+
          # graph-external, +level per root sub+:
@@ -185,29 +184,27 @@ def CPP(typ='PP',
         P_ = None,
         mask__ = None,
         # temporary, replace with Et:
-        Vt = None, # last layer | last fork tree vals for node_connect and clustering
-        Rt = None,
-        Dt = None,
+        Et = None, # last layer | last fork tree vals for node_connect and clustering
         root = None,  # for feedback
         fback_ = None): # feedback [[aggH,valt,rdnt,dect]] per node layer, maps to node_H
 
     params_set = ('fd','ptuple', 'He',
-                  'valt', 'rdnt', 'dect', 'link_', 'node_',
+                  'et', 'link_', 'node_',
                   'ext', 'rng', 'box',
                   'P_','mask__',
-                  'Vt','Rt','Dt','root','fback_')
+                  'Et','root','fback_')
 
     default_value = (0,Cptuple(), [],
-                     [0,0], [1,1], [0,0], [], [],
+                     [], [], [],
                      [0,0, [0,0]], 1, [inf,inf,-inf,-inf],
                      [],None,
-                     [0,0],[1,1],[0,0],[None],[])
+                     [],[None],[])
 
     instance = z(typ=typ, fd=fd,ptuple=ptuple, He=He,
-                 valt=valt, rdnt=rdnt, dect=dect, link_=link_, node_=node_,
+                 et=et, link_=link_, node_=node_,
                  ext=ext, rng=rng, box=box,
                  P_=P_,mask__=mask__,
-                 Vt=Vt,Rt=Rt,Dt=Dt,root=root,fback_=fback_)
+                 Et=Et,root=root,fback_=fback_)
 
     init_default(instance, params_set, default_value)
 
@@ -220,18 +217,14 @@ def Cgraph(typ='graph',
            He = None,  # from PP, not derHv
            # graph-internal, generic:
            aggH = None,  # [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
-           valt = None,  # sum ptuple, derH, aggH
-           rdnt = None,
-           dect = None,
+           et = None,  # sum ptuple, derH, aggH
            link_ = None,  # internal, single-fork, incrementally nested
            node_ = None,  # base node_ replaced by node_t in both agg+ and sub+, deeper node-mediated unpacking in agg+
             # graph-external, +level per root sub+:
            rimH = None,  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
            RimH = None,  # links to the most mediated nodes
            extH = None, # G-external daggH( dsubH( dderH, summed from rim links
-           evalt = None,  # sum from esubH
-           erdnt = None,
-           edect = None,
+           eet = None,  # sum from esubH
            ext = None,  # L,S,A: L len base node_, S sparsity: average link len, A angle: average link dy,dx
            rng = None,
            box = None,  # y,x,y0,x0,yn,xn
@@ -244,9 +237,7 @@ def Cgraph(typ='graph',
            P_ = None,
            mask__ = None,
            # temporary, replace with Et:
-           Vt = None, # last layer | last fork tree vals for node_connect and clustering
-           Rt = None,
-           Dt = None,
+           Et = None, # last layer | last fork tree vals for node_connect and clustering
            root = None,  # for feedback
            fback_ = None, # feedback [[aggH,valt,rdnt,dect]] per node layer, maps to node_H
            compared_ = None,
@@ -258,27 +249,27 @@ def Cgraph(typ='graph',
            id_H = None):  # indices in the list of all possible layers | forks, not used with fback merging
 
     params_set = ('fd','ptuple', 'He',
-                  'aggH', 'valt', 'rdnt', 'dect', 'link_', 'node_',
-                  'rimH', 'RimH', 'extH', 'evalt', 'erdnt', 'edect', 'ext', 'rng', 'box',
+                  'aggH', 'et', 'link_', 'node_',
+                  'rimH', 'RimH', 'extH', 'eet', 'ext', 'rng', 'box',
                   'alt_graph_','avalt','ardnt','adect',
                   'P_','mask__',
-                  'Vt','Rt','Dt','root','fback_','compared_','Rdn',
+                  'Et','root','fback_','compared_','Rdn',
                   'it','depth','nval','id_H')
 
     default_value = (0,Cptuple(), [],
-                     [], [0,0], [1,1], [0,0], [], [],
-                     [], [], [], [0,0], [1,1], [0,0], [0,0, [0,0]], 1, [inf,inf,-inf,-inf],
+                     [], [], [], [],
+                     [], [], [], [], [0,0, [0,0]], 1, [inf,inf,-inf,-inf],
                      [],[0,0],[1,1],[0,0],
                      [],None,
-                     [0,0],[1,1],[0,0],[None],[],[],0,
+                     [],[None],[],[],0,
                      [None, None],0,0,[[]])
 
     instance = z(typ=typ, fd=fd,ptuple=ptuple, He=He,
-                 aggH=aggH, valt=valt, rdnt=rdnt, dect=dect, link_=link_, node_=node_,
-                 rimH=rimH, RimH=RimH, extH=extH, evalt=evalt, erdnt=erdnt, edect=edect, ext=ext, rng=rng, box=box,
+                 aggH=aggH, et=et, link_=link_, node_=node_,
+                 rimH=rimH, RimH=RimH, extH=extH, eet=eet, ext=ext, rng=rng, box=box,
                  alt_graph_=alt_graph_,avalt=avalt,ardnt=ardnt,adect=adect,
                  P_=P_,mask__=mask__,
-                 Vt=Vt,Rt=Rt,Dt=Dt,root=root,fback_=fback_,compared_=compared_,Rdn=Rdn,
+                 Et=Et,root=root,fback_=fback_,compared_=compared_,Rdn=Rdn,
                  it=it,depth=depth,nval=nval,id_H=id_H)
 
     init_default(instance, params_set, default_value)
@@ -289,14 +280,18 @@ def Cgraph(typ='graph',
             if param_name in params_set:
                 setattr(instance, param_name, getattr(PP, param_name))
 
+        # add Decay?
+        if instance.et: instance.et += [0,0]
+        if instance.Et: instance.Et += [0,0]
+
     return instance
 
 
-def CderG(typ='derG', _G=None, G=None, daggH=None, Vt=None, Rt=None, Dt=None, S=None, A=None, roott=None):
+def CderG(typ='derG', _G=None, G=None, daggH=None, Et=None, S=None, A=None, roott=None):
 
-    params_set = ('_G','G','daggH','Vt','Rt','Dt','S', 'A', 'roott')
-    default_value = (None,None,[],[0,0],[1,1],[0,0],0, [0,0], [None, None])
-    instance = z(typ=typ, _G=_G, G=G, daggH=daggH, Vt=Vt, Rt=Rt, Dt=Dt, S=S, A=A, roott=roott)
+    params_set = ('_G','G','daggH','Et','S', 'A', 'roott')
+    default_value = (None,None,[],[],0, [0,0], [None, None])
+    instance = z(typ=typ, _G=_G, G=G, daggH=daggH, Et=Et, S=S, A=A, roott=roott)
     init_default(instance, params_set, default_value)
     return instance
 
