@@ -929,3 +929,16 @@ def comp_G(link, Et):
                         rimH[-1] += [link]  # rimH
                     else:
                         rimH += [link]  # rim
+
+def comp_angle(_angle, angle):  # rn doesn't matter for angles
+
+    # angle = [dy,dx]
+    (_sin, sin), (_cos, cos) = [*zip(_angle, angle)] / np.hypot(*zip(_angle, angle))  # division by 0 here is causing NaN。 Possible when angle is [0,0]
+
+    dangle = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
+    # cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
+    mangle = ave_dangle - abs(dangle)  # inverse match, not redundant if sum cross sign
+
+    return [mangle, dangle]
+
+

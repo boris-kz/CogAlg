@@ -24,9 +24,11 @@ def add_(HE, He, irdnt=[], fagg=0):  # unpack tuples (formally lists) down to nu
 
     if He:  # to be summed
         if HE:  # to sum in
-            ddepth = He[0] - HE[0]  # HE[0] is nesting depth, nest to He depth: md_-> derH-> subH-> aggH:
-            while ddepth > 0:
-                HE[:] = [HE[0]+1, [*HE[1]], [deepcopy(HE)]]; ddepth -= 1
+            ddepth = abs(He[0] - HE[0])  # HE[0] is nesting depth, nest to He depth: md_-> derH-> subH-> aggH:
+            if ddepth:
+                uHe = [HE,He][HE[0]>He[0]]
+                while ddepth > 0:
+                    uHe[:] = [uHe[0]+1, [*uHe[1]], [deepcopy(uHe)]]; ddepth -= 1  # this should be applied on both HE or He, because we still need to sum He into HE if He is md_, while HE is derH
 
             if isinstance(He[2][0], list):
                 for Lay,lay in zip_longest(HE[2], He[2], fillvalue=[]):  # always list He
@@ -43,7 +45,7 @@ def add_(HE, He, irdnt=[], fagg=0):  # unpack tuples (formally lists) down to nu
                             if fagg:  cEt += [(E+e)/2 for E,e in zip(Et[4:],et[4:])]  # norm dect
                             Lay[1][:] = cEt
                         else:
-                            HE += [deepcopy(lay)]  # skip deepcopy if numerical?
+                            HE[2] += [deepcopy(lay)]
             else:
                 HE[2] = np.add(HE[2], He[2])  # sum flat lists: [m,d,m,d,m,d...]
         else:
@@ -183,6 +185,7 @@ def CPP(typ='PP',
         # PP:
         P_ = None,
         mask__ = None,
+        area = None,
         # temporary, replace with Et:
         Et = None, # last layer | last fork tree vals for node_connect and clustering
         root = None,  # for feedback
@@ -191,19 +194,19 @@ def CPP(typ='PP',
     params_set = ('fd','ptuple', 'He',
                   'et', 'link_', 'node_',
                   'ext', 'rng', 'box',
-                  'P_','mask__',
+                  'P_','mask__', 'area',
                   'Et','root','fback_')
 
     default_value = (0,Cptuple(), [],
                      [], [], [],
                      [0,0, [0,0]], 1, [inf,inf,-inf,-inf],
-                     [],None,
+                     [],None,0,
                      [],[None],[])
 
     instance = z(typ=typ, fd=fd,ptuple=ptuple, He=He,
                  et=et, link_=link_, node_=node_,
                  ext=ext, rng=rng, box=box,
-                 P_=P_,mask__=mask__,
+                 P_=P_,mask__=mask__,area=area,
                  Et=Et,root=root,fback_=fback_)
 
     init_default(instance, params_set, default_value)
@@ -230,12 +233,11 @@ def Cgraph(typ='graph',
            box = None,  # y,x,y0,x0,yn,xn
            # tentative:
            alt_graph_ = None,  # adjacent gap+overlap graphs, vs. contour in frame_graphs
-           avalt = None,  # sum from alt graphs to complement G aves?
-           ardnt = None,
-           adect = None,
+           aet = None,  # sum from alt graphs to complement G aves?
            # PP:
            P_ = None,
            mask__ = None,
+           area = None,
            # temporary, replace with Et:
            Et = None, # last layer | last fork tree vals for node_connect and clustering
            root = None,  # for feedback
@@ -251,24 +253,24 @@ def Cgraph(typ='graph',
     params_set = ('fd','ptuple', 'He',
                   'aggH', 'et', 'link_', 'node_',
                   'rimH', 'RimH', 'extH', 'eet', 'ext', 'rng', 'box',
-                  'alt_graph_','avalt','ardnt','adect',
-                  'P_','mask__',
+                  'alt_graph_','aet',
+                  'P_','mask__','area',
                   'Et','root','fback_','compared_','Rdn',
                   'it','depth','nval','id_H')
 
     default_value = (0,Cptuple(), [],
                      [], [], [], [],
                      [], [], [], [], [0,0, [0,0]], 1, [inf,inf,-inf,-inf],
-                     [],[0,0],[1,1],[0,0],
-                     [],None,
+                     [],[],
+                     [],None,0,
                      [],[None],[],[],0,
                      [None, None],0,0,[[]])
 
     instance = z(typ=typ, fd=fd,ptuple=ptuple, He=He,
                  aggH=aggH, et=et, link_=link_, node_=node_,
                  rimH=rimH, RimH=RimH, extH=extH, eet=eet, ext=ext, rng=rng, box=box,
-                 alt_graph_=alt_graph_,avalt=avalt,ardnt=ardnt,adect=adect,
-                 P_=P_,mask__=mask__,
+                 alt_graph_=alt_graph_,aet=aet,
+                 P_=P_,mask__=mask__,area=area,
                  Et=Et,root=root,fback_=fback_,compared_=compared_,Rdn=Rdn,
                  it=it,depth=depth,nval=nval,id_H=id_H)
 

@@ -42,7 +42,8 @@ def der_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep
         for P in PP.P_: P.link_ += [copy(unpack_last_link_(P.link_))]
 
     rng_recursion(PP, rng=1, fd=fd)  # extend PP.link_, derHs by same-der rng+ comp
-    form_PP_t(PP, PP.P_, iRt = PP.Et[2:4])  # der+ is mediated by form_PP_t
+
+    form_PP_t(PP, PP.P_, iRt = PP.Et[2:4] if PP.Et[2:4] else [0,0])  # der+ is mediated by form_PP_t
     if root: root.fback_ += [[PP.He, PP.et]]  # feedback from PPds
 
 
@@ -155,7 +156,7 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
 
 def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
 
-    PP = CPP(typ='PP',fd=fd,root=root,P_=P_,rng=root.rng+1, Et=[0,0,1,1], link_=[], box=[0,0,0,0],  # not inf,inf,-inf,-inf?
+    PP = CPP(typ='PP',fd=fd,root=root,P_=P_,rng=root.rng+1, Et=[0,0,1,1], et=[0,0,1,1], link_=[], box=[0,0,0,0],  # not inf,inf,-inf,-inf?
            ptuple = z(typ='ptuple',I=0, G=0, M=0, Ma=0, angle=[0,0], L=0), He=[])
     # += uplinks:
     S,A = 0, [0,0]
@@ -168,13 +169,16 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
         PP.Et = [V+v for V,v in zip(PP.Et, derP.et)]
         PP.Et[2:4] = [R+ir for R,ir in zip(PP.Et[2:4], iRt)]
         derP.A = np.add(A,derP.A); S += derP.S
-    PP.ext = [len(P_), S, A]  # all from links
+    PP.ext = [len(P_), S or 1, A]  # all from links  (prevent zero S for single P's PP)
+
     # += Ps:
     celly_,cellx_ = [],[]
     for P in P_:
-        PP.area += P.L
+        PP.area += P.ptuple.L
         PP.ptuple += P.ptuple
-        add_(PP.He, P.He)
+        if P.He:
+            add_(PP.He, P.He)
+            PP.et = [V+v for V, v in zip(PP.et, P.He[1])]  # we need to sum et from P too? Else they are always empty
         for y,x in P.cells:
             PP.box = accum_box(PP.box, y, x); celly_+=[y]; cellx_+=[x]
     # pixmap:
@@ -194,7 +198,7 @@ def feedback(root):  # in form_PP_, append new der layers to root PP, single vs.
         eT = [V+v for V,v in zip(eT, et)]
         add_(HE, He)
     add_(root.He, HE if HE[0] else HE[2][-1])  # sum md_ or last md_ in H
-    root.et = [V+v for V,v in zip(root.et, eT)]
+    root.et = [V+v for V,v in zip_longest(root.et, eT, fillvalue=0)]  # fillvalue to init from empty list
 
     if root.typ != 'edge':  # skip if root is Edge
         rroot = root.root  # single PP.root, can't be P

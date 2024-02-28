@@ -1,11 +1,11 @@
 import sys
 import numpy as np
+import math
 from math import floor
 from collections import deque
 from itertools import product
 from .filters import ave_g, ave_dangle, ave_daangle
 from .classes import CP, Cedge, Cptuple
-
 from utils import box2slice
 
 '''
@@ -179,14 +179,19 @@ def interpolate2dert(blob, y, x):
     return (sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t)
 
 
-def comp_angle(_angle, angle):  # rn doesn't matter for angles
+def comp_angle(_A, A):  # rn doesn't matter for angles
 
-    # angle = [dy,dx]
-    (_sin, sin), (_cos, cos) = [*zip(_angle, angle)] / np.hypot(*zip(_angle, angle))
+    # normalize vectors to (sin,cos):
+    _A_A = [np.array(Dy_Dx)/np.hypot(*Dy_Dx) if np.any(Dy_Dx) else np.array([0,0]) for Dy_Dx in[_A,A]]
+    # convert to angles in radians:
+    _angle, angle = [math.atan2(sin,cos / np.hypot(sin,cos)) for sin,cos in _A_A]
 
-    dangle = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
-    # cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
-    mangle = ave_dangle - abs(dangle)  # inverse match, not redundant if sum cross sign
+    dangle = _angle - angle  # difference between angles
+    dangle = (dangle + math.pi) % (2 * math.pi) - math.pi  # normalize to within [-π, π]
+    # angle similarity:
+    mangle = math.cos(dangle)
+    dangle = 2-mangle  # redefine as a signed complementary of mangle, not sure about 2 here
+    mangle += 1  # cos returns range (1,-1), convert to (2,0)
 
     return [mangle, dangle]
 

@@ -5,7 +5,7 @@ from .classes import CderP, Cgraph, CderG, add_, comp_, get_match
 from .filters import aves, ave_mL, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd
 from .slice_edge import slice_edge, comp_angle
 from .comp_slice import der_recursion, comp_ptuple
-from utils import box2center
+from utils import box2center, extend_box
 
 '''
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
@@ -44,12 +44,13 @@ def vectorize_root(blob):  # vectorization in 3 composition levels of xcomp, clu
     der_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
 
     for fd, node_ in enumerate(edge.node_):  # always node_t
-        val,rdn = edge.et[fd], edge.et[2+fd]
-        if  val * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * rdn:
-            for i, PP in enumerate(node_):  # CPP -> CG:
-                node_[i] = Cgraph(PP=PP); PP.root = None
-            # discontinuous PP rng+ cross-comp, cluster -> G_t
-            agg_recursion(None, edge, node_, nrng=1, fagg=1)  # agg+, no Cgraph nodes
+        if edge.et:
+            val,rdn = edge.et[fd], edge.et[2+fd]
+            if  val * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * rdn:
+                for i, PP in enumerate(node_):  # CPP -> CG:
+                    node_[i] = Cgraph(PP=PP); PP.root = None
+                # discontinuous PP rng+ cross-comp, cluster -> G_t
+                agg_recursion(None, edge, node_, nrng=1, fagg=1)  # agg+, no Cgraph nodes
 
     return edge
 
@@ -65,11 +66,11 @@ def agg_recursion(rroot, root, node_, nrng=1, fagg=0):  # lenH = len(root.aggH[-
 
     if node_ and isinstance(node_[0], list):
         for fd, G_ in enumerate(node_):
-            if root.valt[fd] * (len(G_)-1)*root.rng > G_aves[fd] * root.rdnt[fd]:
+            if root.et[fd] * (len(G_)-1)*root.rng > G_aves[fd] * root.et[2+fd]:
                 # agg+ / node_t, vs. sub+ / node_:
                 agg_recursion(rroot, root, G_, nrng=1, fagg=1)
                 if rroot and fd:  # der+ only
-                    rroot.fback_ += [[root.aggH,root.valt,root.rdnt,root.dect]]
+                    rroot.fback_ += [[root.aggH,root.et]]
                     feedback(rroot)  # update root.root..
 
 
@@ -252,6 +253,7 @@ def sum2graph(root, grapht, fd, nrng, fagg):  # sum node and link params into gr
         link.root = graph
         graph.ext[1] += link.S
         graph.ext[2] += link.A
+    graph.ext[1] |= 1  # prevent zero division for single node's graph
     extH, et, eet = [], [0,0,0,0,0,0], [0,0,0,0,0,0]
     # grapht int = node int+ext
     # below not updated
@@ -259,22 +261,25 @@ def sum2graph(root, grapht, fd, nrng, fagg):  # sum node and link params into gr
         graph.ext[0] += 1
         graph.area += G.area
         sum_last_lay(G, fd)
-        graph.box.extend(G.box)
+        graph.box = extend_box(graph.box, G.box)
         graph.ptuple += G.ptuple
-        sum_derH([graph.derH,[0,0],[1,1]], [G.derH,[0,0],[1,1]], base_rdn=1)
-        sum_Hv([extH,evalt,erdnt,edect,2], [G.extH,G.evalt,G.erdnt,G.edect,2], base_rdn=G.erdnt[fd])
-        sum_H(graph.aggH, G.aggH, depth=2, base_rdn=1)
-        for j in 0,1:
-            evalt[j] += G.evalt[j]; erdnt[j] += G.erdnt[j]; edect[j] += G.edect[j]
-            valt[j] += G.valt[j]; rdnt[j] += G.rdnt[j]; dect[j] += G.dect[j]
-    graph.aggH.append(extH)  # dsubH| daggH
+        add_(graph.He, G.He,irdnt=[1,1])
+        add_(extH, G.extH, irdnt=G.et[2:4])
+        add_(graph.aggH, G.aggH, irdnt=[1,1])
+        eet = [V+v for V, v in zip(eet, G.eet)]
+        et = [V+v for V, v in zip(et, G.et)]
+
+    if extH: graph.aggH.append(extH)  # dsubH| daggH
     # graph internals = G Internals + Externals:
-    for gT,T,t in zip((graph.valt,graph.rdnt,graph.dect), (valt,rdnt,dect), (evalt,erdnt,edect)):
-        T[:] = np.add(T,t); gT[:] = T
+    et = [V+v for V, v in zip(et, eet)]
+    graph.et = [V+v for V, v in zip(graph.et, et)]
+
     if fagg:
         if not G.aggH or (G_[0].aggH and G_[0].aggH[-1] == 1):
             # 1st agg+, init aggH = [subHv]:
-            graph.aggH = [[graph.aggH,valt,rdnt,dect,2]]
+            # not sure on here yet
+            # graph.aggH = [[graph.aggH,valt,rdnt,dect,2]]
+            pass
 
     if fd:  # assign alt graphs from d graph, after both linked m and d graphs are formed
         for link in graph.link_:
@@ -283,8 +288,7 @@ def sum2graph(root, grapht, fd, nrng, fagg):  # sum node and link params into gr
                 for fd, (G, alt_G) in enumerate(((mgraph,graph), (graph,mgraph))):  # bilateral assign:
                     if G not in alt_G.alt_graph_:
                         G.alt_graph_ += [alt_G]
-                        for i in 0,1:
-                            G.avalt[i] += alt_G.valt[i]; G.ardnt[i] += alt_G.rdnt[i]; G.adect[i] += alt_G.dect[i]
+                        G.aet = [V+v for V, v in zip_longest(G.aet, alt_G.et, fillvalue=0)]
     return graph
 
 
@@ -302,7 +306,7 @@ def sum_last_lay(G, fd):  # eLay += last layer of link.daggH (dsubH|ddaggH)
             else:  # from sub+
                 dsubH = daggH
             for dderH in dsubH[ int(len(dsubH)/2): ]:  # derH_/ last xcomp: len subH *= 2, maybe single dderH
-                sum_Hv(eLay, dderH, base_rdn=link.Rt[fd])  # sum all derHs of link layer=rdH into esubH[-1]
+                add_(eLay, dderH, irdnt=link.Et[2:4])  # sum all derHs of link layer=rdH into esubH[-1]
 
     if eLay: G.extH += [eLay]
 
@@ -317,19 +321,20 @@ def comp_G(link, iEt):
     Et = [E+e for E,e in zip(pEt[:4],eEt[:4])] + [(E+e)/2 for E,e in zip(pEt[4:],eEt[4:])]
     # default dH:
     dH = [[0,pEt,md_],[0,eEt,extt]]
-    # if >1 P Gs:
+    # if >1 Ps:
+    dderH = [[1,Et,dH]]
     if _G.He and G.He:
         depth, et, dHe = comp_(_G.He, G.He, rn=1, fagg=1)
         Bt = copy(Et)  # base Et
-        Et = [E+e for E,e in zip(Et[:4],et[:4])] + [(E+e)/2 for E,e in zip(Et[4:],et[4:])]
-        dderH = [[1,Bt,dH],[depth,[*Et],dHe]]
-    # / G:
+        Et = [E+e for E,e in zip(Et,et)]  # not needed after adding n: + [(E+e)/2 for E,e in zip(Et[4:],et[4:])]
+        dderH += [[depth,[*Et],dHe]]  # depth is always 1 here
+    # / G, if >1 PPs:
     if _G.aggH and G.aggH:
         depth, et, dHe = comp_(_G.aggH, G.aggH, rn=1, fagg=1)
-        # same as above, not sure:
+        # as above, not sure about ext yet:
         Bt = copy(Et)  # base Et
-        Et = [E+e for E,e in zip(Et[:4],et[:4])] + [(E+e)/2 for E,e in zip(Et[4:],et[4:])]
-        daggH = [[2,Bt,dH],[depth,[*Et],dderH+dHe]]  # with this no der_ext in depth == 2?
+        Et = [E+e for E,e in zip(Et,)]
+        daggH = [[2,Bt,dH],[depth,[*Et],dderH+dHe]]
     else:
         daggH = dderH
     link.daggH += [daggH]
@@ -366,13 +371,6 @@ def comp_ext(_ext, ext, rn):  # primary ext only
     ddec = (dL/Lmax + dS/Smax + dA/Amax) /3
 
     return [M,D,mrdn,drdn,mdec,ddec], [mL,dL,mS,dS,mA,dA]
-
-def sum_ext(Ext, ext):  # ext: m|d L,S,A
-
-    for i,(Par,par) in enumerate(zip(Ext,ext)):
-
-        if isinstance(Par,list): Par[:] = np.add(Par,par)  # sum angle
-        else: Ext[i] = Par+par
 
 
 def feedback(root):  # called from form_graph_, append new der layers to root
