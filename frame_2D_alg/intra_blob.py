@@ -4,14 +4,7 @@
     - vectorize_root: forms roughly edge-orthogonal Ps, evaluated for rotation, comp_slice, etc.
 '''
 import numpy as np
-from scipy.signal import convolve2d
-from itertools import zip_longest
-from frame_blobs import assign_adjacents, flood_fill
-from vectorize_edge_blob.agg_recursion import vectorize_root
-from utils import (
-    kernel_slice_3x3 as ks,
-    box2slice, expand_box, shrink_box, box2sub_box,
-)
+from frame_blobs import frame_blobs_root
 '''
     Conventions:
     postfix 't' denotes tuple, multiple ts is a nested tuple
@@ -30,84 +23,64 @@ ave_nsub = 4  # ave n sub_blobs per blob: 4x higher costs? or eval costs only, s
 # --------------------------------------------------------------------------------------------------------------
 # functions:
 
-def intra_blob_root(root_blob, render, verbose):  # recursive evaluation of cross-comp slice| range| per blob
+def intra_blob_root(frame): # init rng+ recursion
+    i__, I, Dy, Dx, blob_ = frame
 
-    spliced_layers = []
+    for blob in blob_:
+        blob += [1, 1, []]     # extend blob with rdn, rng, sub_blob_
+        intra_blob(blob, i__)
 
-    for blob in root_blob.rlayers[0]:
-        # increment forking sequence: g -> r|v
-        # <--- r fork
-        if (blob.sign and blob.G < aveR * blob.rdn):  # below-average G, eval for comp_r
-            ret = comp_r(blob)  # return None if blob is too small
-            if ret is not None: # if True, proceed to form new fork
-                blob.rdn = root_blob.rdn + 1.5  # sub_blob root values
-                if verbose: print('fork: r')
-                new_der__t, new_mask__, fork_ibox = ret  # unpack comp_r output
-                _, _, g__ = new_der__t
-                sign__ = ave * (blob.rdn + 1) - g__ > 0  # m__ = ave - g__
-                # form sub_blobs:
-                sub_blobs, idmap, adj_pairs = flood_fill(blob, 'r', fork_ibox, new_der__t, sign__, new_mask__, verbose=verbose)
-                '''
-                adjust per average sub_blob, depending on which fork is weaker, or not taken at all:
-                sub_blob.rdn += 1 -|+ min(sub_blob_val, alt_blob_val) / max(sub_blob_val, alt_blob_val):
-                + if sub_blob_val > alt_blob_val, else -?  
-                adj_rdn = ave_nsub - len(sub_blobs)  # adjust ave cross-layer rdn to actual rdn after flood_fill:
-                blob.rdn += adj_rdn
-                for sub_blob in sub_blobs: sub_blob.rdn += adj_rdn
-                '''
-                assign_adjacents(adj_pairs)
+def intra_blob(root_blob, i__):  # recursive evaluation of cross-comp rng+ per blob
+    # unpack root_blob
+    root, sign, I, Dy, Dx, yx_, dert_, link_, rdn, rng, blob_ = root_blob
 
-                sublayers = blob.rlayers = []
-                sublayers += [sub_blobs]  # next level sub_blobs, then add deeper layers of sub_blobs:
-                sublayers += intra_blob_root(blob, render, verbose)  # recursive eval cross-comp per blob
-                spliced_layers[:] += [spliced_layer + sublayer for spliced_layer, sublayer in
-                                      zip_longest(spliced_layers, sublayers, fillvalue=[])]
-        # ---> end r fork
-        # <--- v fork
-        if not blob.sign and blob.G > aveG * blob.rdn:  # above-average G, vectorize blob
-            blob.rdn = root_blob.rdn + 1.5  # comp cost * fork rdn, sub_blob root values
-            blob.prior_forks += 'v'
-            if verbose: print('fork: v')
-            vectorize_root(blob)
-        # ---> end v fork
-    return spliced_layers
+    if not sign: return  # only for below-average G
+    G = np.hypot(Dy, Dx)
+    if G >= aveR * rdn: return  # eval for comp_r
+    rdn += 1.5  # update rdn
+    rng += 1  # update rng
+    dert__ = comp_r(i__, yx_, dert_, rdn, rng)  # return None if blob is too small
+    if not dert__: return
+
+    # proceed to form new fork, flood-fill 1 pixel at a time
+    fyx_ = list(dert__.keys())  # set of pixel coordinates to be filled, from root_blob
+    root__ = {}  # id map pixel to blob
+    perimeter_ = []  # perimeter pixels
+    while cell_:  # cell_ is popped per filled pixel, in form_blob
+        if not perimeter_:  # init blob
+            blob = [root_blob, None, 0, 0, 0, [], [], rdn, rng, []]  # root, sign, I, Dy, Dx, yx_, link_, rdn, rng, blob_
+            perimeter_ += [fyx_[0]]
+
+        form_blob(blob, fyx_, perimeter_, root__, dert__)
+
+        if not perimeter_:  # term blob
+            blob_ += [blob]
+            intra_blob(blob, i__)  # recursive eval cross-comp per blob
 
 
-def comp_r(blob):
-    # increment rng and compute kernel
-    rng = blob.rng + 1
-    ky, kx, km = compute_kernel(rng)
+def comp_r(i__, yx_, dert_, rng, rdn):
+    Y, X = i__.shape
 
-    # expand ibox to reduce shrink if possible
-    y0, x0, yn, xn = blob.ibox
-    y0e, x0e, yne, xne = eibox = expand_box(blob.ibox, *blob.i__.shape, rng) # 'e' stands for 'expanded'
-    pad = ((y0-y0e, yne-yn), (x0-x0e, xne-xn))  # pad of emask__: expanded size per side
+    # compute kernel
+    ky__, kx__ = compute_kernel(rng)
 
-    # compute majority mask, at this point, mask__ can't be None
-    emask__ = np.pad(blob.mask__, pad, 'constant', constant_values=False).astype(int)
-    if emask__.shape[0] < 2+2*rng or emask__.shape[1] < 2+2*rng: # blob is too small
-        return None
+    # loop through root_blob's pixels
+    dert__ = {}     # mapping from y, x to dert
+    for (y, x), (p, dy, dx) in zip(yx_, dert_):
+        if y-rng < 0 or y+rng >= Y or x-rng < 0 or x+rng >= X: continue # boundary check
 
-    majority_mask__ = convolve2d(emask__, km, mode='valid') > 1
+        # comparison. i,j: relative coord within kernel 0 -> rng*2+1
+        for i, j in zip(*ky__.nonzero()):
+            dy += ky__[i, j] * i__[y+i-rng, x+j-rng]    # -rng to get i__ coord
+        for i, j in zip(*kx__.nonzero()):
+            dx += kx__[i, j] * i__[y+i-rng, x+j-rng]
 
-    if not majority_mask__.any():  # no dert
-        return None
+        g = np.hypot(dy, dx)
+        s = ave*(rdn + 1) - g > 0
 
-    # fork is valid, update blob's rng
-    blob.rng = rng
+        dert__[y, x] = p, dy, dx, s
 
-    # compute shrink box of der__t, if shrink = 0 on all size, sdbox size is the same as blob.ibox
-    fork_ibox = shrink_box(eibox, rng)  # fork_ibox, with size = that of der__t after comparison
-    sdbox = box2sub_box(blob.ibox, fork_ibox)    # shrinked der__t box
-
-    dy__, dx__, g__ = blob.der__t   # unpack der__t
-    i__ = blob.i__[box2slice(eibox)]   # expanded i__ for comparison
-    # compare opposed pairs of rim pixels, project onto x, y:
-    new_dy__ = dy__[box2slice(sdbox)] + convolve2d(i__, ky, mode='valid')
-    new_dx__ = dx__[box2slice(sdbox)] + convolve2d(i__, kx, mode='valid')
-    new_g__ = np.hypot(new_dy__, new_dx__)  # gradient, recomputed at each comp_r
-
-    return (new_dy__, new_dx__, new_g__), majority_mask__, fork_ibox
+    return dert__
 
 
 def compute_kernel(rng):
@@ -121,11 +94,51 @@ def compute_kernel(rng):
     #                    = [y, x] / (x*x + y*y)
     ksize = rng*2+1  # kernel size
     y, x = k = np.indices((ksize, ksize)) - rng  # kernel span around (0, 0)
-    km = np.ones((ksize, ksize), dtype=int)  # kernel of mask
     sqr_dist = x*x + y*y  # squared distance
     sqr_dist[rng, rng] = 1  # avoid division by 0
-    coeff = k / sqr_dist # kernel coefficient
-    coeff[ks.mc] = 0  # take the rim
-    km[ks.mc] = 0  # take the rim
+    coeff = k / sqr_dist  # kernel coefficient
+    coeff[1:-1, 1:-1] = 0  # non-rim = 0
 
-    return (*coeff, km)
+    return coeff
+
+
+def form_blob(blob, fyx_, perimeter_, root__, dert__):
+    # unpack structures
+    root, sign, I, Dy, Dx, yx_, dert_, link_, *other_params = blob
+
+    # get and check coord
+    y, x = perimeter_.pop()  # get pixel coord
+    if (y, x) not in dert__: return  # out of bound
+    i, dy, dx, s = dert__[y, x]
+    if (y, x) not in fyx_:  # if adjacent filled, this is pixel of an adjacent blob
+        _blob = root__[y, x]
+        if _blob not in link_: link_ += [_blob]
+        return
+    if sign is None: sign = s  # assign sign to new blob
+    if sign != s: return   # different sign, stop
+
+    # fill coord, proceed with form_blob
+    fyx_.remove((y, x))  # remove from yx_
+    root__[y, x] = blob  # assign root, for link forming
+    I += i; Dy += dy; Dx += dx  # update params
+    yx_ += [(y, x)]; dert_ += [(i, dy, dx)]  # update elements
+
+    # update perimeter_
+    perimeter_ += [(y-1,x), (y,x+1), (y+1,x), (y,x-1)]  # extend perimeter
+    if sign: perimeter_ += [(y-1,x-1), (y-1,x+1), (y+1,x+1), (y+1,x-1)]  # ... include diagonals for +blobs
+
+    blob[:] = root, sign, I, Dy, Dx, yx_, dert_, link_, *other_params # update blob
+
+
+
+if __name__ == "__main__":
+    import argparse
+    from utils import imread
+    # Parse arguments
+    argument_parser = argparse.ArgumentParser()
+    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_eye.jpeg')
+    args = argument_parser.parse_args()
+    image = imread(args.image)
+
+    frame = frame_blobs_root(image)
+    intra_blob_root(frame)

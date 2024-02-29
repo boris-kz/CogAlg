@@ -28,24 +28,14 @@
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs.png
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs_intra_blob.drawio
 '''
-from __future__ import annotations
-
-import sys
-from collections import deque
-from time import time
-from types import SimpleNamespace
+from itertools import product
 import numpy as np
-from visualization.draw_frame import visualize
-from utils import kernel_slice_3x3 as ks, get_instance, box2slice, accum_box, sub_box2box
-# from vectorize_edge.classes import Ct
 # hyper-parameters, set as a guess, latter adjusted by feedback:
 ave = 30  # base filter, directly used for comp_r fork
 ave_a = 1.5  # coef filter for comp_a fork
 aveB = 50
 aveBa = 1.5
 ave_mP = 100
-UNFILLED = -1
-EXCLUDED = -2
 '''
     Conventions:
     postfix 't' denotes tuple, multiple ts is a nested tuple
@@ -57,190 +47,120 @@ EXCLUDED = -2
     longer names are normally classes
 '''
 
-def frame_blobs_root(i__, intra=False, render=False, verbose=False):
-    Y, X = i__.shape[:2]
-    frame = SimpleNamespace(
-        I=0, Dy=0, Dx=0, rdn=1,
-        i__=i__, box=(0, 0, Y, X), rlayers=[[]], rng=1, prior_forks='')
+def frame_blobs_root(i__):
+    der__t = comp_pixel(i__)  # compare all in parallel -> i__, dy__, dx__, g__, s__
+    frame = i__, I, Dy, Dx, blob_ = [i__, 0, 0, 0, []]  # init frame as output
 
-    if verbose: start_time = time()
+    # Flood-fill 1 pixel at a time
+    Y, X = i__.shape  # get i__ height and width
+    fill_yx_ = list(product(range(1,Y-1), range(1,X-1)))  # set of pixel coordinates to be filled (fill_yx_)
+    root__ = {}  # id map pixel to blob
+    perimeter_ = []  # perimeter pixels
+    while fill_yx_:  # fill_yx_ is popped per filled pixel, in form_blob
+        if not perimeter_:  # init blob
+            blob = [frame, None, 0, 0, 0, [], [], []]  # root (frame), sign, I, Dy, Dx, yx_, dert_, link_ (up-links)
+            perimeter_ += [fill_yx_[0]]
 
-    dy__, dx__, g__ = frame.der__t = comp_pixel(i__)
-    sign__ = ave - g__ > 0   # sign is positive for below-average g
+        form_blob(blob, fill_yx_, perimeter_, root__, der__t)  # https://en.wikipedia.org/wiki/Flood_fill
 
-    # https://en.wikipedia.org/wiki/Flood_fill:
-    frame.rlayers[0], idmap, adj_pairs = flood_fill(
-        frame, fork='', fork_ibox=(1, 1, Y - 1, X - 1),
-        der__t=frame.der__t, sign__=sign__, verbose=verbose)
-    assign_adjacents(adj_pairs)  # forms adj_blobs per blob in adj_pairs
-    for blob in frame.rlayers[0]:
-        frame.I += blob.I
-        frame.Dy += blob.Dy
-        frame.Dx += blob.Dx
-    # dlayers = []: no comp_a yet
-    if verbose: print(f"{len(frame.rlayers[0])} blobs formed in {time() - start_time} seconds")
+        if not perimeter_:  # term blob
+            frame[1] += blob[2]  # I
+            frame[2] += blob[3]  # Dy
+            frame[3] += blob[4]  # Dx
+            blob_ += [blob]
 
-    if intra:  # omit for testing frame_blobs without intra_blob
-        if verbose: print("\rRunning frame's intra_blob...")
-        from intra_blob import intra_blob_root
-
-        frame.rlayers += intra_blob_root(frame, render, verbose)  # recursive eval cross-comp range| angle| slice per blob
-        if verbose: print("\rFinished intra_blob")  # print_deep_blob_forking(deep_blobs)
-        # sublayers[0] is fork-specific, deeper sublayers combine sub-blobs of both forks
-
-    if render: visualize(frame)
     return frame
 
-
-def comp_pixel(pi__):
+def comp_pixel(i__):
     # compute directional derivatives:
     dy__ = (
-        (pi__[ks.bl] - pi__[ks.tr]) * 0.25 +
-        (pi__[ks.bc] - pi__[ks.tc]) * 0.50 +
-        (pi__[ks.br] - pi__[ks.tl]) * 0.25
+        (i__[2:,  :-2] - i__[:-2, 2:  ]) * 0.25 +
+        (i__[2:, 1:-1] - i__[:-2, 1:-1]) * 0.50 +
+        (i__[2:, 2:  ] - i__[:-2, 2:  ]) * 0.25
     )
     dx__ = (
-        (pi__[ks.tr] - pi__[ks.bl]) * 0.25 +
-        (pi__[ks.mr] - pi__[ks.mc]) * 0.50 +
-        (pi__[ks.br] - pi__[ks.tl]) * 0.25
+        (i__[ :-2, 2:] - i__[2:  ,  :-2]) * 0.25 +
+        (i__[1:-1, 2:] - i__[1:-1,  :-2]) * 0.50 +
+        (i__[2:  , 2:] - i__[ :-2, 2:  ]) * 0.25
     )
     g__ = np.hypot(dy__, dx__)                          # compute gradient magnitude
+    s__ = ave - g__ > 0  # sign is positive for below-average g
 
-    return dy__, dx__, g__
-
-
-def flood_fill(root_blob, fork, fork_ibox, der__t, sign__, mask__=None, verbose=False):
-    dy__, dx__, g__ = der__t
-    height, width = g__.shape  # = der__t shape
-    fork_i__ = root_blob.i__[box2slice(fork_ibox)]
-    assert height, width == fork_i__.shape  # same shape as der__t
-
-    idmap = np.full((height, width), UNFILLED, 'int64')  # blob's id per dert, initialized UNFILLED
-    if mask__ is not None: idmap[~mask__] = EXCLUDED
-    if verbose:
-        n_pixels = (height*width) if mask__ is None else mask__.sum()
-        step = 100 / n_pixels  # progress % percent per pixel
-        progress = 0.0; print(f"\rClustering... {round(progress)} %", end="");  sys.stdout.flush()
-    blob_ = []
-    adj_pairs = set()
-
-    for y in range(height):
-        for x in range(width):
-            if idmap[y, x] == UNFILLED:  # ignore filled/clustered derts
-                blob = SimpleNamespace(
-                    I=0, Dy=0, Dx=0, A=0,  #  no rlayers yet
-                    i__=root_blob.i__, sign=sign__[y, x], root_ibox=fork_ibox, root_der__t=der__t,
-                    prior_forks=root_blob.prior_forks + fork,
-                    box=(y, x, y + 1, x + 1), rng=root_blob.rng, fopen=False, rdn=1)
-                blob_ += [blob]
-                idmap[y, x] = id(blob)
-                # flood fill the blob, start from current position
-                unfilled_derts = deque([(y, x)])
-                while unfilled_derts:
-                    y1, x1 = unfilled_derts.popleft()
-                    # add dert to blob
-                    blob.I += fork_i__[y1][x1]
-                    blob.Dy += dy__[y1][x1]
-                    blob.Dx += dx__[y1][x1]
-                    blob.A += 1
-                    blob.box = accum_box(blob.box, y1, x1)
-                    # neighbors coordinates, 4 for -, 8 for +
-                    if blob.sign:   # include diagonals
-                        adj_dert_coords = [(y1 - 1, x1 - 1), (y1 - 1, x1),
-                                           (y1 - 1, x1 + 1), (y1, x1 + 1),
-                                           (y1 + 1, x1 + 1), (y1 + 1, x1),
-                                           (y1 + 1, x1 - 1), (y1, x1 - 1)]
-                    else:
-                        adj_dert_coords = [(y1 - 1, x1), (y1, x1 + 1),
-                                           (y1 + 1, x1), (y1, x1 - 1)]
-                    # search neighboring derts:
-                    for y2, x2 in adj_dert_coords:
-                        # image boundary is reached:
-                        if (y2 < 0 or y2 >= height or x2 < 0 or x2 >= width or
-                                idmap[y2, x2] == EXCLUDED):
-                            blob.fopen = True
-                        # pixel is filled:
-                        elif idmap[y2, x2] == UNFILLED:
-                            # same-sign dert:
-                            if blob.sign == sign__[y2, x2]:
-                                idmap[y2, x2] = id(blob)  # add blob ID to each dert
-                                unfilled_derts += [(y2, x2)]
-                        # else check if same-signed
-                        elif blob.sign != sign__[y2, x2]:
-                            adj_pairs.add((idmap[y2, x2], id(blob)))  # blob.id always increases
-                # terminate blob
-                blob.ibox = sub_box2box(fork_ibox, blob.box)
-                blob.der__t = tuple(par__[box2slice(blob.box)] for par__ in der__t)
-                blob.mask__ = (idmap[box2slice(blob.box)] == id(blob))
-                blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses
-                blob.G = np.hypot(blob.Dy, blob.Dx)
-                if verbose:
-                    progress += blob.A * step; print(f"\rClustering... {round(progress)} %", end=""); sys.stdout.flush()
-    if verbose: print("\r" + " " * 79, end=""); sys.stdout.flush(); print("\r", end="")
-
-    return blob_, idmap, adj_pairs
+    return i__, dy__, dx__, g__, s__
 
 
-def assign_adjacents(adj_pairs):  # adjacents are connected opposite-sign blobs
-    '''
-    Assign adjacent blobs bilaterally according to adjacent pairs' ids in blob_binder.
-    '''
-    for blob_id1, blob_id2 in adj_pairs:
-        blob1 = get_instance(blob_id1)
-        blob2 = get_instance(blob_id2)
+def form_blob(blob, fill_yx_, perimeter_, root__, der__t):
+    # unpack structures
+    root, sign, I, Dy, Dx, yx_, dert_, link_ = blob
+    i__, dy__, dx__, g__, s__ = der__t
+    Y, X = g__.shape
 
-        y01, yn1, x01, xn1 = blob1.box
-        y02, yn2, x02, xn2 = blob2.box
+    # get and check coord
+    y, x = perimeter_.pop()  # get pixel coord
+    if y < 1 or y > Y or x < 1 or x > X: return  # out of bound
+    i = i__[y, x]; dy = dy__[y-1, x-1]; dx = dx__[y-1, x-1]; s = s__[y-1, x-1] # get dert from arrays, -1 coords for shrunk arrays
+    if (y, x) not in fill_yx_:  # if adjacent filled, this is pixel of an adjacent blob
+        _blob = root__[y, x]
+        if _blob not in link_: link_ += [_blob]
+        return
+    if sign is None: sign = s  # assign sign to new blob
+    if sign != s: return   # different sign, stop
 
-        if blob1.fopen and blob2.fopen:
-            pose1 = pose2 = 2
-        elif y01 < y02 and x01 < x02 and yn1 > yn2 and xn1 > xn2:
-            pose1, pose2 = 0, 1  # 0: internal, 1: external
-        elif y01 > y02 and x01 > x02 and yn1 < yn2 and xn1 < xn2:
-            pose1, pose2 = 1, 0  # 1: external, 0: internal
-        else:
-            if blob2.A > blob1.A:
-                pose1, pose2 = 0, 1  # 0: internal, 1: external
-            else:
-                pose1, pose2 = 1, 0  # 1: external, 0: internal
-        # bilateral assignments
-        '''
-        if f_segment_by_direction:  # pose is not needed
-            blob1.adj_blobs += [blob2]
-            blob2.adj_blobs += [blob1]
-        '''
-        blob1.adj_blobs[0] += [blob2]
-        blob1.adj_blobs[1] += [pose2]
-        blob2.adj_blobs[0] += [blob1]
-        blob2.adj_blobs[1] += [pose1]
+    # fill coord, proceed with form_blob
+    fill_yx_.remove((y, x))  # remove from yx_
+    root__[y, x] = blob  # assign root, for link forming
+    I += i; Dy += dy; Dx += dx  # update params
+    yx_ += [(y, x)]; dert_ += [(i, dy, dx)]  # update elements
+
+    # update perimeter_
+    perimeter_ += [(y-1,x), (y,x+1), (y+1,x), (y,x-1)]  # extend perimeter
+    if sign: perimeter_ += [(y-1,x-1), (y-1,x+1), (y+1,x+1), (y+1,x-1)]  # ... include diagonals for +blobs
+
+    blob[:] = root, sign, I, Dy, Dx, yx_, dert_, link_ # update blob
 
 
 if __name__ == "__main__":
+    # standalone script, frame_blobs doesn't import from higher modules (like intra_blob).
+    # Instead, higher modules will import from frame_blobs and will have their own standalone scripts like below.
     import argparse
     from utils import imread
     # Parse arguments
     argument_parser = argparse.ArgumentParser()
     argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_eye.jpeg')
-    argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=1)
-    argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=0)
-    argument_parser.add_argument('-c', '--clib', help='use C shared library', type=int, default=0)
-    argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=1)
-    argument_parser.add_argument('-e', '--extra', help='run frame_recursive after frame_blobs', type=int, default=0)
     args = argument_parser.parse_args()
     image = imread(args.image)
-    verbose = args.verbose
-    intra = args.intra
-    render = args.render
 
-    start_time = time()
-    if args.extra:  # not functional yet
-        from frame_recursive import frame_recursive
-        frame = frame_recursive(image, intra, render, verbose)
-    else:
-        frame = frame_blobs_root(image, intra, render, verbose)
+    frame = frame_blobs_root(image)
 
-    end_time = time() - start_time
-    if args.verbose:
-        print(f"\nSession ended in {end_time:.2} seconds", end="")
-    else:
-        print(end_time)
+    # verification/visualization:
+    import matplotlib.pyplot as plt
+    _, I, Dy, Dx, blob_ = frame  # ignore
+
+    i__ = np.zeros_like(image, dtype=np.float32)
+    dy__ = np.zeros_like(image, dtype=np.float32)
+    dx__ = np.zeros_like(image, dtype=np.float32)
+    s__ = np.zeros_like(image, dtype=np.float32)
+    line_ = []
+
+    for blob in blob_:
+        root, sign, I, Dy, Dx, yx_, dert_, link_ = blob
+        for yx, (i, dy, dx) in zip(yx_, dert_):
+            i__[yx] = i
+            dy__[yx] = dy
+            dx__[yx] = dx
+            s__[yx] = sign
+        y, x = map(np.mean, zip(*yx_))  # blob center of gravity
+        for _blob in link_:  # show links
+            _, _, _, _, _, _yx_, _, _ = _blob
+            _y, _x = map(np.mean, zip(*_yx_))  # _blob center of gravity
+            line_ += [((_x, x), (_y, y))]
+
+    plt.imshow(i__, cmap='gray'); plt.show()    # show reconstructed i__
+    plt.imshow(dy__, cmap='gray'); plt.show()   # show reconstructed dy__
+    plt.imshow(dx__, cmap='gray'); plt.show()   # show reconstructed dx__
+
+    # show blobs and links
+    plt.imshow(s__, cmap='gray')
+    for line in line_:
+        plt.plot(*line, "b-")
+    plt.show()

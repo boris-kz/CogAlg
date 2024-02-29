@@ -181,39 +181,12 @@ def interpolate2dert(blob, y, x):
 
 def comp_angle(_A, A):  # rn doesn't matter for angles
 
-    # normalize vectors to (sin,cos):
-    _A_A = [np.array(Dy_Dx)/np.hypot(*Dy_Dx) if np.any(Dy_Dx) else np.array([0,0]) for Dy_Dx in[_A,A]]
-    # convert to angles in radians:
-    _angle, angle = [math.atan2(sin,cos / np.hypot(sin,cos)) for sin,cos in _A_A]
+    _angle, angle = [np.arctan2(Dy, Dx) for Dy, Dx in [_A, A]]
 
     dangle = _angle - angle  # difference between angles
-    dangle = (dangle + math.pi) % (2 * math.pi) - math.pi  # normalize to within [-π, π]
-    # angle similarity:
-    mangle = math.cos(dangle)
-    dangle = 2-mangle  # redefine as a signed complementary of mangle, not sure about 2 here
-    mangle += 1  # cos returns range (1,-1), convert to (2,0)
+    if dangle > np.pi: dangle -= 2 * np.pi  # rotate full-circle clockwise
+    elif dangle < -np.pi: dangle += 2 * np.pi  # rotate full-circle counter-clockwise
+    mangle = (np.cos(dangle) + 1) / 2  # angle similarity, scale to [0,1]
+    dangle /= 2 * np.pi  # scale to the range of mangle, signed: [-.5,.5]
 
     return [mangle, dangle]
-
-
-def comp_aangle(_aangle, aangle):  # currently not used, just in case we need it later
-
-    _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _aangle
-    sin_da0, cos_da0, sin_da1, cos_da1 = aangle
-
-    sin_dda0 = (cos_da0 * _sin_da0) - (sin_da0 * _cos_da0)
-    cos_dda0 = (cos_da0 * _cos_da0) + (sin_da0 * _sin_da0)
-    sin_dda1 = (cos_da1 * _sin_da1) - (sin_da1 * _cos_da1)
-    cos_dda1 = (cos_da1 * _cos_da1) + (sin_da1 * _sin_da1)
-    # for 2D, not reduction to 1D:
-    # aaangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
-    # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]
-    # dax = [-sin_dda0 + sin_dda1, cos_dda0 + cos_dda1]
-    gay = np.arctan2((-sin_dda0 - sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in y?
-    gax = np.arctan2((-sin_dda0 + sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in x?
-
-    # daangle = sin_dda0 + sin_dda1?
-    daangle = np.arctan2(gay, gax)  # diff between aangles, probably wrong
-    maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
-
-    return [maangle,daangle]

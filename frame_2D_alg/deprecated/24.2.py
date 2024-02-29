@@ -942,3 +942,24 @@ def comp_angle(_angle, angle):  # rn doesn't matter for angles
     return [mangle, dangle]
 
 
+def comp_aangle(_aangle, aangle):  # currently not used, just in case we need it later
+
+    _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _aangle
+    sin_da0, cos_da0, sin_da1, cos_da1 = aangle
+
+    sin_dda0 = (cos_da0 * _sin_da0) - (sin_da0 * _cos_da0)
+    cos_dda0 = (cos_da0 * _cos_da0) + (sin_da0 * _sin_da0)
+    sin_dda1 = (cos_da1 * _sin_da1) - (sin_da1 * _cos_da1)
+    cos_dda1 = (cos_da1 * _cos_da1) + (sin_da1 * _sin_da1)
+    # for 2D, not reduction to 1D:
+    # aaangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
+    # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]
+    # dax = [-sin_dda0 + sin_dda1, cos_dda0 + cos_dda1]
+    gay = np.arctan2((-sin_dda0 - sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in y?
+    gax = np.arctan2((-sin_dda0 + sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in x?
+
+    # daangle = sin_dda0 + sin_dda1?
+    daangle = np.arctan2(gay, gax)  # diff between aangles, probably wrong
+    maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
+
+    return [maangle,daangle]

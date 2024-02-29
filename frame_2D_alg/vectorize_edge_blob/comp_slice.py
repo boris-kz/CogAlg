@@ -43,7 +43,7 @@ def der_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep
 
     rng_recursion(PP, rng=1, fd=fd)  # extend PP.link_, derHs by same-der rng+ comp
 
-    form_PP_t(PP, PP.P_, iRt = PP.Et[2:4] if PP.Et[2:4] else [0,0])  # der+ is mediated by form_PP_t
+    form_PP_t(PP, PP.P_, iRt = PP.Et[2:4] if PP.Et else [0,0])  # der+ is mediated by form_PP_t
     if root: root.fback_ += [[PP.He, PP.et]]  # feedback from PPds
 
 
@@ -64,7 +64,7 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contig
                     mlink = comp_P(_link if fd else [_P,P, distance,[dy,dx]], fd)  # return link if match
                     if mlink:
                         V += mlink.et[0]  # unpack last link layer:
-                        link_ = P.link_[-1] if PP.He and PP.He[0] else P.link_  # der++ if PP.He[0] depth==1
+                        link_ = P.link_[-1] if P.link_ and isinstance(P.link_[-1], list) else P.link_  # der++ if PP.He[0] depth==1
                         if rng > 1:
                             if rng == 2: link_[:] = [link_[:]]  # link_ -> link_H
                             if len(link_) < rng: link_ += [[]]  # new link_
@@ -94,7 +94,7 @@ def comp_P(link, fd):
 
     if _P.He and P.He:
         # der+: append link derH, init in rng++ from form_PP_t
-        depth,(vm,vd,rm,rd),H = comp_(_P.He, P.He, rn=rn)
+        depth,(vm,vd,rm,rd),H, n = comp_(_P.He, P.He, rn=rn)
         rm += vd > vm; rd += vm >= vd
         aveP = P_aves[1]
     else:
@@ -103,7 +103,7 @@ def comp_P(link, fd):
         vm = sum(H[::2]); vd = sum(abs(d) for d in H[1::2])
         rm = 1 + vd > vm; rd = 1 + vm >= vd
         aveP = P_aves[0]
-        depth = 0
+        n = 1  # 6 compared params is a unit of n
 
     if vm > aveP*rm:  # always rng+
         if fd:
@@ -113,7 +113,7 @@ def comp_P(link, fd):
             He[2] += [[0, [vm,vd,rm,rd], H]]  # nesting, Et, H
             link.et = [V+v for V, v in zip(link.et,[vm,vd, rm,rd])]
         else:
-            link = CderP(typ='derH' if depth else 'md_', P=P,_P=_P, He=[0,[vm,vd,rm,rd],H], et=[vm,vd,rm,rd], S=S, A=A, roott=[[],[]])
+            link = CderP(P=P,_P=_P, He=[0,[vm,vd,rm,rd],H], et=[vm,vd,rm,rd], S=S, A=A, n=n, roott=[[],[]])
 
         return link
 
@@ -169,7 +169,7 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
         PP.Et = [V+v for V,v in zip(PP.Et, derP.et)]
         PP.Et[2:4] = [R+ir for R,ir in zip(PP.Et[2:4], iRt)]
         derP.A = np.add(A,derP.A); S += derP.S
-    PP.ext = [len(P_), S or 1, A]  # all from links  (prevent zero S for single P's PP)
+    PP.ext = [len(P_), S if S != 0 else 1, A]  # all from links  (prevent zero S for single P's PP)
 
     # += Ps:
     celly_,cellx_ = [],[]
@@ -223,10 +223,9 @@ def comp_ptuple(_ptuple, ptuple, rn, fagg=0):  # 0der params
 
     ret = [mI,dI,mG,dG,mM,dM,mMa,dMa,mAngle-aves[5],dAngle,mL,dL]
 
-    if fagg:
-        Ret = [max(_I,I), abs(_I)+abs(I),max(_G,G),abs(_G)+abs(G), max(_M,M), abs(_M)+abs(M), max(_Ma,Ma), abs(_Ma)+abs(Ma), 2, 2, max(_L,L),abs(_L)+abs(L)]
-        # ret = [ret, Ret]
-        # ?
+    if fagg:  # add norm m,d: ret = [ret, Ret]
+        # max possible m,d per compared param
+        Ret = [max(_I,I), abs(_I)+abs(I), max(_G,G),abs(_G)+abs(G), max(_M,M),abs(_M)+abs(M), max(_Ma,Ma),abs(_Ma)+abs(Ma), 1,.5, max(_L,L),abs(_L)+abs(L)]
         mval, dval = sum(ret[::2]),sum(ret[1::2])
         mrdn, drdn = dval>mval, mval>dval
         mdec, ddec = 0, 0
