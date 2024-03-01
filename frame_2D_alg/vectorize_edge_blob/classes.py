@@ -18,6 +18,16 @@ from .filters import ave_dangle, ave_dI, ave_Pd, ave_Pm, aves
     1-3 letter names are normally scalars, except for P and similar classes, 
     capitalized variables are normally summed small-case variables,
     longer names are normally classes
+    
+Convert to all-lists: cluster_params Cpar_:
+
+Cpar_[0] is numeric typ: [[node|link], [nesting_depth]]:
+depth is 0 in P | derP, 1 in PP | derPP, 2 in G | derG, blobs can be same as nodes.
+
+Cpar_[1] is node [link_,sub_node_] or link nodet,
+Cpar_[1:] is extensible param set, explained in top docstring per module,
+Cpar_[-1] is instance id, set in initialization
+We already have proto-G grapht in segment_node_, 195, just need to add params in sum2graph.
 '''
 
 def add_(HE, He, irdnt=[]):  # unpack tuples (formally lists) down to numericals and sum them
@@ -29,7 +39,7 @@ def add_(HE, He, irdnt=[]):  # unpack tuples (formally lists) down to numericals
             if ddepth:
                 nHe = [HE,He][Depth > depth]  # nested He
                 while ddepth > 0:
-                    nHe[:] = [nHe[0]+1, [*nHe[1]], [deepcopy(nHe)]]; ddepth -= 1
+                   nHe[:] = [nHe[0]+1, [*nHe[1]], [deepcopy(nHe)]]; ddepth -= 1
 
             if isinstance(He[2][0], list):
                 for Lay,lay in zip_longest(HE[2], He[2], fillvalue=[]):  # always list He
@@ -52,6 +62,15 @@ def add_(HE, He, irdnt=[]):  # unpack tuples (formally lists) down to numericals
             HE[1][2] += irdnt[0]; HE[1][3] += irdnt[1]
 
     return HE  # for summing
+
+def nest(HE,He):
+
+    Depth, depth = HE[0], He[0]  # nesting depth, nest to the deeper He: md_-> derH-> subH-> aggH:
+    ddepth = abs(Depth - depth)
+    if ddepth:
+        nHe = [HE,He][Depth > depth]  # nested He
+        while ddepth > 0:
+           nHe[:] = [nHe[0]+1, [*nHe[1]], [deepcopy(nHe)]]; ddepth -= 1
 
 
 def comp_(_He,He, rn=1, fagg=0):  # unpack tuples (formally lists) down to numericals and compare them
@@ -90,7 +109,8 @@ def comp_(_He,He, rn=1, fagg=0):  # unpack tuples (formally lists) down to numer
             vd += diff
             dH += [match,diff]  # flat
         Et = [vm,vd,rm,rd]
-        n += 1
+        if fagg: Et += [decm, decd]
+        n += 1 if len(_cHe[2]) == 12 else 0.5  # md_ += 1, ext += 0.5
 
     return min(_depth,depth), Et, dH, n
 
@@ -203,7 +223,7 @@ def Cgraph(typ='graph',
             # graph-external, +level per root sub+:
            rimH = None,  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
            RimH = None,  # links to the most mediated nodes
-           extH = None, # G-external daggH( dsubH( dderH, summed from rim links
+           ext_He = None, # G-external He: daggH( dsubH( dderH, summed from rim links
            eet = None,  # sum from esubH
            ext = None,  # L,S,A: L len base node_, S sparsity: average link len, A angle: average link dy,dx
            rng = None,
@@ -229,7 +249,7 @@ def Cgraph(typ='graph',
 
     params_set = ('fd','ptuple', 'He',
                   'aggH', 'et', 'link_', 'node_',
-                  'rimH', 'RimH', 'extH', 'eet', 'ext', 'rng', 'box',
+                  'rimH', 'RimH', 'ext_He', 'eet', 'ext', 'rng', 'box',
                   'alt_graph_','aet',
                   'P_','mask__','area',
                   'Et','root','fback_','compared_','Rdn',
@@ -245,7 +265,7 @@ def Cgraph(typ='graph',
 
     instance = z(typ=typ, fd=fd,ptuple=ptuple, He=He,
                  aggH=aggH, et=et, link_=link_, node_=node_,
-                 rimH=rimH, RimH=RimH, extH=extH, eet=eet, ext=ext, rng=rng, box=box,
+                 rimH=rimH, RimH=RimH, ext_He=ext_He, eet=eet, ext=ext, rng=rng, box=box,
                  alt_graph_=alt_graph_,aet=aet,
                  P_=P_,mask__=mask__,area=area,
                  Et=Et,root=root,fback_=fback_,compared_=compared_,Rdn=Rdn,
@@ -266,11 +286,11 @@ def Cgraph(typ='graph',
     return instance
 
 
-def CderG(typ='derG', _G=None, G=None, daggH=None, et=None, S=None, A=None, n=None, roott=None):
+def CderG(typ='derG', _G=None, G=None, He=None, et=None, S=None, A=None, n=None, roott=None):
 
-    params_set = ('_G','G','daggH','et','S', 'A', 'n', 'roott')
+    params_set = ('_G','G','He','et','S', 'A', 'n', 'roott')
     default_value = (None,None,[],[],0, [0,0], 0, [None, None])
-    instance = z(typ=typ, _G=_G, G=G, daggH=daggH, et=et, S=S, A=A, n=n, roott=roott)
+    instance = z(typ=typ, _G=_G, G=G, He=He, et=et, S=S, A=A, n=n, roott=roott)
     init_default(instance, params_set, default_value)
     return instance
 
@@ -475,10 +495,11 @@ def get_match(_par, par):
     match = min(abs(_par),abs(par))
     return -match if (_par<0) != (par<0) else match    # match = neg min if opposite-sign comparands
 
-def negate(He):
 
+def negate(He):
     if isinstance(He[2][0], list):
-        for lay in He[2]: negate(lay)
+        for lay in He[2]:
+            negate(lay)
     else:  # md_
         He[2][1::2] = [-d for d in He[2][1::2]]
 

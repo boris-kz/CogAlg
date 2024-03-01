@@ -83,71 +83,64 @@ def comp_pixel(i__):
         (i__[1:-1, 2:] - i__[1:-1,  :-2]) * 0.50 +
         (i__[2:  , 2:] - i__[ :-2, 2:  ]) * 0.25
     )
-    g__ = np.hypot(dy__, dx__)                          # compute gradient magnitude
+    g__ = np.hypot(dy__, dx__)  # compute gradient magnitude, -> separate G because it's not signed, dy,dx cancel out in Dy,Dx
     s__ = ave - g__ > 0  # sign is positive for below-average g
 
     return i__, dy__, dx__, g__, s__
 
 
 def form_blob(blob, fill_yx_, perimeter_, root__, der__t):
-    # unpack structures
-    root, sign, I, Dy, Dx, yx_, dert_, link_ = blob
+
+    # all lists:
+    root, sign, I, Dy, Dx, G, yx_, dert_, link_ = blob
     i__, dy__, dx__, g__, s__ = der__t
     Y, X = g__.shape
-
-    # get and check coord
-    y, x = perimeter_.pop()  # get pixel coord
+    y, x = perimeter_.pop()  # pixel coord
     if y < 1 or y > Y or x < 1 or x > X: return  # out of bound
-    i = i__[y, x]; dy = dy__[y-1, x-1]; dx = dx__[y-1, x-1]; s = s__[y-1, x-1] # get dert from arrays, -1 coords for shrunk arrays
-    if (y, x) not in fill_yx_:  # if adjacent filled, this is pixel of an adjacent blob
+    i = i__[y, x]; dy = dy__[y-1, x-1]; dx = dx__[y-1, x-1]; g = g__[y-1, x-1];  s = s__[y-1, x-1]  # dert, -1 coords for shrunk arrays
+    if (y, x) not in fill_yx_:  # else this is a pixel of adjacent blob
         _blob = root__[y, x]
         if _blob not in link_: link_ += [_blob]
         return
     if sign is None: sign = s  # assign sign to new blob
     if sign != s: return   # different sign, stop
 
-    # fill coord, proceed with form_blob
-    fill_yx_.remove((y, x))  # remove from yx_
+    fill_yx_.remove((y, x))
     root__[y, x] = blob  # assign root, for link forming
-    I += i; Dy += dy; Dx += dx  # update params
+    I += i; Dy += dy; Dx += dx; G += g  # update params
     yx_ += [(y, x)]; dert_ += [(i, dy, dx)]  # update elements
 
-    # update perimeter_
     perimeter_ += [(y-1,x), (y,x+1), (y+1,x), (y,x-1)]  # extend perimeter
     if sign: perimeter_ += [(y-1,x-1), (y-1,x+1), (y+1,x+1), (y+1,x-1)]  # ... include diagonals for +blobs
 
-    blob[:] = root, sign, I, Dy, Dx, yx_, dert_, link_ # update blob
+    blob[:] = root, sign, I, Dy, Dx, G, yx_, dert_, link_ # update blob
 
 
 if __name__ == "__main__":
-    # standalone script, frame_blobs doesn't import from higher modules (like intra_blob).
-    # Instead, higher modules will import from frame_blobs and will have their own standalone scripts like below.
-    import argparse
-    from utils import imread
-    # Parse arguments
-    argument_parser = argparse.ArgumentParser()
-    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_eye.jpeg')
-    args = argument_parser.parse_args()
-    image = imread(args.image)
 
+    from utils import imread
+    image_file = './images//raccoon_eye.jpeg'
+    image = imread(image_file)
     frame = frame_blobs_root(image)
 
     # verification/visualization:
     import matplotlib.pyplot as plt
-    _, I, Dy, Dx, blob_ = frame  # ignore
+    _, I, Dy, Dx, G, blob_ = frame  # ignore
 
     i__ = np.zeros_like(image, dtype=np.float32)
     dy__ = np.zeros_like(image, dtype=np.float32)
     dx__ = np.zeros_like(image, dtype=np.float32)
+    g__ = np.zeros_like(image, dtype=np.float32)
     s__ = np.zeros_like(image, dtype=np.float32)
     line_ = []
 
     for blob in blob_:
-        root, sign, I, Dy, Dx, yx_, dert_, link_ = blob
-        for yx, (i, dy, dx) in zip(yx_, dert_):
+        root, sign, I, Dy, Dx, G, yx_, dert_, link_ = blob
+        for yx, (i, dy, dx, g) in zip(yx_, dert_):
             i__[yx] = i
             dy__[yx] = dy
             dx__[yx] = dx
+            g__[yx] = g
             s__[yx] = sign
         y, x = map(np.mean, zip(*yx_))  # blob center of gravity
         for _blob in link_:  # show links
@@ -155,9 +148,11 @@ if __name__ == "__main__":
             _y, _x = map(np.mean, zip(*_yx_))  # _blob center of gravity
             line_ += [((_x, x), (_y, y))]
 
-    plt.imshow(i__, cmap='gray'); plt.show()    # show reconstructed i__
-    plt.imshow(dy__, cmap='gray'); plt.show()   # show reconstructed dy__
-    plt.imshow(dx__, cmap='gray'); plt.show()   # show reconstructed dx__
+    plt.imshow(i__, cmap='gray'); plt.show()  # show reconstructed i__
+    plt.imshow(dy__,cmap='gray'); plt.show()  # show reconstructed dy__
+    plt.imshow(dx__,cmap='gray'); plt.show()  # show reconstructed dx__
+    plt.imshow(dx__,cmap='gray'); plt.show()  # show reconstructed dx__
+    plt.imshow(g__, cmap='gray'); plt.show()  # show reconstructed g__
 
     # show blobs and links
     plt.imshow(s__, cmap='gray')
