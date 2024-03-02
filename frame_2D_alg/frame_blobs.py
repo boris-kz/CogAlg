@@ -49,16 +49,16 @@ ave_mP = 100
 
 def frame_blobs_root(i__):
     der__t = comp_pixel(i__)  # compare all in parallel -> i__, dy__, dx__, g__, s__
-    frame = i__, I, Dy, Dx, blob_ = [i__, 0, 0, 0, []]  # init frame as output
+    frame = i__, I, Dy, Dx, G, blob_ = [i__, 0, 0, 0, 0, []]  # init frame as output
 
     # Flood-fill 1 pixel at a time
     Y, X = i__.shape  # get i__ height and width
     fill_yx_ = list(product(range(1,Y-1), range(1,X-1)))  # set of pixel coordinates to be filled (fill_yx_)
-    root__ = {}  # id map pixel to blob
+    root__ = {}  # map pixel to blob
     perimeter_ = []  # perimeter pixels
     while fill_yx_:  # fill_yx_ is popped per filled pixel, in form_blob
         if not perimeter_:  # init blob
-            blob = [frame, None, 0, 0, 0, [], [], []]  # root (frame), sign, I, Dy, Dx, yx_, dert_, link_ (up-links)
+            blob = [frame, None, 0, 0, 0, 0, [], [], []]  # root (frame), sign, I, Dy, Dx, G, yx_, dert_, link_ (up-links)
             perimeter_ += [fill_yx_[0]]
 
         form_blob(blob, fill_yx_, perimeter_, root__, der__t)  # https://en.wikipedia.org/wiki/Flood_fill
@@ -67,9 +67,11 @@ def frame_blobs_root(i__):
             frame[1] += blob[2]  # I
             frame[2] += blob[3]  # Dy
             frame[3] += blob[4]  # Dx
+            frame[4] += blob[4]  # G
             blob_ += [blob]
 
     return frame
+
 
 def comp_pixel(i__):
     # compute directional derivatives:
@@ -108,7 +110,7 @@ def form_blob(blob, fill_yx_, perimeter_, root__, der__t):
     fill_yx_.remove((y, x))
     root__[y, x] = blob  # assign root, for link forming
     I += i; Dy += dy; Dx += dx; G += g  # update params
-    yx_ += [(y, x)]; dert_ += [(i, dy, dx)]  # update elements
+    yx_ += [(y, x)]; dert_ += [(i, dy, dx, g)]  # update elements
 
     perimeter_ += [(y-1,x), (y,x+1), (y+1,x), (y,x-1)]  # extend perimeter
     if sign: perimeter_ += [(y-1,x-1), (y-1,x+1), (y+1,x+1), (y+1,x-1)]  # ... include diagonals for +blobs
@@ -144,7 +146,7 @@ if __name__ == "__main__":
             s__[yx] = sign
         y, x = map(np.mean, zip(*yx_))  # blob center of gravity
         for _blob in link_:  # show links
-            _, _, _, _, _, _yx_, _, _ = _blob
+            _, _, _, _, _, _, _yx_, _, _ = _blob
             _y, _x = map(np.mean, zip(*_yx_))  # _blob center of gravity
             line_ += [((_x, x), (_y, y))]
 

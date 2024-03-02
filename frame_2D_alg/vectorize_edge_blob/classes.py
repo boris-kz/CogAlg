@@ -19,15 +19,24 @@ from .filters import ave_dangle, ave_dI, ave_Pd, ave_Pm, aves
     capitalized variables are normally summed small-case variables,
     longer names are normally classes
     
-Convert to all-lists: cluster_params Cpar_:
+convert to all-lists cluster_params Cpar_:
 
-Cpar_[0] is numeric typ: [[node|link], [nesting_depth]]:
-depth is 0 in P | derP, 1 in PP | derPP, 2 in G | derG, blobs can be same as nodes.
+depth = 0 in P | derP, 1 in PP | derPP, 2 in G | derG, blobs can be same as nodes.
+basic types with param sets, all include common core:
 
-Cpar_[1] is node [link_,sub_node_] or link nodet,
-Cpar_[1:] is extensible param set, explained in top docstring per module,
-Cpar_[-1] is instance id, set in initialization
-We already have proto-G grapht in segment_node_, 195, just need to add params in sum2graph.
+node: node_H, link_H, derH, et, rimH (ext link), extt (LSA, box, area, mask_, axis), root, fback
+link: nodet, dderH, extt, roott 
+ders: He, optional angle, named params, 
+so
+node, link pairs, common core: (depth, Et, n, id):
+   
+    P:     core, (ptuple, He), dert_,link_, yx, axis, cells
+    derP:  core, He, (_P,P), (S,A), roott
+    PP:    core, et, (ptuple, He), (P_,node_),link_, (ext,box,mask__,area), root,fback_, fd,rng
+    derPP: = derP
+    graph: core, et, (ptuple,He,aggH), node_,link_, (ext, box, area), root,fback_, fd,rng
+           (rimH, RimH, eet, ext_He), (alt_graph_, alt_et), compared_
+    derG: = derP
 '''
 
 def add_(HE, He, irdnt=[]):  # unpack tuples (formally lists) down to numericals and sum them
@@ -133,8 +142,9 @@ class z(SimpleNamespace):
 
 def init_default(instance, params_set, default_value):
     for param, value in zip(params_set, default_value):
-        if getattr(instance, param) is None: setattr(instance, param, deepcopy(value))  # deepcopy prevent list has a same reference
+        if getattr(instance, param) is None: setattr(instance, param, deepcopy(value))
 
+'''
 # C inits SimpleNamespace instance with typ-specific param set:
 
 def Cptuple(typ='ptuple',I=None, G=None, M=None, Ma=None, angle=None, L=None):
@@ -295,7 +305,7 @@ def CderG(typ='derG', _G=None, G=None, He=None, et=None, S=None, A=None, n=None,
     return instance
 
 # separate classes:
-'''
+
 class Cptuple(CBaseLite):
 
     I: Real = 0

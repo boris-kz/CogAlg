@@ -21,17 +21,17 @@ aveR = 10  # for range+, fixed overhead per blob
 # functions:
 
 def intra_blob_root(frame): # init rng+ recursion
-    i__, I, Dy, Dx, blob_ = frame
+    i__, I, Dy, Dx, G, blob_ = frame
 
     for blob in blob_:
         intra_blob(blob, i__, rdn=1, rng=1)
 
 def intra_blob(root_blob, i__, rdn, rng):  # recursive evaluation of cross-comp rng+ per blob
     # unpack root_blob
-    root, sign, I, Dy, Dx, yx_, dert_, link_ = root_blob
+    root, sign, I, Dy, Dx, G, yx_, dert_, link_ = root_blob
 
     if not sign: return  # only for below-average G
-    G = np.hypot(Dy, Dx); A = len(dert_)
+    A = len(dert_)
     if G >= ave*A + aveR*rdn: return  # eval for comp_r
 
     rdn += 1.5; rng += 1  # update rdn, rng
@@ -42,11 +42,11 @@ def intra_blob(root_blob, i__, rdn, rng):  # recursive evaluation of cross-comp 
     blob_ = []
     root_blob += [rdn, rng, blob_]  # extend blob with rdn, rng, sub_blob_
     fill_yx_ = list(dert__.keys())  # set of pixel coordinates to be filled, from root_blob
-    root__ = {}  # id map pixel to blob
+    root__ = {}  # map pixel to blob
     perimeter_ = []  # perimeter pixels
     while fill_yx_:  # fill_yx_ is popped per filled pixel, in form_blob
         if not perimeter_:  # init blob
-            blob = [root_blob, None, 0, 0, 0, [], [], []]  # root, sign, I, Dy, Dx, yx_, dert_, link_
+            blob = [root_blob, None, 0, 0, 0, 0, [], [], []]  # root, sign, I, Dy, Dx, G, yx_, dert_, link_
             perimeter_ += [fill_yx_[0]]
 
         form_blob(blob, fill_yx_, perimeter_, root__, dert__)
@@ -64,7 +64,7 @@ def comp_r(i__, yx_, dert_, rdn, rng):
 
     # loop through root_blob's pixels
     dert__ = {}     # mapping from y, x to dert
-    for (y, x), (p, dy, dx) in zip(yx_, dert_):
+    for (y, x), (p, dy, dx, g) in zip(yx_, dert_):
         if y-rng < 0 or y+rng >= Y or x-rng < 0 or x+rng >= X: continue # boundary check
 
         # comparison. i,j: relative coord within kernel 0 -> rng*2+1
@@ -76,7 +76,7 @@ def comp_r(i__, yx_, dert_, rdn, rng):
         g = np.hypot(dy, dx)
         s = ave*(rdn + 1) - g > 0
 
-        dert__[y, x] = p, dy, dx, s
+        dert__[y, x] = p, dy, dx, g, s
 
     return dert__
 
@@ -102,12 +102,12 @@ def compute_kernel(rng):
 
 def form_blob(blob, fill_yx_, perimeter_, root__, dert__):
     # unpack structures
-    root, sign, I, Dy, Dx, yx_, dert_, link_ = blob
+    root, sign, I, Dy, Dx, G, yx_, dert_, link_ = blob
 
     # get and check coord
     y, x = perimeter_.pop()  # get pixel coord
     if (y, x) not in dert__: return  # out of bound
-    i, dy, dx, s = dert__[y, x]
+    i, dy, dx, g, s = dert__[y, x]
     if (y, x) not in fill_yx_:  # if adjacent filled, this is pixel of an adjacent blob
         _blob = root__[y, x]
         if _blob not in link_: link_ += [_blob]
@@ -118,14 +118,14 @@ def form_blob(blob, fill_yx_, perimeter_, root__, dert__):
     # fill coord, proceed with form_blob
     fill_yx_.remove((y, x))  # remove from yx_
     root__[y, x] = blob  # assign root, for link forming
-    I += i; Dy += dy; Dx += dx  # update params
-    yx_ += [(y, x)]; dert_ += [(i, dy, dx)]  # update elements
+    I += i; Dy += dy; Dx += dx;  G += g# update params
+    yx_ += [(y, x)]; dert_ += [(i, dy, dx, g)]  # update elements
 
     # update perimeter_
     perimeter_ += [(y-1,x), (y,x+1), (y+1,x), (y,x-1)]  # extend perimeter
     if sign: perimeter_ += [(y-1,x-1), (y-1,x+1), (y+1,x+1), (y+1,x-1)]  # ... include diagonals for +blobs
 
-    blob[:] = root, sign, I, Dy, Dx, yx_, dert_, link_ # update blob
+    blob[:] = root, sign, I, Dy, Dx, G, yx_, dert_, link_ # update blob
 
 
 
@@ -143,10 +143,10 @@ if __name__ == "__main__":
     while blobQue:
         blob = blobQue.pop(0)
         try:  # raise Value error of blob is un-extended
-            root, sign, I, Dy, Dx, yx_, dert_, link_, rdn, rng, blob_ = blob
+            root, sign, I, Dy, Dx, G, yx_, dert_, link_, rdn, rng, blob_ = blob
             if blob_:
                 print(f"blob {id(blob)}, whose parent is {id(root)}, "
                       f"has {len(blob_)} sub-blob{'' if len(blob_) == 1 else 's'}")
                 blobQue += blob_
         except ValueError as e:  # un-extended blob, skip
-            if "not enough values to unpack (expected 11, got 8)" != str(e): raise e
+            if "not enough values to unpack (expected 12, got 9)" != str(e): raise e
