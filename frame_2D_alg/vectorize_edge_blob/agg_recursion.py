@@ -309,32 +309,35 @@ def sum_last_lay(G, fd):  # eLay += last layer of link.daggH (dsubH|ddaggH)
 
 
   # draft
-def comp_G(link, iEt):
+def comp_G(link, iEt):  # add flat dderH to link and link to the rims of comparands
 
     _G, G = link._G, link.G  # comp: default P.ptuple and G.ext, PP.He if>1 P, G.HHe if>1 PP:
+    rn = _G.n / G.n; Depth = 0
+    N = 1.5  # default
     # / P:
-    pEt, md_ = comp_ptuple(_G.ptuple, G.ptuple, rn=1, fagg=1)
-    # / PP:
-    eEt, extt = comp_ext(_G.ext, G.ext, rn=1)
-    Et = [E+e for E,e in zip(pEt,eEt)]  # evaluation tuple: valt, rdnt, dect
-    dHe = [1,Et, [[0,pEt,md_],[-1,eEt,extt]]]  # default 1-layer dderH
-    link.n += 1.5
-    # if >1 Ps:
-    if _G.He and G.He:
-        depth, et, dH, n = comp_(_G.He, G.He, rn=1, fagg=1)
-        dHe[2] += dH  # add flat to dderH
-        Et = [E+e for E,e in zip(Et,et)]; link.n += n
+    Et, md_ = comp_ptuple(_G.ptuple, G.ptuple, rn, fagg=1)
+    dderH = [[0, [*Et], md_]]  # dderH.H
+    # / PP, if >1 Ps:
+    if _G.derH and G.derH:
+        depth, et, dHe, n = comp_(_G.derH, G.derH, rn, fagg=1)  # dderH is generic now
+        dderH += dHe  # add flat
+        Et = [E+e for E,e in zip(Et,et)]  # evaluation tuple: valt, rdnt, dect
+        N += n; Depth = depth
     # / G, if >1 PPs:
-    if _G.aggH and G.aggH:  # as above, not sure about ext yet
-        depth, et, daggH, n = comp_(_G.aggH, G.aggH, rn=1, fagg=1)
+    if _G.aggH and G.aggH:  # as above
+        depth, et, daggH, n = comp_(_G.aggH, G.aggH, rn, fagg=1)
+        dderH += daggH  # still flat
         Et = [E+e for E,e in zip(Et,et)]
-        dHe = [depth+1, Et, [dHe]+daggH[2]]  # not sure about nesting
-        link.n += n
-    if link.He:
-        add_(link.He, dHe)  # existing He in der+
+        N += n; Depth = depth
+
+    et, extt = comp_ext(_G.ext, G.ext, rn)
+    link.et = [E+e for E,e in zip(Et,et)]  # reset per comp_G
+    link.n = N
+    dderH = [Depth, Et, dderH + [[-1,et,extt]]]  # extt must be last
+    if link.dderH:
+        add_(link.dderH, dderH)  # existing He in der+
     else:
-        link.He = dHe
-    link.et = [*Et]  # reset per comp_G
+        link.dderH = dderH
     for fd in 0, 1:
         Val, Rdn, Dec = Et[fd::2]
         if Val > G_aves[fd] * Rdn:

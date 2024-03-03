@@ -124,6 +124,88 @@ def comp_(_He,He, rn=1, fagg=0):  # unpack tuples (formally lists) down to numer
     return min(_depth,depth), Et, dH, n
 
 
+def __init__(self): self.my_list = []
+z = __init__
+
+class Clink:  # the product of comparison between two nodes
+
+    _node: None  # prior comparand
+    node: None  # current comparand
+    Et: list = z([])
+    dderH: list = z([])  # derivatives produced by comp, from single ptuplet in rng+ to He
+    roott = [None, None]  # clusters that contain this link
+    S: float = 0.0  # sparsity: distance between node centers
+    A: list = [0,0]  # angle: dy,dx between centers
+    n = 0
+
+#  dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
+
+#  He len layers with ext: 2, 3, 6, 12, 24...
+#  max n of tuples per der layer = summed n of tuples in all lower layers: 1, 1, 2, 4, 8..:
+#  lay1: par     # derH per param in vertuple, layer is derivatives of all lower layers:
+#  lay2: [m,d]   # implicit nesting, brackets for clarity:
+#  lay3: [[m,d], [md,dd]]: 2 sLays,
+#  lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
+
+
+class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
+
+    latuple = []  # I,G,M,Ma,L, (Dy,Dx)
+    derH = []  # He, [(mtuple, ptuple)...] vertical derivatives summed from P links
+    Et = []    # Vt,Rt, rng is not used?
+    dert_ = []  # array of pixel-level derts, ~ node_
+    link_ = []  # uplinks per comp layer, nest in rng+)der+
+    cells = set  # pixel-level kernels adjacent to P axis, combined into corresponding derts projected on P axis.
+    roott = []  # PPrm,PPrd that contain this P, single-layer
+    yx = []
+    # dynamic attrs:
+    # axis: dynamic, list = z([0, 0])  # prior slice angle, init sin=0,cos=1
+    # dxdert_: list = z([])  # only in Pd
+    # Pd_: list = z([])  # only in Pm
+    # Mdx: int = 0  # if comp_dx
+    # Ddx: int = 0
+
+
+class CG:  # PP | graph | blob: params of single-fork node_ cluster
+
+    latuple = []  # I,G,M,Ma,L, (Dy,Dx)
+    derH = []  # He, [(mtuple, ptuple)...] vertical derivatives summed from P links
+    aggH = []  # G only: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
+    Et = []  # Vt,Rt,Nt
+    node_ = []  # can be node_H?
+    link_ = []  # links per comp layer, nest in rng+)der+
+    roott = []  # Gm,Gd that contain this G, single-layer
+    box: Cbox = z(Cbox(inf, inf, -inf, -inf))  # y,x,y0,x0,yn,xn
+    rng = 1
+    fd = 0  # fork if flat layers?
+    n = 0
+    # graph-external, +level per root sub+:
+    rim_H: list = z([])  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
+    ederH: list = z([])  # G-external daggH( dsubH( dderH, summed from rim links
+    eaggH = []
+    eEt = []  # from external links
+    extt: list = z([0,0,[0,0]])  # L,S,A: L len base node_, S sparsity: average link len, A angle: average link dy,dx
+    # tentative:
+    alt_graph_: list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
+    alt_Et = [0,0]  # sum from alt graphs to complement G aves?
+    # PP:
+    P_: list = z([])
+    mask__: object = None
+
+    # dynamic attrs:
+    root = [] # for feedback
+    fback_ = []  # feedback [[aggH,valt,rdnt,dect]] per node layer, maps to node_H
+    compared_ = []
+    Rim_H: list = z([])  # links to the most mediated nodes
+    Rdn: int = 0  # for accumulation or separate recursion count?
+    # it: list = z([None,None])  # graph indices in root node_s, implicitly nested
+    # depth: int = 0  # n sub_G levels over base node_, max across forks
+    # nval: int = 0  # of open links: base alt rep
+    # id_H: list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
+    # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
+    # top Lay from links, lower Lays from nodes, hence nested tuple?
+
+
 class z(SimpleNamespace):
 
     def __init__(self, **kwargs):  # this is not working here, their default value is still referencing a same id
@@ -336,121 +418,6 @@ class Cptuple(CBaseLite):
         rdnt = [1+(valt.d>valt.m), 1+(1-(valt.d>valt.m))]   # or rdn = Dval/Mval?
 
         return tuplet, valt, rdnt
-
-
-class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
-
-    ptuple: Cptuple = z(Cptuple())  # latuple: I,G,M,Ma, angle(Dy,Dx), L
-    rnpar_H: list = z([])
-    derH: CderH = z(CderH())  # [(mtuple, ptuple)...] vertical derivatives summed from P links
-    vt: list = z([0,0])  # current rng, not used?
-    rt: list = z([1,1])
-    dert_: list = z([])  # array of pixel-level derts, ~ node_
-    cells: set = z(set())  # pixel-level kernels adjacent to P axis, combined into corresponding derts projected on P axis.
-    roott: list = z([None,None])  # PPrm,PPrd that contain this P, single-layer
-    axis: list = z([0,0])  # prior slice angle, init sin=0,cos=1
-    yx: list = z([0,0])
-    link_: list = z([])  # uplinks per comp layer, nest in rng+)der+
- 
-    # dxdert_: list = z([])  # only in Pd
-    # Pd_: list = z([])  # only in Pm
-    # Mdx: int = 0  # if comp_dx
-    # Ddx: int = 0
-   
-
-    def comp(self, other, link_, rn, A, S):
-
-        dertuplet, valt, rdnt = self.ptuple.comp(other.ptuple, rn=rn)
-
-        if valt.m > ave_Pm * rdnt.m or valt.d > ave_Pm * rdnt.d:
-            derH = CderH([dertuplet])
-            link_ += [CderP(derH=derH, valt=valt, rdnt=rdnt, _P=self, P=other, A=A, S=S)]
-
-
-class CderP(CBase):  # tuple of derivatives in P link: binary tree with latuple root and vertuple forks
-
-    _P: CP  # higher comparand
-    P: CP  # lower comparand
-    derH: CderH = z(CderH())  # [[[mtuple,dtuple],[mval,dval],[mrdn,drdn]]], single ptuplet in rng+
-    vt: list = z([0,0])
-    rt: list = z([1,1])  # mrdn + uprdn if branch overlap?
-    roott: list = z([None, None])  # PPdm,PPdd that contain this derP
-    S: float = 0.0  # sparsity: distance between centers
-    A: list = z([0,0])  # angle: dy,dx between centers
-    # roott: list = z([None, None])  # for der++, if clustering is per link
-
-    def comp(self, link_, rn):
-        dderH, valt, rdnt = self._P.derH.comp(self.P.derH, rn=rn, n=len(self.derH))
-
-        if valt.m > ave_Pd * rdnt.m or valt.d > ave_Pd * rdnt.d:
-            self.derH |= dderH; self.valt = valt; self.rdmt = rdnt  # update derP not form new one
-            link_ += [self]
-            
-#  len layers with ext: 2, 3, 6, 12, 24... 
-#  max n of tuples per der layer = summed n of tuples in all lower layers: 1, 1, 2, 4, 8..:
-#  lay1: par     # derH per param in vertuple, layer is derivatives of all lower layers:
-#  lay2: [m,d]   # implicit nesting, brackets for clarity:
-#  lay3: [[m,d], [md,dd]]: 2 sLays,
-#  lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
-
-class Cgraph(CBase):  # params of single-fork node_ cluster
-
-    fd: int = 0  # fork if flat layers?
-    ptuple: Cptuple = z(Cptuple())  # default P
-    derH: CderH = z(CderH())  # from PP, not derHv
-    # graph-internal, generic:
-    aggH: list = z([])  # [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
-    valt: list = z([0,0])  # sum ptuple, derH, aggH
-    rdnt: list = z([1,1])
-    dect: list = z([0,0])
-    link_: list = z([])  # internal, single-fork, incrementally nested
-    node_: list = z([])  # base node_ replaced by node_t in both agg+ and sub+, deeper node-mediated unpacking in agg+
-    # graph-external, +level per root sub+:
-    rimH: list = z([])  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
-    RimH: list = z([])  # links to the most mediated nodes
-    extH: list = z([])  # G-external daggH( dsubH( dderH, summed from rim links
-    evalt: list = z([0,0])  # sum from esubH
-    erdnt: list = z([1,1])
-    edect: list = z([0,0])
-    ext: list = z([0,0,[0,0]])  # L,S,A: L len base node_, S sparsity: average link len, A angle: average link dy,dx
-    rng: int = 1
-    box: Cbox = z(Cbox(inf,inf,-inf,-inf))  # y,x,y0,x0,yn,xn
-    # tentative:
-    alt_graph_: list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
-    avalt: list = z([0,0])  # sum from alt graphs to complement G aves?
-    ardnt: list = z([1,1])
-    adect: list = z([0,0])
-    # PP:
-    P_: list = z([])
-    mask__: object = None
-    # temporary, replace with Et:
-    Vt: list = z([0,0])  # last layer | last fork tree vals for node_connect and clustering
-    Rt: list = z([1,1])
-    Dt: list = z([0,0])
-    root: list = z([None])  # for feedback
-    fback_: list = z([])  # feedback [[aggH,valt,rdnt,dect]] per node layer, maps to node_H
-    compared_: list = z([])
-    Rdn: int = 0  # for accumulation or separate recursion count?
-
-    # it: list = z([None,None])  # graph indices in root node_s, implicitly nested
-    # depth: int = 0  # n sub_G levels over base node_, max across forks
-    # nval: int = 0  # of open links: base alt rep
-    # id_H: list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
-    # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
-    # top Lay from links, lower Lays from nodes, hence nested tuple?
-
-class CderG(CBase):  # params of single-fork node_ cluster per pplayers
-
-    _G: Cgraph  # comparand + connec params
-    G: Cgraph
-    daggH: list = z([])  # optionally nested dderH ) dsubH ) daggH: top aggLev derived in comp_G
-    Vt: list = z([0,0])  # last layer vals from comp_G
-    Rt: list = z([1,1])
-    Dt: list = z([0,0])
-    S: float = 0.0  # sparsity: average distance to link centers
-    A: list = z([0,0])  # angle: average dy,dx to link centers
-    roott: list = z([None,None])
-    # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
     
 class CderH(CBase):  # derH is a list of der layers or sub-layers, each = ptuple_tv
 
