@@ -200,7 +200,27 @@ def comp_ptuple(_ptuple, ptuple, rn, fagg=0):  # 0der params
         ret = [mval, dval, mrdn, drdn, mdec, ddec], ret
     return ret
 
+def comp_ptuple_generic(_ptuple, ptuple, rn):  # 0der
+
+    mtuple, dtuple, Mtuple = [],[],[]
+    # _n, n = _ptuple, ptuple: add to rn?
+    for i, (_par, par, ave) in enumerate(zip(_ptuple, ptuple, aves)):
+        if isinstance(_par, list) or isinstance(_par, tuple):
+             m,d = comp_angle(_par, par)
+             maxv = 2
+        else:  # I | M | G L
+            npar= par*rn  # accum-normalized param
+            d = _par - npar
+            if i: m = min(_par,npar)-ave
+            else: m = ave-abs(d)  # inverse match for I, no mag/value correlation
+            maxv = max(_par, par)
+        mtuple+=[m]
+        dtuple+=[d]
+        Mtuple+=[maxv]
+    return [mtuple, dtuple, Mtuple]
+
 def unpack_last_link_(link_):  # unpack last link layer
 
     while link_ and isinstance(link_[-1], list): link_ = link_[-1]
     return link_
+

@@ -129,7 +129,7 @@ class Clink(CBase):  # the product of comparison between two nodes
     roott: list = z([None, None])  # clusters that contain this link
     S: float = 0.0  # sparsity: distance between node centers
     A: list = z([0,0])  # angle: dy,dx between centers
-    n : int = 0
+    n: int = 0
 #  dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
 
 #  He len layers with ext: 2, 3, 6, 12, 24...
@@ -142,17 +142,17 @@ class Clink(CBase):  # the product of comparison between two nodes
 
 class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
-    latuple : list = z([])  # I,G,M,Ma,L, (Dy,Dx)
-    derH : list = z([])  # He, [(mtuple, ptuple)...] vertical derivatives summed from P links
-    Et : list = z([])  # from links
-    dert_ : list = z([])  # array of pixel-level derts, ~ node_
-    link_ : list = z([[]])  # uplinks per comp layer, nest in rng+)der+
-    cells : dict = z({})  # pixel-level kernels adjacent to P axis, combined into corresponding derts projected on P axis.
-    roott : list = z([])  # PPrm,PPrd that contain this P, single-layer
-    yx : list = z([])
-    yx_ : list = z([])
+    latuple: list = z([])  # I,G,M,Ma,L, (Dy,Dx)
+    derH: list = z([])  # He, [(mtuple, ptuple)...] vertical derivatives summed from P links
+    Et: list = z([])  # from links
+    dert_: list = z([])  # array of pixel-level derts, ~ node_
+    link_: list = z([[]])  # uplinks per comp layer, nest in rng+)der+
+    cells: dict = z({})  # pixel-level kernels adjacent to P axis, combined into corresponding derts projected on P axis.
+    roott: list = z([])  # PPrm,PPrd that contain this P, single-layer
+    yx: list = z([])
+    yx_: list = z([])
     # dynamic attrs:
-    axis : list = z([0, 0])  # prior slice angle, init sin=0,cos=1
+    axis: list = z([0, 0])  # prior slice angle, init sin=0,cos=1
     # dxdert_: list = z([])  # only in Pd
     # Pd_: list = z([])  # only in Pm
     # Mdx: int = 0  # if comp_dx
@@ -161,34 +161,34 @@ class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    latuple : list = z([])  # I,G,M,Ma,L,[Dy,Dx]
-    derH : list = z([])  # stand-alone, summed from PP only
-    aggH : list = z([])  # G only: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
-    Et : list = z([])  # Vt,Rt,Nt across link layers
-    eEt: list = z([])  # from external links per node or internal links per new graph
+    latuple: list = z([])  # summed from Ps: I,G,M,Ma,L,[Dy,Dx]
+    derH: list = z([])  # summed from PPs
+    aggH: list = z([])  # in G only: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
+    Et: list = z([])  # evaluation tuple: Vt,Rt,Nt across link layers
+    et: list = z([])  # from external links per node or internal links per new graph
     node_: list = z([])  # can be node_H?
     link_: list = z([])  # links per comp layer, nest in rng+)der+
     roott: list = z([])  # Gm,Gd that contain this G, single-layer
     area: int = 0
-    box : list = z([inf, inf, -inf, -inf])  # y,x,y0,x0,yn,xn
-    rng : int = 1
-    fd : int = 0 # fork if flat layers?
-    n : int = 0
+    box: list = z([inf, inf, -inf, -inf])  # y,x,y0,x0,yn,xn
+    rng: int = 1
+    fd: int = 0 # fork if flat layers?
+    n: int = 0
     # graph-external, +level per root sub+:
     rim_H: list = z([])  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
-    ederH: list = z([])  # G-external daggH( dsubH( dderH, summed from rim links
-    eaggH: list = z([])
+    ederH: list = z([])
+    eaggH: list = z([])  # G-external daggH( dsubH( dderH, summed from rim links
     S: float = 0.0  # sparsity: distance between node centers
-    A: list = z([0, 0])  # angle: summed dy,dx in links
+    A: list = z([0,0])  # angle: summed dy,dx in links
     # tentative:
     alt_graph_: list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
-    alt_Et : list = z([0,0])  # sum from alt graphs to complement G aves?
+    alt_Et: list = z([0,0])  # sum from alt graphs to complement G aves?
     # dynamic attrs:
     P_: list = z([])  # in PPs
     mask__: object = None
-    root : list = z([]) # for feedback
-    fback_ : list = z([])  # feedback [[aggH,valt,rdnt,dect]] per node layer, maps to node_H
-    compared_ : list = z([])
+    root: list = z([]) # for feedback
+    fback_: list = z([])  # feedback [[aggH,valt,rdnt,dect]] per node layer, maps to node_H
+    compared_: list = z([])
     Rim_H: list = z([])  # links to the most mediated nodes
     Rdn: int = 0  # for accumulation or separate recursion count?
     # it: list = z([None,None])  # graph indices in root node_s, implicitly nested

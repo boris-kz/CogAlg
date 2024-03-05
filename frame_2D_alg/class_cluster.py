@@ -82,14 +82,11 @@ class CBaseLite:
             for f, v in zip(fields(self)[item], value):
                 setattr(self, f.name, v)
 
-
-
 # ----------------------------------------------------------------------------
 # functions
 def init_param(default):  # initialize param value
     return field(default_factory=lambda: deepcopy(default),
                  repr=False)  # repr=False to avoid recursion in __repr__
-
 
 if __name__ == "__main__":  # for tests
 
@@ -103,7 +100,6 @@ if __name__ == "__main__":  # for tests
         M: int = 0
         Day: int = 0
         Dax: float = 0.0
-
     # blob derivatives
     class CderBlob(CBase):
         mB: int

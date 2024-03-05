@@ -73,7 +73,7 @@ def der_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep
     rng_recursion(PP, rng=1, fd=fd)  # extend PP.link_, derHs by same-der rng+ comp
 
     form_PP_t(PP, PP.P_, iRt = PP.Et[2:4] if PP.Et else [0,0])  # der+ is mediated by form_PP_t
-    if root: root.fback_ += [[PP.derH, PP.et]]  # feedback from PPds
+    if root: root.fback_ += [[PP.derH, PP.Et]]  # feedback from PPds
 
 
 def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contiguously link mediated, because
@@ -185,14 +185,13 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
 
 def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
 
-    PP = CG(fd=fd,root=root,P_=P_,rng=root.rng+1, Et=[0,0,1,1], eEt=[0,0,1,1], link_=[], box=[inf,inf,-inf,-inf], latuple=[0,0,0,0,0,[0,0]], derH=[])
+    PP = CG(fd=fd,root=root,P_=P_,rng=root.rng+1, Et=[0,0,1,1], link_=[], box=[inf,inf,-inf,-inf], latuple=[0,0,0,0,0,[0,0]], derH=[], n=1)   # n=1 default for latuple
     # += uplinks:
-    S,A = 0, [0,0]
     for derP in derP_:
         if derP.node not in P_ or derP._node not in P_: continue
         if derP.dderH:
             add_(derP.node.derH, derP.dderH, iRt)
-            add_(derP._node.derH, negate(deepcopy(derP.dderH)), iRt)
+            add_(derP._node.derH, negate(deepcopy(derP.dderH)), iRt)  # to reverse uplink direction
         PP.link_ += [derP]; derP.roott[fd] = PP
         PP.Et = [V+v for V,v in zip(PP.Et, derP.Et)]
         PP.Et[2:4] = [R+ir for R,ir in zip(PP.Et[2:4], iRt)]
@@ -202,10 +201,10 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
     celly_,cellx_ = [],[]
     for P in P_:
         PP.area += P.latuple[-2]
-        PP.latuple = [[P+p for P,p in zip(PP.latuple[:-1],P.latuple[:-1])], [A+a for A,a in zip(PP.latuple[-1],P.latuple[-1])]]
+        PP.latuple = [P+p for P,p in zip(PP.latuple[:-1],P.latuple[:-1])] + [[A+a for A,a in zip(PP.latuple[-1],P.latuple[-1])]]
         if P.derH:
             add_(PP.derH, P.derH)
-            PP.eEt = [V+v for V,v in zip(PP.eEt, P.derH[1])]
+            # PP.et = [V+v for V,v in zip(PP.et, P.derH[1])]  # this is not needed now? We are already summing PP.Et with derP's Et
         for y,x in P.cells:
             PP.box = accum_box(PP.box, y, x); celly_+=[y]; cellx_+=[x]
     # pixmap:
@@ -219,19 +218,19 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
 
 def feedback(root):  # in form_PP_, append new der layers to root PP, single vs. root_ per fork in agg+
 
-    HE, eT= deepcopy(root.fback_.pop(0))
+    HE, ET= deepcopy(root.fback_.pop(0))
     while root.fback_:
-        He, et = root.fback_.pop(0)
-        eT = [V+v for V,v in zip(eT, et)]
+        He, Et = root.fback_.pop(0)
+        ET = [V+v for V,v in zip(ET, Et)]
         add_(HE, He)
     add_(root.derH, HE if HE[0] else HE[2][-1])  # sum md_ or last md_ in H
-    root.eEt = [V+v for V,v in zip_longest(root.eEt, eT, fillvalue=0)]  # fillvalue to init from empty list
+    root.Et = [V+v for V,v in zip_longest(root.Et, ET, fillvalue=0)]  # fillvalue to init from empty list
 
     if root.root and isinstance(root.root, CG):  # skip if root is Edge
         rroot = root.root  # single PP.root, can't be P
         fback_ = rroot.fback_
         node_ = rroot.node_[1] if rroot.node_ and isinstance(rroot.node_[0],list) else rroot.P_  # node_ is updated to node_t in sub+
-        fback_ += [(HE, eT)]
+        fback_ += [(HE, ET)]
         if fback_ and (len(fback_)==len(node_)):  # all nodes terminated and fed back
             feedback(rroot)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
 
@@ -260,28 +259,9 @@ def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
             for i, (par, maxv, ave) in enumerate(zip(ptuple, Ptuple, aves)):  # compute link decay coef: par/ max(self/same)
                 if fd: ddec += abs(par)/ abs(maxv) if maxv else 1
                 else:  mdec += (par+ave)/ (maxv+ave) if maxv else 1
+
         ret = [mval, dval, mrdn, drdn, mdec, ddec], ret
     return ret
-
-
-def comp_ptuple_generic(_ptuple, ptuple, rn):  # 0der
-
-    mtuple, dtuple, Mtuple = [],[],[]
-    # _n, n = _ptuple, ptuple: add to rn?
-    for i, (_par, par, ave) in enumerate(zip(_ptuple, ptuple, aves)):
-        if isinstance(_par, list) or isinstance(_par, tuple):
-             m,d = comp_angle(_par, par)
-             maxv = 2
-        else:  # I | M | G L
-            npar= par*rn  # accum-normalized param
-            d = _par - npar
-            if i: m = min(_par,npar)-ave
-            else: m = ave-abs(d)  # inverse match for I, no mag/value correlation
-            maxv = max(_par, par)
-        mtuple+=[m]
-        dtuple+=[d]
-        Mtuple+=[maxv]
-    return [mtuple, dtuple, Mtuple]
 
 def unpack_last_link_(link_):  # unpack last link layer
 
