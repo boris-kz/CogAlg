@@ -19,7 +19,7 @@ from .filters import ave_dangle, ave_dI, ave_Pd, ave_Pm, aves
     capitalized variables are normally summed small-case variables,
     longer names are normally classes
     
-all-lists cluster_params Cpar_, types:
+if all-lists: cluster_params Cpar_, types:
 
 node: node_H, link_H, derH, et, rimH (ext link), extt (LSA, box, area, mask_, axis), root, fback  # includes blobs
 link: nodet, dderH, extt, roott 
@@ -39,68 +39,62 @@ def add_(HE, He, irdnt=[]):  # unpack tuples (formally lists) down to numericals
 
     if He:  # to be summed
         if HE:  # to sum in
-            Depth, depth = HE[0], He[0]  # nesting depth, nest to the deeper He: md_-> derH-> subH-> aggH:
-            ddepth = abs(Depth - depth)
+            ddepth = abs(HE.nest - He.nest)  # compare nesting depth, nest lesser He: md_-> derH-> subH-> aggH:
             if ddepth:
-                nHe = [HE,He][Depth > depth]  # nested He
+                nHe = [HE,He][HE.nest>He.nest]  # He to be nested
                 while ddepth > 0:
-                   nHe[:] = [nHe[0]+1, [*nHe[1]], [deepcopy(nHe)]]; ddepth -= 1
+                   nHe.nest += 1; nHe.H = [nHe.H]; ddepth -= 1
 
-            if isinstance(He[2][0], list):
-                for Lay,lay in zip_longest(HE[2], He[2], fillvalue=[]):  # always list He
+            if isinstance(He.H[0], list):
+                for Lay,lay in zip_longest(HE.H, He.H, fillvalue=[]):
                     if lay:
                         if Lay:
-                            if isinstance(Lay[2][0],list):  # and isinstance(lay[2][0],list), and par[0]==Par[0]: same typ, in cpr version?
+                            if isinstance(Lay.H[0],list):  # no and isinstance(lay.H[0],list): same nesting unless cpr?
                                 add_(Lay, lay, irdnt)  # unpack and sum Ets and Hs
                             else:
-                                Lay[2] = np.add(Lay[2],lay[2])  # both have numericals in H
-                            Et, et = Lay[1], lay[1]  # sum lay[1], always numerical
+                                Lay.H = np.add(Lay.H,lay.H)  # both have numericals in H
+                            Et, et = Lay.Et, lay.Et  # always numerical
                             Et[:] = [E+e for E,e in zip(Et,et)]
                             if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4],irdnt)]
+                            Lay.n += lay.n  # param accumulation span
                         else:
-                            HE[2] += [deepcopy(lay)]
+                            HE.H += [deepcopy(lay)]
             else:
-                HE[2] = np.add(HE[2], He[2])  # sum flat lists: [m,d,m,d,m,d...]
+                HE.H = np.add(HE.H, He.H)  # sum flat lists: [m,d,m,d,m,d...]
         else:
             HE[:] = deepcopy(He)  # copy the 1st He to empty HE
         if irdnt:
-            HE[1][2] += irdnt[0]; HE[1][3] += irdnt[1]
+            HE.Et[2] += irdnt[0]; HE.Et[3] += irdnt[1]
 
     return HE  # for summing
-
-def nest(HE,He):
-
-    Depth, depth = HE[0], He[0]  # nesting depth, nest to the deeper He: md_-> derH-> subH-> aggH:
-    ddepth = abs(Depth - depth)
-    if ddepth:
-        nHe = [HE,He][Depth > depth]  # nested He
-        while ddepth > 0:
-           nHe[:] = [nHe[0]+1, [*nHe[1]], [deepcopy(nHe)]]; ddepth -= 1
 
 
 def comp_(_He,He, rn=1, fagg=0):  # unpack tuples (formally lists) down to numericals and compare them
 
-    _depth,depth = _He[0], He[0]
-    ddepth = abs(_depth - depth)
+    ddepth = abs(_He.nest - He.nest)
     n = 0
     if ddepth:  # unpack the deeper He: md_<-derH <-subH <-aggH:
-        uHe = [He,_He][_depth>depth]
+        uHe = [He,_He][_He.nest>He.nest]
         while ddepth > 0:
-            uHe = uHe[2][0]; ddepth -= 1  # comp 1st layer of deeper He:
-        _cHe,cHe = [uHe,He] if _depth>depth else [_He,uHe]
+            uHe = uHe.H[0]; ddepth -= 1  # comp 1st layer of deeper He:
+        _cHe,cHe = [uHe,He] if _He.nest>He.nest else [_He,uHe]
     else: _cHe,cHe = _He,He
 
-    if isinstance(_cHe[2][0], list):  # _lay is He_, same for lay: they are aligned above
+    if isinstance(_cHe.H[0], list):  # _lay is He_, same for lay: they are aligned above
         Et = [0,0,0,0,0,0]  # Vm,Vd, Rm,Rd, Dm,Dd
         dH = []
-        for _lay,lay in zip(_cHe[2],cHe[2]):  # md_| ext| derH| subH| aggH, eval nesting, unpack,comp ds in shared lower layers:
-            dpth, et, dlay, dn = comp_(_lay,lay, rn, fagg)
-            Et[:] = [E+e for E,e in zip(Et,et)]
-            dH += [[dpth, et, dlay]]; n += dn
+        for _lay,lay in zip(_cHe.H,cHe.H):  # md_| ext| derH| subH| aggH, eval nesting, unpack,comp ds in shared lower layers:
+            if _lay and lay:  # ext is empty in single-node Gs
+                dlay = comp_(_lay,lay, rn, fagg)
+                Et[:] = [E+e for E,e in zip(Et,dlay.Et)]
+                n += dlay.n
+                dH += [dlay]  # CH
+            else:
+                dH += [[]]
     else:  # H is md_, numerical comp:
         vm,vd,rm,rd, decm,decd = 0,0,0,0, 0,0
         dH = []
-        for i, (_d,d) in enumerate(zip(_cHe[2][1::2], cHe[2][1::2])):  # compare ds in md_ or ext
+        for i, (_d,d) in enumerate(zip(_cHe.H[1::2], cHe.H[1::2])):  # compare ds in md_ or ext
             d *= rn  # normalize by accum span
             diff = _d-d
             match = min(abs(_d),abs(d))
@@ -117,40 +111,35 @@ def comp_(_He,He, rn=1, fagg=0):  # unpack tuples (formally lists) down to numer
         if fagg: Et += [decm, decd]
         n += 1 if len(_cHe[2]) == 12 else 0.5  # md_ += 1, ext += 0.5
 
-    return min(_depth,depth), Et, dH, n
+    return CH(nest=min(_He.nest,He.nest), Et=Et, H=dH, n=n)
 
 
-class Clink(CBase):  # the product of comparison between two nodes
+class CH(CBase):  # generic derivation hierarchy of variable nesting
 
-    _node: object = None  # prior comparand
-    node: object = None
-    Et: list = z([])
-    dderH: list = z([])  # derivatives produced by comp, from dertv to daggH
-    roott: list = z([None, None])  # clusters that contain this link
-    S: float = 0.0  # sparsity: distance between node centers
-    A: list = z([0,0])  # angle: dy,dx between centers
-    n: int = 0
-#  dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
-
-#  He len layers with ext: 2, 3, 6, 12, 24...
-#  max n of tuples per der layer = summed n of tuples in all lower layers: 1, 1, 2, 4, 8..:
-#  lay1: par     # derH per param in vertuple, layer is derivatives of all lower layers:
-#  lay2: [m,d]   # implicit nesting, brackets for clarity:
-#  lay3: [[m,d], [md,dd]]: 2 sLays,
-#  lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
-
+    nest: int = 0  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH
+    Et: list = z([])  # evaluation tuple: valt, rdnt, normt
+    H: list = z([])  # hierarchy of der layers or md_
+    n: int = 0  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
+    '''
+    len layer +extt: 2, 3, 6, 12, 24,
+    or without extt: 1, 1, 2, 4, 8..: max n of tuples per der layer = summed n of tuples in all lower layers:
+    lay1: par     # derH per param in vertuple, layer is derivatives of all lower layers:
+    lay2: [m,d]   # implicit nesting, brackets for clarity:
+    lay3: [[m,d], [md,dd]]: 2 sLays,
+    lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
+    '''
 
 class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     latuple: list = z([])  # I,G,M,Ma,L, (Dy,Dx)
-    derH: list = z([])  # He, [(mtuple, ptuple)...] vertical derivatives summed from P links
-    Et: list = z([])  # from links
+    derH: object = CH  # [(mtuple, ptuple)...] vertical derivatives summed from P links
     dert_: list = z([])  # array of pixel-level derts, ~ node_
     link_: list = z([[]])  # uplinks per comp layer, nest in rng+)der+
     cells: dict = z({})  # pixel-level kernels adjacent to P axis, combined into corresponding derts projected on P axis.
     roott: list = z([])  # PPrm,PPrd that contain this P, single-layer
     yx: list = z([])
     yx_: list = z([])
+    # n = len dert_
     # dynamic attrs:
     axis: list = z([0, 0])  # prior slice angle, init sin=0,cos=1
     # dxdert_: list = z([])  # only in Pd
@@ -158,31 +147,27 @@ class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param
     # Mdx: int = 0  # if comp_dx
     # Ddx: int = 0
 
-
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
     latuple: list = z([])  # summed from Ps: I,G,M,Ma,L,[Dy,Dx]
-    derH: list = z([])  # summed from PPs
-    aggH: list = z([])  # in G only: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
-    Et: list = z([])  # evaluation tuple: Vt,Rt,Nt across link layers
-    et: list = z([])  # from external links per node or internal links per new graph
+    derH: object = CH  # summed from PPs
+    aggH: object = CH  # in G only: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
     node_: list = z([])  # can be node_H?
     link_: list = z([])  # links per comp layer, nest in rng+)der+
     roott: list = z([])  # Gm,Gd that contain this G, single-layer
     area: int = 0
     box: list = z([inf, inf, -inf, -inf])  # y,x,y0,x0,yn,xn
     rng: int = 1
-    fd: int = 0 # fork if flat layers?
+    fd: int = 0  # fork if flat layers?
     n: int = 0
     # graph-external, +level per root sub+:
     rim_H: list = z([])  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
-    ederH: list = z([])
-    eaggH: list = z([])  # G-external daggH( dsubH( dderH, summed from rim links
+    ederH: object = CH
+    eaggH: object = CH  # G-external daggH( dsubH( dderH, summed from rim links
     S: float = 0.0  # sparsity: distance between node centers
     A: list = z([0,0])  # angle: summed dy,dx in links
     # tentative:
     alt_graph_: list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
-    alt_Et: list = z([0,0])  # sum from alt graphs to complement G aves?
     # dynamic attrs:
     P_: list = z([])  # in PPs
     mask__: object = None
@@ -190,13 +175,25 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
     fback_: list = z([])  # feedback [[aggH,valt,rdnt,dect]] per node layer, maps to node_H
     compared_: list = z([])
     Rim_H: list = z([])  # links to the most mediated nodes
-    Rdn: int = 0  # for accumulation or separate recursion count?
+
+    # Rdn: int = 0  # for accumulation or separate recursion count?
     # it: list = z([None,None])  # graph indices in root node_s, implicitly nested
     # depth: int = 0  # n sub_G levels over base node_, max across forks
     # nval: int = 0  # of open links: base alt rep
     # id_H: list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
     # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
     # top Lay from links, lower Lays from nodes, hence nested tuple?
+
+class Clink(CBase):  # the product of comparison between two nodes
+
+    _node: object = None  # prior comparand
+    node:  object = None
+    dderH: object = CH  # derivatives produced by comp, from dertv to DerH
+    roott: list = z([None, None])  # clusters that contain this link
+    S: float = 0.0  # sparsity: distance between node centers
+    A: list = z([0,0])  # angle: dy,dx between centers
+    n: int = 0
+    # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
 
 '''
 class z(SimpleNamespace):
@@ -464,11 +461,11 @@ def get_match(_par, par):
 
 
 def negate(He):
-    if isinstance(He[2][0], list):
-        for lay in He[2]:
+    if isinstance(He.H[0], list):
+        for lay in He.H:
             negate(lay)
     else:  # md_
-        He[2][1::2] = [-d for d in He[2][1::2]]
+        He.H[1::2] = [-d for d in He.H[1::2]]
 
 
 def comp_angle(_A, A):  # rn doesn't matter for angles

@@ -32,7 +32,7 @@ from copy import deepcopy, copy
 from itertools import zip_longest, combinations
 from math import inf
 from typing import List, Tuple
-from .classes import add_, comp_, negate, get_match, Clink, CG
+from .classes import add_, comp_, negate, get_match, Clink, CG, CH
 from .filters import ave, ave_dI, aves, P_aves, PP_aves
 from .slice_edge import comp_angle
 from utils import box2slice, accum_box, sub_box2box
@@ -72,8 +72,8 @@ def der_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep
 
     rng_recursion(PP, rng=1, fd=fd)  # extend PP.link_, derHs by same-der rng+ comp
 
-    form_PP_t(PP, PP.P_, iRt = PP.Et[2:4] if PP.Et else [0,0])  # der+ is mediated by form_PP_t
-    if root: root.fback_ += [[PP.derH, PP.Et]]  # feedback from PPds
+    form_PP_t(PP, PP.P_, iRt = PP.derH[1][2:4] if PP.derH else [0,0])  # der+ is mediated by form_PP_t
+    if root: root.fback_ += [PP.derH]  # feedback from PPds
 
 
 def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contiguously link mediated, because
@@ -92,7 +92,7 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contig
                 if distance < rng:  # | rng * ((P.val+_P.val) / ave_rval)?
                     mlink = comp_P(_link if fd else [_P,P, distance,[dy,dx]], fd)  # return link if match
                     if mlink:
-                        V += mlink.Et[0]  # unpack last link layer:
+                        V += mlink.dderH.Et[0]  # unpack last link layer:
                         link_ = P.link_[-1] if P.link_ and isinstance(P.link_[-1], list) else P.link_  # der++ if PP.He[0] depth==1
                         if rng > 1:
                             if rng == 2: link_[:] = [link_[:]]  # link_ -> link_H
@@ -137,12 +137,11 @@ def comp_P(link, fd):
     if vm > aveP*rm:  # always rng+
         if fd:
             He = link.dderH
-            if not He[0]: He = link.He = [1,[*He[1]],[He]]  # nest md_ as derH
-            He[1] = np.add(He[1],[vm,vd,rm,rd])
-            He[2] += [[0, [vm,vd,rm,rd], H]]  # nesting, Et, H
-            link.Et = [V+v for V, v in zip(link.Et,[vm,vd, rm,rd])]
+            if not He.nest: He = link.He = CH(nest=1, Et=[*He.Et],H=[He])  # nest md_ as derH
+            He.Et = np.add(He.Et,[vm,vd,rm,rd])
+            He.H += [CH(nest=0, Et=[vm,vd,rm,rd], H=H)]
         else:
-            link = Clink(node=P,_node=_P, dderH=[0,[vm,vd,rm,rd],H], Et=[vm,vd,rm,rd], S=S, A=A, n=n, roott=[[],[]])
+            link = Clink(node=P,_node=_P, dderH = CH(nest=0, Et=[vm,vd,rm,rd], H=H), S=S, A=A, n=n, roott=[[],[]])
 
         return link
 
@@ -174,7 +173,7 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
             inP_ += cP_  # update clustered Ps
 
     for PP in PP_t[1]:  # eval der+ / PPd only, after form_PP_t -> P.root
-        if PP.Et[1] * len(PP.link_) > PP_aves[1] * PP.Et[3]:
+        if PP.derH and PP.derH[1][0] * len(PP.link_) > PP_aves[1] * PP.derH[1][2]:
             # node-mediated correlation clustering:
             der_recursion(root, PP, fd=1)
         if root.fback_:
@@ -185,7 +184,7 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
 
 def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
 
-    PP = CG(fd=fd,root=root,P_=P_,rng=root.rng+1, Et=[0,0,1,1], link_=[], box=[inf,inf,-inf,-inf], latuple=[0,0,0,0,0,[0,0]], derH=[], n=1)   # n=1 default for latuple
+    PP = CG(fd=fd,root=root,P_=P_,rng=root.rng+1, link_=[], box=[inf,inf,-inf,-inf], latuple=[0,0,0,0,0,[0,0]], derH=[])
     # += uplinks:
     for derP in derP_:
         if derP.node not in P_ or derP._node not in P_: continue
@@ -193,20 +192,20 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
             add_(derP.node.derH, derP.dderH, iRt)
             add_(derP._node.derH, negate(deepcopy(derP.dderH)), iRt)  # to reverse uplink direction
         PP.link_ += [derP]; derP.roott[fd] = PP
-        PP.Et = [V+v for V,v in zip(PP.Et, derP.Et)]
-        PP.Et[2:4] = [R+ir for R,ir in zip(PP.Et[2:4], iRt)]
         PP.A = np.add(PP.A,derP.A); PP.S += derP.S
         PP.n += derP.n
     # += Ps:
     celly_,cellx_ = [],[]
     for P in P_:
-        PP.area += P.latuple[-2]
+        PP.n += P.n
+        PP.area += P.latuple[-2]  # L
         PP.latuple = [P+p for P,p in zip(PP.latuple[:-1],P.latuple[:-1])] + [[A+a for A,a in zip(PP.latuple[-1],P.latuple[-1])]]
         if P.derH:
             add_(PP.derH, P.derH)
-            # PP.et = [V+v for V,v in zip(PP.et, P.derH[1])]  # this is not needed now? We are already summing PP.Et with derP's Et
         for y,x in P.cells:
             PP.box = accum_box(PP.box, y, x); celly_+=[y]; cellx_+=[x]
+    if PP.derH:
+        PP.derH.Et[2:4] = [R+r for R,r in zip(PP.derH.Et[2:4], iRt)]
     # pixmap:
     y0,x0,yn,xn = PP.box
     PP.mask__ = np.zeros((yn-y0, xn-x0), bool)
@@ -218,19 +217,17 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
 
 def feedback(root):  # in form_PP_, append new der layers to root PP, single vs. root_ per fork in agg+
 
-    HE, ET= deepcopy(root.fback_.pop(0))
+    HE = deepcopy(root.fback_.pop(0))
     while root.fback_:
-        He, Et = root.fback_.pop(0)
-        ET = [V+v for V,v in zip(ET, Et)]
+        He  = root.fback_.pop(0)
         add_(HE, He)
-    add_(root.derH, HE if HE[0] else HE[2][-1])  # sum md_ or last md_ in H
-    root.Et = [V+v for V,v in zip_longest(root.Et, ET, fillvalue=0)]  # fillvalue to init from empty list
+    add_(root.derH, HE.H[-1] if HE.nest else HE)  # last md_ in H or sum md_
 
     if root.root and isinstance(root.root, CG):  # skip if root is Edge
         rroot = root.root  # single PP.root, can't be P
         fback_ = rroot.fback_
         node_ = rroot.node_[1] if rroot.node_ and isinstance(rroot.node_[0],list) else rroot.P_  # node_ is updated to node_t in sub+
-        fback_ += [(HE, ET)]
+        fback_ += [HE]
         if fback_ and (len(fback_)==len(node_)):  # all nodes terminated and fed back
             feedback(rroot)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
 

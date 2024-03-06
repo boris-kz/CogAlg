@@ -224,3 +224,147 @@ def unpack_last_link_(link_):  # unpack last link layer
     while link_ and isinstance(link_[-1], list): link_ = link_[-1]
     return link_
 
+def nest(HE,He):
+
+    Depth, depth = HE[0], He[0]  # nesting depth, nest to the deeper He: md_-> derH-> subH-> aggH:
+    ddepth = abs(Depth - depth)
+    if ddepth:
+        nHe = [HE,He][Depth > depth]  # nested He
+        while ddepth > 0:
+           nHe[:] = [nHe[0]+1, [*nHe[1]], [deepcopy(nHe)]]; ddepth -= 1
+
+def node_connect(_G_):  # node connectivity = sum surround link vals, incr.mediated: Graph Convolution of Correlations
+    '''
+    Aggregate direct * indirect connectivity per node from indirect links via associated nodes, in multiple cycles.
+    Each cycle adds contributions of previous cycles to linked-nodes connectivity, propagated through the network.
+    Math: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/node_connect.png
+    '''
+    while True:
+        # eval accumulated G connectivity vals, indirectly extending their range
+        G_ = []  # next connectivity expansion, more selective by DVt,Lent = [0,0],[0,0]?
+        for G in _G_:
+            uprim = []  # >ave updates of direct links
+            rim = G.rim_H[-1] if G.rim_H and isinstance(G.rim_H[0], list) else G.rim_H
+            for i in 0,1:
+                val,rdn,dec = G.Et[i::2]  # connect by last layer
+                ave = G_aves[i]
+                for link in rim:
+                    # >ave derG in fd rim
+                    lval,lrdn,ldec = link.Et[i::2]; ldec /= link.n
+                    _G = link._node if link.node is G else link.node
+                    _val,_rdn,_dec = _G.Et[i::2]
+                    # Vt.. for segment_node_:
+                    V = ldec * (val+_val); dv = V-lval
+                    R = ldec * (rdn+_rdn); dr = R-lrdn
+                    D = ldec * (dec+_dec); dd = D-ldec
+                    link.Et[i::2] = [V, R, D]
+                    if dv > ave * dr:
+                        G.Et[i::2] = [V+v for V,v in zip(G.Et[i::2], [V, R, D])]  # add link last layer vals
+                        if link not in uprim: uprim += [link]
+                        # more selective eval: dVt[i] += dv; L=len(uprim); Lent[i] += L
+                    if V > ave * R:
+                        G.et[i::2] = [V+v for V, v in zip(G.et[i::2], [dv, dr, dd])]
+            if uprim:  # prune rim for next loop
+                rim[:] = uprim
+                G_ += [G]
+        if G_: _G_ = G_  # exclude weakly incremented Gs from next connectivity expansion loop
+        else:  break
+
+def segment_node_(root, root_G_, fd, nrng, fagg):  # eval rim links with summed surround vals for density-based clustering
+
+    # graph += [node] if >ave (surround connectivity * relative value of link to any internal node)
+    igraph_ = []; ave = G_aves[fd]
+
+    for G in root_G_:   # init per node, last-layer Vt,Vt,Dt:
+        grapht = [[G],[],copy(G.Et), copy(G.rim_H[-1] if G.rim_H and isinstance(G.rim_H[0],list) else G.rim_H)]  # link_ = last rim
+        G.root = grapht  # for G merge
+        igraph_ += [grapht]
+    _graph_ = igraph_
+
+    while True:
+        graph_ = []
+        for grapht in _graph_:  # extend grapht Rim with +ve in-root links
+            G_, Link_, Et, Rim = grapht
+            inVal, inRdn = 0,0  # new in-graph +ve
+            new_Rim = []
+            for link in Rim:  # unique links
+                if link.node in G_:
+                    G = link.node; _G = link._node
+                else:
+                    G = link._node; _G = link.node
+                if _G in G_: continue
+                # connect by rel match of nodes * match of node Vs: surround M|Ds,
+                # V suggests how deeply inside the graph is G
+                cval = link.Et[fd] + get_match(G.Et[fd],_G.Et[fd])  # same coef for int and ext match?
+                crdn = link.Et[2+fd] + (G.Et[2+fd] + _G.Et[2+fd]) / 2
+                if cval > ave * crdn:  # _G and its root are effectively connected
+                    # merge _root:
+                    _grapht = _G.root
+                    _G_,_Link_,_Et,_Rim = _grapht
+                    if link not in Link_: Link_ += [link]
+                    Link_[:] += [_link for _link in _Link_ if _link not in Link_]
+                    for g in _G_:
+                        g.root = grapht
+                        if g not in G_: G_+=[g]
+                    for i in 0,1:
+                        Et[:] = [V+v for V,v in zip(Et, _Et)]
+                        inVal += _Et[fd]; inRdn += _Et[2+fd]
+                    if _grapht in igraph_:
+                        igraph_.remove(_grapht)
+                    new_Rim += [link for link in _Rim if link not in new_Rim+Rim+Link_]
+            # for next loop:
+            if len(new_Rim) * inVal > ave * inRdn:
+                graph_ += [[G_,Link_, Et, new_Rim]]
+
+        if graph_: _graph_ = graph_  # selected graph expansion
+        else: break
+
+    graph_ = []
+    for grapht in igraph_:
+        if grapht[2][fd] > ave * grapht[2][2+fd]:  # form Cgraphs if Val > ave* Rdn
+            graph_ += [sum2graph(root, grapht[:3], fd, nrng, fagg)]
+
+    return graph_
+
+
+def sum2graph(root, grapht, fd, nrng, fagg):  # sum node and link params into graph, aggH in agg+ or player in sub+
+
+    G_,Link_, Et = grapht
+
+    graph = CG(fd=fd, node_=G_,link_=Link_, et=Et, rng=nrng)
+    # Et and et are not needed, same for latuple=[0,0,0,0,0, [0,0]], n=1?
+    if fd: graph.root = root
+    et = [0,0,0,0,0,0]  # current vals
+    for link in Link_:  # unique current-layer links
+        link.root = graph; graph.S += link.S; np.add(graph.A,link.A)
+        et = [V+v for V,v in zip(et, link.Et)]
+        graph.n += link.n
+    eDerH, Et = [],[0,0,0,0,0,0]
+    # grapht int = node int+ext
+    for G in G_:
+        graph.area += G.area
+        sum_last_lay(G, fd)
+        graph.box = extend_box(graph.box, G.box)
+        graph.latuple = [P+p for P,p in zip(graph.latuple[:-1],graph.latuple[:-1])] + [[A+a for A,a in zip(graph.latuple[-1],graph.latuple[-1])]]
+        add_(graph.derH, G.derH,irdnt=[1,1])
+        eDerH = add_(eDerH, G.ederH, irdnt=G.et[2:4])
+        graph.aggH = add_(graph.aggH, G.aggH)
+        Et = [V+v for V,v in zip(Et, G.Et)]  # combined across node layers
+    # dsubH| daggH:
+    if graph.aggH: graph.aggH[2] += [eDerH]  # init []
+    else: graph.aggH = eDerH
+    graph.Et = [V+v+ev for V,v,ev in zip(graph.Et, Et, et)]  # graph internals = G Internals + Externals, combined across link layers
+    if fagg:
+        if graph.aggH and graph.aggH[0] == 1:  # if depth == 1 (derH), convert to subH (depth =2)
+            # 1st agg+, init aggH = [subHv]:
+            graph.aggH =  [2, [*graph.et], graph.aggH]
+
+    if fd:  # assign alt graphs from d graph, after both linked m and d graphs are formed
+        for link in graph.link_:
+            mgraph = link.roott[0]
+            if mgraph:
+                for fd, (G, alt_G) in enumerate(((mgraph,graph), (graph,mgraph))):  # bilateral assign:
+                    if G not in alt_G.alt_graph_:
+                        G.alt_graph_ += [alt_G]
+                        G.alt_Et = [V+v for V,v in zip_longest(G.alt_Et, alt_G.et, fillvalue=0)]
+    return graph
