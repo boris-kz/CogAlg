@@ -50,7 +50,7 @@ def vectorize_root(blob):  # vectorization in 3 composition levels of xcomp, clu
                 # PP -> G:
                 for i, PP in enumerate(node_):
                     PP.root = None  # still no decay in internal links
-                    PP.node_ = PP.P_  # convert node_t into flat node_, L
+                    PP.node_ = PP.P_  # revert to base node_?
                 # discontinuous PP rng+ cross-comp, cluster -> G_t
                 agg_recursion(None, edge, node_, nrng=1, fagg=1)  # agg+, no Cgraph nodes
 
@@ -98,10 +98,9 @@ def rng_recursion(rroot, root, Q, Et, nrng=1):  # rng++/ G_, der+/ link_ if call
             dy, dx = box2center(G.box)  # compute distance between node centers:
             dist = np.hypot(dy, dx)
             # combined pairwise eval (directional val?) per rng+:
-            _Et = _G.aggH.Et if _G.aggH else (_G.derH.Et if _G.derH else [0,0,0,0,0,0])
-            Et = G.aggH.Et if G.aggH else (G.derH.Et if G.derH else [0,0,0,0,0,0])  # if aggH: sums Et from derH
-
-            if nrng==1 or ((Et[0]+_Et[0])/ (dist/ave_distance) > ave*(Et[2]+_Et[2])):
+            _M,_R = [_G.aggH.Et[0],_G.aggH.Et[2]] if _G.aggH else [0,0]
+            M, R = [G.aggH.Et[0],G.aggH.Et[2]] if G.aggH else [0,0]
+            if nrng==1 or ((M+_M)/ (dist/ave_distance) > ave*(R+_R)):
                 link = Clink(_node=_G, node=G, A=[dy,dx], S=dist)  # prelink
                 G.compared_+=[_G]; _G.compared_+=[G]
                 comp_G(link, et)
@@ -139,10 +138,9 @@ def form_graph_t(root, G_, Et, nrng, fagg=0):  # form Gm_,Gd_ from same-root nod
             graph_ = segment_node_(root, G_, fd, nrng, fagg)  # fd: node-mediated Correlation Clustering
             if fd:  # der+ only, rng++ term by high diffs, can't be extended much in sub Gs
                 for graph in graph_:
-                    # not verified:
-                    et = graph.aggH.H[-1].Et if graph.aggH else \
-                        (graph.derH.H[-1].Et if (graph.derH and graph.derH.nest) else (graph.derH.Et if graph.derH else [0,0,0,0,0,0]))
-                    if graph.link_ and et[1] > G_aves[1] * et[3]:  # eval last Link_
+                    if graph.derH.nest: M,R = [graph.aggH.H[-1].Et[1], graph.aggH.H[-1].Et[3]] if graph.aggH else [0,0]  # eval last Link_
+                    else:               M,R = [graph.aggH.Et[1], graph.aggH.Et[3]] if graph.aggH else[0,0]  # single Link_
+                    if graph.link_ and M > G_aves[1] * R:
                         node_ = graph.node_
                         if isinstance(node_[0].rim_H[0], CG):  # 1st sub+, same rim nesting?
                             for node in node_: node.rim_H = [node.rim_H]  # rim -> rim_H
@@ -170,15 +168,14 @@ def node_connect(_G_):  # node connectivity = sum surround link vals, incr.media
             uprim = []  # >ave updates of direct links
             rim = G.rim_H[-1] if G.rim_H and isinstance(G.rim_H[0], list) else G.rim_H
             for i in 0,1:
-                # below is compact version of above
-                et = G.aggH.H[-1].Et if G.aggH else (G.derH.H[-1].Et if (G.derH and G.derH.nest) else (G.derH.Et if G.derH else [0,0,0,0,0,0]))
+                et = G.aggH.H[-1].Et if G.aggH.nest else G.aggH.Et
                 val,rdn,dec = et[i::2]  # connect by last layer
                 ave = G_aves[i]
                 for link in rim:
                     # >ave derG in fd rim
                     lval,lrdn,ldec = link.dderH.Et[i::2]; ldec /= link.n
                     _G = link._node if link.node is G else link.node
-                    _et = _G.aggH.H[-1].Et if _G.aggH else (_G.derH.H.Et if (_G.derH and _G.derH.nest) else (_G.derH.Et if _G.derH else [0,0,0,0,0,0]))
+                    _et = _G.aggH.H[-1].Et if _G.aggH.nest else _G.aggH.Et
                     _val,_rdn,_dec = _et[i::2]
                     # Vt.. for segment_node_:
                     V = ldec * (val+_val); dv = V-lval
@@ -186,9 +183,8 @@ def node_connect(_G_):  # node connectivity = sum surround link vals, incr.media
                     D = ldec * (dec+_dec); dd = D-ldec
                     link.dderH.Et[i::2] = [V, R, D]
                     if dv > ave * dr:
-                        # not sure here, if previously we add to Et, now we add to Et of derH or aggH
-                        Et = G.aggH.Et if G.aggH else (G.derH.Et if G.derH else [0,0,0,0,0,0])
-                        Et[i::2] = [V+v for V,v in zip(Et[i::2], [V, R, D])]  # add link last layer vals
+                        if not G.aggH: G.aggH.Et = [0,0,0,0,0,0]
+                        G.aggH.Et[i::2] = [V+v for V,v in zip(G.aggH.Et[i::2], [V, R, D])]  # add link last layer vals
                         if link not in uprim: uprim += [link]
                         # more selective eval: dVt[i] += dv; L=len(uprim); Lent[i] += L
                     if V > ave * R:
@@ -206,7 +202,7 @@ def segment_node_(root, root_G_, fd, nrng, fagg):  # eval rim links with summed 
     igraph_ = []; ave = G_aves[fd]
 
     for G in root_G_:   # init per node
-        Et = copy(G.aggH.Et if G.aggH else (G.derH.Et if G.derH else [0,0,0,0,0,0]))  # last-layer Vt,Rt,Dt
+        Et = copy(G.aggH.H[-1].Et) if G.aggH.nest else copy(G.aggH.Et)  # last-layer Vt,Rt,Dt, can't be empty
         link_ = copy(G.rim_H[-1] if G.rim_H and isinstance(G.rim_H[0],list) else G.rim_H)
         grapht = [[G],[], Et, link_]  # link_ = last rim
         G.root = grapht  # for G merge
@@ -225,12 +221,10 @@ def segment_node_(root, root_G_, fd, nrng, fagg):  # eval rim links with summed 
                 else:
                     G = link._node; _G = link.node
                 if _G in G_: continue
-                # connect by rel match of nodes * match of node Vs: surround M|Ds:
-                _Et = _G.aggH.Et if _G.aggH else (_G.derH.Et if _G.derH else [0,0,0,0,0,0])
-                Et = G.aggH.Et if G.aggH else (G.derH.Et if G.derH else [0,0,0,0,0,0])
+                # connect by rel match of nodes * match of node Vs: surround M|Ds,
                 # cval suggests how deeply inside the graph is G:
-                cval = link.dderH.Et[fd] + get_match(Et[fd],_Et[fd])  # same coef for int and ext match?
-                crdn = link.dderH.Et[2+fd] + (Et[2+fd] + _Et[2+fd]) / 2
+                cval = link.dderH.Et[fd] + get_match(_G.aggH.Et[fd], G.aggH.Et[fd])  # same coef for int and ext match?
+                crdn = link.dderH.Et[2+fd] + (_G.aggH.Et[2+fd] + G.aggH.Et[2+fd]) / 2
                 if cval > ave * crdn:  # _G and its root are effectively connected
                     # merge _root:
                     _grapht = _G.root

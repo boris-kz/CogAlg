@@ -30,9 +30,9 @@ def slice_edge(blob, verbose=False):
     i__ = blob.i__[box2slice(blob.ibox)]
     dy__, dx__, g__ = blob.der__t
 
-    edge = CG(root=blob, node_=[[],[]], box=blob.box, mask__=blob.mask__, derH=[])
+    edge = CG(root=blob, node_=[[],[]], box=blob.box, mask__=blob.mask__)
     blob.dlayers = [[edge]]
-    max_ = {*zip(*mask__.nonzero())}  # convert mask__ into a set of (y,x)
+    max_ = {*zip(*mask__.nonzero())}  # convert mask__ to a set of (y,x)
 
     if verbose:
         step = 100 / len(max_)  # progress % percent per pixel
@@ -119,6 +119,7 @@ def form_P(blob, P):
     G = np.hypot(Dy, Dx)  # recompute G
     P.latuple = [I, G, M, Ma, L, [Dy, Dx]]
     P.yx = P.dert_[L // 2][:2]  # new center
+    P.n = L  # then add n from links
 
     return P
 

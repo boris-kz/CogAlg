@@ -18,21 +18,6 @@ from .filters import ave_dangle, ave_dI, ave_Pd, ave_Pm, aves
     1-3 letter names are normally scalars, except for P and similar classes, 
     capitalized variables are normally summed small-case variables,
     longer names are normally classes
-    
-if all-lists: cluster_params Cpar_, types:
-
-node: node_H, link_H, derH, et, rimH (ext link), extt (LSA, box, area, mask_, axis), root, fback  # includes blobs
-link: nodet, dderH, extt, roott 
-ders: He, optional angle, named params, 
-
-common core: depth,Et,n,id; depth = 0 in P | derP, 1 in PP | derPP, 2 in G | derG
-
-   edge  : core, et, (ptuple, He, aggH), (P_, node_), root, fback_, rng
-   P     : core, (ptuple, He), dert_,link_, yx, axis, cells
-   link  : core, He, (_P,P), (S,A), roott
-   PP    : core, et, (ptuple, He), (P_,node_),link_, (ext,box,mask__,area), root, fd,fback_,rng  
-   graph : core, et, (ptuple,He,aggH), node_,link_, (ext,box,area), compared_, root, fd,fback_,rng
-          (rimH, RimH, eEt, ext_He), (alt_graph_, alt_Et)
 '''
 
 def add_(HE, He, irdnt=[]):  # unpack tuples (formally lists) down to numericals and sum them
@@ -45,7 +30,7 @@ def add_(HE, He, irdnt=[]):  # unpack tuples (formally lists) down to numericals
                 while ddepth > 0:
                    nHe.nest += 1; nHe.H = [nHe.H]; ddepth -= 1
 
-            if isinstance(He.H[0], list):
+            if isinstance(He.H[0], CH):
                 for Lay,lay in zip_longest(HE.H, He.H, fillvalue=[]):
                     if lay:
                         if Lay:
@@ -56,7 +41,7 @@ def add_(HE, He, irdnt=[]):  # unpack tuples (formally lists) down to numericals
                             Et, et = Lay.Et, lay.Et  # always numerical
                             Et[:] = [E+e for E,e in zip(Et,et)]
                             if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4],irdnt)]
-                            Lay.n += lay.n  # param accumulation span
+                            Lay.n += lay.n  # combined param accumulation span
                         else:
                             HE.H += [deepcopy(lay)]
             else:
@@ -80,7 +65,7 @@ def comp_(_He,He, rn=1, fagg=0):  # unpack tuples (formally lists) down to numer
         _cHe,cHe = [uHe,He] if _He.nest>He.nest else [_He,uHe]
     else: _cHe,cHe = _He,He
 
-    if isinstance(_cHe.H[0], list):  # _lay is He_, same for lay: they are aligned above
+    if isinstance(_cHe.H[0], CH):  # _lay is He_, same for lay: they are aligned above
         Et = [0,0,0,0,0,0]  # Vm,Vd, Rm,Rd, Dm,Dd
         dH = []
         for _lay,lay in zip(_cHe.H,cHe.H):  # md_| ext| derH| subH| aggH, eval nesting, unpack,comp ds in shared lower layers:
@@ -95,7 +80,7 @@ def comp_(_He,He, rn=1, fagg=0):  # unpack tuples (formally lists) down to numer
         vm,vd,rm,rd, decm,decd = 0,0,0,0, 0,0
         dH = []
         for i, (_d,d) in enumerate(zip(_cHe.H[1::2], cHe.H[1::2])):  # compare ds in md_ or ext
-            d *= rn  # normalize by accum span
+            d *= rn  # normalize by comparand accum span
             diff = _d-d
             match = min(abs(_d),abs(d))
             if (_d<0) != (d<0): match = -match  # if only one comparand is negative
@@ -109,7 +94,8 @@ def comp_(_He,He, rn=1, fagg=0):  # unpack tuples (formally lists) down to numer
             dH += [match,diff]  # flat
         Et = [vm,vd,rm,rd]
         if fagg: Et += [decm, decd]
-        n += 1 if len(_cHe[2]) == 12 else 0.5  # md_ += 1, ext += 0.5
+
+        n = (_He.n+He.n) /2 * (len(_cHe.H)/12)  # ave compared n, /2 if ext: 6 params vs 12 in md_
 
     return CH(nest=min(_He.nest,He.nest), Et=Et, H=dH, n=n)
 
@@ -120,6 +106,10 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting
     Et: list = z([])  # evaluation tuple: valt, rdnt, normt
     H: list = z([])  # hierarchy of der layers or md_
     n: int = 0  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
+
+    def __bool__(self):  # to test empty
+        if self.n: return True
+        else: return False
     '''
     len layer +extt: 2, 3, 6, 12, 24,
     or without extt: 1, 1, 2, 4, 8..: max n of tuples per der layer = summed n of tuples in all lower layers:
@@ -131,8 +121,8 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting
 
 class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
-    latuple: list = z([])  # I,G,M,Ma,L, (Dy,Dx)
-    derH: object = CH  # [(mtuple, ptuple)...] vertical derivatives summed from P links
+    latuple: list = z([])  # lateral I,G,M,Ma,L, (Dy,Dx)
+    derH: object = z(CH())  # [(mtuple, ptuple)...] vertical derivatives summed from P links
     dert_: list = z([])  # array of pixel-level derts, ~ node_
     link_: list = z([[]])  # uplinks per comp layer, nest in rng+)der+
     cells: dict = z({})  # pixel-level kernels adjacent to P axis, combined into corresponding derts projected on P axis.
@@ -147,12 +137,17 @@ class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param
     # Mdx: int = 0  # if comp_dx
     # Ddx: int = 0
 
+    def __bool__(self):  # to test empty
+        if self.dert_: return True
+        else: return False
+
+
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    latuple: list = z([])  # summed from Ps: I,G,M,Ma,L,[Dy,Dx]
-    derH: object = CH  # summed from PPs
-    aggH: object = CH  # in G only: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
-    node_: list = z([])  # can be node_H?
+    latuple: list = z([])   # summed from Ps: lateral I,G,M,Ma,L,[Dy,Dx]
+    derH: object = z(CH())  # summed from PPs
+    aggH: object = z(CH())  # nested derH in Gs: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
+    node_: list = z([])  # node_t after sub_recursion
     link_: list = z([])  # links per comp layer, nest in rng+)der+
     roott: list = z([])  # Gm,Gd that contain this G, single-layer
     area: int = 0
@@ -162,8 +157,8 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
     n: int = 0
     # graph-external, +level per root sub+:
     rim_H: list = z([])  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
-    ederH: object = CH
-    eaggH: object = CH  # G-external daggH( dsubH( dderH, summed from rim links
+    ederH: object = z(CH())
+    eaggH: object = z(CH())  # G-external daggH( dsubH( dderH, summed from rim links
     S: float = 0.0  # sparsity: distance between node centers
     A: list = z([0,0])  # angle: summed dy,dx in links
     # tentative:
@@ -184,6 +179,10 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
     # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
     # top Lay from links, lower Lays from nodes, hence nested tuple?
 
+    def __bool__(self):  # to test empty
+        if self.n: return True
+        else: return False
+
 class Clink(CBase):  # the product of comparison between two nodes
 
     _node: object = None  # prior comparand
@@ -192,7 +191,6 @@ class Clink(CBase):  # the product of comparison between two nodes
     roott: list = z([None, None])  # clusters that contain this link
     S: float = 0.0  # sparsity: distance between node centers
     A: list = z([0,0])  # angle: dy,dx between centers
-    n: int = 0
     # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
 
 '''
@@ -453,6 +451,22 @@ class CderH(CBase):  # derH is a list of der layers or sub-layers, each = ptuple
 
     def __iadd__(self, other): return self + other
     def __isub__(self, other): return self - other
+    
+    
+if all-lists: cluster_params Cpar_, types:
+
+node: node_H, link_H, derH, et, rimH (ext link), extt (LSA, box, area, mask_, axis), root, fback  # includes blobs
+link: nodet, dderH, extt, roott 
+ders: He, optional angle, named params, 
+
+common core: depth,Et,n,id; depth = 0 in P | derP, 1 in PP | derPP, 2 in G | derG
+
+   edge  : core, et, (ptuple, He, aggH), (P_, node_), root, fback_, rng
+   P     : core, (ptuple, He), dert_,link_, yx, axis, cells
+   link  : core, He, (_P,P), (S,A), roott
+   PP    : core, et, (ptuple, He), (P_,node_),link_, (ext,box,mask__,area), root, fd,fback_,rng  
+   graph : core, et, (ptuple,He,aggH), node_,link_, (ext,box,area), compared_, root, fd,fback_,rng
+          (rimH, RimH, eEt, ext_He), (alt_graph_, alt_Et)    
 '''
 
 def get_match(_par, par):
@@ -461,7 +475,7 @@ def get_match(_par, par):
 
 
 def negate(He):
-    if isinstance(He.H[0], list):
+    if isinstance(He.H[0], CH):
         for lay in He.H:
             negate(lay)
     else:  # md_
