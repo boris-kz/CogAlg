@@ -1,12 +1,4 @@
-import sys
-import numpy as np
-import math
-from math import floor
-from collections import deque
-from itertools import product
-from .filters import ave_g, ave_dangle, ave_daangle
-from .classes import CP, CG
-from utils import box2slice
+from math import atan2, cos, floor, pi
 
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
@@ -21,173 +13,157 @@ This process is very complex, so it must be selective. Selection should be by co
 and inverse gradient deviation of flat blobs. But the latter is implicit here: high-gradient areas are usually quite sparse.
 A stable combination of a core flat blob with adjacent edge blobs is a potential object.
 '''
-octant = 0.3826834323650898
+octant = 0.3826834323650898  # radians per octant
+aveG = 10  # for vectorize
+ave_g = 30  # change to Ave from the root intra_blob?
+ave_dangle = .2  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
 
+def slice_edge_root(frame):
 
-def slice_edge(blob, verbose=False):
+    flat_blob_ = []  # unpacked sub-blobs
+    blob_ = frame[-1]  # init frame blob_
+    while blob_:
+        flatten_blob_(flat_blob_, blob_)
+    edge_ = [slice_edge(blob) for blob in flat_blob_]
 
-    mask__ = max_selection(blob)  # mask of local directional maxima of dy, dx, g
-    i__ = blob.i__[box2slice(blob.ibox)]
-    dy__, dx__, g__ = blob.der__t
+    return edge_
 
-    edge = CG(root=blob, node_=[[],[]], box=blob.box, mask__=blob.mask__)
-    blob.dlayers = [[edge]]
-    max_ = {*zip(*mask__.nonzero())}  # convert mask__ to a set of (y,x)
+def flatten_blob_(flat_blob_, blob_):
+    root, sign, I, Dy, Dx, G, yx_, dert_, link_, *other_params = blob = blob_.pop(0)
+    if sign:  # positive sign
+        if other_params:  # blob has rng+ (non-empty other_params), unfold sub-blobs:
+            rdn, rng, sub_blob_ = other_params
+            blob_ += sub_blob_
+    else:  # negative sign, filter
+        try: rdn = root[9]  # root is extended blob
+        except IndexError: rdn = 1  # root is frame
+        if G > aveG * rdn:
+            flat_blob_ += [blob]
 
-    if verbose:
-        step = 100 / len(max_)  # progress % percent per pixel
-        progress = 0.0; print(f"\rTracing max... {round(progress)} %", end="");  sys.stdout.flush()
-    edge.P_ = []
-    Pt_ = []  # not used?
-    while max_:  # queue of (y,x,P)s
-        y,x = max_.pop()
-        maxQue = deque([(y,x,None)])
-        while maxQue:  # trace max_
-            # initialize pivot dert
-            y,x,_P = maxQue.popleft()
-            i, dy, dx, g = i__[y,x], dy__[y,x], dx__[y,x], g__[y,x]
-            ma = ave_dangle  # max value because P direction is the same as dert gradient direction
-            assert g > 0, "g must be positive"
-            P = form_P(blob, CP(yx=[y,x], axis=[dy/g, dx/g], cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
-            edge.P_ += [P]
-            if _P is not None:
-                P.link_[0] += [_P]
-                # Pt_ += [(_P, P)]  # if using combinations
-            # search in max_ path
-            adjacents = max_ & {*product(range(y-1,y+2), range(x-1,x+2))}   # search neighbors
-            maxQue.extend(((_y, _x, P) for _y, _x in adjacents))
-            max_ -= adjacents  # set difference = first set AND not both sets: https://www.scaler.com/topics/python-set-difference/
-            max_ -= P.cells  # remove prior maxes
+def slice_edge(edge):   # edge-blob
+    root, sign, I, Dy, Dx, G, yx_, dert_, link_ = edge
 
-            if verbose:
-                progress += step; print(f"\rTracing max... {round(progress)} %", end=""); sys.stdout.flush()
+    P_ = []
+    root__ = {}  # map max yx to P, like in frame_blobs
+    for yx, axis in select_max(yx_, dert_):  # max = (yx, axis)
+        P = CP(edge, yx, axis, root__)
+        P_ += [P]
 
-    edge.link_ = Pt_  # init links with adjacent P pairs
-    if verbose: print("\r" + " " * 79, end=""); sys.stdout.flush(); print("\r", end="")
+    edge[:] = root, sign, I, Dy, Dx, G, yx_, dert_, link_, P_  # extended with P (no He or node_ yet)
 
     return edge
 
+def select_max(yx_, dert_):
+    max_ = []
+    for (y, x), (i, gy, gx, g) in zip(yx_, dert_):
+        # get sin_angle, cos_angle:
+        sa, ca = gy/g, gx/g
+        # get neighbor direction
+        dy = 1 if sa > octant else -1 if sa < -octant else 0
+        dx = 1 if ca > octant else -1 if ca < -octant else 0
+        # is y,x g > blob max?:
+        new_max = True
+        for _y, _x in [(y-dy, x-dx), (y+dy, x+dx)]:
+            if (_y, _x) not in yx_: continue  # skip if pixel not in edge blob
+            _i, _gy, _gx, _g = dert_[yx_.index((_y, _x))]  # get g of neighbor
+            if g < _g:
+                new_max = False
+                break
+        if new_max: max_ += [((y, x), (sa, ca))]
 
-def max_selection(blob):
+    return max_
 
-    Y, X = blob.mask__.shape
-    dy__, dx__, g__ = blob.der__t
-    # compute direction of gradient
-    with np.errstate(divide='ignore', invalid='ignore'):
-        sin__, cos__ = [dy__, dx__] / g__
+class CP:
+    def __init__(self, edge, yx, axis, root__):  # form_P:
 
-    # round angle to one of eight directions
-    up__, lft__, dwn__, rgt__ = (sin__< -octant), (cos__< -octant), (sin__> octant), (cos__> octant)
-    mdly__, mdlx__ = ~(up__ | dwn__), ~(lft__ | rgt__)
-    # merge in 4 bilateral axes
-    axes_mask__ = [
-        mdly__ & (rgt__ | lft__), (dwn__ & rgt__) | (up__ & lft__),  #  0,  45 deg
-        (dwn__ | up__) & mdlx__,  (dwn__ & lft__) | (up__ & rgt__),  # 90, 135 deg
-    ]
-    max_mask__ = np.zeros_like(blob.mask__, dtype=bool)
-    # local max from cross-comp within axis, use kernel max for vertical sparsity?
-    for axis_mask__, (ydir, xdir) in zip(axes_mask__, ((0,1),(1,1),(1,0),(1,-1))):  # y,x direction per axis
-        # axis AND mask:
-        mask__ = axis_mask__ & blob.mask__
-        y_, x_ = mask__.nonzero()
-        # neighbors:
-        yn1_, xn1_ = y_ + ydir, x_ + xdir
-        yn2_, xn2_ = y_ - ydir, x_ - xdir
-        # computed vals
-        axis1_ = (0 <= yn1_) & (yn1_ < Y) & (0 <= xn1_) & (xn1_ < X)
-        axis2_ = (0 <= yn2_) & (yn2_ < Y) & (0 <= xn2_) & (xn2_ < X)
-        # compare values
-        not_max_ = np.zeros_like(y_, dtype=bool)
-        not_max_[axis1_] |= (g__[y_[axis1_], x_[axis1_]] < g__[yn1_[axis1_], xn1_[axis1_]])
-        not_max_[axis2_] |= (g__[y_[axis2_], x_[axis2_]] < g__[yn2_[axis2_], xn2_[axis2_]])
-        # select maxes
-        mask__[y_[not_max_], x_[not_max_]] = False
-        # add to max_mask__
-        max_mask__ |= mask__
+        y, x = yx
+        pivot = i, gy, gx, g = interpolate2dert(edge, y, x)  # pivot dert
+        ma = ave_dangle  # max value because P direction is the same as dert gradient direction
+        m = ave_g - g
+        pivot += ma, m   # pack extra ders
 
-    return max_mask__
+        I, G, M, Ma, L, Dy, Dx = 0, 0, 0, 0, 0, 0, 0
+        self.axis = ay, ax = axis
+        self.yx_, self.dert_, self.link_ = [yx], [pivot], []
+
+        for dy, dx in [(-ay, -ax), (ay, ax)]: # scan in 2 opposite directions to add derts to P
+            self.yx_.reverse(); self.dert_.reverse()
+            (_y, _x), (_, _gy, _gx, *_) = yx, pivot  # start from pivot
+            y, x = _y+dy, _x+dx  # 1st extension
+            while True:
+                # scan to blob boundary or angle miss:
+                try: i, gy, gx, g = interpolate2dert(edge, y, x)
+                except TypeError: break  # out of bound (TypeError: cannot unpack None)
+
+                mangle,dangle = comp_angle((_gy,_gx), (gy, gx))
+                if mangle < ave_dangle: break  # terminate P if angle miss
+                # update P:
+                m = ave_g - g
+                I += i; Dy += dy; Dx += dx; G += g; Ma += ma; M += m; L += 1
+                self.yx_ += [(y, x)]; self.dert_ += [(i, gy, gx, g, ma, m)]
+                # for next loop:
+                y += dy; x += dx
+                _y, _x, _gy, _gx = y, x, gy, gx
+
+        # scan for neighbor Ps, update link_:
+        for _y, _x in [(y-1,x-1), (y-1,x), (y-1,x+1), (y,x-1), (y,x+1), (y+1,x-1), (y+1,x), (y+1,x+1)]:
+            if (_y, _x) in root__:  # neighbor has P
+                self.link_ += [root__[_y, _x]]
+        root__[y, x] = self    # update root__
+
+        self.yx = self.yx_[L // 2]  # center
+        self.latuple = I, G, M, Ma, L, (Dy, Dx)
+
+    def __repr__(self):
+        return f"P({', '.join(map(str, self.latuple))})"
 
 
-def form_P(blob, P):
+def interpolate2dert(edge, y, x):
+    root, sign, I, Dy, Dx, G, yx_, dert_, link_ = edge
 
-    scan_direction(blob, P, fleft=1)  # scan left
-    scan_direction(blob, P, fleft=0)  # scan right
-    # init:
-    _, _, I, Dy, Dx, G, Ma = map(sum, zip(*P.dert_))
-    L = len(P.dert_)
-    M = ave_g*L - G
-    G = np.hypot(Dy, Dx)  # recompute G
-    P.latuple = [I, G, M, Ma, L, [Dy, Dx]]
-    P.yx = P.dert_[L // 2][:2]  # new center
-    P.n = L  # then add n from links
+    if (y, x) in yx_:   # if edge has (y, x) in it
+        return dert_[yx_.index((y, x))]
 
-    return P
+    # get nearby coords:
+    y_ = [fy] = [floor(y)]; x_ = [fx] = [floor(x)]
+    if y != fy: y_ += [fy+1]    # y is non-integer
+    if x != fx: x_ += [fx+1]    # x is non-integer
+    n, I, Dy, Dx, G = 0, 0, 0, 0, 0
+    for _y in y_:
+        for _x in x_:
+            if (_y, _x) in yx_:
+                _i, _dy, _dx, _g = dert_[yx_.index((_y, _x))]
+                I += _i; Dy += _dy; Dx += _dx; G += _g; n += 1
 
-def scan_direction(blob, P, fleft):  # leftward or rightward from y,x
-
-    sin,cos = _dy,_dx = P.axis
-    _y, _x = P.yx  # pivot
-    r = cos*_y - sin*_x  # P axial line: cos*y - sin*x = r = constant
-    _cy,_cx = round(_y), round(_x)  # keep initial cell
-    y, x = (_y-sin,_x-cos) if fleft else (_y+sin, _x+cos)  # first dert in the direction of axis
-
-    while True:  # scan to blob boundary or angle miss
-
-        dert = interpolate2dert(blob, y, x)
-        if dert is None: break  # blob boundary
-        i, dy, dx, g = dert
-        cy, cx = round(y), round(x)  # nearest cell of (y, x)
-        if not blob.mask__[cy, cx]: break
-        if abs(cy-_cy) + abs(cx-_cx) == 2:  # mask of cell between (y,x) and (_y,_x)
-            my = (_cy+cy) / 2  # midpoint cell, P axis is above, below or over it
-            mx = (_cx+cx) / 2
-            _my_cos = sin * mx + r  # _my*cos at mx in P, to avoid division
-            my_cos = my * cos       # new cell
-            if cos < 0: my_cos, _my_cos = -my_cos, -_my_cos   # reverse sign for comparison because of cos
-            if abs(my_cos-_my_cos) > 1e-5:
-                adj_y, adj_x = (  # deviation from P axis: above/_y>y, below/_y<y, over/_y~=y, with reversed y:
-                    ((_cy, cx) if _cy < cy else (cy, _cx)) if _my_cos < my_cos else
-                    ((_cy, cx) if _cy > cy else (cy, _cx)))
-                if not blob.mask__[adj_y, adj_x]: break    # if the cell is masked, stop
-                P.cells |= {(adj_y, adj_x)}
-
-        mangle,dangle = comp_angle((_dy,_dx), (dy, dx))
-        if mangle < 0:  # terminate P if angle miss
-            break
-        P.cells |= {(cy, cx)}  # add current cell to overlap
-        _cy, _cx, _dy, _dx = cy, cx, dy, dx
-        if fleft:
-            P.dert_ = [(y,x,i,dy,dx,g,mangle)] + P.dert_  # append left
-            y -= sin; x -= cos  # next y,x
-        else:
-            P.dert_ = P.dert_ + [(y,x,i,dy,dx,g,mangle)]  # append right
-            y += sin; x += cos  # next y,x
-
-def interpolate2dert(blob, y, x):
-
-    Y, X = blob.mask__.shape    # boundary
-    x0, y0 = floor(x), floor(y) # floor
-    x1, y1 = x0 + 1, y0 + 1     # ceiling
-    if x0 < 0 or x1 >= X or y0 < 0 or y1 >= Y: return None  # boundary check
-    kernel = [  # cell weighing by inverse distance from float y,x:
-        # https://www.researchgate.net/publication/241293868_A_study_of_sub-pixel_interpolation_algorithm_in_digital_speckle_correlation_method
-        (y0, x0, (y1 - y) * (x1 - x)),
-        (y0, x1, (y1 - y) * (x - x0)),
-        (y1, x0, (y - y0) * (x1 - x)),
-        (y1, x1, (y - y0) * (x - x0))]
-    ider__t = (blob.i__[box2slice(blob.ibox)],) + blob.der__t
-
-    return (sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t)
+    if n >= 2: return I/n, Dy/n, Dx/n, G/n
 
 
 def comp_angle(_A, A):  # rn doesn't matter for angles
 
-    _angle, angle = [np.arctan2(Dy, Dx) for Dy, Dx in [_A, A]]
+    _angle, angle = [atan2(Dy, Dx) for Dy, Dx in [_A, A]]
 
     dangle = _angle - angle  # difference between angles
-    if dangle > np.pi: dangle -= 2 * np.pi  # rotate full-circle clockwise
-    elif dangle < -np.pi: dangle += 2 * np.pi  # rotate full-circle counter-clockwise
-    mangle = (np.cos(dangle) + 1) / 2  # angle similarity, scale to [0,1]
-    dangle /= 2 * np.pi  # scale to the range of mangle, signed: [-.5,.5]
+    if dangle > pi: dangle -= 2*pi  # rotate full-circle clockwise
+    elif dangle < -pi: dangle += 2*pi  # rotate full-circle counter-clockwise
+    mangle = (cos(dangle)+1)/2  # angle similarity, scale to [0,1]
+    dangle /= 2*pi  # scale to the range of mangle, signed: [-.5,.5]
 
     return [mangle, dangle]
+
+if __name__ == "__main__":
+    import sys
+    sys.path.append("..")
+    from utils import imread
+    from frame_blobs import frame_blobs_root
+    from intra_blob import intra_blob_root
+
+    image_file = '../images/raccoon_eye.jpeg'
+    image = imread(image_file)
+
+    frame = frame_blobs_root(image)
+    intra_blob_root(frame)
+    edge_ = slice_edge_root(frame)
+    # verification:
+    for edge in edge_:
+        for P in edge[-1]:
+            print(P)

@@ -368,3 +368,51 @@ def sum2graph(root, grapht, fd, nrng, fagg):  # sum node and link params into gr
                         G.alt_graph_ += [alt_G]
                         G.alt_Et = [V+v for V,v in zip_longest(G.alt_Et, alt_G.et, fillvalue=0)]
     return graph
+
+def comp_G(link, iEt):  # add flat dderH to link and link to the rims of comparands
+
+    _G, G = link._node, link.node
+    rn = len(_G.node_)/ len(G.node_)  # or unpack nested node_?
+    Depth = 0
+    # / P, default
+    Et, md_ = comp_latuple(_G.latuple, G.latuple, rn, fagg=1)
+    dderH_H = [[0,[*Et], md_]]  # dderH.H
+    N = 1
+    # / PP, if >1 Ps:
+    if _G.derH and G.derH:
+        depth, et, dH, n = comp_(_G.derH, G.derH, rn, fagg=1)  # generic dderH
+        dderH_H += [[depth, et, dH]]  # add flat
+        Et = [E+e for E,e in zip(Et,et)]  # evaluation tuple: valt, rdnt, dect
+        N += n; Depth = max(1,depth)
+    # / G, if >1 PPs:
+    if _G.aggH and G.aggH:  # exactly as above?
+        depth, et, daggH, n = comp_(_G.aggH, G.aggH, rn, fagg=1)
+        dderH_H += daggH  # still flat
+        Et = [E+e for E,e in zip(Et,et)]
+        N += n; Depth = depth
+    # if not single-node:
+    if _G.S and G.S:
+        et, extt = comp_ext((len(_G.node_),_G.S,_G.A),(len(G.node_),G.S,G.A), rn)  # or unpack?
+        Et = [E+e for E,e in zip(Et,et)]; N += .5
+        dderH_H += [[0, et, extt]]  # must be last
+    else:
+        dderH_H += [[]]
+        # for fixed len layer to decode nesting, else use Cext as a terminator?
+    dderH = [Depth, Et, dderH_H]
+    link.Et = Et; link.n = N  # reset per comp_G
+    if link.dderH:
+        add_(link.dderH, dderH)  # existing dderH in der+
+    else:
+        link.dderH = dderH
+    for fd in 0, 1:
+        Val, Rdn, Dec = Et[fd::2]
+        if Val > G_aves[fd] * Rdn:
+            iEt[fd::2] = [V+v for V,v in zip(iEt[fd::2], Et[fd::2])]  # to eval grapht in form_graph_t
+            if not fd:
+                for G in link.node, link._node:
+                    rim_H = G.rim_H
+                    if rim_H and isinstance(rim_H[0],list):  # rim is converted to rim_H in 1st sub+
+                        if len(rim_H) == len(G.Rim_H): rim_H += [[]]  # no new rim layer yet
+                        rim_H[-1] += [link]  # rim_H
+                    else:
+                        rim_H += [link]  # rim

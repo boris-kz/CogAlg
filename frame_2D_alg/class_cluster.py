@@ -47,6 +47,10 @@ class CBase:
     def unpack(self):
         return astuple(self)
 
+    def copy(self, other):
+        for attr, value in other.__dict__.items():
+            if attr != '_id' and attr in self.__dict__.keys():  # copy only the available attributes and skip id
+                setattr(self, attr, deepcopy(value))
 
 # ----------------------------------------------------------------------------
 # CbaseLite class
