@@ -73,7 +73,7 @@ def der_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep
     rng_recursion(PP, rng=1, fd=fd)  # extend PP.link_, derHs by same-der rng+ comp
 
     form_PP_t(PP, PP.P_, iRt = PP.derH.Et[2:4] if PP.derH else [0,0])  # der+ is mediated by form_PP_t
-    if root: root.fback_ += [PP.derH]  # feedback from PPds
+    if root is not None: root.fback_ += [PP.derH]  # feedback from PPds
 
 
 def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contiguously link mediated, because
@@ -99,9 +99,11 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contig
                             if len(link_) < rng: link_ += [[]]  # new link_
                             link_ = link_[-1]  # last rng layer
                         link_ += [mlink]
-                        prelink_ += unpack_last_link_(_P.link_[:-1])  # get last link layer, skip old prelinks
+                        if _P.link_ and isinstance(_P.link_[-1], list):
+                            prelink_ += [preP for preP in unpack_last_link_(_P.link_) if preP is not P]  # get last link layer, skip old prelinks  (but why skip -1? [-1] is the prelinks)
             if prelink_:
-                if not fd: prelink_ = [link._P for link in prelink_]  # prelinks are __Ps, else __links
+                # should be if fd?
+                if fd: prelink_ = [link._node for link in prelink_]  # prelinks are __Ps, else __links
                 P.link_ += [prelink_]  # temporary prelinks
                 P_ += [P]  # for next loop
         rng += 1
@@ -197,11 +199,11 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
         PP.area += L; PP.n += L  # no + P.derH.n: current links only?
         PP.latuple = [P+p for P,p in zip(PP.latuple[:-1],P.latuple[:-1])] + [[A+a for A,a in zip(PP.latuple[-1],P.latuple[-1])]]
         if P.derH:
-            add_(PP.derH, P.derH)
+            add_(PP.iderH, P.derH)
         for y,x in P.cells:
             PP.box = accum_box(PP.box, y, x); celly_+=[y]; cellx_+=[x]
-    if PP.derH:
-        PP.derH.Et[2:4] = [R+r for R,r in zip(PP.derH.Et[2:4], iRt)]
+    if PP.iderH:
+        PP.iderH.Et[2:4] = [R+r for R,r in zip(PP.iderH.Et[2:4], iRt)]
     # pixmap:
     y0,x0,yn,xn = PP.box
     PP.mask__ = np.zeros((yn-y0, xn-x0), bool)
@@ -258,9 +260,14 @@ def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
     return ret
 
 #draft
-def append_(HE,He):
+def append_(HE,He, fmerge=0):
 
-    He.H += [He]
+    if fmerge:
+        HE.H += He.H
+        HE.nest = He.nest
+    else:
+        HE.H += [He]
+        HE.nest = max(1, He.nest)
     HE.Et[:] = [V+v for V,v in zip(HE.Et, He.Et)]
     HE.n += He.n
 
@@ -288,29 +295,6 @@ def add_(HE_root, HE, He, irdnt=[]):  # unpack tuples (formally lists) down to n
         else:
             append_(HE_root, He)
 
-            ''' old:
-            if isinstance(He.H[0], CH):
-                for Lay,lay in zip_longest(HE.H, He.H, fillvalue=[]):
-                    if lay:
-                        if Lay:
-                            if isinstance(Lay.H[0],list):  # no and isinstance(lay.H[0],list): same nesting unless cpr?
-                                add_(Lay, lay, irdnt)  # unpack and sum Ets and Hs
-                            else:
-                                Lay.H = np.add(Lay.H,lay.H)  # both have numericals in H
-                            Et, et = Lay.Et, lay.Et  # always numerical
-                            Et[:] = [E+e for E,e in zip(Et,et)]
-                            if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4],irdnt)]
-                            Lay.n += lay.n  # combined param accumulation span
-            
-                        else:
-                            append_(HE,lay)
-            else:
-                HE.H = np.add(HE.H, He.H)  # sum flat lists: [m,d,m,d,m,d...]
-        else:
-            copy(HE,He)  # use custom copy to empty HE
-        if irdnt:
-            HE.Et[2] += irdnt[0]; HE.Et[3] += irdnt[1]
-        '''
     return HE  # for summing
 
 
@@ -406,8 +390,8 @@ class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
     latuple: list = z([])   # summed from Ps: lateral I,G,M,Ma,L,[Dy,Dx]
-    derH: object = z(CH())  # summed from PPs
-    aggH: object = z(CH())  # nested derH in Gs: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
+    iderH: object = z(CH())  # summed from PPs
+    derH: object = z(CH())  # nested derH in Gs: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
     node_: list = z([])  # node_t after sub_recursion
     link_: list = z([])  # links per comp layer, nest in rng+)der+
     roott: list = z([])  # Gm,Gd that contain this G, single-layer
@@ -453,6 +437,7 @@ class Clink(CBase):  # the product of comparison between two nodes
     S: float = 0.0  # sparsity: distance between node centers
     A: list = z([0,0])  # angle: dy,dx between centers
     # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
+
 
 def get_match(_par, par):
     match = min(abs(_par),abs(par))

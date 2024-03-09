@@ -24,7 +24,9 @@ def slice_edge_root(frame):
     blob_ = frame[-1]  # init frame blob_
     while blob_:
         flatten_blob_(flat_blob_, blob_)
-    edge_ = [slice_edge(blob) for blob in flat_blob_]
+    edge_ = [slice_edge(blob) for blob in flat_blob_]  # form 2D array of Ps: horizontal blob slices in dert__
+    # old version:
+    rotate_P_(edge.P__, edge.dert__, edge.mask__)  # reform Ps around centers along G, sides may overlap
 
     return edge_
 
@@ -56,12 +58,12 @@ def slice_edge(edge):   # edge-blob
 def select_max(yx_, dert_):
     max_ = []
     for (y, x), (i, gy, gx, g) in zip(yx_, dert_):
-        # get sin_angle, cos_angle:
+        # sin_angle, cos_angle:
         sa, ca = gy/g, gx/g
         # get neighbor direction
         dy = 1 if sa > octant else -1 if sa < -octant else 0
         dx = 1 if ca > octant else -1 if ca < -octant else 0
-        # is y,x g > blob max?:
+        # ?g[y,x] > blob max:
         new_max = True
         for _y, _x in [(y-dy, x-dx), (y+dy, x+dx)]:
             if (_y, _x) not in yx_: continue  # skip if pixel not in edge blob
@@ -82,7 +84,7 @@ class CP:
         m = ave_g - g
         pivot += ma, m   # pack extra ders
 
-        I, G, M, Ma, L, Dy, Dx = 0, 0, 0, 0, 0, 0, 0
+        I, G, M, Ma, L, Dy, Dx = i, g, m, ma, 1, gy, gx
         self.axis = ay, ax = axis
         self.yx_, self.dert_, self.link_ = [yx], [pivot], []
 
@@ -106,6 +108,7 @@ class CP:
                 _y, _x, _gy, _gx = y, x, gy, gx
 
         # scan for neighbor Ps, update link_:
+        y, x = yx   # get pivot
         for _y, _x in [(y-1,x-1), (y-1,x), (y-1,x+1), (y,x-1), (y,x+1), (y+1,x-1), (y+1,x), (y+1,x+1)]:
             if (_y, _x) in root__:  # neighbor has P
                 self.link_ += [root__[_y, _x]]
@@ -150,6 +153,7 @@ def comp_angle(_A, A):  # rn doesn't matter for angles
 
     return [mangle, dangle]
 
+
 if __name__ == "__main__":
     import sys
     sys.path.append("..")
@@ -167,3 +171,84 @@ if __name__ == "__main__":
     for edge in edge_:
         for P in edge[-1]:
             print(P)
+
+
+# old:
+def rotate_P_(P__, dert__, mask__):  # rotate each P to align it with direction of P gradient
+
+    yn, xn = dert__[0].shape[:2]
+    for P_ in P__:
+        for P in P_:
+            daxis = P.ptuple.angle[0] / P.ptuple.L  # dy: deviation from horizontal axis
+            while P.ptuple.G * abs(daxis) > ave_rotate:
+                P.ptuple.axis = P.ptuple.angle
+                rotate_P(P, dert__, mask__, yn, xn)  # recursive reform P along new axis in blob.dert__
+                _, daxis = comp_angle(P.ptuple.axis, P.ptuple.angle)
+            # store P.daxis to adjust params?
+
+def rotate_P(P, dert__t, mask__, yn, xn):
+
+    L = len(P.dert_)
+    rdert_ = [P.dert_[int(L/2)]]  # init rotated dert_ with old central dert
+
+    ycenter = int(P.y0 + P.ptuple.axis[0]/2)  # can be negative
+    xcenter = int(P.x0 + abs(P.ptuple.axis[1]/2))  # always positive
+    Dy, Dx = P.ptuple.angle
+    dy = Dy/L; dx = abs(Dx/L)  # hypot(dy,dx)=1: each dx,dy adds one rotated dert|pixel to rdert_
+    # scan left:
+    rx=xcenter-dx; ry=ycenter-dy; rdert=1  # to start while:
+    while rdert and rx>=0 and ry>=0 and np.ceil(ry)<yn:
+        rdert = form_rdert(rx,ry, dert__t, mask__)
+        if rdert:
+            rdert_.insert(0, rdert)
+        rx += dx; ry += dy  # next rx, ry
+    P.x0 = rx+dx; P.y0 = ry+dy  # revert to leftmost
+    # scan right:
+    rx=xcenter+dx; ry=ycenter+dy; rdert=1  # to start while:
+    while rdert and ry>=0 and np.ceil(rx)<xn and np.ceil(ry)<yn:
+        rdert = form_rdert(rx,ry, dert__t, mask__)
+        if rdert:
+            rdert_ += [rdert]
+            rx += dx; ry += dy  # next rx,ry
+    # form rP:
+    # initialization:
+    rdert = rdert_[0]; _, G, Ga, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 = rdert; M=ave_g-G; Ma=ave_ga-Ga; ndert_=[rdert]
+    # accumulation:
+    for rdert in rdert_[1:]:
+        _, g, ga, i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = rdert
+        I+=i; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx; Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1
+        ndert_ += [rdert]
+    # re-form gradients:
+    G = np.hypot(Dy,Dx);  Ga = (Cos_da0 + 1) + (Cos_da1 + 1)
+    ptuple = Cptuple(I=I, M=M, G=G, Ma=Ma, Ga=Ga, angle=(Dy,Dx), aangle=(Sin_da0, Cos_da0, Sin_da1, Cos_da1))
+    # add n,val,L,x,axis?
+    # replace P:
+    P.ptuple=ptuple; P.dert_=ndert_
+
+
+def form_rdert(rx,ry, dert__t, mask__):
+
+    # coord, distance of four int-coord derts, overlaid by float-coord rdert in dert__, int for indexing
+    # always in dert__ for intermediate float rx,ry:
+    x1 = int(np.floor(rx)); dx1 = abs(rx - x1)
+    x2 = int(np.ceil(rx));  dx2 = abs(rx - x2)
+    y1 = int(np.floor(ry)); dy1 = abs(ry - y1)
+    y2 = int(np.ceil(ry));  dy2 = abs(ry - y2)
+
+    # scale all dert params in proportion to inverted distance from rdert, sum(distances) = 1?
+    # approximation, square of rpixel is rotated, won't fully match not-rotated derts
+    mask = mask__[y1, x1] * (1 - np.hypot(dx1, dy1)) \
+         + mask__[y2, x1] * (1 - np.hypot(dx1, dy2)) \
+         + mask__[y1, x2] * (1 - np.hypot(dx2, dy1)) \
+         + mask__[y2, x2] * (1 - np.hypot(dx2, dy2))
+    mask = int(mask)  # summed mask is fractional, round to 1|0
+    if not mask:
+        ptuple = []
+        for dert__ in dert__t:  # 10 params in dert: i, g, ga, ri, dy, dx, day0, dax0, day1, dax1
+            param = dert__[y1, x1] * (1 - np.hypot(dx1, dy1)) \
+                  + dert__[y2, x1] * (1 - np.hypot(dx1, dy2)) \
+                  + dert__[y1, x2] * (1 - np.hypot(dx2, dy1)) \
+                  + dert__[y2, x2] * (1 - np.hypot(dx2, dy2))
+            ptuple += [param]
+        return ptuple
+

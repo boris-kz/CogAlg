@@ -369,6 +369,82 @@ def sum2graph(root, grapht, fd, nrng, fagg):  # sum node and link params into gr
                         G.alt_Et = [V+v for V,v in zip_longest(G.alt_Et, alt_G.et, fillvalue=0)]
     return graph
 
+def rng_recursion_agg(rroot, root, Q, Et, nrng=1):  # rng++/ G_, der+/ link_ if called from sub+ fork of agg_recursion, -> rim_H
+
+    et = [0,0,0,0,0,0]  # local only
+    _G_,_link_ = set(),set()  # for next rng+, der+
+    fd = isinstance(Q,list)  # link_ is list, node_ is combinations
+
+    if fd:
+        for link in Q:  # init rng+ from der+, extend root links
+            G = link.G; _G = link._G
+            if _G in G.compared_: continue
+            if link.dderH.Et[1] > G_aves[1] * link.dderH.Et[3]:  # eval der+
+                G.compared_+=[_G]; _G.compared_+=[G]
+                comp_G(link, et)
+                comp_rim(_link_,link,nrng)  # add matching-direction rim links for next rng+?
+    else:
+        Gt_ = Q  # prelinks for init or recursive rng+, form new link_, or make it general?
+        for (_G, G) in Gt_:
+            if _G in G.compared_: continue
+            dy, dx = box2center(G.box)  # compute distance between node centers:
+            dist = np.hypot(dy, dx)
+            # combined pairwise eval (directional val?) per rng+:
+            _M,_R = [_G.aggH.Et[0],_G.aggH.Et[2]] if _G.aggH else [0,0]
+            M, R = [G.aggH.Et[0],G.aggH.Et[2]] if G.aggH else [0,0]
+            if nrng==1 or ((M+_M)/ (dist/ave_distance) > ave*(R+_R)):
+                link = Clink(_node=_G, node=G, A=[dy,dx], S=dist)  # prelink
+                G.compared_+=[_G]; _G.compared_+=[G]
+                comp_G(link, et)
+            else:
+                _G_.add((_G, G))  # for next rng+
+
+    if et[0] > ave_Gm * et[2]:  # rng+ eval per arg cluster because comp is bilateral, 2nd test per new pair
+        Et[:] = [V+v for V, v in zip(Et, et)]  # Vt[i]+=v; Rt[i]+=rt[i]; Dt[i]+=d
+        _Q = _link_ if fd else list(_G_)
+        if _Q:
+            nrng = rng_recursion(rroot, root, _Q, Et, nrng+1)  # eval rng+ for der+ too
+
+    return nrng
+
+def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contiguously link mediated, because
+
+    iP_ = PP.P_
+    while True:
+        P_ = []; V = 0
+        for P in iP_:
+            if not P.link_: continue
+            prelink_ = []  # new prelinks per P
+            _prelink_ = P.link_.pop()  # old prelinks per P
+            for _link in _prelink_:
+                _P = _link._node if fd else _link
+                dy,dx = np.subtract(_P.yx, P.yx)
+                distance = np.hypot(dy,dx)  # distance between P midpoints, /= L for eval?
+                if distance < rng:  # | rng * ((P.val+_P.val) / ave_rval)?
+                    mlink = comp_P(_link if fd else [_P,P, distance,[dy,dx]], fd)  # return link if match
+                    if mlink:
+                        V += mlink.dderH.Et[0]  # unpack last link layer:
+                        link_ = P.link_[-1] if P.link_ and isinstance(P.link_[-1], list) else P.link_  # der++ if PP.He[0] depth==1
+                        if rng > 1:
+                            if rng == 2: link_[:] = [link_[:]]  # link_ -> link_H
+                            if len(link_) < rng: link_ += [[]]  # new link_
+                            link_ = link_[-1]  # last rng layer
+                        link_ += [mlink]
+                        prelink_ += unpack_last_link_(_P.link_[:-1])  # get last link layer, skip old prelinks
+            if prelink_:
+                if not fd: prelink_ = [link._P for link in prelink_]  # prelinks are __Ps, else __links
+                P.link_ += [prelink_]  # temporary prelinks
+                P_ += [P]  # for next loop
+        rng += 1
+        if V > ave * len(P_) * 6:  #  implied val of all __P_s, 6: len mtuple
+            iP_ = P_
+        else:
+            for P in P_: P.link_.pop()
+            break
+    PP.rng=rng
+
+# draft, we need prelink and separate der+ and rng+ forks as in comp_P?
+
 def comp_G(link, iEt):  # add flat dderH to link and link to the rims of comparands
 
     _G, G = link._node, link.node
@@ -376,29 +452,30 @@ def comp_G(link, iEt):  # add flat dderH to link and link to the rims of compara
     Depth = 0
     # / P, default
     Et, md_ = comp_latuple(_G.latuple, G.latuple, rn, fagg=1)
-    dderH_H = [[0,[*Et], md_]]  # dderH.H
+    dderH_H = [CH(nest=0,Et=[*Et], H=md_)]  # dderH.H
     N = 1
     # / PP, if >1 Ps:
     if _G.derH and G.derH:
-        depth, et, dH, n = comp_(_G.derH, G.derH, rn, fagg=1)  # generic dderH
-        dderH_H += [[depth, et, dH]]  # add flat
-        Et = [E+e for E,e in zip(Et,et)]  # evaluation tuple: valt, rdnt, dect
-        N += n; Depth = max(1,depth)
+        dHe = comp_(_G.derH, G.derH, rn, fagg=1)  # generic dderH
+        # append_(dderH,dHe)
+        dderH_H += [dHe]  # add flat
+        Et = [E+e for E,e in zip(Et,dHe.Et)]  # evaluation tuple: valt, rdnt, dect
+        N += dHe.n; Depth = max(1,dHe.nest)
     # / G, if >1 PPs:
     if _G.aggH and G.aggH:  # exactly as above?
-        depth, et, daggH, n = comp_(_G.aggH, G.aggH, rn, fagg=1)
-        dderH_H += daggH  # still flat
-        Et = [E+e for E,e in zip(Et,et)]
-        N += n; Depth = depth
+        dHe = comp_(_G.aggH, G.aggH, rn, fagg=1)
+        dderH_H += dHe.H  # still flat
+        Et = [E+e for E,e in zip(Et,dHe.Et)]
+        N += dHe.n; Depth = dHe.depth
     # if not single-node:
     if _G.S and G.S:
         et, extt = comp_ext((len(_G.node_),_G.S,_G.A),(len(G.node_),G.S,G.A), rn)  # or unpack?
         Et = [E+e for E,e in zip(Et,et)]; N += .5
-        dderH_H += [[0, et, extt]]  # must be last
+        dderH_H += [CH(nest=0, Et=et, H=extt)]  # must be last
     else:
         dderH_H += [[]]
         # for fixed len layer to decode nesting, else use Cext as a terminator?
-    dderH = [Depth, Et, dderH_H]
+    dderH = CH(nest=Depth, Et=Et, H=dderH_H, n=N)
     link.Et = Et; link.n = N  # reset per comp_G
     if link.dderH:
         add_(link.dderH, dderH)  # existing dderH in der+
