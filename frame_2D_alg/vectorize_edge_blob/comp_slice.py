@@ -90,22 +90,28 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contig
                 dy,dx = np.subtract(_P.yx, P.yx)
                 distance = np.hypot(dy,dx)  # distance between P midpoints, /= L for eval?
                 if distance < rng:  # | rng * ((P.val+_P.val) / ave_rval)?
-                    mlink = comp_P(_link if fd else [_P,P, distance,[dy,dx]], fd)  # return link if match
+                    mlink = comp_P(_link if fd else [_P,P, distance,[dy,dx]])  # return link if match
                     if mlink:
+                        if rng > 1:  # not revised:
+                            if rng == 2 and not isinstance(P.link_[0], list): P.link_[:] = [P.link_[:]]  # link_ -> link_H
+                            if len(P.link_) < rng: P.link_ += [[]]  # new link_
+                        link_ = P.link_[-1] if P.link_ and isinstance(P.link_[-1], list) else P.link_
                         V += mlink.dderH.Et[0]  # unpack last link layer:
-                        link_ = P.link_[-1] if P.link_ and isinstance(P.link_[-1], list) else P.link_  # der++ if PP.He[0] depth==1
-                        if rng > 1:
-                            if rng == 2: link_[:] = [link_[:]]  # link_ -> link_H
-                            if len(link_) < rng: link_ += [[]]  # new link_
-                            link_ = link_[-1]  # last rng layer
                         link_ += [mlink]
-                        if _P.link_ and isinstance(_P.link_[-1], list):
-                            prelink_ += [preP for preP in unpack_last_link_(_P.link_) if preP is not P]  # get last link layer, skip old prelinks  (but why skip -1? [-1] is the prelinks)
+                        if _P.link_:
+                            # unpack_last_link_ may not relevant anymore at here now
+                            # _P.link_[-1] could be:
+                            # 1. Clink - flat list of link_
+                            # 2. list - packing Clinks
+                            # 3. list - packing prelinks (CP)
+                            if isinstance(_P.link_[-1], list) and not isinstance(_P.link_[-1][0], Clink) :
+                                prelink_ += [preP for preP in _P.link_[-1] if preP is not P and preP not in prelink_]
             if prelink_:
-                # should be if fd?
                 if fd: prelink_ = [link._node for link in prelink_]  # prelinks are __Ps, else __links
                 P.link_ += [prelink_]  # temporary prelinks
                 P_ += [P]  # for next loop
+            else:
+                P.link_ += [[]]  # for _P last link_ unpack
         rng += 1
         if V > ave * len(P_) * 6:  #  implied val of all __P_s, 6: len mtuple
             iP_ = P_
@@ -117,7 +123,7 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contig
     der++ is tested in PPds formed by rng++, no der++ inside rng++: high diff @ rng++ termination only?
     '''
 
-def comp_P(link, fd):
+def comp_P(link):
 
     if isinstance(link, Clink):
         _P, P = link._node, link.node
@@ -171,7 +177,7 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
             inP_ += cP_  # update clustered Ps
 
     for PP in PP_t[1]:  # eval der+ / PPd only, after form_PP_t -> P.root
-        if PP.derH and PP.derH.Et[0] * len(PP.link_) > PP_aves[1] * PP.derH.Et[2]:
+        if PP.iderH and PP.iderH.Et[0] * len(PP.link_) > PP_aves[1] * PP.iderH.Et[2]:
             # node-mediated correlation clustering:
             der_recursion(root, PP, fd=1)
         if root.fback_:
@@ -187,8 +193,8 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
     for derP in derP_:
         if derP.node not in P_ or derP._node not in P_: continue
         if derP.dderH:
-            add_(derP.node.derH, derP.dderH, iRt)
-            add_(derP._node.derH, negate(deepcopy(derP.dderH)), iRt)  # to reverse uplink direction
+            add_([], derP.node.derH, derP.dderH, iRt)
+            add_([], derP._node.derH, negate(deepcopy(derP.dderH)), iRt)  # to reverse uplink direction
         PP.link_ += [derP]; derP.roott[fd] = PP
         PP.A = np.add(PP.A,derP.A); PP.S += derP.S
         PP.n += derP.dderH.n  # *= ave compared P.L?
@@ -199,8 +205,9 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
         PP.area += L; PP.n += L  # no + P.derH.n: current links only?
         PP.latuple = [P+p for P,p in zip(PP.latuple[:-1],P.latuple[:-1])] + [[A+a for A,a in zip(PP.latuple[-1],P.latuple[-1])]]
         if P.derH:
-            add_(PP.iderH, P.derH)
-        for y,x in P.cells:
+            add_([], PP.iderH, P.derH)
+        for y,x in P.yx_:
+            y = int(round(y)); x = int(round(x))  # yx_ may contain floats due to each yx in yx_ are added with dy and dx (floats) in slice_edge
             PP.box = accum_box(PP.box, y, x); celly_+=[y]; cellx_+=[x]
     if PP.iderH:
         PP.iderH.Et[2:4] = [R+r for R,r in zip(PP.iderH.Et[2:4], iRt)]
@@ -219,8 +226,8 @@ def feedback(root):  # in form_PP_, append new der layers to root PP, single vs.
     HE = deepcopy(root.fback_.pop(0))
     while root.fback_:
         He  = root.fback_.pop(0)
-        add_(HE, He)
-    add_(root.derH, HE.H[-1] if HE.nest else HE)  # last md_ in H or sum md_
+        add_([], HE, He)
+    add_([], root.derH, HE.H[-1] if HE.nest else HE)  # last md_ in H or sum md_
 
     if root.root and isinstance(root.root, CG):  # skip if root is Edge
         rroot = root.root  # single PP.root, can't be P
@@ -293,7 +300,8 @@ def add_(HE_root, HE, He, irdnt=[]):  # unpack tuples (formally lists) down to n
                 if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
                 HE.n += He.n  # combined param accumulation span
         else:
-            append_(HE_root, He)
+            if isinstance(HE, CH):        HE.copy(He)
+            elif isinstance(HE_root, CH): append_(HE_root, He)
 
     return HE  # for summing
 
