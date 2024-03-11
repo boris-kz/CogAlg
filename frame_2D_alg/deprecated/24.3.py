@@ -48,38 +48,6 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contig
     der++ is tested in PPds formed by rng++, no der++ inside rng++: high diff @ rng++ termination only?
     '''
 
-def comp_P(link, fd):
-
-    if isinstance(link,z): _P, P = link._P, link.P  # in der+
-    else:                  _P, P, S, A = link  # list in rng+
-    rn = len(_P.dert_) / len(P.dert_)
-
-    if _P.He and P.He:
-        # der+: append link derH, init in rng++ from form_PP_t
-        depth,(vm,vd,rm,rd),H, n = comp_(_P.He, P.He, rn=rn)
-        rm += vd > vm; rd += vm >= vd
-        aveP = P_aves[1]
-    else:
-        # rng+: add link derH
-        H = comp_ptuple(_P.ptuple, P.ptuple, rn)
-        vm = sum(H[::2]); vd = sum(abs(d) for d in H[1::2])
-        rm = 1 + vd > vm; rd = 1 + vm >= vd
-        aveP = P_aves[0]
-        n = 1  # 6 compared params is a unit of n
-
-    if vm > aveP*rm:  # always rng+
-        if fd:
-            He = link.He
-            if not He[0]: He = link.He = [1,[*He[1]],[He]]  # nest md_ as derH
-            He[1] = np.add(He[1],[vm,vd,rm,rd])
-            He[2] += [[0, [vm,vd,rm,rd], H]]  # nesting, Et, H
-            link.et = [V+v for V, v in zip(link.et,[vm,vd, rm,rd])]
-        else:
-            link = CderP(P=P,_P=_P, He=[0,[vm,vd,rm,rd],H], et=[vm,vd,rm,rd], S=S, A=A, n=n, roott=[[],[]])
-
-        return link
-
-
 def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
 
     PP_t = [[],[]]
@@ -574,4 +542,30 @@ def form_rdert(rx,ry, dert__t, mask__):
                   + dert__[y2, x2] * (1 - np.hypot(dx2, dy2))
             ptuple += [param]
         return ptuple
+
+def comp_P(link):
+
+    if isinstance(link, Clink):
+        _P, P = link._node, link.node
+        if _P.derH and P.derH:  # append link dderH, init in form_PP_t rng++, comp_latuple was already done
+            # der+:
+            dHe = comp_(_P.derH, P.derH, rn= len(_P.dert_)/len(P.dert_))
+            vm,vd,rm,rd = dHe.Et[:4]  # works if called from comp_G too
+            rm += vd > vm; rd += vm >= vd
+            aveP = P_aves[1]
+            He = link.dderH  # append link dderH:
+            if not He.nest: He = link.He = CH(nest=1, Et=[*He.Et], H=[He])  # nest md_ as derH
+            He.Et = np.add(He.Et, [vm, vd, rm, rd])
+            He.H += [dHe]
+            if vm > aveP*rm:  # always rng+
+                return link
+    else:  # rng+:
+        _P, P, S, A = link  # prelink
+        H = comp_latuple(_P.latuple, P.latuple, rn=len(_P.dert_)/len(P.dert_))
+        vm = sum(H[::2]); vd = sum(abs(d) for d in H[1::2])
+        rm = 1 + vd > vm; rd = 1 + vm >= vd
+        n = (len(_P.dert_)+len(P.dert_)) /2  # der value = ave compared n?
+        aveP = P_aves[0]
+        if vm > aveP*rm:  # always rng+
+            return Clink(node=P,_node=_P, dderH = CH(nest=0,Et=[vm,vd,rm,rd],H=H,n=n), S=S, A=A, roott=[[],[]])
 

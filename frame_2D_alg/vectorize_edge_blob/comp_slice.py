@@ -69,11 +69,10 @@ def der_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep
 
     if fd:  # add prelinks per P if not initial call:
         for P in PP.P_: P.link_ += [copy(unpack_last_link_(P.link_))]
-
     rng_recursion(PP, rng=1, fd=fd)  # extend PP.link_, derHs by same-der rng+ comp
 
-    form_PP_t(PP, PP.P_, iRt = PP.derH.Et[2:4] if PP.derH else [0,0])  # der+ is mediated by form_PP_t
-    if root is not None: root.fback_ += [PP.derH]  # feedback from PPds
+    form_PP_t(PP, PP.P_, iRt = PP.iderH.Et[2:4] if PP.iderH else [0,0])  # der+ is mediated by form_PP_t
+    if root is not None: root.fback_ += [PP.iderH]  # feedback from PPds
 
 
 def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contiguously link mediated, because
@@ -87,36 +86,26 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contig
             _prelink_ = P.link_.pop()  # old prelinks per P
             for _link in _prelink_:
                 _P = _link._node if fd else _link
-                dy,dx = np.subtract(_P.yx, P.yx)
+                dy,dx = np.subtract(_P.yx,P.yx)
                 distance = np.hypot(dy,dx)  # distance between P midpoints, /= L for eval?
-                if distance < rng:  # | rng * ((P.val+_P.val) / ave_rval)?
-                    mlink = comp_P(_link if fd else [_P,P, distance,[dy,dx]])  # return link if match
+                if distance < rng:  # | rng * ((P.val+_P.val)/ ave_rval)?
+                    # return link if match:
+                    mlink = comp_P(_link if fd else [_P,P, distance,[dy,dx]])
                     if mlink:
-                        if rng > 1:  # not revised:
+                        V += mlink.dderH.Et[0]
+                        if rng > 1:  # test to add nesting to P.link_:
                             if rng == 2 and not isinstance(P.link_[0], list): P.link_[:] = [P.link_[:]]  # link_ -> link_H
-                            if len(P.link_) < rng: P.link_ += [[]]  # new link_
-                        link_ = P.link_[-1] if P.link_ and isinstance(P.link_[-1], list) else P.link_
-                        V += mlink.dderH.Et[0]  # unpack last link layer:
+                            if len(P.link_) < rng: P.link_ += [[]]  # add new link_
+                        link_ = unpack_last_link_(_P.link_)
                         link_ += [mlink]
-                        if _P.link_:
-                            # unpack_last_link_ may not relevant anymore at here now
-                            # _P.link_[-1] could be:
-                            # 1. Clink - flat list of link_
-                            # 2. list - packing Clinks
-                            # 3. list - packing prelinks (CP)
-                            if isinstance(_P.link_[-1], list) and not isinstance(_P.link_[-1][0], Clink) :
-                                prelink_ += [preP for preP in _P.link_[-1] if preP is not P and preP not in prelink_]
-            if prelink_:
-                if fd: prelink_ = [link._node for link in prelink_]  # prelinks are __Ps, else __links
-                P.link_ += [prelink_]  # temporary prelinks
-                P_ += [P]  # for next loop
-            else:
-                P.link_ += [[]]  # for _P last link_ unpack
+                        _link_ = unpack_last_link_(_P.link_[:-1])  # skip prelink_
+                        prelink_ += [link._node if link.node is _P else link.node for link in _link_]  # connected __Ps
+            P.link_ += [prelink_]  # temporary pre-links, maybe empty
         rng += 1
         if V > ave * len(P_) * 6:  #  implied val of all __P_s, 6: len mtuple
             iP_ = P_
         else:
-            for P in P_: P.link_.pop()
+            for P in PP.P_: P.link_.pop()  # pop from all Ps
             break
     PP.rng=rng
     '''
@@ -125,29 +114,32 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contig
 
 def comp_P(link):
 
-    if isinstance(link, Clink):
-        _P, P = link._node, link.node
-        if _P.derH and P.derH:  # append link dderH, init in form_PP_t rng++, comp_latuple was already done
-            # der+:
-            dHe = comp_(_P.derH, P.derH, rn= len(_P.dert_)/len(P.dert_))
-            vm,vd,rm,rd = dHe.Et[:4]  # works if called from comp_G too
-            rm += vd > vm; rd += vm >= vd
-            aveP = P_aves[1]
-            He = link.dderH  # append link dderH:
-            if not He.nest: He = link.He = CH(nest=1, Et=[*He.Et], H=[He])  # nest md_ as derH
-            He.Et = np.add(He.Et, [vm, vd, rm, rd])
-            He.H += [dHe]
-            if vm > aveP*rm:  # always rng+
-                return link
-    else:  # rng+:
-        _P, P, S, A = link  # prelink
-        H = comp_latuple(_P.latuple, P.latuple, rn=len(_P.dert_)/len(P.dert_))
+    if isinstance(link, Clink):  # der+ only
+        _P,P = link._node, link.node
+        rn = (_P.derH.n if P.derH else len(_P.dert_)) / P.derH.n  # lower P must have derH
+    else:  # rng+
+        _P,P, S,A = link
+        rn = len(_P.dert_) / len(P.dert_)
+        H = comp_latuple(_P.latuple, P.latuple, rn)
         vm = sum(H[::2]); vd = sum(abs(d) for d in H[1::2])
         rm = 1 + vd > vm; rd = 1 + vm >= vd
-        n = (len(_P.dert_)+len(P.dert_)) /2  # der value = ave compared n?
+        n = (len(_P.dert_)+len(P.dert_)) / 2  # der value = ave compared n?
         aveP = P_aves[0]
-        if vm > aveP*rm:  # always rng+
-            return Clink(node=P,_node=_P, dderH = CH(nest=0,Et=[vm,vd,rm,rd],H=H,n=n), S=S, A=A, roott=[[],[]])
+        link = Clink(node=P,_node=_P, dderH = CH(nest=0,Et=[vm,vd,rm,rd],H=H,n=n), S=S, A=A, roott=[[],[]])
+    # both:
+    if _P.derH and P.derH:  # append link dderH, init in form_PP_t rng++, comp_latuple was already done
+        # der+:
+        dderH = comp_(_P.derH, P.derH, rn)
+        vm,vd,rm,rd = dderH.Et[:4]  # also works if called from comp_G
+        rm += vd > vm; rd += vm >= vd
+        aveP = P_aves[1]
+        He = link.dderH  # append link dderH:
+        if not He.nest: He = link.He = CH(nest=1, Et=[*He.Et], H=[He])  # nest md_ as derH
+        He.Et = np.add(He.Et, [vm,vd,rm,rd])
+        He.H += [dderH]
+
+    if vm > aveP * rm:  # always rng+
+        return link
 
 
 def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
@@ -207,7 +199,7 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
         if P.derH:
             add_([], PP.iderH, P.derH)
         for y,x in P.yx_:
-            y = int(round(y)); x = int(round(x))  # yx_ may contain floats due to each yx in yx_ are added with dy and dx (floats) in slice_edge
+            y = int(round(y)); x = int(round(x))  # summed with float dy,dx in slice_edge
             PP.box = accum_box(PP.box, y, x); celly_+=[y]; cellx_+=[x]
     if PP.iderH:
         PP.iderH.Et[2:4] = [R+r for R,r in zip(PP.iderH.Et[2:4], iRt)]
@@ -227,7 +219,7 @@ def feedback(root):  # in form_PP_, append new der layers to root PP, single vs.
     while root.fback_:
         He  = root.fback_.pop(0)
         add_([], HE, He)
-    add_([], root.derH, HE.H[-1] if HE.nest else HE)  # last md_ in H or sum md_
+    add_([], root.iderH, HE.H[-1] if HE.nest else HE)  # last md_ in H or sum md_
 
     if root.root and isinstance(root.root, CG):  # skip if root is Edge
         rroot = root.root  # single PP.root, can't be P
@@ -270,15 +262,13 @@ def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
 def append_(HE,He, fmerge=0):
 
     if fmerge:
-        HE.H += He.H
-        HE.nest = He.nest
+        HE.H += He.H; HE.nest = He.nest
     else:
-        HE.H += [He]
-        HE.nest = max(1, He.nest)
+        HE.H += [He]; HE.nest = max(1, He.nest)
+
     HE.Et[:] = [V+v for V,v in zip(HE.Et, He.Et)]
     HE.n += He.n
 
-# redraft:
 
 def add_(HE_root, HE, He, irdnt=[]):  # unpack tuples (formally lists) down to numericals and sum them
 
@@ -300,11 +290,10 @@ def add_(HE_root, HE, He, irdnt=[]):  # unpack tuples (formally lists) down to n
                 if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
                 HE.n += He.n  # combined param accumulation span
         else:
-            if isinstance(HE, CH):        HE.copy(He)
+            if isinstance(HE, CH): HE.copy(He)
             elif isinstance(HE_root, CH): append_(HE_root, He)
 
-    return HE  # for summing
-
+    return HE  # to sum
 
 def comp_(_He,He, rn=1, fagg=0):  # unpack tuples (formally lists) down to numericals and compare them
 
@@ -371,11 +360,10 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting
     lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
     '''
 
-
 class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
-    latuple: list = z([])  # lateral I,G,M,Ma,L, (Dy,Dx)
-    derH: object = z(CH())  # [(mtuple, ptuple)...] vertical derivatives summed from P links
+    latuple: list = z([])  # lateral params to compare vertically: I,G,M,Ma,L, (Dy,Dx)
+    derH: object = z(CH())  # nested vertical derivatives summed from links
     dert_: list = z([])  # array of pixel-level derts, ~ node_
     link_: list = z([[]])  # uplinks per comp layer, nest in rng+)der+
     cells: dict = z({})  # pixel-level kernels adjacent to P axis, combined into corresponding derts projected on P axis.
@@ -383,8 +371,7 @@ class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param
     yx: list = z([])
     yx_: list = z([])
     # n = len dert_
-    # dynamic attrs:
-    axis: list = z([0, 0])  # prior slice angle, init sin=0,cos=1
+    # axis: list = z([0,0])  # for P rotation, not used
     # dxdert_: list = z([])  # only in Pd
     # Pd_: list = z([])  # only in Pm
     # Mdx: int = 0  # if comp_dx
