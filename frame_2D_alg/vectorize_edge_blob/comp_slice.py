@@ -96,16 +96,17 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contig
                         if rng > 1:  # test to add nesting to P.link_:
                             if rng == 2 and not isinstance(P.link_[0], list): P.link_[:] = [P.link_[:]]  # link_ -> link_H
                             if len(P.link_) < rng: P.link_ += [[]]  # add new link_
-                        link_ = unpack_last_link_(_P.link_)
+                        link_ = unpack_last_link_(P.link_)
                         link_ += [mlink]
                         _link_ = unpack_last_link_(_P.link_[:-1])  # skip prelink_
                         prelink_ += [link._node if link.node is _P else link.node for link in _link_]  # connected __Ps
             P.link_ += [prelink_]  # temporary pre-links, maybe empty
+            if prelink_: P_ += [P]
         rng += 1
         if V > ave * len(P_) * 6:  #  implied val of all __P_s, 6: len mtuple
             iP_ = P_
         else:
-            for P in PP.P_: P.link_.pop()  # pop from all Ps
+            for P in PP.P_: P.link_.pop()
             break
     PP.rng=rng
     '''
@@ -117,6 +118,7 @@ def comp_P(link):
     if isinstance(link, Clink):  # der+ only
         _P,P = link._node, link.node
         rn = (_P.derH.n if P.derH else len(_P.dert_)) / P.derH.n  # lower P must have derH
+        aveP = P_aves[1]
     else:  # rng+
         _P,P, S,A = link
         rn = len(_P.dert_) / len(P.dert_)
@@ -126,7 +128,7 @@ def comp_P(link):
         n = (len(_P.dert_)+len(P.dert_)) / 2  # der value = ave compared n?
         aveP = P_aves[0]
         link = Clink(node=P,_node=_P, dderH = CH(nest=0,Et=[vm,vd,rm,rd],H=H,n=n), S=S, A=A, roott=[[],[]])
-    # both:
+    # both: (This is very rare)
     if _P.derH and P.derH:  # append link dderH, init in form_PP_t rng++, comp_latuple was already done
         # der+:
         dderH = comp_(_P.derH, P.derH, rn)
@@ -199,7 +201,7 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
         if P.derH:
             add_([], PP.iderH, P.derH)
         for y,x in P.yx_:
-            y = int(round(y)); x = int(round(x))  # summed with float dy,dx in slice_edge
+            y = int(round(y)); x = int(round(x))  # summed with float dy,dx in slice_edge?
             PP.box = accum_box(PP.box, y, x); celly_+=[y]; cellx_+=[x]
     if PP.iderH:
         PP.iderH.Et[2:4] = [R+r for R,r in zip(PP.iderH.Et[2:4], iRt)]
@@ -210,8 +212,6 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
     PP.mask__[(celly_-y0, cellx_-x0)] = True
 
     return PP
-
-# not updated:
 
 def feedback(root):  # in form_PP_, append new der layers to root PP, single vs. root_ per fork in agg+
 
@@ -360,6 +360,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting
     lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
     '''
 
+# for reference, redundant to slice_edge
 class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     latuple: list = z([])  # lateral params to compare vertically: I,G,M,Ma,L, (Dy,Dx)
@@ -376,13 +377,14 @@ class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param
     # Pd_: list = z([])  # only in Pm
     # Mdx: int = 0  # if comp_dx
     # Ddx: int = 0
-
     def __bool__(self):  # to test empty
         if self.dert_: return True
         else: return False
 
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
+
+    Et: list = z([])  # external eval tuple, summed from rng++ before forming new graph and appending G.extH
 
     latuple: list = z([])   # summed from Ps: lateral I,G,M,Ma,L,[Dy,Dx]
     iderH: object = z(CH())  # summed from PPs
