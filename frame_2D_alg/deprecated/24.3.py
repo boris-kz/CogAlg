@@ -569,3 +569,18 @@ def comp_P(link):
         if vm > aveP*rm:  # always rng+
             return Clink(node=P,_node=_P, dderH = CH(nest=0,Et=[vm,vd,rm,rd],H=H,n=n), S=S, A=A, roott=[[],[]])
 
+
+# not relevant, check all combinations anyway?
+def comp_rim(node_, link, nrng):  # for next rng+:
+
+    for G in link._node, link.node:
+        for _link in G.rim_H[-1]:
+            _G = _link.node if _link.node in [link._node,link.node] else _link.node  # new to link
+            _cy, _cx = box2center(_G.box); cy, cx = box2center(_G.box)
+            dy = _cy - cy; dx = _cx - cx
+            dist = np.hypot(dy, dx)  # distance between node centers
+            # or use compared?
+            if 2*nrng > dist > 2*(nrng-1):  # init max comparison distance = 2
+                # potentially connected G,_G: within rng, no comp in prior rng
+                if comp_angle(link.A,_link.A)[0] > ave:  # link direction matches in G|_G rim_H[-1]
+                    node_ += [G,_G]  # to compare in rng+

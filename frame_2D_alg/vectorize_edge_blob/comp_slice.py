@@ -89,15 +89,15 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contig
                 dy,dx = np.subtract(_P.yx,P.yx)
                 distance = np.hypot(dy,dx)  # distance between P midpoints, /= L for eval?
                 if distance < rng:  # | rng * ((P.val+_P.val)/ ave_rval)?
-                    # return link if match:
+                    if fd and not (_P.derH and P.derH): continue  # nothing to compare
                     mlink = comp_P(_link if fd else [_P,P, distance,[dy,dx]])
-                    if mlink:
+                    if mlink:  # return if match
                         V += mlink.dderH.Et[0]
                         if rng > 1:  # test to add nesting to P.link_:
                             if rng == 2 and not isinstance(P.link_[0], list): P.link_[:] = [P.link_[:]]  # link_ -> link_H
                             if len(P.link_) < rng: P.link_ += [[]]  # add new link_
                         link_ = unpack_last_link_(P.link_)
-                        link_ += [mlink]
+                        if not fd: link_ += [mlink]
                         _link_ = unpack_last_link_(_P.link_[:-1])  # skip prelink_
                         prelink_ += [link._node if link.node is _P else link.node for link in _link_]  # connected __Ps
             P.link_ += [prelink_]  # temporary pre-links, maybe empty
@@ -128,7 +128,7 @@ def comp_P(link):
         n = (len(_P.dert_)+len(P.dert_)) / 2  # der value = ave compared n?
         aveP = P_aves[0]
         link = Clink(node=P,_node=_P, dderH = CH(nest=0,Et=[vm,vd,rm,rd],H=H,n=n), S=S, A=A, roott=[[],[]])
-    # both: (This is very rare)
+    # both:
     if _P.derH and P.derH:  # append link dderH, init in form_PP_t rng++, comp_latuple was already done
         # der+:
         dderH = comp_(_P.derH, P.derH, rn)
@@ -434,7 +434,6 @@ class Clink(CBase):  # the product of comparison between two nodes
     S: float = 0.0  # sparsity: distance between node centers
     A: list = z([0,0])  # angle: dy,dx between centers
     # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
-
 
 def get_match(_par, par):
     match = min(abs(_par),abs(par))
