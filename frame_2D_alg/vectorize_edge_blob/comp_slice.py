@@ -65,7 +65,7 @@ len prior root_ sorted by G is root.rdn, to eval for inclusion in PP or start ne
 '''
 
   # root function:
-def der_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
+def ider_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
 
     if fd:  # add prelinks per P if not initial call:
         for P in PP.P_: P.link_ += [copy(unpack_last_link_(P.link_))]
@@ -150,6 +150,44 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
     for fd in 0,1:
         P_Ps = []; Link_ = []
         for P in P_:  # not PP.link_: P uplinks are unique, only G links overlap
+            Ps, link_ = [], []
+            for derP in unpack_last_link_(P.link_):
+                Ps += [derP._node]; link_ += [derP]  # not needed for PPs?
+            P_Ps += [Ps]; Link_ += [link_]  # aligned with P_
+        inP_ = []  # clustered Ps and their val,rdn s for all Ps
+        for P in root.P_:
+            if P in inP_: continue  # already packed in some PP
+            cP_, clink_ = [P], []  # clustered Ps and their val,rdn s
+            if P in P_:
+                P_index = P_.index(P)
+                clink_ += Link_[P_index]
+                perimeter = deque(P_Ps[P_index])  # recycle with breadth-first search, up and down:
+                while perimeter:
+                    _P = perimeter.popleft()
+                    if _P in cP_ or _P not in P_: continue  # _P in P_ should be checked here? If _P not in P_, there's no need to add it into CP too
+                    cP_ += [_P]
+                    clink_ += Link_[P_.index(_P)]
+                    perimeter += P_Ps[P_.index(_P)] # append linked __Ps to extended perimeter of P
+            PP = sum2PP(root, cP_, clink_, iRt, fd)
+            PP_t[fd] += [PP]  # no if Val > PP_aves[fd] * Rdn:
+            inP_ += cP_  # update clustered Ps
+
+    for PP in PP_t[1]:  # eval der+ / PPd only, after form_PP_t -> P.root
+        if PP.iderH and PP.iderH.Et[0] * len(PP.link_) > PP_aves[1] * PP.iderH.Et[2]:
+            # node-mediated correlation clustering:
+            ider_recursion(root, PP, fd=1)
+        if root.fback_:
+            feedback(root)  # after der+ in all nodes, no single node feedback
+
+    root.node_ = PP_t  # nested in der+, add_alt_PPs_?
+
+
+def form_PP_t_old(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
+
+    PP_t = [[],[]]
+    for fd in 0,1:
+        P_Ps = []; Link_ = []
+        for P in P_:  # not PP.link_: P uplinks are unique, only G links overlap
             Ps = []
             for derP in unpack_last_link_(P.link_):
                 Ps += [derP._node]; Link_ += [derP]  # not needed for PPs?
@@ -173,7 +211,7 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
     for PP in PP_t[1]:  # eval der+ / PPd only, after form_PP_t -> P.root
         if PP.iderH and PP.iderH.Et[0] * len(PP.link_) > PP_aves[1] * PP.iderH.Et[2]:
             # node-mediated correlation clustering:
-            der_recursion(root, PP, fd=1)
+            ider_recursion(root, PP, fd=1)
         if root.fback_:
             feedback(root)  # after der+ in all nodes, no single node feedback
 
@@ -399,8 +437,8 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
     n: int = 0
     # graph-external, +level per root sub+:
     rim_H: list = z([])  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
-    ederH: object = z(CH())
-    eaggH: object = z(CH())   # G-external daggH( dsubH( dderH, summed from rim links
+    # iextH: object = z(CH())  # not needed?
+    extH: object = z(CH())  # G-external daggH( dsubH( dderH, summed from rim links
     S: float = 0.0  # sparsity: distance between node centers
     A: list = z([0,0])  # angle: summed dy,dx in links
     # tentative:

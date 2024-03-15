@@ -22,13 +22,14 @@ def slice_edge_root(frame):
 
     flat_blob_ = []  # unpacked sub-blobs
     blob_ = frame[-1]  # init frame blob_
-    while blob_:
-        flatten_blob_(flat_blob_, blob_)
-    edge_ = [slice_edge(blob) for blob in flat_blob_]  # form 2D array of Ps: horizontal blob slices in dert__
-    return edge_
+
+    while blob_: flatten_blob_(flat_blob_, blob_)  # get all sub_blobs as a flat list
+
+    return [slice_edge(blob) for blob in flat_blob_]  # form 2D array of Ps: horizontal blob slices in dert__
 
 
 def flatten_blob_(flat_blob_, blob_):
+
     root, sign, I, Dy, Dx, G, yx_, dert_, link_, *other_params = blob = blob_.pop(0)
     if sign:  # positive sign
         if other_params:  # blob has rng+ (non-empty other_params), unfold sub-blobs:
