@@ -584,3 +584,22 @@ def comp_rim(node_, link, nrng):  # for next rng+:
                 # potentially connected G,_G: within rng, no comp in prior rng
                 if comp_angle(link.A,_link.A)[0] > ave:  # link direction matches in G|_G rim_H[-1]
                     node_ += [G,_G]  # to compare in rng+
+
+# unpacked
+def comp_ext(_ext, ext, rn):  # primary ext only
+
+    _L,_S,_A = _ext; L,S,A = ext; L/=rn; S/=rn  # angle is not normalized
+
+    mA, dA = comp_angle(_A, A)
+    mS, dS = min(_S,S)-ave_mL, _S/_L - S/L  # S is summed over L, dS is not summed over dL
+    mL, dL = min(_L,L)-ave_mL, _L -L
+    M = mL + mS + mA
+    D = abs(dL) + abs(dS) + dA
+    mrdn = M > D
+    drdn = D<= M
+    # all comparands are positive: maxm = maxd
+    Lmax = max(L,_L); Smax = max(S,_S); Amax = 1
+    mdec = mL/Lmax + mS/Smax + mA/Amax
+    ddec = dL/Lmax + dS/Smax + dA/Amax
+
+    return [M,D,mrdn,drdn,mdec,ddec], [mL,dL,mS,dS,mA,dA]

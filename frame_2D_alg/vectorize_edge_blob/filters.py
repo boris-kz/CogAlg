@@ -30,7 +30,8 @@ ave_nsubt = [3,3]
 ave_sub = 2  # cost of calling sub_recursion and looping
 ave_agg = 3  # cost of agg_recursion
 ave_overlap = 10
-ave_distance = 3
+ave_dist = 3
+max_dist = 15
 med_decay = .5  # decay of induction per med layer
 PP_vars = ["I", "M", "Ma", "angle", "aangle", "G", "Ga", "x", "L"]
 # comp_param coefs:

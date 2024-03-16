@@ -104,7 +104,7 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contig
             if prelink_: P_ += [P]
         rng += 1
         if V > ave * len(P_) * 6:  #  implied val of all __P_s, 6: len mtuple
-            iP_ = P_
+            iP_ = P_; fd = 0
         else:
             for P in PP.P_: P.link_.pop()
             break
@@ -434,7 +434,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
     box: list = z([inf, inf, -inf, -inf])  # y,x,y0,x0,yn,xn
     rng: int = 1
     fd: int = 0  # fork if flat layers?
-    n: int = 0
+    # n: int = 0
     # graph-external, +level per root sub+:
     rim_H: list = z([])  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
     # iextH: object = z(CH())  # not needed?
