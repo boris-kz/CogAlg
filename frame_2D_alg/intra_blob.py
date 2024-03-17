@@ -26,6 +26,9 @@ def intra_blob_root(frame): # init rng+ recursion
     for blob in blob_:
         intra_blob(blob, i__, rdn=1, rng=1)
 
+    return blob_
+
+
 def intra_blob(root_blob, i__, rdn, rng):  # recursive evaluation of cross-comp rng+ per blob
     # unpack root_blob
     root, sign, I, Dy, Dx, G, yx_, dert_, link_ = root_blob
