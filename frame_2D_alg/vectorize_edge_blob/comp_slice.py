@@ -65,11 +65,10 @@ len prior root_ sorted by G is root.rdn, to eval for inclusion in PP or start ne
 '''
 
   # root function:
-def ider_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
+def ider_recursion(root, PP):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
 
-    if fd:  # add prelinks per P if not initial call:
-        for P in PP.P_: P.link_ += [copy(unpack_last_link_(P.link_))]
-    rng_recursion(PP, rng=1, fd=fd)  # extend PP.link_, derHs by same-der rng+ comp
+    for P in PP.P_: P.link_ += [copy(unpack_last_link_(P.link_))]  # add prelinks per P
+    rng_recursion(PP, rng=1)  # extend PP.link_, derHs by same-der rng+ comp
 
     form_PP_t(PP, PP.P_, iRt = PP.iderH.Et[2:4] if PP.iderH else [0,0])  # der+ is mediated by form_PP_t
     if root is not None: root.fback_ += [PP.iderH]  # feedback from PPds
@@ -120,14 +119,14 @@ def comp_P(link):
         rn = (_P.derH.n if P.derH else len(_P.dert_)) / P.derH.n  # lower P must have derH
         aveP = P_aves[1]
     else:  # rng+
-        _P,P, S,A = link
+        _P,P, distance,angle = link
         rn = len(_P.dert_) / len(P.dert_)
         H = comp_latuple(_P.latuple, P.latuple, rn)
         vm = sum(H[::2]); vd = sum(abs(d) for d in H[1::2])
         rm = 1 + vd > vm; rd = 1 + vm >= vd
         n = (len(_P.dert_)+len(P.dert_)) / 2  # der value = ave compared n?
         aveP = P_aves[0]
-        link = Clink(node=P,_node=_P, dderH = CH(nest=0,Et=[vm,vd,rm,rd],H=H,n=n), S=S, A=A, roott=[[],[]])
+        link = Clink(node=P,_node=_P, dderH = CH(nest=0,Et=[vm,vd,rm,rd],H=H,n=n), distance=distance, angle=angle, roott=[[],[]])
     # both:
     if _P.derH and P.derH:  # append link dderH, init in form_PP_t rng++, comp_latuple was already done
         # der+:
@@ -164,7 +163,7 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
                 perimeter = deque(P_Ps[P_index])  # recycle with breadth-first search, up and down:
                 while perimeter:
                     _P = perimeter.popleft()
-                    if _P in cP_ or _P not in P_: continue  # _P in P_ should be checked here? If _P not in P_, there's no need to add it into CP too
+                    if _P in cP_ or _P not in P_: continue
                     cP_ += [_P]
                     clink_ += Link_[P_.index(_P)]
                     perimeter += P_Ps[P_.index(_P)] # append linked __Ps to extended perimeter of P
@@ -225,13 +224,12 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
     for derP in derP_:
         if derP.node not in P_ or derP._node not in P_: continue
         if derP.dderH:
-            add_([], derP.node.derH, derP.dderH, iRt)
-            add_([], derP._node.derH, negate(deepcopy(derP.dderH)), iRt)  # to reverse uplink direction
+            add_(derP.node.derH, derP.dderH, iRt)
+            add_(derP._node.derH, negate(deepcopy(derP.dderH)), iRt)  # to reverse uplink direction
         PP.link_ += [derP]; derP.roott[fd] = PP
-        PP.A = np.add(PP.A,derP.A)
-        PP.S += np.hypot(*derP.A)  # links are contiguous but slanted
+        PP.A = np.add(PP.A,derP.angle)
+        PP.S += np.hypot(*derP.angle)  # links are contiguous but slanted
         PP.n += derP.dderH.n  # *= ave compared P.L?
-    PP.S = len(P_) * np.hypot(*PP.A)  # S = L * hypot(A)?
     # += Ps:
     celly_,cellx_ = [],[]
     for P in P_:
@@ -298,7 +296,7 @@ def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
         ret = [mval, dval, mrdn, drdn, mdec, ddec], ret
     return ret
 
-#draft
+# replace with add_:
 def append_(HE,He, fmerge=0):
 
     if fmerge:
@@ -310,7 +308,7 @@ def append_(HE,He, fmerge=0):
     HE.n += He.n
 
 
-def add_(HE_root, HE, He, irdnt=[]):  # unpack tuples (formally lists) down to numericals and sum them
+def add_(HE, He, irdnt=[], fmerge=0):  # unpack tuples (formally lists) down to numericals and sum them
 
     if He:  # to be summed
         if HE:  # to sum in
@@ -319,6 +317,7 @@ def add_(HE_root, HE, He, irdnt=[]):  # unpack tuples (formally lists) down to n
                 nHe = [HE,He][HE.nest>He.nest]  # He to be nested
                 while ddepth > 0:
                    nHe.nest += 1; nHe.H = [nHe.H]; ddepth -= 1
+                   # use HE as root if deeper than He and fmerge=0
 
             if isinstance(HE.H[0],CH):  # no and isinstance(lay.H[0],list): same nesting unless cpr?
                 for Lay,lay in zip_longest(HE.H, He.H, fillvalue=[]):
@@ -329,13 +328,14 @@ def add_(HE_root, HE, He, irdnt=[]):  # unpack tuples (formally lists) down to n
                 Et[:] = [E+e for E,e in zip(Et, et)]
                 if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
                 HE.n += He.n  # combined param accumulation span
+        # not revised:
         else:
             if isinstance(HE, CH): HE.copy(He)
             elif isinstance(HE_root, CH): append_(HE_root, He)
 
     return HE  # to sum
 
-def comp_(_He,He, rn=1, dderH=[], fagg=0, fmerge=1):  # unpack tuples (formally lists) down to numericals and compare them
+def comp_(_He,He, rn=1, dderH=CH(), fagg=0, fmerge=1):  # unpack tuples (formally lists) down to numericals and compare them
 
     ddepth = abs(_He.nest - He.nest)
     n = 0
@@ -351,12 +351,12 @@ def comp_(_He,He, rn=1, dderH=[], fagg=0, fmerge=1):  # unpack tuples (formally 
         dH = []
         for _lay,lay in zip(_cHe.H,cHe.H):  # md_| ext| derH| subH| aggH, eval nesting, unpack,comp ds in shared lower layers:
             if _lay and lay:  # ext is empty in single-node Gs
-                dlay = comp_(_lay,lay, rn, fagg)
+                dlay = comp_(_lay,lay, rn, fagg=fagg)
                 Et[:] = [E+e for E,e in zip(Et,dlay.Et)]
                 n += dlay.n
                 dH += [dlay]  # CH
             else:
-                dH += [[]]
+                dH += [CH()]  # empty
     else:  # H is md_, numerical comp:
         vm,vd,rm,rd, decm,decd = 0,0,0,0, 0,0
         dH = []
@@ -378,8 +378,9 @@ def comp_(_He,He, rn=1, dderH=[], fagg=0, fmerge=1):  # unpack tuples (formally 
 
         n = (_He.n+He.n) /2 * (len(_cHe.H)/12)  # ave compared n, /2 if ext: 6 params vs 12 in md_
 
-    if dderH:
-        append_(dderH, CH(nest=min(_He.nest,He.nest), Et=Et, H=dH, n=n), fmerge)
+    # not updated:
+    dHe = add_(dderH, CH(nest=min(_He.nest,He.nest), Et=Et, H=dH, n=n), fmerge)
+    return dHe
 
 
 class CH(CBase):  # generic derivation hierarchy of variable nesting
