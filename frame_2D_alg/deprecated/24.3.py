@@ -585,21 +585,43 @@ def comp_rim(node_, link, nrng):  # for next rng+:
                 if comp_angle(link.A,_link.A)[0] > ave:  # link direction matches in G|_G rim_H[-1]
                     node_ += [G,_G]  # to compare in rng+
 
-# unpacked
-def comp_ext(_ext, ext, rn):  # primary ext only
+# replace with add_:
+def append_(HE,He, fmerge=0):
 
-    _L,_S,_A = _ext; L,S,A = ext; L/=rn; S/=rn  # angle is not normalized
+    if fmerge:
+        HE.H += He.H; HE.nest = He.nest
+    else:
+        HE.H += [He]; HE.nest = max(1, He.nest)
 
-    mA, dA = comp_angle(_A, A)
-    mS, dS = min(_S,S)-ave_mL, _S/_L - S/L  # S is summed over L, dS is not summed over dL
-    mL, dL = min(_L,L)-ave_mL, _L -L
-    M = mL + mS + mA
-    D = abs(dL) + abs(dS) + dA
-    mrdn = M > D
-    drdn = D<= M
-    # all comparands are positive: maxm = maxd
-    Lmax = max(L,_L); Smax = max(S,_S); Amax = 1
-    mdec = mL/Lmax + mS/Smax + mA/Amax
-    ddec = dL/Lmax + dS/Smax + dA/Amax
+    HE.Et[:] = [V+v for V,v in zip_longest(HE.Et, He.Et, fillvalue=0)]
+    HE.n += He.n
 
-    return [M,D,mrdn,drdn,mdec,ddec], [mL,dL,mS,dS,mA,dA]
+
+def add_(HE, He, irdnt=[], fmerge=0):  # unpack tuples (formally lists) down to numericals and sum them
+
+    # per layer of each CH
+    if He:  # to be summed
+        if fmerge:  # HE.H += He.H, else HE.H += [He.H]
+            if HE:  # to sum in
+                ddepth = abs(HE.nest - He.nest)  # compare nesting depth, nest lesser He: md_-> derH-> subH-> aggH:
+                if ddepth:
+                    nHe = [HE,He][HE.nest>He.nest]  # He to be nested
+                    while ddepth > 0:
+                       nHe.nest += 1; nHe.H = [nHe.H]; ddepth -= 1
+                # same nesting:
+                if isinstance(HE.H[0],CH):  # no and isinstance(lay.H[0],list): same nesting unless cpr?
+                    for Lay,lay in zip_longest(HE.H, He.H, fillvalue=[]):
+                        add_(Lay,lay, irdnt,fmerge=1)  # recursive unpack to sum md_s
+                else:
+                    HE.H = np.add(HE.H, He.H)  # both Hs are md_s
+            else:  # add new layer:
+                if fmerge: HE.root.H += copy(He)  # append flat
+                else:    HE.root.H += [copy(He)]  # append nested
+        # default:
+        Et,et = HE.Et,He.Et
+        HE.Et[:] = [E+e for E,e in zip_longest(Et, et, fillvalue=0)]
+        if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
+        HE.n += He.n  # combined param accumulation span
+        HE.nest = max(HE.nest, He.nest)
+
+    return HE  # not used?

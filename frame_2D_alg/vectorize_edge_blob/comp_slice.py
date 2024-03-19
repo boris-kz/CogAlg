@@ -33,7 +33,7 @@ from itertools import zip_longest, combinations
 from math import inf
 from class_cluster import CBase, init_param as z
 from .filters import ave, ave_dI, aves, P_aves, PP_aves
-from .slice_edge import comp_angle
+from .slice_edge import comp_angle, CP
 # from typing import List, Tuple
 # from .classes import add_, comp_, negate, get_match, Clink, CG, CH
 # from utils import box2slice, accum_box, sub_box2box
@@ -70,11 +70,10 @@ def ider_recursion(root, PP):  # node-mediated correlation clustering: keep same
     for P in PP.P_: P.link_ += [copy(unpack_last_link_(P.link_))]  # add prelinks per P
     rng_recursion(PP, rng=1)  # extend PP.link_, derHs by same-der rng+ comp
 
-    form_PP_t(PP, PP.P_, iRt = PP.iderH.Et[2:4] if PP.iderH else [0,0])  # der+ is mediated by form_PP_t
+    form_PP_t(PP, PP.P_, iRt=PP.iderH.Et[2:4] if PP.iderH else [0, 0])  # der+ is mediated by form_PP_t
     if root is not None: root.fback_ += [PP.iderH]  # feedback from PPds
 
-
-def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contiguously link mediated, because
+def rng_recursion(PP, rng=1):  # similar to agg+ rng_recursion, but contiguously link mediated, because
 
     iP_ = PP.P_
     while True:
@@ -84,7 +83,11 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contig
             prelink_ = []  # new prelinks per P
             _prelink_ = P.link_.pop()  # old prelinks per P
             for _link in _prelink_:
-                _P = _link._node if fd else _link
+                if isinstance(_link, Clink):
+                    fd = 1; _P = _link._node
+                else:
+                    fd=0; _P = _link
+                # _P = _link._node if isinstance(_link, Clink) else _link
                 dy,dx = np.subtract(_P.yx,P.yx)
                 distance = np.hypot(dy,dx)  # distance between P midpoints, /= L for eval?
                 if distance < rng:  # | rng * ((P.val+_P.val)/ ave_rval)?
@@ -107,10 +110,8 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contig
         else:
             for P in PP.P_: P.link_.pop()
             break
+    # der++ in PPds from rng++, no der++ inside rng++: high diff @ rng++ termination only?
     PP.rng=rng
-    '''
-    der++ is tested in PPds formed by rng++, no der++ inside rng++: high diff @ rng++ termination only?
-    '''
 
 def comp_P(link):
 
@@ -174,7 +175,7 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
     for PP in PP_t[1]:  # eval der+ / PPd only, after form_PP_t -> P.root
         if PP.iderH and PP.iderH.Et[0] * len(PP.link_) > PP_aves[1] * PP.iderH.Et[2]:
             # node-mediated correlation clustering:
-            ider_recursion(root, PP, fd=1)
+            ider_recursion(root, PP)
         if root.fback_:
             feedback(root)  # after der+ in all nodes, no single node feedback
 
@@ -224,8 +225,8 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
     for derP in derP_:
         if derP.node not in P_ or derP._node not in P_: continue
         if derP.dderH:
-            add_(derP.node.derH, derP.dderH, iRt)
-            add_(derP._node.derH, negate(deepcopy(derP.dderH)), iRt)  # to reverse uplink direction
+            add_(derP.node.derH, derP.dderH, iRt, fmerge=1)
+            add_(derP._node.derH, negate(deepcopy(derP.dderH)), iRt, fmerge=1)  # to reverse uplink direction
         PP.link_ += [derP]; derP.roott[fd] = PP
         PP.A = np.add(PP.A,derP.angle)
         PP.S += np.hypot(*derP.angle)  # links are contiguous but slanted
@@ -237,7 +238,7 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
         PP.area += L; PP.n += L  # no + P.derH.n: current links only?
         PP.latuple = [P+p for P,p in zip(PP.latuple[:-1],P.latuple[:-1])] + [[A+a for A,a in zip(PP.latuple[-1],P.latuple[-1])]]
         if P.derH:
-            add_([], PP.iderH, P.derH)
+            add_(PP.iderH, P.derH, fmerge=1)
         for y,x in P.yx_:
             y = int(round(y)); x = int(round(x))  # summed with float dy,dx in slice_edge?
             PP.box = accum_box(PP.box, y, x); celly_+=[y]; cellx_+=[x]
@@ -256,8 +257,8 @@ def feedback(root):  # in form_PP_, append new der layers to root PP, single vs.
     HE = deepcopy(root.fback_.pop(0))
     while root.fback_:
         He  = root.fback_.pop(0)
-        add_([], HE, He)
-    add_([], root.iderH, HE.H[-1] if HE.nest else HE)  # last md_ in H or sum md_
+        add_(HE, He, fmerge=1)
+    add_(root.iderH, HE.H[-1] if HE.nest else HE, fmerge=1)  # last md_ in H or sum md_
 
     if root.root and isinstance(root.root, CG):  # skip if root is Edge
         rroot = root.root  # single PP.root, can't be P
@@ -296,20 +297,30 @@ def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
         ret = [mval, dval, mrdn, drdn, mdec, ddec], ret
     return ret
 
-# replace with add_:
-def append_(HE,He, fmerge=0):
 
-    if fmerge:
-        HE.H += He.H; HE.nest = He.nest
-    else:
-        HE.H += [He]; HE.nest = max(1, He.nest)
+class CH(CBase):  # generic derivation hierarchy of variable nesting
 
-    HE.Et[:] = [V+v for V,v in zip_longest(HE.Et, He.Et, fillvalue=0)]
-    HE.n += He.n
+    nest: int = 0  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH
+    Et: list = z([])  # evaluation tuple: valt, rdnt, normt
+    H: list = z([])  # hierarchy of der layers or md_
+    n: int = 0  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
+    root: object = None  # higher-order CH
 
+    def __bool__(self):  # to test empty
+        if self.n: return True
+        else: return False
+    '''
+    len layer +extt: 2, 3, 6, 12, 24,
+    or without extt: 1, 1, 2, 4, 8..: max n of tuples per der layer = summed n of tuples in all lower layers:
+    lay1: par     # derH per param in vertuple, layer is derivatives of all lower layers:
+    lay2: [m,d]   # implicit nesting, brackets for clarity:
+    lay3: [[m,d], [md,dd]]: 2 sLays,
+    lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
+    '''
 
 def add_(HE, He, irdnt=[], fmerge=0):  # unpack tuples (formally lists) down to numericals and sum them
 
+    # per layer of each CH
     if He:  # to be summed
         if HE:  # to sum in
             ddepth = abs(HE.nest - He.nest)  # compare nesting depth, nest lesser He: md_-> derH-> subH-> aggH:
@@ -317,23 +328,25 @@ def add_(HE, He, irdnt=[], fmerge=0):  # unpack tuples (formally lists) down to 
                 nHe = [HE,He][HE.nest>He.nest]  # He to be nested
                 while ddepth > 0:
                    nHe.nest += 1; nHe.H = [nHe.H]; ddepth -= 1
-                   # use HE as root if deeper than He and fmerge=0
-
+            # same nesting:
             if isinstance(HE.H[0],CH):  # no and isinstance(lay.H[0],list): same nesting unless cpr?
-                for Lay,lay in zip_longest(HE.H, He.H, fillvalue=[]):
-                    add_(HE, Lay,lay, irdnt)  # recursive unpack
+                for Lay,lay in zip_longest(HE.H, He.H, fillvalue=CH()):
+                    add_(Lay,lay, irdnt,fmerge)  # recursive unpack to sum md_s
             else:
-                HE.H = np.add(HE.H, He.H)  # both have numericals in H
-                Et, et = HE.Et, He.Et  # always numerical
-                Et[:] = [E+e for E,e in zip(Et, et)]
-                if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
-                HE.n += He.n  # combined param accumulation span
-        # not revised:
+                HE.H = np.add(HE.H, He.H)  # both Hs are md_s
         else:
-            if isinstance(HE, CH): HE.copy(He)
-            elif isinstance(HE_root, CH): append_(HE_root, He)
+            # He is deeper than HE, add as new layer to HE.root:
+            if fmerge: HE.root.H += copy(He)  # append flat
+            else:      HE.root.H += [copy(He)]  # append nested
+        # default:
+        He.root = HE
+        Et,et = HE.Et,He.Et
+        HE.Et[:] = [E+e for E,e in zip_longest(Et, et, fillvalue=0)]
+        if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
+        HE.n += He.n  # combined param accumulation span
+        HE.nest = max(HE.nest, He.nest)
 
-    return HE  # to sum
+    return HE  # not used?
 
 def comp_(_He,He, rn=1, dderH=CH(), fagg=0, fmerge=1):  # unpack tuples (formally lists) down to numericals and compare them
 
@@ -351,7 +364,7 @@ def comp_(_He,He, rn=1, dderH=CH(), fagg=0, fmerge=1):  # unpack tuples (formall
         dH = []
         for _lay,lay in zip(_cHe.H,cHe.H):  # md_| ext| derH| subH| aggH, eval nesting, unpack,comp ds in shared lower layers:
             if _lay and lay:  # ext is empty in single-node Gs
-                dlay = comp_(_lay,lay, rn, fagg=fagg)
+                dlay = comp_(_lay,lay, rn, fagg=fagg, fmerge=1)  # dlay is dderH
                 Et[:] = [E+e for E,e in zip(Et,dlay.Et)]
                 n += dlay.n
                 dH += [dlay]  # CH
@@ -375,34 +388,13 @@ def comp_(_He,He, rn=1, dderH=CH(), fagg=0, fmerge=1):  # unpack tuples (formall
             dH += [match,diff]  # flat
         Et = [vm,vd,rm,rd]
         if fagg: Et += [decm, decd]
+        n = len(_cHe.H)/12  # unit n = 6 params, = 12 in md_
 
-        n = (_He.n+He.n) /2 * (len(_cHe.H)/12)  # ave compared n, /2 if ext: 6 params vs 12 in md_
+    add_(dderH, CH(nest=min(_He.nest,He.nest), Et=Et, H=dH, n=n), fmerge=fmerge)
+    return dderH
 
-    # not updated:
-    dHe = add_(dderH, CH(nest=min(_He.nest,He.nest), Et=Et, H=dH, n=n), fmerge)
-    return dHe
-
-
-class CH(CBase):  # generic derivation hierarchy of variable nesting
-
-    nest: int = 0  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH
-    Et: list = z([])  # evaluation tuple: valt, rdnt, normt
-    H: list = z([])  # hierarchy of der layers or md_
-    n: int = 0  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
-
-    def __bool__(self):  # to test empty
-        if self.n: return True
-        else: return False
-    '''
-    len layer +extt: 2, 3, 6, 12, 24,
-    or without extt: 1, 1, 2, 4, 8..: max n of tuples per der layer = summed n of tuples in all lower layers:
-    lay1: par     # derH per param in vertuple, layer is derivatives of all lower layers:
-    lay2: [m,d]   # implicit nesting, brackets for clarity:
-    lay3: [[m,d], [md,dd]]: 2 sLays,
-    lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
-    '''
-
-# for reference, redundant to slice_edge
+'''
+for reference, redundant to slice_edge:
 class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     latuple: list = z([])  # lateral params to compare vertically: I,G,M,Ma,L, (Dy,Dx)
@@ -422,7 +414,7 @@ class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param
     def __bool__(self):  # to test empty
         if self.dert_: return True
         else: return False
-
+'''
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 

@@ -37,9 +37,10 @@ class CBase:
 def slice_edge_root(frame):
 
     flat_blob_ = []  # unpacked sub-blobs
-    blob_ = frame  # init frame blob_
+    i__, I, Dy, Dx, G, blob_ = frame  # unpack frame object
 
-    while blob_: flatten_blob_(flat_blob_, blob_)  # get all sub_blobs as a flat list
+    while blob_:
+        flatten_blob_(flat_blob_, blob_)  # get all sub_blobs as a flat list
 
     return [slice_edge(blob) for blob in flat_blob_]  # form 2D array of Ps: horizontal blob slices in dert__
 
