@@ -1,31 +1,3 @@
-'''
-Vectorize is a terminal fork of intra_blob.
-
-comp_slice traces edge axis by cross-comparing vertically adjacent Ps: horizontal slices across an edge blob.
-These are low-M high-Ma blobs, vectorized into outlines of adjacent flat (high internal match) blobs.
-(high match or match of angle: M | Ma, roughly corresponds to low gradient: G | Ga)
--
-Vectorization is clustering of parameterized Ps + their derivatives (derPs) into PPs: patterns of Ps that describe edge blob.
-This process is a reduced-dimensionality (2D->1D) version of cross-comp and clustering cycle, common across this project.
-
-PP clustering in vertical (along axis) dimension is contiguous and exclusive because 
-Ps are relatively lateral (cross-axis), their internal match doesn't project vertically. 
-
-Primary clustering by match between Ps over incremental distance (rng++), followed by forming overlapping
-Secondary clusters of match of incremental-derivation (der++) difference between Ps. 
-
-As we add higher dimensions (3D and time), this dimensionality reduction is done in salient high-aspect blobs
-(likely edges in 2D or surfaces in 3D) to form more compressed 'skeletal' representations of full-dimensional patterns.
-
-comp_slice traces edge blob axis by cross-comparing vertically adjacent Ps: slices across edge blob, along P.G angle.
-These low-M high-Ma blobs are vectorized into outlines of adjacent flat (high internal match) blobs.
-(high match or match of angle: M | Ma, roughly corresponds to low gradient: G | Ga)
-
-Connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possibly forking. 
-len prior root_ sorted by G is root.rdn, to eval for inclusion in PP or start new P by ave*rdn
-'''
-
-  # root function:
 import numpy as np
 from collections import deque, defaultdict
 from copy import deepcopy, copy
@@ -34,9 +6,6 @@ from math import inf
 from class_cluster import CBase, init_param as z
 from .filters import ave, ave_dI, aves, P_aves, PP_aves
 from .slice_edge import comp_angle, CP
-# from typing import List, Tuple
-# from .classes import add_, comp_, negate, get_match, Clink, CG, CH
-# from utils import box2slice, accum_box, sub_box2box
 '''
 Vectorize is a terminal fork of intra_blob.
 
@@ -67,7 +36,8 @@ len prior root_ sorted by G is root.rdn, to eval for inclusion in PP or start ne
   # root function:
 def ider_recursion(root, PP):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
 
-    for P in PP.P_: P.link_ += [copy(unpack_last_link_(P.link_))]  # add prelinks per P
+    for P in PP.P_:  # add prelinks per P:
+        P.link_ += [[link._node,link.node,link.distance,link.angle] for link in unpack_last_link_(P.link_)]
     rng_recursion(PP, rng=1)  # extend PP.link_, derHs by same-der rng+ comp
 
     form_PP_t(PP, PP.P_, iRt=PP.iderH.Et[2:4] if PP.iderH else [0, 0])  # der+ is mediated by form_PP_t
@@ -83,13 +53,8 @@ def rng_recursion(PP, rng=1):  # similar to agg+ rng_recursion, but contiguously
             prelink_ = []  # new prelinks per P
             _prelink_ = P.link_.pop()  # old prelinks per P
             for _link in _prelink_:
-                if isinstance(_link, Clink):
-                    fd = 1; _P = _link._node
-                else:
-                    fd=0; _P = _link
-                # _P = _link._node if isinstance(_link, Clink) else _link
-                dy,dx = np.subtract(_P.yx,P.yx)
-                distance = np.hypot(dy,dx)  # distance between P midpoints, /= L for eval?
+                _P = _link[0]
+                dy,dx = np.subtract(_P.yx,P.yx); distance = np.hypot(dy,dx)  # distance between P midpoints, /= L for eval?
                 if distance < rng:  # | rng * ((P.val+_P.val)/ ave_rval)?
                     if fd and not (_P.derH and P.derH): continue  # nothing to compare
                     mlink = comp_P(_link if fd else [_P,P, distance,[dy,dx]])
@@ -148,70 +113,33 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
 
     PP_t = [[],[]]
     for fd in 0,1:
-        P_Ps = []; Link_ = []
-        for P in P_:  # not PP.link_: P uplinks are unique, only G links overlap
-            Ps, link_ = [], []
+        _P__, Link_ = [],[]  # per PP, ! PP.link_?
+        for P in P_:
+            _P_,link_ = [],[]  # per P
             for derP in unpack_last_link_(P.link_):
-                Ps += [derP._node]; link_ += [derP]  # not needed for PPs?
-            P_Ps += [Ps]; Link_ += [link_]  # aligned with P_
-        inP_ = []  # clustered Ps and their val,rdn s for all Ps
+                _P_ += [derP._node]; link_ += [derP]
+            _P__ += [_P__]; Link_ += [link_]  # aligned
+        CP_ = []  # all clustered Ps
         for P in root.P_:
-            if P in inP_: continue  # already packed in some PP
-            cP_, clink_ = [P], []  # clustered Ps and their val,rdn s
+            if P in CP_: continue  # already packed in some sub-PP
+            cP_, clink_ = [P], []  # cluster per P
             if P in P_:
                 P_index = P_.index(P)
                 clink_ += Link_[P_index]
-                perimeter = deque(P_Ps[P_index])  # recycle with breadth-first search, up and down:
+                perimeter = deque(_P__[P_index])  # recycle with breadth-first search, up and down:
                 while perimeter:
                     _P = perimeter.popleft()
                     if _P in cP_ or _P not in P_: continue
                     cP_ += [_P]
                     clink_ += Link_[P_.index(_P)]
-                    perimeter += P_Ps[P_.index(_P)] # append linked __Ps to extended perimeter of P
+                    perimeter += _P__[P_.index(_P)]  # extend P perimeter with linked __Ps
             PP = sum2PP(root, cP_, clink_, iRt, fd)
-            PP_t[fd] += [PP]  # no if Val > PP_aves[fd] * Rdn:
-            inP_ += cP_  # update clustered Ps
-
+            PP_t[fd] += [PP]
+            CP_ += cP_
     for PP in PP_t[1]:  # eval der+ / PPd only, after form_PP_t -> P.root
         if PP.iderH and PP.iderH.Et[0] * len(PP.link_) > PP_aves[1] * PP.iderH.Et[2]:
             # node-mediated correlation clustering:
             ider_recursion(root, PP)
-        if root.fback_:
-            feedback(root)  # after der+ in all nodes, no single node feedback
-
-    root.node_ = PP_t  # nested in der+, add_alt_PPs_?
-
-
-def form_PP_t_old(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
-
-    PP_t = [[],[]]
-    for fd in 0,1:
-        P_Ps = []; Link_ = []
-        for P in P_:  # not PP.link_: P uplinks are unique, only G links overlap
-            Ps = []
-            for derP in unpack_last_link_(P.link_):
-                Ps += [derP._node]; Link_ += [derP]  # not needed for PPs?
-            P_Ps += [Ps]  # aligned with P_
-        inP_ = []  # clustered Ps and their val,rdn s for all Ps
-        for P in root.P_:
-            if P in inP_: continue  # already packed in some PP
-            cP_ = [P]  # clustered Ps and their val,rdn s
-            if P in P_:
-                perimeter = deque(P_Ps[P_.index(P)])  # recycle with breadth-first search, up and down:
-                while perimeter:
-                    _P = perimeter.popleft()
-                    if _P in cP_: continue
-                    cP_ += [_P]
-                    if _P in P_:
-                        perimeter += P_Ps[P_.index(_P)] # append linked __Ps to extended perimeter of P
-            PP = sum2PP(root, cP_, Link_, iRt, fd)
-            PP_t[fd] += [PP]  # no if Val > PP_aves[fd] * Rdn:
-            inP_ += cP_  # update clustered Ps
-
-    for PP in PP_t[1]:  # eval der+ / PPd only, after form_PP_t -> P.root
-        if PP.iderH and PP.iderH.Et[0] * len(PP.link_) > PP_aves[1] * PP.iderH.Et[2]:
-            # node-mediated correlation clustering:
-            ider_recursion(root, PP, fd=1)
         if root.fback_:
             feedback(root)  # after der+ in all nodes, no single node feedback
 
@@ -328,27 +256,30 @@ def add_(HE, He, irdnt=[], fmerge=0):  # unpack tuples (formally lists) down to 
                 nHe = [HE,He][HE.nest>He.nest]  # He to be nested
                 while ddepth > 0:
                    nHe.nest += 1; nHe.H = [nHe.H]; ddepth -= 1
-            # same nesting:
-            if isinstance(HE.H[0],CH):  # no and isinstance(lay.H[0],list): same nesting unless cpr?
+            # sum layers of same nesting, elevation:
+            if isinstance(HE.H[0],CH):
+                H = []
                 for Lay,lay in zip_longest(HE.H, He.H, fillvalue=CH()):
-                    add_(Lay,lay, irdnt,fmerge)  # recursive unpack to sum md_s
+                    H+= [add_(Lay,lay, irdnt, fmerge)] # recursive unpack to sum md_s
+                HE.H = H
             else:
                 HE.H = np.add(HE.H, He.H)  # both Hs are md_s
-        else:
-            # He is deeper than HE, add as new layer to HE.root:
-            if fmerge: HE.root.H += copy(He)  # append flat
-            else:      HE.root.H += [copy(He)]  # append nested
+        else:  # He is higher than HE, add as new layer | sub-layer to HE.root:
+            if fmerge:
+                for lay in He.H: lay.root = HE
+                HE.root.H += He  # append flat
+            else:
+                He.root = HE
+                HE.root.H += [He]  # append nested
         # default:
-        He.root = HE
         Et,et = HE.Et,He.Et
         HE.Et[:] = [E+e for E,e in zip_longest(Et, et, fillvalue=0)]
         if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
         HE.n += He.n  # combined param accumulation span
         HE.nest = max(HE.nest, He.nest)
 
-    return HE  # not used?
 
-def comp_(_He,He, rn=1, dderH=CH(), fagg=0, fmerge=1):  # unpack tuples (formally lists) down to numericals and compare them
+def comp_(_He,He, dderH, rn=1, fagg=0, fmerge=1):  # unpack tuples (formally lists) down to numericals and compare them
 
     ddepth = abs(_He.nest - He.nest)
     n = 0
@@ -364,7 +295,7 @@ def comp_(_He,He, rn=1, dderH=CH(), fagg=0, fmerge=1):  # unpack tuples (formall
         dH = []
         for _lay,lay in zip(_cHe.H,cHe.H):  # md_| ext| derH| subH| aggH, eval nesting, unpack,comp ds in shared lower layers:
             if _lay and lay:  # ext is empty in single-node Gs
-                dlay = comp_(_lay,lay, rn, fagg=fagg, fmerge=1)  # dlay is dderH
+                dlay = comp_(_lay,lay, CH(), rn, fagg=fagg, fmerge=1)  # dlay is dderH
                 Et[:] = [E+e for E,e in zip(Et,dlay.Et)]
                 n += dlay.n
                 dH += [dlay]  # CH
@@ -476,8 +407,7 @@ def get_match(_par, par):
 
 def negate(He):
     if isinstance(He.H[0], CH):
-        for lay in He.H:
-            negate(lay)
+        for lay in He.H: negate(lay)
     else:  # md_
         He.H[1::2] = [-d for d in He.H[1::2]]
 

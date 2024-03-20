@@ -41,7 +41,7 @@ https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/agg_re
 
 def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cluster:
 
-    edge_ = slice_edge_root(intra_blob_root( frame_blobs_root(image)))
+    edge_ = slice_edge_root( intra_blob_root( frame_blobs_root(image)))
 
     for edge in edge_:  #  edge = [root, sign, I, Dy, Dx, G, yx_, dert_, link_, P_]
         if edge[5] * (len(edge[-1])-1) > G_aves[0]:  # rdn=1
@@ -131,10 +131,10 @@ def comp_G(link, node_, iEt, nrng=None):  # add flat dderH to link and link to t
         dderH.H = [CH(nest=0, Et=[*Et], H=md_)]
         comp_ext(_G,G, dist, rn, dderH)
         # / PP, if >1 Ps:
-        if _G.iderH and G.iderH: comp_(_G.iderH, G.iderH, rn, dderH, fagg=1, fmerge=0)
+        if _G.iderH and G.iderH: comp_(_G.iderH, G.iderH, dderH, rn, fagg=1, fmerge=0)
     # / G, if >1 PPs | Gs:
-    if _G.extH and G.extH: comp_(_G.extH, G.extH, rn, dderH, fagg=1, fmerge=0)  # always true in der+
-    if _G.derH and G.derH: comp_(_G.derH, G.derH, rn, dderH, fagg=1, fmerge=0)
+    if _G.extH and G.extH: comp_(_G.extH, G.extH, dderH, rn, fagg=1, fmerge=0)  # always true in der+
+    if _G.derH and G.derH: comp_(_G.derH, G.derH, dderH, rn, fagg=1, fmerge=0)
     else: dderH.H+= [CH()]  # empty for fixed-len layer decoding, or use Cext as layer terminator?
 
     add_(link.dderH, dderH, fmerge=1-len(link.dderH.H)>0)  # append for higher-res lower-der summation in sub-G extH
@@ -224,14 +224,13 @@ def node_connect(iG_):  # node connectivity = sum surround link vals, incr.media
                 ave = G_aves[i]
                 for link in rim:
                     # > ave derGs in fd rim
-                    lval,lrdn,ldec = link.dderH.Et[i::2] # i: start, 4: end, 2: step
-                    # current-mediation decay:
-                    decay = mediation * (ldec / (link.dderH.n * 6))  # normalized, 6-param n unit
+                    lval,lrdn,ldec = link.dderH.Et[i::2]  # step=2
+                    decay = mediation * (ldec/ (link.dderH.n * 6))  # normalized, current-mediation decay
                     _G = link._node if link.node is G else link.node
                     _val,_rdn = _G.Et[i::2]
                     # current-loop vals and their difference from last-loop vals, before updating:
                     V = (val+_val) * decay; dv = V-lval
-                    R = (rdn+_rdn) * decay; dr = R-lrdn
+                    R = (rdn+_rdn); dr = R-lrdn  # rdn cost doesn't decay
                     link.dderH.Et[i:4:2] = [V,R]  # last-loop vals for next loop | segment_node_, dect is not updated
                     if dv > ave * dr:  # extend mediation if last-update val, may be negative
                         mediation += 1
@@ -264,6 +263,7 @@ def segment_node_(root, root_G_, fd, nrng, fagg):  # eval rim links with summed 
     while True:
         graph_ = []
         for grapht in _graph_:  # extend grapht Rim with +ve in-root links
+            if grapht not in igraph_: continue  # skip merged graphs
             G_, Link_, Et, Rim = grapht
             inVal, inRdn = 0,0  # new in-graph +ve
             new_Rim = []
@@ -292,7 +292,8 @@ def segment_node_(root, root_G_, fd, nrng, fagg):  # eval rim links with summed 
                     new_Rim += [link for link in _Rim if link not in new_Rim+Rim+Link_]
             # for next loop:
             if len(new_Rim) * inVal > ave * inRdn:
-                graph_ += [grapht[:-1]+ [new_Rim]]  # replace Rim
+                grapht.pop(-1); grapht += [new_Rim]
+                graph_ += [grapht]  # replace Rim
 
         if graph_: _graph_ = graph_  # selected graph expansion
         else: break
@@ -327,7 +328,7 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
         graph.S += link.distance
         np.add(graph.A,link.angle)
         link.root = graph
-    add_(graph.derH, extH)  # graph derH = node derHs + Link_ dderHs
+    add_(graph.derH, extH, fmerge=0)  # graph derH = node derHs + Link_ dderHs
 
     if fd:  # assign alt graphs from d graph, after both linked m and d graphs are formed
         for link in graph.link_:
@@ -362,11 +363,13 @@ def sum_last_lay(G, fd):  # eLay += last layer of link.daggH (dsubH|ddaggH)
 
 def CG_edge(edge):
     root, sign, I, Dy, Dx, G, yx_, dert_, link_, P_ = edge
-
     for P in P_:
         P.derH = CH()
-        P.link_ = [Clink(node=P,_node=_P, distance=np.hypot(*P.yx,*_P.yx),angle=np.subtract(*P.yx,*_P.yx))
-                   for _P in P.link_]
+        Clink_ = []
+        for _P in P.link_:
+            angle = np.subtract(P.yx, _P.yx)
+            Clink_ += [Clink(node=P, _node=_P, distance=np.hypot(*angle), angle=angle)]
+        P.link_ = Clink_
     # edge:
     y_ = [yx[0] for yx in yx_]
     x_ = [yx[1] for yx in yx_]
