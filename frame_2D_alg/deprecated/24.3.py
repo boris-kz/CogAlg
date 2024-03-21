@@ -601,27 +601,30 @@ def add_(HE, He, irdnt=[], fmerge=0):  # unpack tuples (formally lists) down to 
 
     # per layer of each CH
     if He:  # to be summed
-        if fmerge:  # HE.H += He.H, else HE.H += [He.H]
-            if HE:  # to sum in
-                ddepth = abs(HE.nest - He.nest)  # compare nesting depth, nest lesser He: md_-> derH-> subH-> aggH:
-                if ddepth:
-                    nHe = [HE,He][HE.nest>He.nest]  # He to be nested
-                    while ddepth > 0:
-                       nHe.nest += 1; nHe.H = [nHe.H]; ddepth -= 1
-                # same nesting:
-                if isinstance(HE.H[0],CH):  # no and isinstance(lay.H[0],list): same nesting unless cpr?
-                    for Lay,lay in zip_longest(HE.H, He.H, fillvalue=[]):
-                        add_(Lay,lay, irdnt,fmerge=1)  # recursive unpack to sum md_s
-                else:
-                    HE.H = np.add(HE.H, He.H)  # both Hs are md_s
-            else:  # add new layer:
-                if fmerge: HE.root.H += copy(He)  # append flat
-                else:    HE.root.H += [copy(He)]  # append nested
+        if HE:  # to sum in
+            ddepth = abs(HE.nest - He.nest)  # compare nesting depth, nest lesser He: md_-> derH-> subH-> aggH:
+            if ddepth:
+                nHe = [HE,He][HE.nest>He.nest]  # He to be nested
+                while ddepth > 0:
+                   nHe.nest += 1; nHe.H = [nHe.H]; ddepth -= 1
+            # sum layers of same nesting, elevation:
+            if isinstance(HE.H[0],CH):
+                H = []
+                for Lay,lay in zip_longest(HE.H, He.H, fillvalue=CH()):
+                    H+= [add_(Lay,lay, irdnt, fmerge)] # recursive unpack to sum md_s
+                HE.H = H
+            else:
+                HE.H = np.add(HE.H, He.H)  # both Hs are md_s
+        else:  # He is higher than HE, add as new layer | sub-layer to HE.root:
+            if fmerge:
+                for lay in He.H: lay.root = HE
+                HE.root.H += He  # append flat
+            else:
+                He.root = HE
+                HE.root.H += [He]  # append nested
         # default:
         Et,et = HE.Et,He.Et
         HE.Et[:] = [E+e for E,e in zip_longest(Et, et, fillvalue=0)]
         if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
         HE.n += He.n  # combined param accumulation span
         HE.nest = max(HE.nest, He.nest)
-
-    return HE  # not used?
