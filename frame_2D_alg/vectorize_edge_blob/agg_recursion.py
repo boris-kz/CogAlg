@@ -4,7 +4,7 @@ from itertools import combinations, zip_longest
 from frame_blobs import frame_blobs_root
 from intra_blob import intra_blob_root
 from .slice_edge import slice_edge_root, slice_edge, comp_angle
-from .comp_slice import ider_recursion, comp_latuple, CH, Clink, CG, CP, add_, comp_, get_match
+from .comp_slice import ider_recursion, comp_latuple, CH, Clink, CG, CP, add_, comp_, append_, get_match
 from .filters import aves, ave_mL, ave_dangle, ave, G_aves, ave_Gm, ave_Gd, ave_dist, max_dist
 from utils import box2center, extend_box
 
@@ -131,13 +131,13 @@ def comp_G(link, node_, iEt, nrng=None):  # add flat dderH to link and link to t
         dderH.H = [CH(nest=0, Et=[*Et], H=md_)]
         comp_ext(_G,G, dist, rn, dderH)
         # / PP, if >1 Ps:
-        if _G.iderH and G.iderH: comp_(_G.iderH, G.iderH, dderH, rn, fagg=1, fmerge=0)
+        if _G.iderH and G.iderH: comp_(_G.iderH, G.iderH, dderH, rn, fagg=1, flat=0)
     # / G, if >1 PPs | Gs:
-    if _G.extH and G.extH: comp_(_G.extH, G.extH, dderH, rn, fagg=1, fmerge=0)  # always true in der+
-    if _G.derH and G.derH: comp_(_G.derH, G.derH, dderH, rn, fagg=1, fmerge=0)
+    if _G.extH and G.extH: comp_(_G.extH, G.extH, dderH, rn, fagg=1, flat=0)  # always true in der+
+    if _G.derH and G.derH: comp_(_G.derH, G.derH, dderH, rn, fagg=1, flat=0)
     else: dderH.H+= [CH()]  # empty for fixed-len layer decoding, or use Cext as layer terminator?
 
-    add_(link.dderH, dderH, fmerge=1-len(link.dderH.H)>0)  # append for higher-res lower-der summation in sub-G extH
+    add_(link.dderH, dderH, flat=1-len(link.dderH.H)>0)  # append for higher-res lower-der summation in sub-G extH
     for i in 0,1:
         Val, Rdn = dderH.Et[i:4:2]  # exclude dect
         if Val > G_aves[i] * Rdn:
@@ -172,7 +172,7 @@ def comp_ext(_G,G, dist, rn, dderH):  # compare non-derivatives: dist, node_' L,
     mdec = prox / max_dist + mL/ max(L,_L) + mS/ max(S,_S) + mA  # Amax = 1
     ddec = dist / max_dist + mL/ (L+_L) + dS/ (S+_S) + dA
 
-    add_(CH(root=dderH), CH(Et=[M,D,mrdn,drdn,mdec,ddec], H=[prox,dist, mL,dL, mS,dS, mA,dA], n=2/3), fmerge=0)  # 2/3 of 6-param unit
+    add_(dderH, CH(Et=[M,D,mrdn,drdn,mdec,ddec], H=[prox,dist, mL,dL, mS,dS, mA,dA], n=2/3), flat=0)  # 2/3 of 6-param unit
 
 
 def form_graph_t(root, G_, Et, nrng, fagg=0):  # form Gm_,Gd_ from same-root nodes
@@ -213,7 +213,7 @@ def node_connect(iG_):  # node connectivity = sum surround link vals, incr.media
     _G_ = iG_
     while True:
         # eval accumulated G connectivity with node-mediated range extension
-        G_ = []  # next connectivity expansion, more selective by DVt,Lent = [0,0],[0,0]
+        G_ = []  # next connectivity expansion, more selective by DV,Lent
         mediation = 1  # n intermediated nodes, increasing decay
         for G in _G_:
             uprim = []  # >ave updates of direct links
@@ -229,15 +229,13 @@ def node_connect(iG_):  # node connectivity = sum surround link vals, incr.media
                     _val,_rdn = _G.Et[i::2]
                     # current-loop vals and their difference from last-loop vals, before updating:
                     V = (val+_val) * decay; dv = V-lval
-                    R = (rdn+_rdn) # rdn cost doesn't decay
+                    R = (rdn+_rdn)  # rdn doesn't decay
                     link.dderH.Et[i:4:2] = [V,R]  # last-loop vals for next loop | segment_node_, dect is not updated
                     if dv > ave * R:  # extend mediation if last-update val, may be negative
-                        if not G.derH: G.derH.Et = [0,0,0,0]
-                        G.derH.Et[i::2] = [V+v for V,v in zip(G.derH.Et[i::2],[V,R])]  # last layer link vals
+                        G.Et[i::2] = [V+v for V,v in zip(G.Et[i::2],[V,R])]  # last layer link vals
                         if link not in uprim: uprim += [link]
-                        # more selective eval: dVt[i] += dv; L=len(uprim); Lent[i] += L
                     if V > ave * R:  # updated even if terminated
-                        G.Et[i::2] = [V+v for V,v in zip(G.Et[i::2], [dv,R])]  # absolute R?
+                        G.Et[i::2] = [V+v for V,v in zip(G.Et[i::2], [dv,R])]  # use absolute R?
             if uprim:  # prune rim for next loop
                 rim[:] = uprim
                 G_ += [G]
@@ -316,18 +314,18 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
         graph.box = extend_box(graph.box, G.box)
         graph.latuple = [P+p for P,p in zip(graph.latuple[:-1],graph.latuple[:-1])] + [[A+a for A,a in zip(graph.latuple[-1],graph.latuple[-1])]]
         if G.iderH:  # empty in single-P PP|Gs
-            add_(graph.iderH, G.iderH, fmerge=1)
+            add_(graph.iderH, G.iderH, flat=1)
         if G.derH:  # empty in single-PP Gs
-            add_(graph.derH, G.derH, fmerge=1)
+            add_(graph.derH, G.derH, flat=1)
         if fd: G.Et = [0,0,0,0]  # reset in fd: last fork, Gs are shared across both forks
         graph.n += G.n  # non-derH accumulation?
     extH = CH()
     for link in Link_:  # unique current-layer links
-        graph.extH = add_(extH, link.dderH, fmerge=1)  # irdnt from link.dderH.Et?
+        graph.extH = add_(extH, link.dderH, flat=1)  # irdnt from link.dderH.Et?
         graph.S += link.distance
         np.add(graph.A,link.angle)
         link.root = graph
-    add_(graph.derH, extH, fmerge=0)  # graph derH = node derHs + Link_ dderHs
+    append_(graph.derH, extH, flat=0)  # graph derH = node derHs + Link_ dderHs
 
     if fd:  # assign alt graphs from d graph, after both linked m and d graphs are formed
         for link in graph.link_:
@@ -339,7 +337,7 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
     return graph
 
 
-def sum_last_lay(G, fd):  # eLay += last layer of link.daggH (dsubH|ddaggH)
+def sum_last_lay(G):  # eLay += last layer of link.daggH (dsubH|ddaggH)
 
     extH = CH()
     for link in G.rim_H[-1] if G.rim_H and isinstance(G.rim_H[0],list) else G.rim_H:
@@ -350,10 +348,9 @@ def sum_last_lay(G, fd):  # eLay += last layer of link.daggH (dsubH|ddaggH)
                 if  link.dderH.nest ==2 and G.extH and G.extH.nest == 2:
                     dderH = H[-1]
                     H = H[-1].H  # last subH
-                else:
-                    H = []
+                else: H = []
             # derH_/ last xcomp: len subH *= 2, maybe single dderH
-            extH.H = [add_(EH, eH, irdnt=link.dderH.Et[2:4], fmerge=1) for EH, eH in zip_longest(H[int(len(H)/2):], extH.H, fillvalue=CH())]
+            extH.H = [add_(EH, eH, irdnt=link.dderH.Et[2:4], flat=1) for EH, eH in zip_longest(H[int(len(H)/2):], extH.H, fillvalue=CH())]
             extH.n += dderH.n
             extH.nest = dderH.nest
     if extH:
@@ -391,11 +388,9 @@ def feedback(root):  # called from form_graph_, append new der layers to root
     DerH = deepcopy(root.fback_.pop(0))  # init
     while root.fback_:
         derH = root.fback_.pop(0)
-        add_(DerH, derH, fmerge=1)
-        DerH = [add_(HE,He, fmerge=1) for HE,He in zip_longest(DerH, derH, fillvalue=CH())]
-
-    if DerH.Et[1] > G_aves[1] * DerH.Et[3]:  # compress levels?
-        root.derH = [add_(rHe,He, fmerge=1) for rHe,He in zip_longest(root.derH, DerH, fillvalue=CH())]
+        add_(DerH, derH, flat=1)
+    if DerH.Et[1] > G_aves[1] * DerH.Et[3]:
+        add_(root.derH, DerH, flat=1)
 
     if root.root and isinstance(root.root, CG):  # not Edge
         rroot = root.root

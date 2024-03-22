@@ -610,7 +610,7 @@ def add_(HE, He, irdnt=[], fmerge=0):  # unpack tuples (formally lists) down to 
             # sum layers of same nesting, elevation:
             if isinstance(HE.H[0],CH):
                 H = []
-                for Lay,lay in zip_longest(HE.H, He.H, fillvalue=CH()):
+                for Lay,lay in zip_longest(HE.H, He.H, fillvalue=CH(root=HE)):
                     H+= [add_(Lay,lay, irdnt, fmerge)] # recursive unpack to sum md_s
                 HE.H = H
             else:
@@ -618,7 +618,7 @@ def add_(HE, He, irdnt=[], fmerge=0):  # unpack tuples (formally lists) down to 
         else:  # He is higher than HE, add as new layer | sub-layer to HE.root:
             if fmerge:
                 for lay in He.H: lay.root = HE
-                HE.root.H += He  # append flat
+                HE.root.H += He.H  # append flat
             else:
                 He.root = HE
                 HE.root.H += [He]  # append nested
@@ -628,3 +628,41 @@ def add_(HE, He, irdnt=[], fmerge=0):  # unpack tuples (formally lists) down to 
         if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
         HE.n += He.n  # combined param accumulation span
         HE.nest = max(HE.nest, He.nest)
+
+# not revised:
+def add_chee(HE, He, irdnt=[], fmerge=0):  # unpack tuples (formally lists) down to numericals and sum them
+
+    # per layer of each CH
+    if He:  # to be summed
+        if HE:  # to sum in
+            ddepth = abs(HE.nest - He.nest)  # compare nesting depth, nest lesser He: md_-> derH-> subH-> aggH:
+            if ddepth:
+                nHe = [HE,He][HE.nest>He.nest]  # He to be nested
+                while ddepth > 0:
+                   nHe.nest += 1; nHe.H = [nHe.H]; ddepth -= 1
+
+        if fmerge:  # sum layers of same nesting, elevation
+            if isinstance(He.H[0],CH):
+                '''
+                H = []
+                for Lay,lay in zip_longest(HE.H, He.H, fillvalue=None):
+                    if lay is not None:
+                        if Lay is None:  Lay = CH(root = HE)
+                        H += [add_(Lay,lay, irdnt, fmerge)] # recursive unpack to sum md_s
+                HE.H = H  '''
+                HE.H = [add_(CH() if Lay is None else Lay, CH() if lay is None else lay, irdnt, fmerge) for Lay,lay in zip_longest(HE.H, He.H, fillvalue=None)]
+            else:
+                HE.H = [V + v for V, v in zip_longest(HE.H, He.H, fillvalue=0)]  # both Hs are md_s
+
+        elif HE.root:  # append He as a
+            He.root = HE
+            HE.root.H += [He]
+        # default:
+        Et,et = HE.Et,He.Et
+        HE.Et[:] = [E+e for E,e in zip_longest(Et, et, fillvalue=0)]
+        if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
+        HE.n += He.n  # combined param accumulation span
+        HE.nest = max(HE.nest, He.nest)
+
+    return HE
+
