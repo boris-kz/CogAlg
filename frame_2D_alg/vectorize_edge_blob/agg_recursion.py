@@ -189,7 +189,7 @@ def form_graph_t(root, G_, Et, nrng, fagg=0):  # form Gm_,Gd_ from same-root nod
                         node_ = graph.node_
                         if isinstance(node_[0].rim_H[0], CG):  # 1st sub+, same rim nesting?
                             for node in node_: node.rim_H = [node.rim_H]  # rim -> rim_H
-                        pruned_node_ = [node for node in graph.node_ if node.derH.Et[fd] > G_aves[fd] * node.derH.Et[2+fd]]
+                        pruned_node_ = [node for node in graph.node_ if node.extH.Et[fd] > G_aves[fd] * node.extH.Et[2+fd]]
                         if len(pruned_node_)>10:
                             agg_recursion(root, graph, pruned_node_, nrng, fagg=0)
                     elif graph.derH:
@@ -263,7 +263,7 @@ def segment_node_(root, root_G_, fd, nrng, fagg):  # eval rim links with summed 
             inVal, inRdn = 0,0  # new in-graph +ve
             new_Rim = []
             for link in Rim:  # unique links
-                if link.node in G_:
+                if link.node in G_:  # one of the nodes is already clustered
                     G = link.node; _G = link._node
                 else:
                     G = link._node; _G = link.node
@@ -318,12 +318,12 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
         if fd: G.Et = [0,0,0,0]  # reset in fd: last fork, Gs are shared across both forks
         graph.n += G.n  # non-derH accumulation?
     extH = CH()
-    for link in Link_:  # unique current-layer links
-        graph.extH = add_(extH, link.dderH)  # irdnt from link.dderH.Et?
+    for link in Link_:  # unique current-layer links, add last layer only:
+        add_(extH, link.dderH.H[-1] if link.dderH.nest else link.dderH, irdnt=link.dderH.Et[2:4])
         graph.S += link.distance
         np.add(graph.A,link.angle)
         link.root = graph
-    append_(graph.derH, extH, flat=0)  # graph derH = node derHs + Link_ dderHs
+    append_(graph.derH, extH, flat=0)  # graph derH = node derHs + [summed Link_ dderHs]
 
     if fd:  # assign alt graphs from d graph, after both linked m and d graphs are formed
         for link in graph.link_:
@@ -340,11 +340,9 @@ def sum_last_lay(G):  # G.extH += last layer of link.daggH (dsubH|ddaggH)
     dderH = CH()
     for link in G.rim_H[-1] if G.rim_H and isinstance(G.rim_H[0],list) else G.rim_H:  # last link layer
         if link.dderH:
-            if dderH: add_(dderH, link.dderH)
-            else:  append_(dderH, link.dderH, flat=1)
+            add_(dderH, link.dderH)  # if flat: link.dderH.H[int(len(extH.H)/2):]?
     if dderH:
-        if G.extH: add_(G.extH, dderH)
-        else:   append_(G.extH, dderH, flat=1)  # | replace last layer of extH: add_(G.extH[int(len(extH.H)/2):], dderH)
+        add_(G.extH, dderH)
 
 
 def CG_edge(edge):
@@ -381,7 +379,6 @@ def feedback(root):  # called from form_graph_, append new der layers to root
         add_(DerH, derH)
     if DerH.Et[1] > G_aves[1] * DerH.Et[3]:
         add_(root.derH, DerH)
-
     if root.root and isinstance(root.root, CG):  # not Edge
         rroot = root.root
         if rroot:
