@@ -665,4 +665,4 @@ def add_chee(HE, He, irdnt=[], fmerge=0):  # unpack tuples (formally lists) down
         HE.nest = max(HE.nest, He.nest)
 
     return HE
-
+    add_(extH, link.dderH.H[-1] if link.dderH.nest else link.dderH, irdnt=link.dderH.Et[2:4])

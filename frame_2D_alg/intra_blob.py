@@ -4,6 +4,7 @@
     - vectorize_root: forms roughly edge-orthogonal Ps, evaluated for rotation, comp_slice, etc.
 '''
 import numpy as np
+from frame_blobs import CFrame, imread
 '''
     Conventions:
     postfix 't' denotes tuple, multiple ts is a nested tuple
@@ -18,71 +19,56 @@ import numpy as np
 ave = 50   # cost / dert: of cross_comp + blob formation, same as in frame blobs, use rcoef and acoef if different
 aveR = 10  # for range+, fixed overhead per blob
 # --------------------------------------------------------------------------------------------------------------
-# functions:
+# classes: CIntraBlobFrame (root routine), CIntraBlobLayer (recursive routine)
 
-def intra_blob_root(frame): # init rng+ recursion
-    i__, I, Dy, Dx, G, blob_ = frame
+class CIntraBlobFrame(CFrame):
 
-    for blob in blob_:
-        intra_blob(blob, i__, rdn=1, rng=1)
+    def __init__(frame, i__):
+        super().__init__(i__)
+        frame.rdn = 1
+        frame.rng = 1
 
-    return frame
+    class CBlob(CFrame.CBlob):
+        def term(blob):
+            super().term()
+            if blob.sign and blob.G < ave*blob.area + aveR*blob.root.rdn:  # sign and G < ave*L + aveR*rdn
+                lay = blob.CLayer(blob).evaluate()    # recursive eval cross-comp per blob
+                if lay: blob.lay = lay
 
+        class CLayer(CFrame):
+            def __init__(lay, blob):
+                super().__init__(blob.root.i__)  # init params, extra params init below:
+                lay.CBlob = blob.__class__
+                lay.root = blob
+                lay.rdn = blob.root.rdn + 1.5
+                lay.rng = blob.root.rng + 1
 
-def intra_blob(root_blob, i__, rdn, rng):  # recursive evaluation of cross-comp rng+ per blob
-    # unpack root_blob
-    root, sign, I, Dy, Dx, G, yx_, dert_, link_ = root_blob
+            def evaluate(lay):  # recursive evaluation of cross-comp rng+ per blob
+                lay.rdn += 1.5; lay.rng += 1  # update rdn, rng
+                dert__ = lay.comp()  # return None if blob is too small
+                if not dert__: return   # terminate if blob is too small
+                lay.flood_fill(dert__)  # recursive call is per blob in blob.term in flood_fill
+                return lay
 
-    if not sign: return  # only for below-average G
-    A = len(dert_)
-    if G >= ave*A + aveR*rdn: return  # eval for comp_r
+            def comp(lay):   # rng+ comp
+                # compute kernel
+                ky__, kx__ = compute_kernel(lay.rng)
+                # loop through root_blob's pixels
+                dert__ = {}     # mapping from y, x to dert
+                for (y, x), (p, dy, dx, g) in lay.root.dert_.items():
+                    try:
+                        # comparison. i,j: relative coord within kernel 0 -> rng*2+1
+                        for i, j in zip(*ky__.nonzero()):
+                            dy += ky__[i, j] * lay.i__[y+i-lay.rng, x+j-lay.rng]    # -rng to get i__ coord
+                        for i, j in zip(*kx__.nonzero()):
+                            dx += kx__[i, j] * lay.i__[y+i-lay.rng, x+j-lay.rng]
+                    except IndexError: continue     # out of bound
+                    g = np.hypot(dy, dx)
+                    s = ave*(lay.rdn + 1) - g > 0
+                    dert__[y, x] = p, dy, dx, g, s
+                return dert__
 
-    rdn += 1.5; rng += 1  # update rdn, rng
-    dert__ = comp_r(i__, yx_, dert_, rdn, rng)  # return None if blob is too small
-    if not dert__: return
-
-    # proceed to form new fork, flood-fill 1 pixel at a time
-    blob_ = []
-    root_blob += [rdn, rng, blob_]  # extend blob with rdn, rng, sub_blob_
-    fill_yx_ = list(dert__.keys())  # set of pixel coordinates to be filled, from root_blob
-    root__ = {}  # map pixel to blob
-    perimeter_ = []  # perimeter pixels
-    while fill_yx_:  # fill_yx_ is popped per filled pixel, in form_blob
-        if not perimeter_:  # init blob
-            blob = [root_blob, None, 0, 0, 0, 0, [], [], []]  # root, sign, I, Dy, Dx, G, yx_, dert_, link_
-            perimeter_ += [fill_yx_[0]]
-
-        form_blob(blob, fill_yx_, perimeter_, root__, dert__)
-
-        if not perimeter_:  # term blob
-            blob_ += [blob]
-            intra_blob(blob, i__, rdn, rng)  # recursive eval cross-comp per blob
-
-
-def comp_r(i__, yx_, dert_, rdn, rng):
-    Y, X = i__.shape
-
-    # compute kernel
-    ky__, kx__ = compute_kernel(rng)
-
-    # loop through root_blob's pixels
-    dert__ = {}     # mapping from y, x to dert
-    for (y, x), (p, dy, dx, g) in zip(yx_, dert_):
-        if y-rng < 0 or y+rng >= Y or x-rng < 0 or x+rng >= X: continue # boundary check
-
-        # comparison. i,j: relative coord within kernel 0 -> rng*2+1
-        for i, j in zip(*ky__.nonzero()):
-            dy += ky__[i, j] * i__[y+i-rng, x+j-rng]    # -rng to get i__ coord
-        for i, j in zip(*kx__.nonzero()):
-            dx += kx__[i, j] * i__[y+i-rng, x+j-rng]
-
-        g = np.hypot(dy, dx)
-        s = ave*(rdn + 1) - g > 0
-
-        dert__[y, x] = p, dy, dx, g, s
-
-    return dert__
-
+            def __repr__(lay): return f"intra_blob_layer(id={lay.id}, root={lay.root})"
 
 def compute_kernel(rng):
     # kernel_coefficient = projection_coefficient / distance
@@ -102,54 +88,20 @@ def compute_kernel(rng):
 
     return coeff
 
-
-def form_blob(blob, fill_yx_, perimeter_, root__, dert__):
-    # unpack structures
-    root, sign, I, Dy, Dx, G, yx_, dert_, link_ = blob
-
-    # get and check coord
-    y, x = perimeter_.pop()  # get pixel coord
-    if (y, x) not in dert__: return  # out of bound
-    i, dy, dx, g, s = dert__[y, x]
-    if (y, x) not in fill_yx_:  # if adjacent filled, this is pixel of an adjacent blob
-        _blob = root__[y, x]
-        if _blob not in link_: link_ += [_blob]
-        return
-    if sign is None: sign = s  # assign sign to new blob
-    if sign != s: return   # different sign, stop
-
-    # fill coord, proceed with form_blob
-    fill_yx_.remove((y, x))  # remove from yx_
-    root__[y, x] = blob  # assign root, for link forming
-    I += i; Dy += dy; Dx += dx;  G += g# update params
-    yx_ += [(y, x)]; dert_ += [(i, dy, dx, g)]  # update elements
-
-    # update perimeter_
-    perimeter_ += [(y-1,x), (y,x+1), (y+1,x), (y,x-1)]  # extend perimeter
-    if sign: perimeter_ += [(y-1,x-1), (y-1,x+1), (y+1,x+1), (y+1,x-1)]  # ... include diagonals for +blobs
-
-    blob[:] = root, sign, I, Dy, Dx, G, yx_, dert_, link_ # update blob
-
-
-
 if __name__ == "__main__":
-    from utils import imread
-    from frame_blobs import frame_blobs_root
 
     image_file = './images//raccoon_eye.jpeg'
     image = imread(image_file)
 
-    frame = frame_blobs_root(image)
-    intra_blob_root(frame)
+    frame = CIntraBlobFrame(image).evaluate()
     # Verification:
-    blobQue = frame[-1]
+    blobQue = frame.blob_
     while blobQue:
         blob = blobQue.pop(0)
-        try:  # raise Value error of blob is un-extended
-            root, sign, I, Dy, Dx, G, yx_, dert_, link_, rdn, rng, blob_ = blob
-            if blob_:
-                print(f"blob {id(blob)}, whose parent is {id(root)}, "
-                      f"has {len(blob_)} sub-blob{'' if len(blob_) == 1 else 's'}")
-                blobQue += blob_
-        except ValueError as e:  # un-extended blob, skip
-            if "not enough values to unpack (expected 12, got 9)" != str(e): raise e
+        print(f"{blob}'s parent is {blob.root}", end="")
+        if hasattr(blob, "lay") and blob.lay.blob_:  # if blob is extended with lay
+            blob_ = blob.lay.blob_
+            print(f", has {len(blob_)} sub-blob{'' if len(blob_) == 1 else 's'}")
+            if blob_: blobQue += blob_
+        else: print()
+        # else un-extended blob, skip

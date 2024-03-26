@@ -97,7 +97,7 @@ def comp_P(link, fd):
     # both:
     if _P.derH and P.derH:  # append link dderH, init in form_PP_t rng++, comp_latuple was already done
         # der+:
-        dderH = comp_(_P.derH, P.derH, dderH=CH(), rn=rn, flat=0)
+        dderH = CH.comp_(_P.derH, P.derH, dderH=CH(), rn=rn, flat=0)
         vm,vd,rm,rd = dderH.Et[:4]  # also works if called from comp_G
         rm += vd > vm; rd += vm >= vd
         aveP = P_aves[1]
@@ -162,8 +162,8 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
     for derP in derP_:
         if derP.node not in P_ or derP._node not in P_: continue
         if derP.dderH:
-            add_(derP.node.derH, derP.dderH, iRt)
-            add_(derP._node.derH, negate(deepcopy(derP.dderH)), iRt)  # negate reverses uplink ds direction
+            CH.add_(derP.node.derH, derP.dderH, iRt)
+            CH.add_(derP._node.derH, negate(deepcopy(derP.dderH)), iRt)  # negate reverses uplink ds direction
         PP.link_ += [derP]; derP.roott[fd] = PP
         PP.A = np.add(PP.A,derP.angle)
         PP.S += np.hypot(*derP.angle)  # links are contiguous but slanted
@@ -175,10 +175,10 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
         PP.area += L; PP.n += L  # no + P.derH.n: current links only?
         PP.latuple = [P+p for P,p in zip(PP.latuple[:-1],P.latuple[:-1])] + [[A+a for A,a in zip(PP.latuple[-1],P.latuple[-1])]]
         if P.derH:
-            add_(PP.iderH, P.derH)  # no separate extH, the links are unique here
-            for y,x in P.yx_:
-                y = int(round(y)); x = int(round(x))  # summed with float dy,dx in slice_edge?
-            PP.box = accum_box(PP.box, y, x); celly_+=[y]; cellx_+=[x]
+            CH.add_(PP.iderH, P.derH)  # no separate extH, the links are unique here
+        for y,x in P.yx_:
+            y = int(round(y)); x = int(round(x))  # summed with float dy,dx in slice_edge?
+        PP.box = accum_box(PP.box, y, x); celly_+=[y]; cellx_+=[x]
     if PP.iderH:
         PP.iderH.Et[2:4] = [R+r for R,r in zip(PP.iderH.Et[2:4], iRt)]
     # pixmap:
@@ -194,8 +194,8 @@ def feedback(root):  # in form_PP_, append new der layers to root PP, single vs.
 
     HE = deepcopy(root.fback_.pop(0))
     for He in root.fback_:
-        add_(HE, He)
-    add_(root.iderH, HE.H[-1] if HE.nest else HE)  # last md_ in H or sum md_
+        CH.add_(HE, He)
+    CH.add_(root.iderH, HE.H[-1] if HE.nest else HE)  # last md_ in H or sum md_
 
     if root.root and isinstance(root.root, CG):  # skip if root is Edge
         rroot = root.root  # single PP.root, can't be P
@@ -253,85 +253,85 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting
     lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
     '''
 
-def add_(HE, He, irdnt=[]):  # HE, He can't be empty, down to numericals and sum them
+    def add_(HE, He, irdnt=[]):  # HE, He can't be empty, down to numericals and sum them
 
-    if HE:
-        ddepth = abs(HE.nest-He.nest)  # compare nesting depth, nest lesser He: md_-> derH-> subH-> aggH:
-        if ddepth:
-            nHe = [HE,He][HE.nest > He.nest]  # He to be nested
-            while ddepth > 0:
-                nHe.nest += 1; nHe.H = [nHe.H]; ddepth -= 1
-
-        if isinstance(HE.H[0], CH):
-            for Lay, lay in zip_longest(HE.H, He.H, fillvalue=None):
-                if lay:  # to be summed
-                    if Lay is not None: add_(Lay,lay, irdnt)  # recursive unpack to sum md_s
-                    else:               HE.H += [lay]  # append nested
-        else:
-            HE.H = [V+v for V,v in zip_longest(HE.H, He.H, fillvalue=0)]  # both Hs are md_s
-    else:
-        HE.H = He.H; HE.nest = He.nest+1  # initialization
-    # default:
-    Et,et = HE.Et,He.Et
-    HE.Et[:] = [E+e for E,e in zip_longest(Et, et, fillvalue=0)]
-    if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
-    HE.n += He.n  # combined param accumulation span
-    HE.nest = max(HE.nest, He.nest)
-
-def append_(HE,He, irdnt=[], flat=0):
-
-    if flat: HE.H += He.H  # append flat
-    else:  HE.H += [He]  # append nested
-    Et, et = HE.Et, He.Et
-    HE.Et[:] = [E+e for E,e in zip_longest(Et,et, fillvalue=0)]
-    if irdnt: Et[2:4] = [E + e for E, e in zip(Et[2:4], irdnt)]
-    HE.n += He.n  # combined param accumulation span
-    HE.nest = max(HE.nest, He.nest)
-
-
-def comp_(_He,He, dderH, rn=1, fagg=0, flat=1):  # unpack tuples (formally lists) down to numericals and compare them
-
-    ddepth = abs(_He.nest - He.nest)
-    n = 0
-    if ddepth:  # unpack the deeper He: md_<-derH <-subH <-aggH:
-        uHe = [He,_He][_He.nest>He.nest]
-        while ddepth > 0:
-            uHe = uHe.H[0]; ddepth -= 1  # comp 1st layer of deeper He:
-        _cHe,cHe = [uHe,He] if _He.nest>He.nest else [_He,uHe]
-    else: _cHe,cHe = _He,He
-
-    if isinstance(_cHe.H[0], CH):  # _lay is He_, same for lay: they are aligned above
-        Et = [0,0,0,0,0,0]  # Vm,Vd, Rm,Rd, Dm,Dd
-        dH = []
-        for _lay,lay in zip(_cHe.H,cHe.H):  # md_| ext| derH| subH| aggH, eval nesting, unpack,comp ds in shared lower layers:
-            if _lay and lay:  # ext is empty in single-node Gs
-                dlay = comp_(_lay,lay, CH(), rn, fagg=fagg, flat=1)  # dlay is dderH
-                Et[:] = [E+e for E,e in zip(Et,dlay.Et)]
-                dH += [dlay]; n += dlay.n
+        if HE:
+            ddepth = abs(HE.nest-He.nest)  # compare nesting depth, nest lesser He: md_-> derH-> subH-> aggH:
+            if ddepth:
+                nHe = [HE,He][HE.nest > He.nest]  # He to be nested
+                while ddepth > 0:
+                    nHe.nest += 1; nHe.H = [nHe.H]; ddepth -= 1
+            if isinstance(HE.H[0], CH):
+                for Lay, lay in zip_longest(HE.H, He.H, fillvalue=None):
+                    if lay:  # to be summed
+                        # wrong:
+                        if Lay is None: HE.H += [lay]  # append nested
+                        else:           CH.add_(Lay,lay, irdnt)  # recursive unpack to sum md_s
             else:
-                dH += [CH()]  # empty?
-    else:  # H is md_, numerical comp:
-        vm,vd,rm,rd, decm,decd = 0,0,0,0, 0,0
-        dH = []
-        for i, (_d,d) in enumerate(zip(_cHe.H[1::2], cHe.H[1::2])):  # compare ds in md_ or ext
-            d *= rn  # normalize by comparand accum span
-            diff = _d-d
-            match = min(abs(_d),abs(d))
-            if (_d<0) != (d<0): match = -match  # if only one comparand is negative
-            if fagg:
-                maxm = max(abs(_d), abs(d))
-                decm += abs(match) / maxm if maxm else 1  # match / max possible match
-                maxd = abs(_d) + abs(d)
-                decd += abs(diff) / maxd if maxd else 1  # diff / max possible diff
-            vm += match - aves[i]  # fixed param set?
-            vd += diff
-            dH += [match,diff]  # flat
-        Et = [vm,vd,rm,rd]
-        if fagg: Et += [decm, decd]
-        n = len(_cHe.H)/12  # unit n = 6 params, = 12 in md_
+                HE.H = [V+v for V,v in zip_longest(HE.H, He.H, fillvalue=0)]  # both Hs are md_s
+            # default:
+            Et, et = HE.Et, He.Et
+            HE.Et[:] = [E+e for E,e in zip_longest(Et,et, fillvalue=0)]
+            if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
+            HE.n += He.n  # combined param accumulation span
+            HE.nest = max(HE.nest, He.nest)
+        else:
+            HE = deepcopy(He)  # initialization
 
-    append_(dderH, CH(nest=min(_He.nest,He.nest), Et=Et, H=dH, n=n), flat=flat)  # currently flat=1
-    return dderH
+    def append_(HE,He, irdnt=[], flat=0):
+
+        if flat: HE.H += He.H  # append flat
+        else:  HE.H += [He]  # append nested
+
+        Et, et = HE.Et, He.Et
+        HE.Et[:] = [E+e for E,e in zip_longest(Et,et, fillvalue=0)]
+        if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
+        HE.n += He.n  # combined param accumulation span
+        HE.nest = max(HE.nest, He.nest)
+
+    def comp_(_He,He, dderH, rn=1, fagg=0, flat=1):  # unpack tuples (formally lists) down to numericals and compare them
+
+        ddepth = abs(_He.nest - He.nest)
+        n = 0
+        if ddepth:  # unpack the deeper He: md_<-derH <-subH <-aggH:
+            uHe = [He,_He][_He.nest>He.nest]
+            while ddepth > 0:
+                uHe = uHe.H[0]; ddepth -= 1  # comp 1st layer of deeper He:
+            _cHe,cHe = [uHe,He] if _He.nest>He.nest else [_He,uHe]
+        else: _cHe,cHe = _He,He
+
+        if isinstance(_cHe.H[0], CH):  # _lay is He_, same for lay: they are aligned above
+            Et = [0,0,0,0,0,0]  # Vm,Vd, Rm,Rd, Dm,Dd
+            dH = []
+            for _lay,lay in zip(_cHe.H,cHe.H):  # md_| ext| derH| subH| aggH, eval nesting, unpack,comp ds in shared lower layers:
+                if _lay and lay:  # ext is empty in single-node Gs
+                    dlay = CH.comp_(_lay,lay, CH(), rn, fagg=fagg, flat=1)  # dlay is dderH
+                    Et[:] = [E+e for E,e in zip(Et,dlay.Et)]
+                    dH += [dlay]; n += dlay.n
+                else:
+                    dH += [CH()]  # empty?
+        else:  # H is md_, numerical comp:
+            vm,vd,rm,rd, decm,decd = 0,0,0,0, 0,0
+            dH = []
+            for i, (_d,d) in enumerate(zip(_cHe.H[1::2], cHe.H[1::2])):  # compare ds in md_ or ext
+                d *= rn  # normalize by comparand accum span
+                diff = _d-d
+                match = min(abs(_d),abs(d))
+                if (_d<0) != (d<0): match = -match  # if only one comparand is negative
+                if fagg:
+                    maxm = max(abs(_d), abs(d))
+                    decm += abs(match) / maxm if maxm else 1  # match / max possible match
+                    maxd = abs(_d) + abs(d)
+                    decd += abs(diff) / maxd if maxd else 1  # diff / max possible diff
+                vm += match - aves[i]  # fixed param set?
+                vd += diff
+                dH += [match,diff]  # flat
+            Et = [vm,vd,rm,rd]
+            if fagg: Et += [decm, decd]
+            n = len(_cHe.H)/12  # unit n = 6 params, = 12 in md_
+
+        CH.append_(dderH, CH(nest=min(_He.nest,He.nest), Et=Et, H=dH, n=n), flat=flat)  # currently flat=1
+        return dderH
 
 '''
 for reference:

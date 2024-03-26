@@ -308,7 +308,7 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
     if fd: graph.root = root
     for G in G_:
         graph.area += G.area
-        sum_last_lay(G) # G.extH += link dderHs
+        sum_last_lay(G) # G.extH += links dderH last layer
         graph.box = extend_box(graph.box, G.box)
         graph.latuple = [P+p for P,p in zip(graph.latuple[:-1],graph.latuple[:-1])] + [[A+a for A,a in zip(graph.latuple[-1],graph.latuple[-1])]]
         if G.iderH:  # empty in single-P PP|Gs
@@ -317,9 +317,11 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
             add_(graph.derH, G.derH)
         if fd: G.Et = [0,0,0,0]  # reset in fd: last fork, Gs are shared across both forks
         graph.n += G.n  # non-derH accumulation?
-    extH = CH()
-    for link in Link_:  # unique current-layer links, add last layer only:
-        add_(extH, link.dderH.H[-1] if link.dderH.nest else link.dderH, irdnt=link.dderH.Et[2:4])
+    extH = []
+    for link in Link_:  # unique current-layer links
+        last_lay = link.dderH.H[int(len(link.dderH.H)/2):]  # add last layer only, packed flat
+        last_lay = CH(Et = np.add([He.Et for He in last_lay]), H=last_lay, nest=last_lay[0].nest)
+        add_(extH, last_lay, irdnt=link.dderH.Et[2:4])
         graph.S += link.distance
         np.add(graph.A,link.angle)
         link.root = graph
@@ -337,10 +339,12 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
 
 def sum_last_lay(G):  # G.extH += last layer of link.daggH (dsubH|ddaggH)
 
-    dderH = CH()
+    dderH = []
     for link in G.rim_H[-1] if G.rim_H and isinstance(G.rim_H[0],list) else G.rim_H:  # last link layer
         if link.dderH:
-            add_(dderH, link.dderH)  # if flat: link.dderH.H[int(len(extH.H)/2):]?
+            last_lay = link.dderH.H[int(len(link.dderH.H)/2):]  # dderH layers are packed flat
+            last_lay = CH(Et = np.add([He.Et for He in last_lay]), H=last_lay, nest=last_lay[0].nest)
+            add_(dderH, last_lay, irdnt=link.dderH.Et[2:4])
     if dderH:
         add_(G.extH, dderH)
 
