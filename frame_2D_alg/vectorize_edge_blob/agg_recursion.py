@@ -1,12 +1,14 @@
 import numpy as np
 from copy import deepcopy, copy
 from itertools import combinations, zip_longest
-from frame_blobs import frame_blobs_root
-from intra_blob import intra_blob_root
-from .slice_edge import slice_edge_root, slice_edge, comp_angle
-from .comp_slice import ider_recursion, comp_latuple, CH, Clink, CG, CP, add_, comp_, append_, get_match
+from .slice_edge import comp_angle, CSliceEdgeFrame
+from .comp_slice import ider_recursion, comp_latuple, get_match
 from .filters import aves, ave_mL, ave_dangle, ave, G_aves, ave_Gm, ave_Gd, ave_dist, max_dist
 from utils import box2center, extend_box
+import sys
+sys.path.append("..")
+from frame_blobs import CH, CG, Clink
+
 
 '''
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
@@ -39,14 +41,14 @@ https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/generi
 https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/agg_recursion_unfolded.drawio.png
 '''
 
+
 def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cluster:
 
     edge_ = slice_edge_root( intra_blob_root( frame_blobs_root(image)))
 
-    for edge in edge_:  #  edge = [root, sign, I, Dy, Dx, G, yx_, dert_, link_, P_]
-        if edge[5] * (len(edge[-1])-1) > G_aves[0]:  # rdn=1
-
-            edge = CG_edge(edge)  # convert to CG
+    for edge in edge_:
+        if edge.latuple[-1] * (len(edge.P_)-1) > G_aves[0]:
+            # if G in latuple, rdn=1
             ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
 
             for fd, node_ in enumerate(edge.node_):  # always node_t
@@ -130,12 +132,12 @@ def comp_G(link, node_, iEt, nrng=None):  # add flat dderH to link and link to t
         dderH.H = [CH(nest=0, Et=[*Et], H=md_)]
         comp_ext(_G,G, dist, rn, dderH)
         # / PP, if >1 Ps:
-        if _G.iderH and G.iderH: comp_(_G.iderH, G.iderH, dderH, rn, fagg=1, flat=0)
+        if _G.iderH and G.iderH: _G.iderH.comp_(G.iderH, dderH, rn, fagg=1, flat=0)
     # / G, if >1 PPs | Gs:
-    if _G.extH and G.extH: comp_(_G.extH, G.extH, dderH, rn, fagg=1, flat=0)  # always true in der+
-    if _G.derH and G.derH: comp_(_G.derH, G.derH, dderH, rn, fagg=1, flat=0)
+    if _G.extH and G.extH: _G.extH.comp_(G.extH, dderH, rn, fagg=1, flat=0)  # always true in der+
+    if _G.derH and G.derH: _G.derH.comp_(G.derH, dderH, rn, fagg=1, flat=0)
 
-    append_(link.dderH, dderH, flat=len(link.dderH.H)>0)  # append for higher-res lower-der summation in sub-G extH
+    link.dderH.append_(dderH, flat=len(link.dderH.H)>0)  # append for higher-res lower-der summation in sub-G extH
     for i in 0,1:
         Val, Rdn = dderH.Et[i:4:2]  # exclude dect
         if Val > G_aves[i] * Rdn:
@@ -170,7 +172,7 @@ def comp_ext(_G,G, dist, rn, dderH):  # compare non-derivatives: dist, node_' L,
     mdec = prox / max_dist + mL/ max(L,_L) + mS/ max(S,_S) + mA  # Amax = 1
     ddec = dist / max_dist + mL/ (L+_L) + dS/ (S+_S) + dA
 
-    append_(dderH, CH(Et=[M,D,mrdn,drdn,mdec,ddec], H=[prox,dist, mL,dL, mS,dS, mA,dA], n=2/3), flat=0)  # 2/3 of 6-param unit
+    dderH.append_(CH(Et=[M,D,mrdn,drdn,mdec,ddec], H=[prox,dist, mL,dL, mS,dS, mA,dA], n=2/3), flat=0)  # 2/3 of 6-param unit
 
 
 def form_graph_t(root, G_, Et, nrng, fagg=0):  # form Gm_,Gd_ from same-root nodes
@@ -304,7 +306,7 @@ def segment_node_(root, root_G_, fd, nrng, fagg):  # eval rim links with summed 
 def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
     G_, Link_, Et = grapht
-    graph = CG(fd=fd, node_=G_,link_=Link_, rng=nrng, latuple=[0,0,0,0,0,[0,0]], derH=CH())
+    graph = CG(fd=fd, node_=G_,link_=Link_, rng=nrng)
     if fd: graph.root = root
     for G in G_:
         graph.area += G.area
@@ -312,20 +314,22 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
         graph.box = extend_box(graph.box, G.box)
         graph.latuple = [P+p for P,p in zip(graph.latuple[:-1],graph.latuple[:-1])] + [[A+a for A,a in zip(graph.latuple[-1],graph.latuple[-1])]]
         if G.iderH:  # empty in single-P PP|Gs
-            add_(graph.iderH, G.iderH)
+            graph.iderH.add_(G.iderH)
         if G.derH:  # empty in single-PP Gs
-            add_(graph.derH, G.derH)
+            graph.derH.add_(G.derH)
         if fd: G.Et = [0,0,0,0]  # reset in fd: last fork, Gs are shared across both forks
         graph.n += G.n  # non-derH accumulation?
-    extH = []
+    extH = CH()
     for link in Link_:  # unique current-layer links
         last_lay = link.dderH.H[int(len(link.dderH.H)/2):]  # add last layer only, packed flat
-        last_lay = CH(Et = np.add([He.Et for He in last_lay]), H=last_lay, nest=last_lay[0].nest)
-        add_(extH, last_lay, irdnt=link.dderH.Et[2:4])
+        Et = copy(last_lay[0].Et)
+        for He in last_lay[1:]: Et = [V+v for V,v in zip(Et, He.Et)]
+        last_lay = CH(Et=Et, H=last_lay, nest=last_lay[0].nest)
+        extH.add_( last_lay, irdnt=link.dderH.Et[2:4])
         graph.S += link.distance
         np.add(graph.A,link.angle)
         link.root = graph
-    append_(graph.derH, extH, flat=0)  # graph derH = node derHs + [summed Link_ dderHs]
+    graph.derH.append_(extH, flat=0)  # graph derH = node derHs + [summed Link_ dderHs]
 
     if fd:  # assign alt graphs from d graph, after both linked m and d graphs are formed
         for link in graph.link_:
@@ -339,40 +343,16 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
 
 def sum_last_lay(G):  # G.extH += last layer of link.daggH (dsubH|ddaggH)
 
-    dderH = []
+    dderH = CH()
     for link in G.rim_H[-1] if G.rim_H and isinstance(G.rim_H[0],list) else G.rim_H:  # last link layer
         if link.dderH:
             last_lay = link.dderH.H[int(len(link.dderH.H)/2):]  # dderH layers are packed flat
-            last_lay = CH(Et = np.add([He.Et for He in last_lay]), H=last_lay, nest=last_lay[0].nest)
-            add_(dderH, last_lay, irdnt=link.dderH.Et[2:4])
+            Et = copy(last_lay[0].Et)
+            for He in last_lay[1:]: Et = [V+v for V,v in zip(Et, He.Et)]
+            last_lay = CH(Et=Et, H=last_lay, nest=last_lay[0].nest)
+            dderH.add_(last_lay, irdnt=link.dderH.Et[2:4])
     if dderH:
-        add_(G.extH, dderH)
-
-
-def CG_edge(edge):
-    root, sign, I, Dy, Dx, G, yx_, dert_, link_, P_ = edge
-    for P in P_:
-        P.derH = CH()
-        Clink_ = []
-        for _P in P.link_:
-            angle = np.subtract(P.yx, _P.yx)
-            Clink_ += [Clink(node=P, _node=_P, distance=np.hypot(*angle), angle=angle)]
-        P.link_ = [Clink_]
-    # edge:
-    y_ = [yx[0] for yx in yx_]
-    x_ = [yx[1] for yx in yx_]
-    x0 = int(round(min(x_)))
-    x1 = int(round(max(x_) + 1))  # using round because 2nd index is not exclusive
-    y0 = int(round(min(y_)))
-    y1 = int(round(max(y_) + 1))
-    box = [y0, y1, x0, x1]
-
-    mask__ = np.ones((y1 - y0, x1 - x0), dtype="bool")
-    for y, x in yx_: mask__[y - y0, x - x0] = False
-
-    edge = CG(root=root, node_=[[], []], P_=P_, link_=link_, box=box, mask__=mask__)
-
-    return edge
+        G.extH.add_(dderH)
 
 
 def feedback(root):  # called from form_graph_, append new der layers to root
@@ -380,9 +360,9 @@ def feedback(root):  # called from form_graph_, append new der layers to root
     DerH = deepcopy(root.fback_.pop(0))  # init
     while root.fback_:
         derH = root.fback_.pop(0)
-        add_(DerH, derH)
+        DerH.add_(derH)
     if DerH.Et[1] > G_aves[1] * DerH.Et[3]:
-        add_(root.derH, DerH)
+        root.derH.add_(DerH)
     if root.root and isinstance(root.root, CG):  # not Edge
         rroot = root.root
         if rroot:

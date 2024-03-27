@@ -3,9 +3,12 @@ from collections import deque, defaultdict
 from copy import deepcopy, copy
 from itertools import zip_longest, combinations
 from math import inf
-from class_cluster import CBase, init_param as z
-from .filters import ave, ave_dI, aves, P_aves, PP_aves
+from .filters import ave, ave_dI, ave_Gm, aves, P_aves, PP_aves
 from .slice_edge import comp_angle, CP
+import sys
+sys.path.append("..")
+from frame_blobs import CH, CBase, CG, Clink
+
 '''
 Vectorize is a terminal fork of intra_blob.
 
@@ -97,7 +100,7 @@ def comp_P(link, fd):
     # both:
     if _P.derH and P.derH:  # append link dderH, init in form_PP_t rng++, comp_latuple was already done
         # der+:
-        dderH = CH.comp_(_P.derH, P.derH, dderH=CH(), rn=rn, flat=0)
+        dderH = _P.derH.comp_(P.derH, CH(), rn=rn, flat=0)
         vm,vd,rm,rd = dderH.Et[:4]  # also works if called from comp_G
         rm += vd > vm; rd += vm >= vd
         aveP = P_aves[1]
@@ -157,13 +160,13 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
 
 def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
 
-    PP = CG(fd=fd,root=root,P_=P_,rng=root.rng+1, link_=[], box=[inf,inf,-inf,-inf], latuple=[0,0,0,0,0,[0,0]])
+    PP = CG(fd=fd,root=root,P_=P_,rng=root.rng+1)
     # += uplinks:
     for derP in derP_:
         if derP.node not in P_ or derP._node not in P_: continue
         if derP.dderH:
-            CH.add_(derP.node.derH, derP.dderH, iRt)
-            CH.add_(derP._node.derH, negate(deepcopy(derP.dderH)), iRt)  # negate reverses uplink ds direction
+            derP.node.derH.add_(derP.dderH, iRt)
+            derP._node.derH.add_(negate(deepcopy(derP.dderH)), iRt)  # negate reverses uplink ds direction
         PP.link_ += [derP]; derP.roott[fd] = PP
         PP.A = np.add(PP.A,derP.angle)
         PP.S += np.hypot(*derP.angle)  # links are contiguous but slanted
@@ -175,7 +178,7 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
         PP.area += L; PP.n += L  # no + P.derH.n: current links only?
         PP.latuple = [P+p for P,p in zip(PP.latuple[:-1],P.latuple[:-1])] + [[A+a for A,a in zip(PP.latuple[-1],P.latuple[-1])]]
         if P.derH:
-            CH.add_(PP.iderH, P.derH)  # no separate extH, the links are unique here
+            PP.iderH.add_(P.derH)  # no separate extH, the links are unique here
         for y,x in P.yx_:
             y = int(round(y)); x = int(round(x))  # summed with float dy,dx in slice_edge?
         PP.box = accum_box(PP.box, y, x); celly_+=[y]; cellx_+=[x]
@@ -194,8 +197,8 @@ def feedback(root):  # in form_PP_, append new der layers to root PP, single vs.
 
     HE = deepcopy(root.fback_.pop(0))
     for He in root.fback_:
-        CH.add_(HE, He)
-    CH.add_(root.iderH, HE.H[-1] if HE.nest else HE)  # last md_ in H or sum md_
+        HE.add_(He)
+    root.iderH.add_(HE.H[-1] if HE.nest else HE)  # last md_ in H or sum md_
 
     if root.root and isinstance(root.root, CG):  # skip if root is Edge
         rroot = root.root  # single PP.root, can't be P
@@ -234,6 +237,24 @@ def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
     return ret
 
 
+'''
+class Clink(CBase):  # the product of comparison between two nodes
+
+    def __init__(link,_node=None, node=None, dderH = None, roott=None, distance=0.0, angle=None):
+        super().__init__()
+
+        link._node = _node  # prior comparand
+        link.node = node
+        link.dderH = CH() if dderH is None else dderH  # derivatives produced by comp, nesting dertv -> aggH
+        link.roott = [None, None] if roott is None else roott  # clusters that contain this link
+        link.distance = distance  # distance between node centers
+        link.angle = [0,0] if angle is None else angle  # dy,dx between node centers
+        # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
+
+    def __bool__(self):  # to test empty
+        if self.dderH.H: return True
+        else: return False
+
 class CH(CBase):  # generic derivation hierarchy of variable nesting
 
     nest: int = 0  # nesting depth: -1 ext, 0 md_, 1 derH, 2 subH, 3 aggH; root.nest = sub.nest+1, max|same: no skipping?
@@ -244,14 +265,14 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting
     def __bool__(self):  # to test empty
         if self.n: return True
         else: return False
-    '''
-    len layer +extt: 2, 3, 6, 12, 24,
-    or without extt: 1, 1, 2, 4, 8..: max n of tuples per der layer = summed n of tuples in all lower layers:
-    lay1: par     # derH per param in vertuple, layer is derivatives of all lower layers:
-    lay2: [m,d]   # implicit nesting, brackets for clarity:
-    lay3: [[m,d], [md,dd]]: 2 sLays,
-    lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
-    '''
+    
+    # len layer +extt: 2, 3, 6, 12, 24,
+    # or without extt: 1, 1, 2, 4, 8..: max n of tuples per der layer = summed n of tuples in all lower layers:
+    # lay1: par     # derH per param in vertuple, layer is derivatives of all lower layers:
+    # lay2: [m,d]   # implicit nesting, brackets for clarity:
+    # lay3: [[m,d], [md,dd]]: 2 sLays,
+    # lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
+    
 
     def add_(HE, He, irdnt=[]):  # HE, He can't be empty, down to numericals and sum them
 
@@ -333,8 +354,6 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting
         CH.append_(dderH, CH(nest=min(_He.nest,He.nest), Et=Et, H=dH, n=n), flat=flat)  # currently flat=1
         return dderH
 
-'''
-for reference:
 class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     latuple: list = z([])  # lateral params to compare vertically: I,G,M,Ma,L, (Dy,Dx)
@@ -354,7 +373,6 @@ class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param
     def __bool__(self):  # to test empty
         if self.dert_: return True
         else: return False
-'''
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
@@ -399,21 +417,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
     def __bool__(self):  # to test empty
         if self.n: return True
         else: return False
-
-
-class Clink(CBase):  # the product of comparison between two nodes
-
-    _node: object = None  # prior comparand
-    node:  object = None
-    dderH: object = z(CH())  # derivatives produced by comp, nesting dertv -> aggH
-    roott: list = z([None, None])  # clusters that contain this link
-    distance: float = 0.0  # distance between node centers
-    angle: list = z([0,0])  # dy,dx between node centers
-    # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
-    def __bool__(self):  # to test empty
-        if self.dderH.H: return True
-        else: return False
-
+'''
 
 def get_match(_par, par):
     match = min(abs(_par),abs(par))
