@@ -1,8 +1,8 @@
 from math import atan2, cos, floor, pi
 import sys
 sys.path.append("..")
-from frame_blobs import CBase, imread   # for CP
-from intra_blob import CIntraBlobFrame
+from frame_blobs import CBase, CH, imread   # for CP
+from intra_blob import CsubFrame
 
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
@@ -22,26 +22,21 @@ aveG = 10  # for vectorize
 ave_g = 30  # change to Ave from the root intra_blob?
 ave_dangle = .2  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
 
-class CSliceEdgeFrame(CIntraBlobFrame):
+class CsliceEdge(CsubFrame):
 
-    def evaluate(frame):
-        super().evaluate()
-        frame.edge_ = []
-        edgeQue = list(frame.blob_)
-        while edgeQue:
-            blob = edgeQue.pop(0)
-            try: rdn = blob.root.rdn
-            except AttributeError: rdn = 1
+    class CEdge(CsubFrame.CBlob):     # replaces CBlob after definition
 
-            if not blob.sign and blob.G > aveG * rdn:  frame.edge_ += [blob.slice_edge()]    # slice edge
-            elif hasattr(blob, "lay"):            edgeQue += blob.lay.blob_             # flatten/unpack deeper blobs
-        return frame
+        def term(blob):     # an extension to CsubFrame.CBlob.term(), evaluate for vectorization right after rng+ in intra_blob
+            super().term()
+            if not blob.sign and blob.G > aveG * blob.root.rdn:
+                blob.vectorize()
 
-    class CEdge(CIntraBlobFrame.CBlob):
+        def vectorize(blob):        # to be overridden in higher modules (comp_slice, agg_recursion)
+            blob.slice_edge()
+
         def slice_edge(edge):
             root__ = {}  # map max yx to P, like in frame_blobs
-            edge.P_ = [CP(edge, yx, axis, root__) for yx, axis in edge.select_max()]  # max = (yx, axis)
-            return edge
+            edge.P_ = [CP(edge, yx, axis, root__) for yx, axis in edge.select_max()]  # P_ is added dynamically, only edge-blobs have P_
 
         def select_max(edge):
             max_ = []
@@ -59,9 +54,27 @@ class CSliceEdgeFrame(CIntraBlobFrame):
                         new_max = False
                         break
                 if new_max: max_ += [((y, x), (sa, ca))]
+            max_.sort(key=lambda itm: itm[0])   # sort by yx
             return max_
 
-    CBlob = CEdge   # Replace CBlob with CEdge
+    CBlob = CEdge
+
+
+class Clink(CBase):  # the product of comparison between two nodes
+
+    def __init__(l,_node=None, node=None, dderH = None, roott=None, distance=0.0, angle=None):
+        super().__init__()
+
+        l._node = _node  # prior comparand
+        l.node = node
+        l.dderH = CH() if dderH is None else dderH  # derivatives produced by comp, nesting dertv -> aggH
+        l.roott = [None, None] if roott is None else roott  # clusters that contain this link
+        l.distance = distance  # distance between node centers
+        l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
+        # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
+
+    def __bool__(l):  return bool(l.dderH.H)
+
 
 class CP(CBase):
     def __init__(P, edge, yx, axis, root__):  # form_P:
@@ -75,7 +88,7 @@ class CP(CBase):
 
         I, G, M, Ma, L, Dy, Dx = i, g, m, ma, 1, gy, gx
         P.axis = ay, ax = axis
-        P.yx_, P.dert_, P.link_ = [yx], [pivot], []
+        P.yx_, P.dert_, P.link_ = [yx], [pivot], [[]]
 
         for dy, dx in [(-ay, -ax), (ay, ax)]: # scan in 2 opposite directions to add derts to P
             P.yx_.reverse(); P.dert_.reverse()
@@ -97,21 +110,20 @@ class CP(CBase):
                 _y, _x, _gy, _gx = y, x, gy, gx
 
         # scan for neighbor P pivots, update link_:
-        y, x = yx   # pivot
+        y, x = yx   # pivot, change to P center
         for _y, _x in [(y-1,x-1), (y-1,x), (y-1,x+1), (y,x-1), (y,x+1), (y+1,x-1), (y+1,x), (y+1,x+1)]:
             if (_y, _x) in root__:  # neighbor has P
-                P.link_ += [root__[_y, _x]]
+                angle = np.subtract((y,x),(_y,_x))
+                P.link_[0] += [Clink(node=P, _node=_P, distance=np.hypot(*angle), angle=angle)]  # prelinks
         root__[y, x] = P    # update root__
 
         P.yx = P.yx_[L // 2]  # center
         P.latuple = I, G, M, Ma, L, (Dy, Dx)
 
-    def __repr__(P):
-        return f"P({', '.join(map(str, P.latuple))})"  # or return f"P(id={P.id})" ?
+    def __repr__(P): return f"P({', '.join(map(str, P.latuple))})"  # or return f"P(id={P.id})" ?
 
 def interpolate2dert(edge, y, x):
-    if (y, x) in edge.dert_:   # if edge has (y, x) in it
-        return edge.dert_[y, x]
+    if (y, x) in edge.dert_: return edge.dert_[y, x]  # if edge has (y, x) in it
 
     # get nearby coords:
     y_ = [fy] = [floor(y)]; x_ = [fx] = [floor(x)]
@@ -144,14 +156,20 @@ if __name__ == "__main__":
     image_file = '../images/raccoon_eye.jpeg'
     image = imread(image_file)
 
-    frame = CSliceEdgeFrame(image).evaluate()
+    frame = CsliceEdge(image).segment()
     # verification:
     import numpy as np
     import matplotlib.pyplot as plt
 
     # show first largest n edges
+    edge_, edgeQue = [], list(frame.blob_)
+    while edgeQue:
+        blob = edgeQue.pop(0)
+        if hasattr(blob, "P_"): edge_ += [blob]
+        elif hasattr(blob, "rlay"): edgeQue += blob.rlay.blob_
+
     num_to_show = 5
-    sorted_edge_ = sorted(frame.edge_, key=lambda edge: len(edge.yx_), reverse=True)
+    sorted_edge_ = sorted(edge_, key=lambda edge: len(edge.yx_), reverse=True)
     for edge in sorted_edge_[:num_to_show]:
         yx_ = np.array(edge.yx_)
         yx0 = yx_.min(axis=0) - 1

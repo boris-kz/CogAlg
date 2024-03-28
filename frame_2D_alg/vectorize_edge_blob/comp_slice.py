@@ -106,7 +106,7 @@ def comp_P(link, fd):
         aveP = P_aves[1]
         He = link.dderH  # append link dderH:
         if not He.nest: He = link.dderH = CH(nest=1, Et=[*He.Et], H=[He])  # nest md_ as derH
-        He.Et = [V+v for V, v in zip_longest(He.Et, [vm,vd,rm,rd], fillvalue=0)]
+        He.Et = np.add(He.Et, (vm,vd,rm,rd))
         He.H += [dderH]
 
     if vm > aveP * rm:  # always rng+
@@ -205,7 +205,7 @@ def feedback(root):  # in form_PP_, append new der layers to root PP, single vs.
         fback_ = rroot.fback_
         node_ = rroot.node_[1] if rroot.node_ and isinstance(rroot.node_[0],list) else rroot.P_  # node_ is updated to node_t in sub+
         fback_ += [HE]
-        if fback_ and (len(fback_)==len(node_)):  # all nodes terminated and fed back
+        if len(fback_)==len(node_):  # all nodes terminated and fed back
             feedback(rroot)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
 
 
@@ -235,7 +235,6 @@ def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
 
         ret = [mval, dval, mrdn, drdn, mdec, ddec], ret
     return ret
-
 
 '''
 class Clink(CBase):  # the product of comparison between two nodes

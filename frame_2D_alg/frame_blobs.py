@@ -28,8 +28,8 @@
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs.png
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs_intra_blob.drawio
 '''
-from copy import deepcopy, copy
-from itertools import zip_longest, combinations
+from copy import deepcopy
+from itertools import zip_longest
 import weakref
 import numpy as np
 from matplotlib import pyplot as plt
@@ -79,10 +79,9 @@ class CBase:
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    def __init__(G, root=None, rng=1, fd=0, P_=None, node_=None, link_=None):
+    def __init__(G, root=None, rng=1, fd=0, node_=None, link_=None):
         super().__init__()
         # PP:
-        G.P_ = [] if P_ is None else P_
         G.root = root
         G.rng = rng
         G.fd = fd  # fork if flat layers?
@@ -170,7 +169,7 @@ class CFrame(CBase):
         def __init__(blob, root):
             super().__init__(root)
             blob.sign = None
-            blob.latuple = [0, 0, 0, 0, 0, 0]  # Y, X, I, Dy, Dx, G: vertical tuple
+            blob.latuple = [0, 0, 0, 0, 0, 0]  # Y, X, I, Dy, Dx, G, override CG initialization
             blob.dert_ = {}  # keys: (y, x). values: (i, dy, dx, g)
             blob.adj_ = []  # adjacent blobs
 
@@ -225,14 +224,14 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
     def __init__(He, nest=0, n=0, Et=None, H=None):
         He.nest = nest  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH
         He.n = n  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
-        He.Et = [] if Et is None else Et  # evaluation tuple: valt, rdnt, normt
+        He.Et = [0,0,0,0]   # evaluation tuple: valt, rdnt, normt
         He.H = [] if H is None else H  # hierarchy of der layers or md_
 
-    def __bool__(self): return self.n != 0
+    def __bool__(H): return H.n != 0
 
-    def add_(self, He, irdnt=[]):  # unpack down to numericals and sum them
+    def add_(HE, He, irdnt=None):  # unpack down to numericals and sum them
 
-        HE = self  # reassign for clarity
+        if irdnt is None: irdnt = []
         if HE:
             ddepth = abs(HE.nest-He.nest)  # compare nesting depth, nest lesser He: md_-> derH-> subH-> aggH:
             if ddepth:
@@ -258,9 +257,9 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
         else:
             HE.copy(He)  # initialization
 
-    def append_(self ,He, irdnt=[], flat=0):
+    def append_(HE,He, irdnt=None, flat=0):
 
-        HE = self
+        if irdnt is None: irdnt = []
         if flat: HE.H += He.H  # append flat
         else:  HE.H += [He]  # append nested
 
@@ -270,10 +269,8 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
         HE.n += He.n  # combined param accumulation span
         HE.nest = max(HE.nest, He.nest)
 
+    def comp_(_He, He, dderH, rn=1, fagg=0, flat=1):  # unpack tuples (formally lists) down to numericals and compare them
 
-    def comp_(self, He, dderH, rn=1, fagg=0, flat=1):  # unpack tuples (formally lists) down to numericals and compare them
-
-        _He = self
         ddepth = abs(_He.nest - He.nest)
         n = 0
         if ddepth:  # unpack the deeper He: md_<-derH <-subH <-aggH:
@@ -316,40 +313,17 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
         dderH.append_(CH(nest=min(_He.nest,He.nest), Et=Et, H=dH, n=n), flat=flat)  # currently flat=1
         return dderH
 
-    def copy(self, other):
-        for attr, value in other.__dict__.items():
-            if attr != '_id' and attr in self.__dict__.keys():  # copy only the available attributes and skip id
-                setattr(self, attr, deepcopy(value))
+    def copy(_H, H):
+        for attr, value in H.__dict__.items():
+            if attr != '_id' and attr in _H.__dict__.keys():  # copy only the available attributes and skip id
+                setattr(_H, attr, deepcopy(value))
 
 
-class Clink(CBase):  # the product of comparison between two nodes
-
-    def __init__(l,_node=None, node=None, dderH = None, roott=None, distance=0.0, angle=None):
-        super().__init__()
-
-        l._node = _node  # prior comparand
-        l.node = node
-        l.dderH = CH() if dderH is None else dderH  # derivatives produced by comp, nesting dertv -> aggH
-        l.roott = [None, None] if roott is None else roott  # clusters that contain this link
-        l.distance = distance  # distance between node centers
-        l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
-        # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
-
-    def __bool__(self):  # to test empty
-        if self.dderH.H: return True
-        else: return False
-
-
-def imread(filename, raise_if_not_read=True):
-    "Read an image in grayscale, return array."
-    try:
-        return np.mean(plt.imread(filename), axis=2).astype(float)
+def imread(filename, raise_if_not_read=True):  # Read an image in grayscale, return array
+    try: return np.mean(plt.imread(filename), axis=2).astype(float)
     except AttributeError:
-        if raise_if_not_read:
-            raise SystemError('image is not read')
-        else:
-            print('Warning: image is not read')
-            return None
+        if raise_if_not_read: raise SystemError('image is not read')
+        else: print('Warning: image is not read')
 
 if __name__ == "__main__":
 
@@ -358,7 +332,6 @@ if __name__ == "__main__":
     frame = CFrame(image).segment()
 
     # verification/visualization:
-    import matplotlib.pyplot as plt
     I, Dy, Dx, G = frame.latuple
 
     i__ = np.zeros_like(image, dtype=np.float32)
