@@ -54,11 +54,20 @@ class CsliceEdge(CsubFrame):
                         new_max = False
                         break
                 if new_max: max_ += [((y, x), (sa, ca))]
-            max_.sort(key=lambda itm: itm[0])   # sort by yx
+            max_.sort(key=lambda itm: itm[0])  # sort by yx
             return max_
 
     CBlob = CEdge
 
+'''
+to get links between adjacent / overlapping Ps in sorted P_:
+
+Dy = abs(P.yx_[0][0] - P.yx_[-1][0]
+Dx = abs(P.yx_[0][1] - P.yx_[-1][1]
+# gap -= P extension from P center, overlap = negative gap:
+ygap = _P.yx[0] - P.yx[0] - (Dy+_Dy)/2
+xgap = abs(_P.yx[1]-P.yx[1]) - (Dx+_Dx)/2
+'''
 
 class Clink(CBase):  # the product of comparison between two nodes
 
@@ -67,6 +76,7 @@ class Clink(CBase):  # the product of comparison between two nodes
 
         l._node = _node  # prior comparand
         l.node = node
+        l.med_node_ = []  # intermediate nodes, as in hypergraph edges
         l.dderH = CH() if dderH is None else dderH  # derivatives produced by comp, nesting dertv -> aggH
         l.roott = [None, None] if roott is None else roott  # clusters that contain this link
         l.distance = distance  # distance between node centers

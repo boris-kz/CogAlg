@@ -79,9 +79,10 @@ class CBase:
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    def __init__(G, root=None, rng=1, fd=0, node_=None, link_=None):
+    def __init__(G, root=None, rng=1, fd=0, node_=None, link_=None, P_=None, Et=None):  # we need P_ to init PP, Et in init graph
         super().__init__()
         # PP:
+        G.P_ = [] if P_ is None else P_
         G.root = root
         G.rng = rng
         G.fd = fd  # fork if flat layers?
@@ -89,7 +90,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.area = 0
         G.S = 0  # sparsity: distance between node centers
         G.A = 0, 0  # angle: summed dy,dx in links
-        G.Et = []  # external eval tuple, summed from rng++ before forming new graph and appending G.extH
+        G.Et = [0,0,0,0] if Et is None else Et  # external eval tuple, summed from rng++ before forming new graph and appending G.extH
         G.latuple = [0,0,0,0,0,[0,0]]  # lateral I,G,M,Ma,L,[Dy,Dx]
         G.iderH = CH()  # summed from PPs
         G.derH = CH()  # nested derH in Gs: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
@@ -224,7 +225,7 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
     def __init__(He, nest=0, n=0, Et=None, H=None):
         He.nest = nest  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH
         He.n = n  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
-        He.Et = [0,0,0,0]   # evaluation tuple: valt, rdnt, normt
+        He.Et = [0,0,0,0] if Et is None else Et   # evaluation tuple: valt, rdnt, normt (we should init it as [0,0,0,0] only if input Et is not provided )
         He.H = [] if H is None else H  # hierarchy of der layers or md_
 
     def __bool__(H): return H.n != 0
