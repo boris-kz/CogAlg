@@ -337,45 +337,8 @@ def sum2graph(root, grapht, fd, nrng, fagg):  # sum node and link params into gr
                         G.alt_Et = [V+v for V,v in zip_longest(G.alt_Et, alt_G.et, fillvalue=0)]
     return graph
 
-def rng_recursion_agg(rroot, root, Q, Et, nrng=1):  # rng++/ G_, der+/ link_ if called from sub+ fork of agg_recursion, -> rim_H
 
-    et = [0,0,0,0,0,0]  # local only
-    _G_,_link_ = set(),set()  # for next rng+, der+
-    fd = isinstance(Q,list)  # link_ is list, node_ is combinations
-
-    if fd:
-        for link in Q:  # init rng+ from der+, extend root links
-            G = link.G; _G = link._G
-            if _G in G.compared_: continue
-            if link.dderH.Et[1] > G_aves[1] * link.dderH.Et[3]:  # eval der+
-                G.compared_+=[_G]; _G.compared_+=[G]
-                comp_G(link, et)
-                comp_rim(_link_,link,nrng)  # add matching-direction rim links for next rng+?
-    else:
-        Gt_ = Q  # prelinks for init or recursive rng+, form new link_, or make it general?
-        for (_G, G) in Gt_:
-            if _G in G.compared_: continue
-            dy, dx = box2center(G.box)  # compute distance between node centers:
-            dist = np.hypot(dy, dx)
-            # combined pairwise eval (directional val?) per rng+:
-            _M,_R = [_G.aggH.Et[0],_G.aggH.Et[2]] if _G.aggH else [0,0]
-            M, R = [G.aggH.Et[0],G.aggH.Et[2]] if G.aggH else [0,0]
-            if nrng==1 or ((M+_M)/ (dist/ave_distance) > ave*(R+_R)):
-                link = Clink(_node=_G, node=G, A=[dy,dx], S=dist)  # prelink
-                G.compared_+=[_G]; _G.compared_+=[G]
-                comp_G(link, et)
-            else:
-                _G_.add((_G, G))  # for next rng+
-
-    if et[0] > ave_Gm * et[2]:  # rng+ eval per arg cluster because comp is bilateral, 2nd test per new pair
-        Et[:] = [V+v for V, v in zip(Et, et)]  # Vt[i]+=v; Rt[i]+=rt[i]; Dt[i]+=d
-        _Q = _link_ if fd else list(_G_)
-        if _Q:
-            nrng = rng_recursion(rroot, root, _Q, Et, nrng+1)  # eval rng+ for der+ too
-
-    return nrng
-
-def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contiguously link mediated, because
+def rng_recursion_PP(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contiguously link mediated, because
 
     iP_ = PP.P_
     while True:
@@ -666,3 +629,55 @@ def add_chee(HE, He, irdnt=[], fmerge=0):  # unpack tuples (formally lists) down
 
     return HE
     add_(extH, link.dderH.H[-1] if link.dderH.nest else link.dderH, irdnt=link.dderH.Et[2:4])
+
+
+def agg_recursion(rroot, root, Q, nrng=1, fagg=0):  # lenH = len(root.aggH[-1][0]), lenHH: same in agg_compress
+
+    Et = [0,0,0,0]  # eval tuple, sum from Link_
+    # agg+ der=1 xcomp of new Gs if fagg, else sub+: der+ xcomp of old Gs,
+    nrng, node_, Et = rng_recursion(rroot, root, Q, Et, nrng=nrng)  # rng+ appends prelink_ -> rim, link.dderH
+
+    node_t = form_graph_t(root, node_, Et, nrng, fagg)  # root_fd, eval der++ and feedback per Gd, not sub-recursion in Gms
+    if node_t:
+        for fd, node_ in enumerate(node_t):
+            if root.Et[0] * (len(node_)-1)*root.rng > G_aves[1] * root.Et[2]:
+                # agg+ / node_t, vs. sub+ / node_, always rng+:
+                pruned_node_ = [node for node in node_ if node.Et[0] > G_aves[fd] * node.Et[2]]
+                if len(pruned_node_) > 10:
+                    agg_recursion(rroot, root, Q=list(combinations(pruned_node_,r=2)), nrng=1, fagg=1)
+                    if rroot and fd and root.derH:  # der+ only (check not empty root.derH)
+                        rroot.fback_ += [root.derH]
+                        feedback(rroot)  # update root.root..
+
+
+def rng_recursion(rroot, root, Q, iEt, nrng=1):  # rng++/G_, der+/link_ in sub+, -> rim_H
+
+    fd = isinstance(Q[0],Clink)  # else [G,_G]
+    Et = [0,0,0,0]  # for rng+
+    node_ = []  # for rng+, append inside comp_G
+
+    if fd:  # only in 1st rng+ from der+, extend root links
+        for link in Q:
+            # if link.dderH.Et[1] > G_aves[1] * link.dderH.Et[3]:  # eval der+?
+            comp_G(link, node_, Et)
+    else:
+        for _G,G in Q:  # prelinks in rng+
+            if _G in G.compared_: continue
+            cy, cx = box2center(G.box); _cy, _cx = box2center(_G.box); dy = cy - _cy; dx = cx - _cx
+            dist = np.hypot(dy, dx)  # distance between node centers
+
+            if nrng > 1:  # pair eval, add M,R of intermediate matching nodes, directionally?
+                _M,_R, M,R = _G.Et[0],_G.Et[2], G.Et[0],G.Et[2]
+            if nrng==1 or ((M+_M)/ (dist/ave_dist) > ave*(R+_R)):  # or directional?
+                G.compared_+=[_G]; _G.compared_+=[G]
+                comp_G([_G,G, dist, [dy,dx]], node_, Et)
+
+    if Et[0] > ave_Gm * Et[2]:
+        # rng+ eval per arg cluster because comp is bilateral, 2nd test per new pair
+        iEt[:] = [V+v for V,v in zip(iEt, Et)]  # Vt[i]+=v; Rt[i]+=rt[i]; Dt[i]+=d
+        if node_:  # eval rng+
+            node_ = list(set(node_))
+            nrng,_,_ = rng_recursion(rroot, root, list(combinations(node_,r=2)), iEt, nrng+1)
+
+    return nrng, node_, Et
+

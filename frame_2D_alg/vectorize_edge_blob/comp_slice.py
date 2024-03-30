@@ -36,8 +36,7 @@ Connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possib
 len prior root_ sorted by G is root.rdn, to eval for inclusion in PP or start new P by ave*rdn
 '''
 
-  # root function:
-def ider_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
+def comp_slice_root(root, PP, fd=0):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
 
     rng_recursion(PP, rng=1, fd=fd)  # extend PP.link_, derHs by same-der rng+ comp
     # calls der+:
@@ -46,7 +45,17 @@ def ider_recursion(root, PP, fd=0):  # node-mediated correlation clustering: kee
     if root is not None and PP.iderH: root.fback_ += [PP.iderH]
 
 
-def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contiguously link mediated, because
+def ider_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
+
+    # no der+'rng+, or directional, within node-mediated hyper-links only?
+    rng_recursion(PP, rng=1, fd=fd)  # extend PP.link_, derHs by same-der rng+ comp
+    # calls der+:
+    form_PP_t(PP, PP.P_, iRt=PP.iderH.Et[2:4] if PP.iderH else [0,0])
+    # feedback per PPd:
+    if root is not None and PP.iderH: root.fback_ += [PP.iderH]
+
+
+def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
     iP_ = PP.P_
     while True:
