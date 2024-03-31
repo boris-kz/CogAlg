@@ -71,11 +71,12 @@ def agg_recursion(rroot, root, Q, nrng=1, fagg=0):  # lenH = len(root.aggH[-1][0
     if fagg:  # rng+ higher Gs
         nrng, node_, Et = rng_recursion(rroot, root, Q, Et, nrng=nrng)  # rng+ appends prelink_ -> rim, link.dderH
     else:
+        node_ = []
         for link in Q:  # der+ node Gs, dderH append, not directly recursive, all >der+ ave?
-            node_ = comp_G(link, Et)
+            node_ += comp_G(link, Et)
             # der+'rng+ must be directional, within node-mediated hyper-links extending beyond root graph?
-
-    node_t = form_graph_t(root, node_, Et, nrng, fagg)  # root_fd, eval der++ and feedback per Gd, not sub-recursion in Gms
+            # cluster by dir angle?
+    node_t = form_graph_t(root, list(set(node_)), Et, nrng, fagg)  # root_fd, eval der++ and feedback per Gd only
     if node_t:
         for fd, node_ in enumerate(node_t):
             if root.Et[0] * (len(node_)-1)*root.rng > G_aves[1] * root.Et[2]:
@@ -94,10 +95,18 @@ def rng_recursion(rroot, root, prelinks, Et, nrng=1):  # rng++/G_, der+/link_ in
         if _G in G.compared_: continue
         cy, cx = box2center(G.box); _cy, _cx = box2center(_G.box); dy = cy - _cy; dx = cx - _cx
         dist = np.hypot(dy, dx)  # distance between node centers
-
-        if nrng > 1:  # pair eval, add M,R of directionally intermediate matching nodes, from prior rng+?
+        # directional der+'rng+?
+        if nrng > 1:  # pair eval
             _M,_R, M,R = _G.Et[0],_G.Et[2], G.Et[0],G.Et[2]
-        if (nrng==1 and dist<=ave_dist) or ((M+_M)/ (dist/ave_dist) > ave*(R+_R)):  # or directional?
+            M = (M+_M)/2; R = (R+_R)/2  # local
+            # very tentative mediation eval:
+            for link in G.rim:
+                for (med_G, med_link) in link.med_node_:
+                    mA = comp_angle((dy,dx),med_link.A)
+                    if mA > ave_mA:
+                        M += med_link.dderH[-1].Et[0]
+                        R += med_link.dderH[-1].Et[2]
+        if (nrng==1 and dist<=ave_dist) or (nrng>1 and M / (dist/ave_dist) > ave*R):
             G.compared_ += [_G]; _G.compared_ += [G]
             comp_G([_G,G, dist, [dy,dx]], Et, node_)
 
@@ -124,10 +133,10 @@ def comp_G(link, iEt, node_=[], nrng=None):  # add flat dderH to link and link t
         # / PP, if >1 Ps:
         if _G.iderH and G.iderH: _G.iderH.comp_(G.iderH, dderH, rn, fagg=1, flat=0)
     # / G, if >1 PPs | Gs:
-    if _G.extH and G.extH: _G.extH.comp_(G.extH, dderH, rn, fagg=1, flat=0) # always true in der+
-    if _G.derH and G.derH: _G.derH.comp_(G.derH, dderH, rn, fagg=1, flat=0)
+    if _G.extH and G.extH: _G.extH.comp_(dderH, G.extH, rn, fagg=1, flat=0) # always true in der+
+    if _G.derH and G.derH: _G.derH.comp_(dderH, G.derH, rn, fagg=1, flat=0) # append and sum new dderH to base dderH
 
-    link.dderH.append_(dderH, flat=len(link.dderH.H)>0)  # append for higher-res lower-der summation in sub-G extH
+    link.dderH.append_(dderH, flat=0)  # append nested, higher-res lower-der summation in sub-G extH
     iEt[:] = np.add(iEt,dderH.Et[:4])  # init eval rng+ and form_graph_t by total m|d?
     for i in 0,1:
         Val, Rdn = dderH.Et[i:4:2]  # exclude dect
@@ -287,7 +296,8 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
         graph.root = root
     for G in G_:
         graph.area += G.area
-        sum_last_lay(G) # G.extH += links dderH last layer
+        for link in G.rim:
+            G.extH.add_(link.dderH[-1], irdnt=link.dderH_[-1].Et[2:4])  # sum last layer
         graph.box = extend_box(graph.box, G.box)
         graph.latuple = [P+p for P,p in zip(graph.latuple[:-1],graph.latuple[:-1])] + [[A+a for A,a in zip(graph.latuple[-1],graph.latuple[-1])]]
         if G.iderH:  # empty in single-P PP|Gs
@@ -297,10 +307,8 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
         if fd: G.Et = [0,0,0,0]  # reset in last form_graph_t fork, Gs are shared in both forks
         graph.n += G.n  # non-derH accumulation?
     extH = CH()
-    for link in Link_:  # unique current-layer links
-        last_lay = link.dderH.H[int(len(link.dderH.H)/2):]  # add last layer only, packed flat
-        last_lay = CH(Et=np.sum([He.Et for He in last_lay],axis=0), H=last_lay, nest=last_lay[0].nest, n=sum([He.n for He in last_lay]))
-        extH.add_( last_lay, irdnt=link.dderH.Et[2:4])
+    for link in Link_:  # sum last layer of unique current-layer links
+        extH.add_(link.dderH[-1], irdnt=link.dderH[-1].Et[2:4])
         graph.S += link.distance
         np.add(graph.A,link.angle)
         link.root = graph
@@ -314,18 +322,6 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
                     if G not in alt_G.alt_graph_:
                         G.alt_graph_ += [alt_G]
     return graph
-
-
-def sum_last_lay(G):  # G.extH += last layer of link.daggH (dsubH|ddaggH)
-
-    dderH = CH()
-    for link in G.rim:
-        if link.dderH:
-            last_lay = link.dderH.H[int(len(link.dderH.H)/2):]  # dderH layers are packed flat, need to nest them now?
-            last_lay = CH(Et=np.sum([He.Et for He in last_lay],axis=0), H=last_lay, nest=last_lay[0].nest, n=sum([He.n for He in last_lay]))
-            dderH.add_(last_lay, irdnt=link.dderH.Et[2:4])
-    if dderH:
-        G.extH.add_(dderH)
 
 
 def feedback(root):  # called from form_graph_, append new der layers to root

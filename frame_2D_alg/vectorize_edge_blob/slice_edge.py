@@ -38,25 +38,23 @@ class CsliceEdge(CsubFrame):
         def slice_edge(edge):
             root__ = {}  # map max yx to P, like in frame_blobs
             edge.P_ = [CP(edge, yx, axis, root__) for yx, axis in edge.select_max()]  # P_ is added dynamically, only edge-blobs have P_
-            edge.P_ = sorted(edge.P_, key=lambda P: P.yx[0])   # sort Ps in descending order (top down)
+            edge.P_ = sorted(edge.P_, key=lambda P: P.yx[0], reverse=True)  # sort Ps in descending order (bottom up)
             # scan to update link_:
-            for P in edge.P_:
+            for i, P in enumerate(edge.P_):
                 y, x = P.yx  # pivot, change to P center
-                # scan all other Ps
-                for _P in edge.P_:
+                for _P in edge.P_[i+1:]:  # scan all higher Ps to get links to adjacent / overlapping Ps in P_ sorted by y
                     _y, _x = _P.yx
-                    if _y < y:  # uplinks only
-                        Dy = abs(P.yx_[0][0] - P.yx_[-1][0]); _Dy = abs(_P.yx_[0][0] - _P.yx_[-1][0])
-                        Dx = abs(P.yx_[0][1] - P.yx_[-1][1]); _Dx = abs(_P.yx_[0][1] - _P.yx_[-1][1])
-                        # gap -= P extension from P center, overlap = negative gap:
-                        ygap = abs(_P.yx[0] - P.yx[0]) - (Dy+_Dy)/2
-                        xgap = abs(_P.yx[1]-P.yx[1]) - (Dx+_Dx)/2
-
-                        if ygap <= 0 or xgap <= 0:  # overlapping or adjacent Ps
-                            angle = np.subtract((y,x),(_y,_x))
-                            P.link_[0] += [Clink(node=P, _node=_P, distance=np.hypot(*angle), angle=angle)]  # prelinks
-
-            edge.P_ = sorted(edge.P_, key=lambda P: P.yx[0], reverse=True)  # sort Ps in ascending order (bottom up)
+                    # get max possible y,x extension from P centers:
+                    Dy = abs(P.yx_[0][0] - P.yx_[-1][0])/2; _Dy = abs(_P.yx_[0][0] - _P.yx_[-1][0])/2
+                    Dx = abs(P.yx_[0][1] - P.yx_[-1][1])/2; _Dx = abs(_P.yx_[0][1] - _P.yx_[-1][1])/2
+                    # min gap = distance between centers - combined extension,
+                    # max overlap is negative min gap:
+                    ygap = (_P.yx[0] - P.yx[0]) - (Dy+_Dy)
+                    xgap = abs(_P.yx[1]-P.yx[1]) - (Dx+_Dx)
+                    # overlapping | adjacent Ps:
+                    if ygap <= 0 and xgap <= 0:
+                        angle = np.subtract((y,x),(_y,_x))
+                        P.link_[0] += [Clink(node=P, _node=_P, distance=np.hypot(*angle), angle=angle)]  # prelinks
 
         def select_max(edge):
             max_ = []
@@ -79,31 +77,22 @@ class CsliceEdge(CsubFrame):
 
     CBlob = CEdge
 
-'''
-to get links between adjacent / overlapping Ps in sorted P_:
-
-Dy = abs(P.yx_[0][0] - P.yx_[-1][0]
-Dx = abs(P.yx_[0][1] - P.yx_[-1][1]
-# gap -= P extension from P center, overlap = negative gap:
-ygap = _P.yx[0] - P.yx[0] - (Dy+_Dy)/2
-xgap = abs(_P.yx[1]-P.yx[1]) - (Dx+_Dx)/2
-'''
 
 class Clink(CBase):  # the product of comparison between two nodes
 
-    def __init__(l,_node=None, node=None, dderH = None, roott=None, distance=0.0, angle=None):
+    def __init__(l,_node=None, node=None, dderH= None, roott=None, distance=0.0, angle=None):
         super().__init__()
 
         l._node = _node  # prior comparand
         l.node = node
         l.med_node_ = []  # intermediate nodes and links in roughly the same direction, as in hypergraph edges
-        l.dderH = CH() if dderH is None else dderH  # derivatives produced by comp, nesting dertv -> aggH
+        l.dderH = CH() if dderH is None else dderH
         l.roott = [None, None] if roott is None else roott  # clusters that contain this link
         l.distance = distance  # distance between node centers
         l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
         # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
 
-    def __bool__(l):  return bool(l.dderH.H)
+    def __bool__(l):  return bool(l.dderH_[-1].H) if l.dderH is None else bool(l.dderH.H)
 
 
 class CP(CBase):
