@@ -103,3 +103,26 @@ def segment_node_(root, node_, fd, nrng, fagg):  # eval rim links with summed su
             graph_ += [sum2graph(root, grapht[:3], fd, nrng)]
 
     return graph_
+'''
+    for fd, e_ in zip((0,1), (node_,link_)):
+        ave = G_aves[fd]
+        kernels, lV,lR = [],0,0  # form base layer kernel per node|link, to sum in higher layers:
+        for e in e_:  # root node_|link_
+            E_ = [e]  # base kernel + neighborhood, may overlap:
+            if fd:  # += dlinks in link._node.rim:
+                V,R = e.Et[1],e.Et[3]
+                for G in e._node, e.node:
+                    for link in G.rim:
+                        if link.Et[1] > ave * link.Et[3]:
+                            E_+=[link]; V+=link.Et[1]; R+=link.Et[3]
+            else:  # += linked nodes
+                V,R = e.Et[0],e.Et[2]
+                for link in e.rim:
+                    node = link._node if link.node is e else link.node
+                    if node.Et[0] > ave * node.Et[2]:
+                        E_+=[node]; V+=node.Et[0]; R+=link.Et[3]
+            kernels += [E_,V,R,len(E_)]
+            lV+=V; lR+=R
+        layers = [[kernels],lV,lR]  # init convo layers
+        _hV=lV; _hR=lR
+'''
