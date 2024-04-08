@@ -180,74 +180,75 @@ def convolve_graph(node_, link_):  # revalue nodes and links by the value of the
     Sum connectivity per node|link from their links|nodes, extended in feedforward through the network, bottom-up.
     Then backprop adjusts node|link connect value by relative value of its higher-layer neighborhood, top-down.
     Math: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/node_connect.png
-
-    or inclusion adjustment by similarity to kernel, vs. rim similarity in all kernel elements:
-    Reduce proximity bias by kernel centroid quasi-clustering: inclusion val adjustment per element.
+    Reduce proximity bias in inclusion value by kernel centroid quasi-clustering: cross-similarity among kernels
     '''
     rim_effect = 0.5  # impact of neighborhood inclusion on node|link inclusion
 
     for fd, e_ in zip((0,1), (node_,link_)):
         ave = G_aves[fd]
+        Ce = [CG,Clink][fd]; comp = [comp_G, Clink.comp_link][fd]
         iterations = 0
         # ff,fb through all layers, break if abs(_hV-hV) < ave or hV < ave:
         while True:
-            # bottom-up feedforward,
-            # 1st-layer kernels are [node|link + rim]s:
+            # bottom-up feedforward, 1st-layer kernels are [node|link + rim]s:
             kernels, lV,lR = [],0,0
             for e in e_:  # root node_|link_
-                E_ = [e]; kernel = [E_]; e.root = kernel  # in core e, replace in sum2graph
-                # E_ = e + neighborhood:
+                E_ = [e]; Et = copy(e.Et); n = 1  # E_ = e + rim/neighborhood:
                 if fd: # += dlinks in link._node.rim:
-                    V,R = e.Et[1],e.Et[3]
                     for G in e._node, e.node:
                         for link in G.rim:
                             if link is not e and link.Et[1] > ave * link.Et[3]:
-                                E_+=[link]; V+=link.Et[1]; R+=link.Et[3]
+                                E_+=[link]; np.add(Et,link.Et); n += 1
                 else:  # += linked nodes
-                    V,R = e.Et[0],e.Et[2]
                     for link in e.rim:
                         node = link._node if link.node is e else link.node
                         if node.Et[0] > ave * node.Et[2]:
-                            E_+=[node]; V+=node.Et[0]; R+=link.Et[3]
-                kernels += [kernel+[V,R,0,len(E_), None]]  # no root yet?
-                lV+=V; lR+=R
-            layers = [[kernels],lV,lR]  # init convo layers
+                            E_+=[node]; np.add(Et,link.Et); n += 1
+                kernel = Ce(node_=E_,Et=Et,n=n); e.root = kernel  # replace in sum2graph
+                kernels += [kernel]
+                lV+=Et[fd]; lR+=Et[2+fd]
+            layers = [[kernels,lV,lR]]  # init convo layers
             _hV=lV; _hR=lR
-            while True:  # break if kernel == root E_: no higher kernels
-                # add higher layer: Kernel = core kernel + overlapping input kernels (rolp>ave):
+            while True:  # add higher layer Kernels: node_= new center + extended rim, break if kernel == root E_: no higher kernels
                 Kernels, lV,lR = [],0,0
-                for kernel in kernels:  # v,r for feedback only
-                    e_,v,r,o,n = kernel[:5]  # root may not be assigned yet
-                    E_,V,R,O,N = [e_],v,r,o,n  # init with central lower kernel, nested
-                    for e in e_[1:]:  # exclude core e
-                        _kernel = e[-1] if isinstance(e, list) else e.root  # root is overlapping kernel
-                        _e_,_v,_r,_o,_n,_root = _kernel
-                        overlap = list(set(e_).intersection(set(_e_)))
-                        # relative overlap is a crude measure of connection to central kernel:
-                        if len(overlap)/len(_e_) > .5:  # > ave_rolp
-                            E_+=_kernel; V+=_v; R+=_r; O+=overlap; N+=len(_e_)
-                    Kernel = [E_,V,R,O,N]; kernel += [Kernel]  # add root
-                    Kernels += [Kernel]; lV+=V; lR+=R
+                for kernel in kernels:  # CG | Clink
+                    Kernel = Ce(node_=[kernel]); kernel.root=Kernel  # init with each lower kernel (central), add new rim from current rim roots:
+                    '''
+                    next layer wider Kernels: get root _Kernel of each _kernel in current rim, add _Kernel rim __kernels if not in current rim. 
+                    Those rim _Kernels are a bridge between current rim and extended rim, they include both:
+                    '''
+                    for e in kernel.node_[1:]:  # current rim
+                        _kernel = e.root
+                        for _e in _kernel.node_[1:]:
+                            __kernel = _e.root
+                            if __kernel not in Kernel.node_ and __kernel not in kernel.node_:  # not in current rim, add to new rim:
+                                Kernel.node_ += [__kernel]; np.add(Kernel.Et, __kernel.Et); Kernel.n+=__kernel.n
+                                # add summing kernel params for centroid comparison,
+                                # as in sum2graph?
+                    Kernels += [Kernel]; lV+=Kernel.Et[fd]; lR+=Kernel.Et[2+fd]
                 layers += [[Kernels,lV,lR]]; hV=lV; hR=lR
-                if len(Kernels[0]) == 1:
-                    break  # stop if one Kernel covers the whole root node_|link_
+                if Kernels[0].n == len([node_,link_][fd]):
+                    break  # each Kernel covers the whole root node_|link_
                 else:
                     kernels = Kernels
-            # backprop per layer of Kernels to their sub-kernels in lower layer:
+            # backprop per layer of centroid Kernels to their sub-kernels in lower layer, draft:
             while layers:
                 Kernels,_,_ = layers.pop()  # unpack top-down
-                for E_,V,R,O,N,_ in Kernels:
-                    rV = V / (ave * N) * rim_effect
-                    for kernel in E_:
-                        kernel[1] *= rV  # adjust element inclusion value by relative value of Kernel, rdn is not affected?
+                for Kernel in Kernels:
+                    for kernel in Kernel.node_:
+                        dderH = comp(Kernel, kernel)
+                        rV = dderH.Et[fd] / (ave * dderH.n) * rim_effect
+                        kernel.Et[fd] *= rV  # adjust element inclusion value by relative value of Kernel, rdn is not affected?
                         if not len(layers):  # bottom layer
-                            e_,v,r,o,n,root = kernel
-                            for e in e_:  # adjust base node|link V:
-                                e.Et[fd] *= v / (ave * n) * rim_effect * rV
+                            for e in kernel.node_:  # adjust base node|link V:
+                                dderh = comp(kernel, e)
+                                rv = dderh.Et[fd] / (ave * dderh.n) * rim_effect
+                                e.Et[fd] *= rv
             iterations += 1
             if abs(_hV - hV) < ave or hV < ave*hR:  # low adjustment or net value?
                 break
-            else: _hV=hV; _hR=hR
+            else:
+                _hV=hV; _hR=hR
 
 
 def form_graph_t(root, node_, Et, nrng, fagg=0):  # form Gm_,Gd_ from same-root nodes

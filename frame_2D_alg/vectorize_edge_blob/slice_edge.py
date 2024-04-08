@@ -87,16 +87,27 @@ class Clink(CBase):  # the product of comparison between two nodes
     def __init__(l,_node=None, node=None, dderH= None, roott=None, distance=0.0, angle=None):
         super().__init__()
         l.Et = [0,0,0,0,0,0]  # graph-specific, accumulated from surrounding nodes in node_connect
-        l._node = _node  # prior comparand
-        l.node = node
-        l.med_Gl_ = []  # intermediate nodes and links in roughly the same direction, as in hypergraph edges
+        l.node_ = []  # e_ in kernels, else replaces _node,node: not used in kernels?
+        l.link_ = []  # list of mediating Clinks in hyperlink
         l.dderH = CH() if dderH is None else dderH
         l.roott = [None, None] if roott is None else roott  # clusters that contain this link
         l.distance = distance  # distance between node centers
         l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
         # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
+        # deprecated:
+        l._node = _node  # prior comparand
+        l.node = node
+        l.med_Gl_ = []  # replace by link_, intermediate nodes and links in roughly the same direction, as in hypergraph edges
 
     def __bool__(l): bool(l.dderH.H)
+    # draft:
+    def comp_link(_link, link, dderH, rn=1, fagg=0, flat=1):  # use in der+ and comp_kernel
+
+        dderH = comp_(_link.dderH, link.dderH, dderH, rn=1, fagg=0, flat=1)
+        mA,dA = comp_angle(_link.angle, link.angle)
+        # draft:
+        for _med_link,med_link in zip(_link.link_,link.link_):
+            comp_link(_med_link, med_link)
 
 
 class CP(CBase):
