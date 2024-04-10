@@ -25,6 +25,7 @@ def node_connect(iG_):  # node connectivity = sum surround link vals, incr.media
                     _G = link._node if link.node is G else link.node
                     _val,_rdn = _G.Et[i::2]
                     # current-loop vals and their difference from last-loop vals, before updating:
+                    # += adjacent Vs * dec: lateral modulation of node value, vs. current vertical modulation by Kernel comp:
                     V = (val+_val) * decay; dv = V-lval
                     R = (rdn+_rdn)  # rdn doesn't decay
                     link.Et[i:4:2] = [V,R]  # last-loop vals for next loop | segment_node_, dect is not updated

@@ -79,14 +79,14 @@ class CBase:
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    def __init__(G, root=None, rng=1, fd=0, node_=None, link_=None, P_=None, Et=None):  # we need P_ to init PP, Et in init graph
+    def __init__(G, root=None, rng=1, fd=0, node_=None, link_=None, P_=None, Et=None, n=0):  # we need P_ to init PP, Et in init graph
         super().__init__()
         # PP:
         G.P_ = [] if P_ is None else P_
         G.root = root
         G.rng = rng
         G.fd = fd  # fork if flat layers?
-        G.n = 0  # external n (last layer n)
+        G.n = n  # external n (last layer n)
         G.area = 0
         G.S = 0  # sparsity: distance between node centers
         G.A = 0, 0  # angle: summed dy,dx in links
@@ -99,7 +99,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.roott = []  # Gm,Gd that contain this G, single-layer
         G.box = [np.inf, np.inf, -np.inf, -np.inf]  # y,x,y0,x0,yn,xn
         # graph-external, +level per root sub+:
-        G.rim_H = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
+        G.rim = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
         G.extH = CH()  # G-external daggH( dsubH( dderH, summed from rim links
         G.alt_graph_ = []  # adjacent gap+overlap graphs, vs. contour in frame_graphs
         # dynamic attrs:
@@ -223,6 +223,7 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
     lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
     '''
     def __init__(He, nest=0, n=0, Et=None, H=None):
+        super().__init__()
         He.nest = nest  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH
         He.n = n  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
         He.Et = [0,0,0,0] if Et is None else Et   # evaluation tuple: valt, rdnt, normt (we should init it as [0,0,0,0] only if input Et is not provided )
@@ -261,7 +262,7 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
     def append_(HE,He, irdnt=None, flat=0):
 
         if irdnt is None: irdnt = []
-        if flat: HE.H += He.H  # append flat
+        if flat: HE.H += deepcopy(He.H)  # append flat
         else:  HE.H += [He]  # append nested
 
         Et, et = HE.Et, He.Et
