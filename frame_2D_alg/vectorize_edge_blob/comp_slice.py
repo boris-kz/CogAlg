@@ -105,12 +105,12 @@ def comp_P(link, fd):
         rm = 1 + vd > vm; rd = 1 + vm >= vd
         n = (len(_P.dert_)+len(P.dert_)) / 2  # der value = ave compared n?
         aveP = P_aves[0]
-        link = Clink(node=P,_node=_P, dderH = CH(nest=0,Et=[vm,vd,rm,rd],H=H,n=n), distance=distance, angle=angle, roott=[[],[]])
+        link = Clink(node=P,_node=_P, dderH = CH(nest=0,Et=[vm,vd,rm,rd],H=H,n=n), roott=[[],[]])
     # both:
     if _P.derH and P.derH:  # append link dderH, init in form_PP_t rng++, comp_latuple was already done
         # der+:
         dderH = _P.derH.comp_(P.derH, CH(), rn=rn, flat=0)
-        vm,vd,rm,rd = dderH.Et[:4]  # also works if called from comp_G
+        vm,vd,rm,rd = dderH.Et
         rm += vd > vm; rd += vm >= vd
         aveP = P_aves[1]
         He = link.dderH  # append link dderH:
@@ -242,7 +242,7 @@ def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
                 if fd: ddec += abs(par)/ abs(maxv) if maxv else 1
                 else:  mdec += (par+ave)/ (maxv+ave) if maxv else 1
 
-        ret = [mval, dval, mrdn, drdn, mdec, ddec], ret
+        ret = [mval, dval, mrdn, drdn], [mdec, ddec], ret
     return ret
 
 def get_match(_par, par):

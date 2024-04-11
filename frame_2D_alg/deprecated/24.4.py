@@ -107,66 +107,89 @@ def segment_node_(root, node_, fd, nrng, fagg):  # eval rim links with summed su
 
 def convolve_graph(node_, link_):  # revalue nodes and links by the value of their increasingly wide neighborhood:
     '''
-    or inclusion adjustment by similarity to kernel, vs. rim similarity in all kernel elements:
-    Reduce proximity bias by kernel centroid quasi-clustering: inclusion val adjustment per element.
-
     Sum connectivity per node|link from their links|nodes, extended in feedforward through the network, bottom-up.
     Then backprop adjusts node|link connect value by relative value of its higher-layer neighborhood, top-down.
     Math: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/node_connect.png
+    Reduce proximity bias in inclusion value by kernel centroid quasi-clustering: cross-similarity among kernels
     '''
-    rim_effect = 0.5  # impact of neighborhood inclusion on node|link inclusion
+    rim_coef = 0.5  # impact of neighborhood inclusion on node|link inclusion
 
     for fd, e_ in zip((0,1), (node_,link_)):
         ave = G_aves[fd]
+        Ce = [CG,Clink][fd]
         iterations = 0
         # ff,fb through all layers, break if abs(_hV-hV) < ave or hV < ave:
         while True:
-            kernels, lV, lR = [], 0, 0  # form/reform base layer of kernels per node|link:
+            # bottom-up feedforward, 1st-layer kernels are [node|link + rim]s:
+            kernels, lV,lR = [],0,0
             for e in e_:  # root node_|link_
-                V=e.Et[fd]; R=e.Et[2+fd]
-                kernels += [[[e], V, R]]  # init kernel / node|link, no neighborhood yet
-                lV += V; lR += R
-            layers = [[kernels, lV, lR]]  # init convo layers
-            _hV = lV; _hR = lR
-
-            while True:  # bottom-up feedforward, break if kernel == root E_
-                # add higher layer of larger kernels: += adjacent nodes or dlinks:
+                E_ = [e]; Et = copy(e.Et); n = 1  # E_ = e + rim/neighborhood:
+                if fd: # += dlinks in link._node.rim:
+                    for G in e._node, e.node:
+                        for link in G.rim:
+                            if link is not e and link.Et[1] > ave * link.Et[3]:
+                                E_+=[link]; np.add(Et,link.Et); n += 1
+                else:  # += linked nodes
+                    for link in e.rim:
+                        node = link._node if link.node is e else link.node
+                        if node.Et[0] > ave * node.Et[2]:
+                            E_+=[node]; Et = [V+v for V,v in zip(Et, link.Et)]; n += 1
+                kernel = Ce(node_=E_,Et=Et,n=n); e.root = kernel  # replace in sum2graph
+                kernels += [kernel]
+                lV+=Et[fd]; lR+=Et[2+fd]
+            layers = [[kernels,lV,lR]]  # init convo layers
+            _hV=lV; _hR=lR
+            while True:  # add higher layer Kernels: node_= new center + extended rim, break if kernel == root E_: no higher kernels
                 Kernels, lV,lR = [],0,0
-                for e_,v,r in kernels:  # v,r for feedback only, overlap between kernels
-                    E_,V,R = e_,v,r  # init with lower kernel
-                    for e in e_:
-                        if fd:  # += dlinks in link._node.rim:
-                            for G in e._node, e.node:
-                                for link in G.rim:
-                                    if link not in E_ and link.Et[1] > ave * link.Et[3]:
-                                        E_+=[link]; V+=link.Et[1]; R+=link.Et[3]
-                        else:  # += linked nodes
-                            V,R = e.Et[0],e.Et[2]
-                            for link in e.rim:
-                                node = link._node if link.node is e else link.node
-                                if node not in E_ and node.Et[0] > ave * node.Et[2]:
-                                    E_+=[node]; V+=node.Et[0]; R+=link.Et[3]
-                    Kernels += [[E_,V,R]]; lV+=V; lR+=R
+                for kernel in kernels:  # CG | Clink
+                    Kernel = Ce(node_=[kernel],n=1); kernel.root=Kernel  # init with each lower kernel (central), add new rim from current rim roots:
+                    '''
+                    next layer wider Kernels: get root _Kernel of each _kernel in current rim, add _Kernel rim __kernels if not in current rim. 
+                    Those rim _Kernels are a bridge between current rim and extended rim, they include both:
+                    '''
+                    for e in kernel.node_[1:]:  # current rim
+                        _kernel = e.root
+                        for _e in _kernel.node_[1:]:
+                            __kernel = _e.root
+                            if __kernel not in Kernel.node_ and __kernel not in kernel.node_:  # not in current rim, add to new rim:
+                                Kernel.node_ += [__kernel]; Kernel.Et=[V+v for V,v in zip(Kernel.Et, __kernel.Et)]
+                                if Kernel.derH: Kernel.derH.add_(__kernel.derH)
+                                else:           Kernel.derH.append(__kernel.derH, flat=1)
+                                Kernel.n += __kernel.n
+                    Kernels += [Kernel]; lV+=Kernel.Et[fd]; lR+=Kernel.Et[2+fd]
                 layers += [[Kernels,lV,lR]]; hV=lV; hR=lR
-                if len(Kernels[0]) == 1:
-                    break  # stop if one Kernel covers the whole root node_|link_
+                if Kernels[0].n == len([node_,link_][fd]):
+                    break  # each Kernel covers the whole root node_|link_
                 else:
                     kernels = Kernels
-            # backprop per layer of Kernels to their sub-kernels in lower layer:
-            elev = len(layers)
+            # backprop per layer of centroid Kernels to their sub-kernels in lower layer, draft:
             while layers:
-                Kernels,_,_,_ = layers.pop()  # unpack top-down
-                elev -= 1  # elevation of the lower layer, to be adjusted
-                for Kernel,V,R in Kernels:
-                    rV = V / (ave * len(Kernel[0]))  # relative inclusion value, no use for R?
-                    for i, (kernel,v,r) in enumerate(Kernel):
-                        # adjust element val by wider Kernel relative val, rdn is not affected?
-                        if elev:  # adjust lower kernel V:
-                            Kernel[0][i][1] = v * (rV * rim_effect)  # this is wrong, should be lower-layer kernel that contains Kernel[0][i]
-                        else:  # bottom layer, adjust node|link V:
-                            Kernel[0][i].Et[fd] = v * (rV * rim_effect)
-
+                if len(layers) == 1: break  # skip if it's the bottom layer (nothing to compare?, their Et will be adjusted below, when len(layers) == 1)
+                Kernels,_,_ = layers.pop()  # unpack top-down
+                for Kernel in Kernels:
+                    for kernel in Kernel.node_:
+                        DderH = comp_kernel(Kernel, kernel, fd)
+                        rV = DderH.Et[fd] / (ave * DderH.n) * rim_coef
+                        kernel.Et[fd] *= rV  # adjust element inclusion value by relative value of Kernel, rdn is not affected?
+                        if len(layers) == 1:  # bottom layer
+                            for e in kernel.node_:  # adjust base node|link V:
+                                dderH = comp_kernel(kernel, e, fd)
+                                rv = dderH.Et[fd] / (ave * dderH.n) * rim_coef
+                                e.Et[fd] *= rv
             iterations += 1
             if abs(_hV - hV) < ave or hV < ave*hR:  # low adjustment or net value?
                 break
-            else: _hV=hV; _hR=hR
+            else:
+                _hV=hV; _hR=hR  # hR is not used?
+
+def comp_kernel(_kernel, kernel, fd):
+
+    if fd:
+        dderH = CH()
+        _kernel.comp_link(kernel, dderH)
+    else:
+        cy, cx = box2center(_kernel.box); _cy, _cx = box2center(kernel.box); dy = cy - _cy; dx = cx - _cx
+        dist = np.hypot(dy, dx)  # distance between node centers
+        dderH = comp_G([_kernel,kernel, dist, [dy,dx]],iEt=[0,0,0,0], fkernel=1)
+
+    return dderH

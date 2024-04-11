@@ -82,45 +82,58 @@ class CsliceEdge(CsubFrame):
 
 class Clink(CBase):  # the product of comparison between two nodes
 
-    def __init__(l,_node=None, node=None, dderH= None, roott=None):
+    def __init__(l,_node=None, node=None, dderH= None, roott=None, distance=0, angle=None ):
         super().__init__()
-        l.angle = np.subtract(node.yx, _node.yx)  # dy,dx between node centers
-        l.distance = np.hypot(*l.angle)  # distance between node centers
-        l.Et = [0,0,0,0,0,0]  # graph-specific, accumulated from surrounding nodes in node_connect
+        # for P only, use box for Gs?:
+        l.angle = np.subtract(node.yx, _node.yx) if angle is None else angle  # dy,dx between node centers
+        l.distance = np.hypot(*l.angle) if distance is None else distance  # distance between node centers
+        l.Et = [0,0,0,0]  # graph-specific, accumulated from surrounding nodes in node_connect
+        l.relt = [0,0]
         l.node_ = []  # e_ in kernels, else replaces _node,node: not used in kernels?
-        l.link_ = []  # list of mediating Clinks in hyperlink
+        l.link_ = []  # list of mediating Clinks in hyperlink in roughly the same direction, as in hypergraph
         l.dderH = CH() if dderH is None else dderH
         l.roott = [None, None] if roott is None else roott  # clusters that contain this link
-        # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
-        # deprecated:
-        l._node = _node  # prior comparand
-        l.node = node
-        l.med_Gl_ = []  # replace by link_, intermediate nodes and links in roughly the same direction, as in hypergraph edges
+        # l.dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
 
-    def __bool__(l): bool(l.dderH.H)
-    # draft:
-    def comp_link(_link, link, dderH, rn=1, fagg=0, flat=1):  # use in der+ and comp_kernel
+    def __bool__(l): return bool(l.dderH.H)
 
-        _link.dderH.comp_( link.dderH, dderH, rn=1, fagg=0, flat=1)
-        mA,dA = comp_angle(_link.angle, link.angle)
+    def comp_link(Link, dderH, fagg=0):  # use in der+ and comp_kernel
+
+        if isinstance(Link,list):  # if der+'rng+: form new Clink
+            _link,link = Link
+            Link = Clink(node_=[_link,link])
+        else: _link,link = Link.node_  # higher-der link
+
         _y1,_x1 = box2center(_link.node_[0].box)
         _y2,_x2 = box2center(_link.node_[1].box)
         y1,x1 = box2center(link.node_[0].box)
         y2,x2 = box2center(link.node_[1].box)
         dy = (y1+y2)/2 - (_y1+_y2)/2
         dx = (x1+x2)/2 - (_x1+_x2)/2
-        dist = np.hypot(dy, dx)  # distance between node centers
-        comp_ext(_link.node,link.node, dist, rn, dderH)
-
-        # add mA, dA to der of ext
-        dderH.H[-1].Et[0] += mA; dderH.H[-1].Et[1] += dA;
-
-        # draft:
+        Link.angle = (dy,dx)
+        Link.distance = np.hypot(dy, dx)  # distance between link centers
+        (_G1,_G2),(G1,G2) = _link.node_,link.node_
+        rn = min(_G1.n,_G2.n) / min(G1.n,G2.n) # min: only shared layers are compared
+        _link.dderH.comp_(link.dderH, dderH, rn, fagg=0, flat=1)
         ddderH = CH()
         for _med_link,med_link in zip(_link.link_,link.link_):
             _med_link.comp_link(med_link, ddderH)
-        dderH.append_(ddderH, flat=0)  # not sure on this, their der will be additional He after comp links and ext above?
+        dderH.add_(ddderH)
+        # comp_ext:
+        _L,L,_S,S,_A,A = _link.distance,link.distance, len(_link.link_),len(link.link_), _link.angle,link.angle
+        L/=rn; S/=rn
+        dL = _L - L;      mL = min(_L,L) - ave_mL  # direct match
+        dS = _S/_L - S/L; mS = min(_S,S) - ave_mL  # sparsity is accumulated over L
+        mA, dA = comp_angle(_A, A)  # angle is not normalized
+        dist = Link.distance
+        prox = ave_dist-dist  # proximity = inverted distance (position difference), no prior accum to n
+        M = prox + mL + mS + mA
+        D = dist + abs(dL) + abs(dS) + abs(dA)  # signed dA?
+        mrdn = M > D; drdn = D<= M
+        mdec = prox / max_dist + mL/ max(L,_L) + mS/ max(S,_S) if S or _S else 1 + mA  # Amax = 1
+        ddec = dist / max_dist + mL/ (L+_L) + dS/ (S+_S) if S or _S else 1 + dA
 
+        dderH.append_(CH(Et=[M,D,mrdn,drdn],relt=[mdec,ddec], H=[prox,dist, mL,dL, mS,dS, mA,dA], n=2/3), flat=0)  # 2/3 of 6-param unit
 
 
 class CP(CBase):
@@ -180,26 +193,6 @@ def interpolate2dert(edge, y, x):
             I += i*k; Dy += dy*k; Dx += dx*k; G += g*k
 
     return I, Dy, Dx, G
-
-
-def comp_ext(_G,G, dist, rn, dderH):  # compare non-derivatives: dist, node_' L,S,A:
-
-    prox = ave_dist - dist  # proximity = inverted distance (position difference), no prior accum to n
-    _L = len(_G.node_); L = len(G.node_); L/=rn
-    _S, S = _G.S, G.S; S/=rn
-
-    dL = _L - L;      mL = min(_L,L) - ave_mL  # direct match
-    dS = _S/_L - S/L; mS = min(_S,S) - ave_mL  # sparsity is accumulated over L
-    mA, dA = comp_angle(_G.A, G.A)  # angle is not normalized
-
-    M = prox + mL + mS + mA
-    D = dist + abs(dL) + abs(dS) + abs(dA)  # signed dA?
-    mrdn = M > D; drdn = D<= M
-
-    mdec = prox / max_dist + mL/ max(L,_L) + mS/ max(S,_S) if S or _S else 1 + mA  # Amax = 1
-    ddec = dist / max_dist + mL/ (L+_L) + dS/ (S+_S) if S or _S else 1 + dA
-
-    dderH.append_(CH(Et=[M,D,mrdn,drdn,mdec,ddec], H=[prox,dist, mL,dL, mS,dS, mA,dA], n=2/3), flat=0)  # 2/3 of 6-param unit
 
 
 def comp_angle(_A, A):  # rn doesn't matter for angles

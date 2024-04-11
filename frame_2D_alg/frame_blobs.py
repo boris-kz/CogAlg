@@ -103,7 +103,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.extH = CH()  # G-external daggH( dsubH( dderH, summed from rim links
         G.alt_graph_ = []  # adjacent gap+overlap graphs, vs. contour in frame_graphs
         # dynamic attrs:
-        G.Rim_H = []  # links to the most mediated nodes
+        G.Rim = []  # links to the most mediated nodes
         G.fback_ = []  # feedback [[aggH,valt,rdnt,dect]] per node layer, maps to node_H
         G.compared_ = []
 
@@ -222,11 +222,12 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
     lay3: [[m,d], [md,dd]]: 2 sLays,
     lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
     '''
-    def __init__(He, nest=0, n=0, Et=None, H=None):
+    def __init__(He, nest=0, n=0, Et=None, relt=None, H=None):
         super().__init__()
         He.nest = nest  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH
         He.n = n  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
-        He.Et = [0,0,0,0] if Et is None else Et   # evaluation tuple: valt, rdnt, normt (we should init it as [0,0,0,0] only if input Et is not provided )
+        He.Et = [0,0,0,0] if Et is None else Et   # evaluation tuple: valt, rdnt
+        He.relt = [0,0] if relt is None else relt  # m,d relative to max possible m,d
         He.H = [] if H is None else H  # hierarchy of der layers or md_
 
     def __bool__(H): return H.n != 0
@@ -252,8 +253,8 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
                 HE.H = [V+v for V,v in zip_longest(HE.H, He.H, fillvalue=0)]  # both Hs are md_s
             # default:
             Et, et = HE.Et, He.Et
-            HE.Et[:] = [E+e for E,e in zip_longest(Et,et, fillvalue=0)]
-            if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
+            HE.Et = np.add(HE.Et, He.Et); HE.relt = np.add(HE.relt, He.relt)
+            if any(irdnt): Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
             HE.n += He.n  # combined param accumulation span
             HE.nest = max(HE.nest, He.nest)
         else:
@@ -266,7 +267,7 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
         else:  HE.H += [He]  # append nested
 
         Et, et = HE.Et, He.Et
-        HE.Et[:] = [E+e for E,e in zip_longest(Et,et, fillvalue=0)]
+        HE.Et = np.add(HE.Et, He.Et); HE.relt = np.add(HE.relt, He.relt)
         if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
         HE.n += He.n  # combined param accumulation span
         HE.nest = max(HE.nest, He.nest)
@@ -283,17 +284,19 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
         else: _cHe,cHe = _He,He
 
         if isinstance(_cHe.H[0], CH):  # _lay is He_, same for lay: they are aligned above
-            Et = [0,0,0,0,0,0]  # Vm,Vd, Rm,Rd, Dm,Dd
+            Et = [0,0,0,0]  # Vm,Vd, Rm,Rd
+            relt = [0,0]  # Dm,Dd
             dH = []
             for _lay,lay in zip(_cHe.H,cHe.H):  # md_| ext| derH| subH| aggH, eval nesting, unpack,comp ds in shared lower layers:
                 if _lay and lay:  # ext is empty in single-node Gs
                     dlay = _lay.comp_(lay, CH(), rn, fagg=fagg, flat=1)  # dlay is dderH
-                    Et[:] = [E+e for E,e in zip(Et,dlay.Et)]
+                    Et = np.add(Et, dlay.Et)
+                    relt = np.add(relt, dlay.relt)
                     dH += [dlay]; n += dlay.n
                 else:
                     dH += [CH()]  # empty?
         else:  # H is md_, numerical comp:
-            vm,vd,rm,rd, decm,decd = 0,0,0,0, 0,0
+            vm,vd,rm,rd, decm,decd = 0,0,0,0,0,0
             dH = []
             for i, (_d,d) in enumerate(zip(_cHe.H[1::2], cHe.H[1::2])):  # compare ds in md_ or ext
                 d *= rn  # normalize by comparand accum span
@@ -308,11 +311,10 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
                 vm += match - aves[i]  # fixed param set?
                 vd += diff
                 dH += [match,diff]  # flat
-            Et = [vm,vd,rm,rd]
-            if fagg: Et += [decm, decd]
+            Et = [vm,vd,rm,rd]; relt= [decm,decd]
             n = len(_cHe.H)/12  # unit n = 6 params, = 12 in md_
 
-        dderH.append_(CH(nest=min(_He.nest,He.nest), Et=Et, H=dH, n=n), flat=flat)  # currently flat=1
+        dderH.append_(CH(nest=min(_He.nest,He.nest), Et=Et, relt=relt, H=dH, n=n), flat=flat)  # currently flat=1
         return dderH
 
     def copy(_H, H):
