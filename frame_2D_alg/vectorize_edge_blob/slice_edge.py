@@ -66,7 +66,7 @@ class CsliceEdge(CsubFrame):
                 P.form(edge, fill_yx_, vadjacent_, hdert_, hyx_)
                 if not vadjacent_:  # scan P
                     P.term(edge)
-                    edge.P_ += [P]
+                    if P.yx: edge.P_ += [P]
     CBlob = CEdge
 
 class CP(CBase):
@@ -90,16 +90,20 @@ class CP(CBase):
                         P.link_[0] += [_P]
 
     def term(P, edge):
-        y, x = P.yx = map(sum, zip(*P.dert_.keys()))
-        ay,ax = P.axis = map(sum, zip(*((gy/g, gx/g) for i,gy,gx,g in P.dert_.values())))
+        y, x  = map(sum, zip(*P.dert_.keys())); P.yx = y, x  # unpack map once?
+        ay,ax = map(sum, zip(*((gy/g, gx/g) for i,gy,gx,g in P.dert_.values()))); P.axis = ay, ax
 
-        pivot = i,gy,gx,g = interpolate2dert(edge, y,x)
-        ma = ave_dangle  # max value because P direction is the same as dert gradient direction
+        dert = interpolate2dert(edge, y,x)  # dert is None if (_y, _x) not in edge.dert_: return` in `interpolate2dert`
+        if dert:
+            pivot = i,gy,gx,g = dert
+        else:
+            P.yx = None  # temporary, to identify if there's no pivot
+            return
+        ma = ave_dangle  # ? max value because P direction is the same as dert gradient direction
         m = ave_g - g
         pivot += ma,m
 
         I,G,M,Ma,L,Dy,Dx = i,g,m,ma,1,gy,gx
-        dert_ = P.dert_  # DEBUG
         P.yx_, P.dert_, P.link_ = [P.yx], [pivot], [[]]
 
         # this rotation should be recursive, use P.latuple Dy,Dx to get secondary direction, no need for axis?
@@ -133,9 +137,9 @@ class Clink(CBase):  # the product of comparison between two nodes
 
     def __init__(l, node_=None,rim=None, derH=None, extH=None, roott=None, distance=0, angle=None ):
         super().__init__()
-        if hasattr(node_[0],'yx'): _y,_x = node_[0].yx; _y,_x = node_[1].yx # CP
-        else:                      _y,_x = box2center(node_[0].box); y,x = box2center(node_[1].box) # CG
-        l.angle = np.subtract([y,x], [_y, _x]) if angle is None else angle  # dy,dx between node centers
+        if hasattr(node_[0],'yx'): _y,_x = node_[0].yx; y,x = node_[1].yx  # CP
+        else:                      _y,_x = box2center(node_[0].box); y,x = box2center(node_[1].box)  # CG
+        l.angle = np.subtract([y,x], [_y,_x]) if angle is None else angle  # dy,dx between node centers
         l.distance = np.hypot(*l.angle) if distance is None else distance  # distance between node centers
         l.Et = [0,0,0,0]  # graph-specific, accumulated from surrounding nodes in node_connect
         l.relt = [0,0]
@@ -149,7 +153,7 @@ class Clink(CBase):  # the product of comparison between two nodes
 
     def __bool__(l): return bool(l.dderH.H)
 
-class CP(CBase):
+class CP2(CBase):
     def __init__(P, edge, yx, axis):  # form_P:
 
         super().__init__()

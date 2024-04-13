@@ -67,11 +67,11 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but loopin
             else:  _prelink_ = P.link_.pop()  # old rng+ prelinks, including all links added in slice_edge
             for link in _prelink_:
                 if link.distance <= rng:  # | rng * ((P.val+_P.val)/ ave_rval)?
-                    _P = link._node
+                    _P = link.node_[0]
                     if fd and not (P.derH and _P.derH): continue  # nothing to compare
                     mlink = comp_P(link, fd)
                     if mlink:  # return if match
-                        V += mlink.dderH.Et[0]
+                        V += mlink.derH.Et[0]
                         if rng > 1:  # test to add nesting to P.link_:
                             if rng == 2 and not isinstance(P.link_[0], list): P.link_[:] = [P.link_[:]]  # link_ -> link_H
                             if len(P.link_) < rng: P.link_ += [[]]  # add new link_
@@ -93,7 +93,7 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but loopin
 
 
 def comp_P(link, fd):
-    _P, P, distance, angle = link._node, link.node, link.distance, link.angle
+    _P, P, distance, angle = link.node_[0], link.node_[1], link.distance, link.angle
 
     if fd:  # der+ only
         rn = (_P.derH.n if P.derH else len(_P.dert_)) / P.derH.n  # lower P must have derH
@@ -105,18 +105,18 @@ def comp_P(link, fd):
         rm = 1 + vd > vm; rd = 1 + vm >= vd
         n = (len(_P.dert_)+len(P.dert_)) / 2  # der value = ave compared n?
         aveP = P_aves[0]
-        link = Clink(node=P,_node=_P, dderH = CH(nest=0,Et=[vm,vd,rm,rd],H=H,n=n), roott=[[],[]])
+        link = Clink(node_=[_P, P], derH = CH(nest=0,Et=[vm,vd,rm,rd],H=H,n=n), roott=[[],[]])
     # both:
-    if _P.derH and P.derH:  # append link dderH, init in form_PP_t rng++, comp_latuple was already done
+    if _P.derH and P.derH:  # append link derH, init in form_PP_t rng++, comp_latuple was already done
         # der+:
-        dderH = _P.derH.comp_(P.derH, CH(), rn=rn, flat=0)
-        vm,vd,rm,rd = dderH.Et
+        derH = _P.derH.comp_(P.derH, CH(), rn=rn, flat=0)
+        vm,vd,rm,rd = derH.Et
         rm += vd > vm; rd += vm >= vd
         aveP = P_aves[1]
-        He = link.dderH  # append link dderH:
-        if not He.nest: He = link.dderH = CH(nest=1, Et=[*He.Et], H=[He])  # nest md_ as derH
+        He = link.derH  # append link derH:
+        if not He.nest: He = link.derH = CH(nest=1, Et=[*He.Et], H=[He])  # nest md_ as derH
         He.Et = np.add(He.Et, (vm,vd,rm,rd))
-        He.H += [dderH]
+        He.H += [derH]
 
     if vm > aveP * rm:  # always rng+
         return link
@@ -130,12 +130,12 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
         mlink_,_mP_, dlink_,_dP_ = [],[],[],[]  # per P
         # eval all links in possibly nested P.link_:
         for link in [l for l_ in P.link_ for l in (l_ if isinstance(l_,list) else [l_])]:
-            if link.dderH.nest: m,d,mr,dr = link.dderH.H[-1].Et  # last der+ layer vals
-            else:               m,d,mr,dr = link.dderH.Et  # H is md_
+            if link.derH.nest: m,d,mr,dr = link.derH.H[-1].Et  # last der+ layer vals
+            else:               m,d,mr,dr = link.derH.Et  # H is md_
             if m >= ave * mr:
-                mlink_+= [link]; _mP_+= [link._node]
+                mlink_+= [link]; _mP_+= [link.node_[1] if link.node_[0] is P else link.node_[0]]
             if d > ave * dr:  # ?link in both forks?
-                dlink_+= [link]; _dP_+= [link._node]
+                dlink_+= [link]; _dP_+= [link.node_[1] if link.node_[0] is P else link.node_[0]]
         mLink_+=[mlink_]; _mP__+=[_mP_]
         dLink_+=[dlink_]; _dP__+=[_dP_]
         # aligned
@@ -172,14 +172,14 @@ def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
     PP = CG(fd=fd,root=root,P_=P_,rng=root.rng+1)
     # += uplinks:
     for derP in derP_:
-        if derP.node not in P_ or derP._node not in P_: continue
-        if derP.dderH:
-            derP.node.derH.add_(derP.dderH, iRt)
-            derP._node.derH.add_(negate(deepcopy(derP.dderH)), iRt)  # negate reverses uplink ds direction
+        if derP.node_[0] not in P_ or derP.node_[1] not in P_: continue
+        if derP.derH:
+            derP.node_[1].derH.add_(derP.derH, iRt)
+            derP.node_[0].derH.add_(negate(deepcopy(derP.derH)), iRt)  # negate reverses uplink ds direction
         PP.link_ += [derP]; derP.roott[fd] = PP
         PP.A = np.add(PP.A,derP.angle)
         PP.S += np.hypot(*derP.angle)  # links are contiguous but slanted
-        PP.n += derP.dderH.n  # *= ave compared P.L?
+        PP.n += derP.derH.n  # *= ave compared P.L?
     # += Ps:
     celly_,cellx_ = [],[]
     for P in P_:

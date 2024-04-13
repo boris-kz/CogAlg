@@ -193,3 +193,5 @@ def comp_kernel(_kernel, kernel, fd):
         dderH = comp_G([_kernel,kernel, dist, [dy,dx]],iEt=[0,0,0,0], fkernel=1)
 
     return dderH
+
+
