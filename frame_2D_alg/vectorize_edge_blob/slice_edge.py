@@ -41,80 +41,69 @@ class CsliceEdge(CsubFrame):
             blob.slice_edge()
 
         def slice_edge(edge):
-            hyx_ = edge.slice()  # horizontal map
-            edge.trace(hyx_)  # vertical map
+            edge.rootd = {}
+            edge.P_ = [CP(edge, yx, axis) for yx, axis in edge.select_max()]
+            edge.P_.sort(key=lambda P: P.yx, reverse=True)
+            edge.trace()
+            # del edge.rootd
 
-        def slice(edge):  # scan along direction of gradient
-            hyx_ = defaultdict(list)
-            for (y,x), (i,gy,gx,g) in edge.dert_.items():
-                # hyx_[y, x] = []
-                sa,ca = gy/g, gx/g  # sin_angle, cos_angle
-                # get neighbor direction
-                dy = 1 if sa > octant else -1 if sa < -octant else 0
-                dx = 1 if ca > octant else -1 if ca < -octant else 0
-                for _y,_x in [(y-dy, x-dx), (y+dy, x+dx)]:
-                    if (_y,_x) not in edge.dert_: continue  # skip if pixel not in edge blob
-                    if (y,x) not in hyx_[_y,_x]: hyx_[_y,_x] += [(y,x)]
-                    if (_y,_x) not in hyx_[y,x]: hyx_[y,x] += [(_y,_x)]
-            return hyx_
+        def select_max(edge):
+            max_ = []
+            for (y, x), (i, gy, gx, g) in edge.dert_.items():
+                # check neighbors
+                new_max = True
+                for dy, dx in [(-1,-1),(-1,0),(-1,1),(0,1)]:
+                    for _y, _x in [(y-dy, x-dx), (y+dy, x+dx)]:
+                        if (_y, _x) not in edge.dert_: continue  # skip if pixel not in edge blob
+                        _i, _gy, _gx, _g = edge.dert_[_y, _x]  # get g of neighbor
+                        if g < _g:
+                            new_max = False
+                            break
+                if new_max: max_ += [((y, x), (gy/g, gx/g))]
+            return max_
 
-        def trace(edge, hyx_):  # fill and trace across slices
-            edge.P_ = []
-            fill_yx_ = list(hyx_.keys())  # set of pixel coordinates to be filled (fill_yx_)
-            hdert_ = defaultdict(list)  # map derts to blob
-            vadjacent_ = []  # derts vertically adjacent to P
-            while fill_yx_:  # fill_yx_ is popped per filled pixel, in form_blob
-                if not vadjacent_:  # init blob
-                    P = CP(); vadjacent_ += [fill_yx_[0]]
-                P.form(edge, fill_yx_, vadjacent_, hdert_, hyx_)
-                if not vadjacent_:  # scan P
-                    if P.term(edge): edge.P_ += [P]
+        def trace(edge):  # fill and trace across slices
+            for P in edge.P_:
+                adjacent_ = [yx for yx in edge.rootd if edge.rootd[yx] is P]
+                while adjacent_:
+                    _y, _x = adjacent_.pop()
+                    for y, x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:
+                        try:    # if yx has _P, try to form link
+                            _P = edge.rootd[y, x]
+                            if _P is not P and _P not in P.link_[0]:
+                                P.link_[0] += [_P]
+                        except KeyError:    # if yx empty, keep tracing
+                            if (y, x) not in edge.dert_: continue
+                            edge.rootd[y, x] = P
+                            adjacent_ += [(y, x)]
+                P.link_[0] = [Clink([_P, P]) for _P in P.link_[0]]
 
     CBlob = CEdge
 
 class CP(CBase):
-    def __init__(P):
+
+    def __init__(P, edge, yx, axis):
         super().__init__()
-        P.dert_ = {}
-        P.link_ = [[]]
+        y, x = yx
+        P.axis = ay, ax = axis
 
-    def form(P, edge, fill_yx_, vadjacent_, hdert_, hyx_):
-        y,x = vadjacent_.pop()
-        if (y,x) not in fill_yx_: return
-        fill_yx_.remove((y,x))
-        P.dert_[y,x] = edge.dert_[y,x]
-        hdert_[y,x] += [ref(P)]
-        for _y,_x in [(y-1,x-1),(y-1,x),(y-1,x+1),(y,x+1),(y+1,x+1),(y+1,x),(y+1,x-1),(y,x-1)]:
-            if (_y,_x) in hyx_[y,x]:
-                vadjacent_ += [(_y,_x)]
-            else:  # get _Ps vertically adjacent to P
-                for _P_ref in hdert_[_y,_x]:
-                    _P = _P_ref()
-                    if _P is not None and _P not in P.link_[0]:
-                        P.link_[0] += [_P]
-
-    def term(P, edge):
-        P.yx = y, x  = [*map(np.mean, zip(*P.dert_.keys()))]
-        ay, ax = [*map(sum, zip(*((gy/g, gx/g) for i,gy,gx,g in P.dert_.values())))]
-        ay, ax = [ay, ax] / np.hypot(ay, ax)
-        P.axis = ay, ax
-
-        try: pivot = i,gy,gx,g = interpolate2dert(edge, y,x)  # dert is None if (_y, _x) not in edge.dert_: return` in `interpolate2dert`
-        except TypeError: return False
+        pivot = i,gy,gx,g = edge.dert_[y,x]  # dert is None if (_y, _x) not in edge.dert_: return` in `interpolate2dert`
         ma = ave_dangle  # ? max value because P direction is the same as dert gradient direction
         m = ave_g - g
         pivot += ma,m
 
+        edge.rootd[y, x] = P
         I,G,M,Ma,L,Dy,Dx = i,g,m,ma,1,gy,gx
-        P.yx_, P.dert_, P.hdert_ = [P.yx], [pivot], P.dert_
+        P.yx_, P.dert_, P.link_ = [yx], [pivot], [[]]
 
         # this rotation should be recursive, use P.latuple Dy,Dx to get secondary direction, no need for axis?
         for dy,dx in [(-ay,-ax),(ay,ax)]:  # scan in 2 opposite directions to add derts to P
             P.yx_.reverse(); P.dert_.reverse()
-            (_y,_x), (_,_gy,_gx,*_) = P.yx, pivot  # start from pivot
+            (_y,_x), (_,_gy,_gx,*_) = yx, pivot  # start from pivot
             y,x = _y+dy, _x+dx  # 1st extension
             while True:
                 # scan to blob boundary or angle miss:
+                ky, kx = round(y), round(x)
                 if (round(y),round(x)) not in edge.dert_: break
                 try: i,gy,gx,g = interpolate2dert(edge, y, x)
                 except TypeError: break  # out of bound (TypeError: cannot unpack None)
@@ -122,6 +111,7 @@ class CP(CBase):
                 mangle, dangle = comp_angle((_gy,_gx), (gy, gx))
                 if mangle < ave_dangle: break  # terminate P if angle miss
                 # update P:
+                edge.rootd[ky, kx] = P
                 m = ave_g - g
                 I += i; Dy += dy; Dx += dx; G += g; Ma += ma; M += m; L += 1
                 P.yx_ += [(y,x)]; P.dert_ += [(i,gy,gx,g,ma,m)]
@@ -129,12 +119,9 @@ class CP(CBase):
                 y += dy; x += dx
                 _y,_x,_gy,_gx = y,x,gy,gx
 
-        P.yx = np.mean([P.yx_[0], P.yx_[-1]], axis=0)
+        P.yx = tuple(np.mean([P.yx_[0], P.yx_[-1]], axis=0))
         P.latuple = I, G, M, Ma, L, (Dy, Dx)
         P.derH = CH()
-        P.link_[0] = [Clink([_P, P]) for _P in P.link_[0]]  # create links
-
-        return True
 
     def __repr__(P): return f"P(id={P.id})"
 
@@ -143,11 +130,9 @@ class Clink(CBase):  # the product of comparison between two nodes
 
     def __init__(l, node_=None,rim=None, derH=None, extH=None, roott=None, distance=0, angle=None ):
         super().__init__()
-        if hasattr(node_[0],'yx'): _y,_x = node_[0].yx; y,x = node_[1].yx  # CP
-        else:                      _y,_x = box2center(node_[0].box); y,x = box2center(node_[1].box)  # CG
         l.node_ = [] if node_ is None else node_  # e_ in kernels, else replaces _node,node: not used in kernels?
-        l.angle = np.subtract([y,x], [_y,_x]) if angle is None else angle  # dy,dx between node centers
-        l.distance = np.hypot(*l.angle) if distance is None else distance  # distance between node centers
+        l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
+        l.distance = distance  # distance between node centers
         l.Et = [0,0,0,0]  # graph-specific, accumulated from surrounding nodes in node_connect
         l.relt = [0,0]
         l.rim = []  # for der+, list of mediating Clinks in hyperlink in roughly the same direction, as in hypergraph
@@ -155,6 +140,10 @@ class Clink(CBase):  # the product of comparison between two nodes
         l.extH = CH() if extH is None else extH  # for der+
         l.roott = [None, None] if roott is None else roott  # clusters that contain this link
         l.compared_ = []
+        # for rng+
+        l.nest = 0
+        l.n = 1  # default n
+        l.area = 0
         # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
         # n: always min(node_.n)?
 
@@ -226,7 +215,6 @@ if __name__ == "__main__":
     show_slices = True
     sorted_edge_ = sorted(edge_, key=lambda edge: len(edge.yx_), reverse=True)
     for edge in sorted_edge_[:num_to_show]:
-        print(edge.hdert_)
         yx_ = np.array(edge.yx_)
         yx0 = yx_.min(axis=0) - 1
 
@@ -247,20 +235,20 @@ if __name__ == "__main__":
 
         # show slices
         if show_slices:
-            for i, P in enumerate(edge.P_):
+            for P in edge.P_:
                 y_, x_ = zip(*(P.yx_ - yx0))
                 if len(P.yx_) == 1:
                     v, u = P.axis
                     y_ = y_[0]-v/2, y_[0]+v/2
                     x_ = x_[0]-u/2, x_[0]+u/2
-                plt.plot(x_, y_, "k-", linewidth=2)
+                plt.plot(x_, y_, "k-", linewidth=3)
                 yp, xp = P.yx - yx0
                 for link in P.link_[0]:
                     _yp, _xp = link.node_[0].yx - yx0
                     print(link.node_)
-                    plt.plot([_xp, xp], [_yp, yp], "ko-")
+                    plt.plot([_xp, xp], [_yp, yp], "ko--", alpha=0.5)
 
-                y_, x_ = zip(*([*P.hdert_.keys()] - yx0))
+                y_, x_ = zip(*([yx for yx in edge.rootd if edge.rootd[yx] is P] - yx0))
                 plt.plot(x_, y_, 'o', alpha=0.5)
 
 

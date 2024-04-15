@@ -195,3 +195,38 @@ def comp_kernel(_kernel, kernel, fd):
     return dderH
 
 
+def rng_recursion(rroot, root, node_, links, Et, nrng=1):  # rng++/G_, der+/link_ in sub+, -> rim_H
+
+    for link in links:
+        if isinstance(link.list):
+            fd = 0; _G, G = link  # prelink in recursive rng+
+            if isinstance(G,CG):
+                cy, cx = box2center(G.box); _cy, _cx = box2center(_G.box)
+                dy = cy-_cy; dx = cx-_cx
+            else:
+                (_y1,_x1),(_y2,_x2) = box2center(_G.node_[0].box), box2center(_G.node_[1].box)
+                (y1,x1),(y2,x2)     = box2center(G.node_[0].box), box2center(G.node_[1].box)
+                dy = (y1+y2)/2 -(_y1+_y2)/2; dx = (x1+x2)/2 -(_x1+_x2)/2
+            dist = np.hypot(dy, dx)  # distance between node centers or link centers
+        else:
+            fd = 0; (_G, G), dist, (dy,dx) = link.node_, link.distance, link.angle  # Clink in 1st call from sub+
+        if _G in G.compared_: continue
+        # der+'rng+ is directional
+        if nrng > 1:  # pair eval:
+            M = (G.Et[0]+_G.Et[0])/2; R = (G.Et[2]+_G.Et[2])/2  # local
+            for link in _G.rim:
+                if comp_angle((dy,dx), link.angle)[0] > ave_mA:
+                    for med_link in link.rim:  # if link is hyperlink
+                        M += med_link.derH.H[-1].Et[0]
+                        R += med_link.derH.H[-1].Et[2]
+        if nrng==1:
+            if dist<=ave_dist:
+                G.compared_ += [_G]; _G.compared_ += [G]
+                comp_G(link, Et) if fd else comp_G([_G,G, dist, [dy,dx]], Et)  # Clink in 1st call from sub+
+        elif M / (dist/ave_dist) > ave * R:
+           G.compared_ += [_G]; _G.compared_ += [G]
+           comp_G([_G,G, dist, [dy,dx]], Et)
+    if Et[0] > ave_Gm * Et[2]:  # rng+ eval per arg cluster because comp is bilateral, 2nd test per new pair
+        nrng,_ = rng_recursion(rroot, root, node_, list(combinations(node_,r=2)), Et, nrng+1)
+
+    return nrng, Et

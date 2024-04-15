@@ -105,7 +105,10 @@ def comp_P(link, fd):
         rm = 1 + vd > vm; rd = 1 + vm >= vd
         n = (len(_P.dert_)+len(P.dert_)) / 2  # der value = ave compared n?
         aveP = P_aves[0]
-        link = Clink(node_=[_P, P], derH = CH(nest=0,Et=[vm,vd,rm,rd],H=H,n=n), roott=[[],[]])
+        _y,_x = _P.yx; y,x = P.yx
+        angle = np.subtract([y,x], [_y,_x]) # dy,dx between node centers
+        distance = np.hypot(*angle)       # distance between node centers
+        link = Clink(node_=[_P, P], derH = CH(nest=0,Et=[vm,vd,rm,rd],H=H,n=n), roott=[[],[]], angle=angle, distance=distance)
     # both:
     if _P.derH and P.derH:  # append link derH, init in form_PP_t rng++, comp_latuple was already done
         # der+:
