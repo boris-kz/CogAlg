@@ -230,3 +230,52 @@ def rng_recursion(rroot, root, node_, links, Et, nrng=1):  # rng++/G_, der+/link
         nrng,_ = rng_recursion(rroot, root, node_, list(combinations(node_,r=2)), Et, nrng+1)
 
     return nrng, Et
+
+
+def comp_G(link, iEt, nrng=None):  # add dderH to link and link to the rims of comparands, which may be Gs or links
+
+    dderH = CH()  # new layer of link.dderH
+    if isinstance(link, Clink):  # always true now?
+        # der+
+        _G,G = link.node_; fd=1
+    else:  # rng+
+        _G,G, distance, [dy,dx] = link; fd=0
+        link = Clink(node_=[_G, G], distance=distance, angle=[dy, dx])
+    if isinstance(G,CG):
+        fG = 1; rn = _G.n/G.n
+    else:
+        fG = 0; rn = min(_G.node_[0].n,_G.node_[1].n) / min(G.node_[0].n,G.node_[1].n)
+    if not fd:  # form new Clink
+        if fG:  # / P
+            Et, relt, md_ = comp_latuple(_G.latuple, G.latuple, rn, fagg=1)
+            dderH.n = 1; dderH.Et = Et; dderH.relt=relt
+            dderH.H = [CH(nest=0, Et=copy(Et), relt=copy(relt), H=md_, n=1)]
+            # / PP, if >1 Ps:
+            if _G.iderH and G.iderH: _G.iderH.comp_(G.iderH, dderH, rn, fagg=1, flat=0)
+            _L,L = len(_G.node_),len(G.node_); _S,S = _G.S, G.S/rn; _A,A = _G.A,G.A
+            dderH.nest = 1  # packing md_
+        else: _L,L = _G.distance,G.distance; _S,S = len(_G.rim),len(G.rim); _A,A = _G.angle,G.angle
+        comp_ext(_L,L,_S,S,_A,A, distance, dderH)
+    # / G, if >1 PPs | Gs:
+    if _G.extH and G.extH: _G.extH.comp_(G.extH, dderH, rn, fagg=1, flat=1)  # always true in der+
+    if _G.derH and G.derH: _G.derH.comp_(G.derH, dderH, rn, fagg=1, flat=0)  # append and sum new dderH to base dderH
+
+    link.derH.append_(dderH, flat=0)  # append nested, higher-res lower-der summation in sub-G extH
+    iEt[:] = np.add(iEt,dderH.Et)  # init eval rng+ and form_graph_t by total m|d?
+    for i in 0,1:
+        Val, Rdn = dderH.Et[i::2]
+        if Val > G_aves[i] * Rdn:
+            if not fd:  # else old links
+                for node in _G,G:
+                    if fG:
+                        for _link in node.rim:  # +med_links for der+
+                            if comp_angle(link.angle, _link.angle)[0] > ave_mA:
+                                _link.rim += [link]  # med_links angle should also match
+                        node.rim += [link]
+                    else:  # node is Clink, all mediating links in link.rim should have matching angle:
+                        if comp_angle(node.rim[-1].angle, link.angle)[0] > ave_mA:
+                            node.rim += [link]
+                fd = 1  # to not add the same link twice
+            _G.Et[i] += Val; G.Et[i] += Val
+            _G.Et[2+i] += Rdn; G.Et[2+i] += Rdn  # per fork link in both Gs
+            # if select fork links: iEt[i::2] = [V+v for V,v in zip(iEt[i::2], dderH.Et[i::2])]

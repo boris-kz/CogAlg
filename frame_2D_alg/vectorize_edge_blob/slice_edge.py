@@ -128,7 +128,7 @@ class CP(CBase):
 
 class Clink(CBase):  # the product of comparison between two nodes
 
-    def __init__(l, node_=None,rim=None, derH=None, extH=None, roott=None, distance=0, angle=None ):
+    def __init__(l, node_=None,rim=None, derH=None, extH=None, roott=None, distance=0, angle=None, box=None ):
         super().__init__()
         l.node_ = [] if node_ is None else node_  # e_ in kernels, else replaces _node,node: not used in kernels?
         l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
@@ -144,6 +144,7 @@ class Clink(CBase):  # the product of comparison between two nodes
         l.nest = 0
         l.n = 1  # default n
         l.area = 0
+        l.box = [np.inf, np.inf, -np.inf, -np.inf] if box is None else box  # y,x,y0,x0,yn,xn
         # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
         # n: always min(node_.n)?
 
