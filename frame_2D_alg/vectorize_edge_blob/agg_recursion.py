@@ -90,7 +90,7 @@ def agg_recursion(rroot, root, fagg=0):
                         rroot.fback_ += [root.derH]
                         feedback(rroot)  # update root.root..
 
-
+# draft
 def rng_recursion(root, Et, fagg):  # comp Gs in agg+, links in sub+
     nrng = 1
 
@@ -108,9 +108,13 @@ def rng_recursion(root, Et, fagg):  # comp Gs in agg+, links in sub+
                     M = (G.Et[0]+_G.Et[0])/2; R = (G.Et[2]+_G.Et[2])/2  # local
                     fcomp = M / (dist/ave_dist) > ave * R
                 if fcomp:
-                    G.compared_ += [_G]; _G.compared_ += [G]
-                    Link = Clink(node_=[_G,G], distance=dist, angle=[dy,dx], box = extend_box(G.box, _G.box))
-                    comp_G(Link, Et, fd=0)
+                    rn = _G.n / G.n  # comp ext params prior: _L,L,_S,S,_A,A, dist, no comp_G unless match:
+                    et, rt,eH = comp_ext(len(_G.node_),len(G.node_),_G.S,G.S/rn, _G.A,G.A, dist)
+                    if  et[0] > ave*et[2]:
+                        G.compared_ += [_G]; _G.compared_ += [G]
+                        Link = Clink(node_=[_G,G], distance=dist, angle=[dy,dx], box = extend_box(G.box, _G.box))
+                        comp_G(Link, Et, fd=0, rn=rn)
+                        Link.derH.append_(CH(Et=et, relt=rt, H=eH, n=2/3), flat=0)  # += extt
             # reuse _links?
             if Et[0] > ave_Gm * Et[2] * nrng: nrng += 1
             else: break
@@ -121,18 +125,19 @@ def rng_recursion(root, Et, fagg):  # comp Gs in agg+, links in sub+
             for link in _links:
                 for G in link.node_:  # search in both directions, G can be link?
                     for _link in G.rim:
-                        mA,dA = comp_angle(_link.angle, link.angle)
-                        if mA > ave_mA:
-                            (_y,_x), (y,x) = box2center(_link.box), box2center(link.box)
-                            dy = _y - y; dx = _x - x
-                            dist = np.hypot(dy, dx)  # distance between node centers or link centers
+                        (_y,_x), (y,x) = box2center(_link.box), box2center(link.box)
+                        dy = _y - y; dx = _x - x
+                        dist = np.hypot(dy, dx)  # distance between node centers
+                        # comp ext params prior: _L,L,_S,S,_A,A, dist, no comp_G unless match:
+                        et, rt, eH = comp_ext(_link.distance,link.distance, len(_link.rim),len(G.rim), _link.angle,link.angle, dist)
+                        et[0]+= eH[-2]  # add weight of mA if fd
+                        if  et[0] > ave*et[2]:
                             Link = Clink(node_=[_link,link], distance=dist, angle=(dy,dx), box=extend_box(link.box, _link.box))
-
-                            comp_G(Link, Et, fd=1)
-                            for med_link in link.rim:  # if link is hyperlink, not sure
+                            comp_G(Link, Et, fd=1, rn = min(_link.node_[0].n,_link.node_[1].n) / min(link.node_[0].n,link.node_[1].n))
+                            Link.derH.append_(CH(Et=et, relt=rt, H=eH, n=2/3), flat=0)  # += extt
+                            for med_link in link.rim:  # if link is hyperlink
                                 medV, medR = med_link.derH.H[-1].Et[0], med_link.derH.H[-1].Et[2]
-                                Et[0] += medV; Link.derH.Et[0] += medV
-                                Et[2] += medR; Link.derH.Et[2] += medR
+                                Et[0] += medV; Link.derH.Et[0] += medV; Et[2] += medR; Link.derH.Et[2] += medR
                             if Link.derH.Et[0] > ave_Gm * Link.derH.Et[2] * nrng:
                                 links += [Link]
 
@@ -143,39 +148,33 @@ def rng_recursion(root, Et, fagg):  # comp Gs in agg+, links in sub+
     return nrng, Et
 
 
-def comp_G(link, iEt, fd):  # add dderH to link and link to the rims of comparands, which may be Gs or links
+def comp_G(link, iEt, fd, rn):  # add dderH to link and link to the rims of comparands, which may be Gs or links
 
     dderH = CH()  # new layer of link.dderH
     _G, G = link.node_
 
-    if fd:  # Clink Gs
-        rn = min(_G.node_[0].n,_G.node_[1].n) / min(G.node_[0].n,G.node_[1].n)
-        _L,L = _G.distance,G.distance; _S,S = len(_G.rim),len(G.rim); _A,A = _G.angle,G.angle
-    else:   # CG Gs
-        rn = _G.n/G.n
+    if not fd:  # CGs
         Et, relt, md_ = comp_latuple(_G.latuple, G.latuple, rn, fagg=1)
         dderH.n = 1; dderH.Et = Et; dderH.relt=relt
         dderH.H = [CH(nest=0, Et=copy(Et), relt=copy(relt), H=md_, n=1)]
         # / PP, if >1 Ps:
         if _G.iderH and G.iderH: _G.iderH.comp_(G.iderH, dderH, rn, fagg=1, flat=0)
         dderH.nest = 1  # packs md_
-        _L,L = len(_G.node_),len(G.node_); _S,S = _G.S, G.S/rn; _A,A = _G.A,G.A
-
-    comp_ext(_L,L,_S,S,_A,A, link.distance, dderH)
     # / G, if >1 PPs | Gs:
     if _G.extH and G.extH: _G.extH.comp_(G.extH, dderH, rn, fagg=1, flat=1)  # always true in der+
     if _G.derH and G.derH: _G.derH.comp_(G.derH, dderH, rn, fagg=1, flat=0)  # append and sum new dderH to base dderH
 
-    link.derH = dderH  # always new link per comp
+    link.derH = dderH  # new link / comp
     iEt[:] = np.add(iEt,dderH.Et)  # init eval rng+ and form_graph_t by total m|d?
-    fadded = 0
+    fin = 0
     for i in 0, 1:
         Val, Rdn = dderH.Et[i::2]
         if Val > G_aves[i] * Rdn:
-            if not fadded:  # to not add the same link in both forks
-                fadded = 1
+            if not fin:  # to not add the same link in both forks
+                fin = 1
                 for node in _G,G:
                     if fd:  # node is Clink, all mediating links in link.rim should have matching angle:
+                        # replace with comp_ext(node,link)?
                         if comp_angle(node.angle, link.angle)[0] > ave_mA:
                             node.rim += [link]
                     else:
@@ -188,7 +187,7 @@ def comp_G(link, iEt, fd):  # add dderH to link and link to the rims of comparan
         # if select fork links: iEt[i::2] = [V+v for V,v in zip(iEt[i::2], dderH.Et[i::2])]
 
 
-def comp_ext(_L,L,_S,S,_A,A, dist, dderH):  # compare non-derivatives: dist, node_' L,S,A:
+def comp_ext(_L,L,_S,S,_A,A, dist):  # compare non-derivatives: dist, node_' L,S,A:
 
     prox = ave_dist - dist  # proximity = inverted distance (position difference), no prior accum to n
 
@@ -203,7 +202,8 @@ def comp_ext(_L,L,_S,S,_A,A, dist, dderH):  # compare non-derivatives: dist, nod
     mdec = prox / max_dist + mL/ max(L,_L) + mS/ max(S,_S) if S or _S else 1 + mA  # Amax = 1
     ddec = dist / max_dist + mL/ (L+_L) + dS/ (S+_S) if S or _S else 1 + dA
 
-    dderH.append_(CH(Et=[M,D,mrdn,drdn], relt=[mdec,ddec], H=[prox,dist, mL,dL, mS,dS, mA,dA], n=2/3), flat=0)  # 2/3 of 6-param unit
+    return [M,D,mrdn,drdn], [mdec,ddec], [prox,dist, mL,dL, mS,dS, mA,dA]
+
 
 # draft:
 def convolve_graph(iG_):  # node connectivity = sum surround link vals, incr.mediated: Graph Convolution of Correlations
@@ -231,8 +231,7 @@ def convolve_graph(iG_):  # node connectivity = sum surround link vals, incr.med
                     # > ave derGs in new fd rim:
                     lval,lrdn = link.Et[i::2]  # step=2, graph-specific vals accumulated from surrounding nodes, or use link.node_.Et instead?
                     decay =  (link.relt[i] / (link.derH.n * 6)) ** mediation  # normalized decay at current mediation
-                    for _G in link.node_:
-                        if _G is not G: break
+                    _G = link.node_[0] if link.node_[1] is G else link.node_[1]
                     # add G.derH.comp_(_G.extH.H[-1]): temporary derH summed from surrounding G.derHs,
                     # for lower-res rng+, if no direct rng+ and high _G.V? or replace mediated rng+?
                     _val,_rdn = _G.Et[i::2] # current-loop vals and their difference from last-loop vals, before updating:
@@ -264,7 +263,7 @@ def form_graph_t(root, node_, Et, nrng, fagg=0):  # form Gm_,Gd_ from same-root 
             if fd:  # der+ after rng++ term by high ds
                 for graph in graph_:
                     if graph.link_ and graph.Et[1] > G_aves[1] * graph.Et[3]:  # Et is summed from all links
-                        agg_recursion(root, graph, nrng=1, fagg=0)  # graph.node_ is not node_t yet
+                        agg_recursion(root, graph, fagg=0)  # graph.node_ is not node_t yet
                     elif graph.derH:
                         root.fback_ += [graph.derH]
                         feedback(root)  # update root.root.. per sub+
