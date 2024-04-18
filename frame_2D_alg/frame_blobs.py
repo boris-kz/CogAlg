@@ -254,7 +254,7 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
             # default:
             Et, et = HE.Et, He.Et
             HE.Et = np.add(HE.Et, He.Et); HE.relt = np.add(HE.relt, He.relt)
-            if any(irdnt): Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
+            if any(irdnt): Et[2:] = [E+e for E,e in zip(Et[2:], irdnt)]
             HE.n += He.n  # combined param accumulation span
             HE.nest = max(HE.nest, He.nest)
         else:

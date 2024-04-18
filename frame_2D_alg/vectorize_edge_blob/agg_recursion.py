@@ -75,8 +75,8 @@ def agg_recursion(rroot, root, fagg=0):
     for G in Q:
         if sum(G.Et[:2]):  # G.rim was extended, sum in G.extH:
             for link in G.rim:
-                if len(G.extH.H)==len(link.derH.H): G.extH.H[-1].add_(link.derH.H[-1],irdnt=link.derH.H[-1].Et[2:])  # sum last layer
-                else:                               G.extH.append_(link.derH.H[-1],flat=0)  # pack last layer
+                if len(G.extH.H)<len(link.derH.H): G.extH.append_(link.derH.H[-1],flat=0)  # pack last layer
+                else:  G.extH.H[-1].add_(link.derH.H[-1],irdnt=link.derH.H[-1].Et[2:])  # sum last layer
             upnode_ += [G]
     node_t = form_graph_t(root, upnode_, Et, nrng, fagg)  # root_fd, eval der++ and feedback per Gd only
     if node_t:
@@ -90,7 +90,6 @@ def agg_recursion(rroot, root, fagg=0):
                         rroot.fback_ += [root.derH]
                         feedback(rroot)  # update root.root..
 
-# draft
 def rng_recursion(root, Et, fagg):  # comp Gs in agg+, links in sub+
     nrng = 1
 
@@ -102,44 +101,40 @@ def rng_recursion(root, Et, fagg):  # comp Gs in agg+, links in sub+
                 if _G in G.compared_: continue
                 cy, cx = box2center(G.box); _cy, _cx = box2center(_G.box)
                 dy = cy-_cy; dx = cx-_cx
-                dist = np.hypot(dy, dx)  # distance between node centers or link centers
-                if nrng==1: fcomp = dist<=ave_dist
+                dist = np.hypot(dy, dx)  # eval distance between node centers:
+                if nrng==1: fcomp = dist <= ave_dist
                 else:
                     M = (G.Et[0]+_G.Et[0])/2; R = (G.Et[2]+_G.Et[2])/2  # local
                     fcomp = M / (dist/ave_dist) > ave * R
                 if fcomp:
-                    rn = _G.n / G.n  # comp ext params prior: _L,L,_S,S,_A,A, dist, no comp_G unless match:
-                    et, rt,eH = comp_ext(len(_G.node_),len(G.node_),_G.S,G.S/rn, _G.A,G.A, dist)
-                    if  et[0] > ave*et[2]:
-                        G.compared_ += [_G]; _G.compared_ += [G]
-                        Link = Clink(node_=[_G,G], distance=dist, angle=[dy,dx], box = extend_box(G.box, _G.box))
-                        comp_G(Link, Et, fd=0, rn=rn)
-                        Link.derH.append_(CH(Et=et, relt=rt, H=eH, n=2/3), flat=0)  # += extt
-            # reuse _links?
+                    G.compared_ += [_G]; _G.compared_ += [G]
+                    Link = Clink(node_=[_G, G], distance=dist, angle=[dy, dx],box=extend_box(G.box, _G.box))
+                    comp_G(Link, Et, fd=0)
+            # reuse _links
             if Et[0] > ave_Gm * Et[2] * nrng: nrng += 1
             else: break
     else:
         _links = root.link_  # der+'rng+: directional and node-mediated comp link
-        links = []
         while True:
+            links = []
             for link in _links:
-                for G in link.node_:  # search in both directions, G can be link?
+                for G in link.node_:  # search in both directions, G can be link
                     for _link in G.rim:
+                        if _link in link.compared_: continue
                         (_y,_x), (y,x) = box2center(_link.box), box2center(link.box)
                         dy = _y - y; dx = _x - x
                         dist = np.hypot(dy, dx)  # distance between node centers
-                        # comp ext params prior: _L,L,_S,S,_A,A, dist, no comp_G unless match:
-                        et, rt, eH = comp_ext(_link.distance,link.distance, len(_link.rim),len(G.rim), _link.angle,link.angle, dist)
-                        et[0]+= eH[-2]  # add weight of mA if fd
-                        if  et[0] > ave*et[2]:
-                            Link = Clink(node_=[_link,link], distance=dist, angle=(dy,dx), box=extend_box(link.box, _link.box))
-                            comp_G(Link, Et, fd=1, rn = min(_link.node_[0].n,_link.node_[1].n) / min(link.node_[0].n,link.node_[1].n))
-                            Link.derH.append_(CH(Et=et, relt=rt, H=eH, n=2/3), flat=0)  # += extt
-                            for med_link in link.rim:  # if link is hyperlink
+                        if comp_angle((dy,dx),G.angle)[0] > ave:  # node-mediated, distance eval in agg+ only?
+                            _link.compared_ += [link]; link.compared_ += [_link]
+                            Link = Clink(node_=[_link,link],distance=dist,angle=(dy,dx),box=extend_box(link.box,_link.box))
+                            comp_G(Link, Et, fd=1)
+                            for med_link in link.rim:  # if hyperlink
                                 medV, medR = med_link.derH.H[-1].Et[0], med_link.derH.H[-1].Et[2]
                                 Et[0] += medV; Link.derH.Et[0] += medV; Et[2] += medR; Link.derH.Et[2] += medR
                             if Link.derH.Et[0] > ave_Gm * Link.derH.Et[2] * nrng:
                                 links += [Link]
+                                # if Link not in link.rim: link.rim += [Link]
+                                # should be checking if rim node_s are in compared instead?
 
             if Et[0] > ave_Gm * Et[2] * nrng:  # rng+ eval per arg cluster because comp is bilateral, 2nd test per new pair
                 nrng += 1; _links = links
@@ -148,20 +143,28 @@ def rng_recursion(root, Et, fagg):  # comp Gs in agg+, links in sub+
     return nrng, Et
 
 
-def comp_G(link, iEt, fd, rn):  # add dderH to link and link to the rims of comparands, which may be Gs or links
+def comp_G(link, iEt, fd):  # add dderH to link and link to the rims of comparands, which may be Gs or links
 
     dderH = CH()  # new layer of link.dderH
     _G, G = link.node_
 
-    if not fd:  # CGs
-        Et, relt, md_ = comp_latuple(_G.latuple, G.latuple, rn, fagg=1)
-        dderH.n = 1; dderH.Et = Et; dderH.relt=relt
-        dderH.H = [CH(nest=0, Et=copy(Et), relt=copy(relt), H=md_, n=1)]
+    if fd:  # Clinks
+        rn=min(_G.node_[0].n,_G.node_[1].n)/ min(G.node_[0].n,G.node_[1].n)
+        et, rt, md_ = comp_ext(_G.distance,G.distance,len(_G.rim),len(G.rim),_G.angle,G.angle)
+        dderH.n = 1; dderH.Et = et; dderH.relt = rt
+        dderH.H = [CH(nest=0, Et=copy(et), relt=copy(rt), H=md_, n=1)]
+    else:  # CGs
+        rn = _G.n / G.n  # comp ext params prior: _L,L,_S,S,_A,A, dist, no comp_G unless match:
+        et, rt, md_ = comp_ext(len(_G.node_), len(G.node_), _G.S, G.S / rn, _G.A,G.A)
+        Et, Rt, Md_ = comp_latuple(_G.latuple, G.latuple, rn, fagg=1)
+        Et = np.add(Et,et); Rt = np.add(Rt,rt)
+        dderH.n = 1; dderH.Et = Et; dderH.relt = Rt
+        dderH.H = [CH(nest=0, Et=copy(Et), relt=copy(Rt), H=[md_]+[Md_], n=1)]
         # / PP, if >1 Ps:
         if _G.iderH and G.iderH: _G.iderH.comp_(G.iderH, dderH, rn, fagg=1, flat=0)
         dderH.nest = 1  # packs md_
     # / G, if >1 PPs | Gs:
-    if _G.extH and G.extH: _G.extH.comp_(G.extH, dderH, rn, fagg=1, flat=1)  # always true in der+
+    if _G.extH and G.extH: _G.extH.comp_(G.extH, dderH, rn, fagg=1, flat=1)
     if _G.derH and G.derH: _G.derH.comp_(G.derH, dderH, rn, fagg=1, flat=0)  # append and sum new dderH to base dderH
 
     link.derH = dderH  # new link / comp
@@ -187,22 +190,18 @@ def comp_G(link, iEt, fd, rn):  # add dderH to link and link to the rims of comp
         # if select fork links: iEt[i::2] = [V+v for V,v in zip(iEt[i::2], dderH.Et[i::2])]
 
 
-def comp_ext(_L,L,_S,S,_A,A, dist):  # compare non-derivatives: dist, node_' L,S,A:
-
-    prox = ave_dist - dist  # proximity = inverted distance (position difference), no prior accum to n
+def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
 
     dL = _L - L;      mL = min(_L,L) - ave_mL  # direct match
     dS = _S/_L - S/L; mS = min(_S,S) - ave_mL  # sparsity is accumulated over L
     mA, dA = comp_angle(_A,A)  # angle is not normalized
-
-    M = prox + mL + mS + mA
-    D = dist + abs(dL) + abs(dS) + abs(dA)  # signed dA?
+    M = mL + mS + mA
+    D = abs(dL) + abs(dS) + abs(dA)  # signed dA?
     mrdn = M > D; drdn = D<= M
+    mdec = mL/ max(L,_L) + mS/ max(S,_S) if S or _S else 1 + mA  # Amax = 1
+    ddec = max_dist + mL/ (L+_L) + dS/ (S+_S) if S or _S else 1 + dA
 
-    mdec = prox / max_dist + mL/ max(L,_L) + mS/ max(S,_S) if S or _S else 1 + mA  # Amax = 1
-    ddec = dist / max_dist + mL/ (L+_L) + dS/ (S+_S) if S or _S else 1 + dA
-
-    return [M,D,mrdn,drdn], [mdec,ddec], [prox,dist, mL,dL, mS,dS, mA,dA]
+    return [M,D,mrdn,drdn], [mdec,ddec], [mL,dL, mS,dS, mA,dA]
 
 
 # draft:
@@ -273,7 +272,6 @@ def form_graph_t(root, node_, Et, nrng, fagg=0):  # form Gm_,Gd_ from same-root 
     if any(node_t):
         root.node_[:] = node_t  # else keep root.node_
         return node_t
-
 
 # not updated:
 def segment_graph(root, Q, fd, nrng, fagg):  # eval rim links with summed surround vals for density-based clustering

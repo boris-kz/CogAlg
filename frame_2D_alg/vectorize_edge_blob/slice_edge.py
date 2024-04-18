@@ -63,19 +63,19 @@ class CsliceEdge(CsubFrame):
             return max_
 
         def trace(edge):  # fill and trace across slices
+            adjacent_ = [(P, y, x) for P in edge.P_ for y, x in edge.rootd if edge.rootd[y, x] is P]
+            while adjacent_:
+                _P, _y, _x = adjacent_.pop(0)
+                for y, x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:
+                    try:    # if yx has _P, try to form link
+                        P = edge.rootd[y, x]
+                        if _P is not P and _P not in P.link_[0]:
+                            P.link_[0] += [_P]
+                    except KeyError:    # if yx empty, keep tracing
+                        if (y, x) not in edge.dert_: continue
+                        edge.rootd[y, x] = _P
+                        adjacent_ += [(_P, y, x)]
             for P in edge.P_:
-                adjacent_ = [yx for yx in edge.rootd if edge.rootd[yx] is P]
-                while adjacent_:
-                    _y, _x = adjacent_.pop()
-                    for y, x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:
-                        try:    # if yx has _P, try to form link
-                            _P = edge.rootd[y, x]
-                            if _P is not P and _P not in P.link_[0]:
-                                P.link_[0] += [_P]
-                        except KeyError:    # if yx empty, keep tracing
-                            if (y, x) not in edge.dert_: continue
-                            edge.rootd[y, x] = P
-                            adjacent_ += [(y, x)]
                 P.link_[0] = [Clink([_P, P]) for _P in P.link_[0]]
 
     CBlob = CEdge
