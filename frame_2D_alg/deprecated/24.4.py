@@ -307,3 +307,116 @@ def comp_ext(_L,L,_S,S,_A,A, dist,direction=None):  # compare non-derivatives: n
 
     return [M,D,mrdn,drdn], [mdec,ddec], [prox,dist, alignt, mL,dL, mS,dS, mA,dA]
 
+
+class CH(CBase):  # generic derivation hierarchy with variable nesting
+    '''
+    len layer +extt: 2, 3, 6, 12, 24,
+    or without extt: 1, 1, 2, 4, 8..: max n of tuples per der layer = summed n of tuples in all lower layers:
+    lay1: par     # derH per param in vertuple, layer is derivatives of all lower layers:
+    lay2: [m,d]   # implicit nesting, brackets for clarity:
+    lay3: [[m,d], [md,dd]]: 2 sLays,
+    lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
+    '''
+    def __init__(He, nest=0, n=0, Et=None, relt=None, H=None):
+        super().__init__()
+        He.nest = nest  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH
+        He.n = n  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
+        He.Et = [0,0,0,0] if Et is None else Et   # evaluation tuple: valt, rdnt
+        He.relt = [0,0] if relt is None else relt  # m,d relative to max possible m,d
+        He.H = [] if H is None else H  # hierarchy of der layers or md_
+
+    def __bool__(H): return H.n != 0
+
+    def add_(HE, He, irdnt=None):  # unpack down to numericals and sum them
+
+        if irdnt is None: irdnt = []
+        if HE:
+            ddepth = abs(HE.nest-He.nest)  # compare nesting depth, nest lesser He: md_-> derH-> subH-> aggH:
+            if ddepth:
+                nHe = [HE,He][HE.nest > He.nest]  # He to be nested
+                while ddepth > 0:
+                    nHe.H = [CH(H=nHe.H, Et=copy(nHe.Et), nest=nHe.nest)]; ddepth -= 1
+
+            if isinstance(HE.H[0], CH):
+                H = []
+                for Lay, lay in zip_longest(HE.H, He.H, fillvalue=None):
+                    if lay:  # to be summed
+                        if Lay is None: Lay = CH()
+                        Lay.add_(lay, irdnt)  # recursive unpack to sum md_s
+                    H += [Lay]
+                HE.H = H
+            else:
+                HE.H = [V+v for V,v in zip_longest(HE.H, He.H, fillvalue=0)]  # both Hs are md_s
+            # default:
+            Et, et = HE.Et, He.Et
+            HE.Et = np.add(HE.Et, He.Et); HE.relt = np.add(HE.relt, He.relt)
+            if any(irdnt): Et[2:] = [E+e for E,e in zip(Et[2:], irdnt)]
+            HE.n += He.n  # combined param accumulation span
+            HE.nest = max(HE.nest, He.nest)
+        else:
+            HE.copy(He)  # initialization
+
+    def append_(HE,He, irdnt=None, flat=0):
+
+        if irdnt is None: irdnt = []
+        if flat: HE.H += deepcopy(He.H)  # append flat
+        else:  HE.H += [He]  # append nested
+
+        Et, et = HE.Et, He.Et
+        HE.Et = np.add(HE.Et, He.Et); HE.relt = np.add(HE.relt, He.relt)
+        if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
+        HE.n += He.n  # combined param accumulation span
+        # HE.nest = max(HE.nest, He.nest)
+
+    def comp_(_He, He, dderH, rn=1, fagg=0, flat=1):  # unpack tuples (formally lists) down to numericals and compare them
+
+        ddepth = abs(_He.nest - He.nest)
+        n = 0
+        if ddepth:  # unpack the deeper He: md_<-derH <-subH <-aggH:
+            uHe = [He,_He][_He.nest>He.nest]
+            while ddepth > 0:
+                uHe = uHe.H[0]; ddepth -= 1  # comp 1st layer of deeper He:
+            _cHe,cHe = [uHe,He] if _He.nest>He.nest else [_He,uHe]
+        else: _cHe,cHe = _He,He
+
+        if isinstance(_cHe.H[0], CH):  # _lay is He_, same for lay: they are aligned above
+            Et = [0,0,0,0]  # Vm,Vd, Rm,Rd
+            relt = [0,0]  # Dm,Dd
+            dH = []
+            for _lay,lay in zip(_cHe.H,cHe.H):  # md_| ext| derH| subH| aggH, eval nesting, unpack,comp ds in shared lower layers:
+                if _lay and lay:  # ext is empty in single-node Gs
+                    dlay = _lay.comp_(lay, CH(), rn, fagg=fagg, flat=1)  # dlay is dderH
+                    Et = np.add(Et, dlay.Et)
+                    relt = np.add(relt, dlay.relt)
+                    dH += [dlay]; n += dlay.n
+                else:
+                    dH += [CH()]  # empty?
+        else:  # H is md_, numerical comp:
+            vm,vd,rm,rd, decm,decd = 0,0,0,0,0,0
+            dH = []
+            for i, (_d,d) in enumerate(zip(_cHe.H[1::2], cHe.H[1::2])):  # compare ds in md_ or ext
+                d *= rn  # normalize by comparand accum span
+                diff = _d-d
+                match = min(abs(_d),abs(d))
+                if (_d<0) != (d<0): match = -match  # if only one comparand is negative
+                if fagg:
+                    maxm = max(abs(_d), abs(d))
+                    decm += abs(match) / maxm if maxm else 1  # match / max possible match
+                    maxd = abs(_d) + abs(d)
+                    decd += abs(diff) / maxd if maxd else 1  # diff / max possible diff
+                vm += match - aves[i]  # fixed param set?
+                vd += diff
+                dH += [match,diff]  # flat
+            Et = [vm,vd,rm,rd]; relt= [decm,decd]
+            n = len(_cHe.H)/12  # unit n = 6 params, = 12 in md_
+
+        dderH.append_(CH(nest=min(_He.nest,He.nest), Et=Et, relt=relt, H=dH, n=n), flat=flat)  # currently flat=1
+        return dderH
+
+    def copy(_H, H):
+        for attr, value in H.__dict__.items():
+            if attr != '_id' and attr in _H.__dict__.keys():  # copy only the available attributes and skip id
+                setattr(_H, attr, deepcopy(value))
+
+
+

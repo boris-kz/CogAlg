@@ -4,7 +4,7 @@ from math import atan2, cos, floor, pi
 from weakref import ref
 import sys
 sys.path.append("..")
-from frame_blobs import CBase, CH, imread   # for CP
+from frame_blobs import CBase, CH, Clink, imread   # for CP
 from intra_blob import CsubFrame
 from utils import box2center
 '''
@@ -124,31 +124,6 @@ class CP(CBase):
         P.derH = CH()
 
     def __repr__(P): return f"P(id={P.id})"
-
-
-class Clink(CBase):  # the product of comparison between two nodes
-
-    def __init__(l, node_=None,rim=None, derH=None, extH=None, roott=None, distance=0, angle=None, box=None ):
-        super().__init__()
-        l.node_ = [] if node_ is None else node_  # e_ in kernels, else replaces _node,node: not used in kernels?
-        l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
-        l.distance = distance  # distance between node centers
-        l.Et = [0,0,0,0]  # graph-specific, accumulated from surrounding nodes in node_connect
-        l.relt = [0,0]
-        l.rim = []  # for der+, list of mediating Clinks in hyperlink in roughly the same direction, as in hypergraph
-        l.derH = CH() if derH is None else derH
-        l.extH = CH() if extH is None else extH  # for der+
-        l.roott = [None, None] if roott is None else roott  # clusters that contain this link
-        l.compared_ = []
-        # for rng+
-        l.nest = 0
-        l.n = 1  # default n
-        l.area = 0
-        l.box = [np.inf, np.inf, -np.inf, -np.inf] if box is None else box  # y,x,y0,x0,yn,xn
-        # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
-        # n: always min(node_.n)?
-
-    def __bool__(l): return bool(l.derH.H)
 
 
 def interpolate2dert(edge, y, x):
