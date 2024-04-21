@@ -195,39 +195,52 @@ def comp_kernel(_kernel, kernel, fd):
     return dderH
 
 
-def rng_recursion(rroot, root, node_, links, Et, nrng=1):  # rng++/G_, der+/link_ in sub+, -> rim_H
+def rng_recursion(root, Et, fagg):  # comp Gs in agg+, links in sub+
+    nrng = 1
 
-    for link in links:
-        if isinstance(link.list):
-            fd = 0; _G, G = link  # prelink in recursive rng+
-            if isinstance(G,CG):
+    if fagg:  # distance eval, else fd: mangle eval
+        _links = list(combinations(root.node_,r=2))
+        while True:
+            for link in _links:  # prelink in agg+
+                _G, G = link
+                if _G in G.compared_: continue
                 cy, cx = box2center(G.box); _cy, _cx = box2center(_G.box)
-                dy = cy-_cy; dx = cx-_cx
-            else:
-                (_y1,_x1),(_y2,_x2) = box2center(_G.node_[0].box), box2center(_G.node_[1].box)
-                (y1,x1),(y2,x2)     = box2center(G.node_[0].box), box2center(G.node_[1].box)
-                dy = (y1+y2)/2 -(_y1+_y2)/2; dx = (x1+x2)/2 -(_x1+_x2)/2
-            dist = np.hypot(dy, dx)  # distance between node centers or link centers
-        else:
-            fd = 0; (_G, G), dist, (dy,dx) = link.node_, link.distance, link.angle  # Clink in 1st call from sub+
-        if _G in G.compared_: continue
-        # der+'rng+ is directional
-        if nrng > 1:  # pair eval:
-            M = (G.Et[0]+_G.Et[0])/2; R = (G.Et[2]+_G.Et[2])/2  # local
-            for link in _G.rim:
-                if comp_angle((dy,dx), link.angle)[0] > ave_mA:
-                    for med_link in link.rim:  # if link is hyperlink
-                        M += med_link.derH.H[-1].Et[0]
-                        R += med_link.derH.H[-1].Et[2]
-        if nrng==1:
-            if dist<=ave_dist:
-                G.compared_ += [_G]; _G.compared_ += [G]
-                comp_G(link, Et) if fd else comp_G([_G,G, dist, [dy,dx]], Et)  # Clink in 1st call from sub+
-        elif M / (dist/ave_dist) > ave * R:
-           G.compared_ += [_G]; _G.compared_ += [G]
-           comp_G([_G,G, dist, [dy,dx]], Et)
-    if Et[0] > ave_Gm * Et[2]:  # rng+ eval per arg cluster because comp is bilateral, 2nd test per new pair
-        nrng,_ = rng_recursion(rroot, root, node_, list(combinations(node_,r=2)), Et, nrng+1)
+                dy = cy-_cy; dx = cx-_cx;  dist = np.hypot(dy,dx)
+                if nrng==1:  # eval distance between node centers
+                    fcomp = dist <= ave_dist
+                else:
+                    M = (G.Et[0]+_G.Et[0])/2; R = (G.Et[2]+_G.Et[2])/2  # local
+                    fcomp = M / (dist/ave_dist) > ave * R
+                if fcomp:
+                    G.compared_ += [_G]; _G.compared_ += [G]
+                    Link = Clink(node_=[_G, G], distance=dist, angle=[dy, dx], box=extend_box(G.box, _G.box))
+                    comp_G(Link, Et, fd=0)
+            # reuse combinations
+            if Et[0] > ave_Gm * Et[2] * nrng: nrng += 1
+            else: break
+    else:
+        _links = root.link_  # der+'rng+: directional and node-mediated comp link
+        while True:
+            links = []
+            for link in _links:
+                for G in link.node_:  # search in both directions via Clink Gs
+                    for _link in G.rim:
+                        if _link in link.compared_: continue
+                        (_y,_x),(y,x) = box2center(_link.box),box2center(link.box)
+                        dy=_y-y; dx=_x-x; dist = np.hypot(dy,dx)  # distance between node centers
+                        mA,dA = comp_angle((dy,dx), _link.angle)  # node-mediated, distance eval in agg+ only
+                        if mA > ave_mA:
+                            _link.compared_ += [link]; link.compared_ += [_link]
+                            _derH = _link.derH; et = _derH.Et
+                            Link = Clink(node_=[_link,link],distance=dist,angle=(dy,dx),box=extend_box(link.box,_link.box),
+                                         derH=CH(H=deepcopy(_derH.H), Et=[et[0]+mA, et[1]+dA, et[2]+mA<dA, et[3]+dA<=mA]))
+                            comp_G(Link, Et, fd=1)  # + comp med_links
+                            if Link.derH.Et[0] > ave_Gm * Link.derH.Et[2] * nrng:
+                                links += [Link]
+
+            if Et[0] > ave_Gm * Et[2] * nrng:  # rng+ eval per arg cluster because comp is bilateral, 2nd test per new pair
+                nrng += 1; _links = links
+            else: break
 
     return nrng, Et
 
@@ -275,6 +288,19 @@ def comp_G(link, iEt, nrng=None):  # add dderH to link and link to the rims of c
                     else:  # node is Clink, all mediating links in link.rim should have matching angle:
                         if comp_angle(node.rim[-1].angle, link.angle)[0] > ave_mA:
                             node.rim += [link]
+                                for node in _G,G:  # draft:
+                    # or:
+                    llink = node.rim[-1]  # last mediating link, doesn't matter for CG.rim
+                    _node = llink.node_[1] if llink.node_[0] is node else llink.node_[0]
+                    rim = []  # all mA links mediated by last-link _node
+                    for _link in reversed.node.rim:  # +med_links for der+
+                        if _node in _link.node_:
+                            if comp_angle(link.angle, _link.angle)[0] > ave_mA:
+                                rim += [link]
+                        else:  # different mediating _node, different rim layer
+                            node.rim += rim  # no op if empty
+                            break  # for both fd?
+
                 fd = 1  # to not add the same link twice
             _G.Et[i] += Val; G.Et[i] += Val
             _G.Et[2+i] += Rdn; G.Et[2+i] += Rdn  # per fork link in both Gs

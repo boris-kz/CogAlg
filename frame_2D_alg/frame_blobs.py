@@ -83,7 +83,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         super().__init__()
         # PP:
         G.P_ = [] if P_ is None else P_
-        G.root = root
+        G.root = [] if root is None else root  # mgraphs that contain this G, single-layer
         G.rng = rng
         G.fd = fd  # fork if flat layers?
         G.n = n  # external n (last layer n)
@@ -96,7 +96,6 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.derH = CH()  # nested derH in Gs: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
         G.node_ = [] if node_ is None else node_  # convert to node_t in sub_recursion
         G.link_ = [] if link_ is None else link_  # links per comp layer, nest in rng+)der+
-        G.root = []  # mgraphs that contain this G, single-layer
         G.box = [np.inf, np.inf, -np.inf, -np.inf]  # y,x,y0,x0,yn,xn
         # graph-external, +level per root sub+:
         G.rim = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
@@ -307,7 +306,7 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
         else:  # H is md_, numerical comp:
             vm,vd,rm,rd, decm,decd = 0,0,0,0,0,0
             dH = []
-            for i, (_d,d) in enumerate(zip(_cHe.H[1::2], cHe.H[1::2])):  # compare ds in md_ or ext
+            for i, (_d,d) in enumerate(zip(_He.H[1::2], He.H[1::2])):  # compare ds in md_ or ext
                 d *= rn  # normalize by comparand accum span
                 diff = _d-d
                 match = min(abs(_d),abs(d))
