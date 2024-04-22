@@ -6,7 +6,6 @@ import sys
 sys.path.append("..")
 from frame_blobs import CBase, CH, Clink, imread   # for CP
 from intra_blob import CsubFrame
-from utils import box2center
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
 Potential object is proximate low-gradient (flat) blobs, with rough / thick boundary of adjacent high-gradient (edge) blobs.
@@ -26,7 +25,7 @@ ave_g = 30  # change to Ave from the root intra_blob?
 ave_mL = 2
 ave_dist = 3
 max_dist = 15
-ave_dangle = .8  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
+ave_dangle = .95  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
 
 class CsliceEdge(CsubFrame):
 

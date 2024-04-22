@@ -79,10 +79,9 @@ class CBase:
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    def __init__(G, root=None, rng=1, fd=0, node_=None, link_=None, P_=None, Et=None, n=0):  # we need P_ to init PP, Et in init graph
+    def __init__(G, root=None, rng=1, fd=0, node_=None, link_=None, Et=None, n=0):  # we need P_ to init PP, Et in init graph
         super().__init__()
         # PP:
-        G.P_ = [] if P_ is None else P_
         G.root = [] if root is None else root  # mgraphs that contain this G, single-layer
         G.rng = rng
         G.fd = fd  # fork if flat layers?

@@ -1,6 +1,6 @@
 import numpy as np
 from copy import deepcopy, copy
-from itertools import combinations, zip_longest
+from itertools import combinations, product, zip_longest
 from .slice_edge import comp_angle, CsliceEdge, Clink
 from .comp_slice import ider_recursion, comp_latuple, get_match
 from .filters import aves, ave_mL, ave_dangle, ave, G_aves, ave_Gm, ave_Gd, ave_dist, ave_mA, max_dist
@@ -95,17 +95,25 @@ def rng_recursion(root, Et, fagg):  # comp Gs in agg+, links in sub+
 
     if fagg:  # distance eval, else fd: mangle eval
         _links = list(combinations(root.node_,r=2))
+    elif isinstance(root.link_[0].node_[0], CG):
+        # concat rim link combinations from all Clink node_ CGs:
+        _links = [list(product(link.node_[0].rim, link.node_[1].rim)) for link in root.link_]
+
+    if _links in locals:  # unmediated rng+ over node combinations or link.node.rim combinations
         while True:
-            for link in _links:  # prelink in agg+
+            for link in _links:
                 _G, G = link
                 if _G in G.compared_: continue
                 cy, cx = box2center(G.box); _cy, _cx = box2center(_G.box)
                 dy = cy-_cy; dx = cx-_cx;  dist = np.hypot(dy,dx)
-                if nrng==1:  # eval distance between node centers
-                    fcomp = dist <= ave_dist
-                else:
-                    M = (G.Et[0]+_G.Et[0])/2; R = (G.Et[2]+_G.Et[2])/2  # local
-                    fcomp = M / (dist/ave_dist) > ave * R
+                if fagg:
+                    if nrng==1:  # eval distance between node centers
+                        fcomp = dist <= ave_dist
+                    else:
+                        M = (G.Et[0]+_G.Et[0])/2; R = (G.Et[2]+_G.Et[2])/2  # local
+                        fcomp = M / (dist/ave_dist) > ave * R
+                else:  # to form hyperlinks, compare rim link angles instead of distance eval:
+                    fcomp = comp_angle(_G.angle,G.angle)[0]
                 if fcomp:
                     G.compared_ += [_G]; _G.compared_ += [G]
                     Link = Clink(node_=[_G, G], distance=dist, angle=[dy, dx], box=extend_box(G.box, _G.box))
@@ -118,21 +126,21 @@ def rng_recursion(root, Et, fagg):  # comp Gs in agg+, links in sub+
         while True:
             links = []
             for link in _links:
-                _G,G = link.node_  # compare equi-mediated nodes in Clink G rims:
+                _G,G = link.node_  # compare equimediated Clink nodes in hyperlink rims, if mediating links angle match?
                 if len(_G.rim)>nrng and len(G.rim)>nrng:
-                    fst_link, lst_link = _G.rim[-nrng], G.rim[nrng]
-                    fst_G, lst_G = fst_link.node_[0], lst_link.node_[1]  # comp G | link?
-                    # if position corresponds to mediation order, the Gs were not compared yet?
-                    if fst_G in lst_G.compared_: continue
-                    (_y,_x),(y,x) = box2center(fst_G.box),box2center(lst_G.box)
+                    ilink, nlink = _G.rim[-nrng], G.rim[nrng]  # +- mediation / nrng, increasing mediation gap?
+                    _A,A = ilink.angle, nlink.angle
+                    iG,nG = ilink.node_[0],nlink.node_[1]  # if position corresponds to mediation order, the Gs were not compared yet?
+                    if iG in nG.compared_: continue
+                    (_y,_x),(y,x) = box2center(iG.box),box2center(nG.box)
                     dy=_y-y; dx=_x-x; dist = np.hypot(dy,dx)  # distance between node centers
-                    mA,dA = comp_angle(fst_link.angle, lst_link.angle)  # node-mediated, distance eval in agg+ only
+                    mA,dA = comp_angle(_A,A)  # node-mediated link angles
                     if mA > ave_mA:
-                        fst_G.compared_ += [lst_G]; lst_G.compared_ += [fst_G]
-                        _derH = fst_G.derH; et = _derH.Et
-                        Link = Clink(node_=[fst_G,lst_G],distance=dist,angle=(dy,dx),box=extend_box(fst_G.box,lst_G.box),
+                        iG.compared_ += [nG]; nG.compared_ += [iG]
+                        _derH = iG.derH; et = _derH.Et
+                        Link = Clink(node_=[iG,nG],distance=dist,angle=(dy,dx),box=extend_box(iG.box,nG.box),
                                      derH=CH(H=deepcopy(_derH.H), Et=[et[0]+mA, et[1]+dA, et[2]+mA<dA, et[3]+dA<=mA]))
-                        comp_G(Link, Et, fd=1)  # + comp med_links
+                        comp_G(Link, Et, fd=1)  # comp med_links
                         if Link.derH.Et[0] > ave_Gm * Link.derH.Et[2] * nrng:
                             links += [Link]
 
@@ -153,20 +161,21 @@ def comp_G(link, iEt, fd):  # add dderH to link and link to the rims of comparan
         Et, rt, md_ = comp_ext(_G.distance,G.distance,len(_G.rim),len(G.rim),_G.angle,G.angle)
         dderH.n = 1; dderH.Et = Et; dderH.relt = rt
         dderH.H = [CH(Et=copy(Et), relt=copy(rt), H=md_, n=1)]
+        # compare co-mediating links between hyperlink nodes:
         for _mlink,mlink in zip(_G.rim,G.rim):
             if _mlink in mlink.compared_: continue
             (_y,_x),(y,x) = box2center(_mlink.box),box2center(mlink.box)
-            dy=_y-y; dx=_x-x; dist = np.hypot(dy,dx)  # distance between link centers, doesn't matter?
+            dy=_y-y; dx=_x-x; dist = np.hypot(dy,dx)  # distance between link centers, not evaluated?
             mA,dA = comp_angle(_mlink.angle,mlink.angle)  # node-mediated, distance eval in agg+ only
             if mA > ave_mA:
                 _mlink.compared_ += [mlink]; mlink.compared_ += [_mlink]
                 _derH = _mlink.derH; et = _derH.Et
                 mLink = Clink(node_=[_mlink,mlink],distance=dist,angle=(dy,dx),box=extend_box(mlink.box,_mlink.box),
                               derH=CH(H=deepcopy(_derH.H), Et=[et[0]+mA, et[1]+dA, et[2]+mA<dA, et[3]+dA<=mA]))
-                # compare mediating links between hyperlink nodes
                 comp_G(mLink, Et, fd=1)
-                if et[0] < ave * et[2]:
-                    break  # comp next mediated link if mediating links match
+                if et[0] > ave * et[2]:
+                    link.rim += mLink  # combined hyperlink
+                else: break  # comp next mediated link if mediating links match
     else:  # CGs
         rn= _G.n/G.n  # comp ext params prior: _L,L,_S,S,_A,A, dist, no comp_G unless match:
         et, rt, md_ = comp_ext(len(_G.node_),len(G.node_),_G.S,G.S/rn,_G.A,G.A)
