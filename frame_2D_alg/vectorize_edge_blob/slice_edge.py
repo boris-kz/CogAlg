@@ -33,6 +33,7 @@ class CsliceEdge(CsubFrame):
 
         def term(blob):  # extension of CsubFrame.CBlob.term(), evaluate for vectorization right after rng+ in intra_blob
             super().term()
+            blob.P_ = []
             if not blob.sign and blob.G > aveG * blob.root.rdn:
                 blob.vectorize()
 
@@ -44,7 +45,7 @@ class CsliceEdge(CsubFrame):
             yx_ = sorted(axisd.keys(), key=lambda yx: edge.dert_[yx][-1])  # sort by g
 
             # form P per non-overlapped max yx
-            edge.P_ = []; edge.rootd = {}
+            edge.rootd = {}
             while yx_:
                 yx = yx_.pop(); axis = axisd[yx]    # get max of maxes (highest g)
                 edge.P_ += [CP(edge, yx, axis)]     # form P

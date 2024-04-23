@@ -172,7 +172,7 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
 
 def sum2PP(root, P_, derP_, iRt, fd):  # sum links in Ps and Ps in PP
 
-    PP = CG(fd=fd,root=root,P_=P_,rng=root.rng+1)
+    PP = CG(fd=fd, root=root, rng=root.rng+1); PP.P_ = P_  # init P_
     # += uplinks:
     for derP in derP_:
         if derP.node_[0] not in P_ or derP.node_[1] not in P_: continue

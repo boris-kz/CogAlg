@@ -75,8 +75,8 @@ def agg_recursion(rroot, root, fagg=0):
     for G in Q:
         if sum(G.Et[:2]):  # G.rim was extended, sum in G.extH:
             for link in G.rim:
-                if len(G.extH.H)<len(link.derH.H): G.extH.append_(link.derH.H[-1],flat=0)  # pack last layer
-                else:  G.extH.H[-1].add_(link.derH.H[-1],irdnt=link.derH.H[-1].Et[2:])  # sum last layer
+                if G.extH: G.extH.H[-1].add_(link.derH.H[-1],irdnt=link.derH.H[-1].Et[2:])  # sum last layer
+                else:      G.extH.append_(link.derH.H[-1],flat=0)  # pack last layer
             upQ += [G]
     node_t = form_graph_t(root, upQ, Et, nrng)  # root_fd, eval der++ and feedback per Gd only
     if node_t:
@@ -90,34 +90,28 @@ def agg_recursion(rroot, root, fagg=0):
                         rroot.fback_ += [root.derH]
                         feedback(rroot)  # update root.root..
 
+
 def rng_recursion(root, Et, fagg):  # comp Gs in agg+, links in sub+
     nrng = 1
 
     if fagg:  # distance eval, else fd: mangle eval
-        _links = list(combinations(root.node_,r=2))
-    elif isinstance(root.link_[0].node_[0], CG):
-        # concat rim link combinations from all Clink node_ CGs:
-        _links = [list(product(link.node_[0].rim, link.node_[1].rim)) for link in root.link_]
-
-    if _links in locals:  # unmediated rng+ over node combinations or link.node.rim combinations
         while True:
-            for link in _links:
+            for link in list(combinations(root.node_,r=2)):
                 _G, G = link
                 if _G in G.compared_: continue
                 cy, cx = box2center(G.box); _cy, _cx = box2center(_G.box)
                 dy = cy-_cy; dx = cx-_cx;  dist = np.hypot(dy,dx)
-                if fagg:
-                    if nrng==1:  # eval distance between node centers
-                        fcomp = dist <= ave_dist
-                    else:
-                        M = (G.Et[0]+_G.Et[0])/2; R = (G.Et[2]+_G.Et[2])/2  # local
-                        fcomp = M / (dist/ave_dist) > ave * R
-                else:  # to form hyperlinks, compare rim link angles instead of distance eval:
-                    fcomp = comp_angle(_G.angle,G.angle)[0]
+                # eval distance between node centers:
+                if nrng==1: fcomp = dist <= ave_dist
+                else:
+                    M = (G.Et[0]+_G.Et[0])/2; R = (G.Et[2]+_G.Et[2])/2  # local
+                    fcomp = M / (dist/ave_dist) > ave * R
                 if fcomp:
                     G.compared_ += [_G]; _G.compared_ += [G]
                     Link = Clink(node_=[_G, G], distance=dist, angle=[dy, dx], box=extend_box(G.box, _G.box))
-                    comp_G(Link, Et, fd=0)
+                    Link = comp_G(Link, Et, fd=0)
+                if Link in locals and Link:
+                    for G in link: G.rim += [Link]
             # reuse combinations
             if Et[0] > ave_Gm * Et[2] * nrng: nrng += 1
             else: break
@@ -126,23 +120,31 @@ def rng_recursion(root, Et, fagg):  # comp Gs in agg+, links in sub+
         while True:
             links = []
             for link in _links:
-                _G,G = link.node_  # compare equimediated Clink nodes in hyperlink rims, if mediating links angle match?
-                if len(_G.rim)>nrng and len(G.rim)>nrng:
-                    ilink, nlink = _G.rim[-nrng], G.rim[nrng]  # +- mediation / nrng, increasing mediation gap?
-                    _A,A = ilink.angle, nlink.angle
-                    iG,nG = ilink.node_[0],nlink.node_[1]  # if position corresponds to mediation order, the Gs were not compared yet?
-                    if iG in nG.compared_: continue
-                    (_y,_x),(y,x) = box2center(iG.box),box2center(nG.box)
-                    dy=_y-y; dx=_x-x; dist = np.hypot(dy,dx)  # distance between node centers
-                    mA,dA = comp_angle(_A,A)  # node-mediated link angles
-                    if mA > ave_mA:
-                        iG.compared_ += [nG]; nG.compared_ += [iG]
-                        _derH = iG.derH; et = _derH.Et
-                        Link = Clink(node_=[iG,nG],distance=dist,angle=(dy,dx),box=extend_box(iG.box,nG.box),
-                                     derH=CH(H=deepcopy(_derH.H), Et=[et[0]+mA, et[1]+dA, et[2]+mA<dA, et[3]+dA<=mA]))
-                        comp_G(Link, Et, fd=1)  # comp med_links
-                        if Link.derH.Et[0] > ave_Gm * Link.derH.Et[2] * nrng:
-                            links += [Link]
+                for G in link.node_:  # compare equimediated Clink nodes in hyperlink rims, if mediating links angle match?
+                    if isinstance(G,Clink):
+                        if len(G.rim) > nrng-1:  # Clink rim is a hyperlink, +mediation / nrng
+                            rim = G.rim[nrng-1]  # link.rim should be nested now
+                            new_layer = []  # mA links in rim layer
+                        else: break  # med rng exhausted
+                    else: rim = G.rim  # flat in CGs, single-node mediated
+                    for _link in rim:
+                        if _link in link.compared_: continue
+                        (_y,_x),(y,x) = box2center(link.box),box2center(_link.box)
+                        dy=_y-y; dx=_x-x; dist = np.hypot(dy,dx)  # distance between link centers
+                        mA,dA = comp_angle(_link.angle,link.angle)
+                        if mA > ave_mA:
+                            _link.compared_+=[link]; link.compared_+=[_link]
+                            _derH = _link.derH; et = _derH.Et
+                            Link = Clink(node_=[_link,link],distance=dist,angle=(dy,dx),box=extend_box(_link.box,link.box),
+                                         derH=CH(H=deepcopy(_derH.H), Et=[et[0]+mA, et[1]+dA, et[2]+mA<dA, et[3]+dA<=mA]))
+                            Link = comp_G(Link, Et, fd=1)
+                            if Link.derH.Et[0] > ave_Gm * Link.derH.Et[2] * nrng:
+                                if new_layer in locals: new_layer += [Link]
+                                links += [Link]
+
+                for G in link.node_:  # move here from comp_G:
+                    if new_layer in locals:        G.rim += [new_layer]  # incremental link.rim else link.node mediation in next rng+
+                    elif Link in locals and Link:  G.rim += [Link]
 
             if Et[0] > ave_Gm * Et[2] * nrng:  # rng+ eval per arg cluster because comp is bilateral, 2nd test per new pair
                 nrng += 1; _links = links
@@ -174,7 +176,7 @@ def comp_G(link, iEt, fd):  # add dderH to link and link to the rims of comparan
                               derH=CH(H=deepcopy(_derH.H), Et=[et[0]+mA, et[1]+dA, et[2]+mA<dA, et[3]+dA<=mA]))
                 comp_G(mLink, Et, fd=1)
                 if et[0] > ave * et[2]:
-                    link.rim += mLink  # combined hyperlink
+                    link.rim += [mLink]  # combined hyperlink
                 else: break  # comp next mediated link if mediating links match
     else:  # CGs
         rn= _G.n/G.n  # comp ext params prior: _L,L,_S,S,_A,A, dist, no comp_G unless match:
@@ -194,14 +196,11 @@ def comp_G(link, iEt, fd):  # add dderH to link and link to the rims of comparan
     fin = 0
     for i in 0, 1:
         Val, Rdn = dderH.Et[i::2]
-        if Val > G_aves[i] * Rdn:
-            if not fin:  # include link once
-                fin = 1
-                for node in _G,G: # CG | Clink
-                    node.rim += [link]
+        if Val > G_aves[i] * Rdn: fin = 1
         _G.Et[i] += Val; G.Et[i] += Val  # not selective
         _G.Et[2+i] += Rdn; G.Et[2+i] += Rdn  # per fork link in both Gs
         # if select fork links: iEt[i::2] = [V+v for V,v in zip(iEt[i::2], dderH.Et[i::2])]
+    if fin: return link
 
 
 def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
@@ -240,7 +239,8 @@ def convolve_graph(iG_):  # node connectivity = sum surround link vals, incr.med
                 if not val: continue  # G has no new links
                 ave = G_aves[i]
                 for link in G.rim:  # if fd: use hyper-Links between links: link.link_, ~ G.rim, then add in dgraph.link_?
-                    if len(link.derH.H)<=len(G.extH.H): continue  # old links, else derH+= in comp_G, same for link Gs?
+                    # should be no old rims now
+                    # if len(link.derH.H)<=len(G.extH.H): continue  # old links, else derH+= in comp_G, same for link Gs?
                     # > ave derGs in new fd rim:
                     lval,lrdn = link.Et[i::2]  # step=2, graph-specific vals accumulated from surrounding nodes, or use link.node_.Et instead?
                     decay =  (link.relt[i] / (link.derH.n * 6)) ** mediation  # normalized decay at current mediation
@@ -289,11 +289,11 @@ def form_graph_t(root, upQ, Et, nrng):  # form Gm_,Gd_ from same-root nodes
 # not updated:
 def segment_graph(root, Q, fd, nrng):  # eval rim links with summed surround vals for density-based clustering
 
-    # graph+= [node] if >ave (surround connectivity * relative value of link to any internal node)
+    # graph += [node] if >ave (surround connectivity * relative value of link to any internal node)
     igraph_ = []; ave = G_aves[fd]
 
     for e in Q:  # init per updated node or link
-        uprim = [link for link in e.rim if len(link.derH.H)==len(e.extH.H)]
+        uprim = e.rim
         if uprim:  # skip nodes without add new added rim
             grapht = [[e],[],[*e.Et], uprim]  # link_ = updated rim
             e.root = grapht  # for merging
