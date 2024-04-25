@@ -33,7 +33,6 @@ class CsliceEdge(CsubFrame):
 
         def term(blob):  # extension of CsubFrame.CBlob.term(), evaluate for vectorization right after rng+ in intra_blob
             super().term()
-            blob.P_ = []
             if not blob.sign and blob.G > aveG * blob.root.rdn:
                 blob.vectorize()
 
@@ -45,7 +44,7 @@ class CsliceEdge(CsubFrame):
             yx_ = sorted(axisd.keys(), key=lambda yx: edge.dert_[yx][-1])  # sort by g
 
             # form P per non-overlapped max yx
-            edge.rootd = {}
+            edge.P_ = []; edge.rootd = {}
             while yx_:
                 yx = yx_.pop(); axis = axisd[yx]    # get max of maxes (highest g)
                 edge.P_ += [CP(edge, yx, axis)]     # form P
@@ -54,6 +53,7 @@ class CsliceEdge(CsubFrame):
             edge.P_.sort(key=lambda P: P.yx, reverse=True)
             edge.trace()
             # del edge.rootd
+            return edge
 
         def select_max(edge):
             axisd = {}  # map yx to axis
@@ -78,8 +78,9 @@ class CsliceEdge(CsubFrame):
                 for y, x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:
                     try:  # if yx has _P, try to form link
                         P = edge.rootd[y, x]
-                        if _P is not P and _P not in P.link_[0]:
-                            P.link_[0] += [_P]
+                        if _P is not P and _P not in P.link_[0] and P not in _P.link_[0]:
+                            if _P.yx < P.yx: P.link_[0] += [_P]
+                            else:            _P.link_[0] += [P]
                     except KeyError:    # if yx empty, keep tracing
                         if (y, x) not in edge.dert_: continue
                         edge.rootd[y, x] = _P
@@ -225,14 +226,15 @@ if __name__ == "__main__":
                 plt.plot(x_, y_, "k-", linewidth=3)
                 yp, xp = P.yx - yx0
                 for link in P.link_[0]:
-                    _yp, _xp = link.node_[0].yx - yx0
+                    _P = link.node_[0]
+                    assert _P.yx < P.yx
+                    _yp, _xp = _P.yx - yx0
                     plt.plot([_xp, xp], [_yp, yp], "ko--", alpha=0.5)
 
                 yx_ = [yx for yx in edge.rootd if edge.rootd[yx] is P]
                 if yx_:
                     y_, x_ = zip(*(yx_ - yx0))
                     plt.plot(x_, y_, 'o', alpha=0.5)
-
 
         ax = plt.gca()
         ax.set_aspect('equal', adjustable='box')

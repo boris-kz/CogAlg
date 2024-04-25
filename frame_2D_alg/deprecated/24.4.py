@@ -305,7 +305,26 @@ def comp_G(link, iEt, nrng=None):  # add dderH to link and link to the rims of c
             _G.Et[i] += Val; G.Et[i] += Val
             _G.Et[2+i] += Rdn; G.Et[2+i] += Rdn  # per fork link in both Gs
             # if select fork links: iEt[i::2] = [V+v for V,v in zip(iEt[i::2], dderH.Et[i::2])]
-
+'''
+        # comp G.link_ if fd else G.node_:
+        for i in 0,1:  # comp co-mediating links between hyperlink nodes, while prior match per direction:
+            new_rim = []
+            for _mlink_,mlink_ in product(_G.rim_t[i],G.rim_t[i]):
+                for _mlink, mlink in product(_mlink_,mlink_):  # use product here and above to get all possible pairs between 2 rims?
+                    if _mlink in mlink.compared_: continue
+                    (_y,_x),(y,x) = box2center(_mlink.box),box2center(mlink.box)
+                    dy=_y-y; dx=_x-x; dist = np.hypot(dy,dx)  # distance between link centers, not evaluated?
+                    mA,dA = comp_angle(_mlink.angle,mlink.angle)  # node-mediated, distance eval in agg+ only
+                    if mA > ave_mA:
+                        _mlink.compared_ += [mlink]; mlink.compared_ += [_mlink]
+                        _derH = _mlink.derH; et = _derH.Et
+                        mLink = Clink(node_=[_mlink,mlink],distance=dist,angle=(dy,dx),box=extend_box(mlink.box,_mlink.box),
+                                      derH=CH(H=deepcopy(_derH.H), Et=[et[0]+mA, et[1]+dA, et[2]+mA<dA, et[3]+dA<=mA]))
+                        comp_G(mLink, Et, fd=1, ri=i)
+                        if et[0] > ave * et[2]: new_rim += [mLink]  # combined hyperlink, not in mlinks
+                        else: break  # comp next mediated link if mediating match
+            link.rim_t[i] += [new_rim]  # nest per rng+?
+'''
 
 def comp_ext(_L,L,_S,S,_A,A, dist,direction=None):  # compare non-derivatives: node_ L,S,A, dist,direction:
 
