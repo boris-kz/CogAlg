@@ -91,7 +91,8 @@ def agg_recursion(rroot, root, fagg=0):
                         feedback(rroot)  # update root.root..
 
 
-# revise to compare prior-rng exemplars instead original nodes | links:
+# interlace with convolution for indirect rng+ instead?
+
 def rng_recursion(root, Et, fagg):  # comp Gs in agg+, links in sub+
     nrng = 1
 
@@ -119,9 +120,6 @@ def rng_recursion(root, Et, fagg):  # comp Gs in agg+, links in sub+
         while True:
             for link in root.link_:  # der+'rng+: directional and node-mediated comp link
                 # revise:
-                # link.rimt__ is a link-centered graph, that would overlap other connected-link - centered graphs.
-                # Where link is an exemplar, select max connected exemplars per rng to reduce resolution of rng+
-
                 for rimt_ in link.rimt__:  # compare equimediated Clink nodes in hyperlink rims, if mediating links angle match?
                     if len(rimt_) > nrng-1:  # rim is a hyperlink, nested by mediation / nrng
                         rimt = rimt_[-1]  # link.rim is nested per der+( rng+
@@ -198,7 +196,8 @@ def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
     return [M,D,mrdn,drdn], [mdec,ddec], [mL,dL, mS,dS, mA,dA]
 
 
-# draft:
+# draft, replace with interlaced rng+?:
+
 def convolve_graph(iG_):  # node connectivity = sum surround link vals, incr.mediated: Graph Convolution of Correlations
     '''
     Aggregate direct * indirect connectivity per node from indirect links via associated nodes, in multiple cycles.
@@ -219,7 +218,6 @@ def convolve_graph(iG_):  # node connectivity = sum surround link vals, incr.med
                 val,rdn = G.Et[i::2]  # rng+ for both segment forks
                 if not val: continue  # G has no new links
                 ave = G_aves[i]
-                # not sure, use both directions' rims?
                 for link in G.rim if isinstance(G,CG) else G.rimt__[-1][-1][0] + G.rimt__[-1][-1][1]:  # not updated
                     # > ave derGs in new fd rim:
                     lval,lrdn = link.Et[i::2]  # step=2, graph-specific vals accumulated from surrounding nodes, or use link.node_.Et instead?
@@ -228,7 +226,6 @@ def convolve_graph(iG_):  # node connectivity = sum surround link vals, incr.med
                     # add G.derH.comp_(_G.extH.H[-1]): temporary derH summed from surrounding G.derHs,
                     # for lower-res rng+, if no direct rng+ and high _G.V? or replace mediated rng+?
                     _val,_rdn = _G.Et[i::2] # current-loop vals and their difference from last-loop vals, before updating:
-                    # += adjacent Vs * dec: lateral modulation of node value, vs. current vertical modulation by Kernel comp:
                     V = (val+_val) * decay; dv = V-lval
                     R = (rdn+_rdn)  # rdn doesn't decay
                     link.Et[i::2] = [V,R]  # last-loop vals for next loop | segment_node_, dect is not updated
@@ -268,7 +265,7 @@ def form_graph_t(root, upQ, Et, nrng):  # form Gm_,Gd_ from same-root nodes
         return node_t
 
 
-def get_max_kernels(graph):
+def get_max_kernels(graph):  # use local-max kernels to init sub-graphs for segmentation
 
     G_ = copy(graph.node_)
     kernel_ = []
@@ -277,30 +274,32 @@ def get_max_kernels(graph):
         for link in G.rim:
             _G = link.node_[0] if link.node_[1] is G else link.node_[1]
             if _G.Et[0] > G.Et[0]:
-                fmax = 0; break
-            _G_ += _G
+                fmax = 0
+                break
+            _G_ += [_G]
         if fmax:
-            kernel = [[G]+_G_]  # immediate kernel
+            kernel = [G]+_G_  # immediate kernel
             for k in kernel:
                 k.root = kernel
                 if k in G_: G_.remove(k)
             kernel_ += [kernel]
-    for G in G_:  # remaining Gs are not in any kernels
-        _G_ = [link.node_[0] if link.node_[1] is G else link.node_[1] for link in G.rim]  # directly connected Gs, already checked
+    for G in G_:  # remaining Gs are not in any kernels, append to the nearest kernel
+        _G_ = [link.node_[0] if link.node_[1] is G else link.node_[1] for link in G.rim]  # directly connected Gs already checked
         __G_ = []
         while _G_:
-            for _G in _G_:
-                for link in _G.rim:
-                    __G = link.node_[0] if link.node_[1] is _G else link.node_[1]
-                    if __G not in G_:  # in some kernel;
-                        __G.root += G  # append to the nearest kernel
-                        G_.remove(G)
-                        break
-                    else:
-                        __G_ += __G
-            _G_ = __G_
+            while True:
+                for _G in _G_:
+                    for link in _G.rim:
+                        __G = link.node_[0] if link.node_[1] is _G else link.node_[1]  # indirectly connected Gs
+                        if __G not in G_:  # in some kernel, append G to it:
+                            G.root = __G.root
+                            __G.root += [G]
+                            break
+                        __G_ += [__G]
+                _G_ = __G_
     return kernel_
 
+# not relevant with kernel-based rng+, use discrete rng+ to append link.rimt_ tree:
 
 def add_rim_(link_):  # sub+: bidirectional rim_t += _links from last-layer node.rims, if they match link:
 
@@ -324,6 +323,10 @@ def add_rim_(link_):  # sub+: bidirectional rim_t += _links from last-layer node
 # not updated:
 def segment_graph(root, Q, fd, nrng):  # eval rim links with summed surround vals for density-based clustering
 
+    # may replace current segmentation not sure:
+    kernels = get_max_kernels(Q)
+    grapht_ = select_merge(kernels)  # refine by match to max, or only use it to selectively merge?
+
     # graph += [node] if >ave (surround connectivity * relative value of link to any internal node)
     igraph_ = []; ave = G_aves[fd]
 
@@ -339,8 +342,6 @@ def segment_graph(root, Q, fd, nrng):  # eval rim links with summed surround val
     while True:
         graph_ = []
         for grapht in _graph_:  # extend grapht Rim with +ve in-root links
-            # this is just a start:
-            get_max_kernels(grapht)
             # not revised:
             if grapht not in igraph_: continue  # skip merged graphs
             G_, Link_, Et, Rim = grapht

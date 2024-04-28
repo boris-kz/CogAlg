@@ -125,7 +125,7 @@ class Clink(CBase):  # the product of comparison between two nodes
         l.distance = distance  # distance between node centers
         l.Et = [0,0,0,0]  # graph-specific, accumulated from surrounding nodes in node_connect
         l.relt = [0,0]
-        l.rimt__ = []  # der+: lists of _links in link node rims, nested in rng+)der+
+        l.rimT = []  # dual tree of _links, each may have its own node-mediated links
         l.derH = CH() if derH is None else derH
         l.extH = CH() if extH is None else extH  # for der+
         l.root = None if root is None else root  # dgraphs that contain this link
