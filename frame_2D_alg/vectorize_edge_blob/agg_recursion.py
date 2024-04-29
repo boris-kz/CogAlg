@@ -64,9 +64,9 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
 
 
 def agg_recursion(rroot, root, fagg=0):
-    Et = [0,0,0,0]  # eval tuple, sum from Link_
 
-    nrng, Et = rng_recursion(root, Et, fagg)  # rng+ appends rim with prelink_
+    nrng, Et = rng_convolve(root, [0,0,0,0], fagg)
+
     for link in root.link_:
         link.Et = copy(link.derH.Et); link.relt = copy(link.derH.relt)  # accum from surrounding nodes in convolve_graph:
     Q = root.node_ if fagg else root.link_
@@ -90,42 +90,64 @@ def agg_recursion(rroot, root, fagg=0):
                         rroot.fback_ += [root.derH]
                         feedback(rroot)  # update root.root..
 
+def rng_convolve(root, Et, fagg):  # comp Gs in agg+, links in sub+
 
-# interlace with convolution for indirect rng+ instead?
-
-def rng_recursion(root, Et, fagg):  # comp Gs in agg+, links in sub+
     nrng = 1
-
     if fagg:  # distance eval, else fd: mangle eval
-        while True:
-            for link in list(combinations(root.node_,r=2)):
-                _G, G = link
-                if _G in G.compared_: continue
-                cy, cx = box2center(G.box); _cy, _cx = box2center(_G.box)
-                dy = cy-_cy; dx = cx-_cx;  dist = np.hypot(dy,dx)
-                # eval distance between node centers:
-                if nrng==1: fcomp = dist <= ave_dist
-                else:
-                    M = (G.Et[0]+_G.Et[0])/2; R = (G.Et[2]+_G.Et[2])/2  # local
-                    fcomp = M / (dist/ave_dist) > ave * R
-                if fcomp:
-                    G.compared_ += [_G]; _G.compared_ += [G]
-                    Link = Clink(node_=[_G, G], distance=dist, angle=[dy, dx], box=extend_box(G.box, _G.box))
-                    if comp_G(Link, Et, fd=0):
-                        for G in link: G.rim += [Link]
-            # reuse combinations
-            if Et[0] > ave_Gm * Et[2] * nrng: nrng += 1
-            else: break
+        G_ = []   # unique G + kernels
+        # kernel initialization:
+        for link in list(combinations(root.node_,r=2)):
+            _G, G = link
+            if _G in G.compared_: continue
+            cy, cx = box2center(G.box); _cy, _cx = box2center(_G.box)
+            dy = cy-_cy; dx = cx-_cx;  dist = np.hypot(dy,dx)
+            if nrng==1: fcomp = dist <= ave_dist  # eval distance between node centers
+            else:
+                M = (G.Et[0]+_G.Et[0])/2; R = (G.Et[2]+_G.Et[2])/2  # local
+                fcomp = M / (dist/ave_dist) > ave * R
+            if fcomp:
+                G.compared_ += [_G]; _G.compared_ += [G]
+                Link = Clink(node_=[_G, G], distance=dist, angle=[dy, dx], box=extend_box(G.box, _G.box))
+                Link = comp_G(Link, Et, fd=0)
+                if Link.Et[0] > ave:
+                    for node in _G,G:
+                        if node in G_: continue
+                        node.kernel = [link.node_[0] if link.node_[1] is node else link.node_[1] for _link in node.rim]  # initialization
+                        G_ += [node]
+        while len(G_) > 2:  # rng+ with kernel rims formed per loop
+            _G_ = []
+            for G in G_:
+                for link in G.rim:
+                    if link.Et[0] > ave:
+                        _G = link.node_[1] if link.node_[0] is G else link.node_[0]
+                        derH = comp_kernel(G.kernel,_G.kernel)
+                        if derH.Et[0] > ave:
+                            link.ExtH.add_(derH,irdnt=derH.H[-1].Et[2:]) if link.ExtH else link.ExtH.append_(derH,flat=1)
+                            for node in _G,G:
+                                if node in _G_: continue
+                                kernel = []
+                                for _link in node.rim:
+                                    _node = link.node_[0] if link.node_[1] is node else link.node_[1]
+                                    kernel += _node.kernel
+                                    node.kernel = kernel  # last kernel rim only
+                                    _G_ += [node]
+            G_ = _G_; nrng += 1
     else:
-        while True:
-            for link in root.link_:  # der+'rng+: directional and node-mediated comp link
-                # revise:
-                for rimt_ in link.rimt__:  # compare equimediated Clink nodes in hyperlink rims, if mediating links angle match?
-                    if len(rimt_) > nrng-1:  # rim is a hyperlink, nested by mediation / nrng
-                        rimt = rimt_[-1]  # link.rim is nested per der+( rng+
-                    else: break  # med rng exhausted
-
-                    new_rimt = [[],[]]
+        # draft:
+        link_ = root.link_  # init for der+ rng+ in root.link_ rimTs
+        _link_ = []
+        while link_:
+            for link in link_:  # der+'rng+: directional and node-mediated comp link
+                for rim__ in link.rim__t:  # two directions of layers, each nested by mediating links
+                    for _L in [L for L in rim for rim in rim__[-1]]:  # last nested layer
+                        _G = _L.node_[0] if _L.node_[1] in link.node_ else _L.node_[1]
+                        for _link in _G.rim:
+                            Link = Clink(node_=[link,_link])
+                            if comp_G(Link):
+                                _link_ += Link
+            link_ = _link_; nrng += 1
+            '''  probably not relevant:
+                new_rimt = [[],[]]
                     for i, rim in enumerate(rimt):
                         for _link in rim:
                             if _link in link.compared_ or _link not in root.link_: continue
@@ -143,7 +165,7 @@ def rng_recursion(root, Et, fagg):  # comp Gs in agg+, links in sub+
             if Et[0] > ave_Gm * Et[2] * nrng:  # rng+ eval per arg cluster because comp is bilateral, 2nd test per new pair
                 nrng += 1
             else: break
-
+            '''
     return nrng, Et
 
 
@@ -323,8 +345,7 @@ def add_rim_(link_):  # sub+: bidirectional rim_t += _links from last-layer node
 # not updated:
 def segment_graph(root, Q, fd, nrng):  # eval rim links with summed surround vals for density-based clustering
 
-    # may replace current segmentation not sure:
-    kernels = get_max_kernels(Q)
+    kernels = get_max_kernels(Q)  # may replace current segmentation not sure
     grapht_ = select_merge(kernels)  # refine by match to max, or only use it to selectively merge?
 
     # graph += [node] if >ave (surround connectivity * relative value of link to any internal node)
