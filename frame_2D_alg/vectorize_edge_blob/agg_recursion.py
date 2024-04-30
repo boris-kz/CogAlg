@@ -62,17 +62,15 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
                             edge.node_ = pruned_node_  # agg+ of PP nodes:
                             agg_recursion(None, edge, fagg=1)
 
-
 def agg_recursion(rroot, root, fagg=0):
 
-    nrng, Et = rng_convolve(root, [0,0,0,0], fagg)
-
     for link in root.link_:
-        link.Et = copy(link.derH.Et); link.relt = copy(link.derH.relt)  # accum from surrounding nodes in convolve_graph:
-    Q = root.node_ if fagg else root.link_
-    convolve_graph(Q)  # convolution over graph node_|link_
-    upQ = []  # upnode_/ agg+, uplink_/ der+
-    for G in Q:
+        link.Et = copy(link.derH.Et); link.relt = copy(link.derH.relt)
+        # accum from surrounding nodes in rng_convolve:
+    nrng, Et = rng_convolve(root, [0,0,0,0], fagg)
+    # upnode_/agg+, uplink_/der+:
+    upQ = []
+    for G in root.node_ if fagg else root.link_:
         if sum(G.Et[:2]):  # G.rim was extended, sum in G.extH:
             for link in G.rim if fagg else G.rimt__[-1][-1][0] + G.rimt__[-1][-1][1]:
                 if G.extH: G.extH.H[-1].add_(link.derH.H[-1],irdnt=link.derH.H[-1].Et[2:])  # sum last layer
@@ -93,9 +91,8 @@ def agg_recursion(rroot, root, fagg=0):
 def rng_convolve(root, Et, fagg):  # comp Gs in agg+, links in sub+
 
     nrng = 1
-    if fagg:  # distance eval, else fd: mangle eval
-        G_ = []   # unique G + kernels
-        # kernel initialization:
+    if fagg:  # comp CG
+        G_ = []  # initialize kernels:
         for link in list(combinations(root.node_,r=2)):
             _G, G = link
             if _G in G.compared_: continue
@@ -111,62 +108,98 @@ def rng_convolve(root, Et, fagg):  # comp Gs in agg+, links in sub+
                 Link = comp_G(Link, Et, fd=0)
                 if Link.Et[0] > ave:
                     for node in _G,G:
-                        if node in G_: continue
-                        node.kernel = [link.node_[0] if link.node_[1] is node else link.node_[1] for _link in node.rim]  # initialization
-                        G_ += [node]
-        while len(G_) > 2:  # rng+ with kernel rims formed per loop
+                        node.rim += [Link]
+                        if node not in G_: G_ += [node]
+        for G in G_:
+            G.kernel = [link.node_[0] if link.node_[1] is G else link.node_[1] for link in G.rim]  # initialization
+        while len(G_)> 2:  # rng+ with kernel rims formed per loop
             _G_ = []
             for G in G_:
                 for link in G.rim:
-                    if link.Et[0] > ave:
-                        _G = link.node_[1] if link.node_[0] is G else link.node_[0]
-                        derH = comp_kernel(G.kernel,_G.kernel)
-                        if derH.Et[0] > ave:
-                            link.ExtH.add_(derH,irdnt=derH.H[-1].Et[2:]) if link.ExtH else link.ExtH.append_(derH,flat=1)
-                            for node in _G,G:
-                                if node in _G_: continue
-                                kernel = []
-                                for _link in node.rim:
-                                    _node = link.node_[0] if link.node_[1] is node else link.node_[1]
-                                    kernel += _node.kernel
-                                    node.kernel = kernel  # last kernel rim only
-                                    _G_ += [node]
+                    if link.Et[0] > ave:  # link.Et+ per rng
+                        comp_kernel(link, _G_) # sum full kernel: link val = rel node similarity * connectivity?
             G_ = _G_; nrng += 1
-    else:
-        # draft:
-        link_ = root.link_  # init for der+ rng+ in root.link_ rimTs
+
+    else:  # comp Clinks: der+ rng+ in root.link_ rim__t node rims
+        link_ = root.link_
         _link_ = []
         while link_:
             for link in link_:  # der+'rng+: directional and node-mediated comp link
-                for rim__ in link.rim__t:  # two directions of layers, each nested by mediating links
-                    for _L in [L for L in rim for rim in rim__[-1]]:  # last nested layer
+                for dir, rim__ in zip((0,1), link.rim__t):  # two directions of layers, each nested by mediating links
+                    for _L in [L for rim in rim__[-1] for L in rim]:  # last nested layer
+                        _L_ = []
                         _G = _L.node_[0] if _L.node_[1] in link.node_ else _L.node_[1]
                         for _link in _G.rim:
                             Link = Clink(node_=[link,_link])
-                            if comp_G(Link):
-                                _link_ += Link
+                            if comp_G(Link, fd=1):
+                                _link_ += link  # old link
+                                _L_ += Link  # new link
+                        if _L_: link.rim__t[dir][-1] += [_L_]  # append matching _L-mediated links
             link_ = _link_; nrng += 1
-            '''  probably not relevant:
-                new_rimt = [[],[]]
-                    for i, rim in enumerate(rimt):
-                        for _link in rim:
-                            if _link in link.compared_ or _link not in root.link_: continue
-                            (_y,_x),(y,x) = box2center(link.box),box2center(_link.box)
-                            dy=_y-y; dx=_x-x; dist = np.hypot(dy,dx)  # distance between link centers
-                            mA,dA = comp_angle(_link.angle,link.angle)
-                            if mA > ave_mA:
-                                _link.compared_+=[link]; link.compared_+=[_link]
-                                _derH = _link.derH; et = _derH.Et
-                                Link = Clink(node_=[_link,link],distance=dist,angle=(dy,dx),box=extend_box(_link.box,link.box),
-                                             derH=CH(H=deepcopy(_derH.H), Et=[et[0]+mA, et[1]+dA, et[2]+mA<dA, et[3]+dA<=mA]))
-                                if comp_G(Link, Et, fd=1):
-                                    new_rimt[i] += [Link]  # append link.rim
-                    rimt_ += [new_rimt]  # new rng's rimt
-            if Et[0] > ave_Gm * Et[2] * nrng:  # rng+ eval per arg cluster because comp is bilateral, 2nd test per new pair
-                nrng += 1
-            else: break
-            '''
     return nrng, Et
+
+def comp_kernel(link, G_, fd=0):
+
+    _G, G = link.node_  # same direction
+    ave = G_aves[fd]
+    _K = set(_G.kH[-1]); K = set(G.kH[-1]); overlap = K.intersection(_K)  # sum unique nodes in kernels:
+    _n,_L,_S,_A,_latuple,_iderH,_derH,_Et = sum_kernel(_K.symmetric_difference(overlap))
+    n, L, S, A, latuple, iderH, derH, Et  = sum_kernel(K.symmetric_difference(overlap))
+    rn = _n/n
+    dderH = CH()
+    et, rt, md_ = comp_ext(_L,L,_S,S/rn,_A,A)
+    Et, Rt, Md_ = comp_latuple(_latuple, latuple, rn, fagg=1)
+    dderH.n = 1; dderH.Et = np.add(Et,et); dderH.relt = np.add(Rt,rt)
+    dderH.H = [CH(Et=et,relt=rt,H=md_,n=.5),CH(Et=Et,relt=Rt,H=Md_,n=1)]
+    # / PP:
+    _iderH.comp_(iderH, dderH, rn, fagg=1, flat=0)
+    # / G, if >1 PPs | Gs:
+    if _derH and derH: _derH.comp_(derH, dderH, rn, fagg=1, flat=0)  # append and sum new dderH to base dderH
+    # if _extH and extH: _extH.comp_(extH, dderH, rn, fagg=1, flat=1)
+    if dderH.Et[0] > ave:
+        link.ExtH.H[-1].add_(dderH, irdnt=dderH.H[-1].Et[2:]) if len(link.ExtH.H)==nrng else link.ExtH.append_(dderH,flat=1)
+        for node in _G, G:
+            if node in G_: continue  # new kernel is already added
+            kLayer = []
+            for _link in node.rim:
+                _node = link.node_[0] if link.node_[1] is node else link.node_[1]
+                kLayer += [_G for _G in _node.kernel if _G not in kLayer]
+                '''
+                So we need to sum full kernel in G.ExtH, 
+                define link val = rel node similarity: link.ExtH, * connectivity: ave node.ExtH:  
+                '''
+                params = sum_kernel(kLayer)  # not updated:
+                lval,lrdn = link.Et[fd::2]  # step=2, graph-specific vals accumulated from surrounding nodes, or use link.node_.Et instead?
+                decay =  (link.relt[fd] / (link.derH.n * 6)) ** nrng  # normalized decay at current mediation
+                _G = link.node_[0] if link.node_[1] is G else link.node_[1]
+                _val,_rdn = _G.Et[fd::2] # current-loop vals and their difference from last-loop vals, before updating:
+                V = (val+_val) * decay; dv = V-lval
+                R = (rdn+_rdn)  # rdn doesn't decay
+                link.Et[fd::2] = [V,R]  # last-loop vals for next loop | segment_node_, dect is not updated
+                if dv > ave * R:  # extend mediation if last-update val, may be negative
+                    G.Et[fd::2] = [V+v for V,v in zip(G.Et[fd::2],[V,R])]  # last layer link vals
+                if V > ave * R:  # updated even if terminated
+                    G.Et[fd::2] = [V+v for V,v in zip(G.Et[fd::2], [dv,R])]  # use absolute R?
+
+            node.kH += [kLayer]  # last kernel rim
+            G_ += [node]
+
+def sum_kernel(kernel):
+
+    _G = kernel[0]
+    n, L, S, A = _G.n, len(_G.node_), _G.S, _G.A
+    latuple = deepcopy(_G.latuple)
+    iderH = deepcopy(_G.iderH)
+    derH = deepcopy(_G.derH)
+    Et = copy(_G.Et)
+    for G in kernel[1:]:
+        latuple = [P+p for P,p in zip(latuple[:-1],G.latuple[:-1])] + [[A+a for A,a in zip(latuple[-1],G.latuple[-1])]]
+        n += G.n;  L += len(G.node_); S += G.S;  A =  [ Angle+angle for Angle, angle in zip(A, G.A)]
+        if G.iderH: iderH.add_(G.iderH)
+        if G.derH:  derH.add_(G.derH)
+        Et.add_(G.Et)
+
+    return n, L, S, A, latuple, iderH, derH, Et  # not sure about Et
 
 
 def comp_G(link, iEt, fd):  # add dderH to link and link to the rims of comparands, which may be Gs or links
@@ -175,8 +208,7 @@ def comp_G(link, iEt, fd):  # add dderH to link and link to the rims of comparan
     _G, G = link.node_
     if fd:  # Clink Gs
         rn= min(_G.node_[0].n,_G.node_[1].n)/ min(G.node_[0].n,G.node_[1].n)
-        # not revised:
-        Et, rt, md_ = comp_ext(_G.distance,G.distance, len(_G.rimt__[-1][-1][0])+len(_G.rimt__[-1][-1][1]), len(G.rimt__[-1][-1][0])+len(G.rimt__[-1][-1][1]), _G.angle,G.angle)
+        Et, rt, md_ = comp_ext(_G.distance,G.distance, len(_G.rim__t[0][-1])+len(_G.rim__t[1][-1]),len(G.rim__t[0][-1])+len(G.rim__t[1][-1]), _G.angle,G.angle)
         dderH.n = 1; dderH.Et = Et; dderH.relt = rt
         dderH.H = [CH(Et=copy(Et), relt=copy(rt), H=md_, n=1)]
     else:  # CG Gs
@@ -218,53 +250,6 @@ def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
     return [M,D,mrdn,drdn], [mdec,ddec], [mL,dL, mS,dS, mA,dA]
 
 
-# draft, replace with interlaced rng+?:
-
-def convolve_graph(iG_):  # node connectivity = sum surround link vals, incr.mediated: Graph Convolution of Correlations
-    '''
-    Aggregate direct * indirect connectivity per node from indirect links via associated nodes, in multiple cycles.
-    Each cycle adds contributions of previous cycles to linked-nodes connectivity, propagated through the network.
-    Math: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/node_connect.png
-    Link-mediated in all iterations, no layers of kernels, update node Et.
-    Add der+: cross-comp root.link_, update link Et.
-    Not sure: sum and compare kernel params: reduced-resolution rng+, lateral link-mediated vs. vertical in agg_kernels?
-    '''
-    _G_ = iG_; fd = isinstance(iG_[0],Clink)  # ave = G_aves[fd]  # ilink_ if fd, very rare?
-    while True:
-        # eval accumulated G connectivity with node-mediated range extension
-        G_ = []  # next connectivity expansion, use link_ instead? more selective by DV,Lent
-        mediation = 1  # n intermediated nodes, increasing decay
-        for G in _G_:
-            uprim = []  # >ave updates of direct links
-            for i in 0,1:
-                val,rdn = G.Et[i::2]  # rng+ for both segment forks
-                if not val: continue  # G has no new links
-                ave = G_aves[i]
-                for link in G.rim if isinstance(G,CG) else G.rimt__[-1][-1][0] + G.rimt__[-1][-1][1]:  # not updated
-                    # > ave derGs in new fd rim:
-                    lval,lrdn = link.Et[i::2]  # step=2, graph-specific vals accumulated from surrounding nodes, or use link.node_.Et instead?
-                    decay =  (link.relt[i] / (link.derH.n * 6)) ** mediation  # normalized decay at current mediation
-                    _G = link.node_[0] if link.node_[1] is G else link.node_[1]
-                    # add G.derH.comp_(_G.extH.H[-1]): temporary derH summed from surrounding G.derHs,
-                    # for lower-res rng+, if no direct rng+ and high _G.V? or replace mediated rng+?
-                    _val,_rdn = _G.Et[i::2] # current-loop vals and their difference from last-loop vals, before updating:
-                    V = (val+_val) * decay; dv = V-lval
-                    R = (rdn+_rdn)  # rdn doesn't decay
-                    link.Et[i::2] = [V,R]  # last-loop vals for next loop | segment_node_, dect is not updated
-                    if dv > ave * R:  # extend mediation if last-update val, may be negative
-                        G.Et[i::2] = [V+v for V,v in zip(G.Et[i::2],[V,R])]  # last layer link vals
-                        if link not in uprim: uprim += [link]
-                    if V > ave * R:  # updated even if terminated
-                        G.Et[i::2] = [V+v for V,v in zip(G.Et[i::2], [dv,R])]  # use absolute R?
-            if uprim:
-                G_ += [G]  # list of nodes to check in next loop
-        if G_:
-            mediation += 1  # n intermediated nodes in next loop
-            _G_ = G_  # exclude weakly incremented Gs from next connectivity expansion loop
-        else:
-            break
-
-
 def form_graph_t(root, upQ, Et, nrng):  # form Gm_,Gd_ from same-root nodes
 
     node_t = []
@@ -274,7 +259,6 @@ def form_graph_t(root, upQ, Et, nrng):  # form Gm_,Gd_ from same-root nodes
             if fd:  # der+ after rng++ term by high ds
                 for graph in graph_:
                     if graph.link_ and graph.Et[1] > G_aves[1] * graph.Et[3]:  # Et is summed from all links
-                        add_rim_(graph.link_)
                         agg_recursion(root, graph, fagg=0)  # graph.node_ is not node_t yet
                     elif graph.derH:
                         root.fback_ += [graph.derH]
@@ -320,27 +304,6 @@ def get_max_kernels(graph):  # use local-max kernels to init sub-graphs for segm
                         __G_ += [__G]
                 _G_ = __G_
     return kernel_
-
-# not relevant with kernel-based rng+, use discrete rng+ to append link.rimt_ tree:
-
-def add_rim_(link_):  # sub+: bidirectional rim_t += _links from last-layer node.rims, if they match link:
-
-    for link in link_:
-        new_rimt = [[],[]]
-        if link.rimt__:
-            rimt = [[],[]]
-            for _rimt in link.rimt__[-1]:
-                rimt[0] += _rimt[0]; rimt[1] += _rimt[1]  # flatten nested rimt_
-        else:  rimt = [link.node_[0].rim,link.node_[1].rim]  # 1st sub+/ link
-        for i, rim, new_rim in zip((0,1), rimt, new_rimt):
-            for _link in rim:
-                if _link is link or link in new_rim: continue
-                angle = link.angle if i else [-d for d in link.angle]  # reverse angle direction for left link comp
-                # or compare the whole links, which is the actual der+?
-                if comp_angle(angle, _link.angle)[0] > ave_mA:
-                    new_rim += [_link]  # from rng++/ last der+?
-        if any(new_rimt): link.rimt__ += [[new_rimt]]  # double nesting for next rng+
-        # this can be default? Else we will need a lot of checking for empty rimt__ later
 
 # not updated:
 def segment_graph(root, Q, fd, nrng):  # eval rim links with summed surround vals for density-based clustering

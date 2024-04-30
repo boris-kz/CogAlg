@@ -521,4 +521,66 @@ def rng_recursion(root, Et, fagg):  # comp Gs in agg+, links in sub+
 
     return nrng, Et
 
+def convolve_graph(iG_):  # node connectivity = sum surround link vals, incr.mediated: Graph Convolution of Correlations
+    '''
+    Aggregate direct * indirect connectivity per node from indirect links via associated nodes, in multiple cycles.
+    Each cycle adds contributions of previous cycles to linked-nodes connectivity, propagated through the network.
+    Math: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/node_connect.png
+    Link-mediated in all iterations, no layers of kernels, update node Et.
+    Add der+: cross-comp root.link_, update link Et.
+    Not sure: sum and compare kernel params: reduced-resolution rng+, lateral link-mediated vs. vertical in agg_kernels?
+    '''
+    _G_ = iG_; fd = isinstance(iG_[0],Clink)  # ave = G_aves[fd]  # ilink_ if fd, very rare?
+    while True:
+        # eval accumulated G connectivity with node-mediated range extension
+        G_ = []  # next connectivity expansion, use link_ instead? more selective by DV,Lent
+        mediation = 1  # n intermediated nodes, increasing decay
+        for G in _G_:
+            uprim = []  # >ave updates of direct links
+            for i in 0,1:
+                val,rdn = G.Et[i::2]  # rng+ for both segment forks
+                if not val: continue  # G has no new links
+                ave = G_aves[i]
+                for link in G.rim if isinstance(G,CG) else G.rimt__[-1][-1][0] + G.rimt__[-1][-1][1]:  # not updated
+                    # > ave derGs in new fd rim:
+                    lval,lrdn = link.Et[i::2]  # step=2, graph-specific vals accumulated from surrounding nodes, or use link.node_.Et instead?
+                    decay =  (link.relt[i] / (link.derH.n * 6)) ** mediation  # normalized decay at current mediation
+                    _G = link.node_[0] if link.node_[1] is G else link.node_[1]
+                    _val,_rdn = _G.Et[i::2] # current-loop vals and their difference from last-loop vals, before updating:
+                    V = (val+_val) * decay; dv = V-lval
+                    R = (rdn+_rdn)  # rdn doesn't decay
+                    link.Et[i::2] = [V,R]  # last-loop vals for next loop | segment_node_, dect is not updated
+                    if dv > ave * R:  # extend mediation if last-update val, may be negative
+                        G.Et[i::2] = [V+v for V,v in zip(G.Et[i::2],[V,R])]  # last layer link vals
+                        if link not in uprim: uprim += [link]
+                    if V > ave * R:  # updated even if terminated
+                        G.Et[i::2] = [V+v for V,v in zip(G.Et[i::2], [dv,R])]  # use absolute R?
+            if uprim:
+                G_ += [G]  # list of nodes to check in next loop
+        if G_:
+            mediation += 1  # n intermediated nodes in next loop
+            _G_ = G_  # exclude weakly incremented Gs from next connectivity expansion loop
+        else:
+            break
+
+# not relevant with kernel-based rng+, use discrete rng+ to append link.rimt_ tree:
+def add_rim_(link_):  # sub+: bidirectional rim_t += _links from last-layer node.rims, if they match link:
+
+    for link in link_:
+        new_rimt = [[],[]]
+        if link.rimt__:
+            rimt = [[],[]]
+            for _rimt in link.rimt__[-1]:
+                rimt[0] += _rimt[0]; rimt[1] += _rimt[1]  # flatten nested rimt_
+        else:  rimt = [link.node_[0].rim,link.node_[1].rim]  # 1st sub+/ link
+        for i, rim, new_rim in zip((0,1), rimt, new_rimt):
+            for _link in rim:
+                if _link is link or link in new_rim: continue
+                angle = link.angle if i else [-d for d in link.angle]  # reverse angle direction for left link comp
+                # or compare the whole links, which is the actual der+?
+                if comp_angle(angle, _link.angle)[0] > ave_mA:
+                    new_rim += [_link]  # from rng++/ last der+?
+        if any(new_rimt): link.rimt__ += [[new_rimt]]  # double nesting for next rng+
+        # this can be default? Else we will need a lot of checking for empty rimt__ later
+
 
