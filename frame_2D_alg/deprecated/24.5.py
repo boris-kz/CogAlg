@@ -70,3 +70,22 @@ def segment_graph(root, Q, fd, nrng):  # eval rim links with summed surround val
             graph_ += [sum2graph(root, grapht[:3], fd, nrng)]
 
     return graph_
+
+# non-recursive inclusion per single link
+def segment_graph(root, Q, fd, nrng):  # eval rim links with summed surround vals for density-based clustering
+    '''
+    kernels = get_max_kernels(Q)  # parallelization of link tracing, not urgent
+    grapht_ = select_merge(kernels)  # refine by match to max, or only use it to selectively merge?
+    '''
+
+    grapht_ = []
+    # node_|link_
+    for node in copy(Q):  # depth-first eval merge nodes connected via their rims|kernels:
+        if node not in Q: continue  # already merged
+        grapht = [[],[],[0,0,0,0],[]]  # G_, Link_, Et, adjacent nodes
+        Q.remove(node)
+        grapht_ += [grapht]
+        merge_node(Q, grapht_, grapht, node, fd)  # default for initialization
+    # form Cgraphs if Val > ave* Rdn:
+    return [sum2graph(root, grapht[:3], fd, nrng) for grapht in grapht_ if  grapht[2][fd] > ave * grapht[2][2+fd]]
+
