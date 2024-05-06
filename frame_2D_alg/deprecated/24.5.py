@@ -77,7 +77,6 @@ def segment_graph(root, Q, fd, nrng):  # eval rim links with summed surround val
     kernels = get_max_kernels(Q)  # parallelization of link tracing, not urgent
     grapht_ = select_merge(kernels)  # refine by match to max, or only use it to selectively merge?
     '''
-
     grapht_ = []
     # node_|link_
     for node in copy(Q):  # depth-first eval merge nodes connected via their rims|kernels:
