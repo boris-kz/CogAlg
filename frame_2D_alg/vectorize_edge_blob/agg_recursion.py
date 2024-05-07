@@ -79,8 +79,9 @@ def agg_recursion(rroot, root, fagg=0):
                     if rroot and fd and root.derH:  # der+ only (check not empty root.derH)
                         rroot.fback_ += [root.derH]
                         feedback(rroot)  # update root.root..
-
-# a version of graph convolutional network
+'''
+a version of graph convolutional network without backprop
+'''
 def rng_convolve(root, Et, fagg):  # comp Gs|kernels in agg+, links | link rim__t node rims in sub+
 
     nrng = 1
@@ -109,7 +110,8 @@ def rng_convolve(root, Et, fagg):  # comp Gs|kernels in agg+, links | link rim__
                 else: G.derH = deepcopy(link.derH)
                 krim += [link.node_[0] if link.node_[1] is G else link.node_[1]]
             G.kH = [krim]
-        # node-mediated rng+: recursive center node extH += linked node derHs for next-loop cross-comp
+        # aggregate rng+: recursive center node DerH += linked node derHs for next-loop cross-comp
+        iG_ = G_
         while len(G_) > 2:
             nrng += 1; _G_ = []
             for G in G_:
@@ -118,6 +120,11 @@ def rng_convolve(root, Et, fagg):  # comp Gs|kernels in agg+, links | link rim__
                     if link.Et[0] > ave:  # link.Et+ per rng
                         comp_krim(link, _G_, nrng)  # + kernel rim / loop, sum in G.extH, derivatives in link.extH?
             G_ = _G_
+        # G.extH+ for segmentation
+        for G in iG_:
+            for i, link in enumerate(G.rim):
+                G.extH.add_(link.DerH) if i else G.extH.append_(link.DerH, flat=1)
+
     else:  # comp Clinks: der+'rng+ in root.link_ rim__t node rims
         link_ = root.link_; _link_ = []
         while link_:
@@ -137,10 +144,10 @@ def rng_convolve(root, Et, fagg):  # comp Gs|kernels in agg+, links | link rim__
     return nrng, Et
 
 '''
-G.DerH sums from krim _G.derHs, not from links, so it's empty in the first loop.
-_G.derHs can't be empty in comp_krim, it's init in loop link.derHs
+G.DerH sums krim _G.derHs, not from links, so it's empty in the first loop.
+_G.derHs can't be empty in comp_krim: init in loop link.derHs
 link.DerH is ders from comp G.DerH in comp_krim
-G.extH is sums from link DerH?
+G.extH sums link.DerHs
 '''
 def comp_krim(link, G_, nrng, fd=0):  # sum rim _G.derHs, compare to form link.DerH layer
 
@@ -157,7 +164,7 @@ def comp_krim(link, G_, nrng, fd=0):  # sum rim _G.derHs, compare to form link.D
                 else:         node.DerH = deepcopy(__node.derH)  # init
         node.kH += [krim]
         G_ += [node]
-    # sum kernel rim _Gs without overlap:
+    # sum G-unique kernel rims:
     _n,_L,_S,_A,_latuple,_iderH,_derH,_Et = sum_krim(list(set(_G.kH[-1])-set(G.kH[-1])))
     n, L, S, A, latuple, iderH, derH, Et  = sum_krim(list(set(G.kH[-1])-set(_G.kH[-1])))
     rn = _n / n
@@ -171,12 +178,10 @@ def comp_krim(link, G_, nrng, fd=0):  # sum rim _G.derHs, compare to form link.D
     # / G, if >1 PPs | Gs:
     if _derH and derH: _derH.comp_(derH, dderH, rn, fagg=1, flat=0)  # append and sum new dderH to base dderH
     # empty extH
-    if dderH.Et[0] > ave * dderH.Et[2]:
-        # nested link.derH vs DerH?
+    if dderH.Et[0] > ave * dderH.Et[2]:  # use nested link.derH vs DerH?
         link.DerH.H[-1].add_(dderH, irdnt=dderH.H[-1].Et[2:]) if len(link.DerH.H)==nrng else link.DerH.append_(dderH,flat=1)
 
     # connectivity eval in segment_graph via decay = (link.relt[fd] / (link.derH.n * 6)) ** nrng  # normalized decay at current mediation
-
 
 def sum_krim(krim):  # sum last kernel layer
 
@@ -188,7 +193,7 @@ def sum_krim(krim):  # sum last kernel layer
     Et = copy(_G.Et)
     for G in krim[1:]:
         latuple = [P+p for P,p in zip(latuple[:-1],G.latuple[:-1])] + [[A+a for A,a in zip(latuple[-1],G.latuple[-1])]]
-        n += G.n;  L += len(G.node_); S += G.S;  A =  [ Angle+angle for Angle, angle in zip(A, G.A)]
+        n+=G.n; L+=len(G.node_); S+=G.S; A=[Angle+angle for Angle,angle in zip(A,G.A)]
         if G.iderH: iderH.add_(G.iderH)
         if G.derH:  derH.add_(G.derH)
         np.add(Et,G.Et)
@@ -266,8 +271,11 @@ def form_graph_t(root, upQ, Et, nrng):  # form Gm_,Gd_ from same-root nodes
         root.node_[:] = node_t  # else keep root.node_
         return node_t
 
-# draft, need to make it scalable:
-
+'''
+we need to parallelize clustering, through some form of backprop from cluster representations:
+form new layer of graphs for each node kernel rim layer, expanding to frame|root box.
+eval node similarity * nearest_nodes proximity: no disconnected nodes?
+'''
 def segment_graph(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster assignment
 
     ''' kernels = get_max_kernels(Q)  # parallelization of link tracing, not urgent
@@ -279,18 +287,15 @@ def segment_graph(root, Q, fd, nrng):  # recursive eval node_|link_ rims for clu
     while True:
         node_ = []
         for node in _node_:  # depth-first eval merge node_|link_ connected via their rims:
-            if node not in G_:
-                continue  # merged?
+            if node not in G_: continue  # merged?
             if not r:  # init in 1st loop
                 grapht = [[node],[],[0,0,0,0]]  # G_, Link_, Et
                 grapht_ += [grapht]
                 node.root = grapht
-            G_.remove(node)
-            upV, remaining_node_ = merge_node(grapht_, node_, node, fd, upV=0)
+            upV, remaining_node_ = merge_node(grapht_, G_, node, fd, upV=0)  # G_ to remove merged node
             if upV > ave:  # graph update value, accumulate?
                 node_ += [node]
-            G_ += remaining_node_  # re-add nodes
-            node_ += remaining_node_  # for next while loop
+            G_ += remaining_node_; node_ += remaining_node_    # re-add for next while loop
         if node_:
             _node_ = G_ = copy(node_)
         else:
@@ -301,37 +306,40 @@ def segment_graph(root, Q, fd, nrng):  # recursive eval node_|link_ rims for clu
     return graph_
 
 # draft
-def merge_node(grapht_, node_, G, fd, upV):
+def merge_node(grapht_, iG_, G, fd, upV):
+
+    if G in iG_: iG_.remove(G)
     G_, Link_, Et = G.root
     ave = G_aves[fd]
-    remaining_node_ = []  # remaining nodes after grapht is removed from grapht_
+    remaining_node_ = []  # from grapht removed from grapht_
+
     for link in G.rim if isinstance(G, CG) else G.rim__t[0][-1][-1]+G.rim__t[1][-1][-1]:
         if link.Et[fd] > ave:  # fork eval
-            if link not in Link_:
-                Link_ += [link]
+            if link not in Link_: Link_ += [link]
             _G = link.node_[0] if link.node_[1] is G else link.node_[1]
             if _G in G_:
-                continue
+                continue  # _G is already in graph
             olink_ = list(set(Link_).intersection(_G.rim))  # link overlap between grapht and node.rim
             oV = sum([olink.Et[fd] for olink in olink_])  # link overlap V
-            if oV > ave and oV > _G.Et[fd]:
-                # higher node inclusion value in new vs. current root
+            if oV > ave and oV > _G.Et[fd]:  # higher inclusion value in new vs. current root
                 upV += oV
                 _G.Et[fd] = oV  # graph-specific, rdn?
                 G_ += [_G]; Link_ += [link]; Et = np.add(Et,_G.Et)
-                if _G.root:
+                if _G.root:  # remove _G from root
                     _G_, _Link_, _Et = _G.root
-                    _G_.remove(_G); _Link_.remove(link);
+                    _G_.remove(_G)
+                    if link in _Link_: _Link_.remove(link)  # empty at grapht init in r==0
                     _Et = np.subtract(_Et, Et)
-                    # no separate eval: ?
-                    upV, up_remaining_node_ = merge_node(grapht_, node_, _G, fd, upV)
-                    remaining_node_ += up_remaining_node_
-
-                    if _Et[fd] < ave * _Et[2+fd]:
-                        grapht_.remove(_G.root)  # not sure, unpack pruned grapht?
+                    if _Et[fd] < ave*_Et[2+fd]:
+                        grapht_.remove(_G.root)
+                        for __G in _G_: __G.root = []   # reset root
                         remaining_node_ += _G_
 
-                _G.root = G.root
+                _G.root = G.root  # temporary
+                upV, up_remaining_node_ = merge_node(grapht_, iG_, _G, fd, upV)
+                remaining_node_ += up_remaining_node_
+
+
     return upV, remaining_node_
 
 
