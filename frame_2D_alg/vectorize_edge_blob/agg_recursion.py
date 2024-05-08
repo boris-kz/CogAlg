@@ -68,7 +68,9 @@ def agg_recursion(rroot, root, fagg=0):
         link.Et = copy(link.derH.Et); link.relt = copy(link.derH.relt)
 
     nrng, Et = rng_convolve(root, [0,0,0,0], fagg)  # += connected nodes in med rng
-    node_t = form_graph_t(root, root.node_ if fagg else root.link_, Et, nrng)  # root_fd, eval der++ and feedback per Gd only
+    Q = root.node_ if fagg else [link for link in root.link_ if len(link.rim__t[0][-1]) == nrng or len(link.rim__t[1][-1]) == nrng]  # if current rim__
+
+    node_t = form_graph_t(root, Q, Et, nrng)  # root_fd, eval der++ and feedback per Gd only
     if node_t:
         for fd, node_ in enumerate(node_t):
             if root.Et[0] * (len(node_)-1)*root.rng > G_aves[1] * root.Et[2]:
@@ -80,7 +82,7 @@ def agg_recursion(rroot, root, fagg=0):
                         rroot.fback_ += [root.derH]
                         feedback(rroot)  # update root.root..
 '''
-a version of graph convolutional network without backprop
+sort of a graph convolutional network without backprop
 '''
 def rng_convolve(root, Et, fagg):  # comp Gs|kernels in agg+, links | link rim__t node rims in sub+
 
@@ -99,7 +101,7 @@ def rng_convolve(root, Et, fagg):  # comp Gs|kernels in agg+, links | link rim__
             if fcomp:
                 G.compared_ += [_G]; _G.compared_ += [G]
                 Link = Clink(node_=[_G, G], distance=dist, angle=[dy, dx], box=extend_box(G.box, _G.box))
-                if comp_G(Link, Et, fd=0):
+                if comp_G(Link, Et):
                     for node in _G,G:
                         node.rim += [Link]
                         if node not in G_: G_ += [node]
@@ -125,20 +127,20 @@ def rng_convolve(root, Et, fagg):  # comp Gs|kernels in agg+, links | link rim__
             for i, link in enumerate(G.rim):
                 G.extH.add_(link.DerH) if i else G.extH.append_(link.DerH, flat=1)
 
-    else:  # comp Clinks: der+'rng+ in root.link_ rim__t node rims
+    else:  # comp Clinks: der+'rng+ in root.link_ rim__t node rims: directional and link node -mediated
         link_ = root.link_; _link_ = []
         while link_:
-            for link in link_:  # der+'rng+: directional and node-mediated comp link
-                for dir, rim__ in zip((0,1), link.rim__t):  # two directions of layers, each nested by mediating links
-                    for _L in [L for rim in rim__[-1] for L in rim]:  # last nested layer
+            for link in link_:
+                for dir, rim__ in zip((0,1), link.rim__t if link.rim__t else [link.node_[0].rim,link.node_[1].rim]):
+                    # two directions of last layer, maybe nested by mediating links:
+                    for _L in [L for rim in rim__[-1] for L in rim]:
                         _L_ = []
                         _G = _L.node_[0] if _L.node_[1] in link.node_ else _L.node_[1]
                         for _link in _G.rim:
-                            Link = Clink(node_=[link,_link])
-                            if comp_G(Link, Et, fd=1):
+                            if comp_G(Clink(node_=[link,_link]), Et, dir):
                                 _link_ += [link]  # old link
-                                _L_ += [Link]  # new link
-                        if _L_: link.rim__t[dir][-1] += [_L_]  # += list( matching _L-mediated links)
+                                _L_ += [_link]  # new _G-mediated link
+                        if _L_: link.rim__t[dir][-1] += [_L_]  # += _L-mediated link layer
             nrng += 1
             link_ = _link_
     return nrng, Et
@@ -201,13 +203,16 @@ def sum_krim(krim):  # sum last kernel layer
     return n, L, S, A, latuple, iderH, derH, Et  # not sure about Et
 
 
-def comp_G(link, iEt, fd):  # add dderH to link and link to the rims of comparands: Gs or links
+def comp_G(link, iEt, dir=None):  # add dderH to link and link to the rims of comparands: Gs or links
 
+    fd = dir is not None  # compared links have binary relative direction?
     dderH = CH()  # new layer of link.dderH
     _G, G = link.node_
+
     if fd:  # Clink Gs
         rn= min(_G.node_[0].n,_G.node_[1].n)/ min(G.node_[0].n,G.node_[1].n)
-        Et, rt, md_ = comp_ext(_G.distance,G.distance, len(_G.rim__t[0][-1])+len(_G.rim__t[1][-1]),len(G.rim__t[0][-1])+len(G.rim__t[1][-1]), _G.angle,G.angle)
+        _A, A = _G.angle, G.angle if dir else [-d for d in G.angle]  # reverse angle direction for left link comp
+        Et, rt, md_ = (comp_ext(_G.distance,G.distance, len(_G.rim__t[0][-1][-1])+len(_G.rim__t[1][-1][-1]),len(G.rim__t[0][-1][-1])+len(G.rim__t[1][-1][-1]),_A,A))
         dderH.n = 1; dderH.Et = Et; dderH.relt = rt
         dderH.H = [CH(Et=copy(Et), relt=copy(rt), H=md_, n=1)]
     else:  # CG Gs
@@ -272,9 +277,9 @@ def form_graph_t(root, upQ, Et, nrng):  # form Gm_,Gd_ from same-root nodes
         return node_t
 
 '''
-we need to parallelize clustering, through some form of backprop from cluster representations:
-form new layer of graphs for each node kernel rim layer, expanding to frame|root box.
-eval node similarity * nearest_nodes proximity: no disconnected nodes?
+parallelize by backprop from clusters: a layer of graphs for each node kernel rim layer, expanding to frame|root box?
+eval node similarity * nearest_nodes proximity?
+or message-passing, remove reciprocal in-graph links during rng+?
 '''
 def segment_graph(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster assignment
 
@@ -288,7 +293,7 @@ def segment_graph(root, Q, fd, nrng):  # recursive eval node_|link_ rims for clu
         node_ = []
         for node in _node_:  # depth-first eval merge node_|link_ connected via their rims:
             if node not in G_: continue  # merged?
-            if not r:  # init in 1st loop
+            if not node.root:  # init in 1st loop or empty root after root removal
                 grapht = [[node],[],[0,0,0,0]]  # G_, Link_, Et
                 grapht_ += [grapht]
                 node.root = grapht
@@ -340,7 +345,7 @@ def merge_node(grapht_, iG_, G, fd, upV):
                 remaining_node_ += up_remaining_node_
 
 
-    return upV, remaining_node_
+    return upV, [rnode for rnode in remaining_node_ if not rnode.root]  # skip node if they added to grapht during the subsequent merge_node process
 
 
 def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, aggH in agg+ or player in sub+
