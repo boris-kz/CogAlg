@@ -131,16 +131,20 @@ def rng_convolve(root, Et, fagg):  # comp Gs|kernels in agg+, links | link rim__
         link_ = root.link_; _link_ = []
         while link_:
             for link in link_:
-                for dir, rim__ in zip((0,1), link.rim__t if link.rim__t else [link.node_[0].rim,link.node_[1].rim]):
+                for dir, rim_ in zip((0,1), link.rim_t if any(link.rim_t) else [[link.node_[0].rim],[link.node_[1].rim]]):  # add nesting to convert rim into rim_
                     # two directions of last layer, maybe nested by mediating links:
-                    for _L in [L for rim in rim__[-1] for L in rim]:
+                    for _L in [L for L in rim_[-1]]:
                         _L_ = []
                         _G = _L.node_[0] if _L.node_[1] in link.node_ else _L.node_[1]
                         for _link in _G.rim:
                             if comp_G(Clink(node_=[link,_link]), Et, dir):
                                 _link_ += [link]  # old link
                                 _L_ += [_link]  # new _G-mediated link
-                        if _L_: link.rim__t[dir][-1] += [_L_]  # += _L-mediated link layer
+                        if _L_:
+                            if link.rim_t:
+                                link.rim_t[dir] += [_L_]  # += _L-mediated link layer
+                            else:
+                                link.rim_t = [[],[_L_]] if dir else [[_L_],[]]  # first der+ link.rim_t is empty
             nrng += 1
             link_ = _link_
     return nrng, Et
@@ -210,11 +214,13 @@ def comp_G(link, iEt, dir=None):  # add dderH to link and link to the rims of co
     _G, G = link.node_
 
     if fd:  # Clink Gs
-        rn= min(_G.node_[0].n,_G.node_[1].n)/ min(G.node_[0].n,G.node_[1].n)
-        _A, A = _G.angle, G.angle if dir else [-d for d in G.angle]  # reverse angle direction for left link comp
-        Et, rt, md_ = (comp_ext(_G.distance,G.distance, len(_G.rim__t[0][-1][-1])+len(_G.rim__t[1][-1][-1]),len(G.rim__t[0][-1][-1])+len(G.rim__t[1][-1][-1]),_A,A))
+        _L = len(_G.rim__t[0][-1])+len(_G.rim__t[1][-1]) if any(_G.rim__t) else len(_G.node_[0].rim)+len(_G.node_[1].rim)
+        L = len(G.rim__t[0][-1])+len(G.rim__t[1][-1]) if any(G.rim__t) else len(G.node_[0].rim)+len(G.node_[1].rim)
+        _A, A = _G.angle, G.angle if dir else [-d for d in G.angle]  # reverse angle direction for left link
+        Et, rt, md_ = (comp_ext(_G.distance,G.distance,_L,L,_A,A))
         dderH.n = 1; dderH.Et = Et; dderH.relt = rt
         dderH.H = [CH(Et=copy(Et), relt=copy(rt), H=md_, n=1)]
+        rn = min(_G.node_[0].n,_G.node_[1].n) / min(G.node_[0].n,G.node_[1].n)
     else:  # CG Gs
         rn= _G.n/G.n  # comp ext params prior: _L,L,_S,S,_A,A, dist, no comp_G unless match:
         et, rt, md_ = comp_ext(len(_G.node_),len(G.node_),_G.S,G.S/rn,_G.A,G.A)
@@ -277,14 +283,51 @@ def form_graph_t(root, upQ, Et, nrng):  # form Gm_,Gd_ from same-root nodes
         return node_t
 
 '''
-parallelize by backprop from clusters: a layer of graphs for each node kernel rim layer, expanding to frame|root box?
-eval node similarity * nearest_nodes proximity?
-or message-passing, remove reciprocal in-graph links during rng+?
+parallelize by forward/feedback message-passing between two layers: roots with node_ and nodes with root_: 
+compute link oV for each (node,root), find max oV in node.root_, move all node links to that max root, 
+recompute oV while >min adjustment in OV
+draft:
 '''
-def segment_graph(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster assignment
+def segment_parallel(Q, fd):  # recursive eval node_|link_ rims for cluster assignment
 
-    ''' kernels = get_max_kernels(Q)  # parallelization of link tracing, not urgent
-        grapht_ = select_merge(kernels)  # refine by match to max, or only use it to selectively merge?
+    node_,root_ = [],[]
+    for N in Q:
+        node_ += [[N,root_,[]]]; root_ += [[N,node_,[]]]  # init both with each node, oV_ = []
+    r = 0  # recursion count
+    _OV = 0
+    while True:
+        OV = 0
+        for [N,root_,_roV_] in node_:  # multiple roots, root inclusion V per node while True
+            roV_ = []
+            for G,_node_,_noV_ in root_:  # in-graph node update while True
+                noV_ = []  # node inclusion Vs per root?
+                rim = N.rim_t[0][-1]+N.rim_t[1][-1] if fd else N.rim
+                olink_ = list(set(G.link_).intersection(rim))
+                oV = sum([olink.Et[fd] for olink in olink_])
+                OV += oV
+                if oV > ave:
+                    if N not in _node_: # add N to in-graph _node_
+                        G.link_ = list(set(G.link_ + rim))
+                        _node_+= [N]; _noV_ += [oV]
+                elif N in _node_:  # remove N from in-graph _node_
+                    G.link_ = list(set(G.link_ - rim))
+                    _node_.remove(N); _noV_.remove(oV)  # not sure
+            _roV_[:] = roV_
+        r += 1
+        if OV - _OV < ave:
+            break  # low overlap update
+        # root selection:
+        for N, root_, oV_ in node_:
+            root = root_.sorted(key=lambda x: oV_)[-1]  # max oV root
+            N.root = root
+            if N not in root.node_:
+                root.node_ += [N]; root.Et[0] += max(oV_)
+
+
+def segment_graph(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster assignment
+    '''
+    kernels = get_max_kernels(Q)  # parallelization of link tracing, not urgent
+    grapht_ = select_merge(kernels)  # refine by match to max, or only use it to selectively merge?
     '''
     _node_ = G_ = copy(Q)
     r = 0
@@ -317,14 +360,17 @@ def merge_node(grapht_, iG_, G, fd, upV):
     G_, Link_, Et = G.root
     ave = G_aves[fd]
     remaining_node_ = []  # from grapht removed from grapht_
+    fagg = isinstance(G,CG)
 
-    for link in G.rim if isinstance(G, CG) else G.rim__t[0][-1][-1]+G.rim__t[1][-1][-1]:
+    for link in (G.rim if fagg else G.rim__t[0][-1][-1]+G.rim__t[1][-1][-1]):
         if link.Et[fd] > ave:  # fork eval
             if link not in Link_: Link_ += [link]
-            _G = link.node_[0] if link.node_[1] is G else link.node_[1]
+            if fagg: _G = link.node_[0] if link.node_[1] is G else link.node_[1]
+            else:    _G = link  # we didn't pack new Link in der+, so _G will be just link?
             if _G in G_:
                 continue  # _G is already in graph
-            olink_ = list(set(Link_).intersection(_G.rim))  # link overlap between grapht and node.rim
+            # get link overlap between graph and node.rim:
+            olink_ = list(set(Link_).intersection(_G.rim))
             oV = sum([olink.Et[fd] for olink in olink_])  # link overlap V
             if oV > ave and oV > _G.Et[fd]:  # higher inclusion value in new vs. current root
                 upV += oV

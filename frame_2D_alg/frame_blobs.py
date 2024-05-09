@@ -93,12 +93,15 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.latuple = [0,0,0,0,0,[0,0]]  # lateral I,G,M,Ma,L,[Dy,Dx]
         G.iderH = CH()  # summed from PPs
         G.derH = CH()  # nested derH in Gs: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
+        G.DerH = CH()  # summed kernel rims
         G.node_ = [] if node_ is None else node_  # convert to node_t in sub_recursion
         G.link_ = [] if link_ is None else link_  # links per comp layer, nest in rng+)der+
         G.box = [np.inf, np.inf, -np.inf, -np.inf]  # y,x,y0,x0,yn,xn
+        G.kH = []
         # graph-external, +level per root sub+:
         G.rim = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
         G.extH = CH()  # G-external daggH( dsubH( dderH, summed from rim links
+        G.ExtH = CH()  # summed link.DerH
         G.alt_graph_ = []  # adjacent gap+overlap graphs, vs. contour in frame_graphs
         # dynamic attrs:
         G.Rim = []  # links to the most mediated nodes
@@ -125,11 +128,14 @@ class Clink(CBase):  # the product of comparison between two nodes
         l.distance = distance  # distance between node centers
         l.Et = [0,0,0,0]  # graph-specific, accumulated from surrounding nodes in node_connect
         l.relt = [0,0]
-        l.rimT = []  # dual tree of _links, each may have its own node-mediated links
+        l.rim_t = []  # dual tree of _links, each may have its own node-mediated links
         l.derH = CH() if derH is None else derH
+        l.DerH = CH()  # ders from G.DerH
         l.extH = CH() if extH is None else extH  # for der+
+        l.ExtH = CH()  # summed from kernels in der+
         l.root = None if root is None else root  # dgraphs that contain this link
         l.compared_ = []
+        l.rim = []
         l.n = 1  # default n, or always min(node_.n)?
         l.area = 0
         l.box = [np.inf, np.inf, -np.inf, -np.inf] if box is None else box  # y,x,y0,x0,yn,xn
