@@ -88,3 +88,10 @@ def segment_graph(root, Q, fd, nrng):  # eval rim links with summed surround val
     # form Cgraphs if Val > ave* Rdn:
     return [sum2graph(root, grapht[:3], fd, nrng) for grapht in grapht_ if  grapht[2][fd] > ave * grapht[2][2+fd]]
 
+'''
+        # sparsity = 1/nlinks in rim? or summed node_ S?
+        if _G.rim_t: _L = len(_G.rim_t[0][-1]) if _G.rim_t[0] else 0 + len(_G.rim_t[1][-1]) if _G.rim_t[1] else 0
+        else:        _L = len(_G.node_[0].rim)+len(_G.node_[1].rim)
+        if G.rim_t: L = len(G.rim_t[0][-1]) if G.rim_t[0] else 0 + len(G.rim_t[0][-1]) if G.rim_t[0] else 0
+        else:       L = len(G.node_[0].rim)+len(G.node_[1].rim)
+'''

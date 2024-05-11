@@ -68,8 +68,10 @@ def agg_recursion(rroot, root, fagg=0):
         link.Et = copy(link.derH.Et); link.relt = copy(link.derH.relt)
 
     nrng, Et = rng_convolve(root, [0,0,0,0], fagg)  # += connected nodes in med rng
-    if fagg: Q = root.node_  # else der+, only current-rng links if recursive der+:
-    else:    Q = [L for L in root.link_ if L.rim_t and ((L.rim_t[0] and len(L.rim_t[0][-1])==nrng) or (L.rim_t[1] and len(L.rim_t[1][-1])==nrng))]
+    if fagg:  # rng+
+        Q = root.node_
+    else:  # der+, cluster links if current-rng link.rim_t layer:
+        Q = [L for L in root.link_ if L.rim_t and ((L.rim_t[0] and len(L.rim_t[0][-1])==nrng) or (L.rim_t[1] and len(L.rim_t[1][-1])==nrng))]
 
     node_t = form_graph_t(root, Q, Et, nrng)  # root_fd, eval der++ and feedback per Gd only
     if node_t:
@@ -83,7 +85,7 @@ def agg_recursion(rroot, root, fagg=0):
                         rroot.fback_ += [root.derH]
                         feedback(rroot)  # update root.root..
 '''
-~ graph convolutional network, but a version of backprop is only done in clustering
+~ graph convolutional network, but rim olp backprop is only done in clustering
 '''
 def rng_convolve(root, Et, fagg):  # comp Gs|kernels in agg+, links | link rim_t node rims in sub+
 
@@ -175,7 +177,7 @@ def comp_krim(link, G_, nrng, fd=0):  # sum rim _G.derHs, compare to form link.D
                 else:         node.DerH = deepcopy(__node.derH)  # init
         node.kH += [krim]
         G_ += [node]
-    # sum G-unique kernel rims:
+    # sum G-specific kernel rim:
     _n,_L,_S,_A,_latuple,_iderH,_derH,_Et = sum_krim(list(set(_G.kH[-1])-set(G.kH[-1])))
     n, L, S, A, latuple, iderH, derH, Et  = sum_krim(list(set(G.kH[-1])-set(_G.kH[-1])))
     rn = _n / n
@@ -206,7 +208,7 @@ def sum_krim(krim):  # sum last kernel layer
         latuple = [P+p for P,p in zip(latuple[:-1],G.latuple[:-1])] + [[A+a for A,a in zip(latuple[-1],G.latuple[-1])]]
         n+=G.n; L+=len(G.node_); S+=G.S; A=[Angle+angle for Angle,angle in zip(A,G.A)]
         if G.iderH: iderH.add_(G.iderH)
-        if G.derH:  derH.add_(G.derH)
+        if G.derH: derH.add_(G.derH)
         np.add(Et,G.Et)
 
     return n, L, S, A, latuple, iderH, derH, Et  # not sure about Et
@@ -219,18 +221,15 @@ def comp_G(link, iEt, dir=None):  # add dderH to link and link to the rims of co
     _G, G = link.node_
 
     if fd:  # Clink Gs
-        if _G.rim_t: _L = len(_G.rim_t[0][-1]) if _G.rim_t[0] else 0 + len(_G.rim_t[1][-1]) if _G.rim_t[1] else 0
-        else:        _L = len(_G.node_[0].rim)+len(_G.node_[1].rim)
-        if G.rim_t: L = len(G.rim_t[0][-1]) if G.rim_t[0] else 0 + len(G.rim_t[0][-1]) if G.rim_t[0] else 0
-        else:       L = len(G.node_[0].rim)+len(G.node_[1].rim)
+        rn = min(_G.node_[0].n, _G.node_[1].n) / min(G.node_[0].n, G.node_[1].n)
+        _S, S = _G.node_[0].S + _G.node_[1].S, (G.node_[0].S + G.node_[1].S)  # then sum in link.S
         _A, A = _G.angle, G.angle if dir else [-d for d in G.angle]  # reverse angle direction for left link
-        Et, rt, md_ = (comp_ext(_G.distance,G.distance,_L,L,_A,A))
+        Et, rt, md_ = (comp_ext(_G.distance,G.distance, _S,S/rn, _A,A))
         dderH.n = 1; dderH.Et = Et; dderH.relt = rt
         dderH.H = [CH(Et=copy(Et), relt=copy(rt), H=md_, n=1)]
-        rn = min(_G.node_[0].n,_G.node_[1].n) / min(G.node_[0].n,G.node_[1].n)
     else:  # CG Gs
         rn= _G.n/G.n  # comp ext params prior: _L,L,_S,S,_A,A, dist, no comp_G unless match:
-        et, rt, md_ = comp_ext(len(_G.node_),len(G.node_),_G.S,G.S/rn,_G.A,G.A)
+        et, rt, md_ = comp_ext(len(_G.node_),len(G.node_), _G.S,G.S/rn, _G.A,G.A)
         Et, Rt, Md_ = comp_latuple(_G.latuple, G.latuple, rn,fagg=1)
         dderH.n = 1; dderH.Et = np.add(Et,et); dderH.relt = np.add(Rt,rt)
         dderH.H = [CH(Et=et,relt=rt,H=md_,n=.5),CH(Et=Et,relt=Rt,H=Md_,n=1)]
@@ -276,7 +275,7 @@ def form_graph_t(root,Q, Et, nrng):  # form Gm_,Gd_ from same-root nodes
             for G in Q: G.root = []  # reset per fork
 
             graph_ = segment_graph(root, copy(Q), fd, nrng)  # copy to use upQ in both forks
-            # or segment_parallel(upQ, fd=fd)
+            # or segment_parallel(Q, fd=fd)
             if fd:  # der+ after rng++ term by high ds
                 for graph in graph_:
                     if graph.link_ and graph.Et[1] > G_aves[1] * graph.Et[3]:  # Et is summed from all links
@@ -293,28 +292,30 @@ def form_graph_t(root,Q, Et, nrng):  # form Gm_,Gd_ from same-root nodes
 
 '''
 parallelize by forward/feedback message-passing between two layers: roots with node_ and nodes with root_: 
-compute link oV for each (node,root), find max oV in node.root_, move all node links to that max root, 
-while > ave dOV
-So feedback is fitting nodes to the connected subset their roots / clusters. 
-As distinct from fitting to the whole higher node in conventional backprop, including that in GNN. 
+while > ave dOV: compute link_ oV for each (node,root); then assign each node to max root
+
+So feedback here is fitting nodes to the connected subset in higher nodes: their clusters, 
+that's different from fitting to the whole higher node in conventional backprop, as in GNN 
 '''
 def segment_parallel(Q, fd):  # recursive eval node_|link_ rims for cluster assignment
-
+    '''
+    kernels = get_max_kernels(Q)  # for selective link tracing?
+    grapht_ = select_merge(kernels)  # refine by match to max, or only use it to selectively merge?
+    '''
     node_,root_ = [],[]
     for N in Q:
-        node_ += [[N,root_,[]]]  # Vs
-        root_ += [[N.rim_t if N.rim_t else N.rim, [N],[]]]  # init link_ = N.rim, node_ = [N], noV_
+        rim = (N.rim_t[0][-1] if N.rim_t[0] else []) + (N.rim_t[1][-1] if N.rim_t[1] else []) if hasattr(N,"rim_t") else N.rim
+        node_ += [[N, rim, root_, []]]
+        root_ += [[rim, [N], [0]]]  # init link_= N.rim, node_= [N], noV_=[0]
     r = 0  # recursion count
     _OV = 0
     while True:
         OV = 0
-        for N,root_,_V_ in node_:  # update node roots, inclusion vals
+        for N, rim, root_,_V_ in node_:  # update node roots, inclusion vals
             V_ = []
             for link_,N_,_rV_ in root_:  # update root links, nodes
-                if fd: rim = N.rim_t[0][-1] + N.rim_t[1][-1] if N.rim_t else N.node_[0].rim + N.node_[0].rim
-                else:  rim = N.rim
                 olink_ = list(set(link_).intersection(rim))
-                oV = sum([olink.Et[fd] for olink in olink_]) if olink_ else 0
+                oV = sum([olink.Et[fd] for olink in olink_]) if olink_ else 0  # also consider rdn?
                 OV += oV; V_ += [oV]
                 if oV > ave:  # N in root
                     if N not in N_:
@@ -323,12 +324,20 @@ def segment_parallel(Q, fd):  # recursive eval node_|link_ rims for cluster assi
                     N_.remove(N); _rV_.remove(oV); link_[:] = list(set(link_).difference(rim))
             _V_[:] = V_
         r += 1
-        if OV - _OV < ave:
-            break  # low overlap update
+        if OV - _OV < ave:  # low total overlap update
+            break
         _OV = OV
-    # max:
-    for N,root_,oV_ in node_:
-        N.root = sorted(root_, key=lambda root: root[2][root[1].index(N)])[-1]
+
+    for N,rim, root_,oV_ in node_:  # exclusive N assignment to clusters based on final oV
+
+        Nroot_ = [root for root in root_ if N in root[1]]
+        Nroot_ = sorted(Nroot_, key=lambda root: root[2][root[1].index(N)])  # sort by NoV in roots
+        N.root = Nroot_.pop  # last: max root
+        for root in Nroot_:  # remove N from other roots
+            root[0] = list(set(root[0]).difference(rim))  # remove rim
+            i = root[1].index(N); root[1].pop(i); root[2].pop(i)  # remove N and NoV
+
+    return [root for root in root_ if root[1]]  # not-empty clusters
 
 
 def segment_graph(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster assignment
@@ -395,7 +404,6 @@ def merge_node(grapht_, iG_, G, fd, upV):
                 _G.root = G.root  # temporary
                 upV, up_remaining_node_ = merge_node(grapht_, iG_, _G, fd, upV)
                 remaining_node_ += up_remaining_node_
-
 
     return upV, [rnode for rnode in remaining_node_ if not rnode.root]  # skip node if they added to grapht during the subsequent merge_node process
 

@@ -126,6 +126,7 @@ class Clink(CBase):  # the product of comparison between two nodes
         l.node_ = [] if node_ is None else node_  # e_ in kernels, else replaces _node,node: not used in kernels?
         l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
         l.distance = distance  # distance between node centers
+        l.S = 0  # initially summed from node_
         l.Et = [0,0,0,0]  # graph-specific, accumulated from surrounding nodes in node_connect
         l.relt = [0,0]
         l.rim_t = []  # dual tree of _links, each may have its own node-mediated links
