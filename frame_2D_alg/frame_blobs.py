@@ -130,6 +130,7 @@ class Clink(CBase):  # the product of comparison between two nodes
         l.Et = [0,0,0,0]  # graph-specific, accumulated from surrounding nodes in node_connect
         l.relt = [0,0]
         l.rim_t = []  # dual tree of _links, each may have its own node-mediated links
+        # reciprocal rim_t of connecting links?
         l.derH = CH() if derH is None else derH
         l.DerH = CH()  # ders from G.DerH
         l.extH = CH() if extH is None else extH  # for der+
@@ -276,7 +277,7 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
             # default:
             Et, et = HE.Et, He.Et
             HE.Et = np.add(HE.Et, He.Et); HE.relt = np.add(HE.relt, He.relt)
-            if any(irdnt): Et[2:] = [E+e for E,e in zip(Et[2:], irdnt)]
+            if any(irdnt): HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
             HE.n += He.n  # combined param accumulation span
         else:
             HE.copy(He)  # initialization

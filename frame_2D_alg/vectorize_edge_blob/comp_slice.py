@@ -5,7 +5,7 @@ from itertools import zip_longest, combinations
 import sys
 sys.path.append("..")
 from frame_blobs import CH, CBase, CG, imread
-from slice_edge import comp_angle, CP, Clink, CsliceEdge
+from .slice_edge import comp_angle, CP, Clink, CsliceEdge
 
 '''
 Vectorize is a terminal fork of intra_blob.
@@ -56,16 +56,16 @@ class CcompSliceFrame(CsliceEdge):
 def ider_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
 
     # no der+'rng+, or directional, within node-mediated hyper-links only?
-    rng_recursion(PP, rng=1, fd=fd)  # extend PP.link_, derHs by same-der rng+ comp
+    P_ = rng_recursion(PP, rng=1, fd=fd)  # extend PP.link_, derHs by same-der rng+ comp
     # calls der+:
-    form_PP_t(PP, PP.P_, iRt=PP.iderH.Et[2:4] if PP.iderH else [0,0])
+    form_PP_t(PP, P_, iRt=PP.iderH.Et[2:4] if PP.iderH else [0,0])
     # feedback per PPd:
     if root is not None and PP.iderH: root.fback_ += [PP.iderH]
 
 
 def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
-    iP_ = PP.P_
+    iP_, nP_  = PP.P_, []  # nP = new P with added links
     rrdn = 2  # cost of links added per rng+
     while True:
         P_ = []; V = 0
@@ -80,6 +80,7 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but loopin
                     if fd and not (P.derH and _P.derH): continue  # nothing to compare
                     mlink = comp_P(link, fd)
                     if mlink:  # return if match
+                        if P not in nP_: nP_ += [P]
                         V += mlink.derH.Et[0]
                         if rng > 1:  # test to add nesting to P.link_:
                             if rng == 2 and not isinstance(P.link_[0], list): P.link_[:] = [P.link_[:]]  # link_ -> link_H
@@ -101,6 +102,7 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but loopin
     # der++ in PPds from rng++, no der++ inside rng++: high diff @ rng++ termination only?
     PP.rng=rng  # represents rrdn
 
+    return nP_
 
 def comp_P(link, fd):
     _P, P, distance, angle = link.node_[0], link.node_[1], link.distance, link.angle
