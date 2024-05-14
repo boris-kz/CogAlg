@@ -95,3 +95,44 @@ def segment_graph(root, Q, fd, nrng):  # eval rim links with summed surround val
         if G.rim_t: L = len(G.rim_t[0][-1]) if G.rim_t[0] else 0 + len(G.rim_t[0][-1]) if G.rim_t[0] else 0
         else:       L = len(G.node_[0].rim)+len(G.node_[1].rim)
 '''
+
+def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
+
+    iP_, nP_  = PP.P_, []  # nP = new P with added links
+    rrdn = 2  # cost of links added per rng+
+    while True:
+        P_ = []; V = 0
+        for P in iP_:
+            if not P.link_: continue
+            prelink_ = []  # new prelinks per P
+            if fd: _prelink_ = unpack_last_link_(P.link_)  # reuse links in der+
+            else:  _prelink_ = P.link_.pop()  # old rng+ prelinks, including all links added in slice_edge
+            for link in _prelink_:
+                if link.distance <= rng:  # | rng * ((P.val+_P.val)/ ave_rval)?
+                    _P = link.node_[0]
+                    if fd and not (P.derH and _P.derH): continue  # nothing to compare
+                    mlink = comp_P(link, fd)
+                    if mlink:  # return if match
+                        if P not in nP_: nP_ += [P]
+                        V += mlink.derH.Et[0]
+                        if rng > 1:  # test to add nesting to P.link_:
+                            if rng == 2 and not isinstance(P.link_[0], list): P.link_[:] = [P.link_[:]]  # link_ -> link_H
+                            if len(P.link_) < rng: P.link_ += [[]]  # add new link_
+                        link_ = unpack_last_link_(P.link_)
+                        if not fd: link_ += [mlink]
+                        _link_ = unpack_last_link_(_P.link_ if fd else _P.link_[:-1])  # skip prelink_ if rng+
+                        prelink_ += _link_  # connected __Ps links
+            P.link_ += [prelink_]  # temporary pre-links, may be empty
+            if prelink_: P_ += [P]
+        rng += 1
+        if V > ave * rrdn * len(P_) * 6:  #  implied val of all __P_s, 6: len mtuple
+            iP_ = P_; fd = 0
+            rrdn += 1
+        else:
+            for P in PP.P_:
+                if P.link_: P.link_.pop()  # remove prelinks in rng+
+            break
+    # der++ in PPds from rng++, no der++ inside rng++: high diff @ rng++ termination only?
+    PP.rng=rng  # represents rrdn
+
+    return nP_
