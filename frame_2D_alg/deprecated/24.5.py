@@ -136,3 +136,10 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but loopin
     PP.rng=rng  # represents rrdn
 
     return nP_
+
+def unpack_last_link_(link_):  # unpack last link layer
+
+    while link_ and isinstance(link_[-1], list): link_ = link_[-1]
+    return link_
+    # change to use nested link_, or
+    # get higher-P mediated link_s while recursion_count < rng?

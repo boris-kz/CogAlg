@@ -86,7 +86,7 @@ class CsliceEdge(CsubFrame):
                         edge.rootd[y, x] = _P
                         adjacent_ += [(_P, y, x)]
             for P in edge.P_:
-                P.link_[0] = [Clink([_P, P]) for _P in P.link_[0]]
+                P.link_[0] = [Clink([_P, P]) for _P in P.link_[0]]  # prelinks for comp_slice
 
     CBlob = CEdge
 

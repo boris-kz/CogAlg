@@ -48,7 +48,7 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
 
     for edge in frame.blob_:
         if hasattr(edge, 'P_') and edge.latuple[-1] * (len(edge.P_)-1) > G_aves[0]:  # eval G, rdn=1
-            for P in edge.P_: P.link_ += [[]]  # add nesting for rng+
+            for P in edge.P_: P.link_.insert(0, [])  # add nesting for rng+
             ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
 
             for fd, node_ in enumerate(edge.node_):  # always node_t
@@ -71,12 +71,8 @@ def agg_recursion(rroot, root, fagg=0):
         link.Et = copy(link.derH.Et); link.relt = copy(link.derH.relt)
 
     nrng, Et = rng_convolve(root, [0,0,0,0], fagg)  # += connected nodes in med rng
-    if fagg:  # rng+
-        Q = root.node_
-    else:  # der+, cluster links with current-rng rim_t layer:
-        Q = [L for L in root.link_ if L.rim_t and ((L.rim_t[0] and len(L.rim_t[0][-1])==nrng) or (L.rim_t[1] and len(L.rim_t[1][-1])==nrng))]
 
-    node_t = form_graph_t(root, Q, Et, nrng)  # root_fd, eval der++ and feedback per Gd only
+    node_t = form_graph_t(root, root.node_ if fagg else root.link_, Et, nrng)  # der++ and feedback per Gd?
     if node_t:
         for fd, node_ in enumerate(node_t):
             if root.Et[0] * ((len(node_)-1)*root.rng) > G_aves[1] * root.Et[2]:
@@ -88,16 +84,16 @@ def agg_recursion(rroot, root, fagg=0):
                         rroot.fback_ += [root.derH]
                         feedback(rroot)  # update root.root..
 '''
-~ graph convolutional network but no backprop in rng+, only olp feedback in clustering, or
-discrete rng+/seg+ loop: add links to increase overlap, from mediated: proximity+value, between individual nodes 
+~ graph convolutional network but no backprop in rng+, only olp feedback in clustering
 '''
 def rng_convolve(root, Et, fagg):  # comp Gs|kernels in agg+, links | link rim_t node rims in sub+
 
     nrng = 1
-    if fagg:  # comp CG
-        L_ = []; G_ = list(combinations(root.node_,r=2))
-        # initialize kernels:
-        for link in G_:
+    if fagg:
+        # comp CGs, summed in krims for rng>1
+        L_ = []; G_ = root.node_
+        # init kernels:
+        for link in list(combinations(G_,r=2)):
             _G, G = link
             if _G in G.compared_: continue
             cy, cx = box2center(G.box); _cy, _cx = box2center(_G.box)
@@ -110,7 +106,7 @@ def rng_convolve(root, Et, fagg):  # comp Gs|kernels in agg+, links | link rim_t
                 G.compared_ += [_G]; _G.compared_ += [G]
                 Link = Clink(node_=[_G, G], distance=dist, angle=[dy, dx], box=extend_box(G.box, _G.box))
                 comp_G(Link, Et, L_)
-        for G in G_:  # init kernel with 1st rim
+        for G in G_:  # init kernel with 1st krim
             krim = []
             for link in G.rim:
                 if G.derH: G.derH.add_(link.derH)
@@ -131,8 +127,9 @@ def rng_convolve(root, Et, fagg):  # comp Gs|kernels in agg+, links | link rim_t
         for G in iG_:
             for i, link in enumerate(G.rim):
                 G.extH.add_(link.DerH) if i else G.extH.append_(link.DerH, flat=1)
-
-    else:  # comp Clinks: der+'rng+ in root.link_ rim_t node rims: directional and link node -mediated
+        root.link_ = L_
+    else:
+        # comp Clinks: der+'rng+ in root.link_ rim_t node rims: directional and link node -mediated
         _L_ = root.link_
         link_ = []
         while _L_:
@@ -151,10 +148,8 @@ def rng_convolve(root, Et, fagg):  # comp Gs|kernels in agg+, links | link rim_t
             _L_= L_
             nrng += 1
         root.link_ = link_
-        root.node_ = list(set([link.node_ for link in link_]))  # refine from current link_ only, if needed?
 
     return nrng, Et
-
 '''
 G.DerH sums krim _G.derHs, not from links, so it's empty in the first loop.
 _G.derHs can't be empty in comp_krim: init in loop link.derHs
@@ -304,6 +299,9 @@ while > ave dOV: compute link_ oV for each (node,root); then assign each node to
 
 So feedback here is refining connected subset per node in higher nodes: their clusters, 
 that's different from fitting to the whole higher node in conventional backprop, as in GNN 
+
+rng+/seg+: direct comp nodes (vs summed in krim) in proportion to graph size * M: likely distant match,
+node-mediated krims, but comp individual nodes, replace krims and ExtH layers, adding links and overlap for segmentation.
 '''
 # not fully updated
 def segment_parallel(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster assignment
@@ -313,17 +311,26 @@ def segment_parallel(root, Q, fd, nrng):  # recursive eval node_|link_ rims for 
     '''
     node_,root_ = [],[]
     for N in Q:
-        rim = (N.rim_t[0][-1] if N.rim_t[0] else []) + (N.rim_t[1][-1] if N.rim_t[1] else []) if hasattr(N,"rim_t") else N.rim
-        root_ += [[rim, [N], [[0,0,0,0]]]]  # init link_=N.rim, node_=[N], oEt_
+        if fd:  # N is Clink
+            if isinstance(N.node_[0],CG):
+                rim = [G.rim for G in N.node_]
+            else:  # link node rim_t dirs opposite from each other, else covered by the other link' rim_t[1-dir]?
+                rim = [(L.rim_t[1-dir][-1] if L.rim_t[dir] else []) for dir, L in zip((0,1), N.node_)]
+        else:   rim = N.rim
+        root_ += [[[], [N], [[0,0,0,0]]]]  # init link_=N.rim, node_=[N], oEt_
         node_ += [[N, rim, root_, []]]
     r = 0  # recursion count
     _OEt = [0,0,0,0]
     while True:
         OEt = [0,0,0,0]
-        for N, rim, root_,_oEt_ in node_:  # update node roots, inclusion vals
+        for N,rim, root_,_oEt_ in node_:  # update node roots, inclusion vals
             oEt_ = []
             for link_,N_,_roEt_ in root_:  # update root links, nodes
-                olink_ = list(set(link_).intersection(rim))
+                olink_ = []
+                for link in rim:
+                    _N = link.node_[0] if link.node_[1] is N else link.node_[1]
+                    if _N in N_:  # both in root and in N.rim
+                        olink_ += list(set(_N.rim).intersection(rim))  # all N rim overlaps
                 oEt = [0,0,0,0]
                 for olink in olink_: oEt = np.add(oEt, olink.Et)
                 OEt = np.add(OEt,oEt); oEt_+=[oEt]
@@ -331,7 +338,7 @@ def segment_parallel(root, Q, fd, nrng):  # recursive eval node_|link_ rims for 
                     if N not in N_:
                         N_ += [N]; _roEt_ += [oEt]; link_[:] = list(set(link_).union(rim))  # not directional
                 elif N in N_:
-                    N_.remove(N); _roEt_.pop(N_.index(N)); link_[:] = list(set(link_).difference(rim))
+                    _roEt_.pop(N_.index(N)); N_.remove(N); link_[:] = list(set(link_).difference(rim))
             _oEt_[:] = oEt_
         r += 1
         if OEt[fd] - _OEt[fd] < ave:  # low total overlap update
