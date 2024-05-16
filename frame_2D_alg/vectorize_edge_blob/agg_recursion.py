@@ -48,7 +48,6 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
 
     for edge in frame.blob_:
         if hasattr(edge, 'P_') and edge.latuple[-1] * (len(edge.P_)-1) > G_aves[0]:  # eval G, rdn=1
-            for P in edge.P_: P.link_.insert(0, [])  # add nesting for rng+
             ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
 
             for fd, node_ in enumerate(edge.node_):  # always node_t
@@ -297,48 +296,45 @@ def form_graph_t(root,Q, Et, nrng):  # form Gm_,Gd_ from same-root nodes
 parallelize by forward/feedback message-passing between two layers: roots with node_ and nodes with root_: 
 while > ave dOV: compute link_ oV for each (node,root); then assign each node to max root
 
-So feedback here is refining connected subset per node in higher nodes: their clusters, 
-that's different from fitting to the whole higher node in conventional backprop, as in GNN 
+feedback refines link overlap: connected subset per node in higher nodes / clusters, 
+different from fitting to the whole higher node in conventional backprop, as in GNN 
 
 rng+/seg+: direct comp nodes (vs summed in krim) in proportion to graph size * M: likely distant match,
-node-mediated krims, but comp individual nodes, replace krims and ExtH layers, adding links and overlap for segmentation.
+comp individual nodes in node-mediated krims, replacing krims and ExtH layers? 
+adding links and overlap for segmentation.
 '''
-# not fully updated
+# draft:
 def segment_parallel(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster assignment
     '''
     kernels = get_max_kernels(Q)  # for selective link tracing?
     grapht_ = select_merge(kernels)  # refine by match to max, or only use it to selectively merge?
     '''
     node_,root_ = [],[]
-    for N in Q:
-        if fd:  # N is Clink
-            if isinstance(N.node_[0],CG):
-                rim = [G.rim for G in N.node_]
-            else:  # link node rim_t dirs opposite from each other, else covered by the other link' rim_t[1-dir]?
-                rim = [(L.rim_t[1-dir][-1] if L.rim_t[dir] else []) for dir, L in zip((0,1), N.node_)]
-        else:   rim = N.rim
-        root_ += [[[], [N], [[0,0,0,0]]]]  # init link_=N.rim, node_=[N], oEt_
-        node_ += [[N, rim, root_, []]]
+    for i, N in enumerate(Q):
+        N.root = i  # index in root_,node_
+        rim = get_rim(N, fd)
+        _N_ = [link.node_[0] if link.node_[1] is N else link.node_[1] for link in rim]
+        root_ += [[[],[N], [[0,0,0,0]]]]  # init link_=N.rim, node_=[N], oEt_
+        node_ += [[N, rim,_N_, [i], []]]  # root_ indices, empty nEt_
     r = 0  # recursion count
     _OEt = [0,0,0,0]
     while True:
         OEt = [0,0,0,0]
-        for N,rim, root_,_oEt_ in node_:  # update node roots, inclusion vals
+        for N,rim,_N_, nroot_,_oEt_ in node_:  # update node roots
             oEt_ = []
-            for link_,N_,_roEt_ in root_:  # update root links, nodes
-                olink_ = []
-                for link in rim:
-                    _N = link.node_[0] if link.node_[1] is N else link.node_[1]
-                    if _N in N_:  # both in root and in N.rim
-                        olink_ += list(set(_N.rim).intersection(rim))  # all N rim overlaps
-                oEt = [0,0,0,0]
-                for olink in olink_: oEt = np.add(oEt, olink.Et)
-                OEt = np.add(OEt,oEt); oEt_+=[oEt]
+            for link_, N_, nEt_ in root_:
+                olink_,oEt = [0,0,0,0]
+                for L,_N in zip(rim,_N_):  # get _N||L overlap between rim and root
+                    if _N in N_:  # in both root and rim
+                        oEt = np.add(oEt, L.Et)
+                        olink_ += [L]
+                OEt = np.add(OEt,oEt)
+                oEt_ += [oEt]
                 if oEt[fd] > ave * oEt[2+fd]:  # N in root
                     if N not in N_:
-                        N_ += [N]; _roEt_ += [oEt]; link_[:] = list(set(link_).union(rim))  # not directional
+                        N_ += [N]; nEt_ += [oEt]; link_[:] = list(set(link_).union(olink_))  # not directional
                 elif N in N_:
-                    _roEt_.pop(N_.index(N)); N_.remove(N); link_[:] = list(set(link_).difference(rim))
+                    nEt_.pop(N_.index(N)); N_.remove(N); link_[:] = list(set(link_).difference(olink_))
             _oEt_[:] = oEt_
         r += 1
         if OEt[fd] - _OEt[fd] < ave:  # low total overlap update
@@ -357,6 +353,15 @@ def segment_parallel(root, Q, fd, nrng):  # recursive eval node_|link_ rims for 
 
     return [sum2graph(root, grapht, fd, nrng) for grapht in root_ if grapht[1]]  # not-empty clusters
 
+def get_rim(N, fd):
+    if fd:  # N is Clink
+        if isinstance(N.node_[0],CG):
+            rim = [G.rim for G in N.node_]
+        else:  # get link node rim_t dirs opposite from each other, else covered by the other link rim_t[1-dir]?
+            rim = [(link.rim_t[1-dir][-1] if link.rim_t[dir] else []) for dir, link in zip((0,1), N.node_)]
+    else:   rim = N.rim
+
+    return rim
 
 def segment_graph(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster assignment
     '''

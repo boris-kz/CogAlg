@@ -61,42 +61,58 @@ def ider_recursion(root, PP, fd=0):  # node-mediated correlation clustering: kee
     # feedback per PPd:
     if root is not None and PP.iderH: root.fback_ += [PP.iderH]
 
-def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
-    iP_  = PP.P_
+def rng_recursion(PP, fd=0):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
+
+    # fd sequence is not revised
+    if fd:
+        iP_ = PP.link_
+        for link in PP.link_:
+            last_rim_layer = copy(link.node_[0].link_[-1])   # only upper node's links? Since comp_slice uses single upward direction?
+            link.link_ = [last_rim_layer]  # add prelinks in Clink
+    else:
+        iP_ = PP.P_
     rng = 0  # cost of links added per rng+
     while True:
         rng += 1
         P_ = []; V = 0
         for P in iP_:
             if P.link_:
-                if len(P.link)<rng: continue  # no current-rng link_
-            else: continue  # top P_ in PP?
+                if len(P.link_) < rng: continue  # no _rng_link_
+            else: continue  # top P_ in PP
             _prelink_ = P.link_.pop()
-            rng_link_, prelink_ = [],[]  # both per rng+
+            rnglink_, prelink_ = [],[]  # both per rng+
             for link in _prelink_:
-                if link.distance <= rng:  # | rng * ((P.val+_P.val)/ ave_rval)?
-                    _P = link.node_[0]
-                    if fd and not (P.derH and _P.derH): continue  # nothing to compare
-                    mlink = comp_P(link, fd)
-                    if mlink: # return if match
-                        V += mlink.derH.Et[0]
-                        rng_link_ += [mlink]
-                        prelink_ += _P.link_[-1]  # connected __Ps links (_P.link_[-1] is prelinks)
-            if rng_link_:
-                P.link_ += [rng_link_]
-                if prelink_: P.link_ += [rng_link_]  # temporary pre-links
-            if prelink_:
-                P_ += [P]
-        if V > ave * rng * len(P_) * 6:  #  implied val of all __P_s, 6: len mtuple
-            iP_ = P_; fd = 0
-        else:
-            for P in PP.P_: P.link_.pop()  # remove prelinks
+                if fd:
+                    if link.node_[0].link_:
+                        _P_ = link.node_[0].link_[-1]  # rng uplinks in _P
+                    else: continue
+                    # add comp_P(fd) sequence here
+
+                elif link.distance <= rng:  # | rng * ((P.val+_P.val)/ ave_rval)?
+                    _P_ = [link.node_[0]]
+                    for _P in _P_:
+                        if fd and not (P.derH and _P.derH): continue  # nothing to compare
+                        mlink = comp_P(Clink(node_=[_P, P]) if fd else link, fd)
+                        if mlink: # return if match
+                            V += mlink.derH.Et[0]
+                            rnglink_ += [mlink]
+                            prelink_ += _P.link_[-1]  # connected __Ps links (can't be prelinks?)
+                    if rnglink_:
+                        P.link_ += [rnglink_]
+                        if prelink_:
+                            P.link_ += [prelink_]  # temporary pre-links
+                            if P not in P_: P_ += [P]
+                            if fd:
+                                if _P.node_[0].link_: prelink_ += _P.node_[0].link_[-1]
+
+        if V < ave * rng * len(P_) * 6:  # implied val of all __P_s, 6: len mtuple
+            for P in iP_: P.link_.pop()  # remove prelinks
             break
     # der++ in PPds from rng++, no der++ inside rng++: high diff @ rng++ termination only?
     PP.rng=rng  # represents rrdn
 
-    return P_
+    return iP_
 
 def comp_P(link, fd):
     _P, P, distance, angle = link.node_[0], link.node_[1], link.distance, link.angle
@@ -123,7 +139,7 @@ def comp_P(link, fd):
         rm += vd > vm; rd += vm >= vd
         aveP = P_aves[1]
         He = link.derH  # append link derH:
-        if not isinstance(He.H[0], CH): He = link.derH = CH(Et=[*He.Et], H=[He])  # nest md_ as derH
+        if He and not isinstance(He.H[0], CH): He = link.derH = CH(Et=[*He.Et], H=[He])  # nest md_ as derH
         He.Et = np.add(He.Et, (vm,vd,rm,rd))
         He.H += [derH]
 
