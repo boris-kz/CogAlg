@@ -142,7 +142,9 @@ class Clink(CBase):  # the product of comparison between two nodes
         l.area = 0
         l.box = [np.inf, np.inf, -np.inf, -np.inf] if box is None else box  # y,x,y0,x0,yn,xn
         l.dir = bool  # direction of comparison if not G0,G1, only needed for comp link?
-
+        # for der++ in comp_slice:
+        l.latuple = [0,0,0,0,0,[0,0]]  # lateral I,G,M,Ma,L,[Dy,Dx]
+        l.yx_ = []
 
     def __bool__(l): return bool(l.derH.H)
 

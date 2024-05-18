@@ -82,7 +82,7 @@ class CsliceEdge(CsubFrame):
                             if _P.yx < P.yx: P.link_[0] += [_P]
                             else:            _P.link_[0] += [P]
                     except KeyError:    # if yx empty, keep tracing
-                        if (y, x) not in edge.dert_: continue
+                        if (y, x) not in edge.dert_: continue   # stop if yx outside the edge
                         edge.rootd[y, x] = _P
                         adjacent_ += [(_P, y, x)]
             for P in edge.P_:

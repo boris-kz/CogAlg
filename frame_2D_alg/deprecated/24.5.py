@@ -141,15 +141,15 @@ def unpack_last_link_(link_):  # unpack last link layer
     # get higher-P mediated link_s while recursion_count < rng?
 
 '''
-parallelize by forward/feedback message-passing between two layers: roots with node_ and nodes with root_: 
+forward/feedback message-passing between two layers: roots with node_ and nodes with root_: 
 while > ave dOV: compute link_ oV for each (node,root); then assign each node to max root
+root feedback refines node x root link overlap, vs fitting to higher node in GNN backprop 
 
-feedback refines link overlap: connected subset per node in higher nodes / clusters, 
-different from fitting to the whole higher node in conventional backprop, as in GNN 
+der+: correlation clustering of links through their nodes, forming dual trees of matching links in rng+?
 
-rng+/seg+: direct comp nodes (vs summed in krim) in proportion to graph size * M: likely distant match,
-comp individual nodes in node-mediated krims, replacing krims and ExtH layers? 
-adding links and overlap for segmentation.
+add rng+/seg+: direct comp nodes (vs summed in krim) in proportion to graph size * M: likely distant match,
+comp individual nodes in node-mediated krims, replacing krims and ExtH layers, 
+adding links overlap for segmentation.
 '''
 def segment_parallel(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster assignment
     '''
@@ -159,7 +159,7 @@ def segment_parallel(root, Q, fd, nrng):  # recursive eval node_|link_ rims for 
     node_,root_ = [],[]
     for i, N in enumerate(Q):
         N.root = i  # index in root_,node_
-        rim = get_rim(N, fd)
+        rim = get_rim(N)
         _N_ = [link.node_[0] if link.node_[1] is N else link.node_[1] for link in rim]
         root_ += [[[],[N], [[0,0,0,0]]]]  # init link_=N.rim, node_=[N], oEt_
         node_ += [[N, rim,_N_, [i], []]]  # root_ indices, empty nEt_
@@ -167,57 +167,43 @@ def segment_parallel(root, Q, fd, nrng):  # recursive eval node_|link_ rims for 
     _OEt = [0,0,0,0]
     while True:
         OEt = [0,0,0,0]
-        for N,rim,_N_, nroot_,_oEt_ in node_:  # update node roots
-            olink_,oEt_ = [],[]  # recompute
-            for link_, N_, nEt_ in root_:
-                oEt = [0,0,0,0]
-                for L,_N in zip(rim,_N_):
-                    if _N in N_:  # both in nroot and in N.rim
-                        oEt = np.add(oEt, L.Et)
-                OEt = np.add(OEt,oEt)
-                _oEt[:] = oEt
-                if oEt[fd] > ave * oEt[2+fd]:  # N in root
-                    if N not in N_:
-                        N_ += [N]; nEt_ += [oEt]; link_[:] = list(set(link_).union(rim))  # not directional
-                elif N in N_:
-                    nEt_.pop(N_.index(N)); N_.remove(N); link_[:] = list(set(link_).difference(rim))
-                olink_ = []
-            _oEt_[:] = oEt_
-        r += 1
-        if OEt[fd] - _OEt[fd] < ave:  # low total overlap update
-            break
-        _OEt = OEt
-    # old:
-    while True:
-        OEt = [0,0,0,0]
-        for N,rim, root_,_oEt_ in node_:  # update node roots, inclusion vals
+        for N,rim,_N_,nroot_,_oEt_ in node_:  # update node roots
             oEt_ = []
-            for link_,N_,_roEt_ in root_:  # update root links, nodes
-                olink_ = []
-                oEt = [0,0,0,0]
-                for olink in olink_: oEt = np.add(oEt, olink.Et)
-                OEt = np.add(OEt,oEt); oEt_+=[oEt]
+            for i,(link_,N_,nEt_) in enumerate(root_):
+                olink_,oEt = [],[0,0,0,0]
+                for L,_N in zip(rim,_N_):  # get overlap between N rim and root link_
+                    if _N in N_:  # in both N rim and root link_
+                        oEt = np.add(oEt, L.Et)
+                        olink_ += [L]
+                if olink_:
+                    OEt = np.add(OEt,oEt)
+                    oEt_ += [oEt]
+                # feedback to roots: add/remove N from rN_, adjusting next-loop overlap:
                 if oEt[fd] > ave * oEt[2+fd]:  # N in root
                     if N not in N_:
-                        N_ += [N]; _roEt_ += [oEt]; link_[:] = list(set(link_).union(rim))  # not directional
-                elif N in N_:
-                    _roEt_.pop(N_.index(N)); N_.remove(N); link_[:] = list(set(link_).difference(rim))
+                        nroot_ += [i]; N_ += [N]; nEt_ += [oEt]; link_[:] = list(set(link_).union(olink_))  # not directional
+                elif N in N_ and len(N_)>1:
+                    Ni = N_.index(N); nroot_.pop(Ni); nEt_.pop(Ni); N_.remove(N); link_[:] = list(set(link_).difference(olink_))
             _oEt_[:] = oEt_
         r += 1
         if OEt[fd] - _OEt[fd] < ave:  # low total overlap update
             break
         _OEt = OEt
-
-    for N,rim, Nroot_,oEt_ in node_:  # exclusive N assignment to clusters based on final oV
-
-        Nroot_ = [root for root in Nroot_ if N in root[1]]
-        if Nroot_:  # include isolated N?
-            Nroot_ = sorted(Nroot_, key=lambda root: root[2][root[1].index(N)][fd])  # sort by NoV in roots
-            N.root = Nroot_.pop()  # max root
-            for root in Nroot_:  # remove N from other roots
-                root[0][:] = list(set(root[0]).difference(rim))  # remove rim
-                i = root[1].index(N); root[1].pop(i); root[2].pop(i)  # remove N and NoV
-
+    # exclusive N assignment to clusters based on final oV:
+    for N,rim, _N_, nroot_,oEt_ in node_:
+         if len(nroot_) == 1:
+             continue  # keep isolated Ns
+         nroot_ = [root_[i] for i in nroot_]
+         nroot_ = sorted(nroot_, key=lambda root: root[2][root[1].index(N)][fd])  # sort by NoV in roots
+         N.root = nroot_.pop()  # max root
+         for root in nroot_:  # remove N from other roots
+             root[0][:] = list(set(root[0]).difference(rim))  # remove rim
+             i = root[1].index(N); root[1].pop(i); root[2].pop(i)  # remove N and NoV
+    '''
+    This pruning should actually be recursive too, it reduces overlap. May as well merge graphs via floodfill.
+    Which is sequential, the only parallelization is reusing merged-graph processor for some other root graph. 
+    Or subdividing processing of large graphs, but that's a lot of overhead.
+    '''
     return [sum2graph(root, grapht, fd, nrng) for grapht in root_ if grapht[1]]  # not-empty clusters
 
 def get_rim(N, fd):
@@ -229,3 +215,37 @@ def get_rim(N, fd):
     else:   rim = N.rim
 
     return rim
+
+def get_max_kernels(G_):  # use local-max kernels to init sub-graphs for segmentation
+
+    kernel_ = []
+    for G in copy(G_):
+        _G_ = []; fmax = 1
+        for link in G.rim:
+            _G = link.node_[0] if link.node_[1] is G else link.node_[1]
+            if _G.DerH.Et[0] > G.DerH.Et[0]:  # kernel-specific
+                fmax = 0
+                break
+            _G_ += [_G]
+        if fmax:
+            kernel = [G]+_G_  # immediate kernel
+            for k in kernel:
+                k.root += [kernel]  # node in overlapped area may get more than 1 kernel
+                if k in G_: G_.remove(k)
+            kernel_ += [kernel]
+    for G in G_:  # remaining Gs are not in any kernels, append to the nearest kernel
+        _G_ = [link.node_[0] if link.node_[1] is G else link.node_[1] for link in G.rim]  # directly connected Gs already checked
+        __G_ = []
+        while _G_:
+            while True:
+                for _G in _G_:
+                    for link in _G.rim:
+                        __G = link.node_[0] if link.node_[1] is _G else link.node_[1]  # indirectly connected Gs
+                        if __G not in G_:  # in some kernel, append G to it:
+                            G.root = __G.root
+                            __G.root[-1] += [G]
+                            break
+                        __G_ += [__G]
+                _G_ = __G_
+    # each kernel may still have overlapped nodes
+    return kernel_

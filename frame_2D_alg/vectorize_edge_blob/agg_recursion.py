@@ -83,7 +83,7 @@ def agg_recursion(rroot, root, fagg=0):
                         rroot.fback_ += [root.derH]
                         feedback(rroot)  # update root.root..
 '''
-~ graph convolutional network but no backprop in rng+, only olp feedback in clustering
+~ graph convolutional network without backprop
 '''
 def rng_convolve(root, Et, fagg):  # comp Gs|kernels in agg+, links | link rim_t node rims in sub+
 
@@ -134,12 +134,13 @@ def rng_convolve(root, Et, fagg):  # comp Gs|kernels in agg+, links | link rim_t
         while _L_:
             link_ += _L_; L_ = []
             for link in _L_:
-                if link.rim_t: rimt = [link.rim_t[0][-1] if link.rim_t[0] else [], link.rim_t[1][-1] if link.rim_t[1] else []]
-                else:          rimt = [link.node_[0].rim,link.node_[1].rim]
+                if link.rim_t: rimt = [copy(link.rim_t[0][-1]) if link.rim_t[0] else [], copy(link.rim_t[1][-1]) if link.rim_t[1] else []]
+                else:          rimt = [link.node_[0].rim, link.node_[1].rim]
                 for dir,rim in zip((0,1),rimt):  # two directions per layer
                     for _link in rim:
                         _G = _link.node_[0] if _link.node_[1] in link.node_ else _link.node_[1]  # mediating node
-                        _rim = _G.rim if isinstance(_G,CG) else (_G.rim_t[dir][-1] if _G.rim_t and _G.rim_t[dir] else [])
+                        # this _rim may contain current der+ added links because we added link to rim_t in comp_G
+                        _rim = _G.rim if isinstance(_G,CG) else (copy(_G.rim_t[dir][-1]) if _G.rim_t and _G.rim_t[dir] else [])
                         for _link in _rim:
                             if _link is link: continue
                             Link = Clink(node_=[_link,link])
@@ -232,7 +233,7 @@ def comp_G(link, iEt, link_, dir=None):  # add dderH to link and link to the rim
     if _G.derH and G.derH: _G.derH.comp_(G.derH, dderH, rn, fagg=1, flat=0)  # append and sum new dderH to base dderH
     if _G.extH and G.extH: _G.extH.comp_(G.extH, dderH, rn, fagg=1, flat=1)
 
-    if fd: link.derH.append_(dderH, flat=0)  # append to derH.H
+    if fd: link.derH.append_(dderH, flat=0)  # append dderH.H into link.derH.H
     else:  link.derH = dderH
     iEt[:] = np.add(iEt,dderH.Et)  # init eval rng+ and form_graph_t by total m|d?
     fin = 0
@@ -293,151 +294,93 @@ def form_graph_t(root,Q, Et, nrng):  # form Gm_,Gd_ from same-root nodes
         return node_t
 
 '''
-forward/feedback message-passing between two layers: roots with node_ and nodes with root_: 
-while > ave dOV: compute link_ oV for each (node,root); then assign each node to max root
-root feedback refines node x root link overlap, vs fitting to higher node in GNN backprop 
-
 der+: correlation clustering of links through their nodes, forming dual trees of matching links in rng+?
-
-add rng+/seg+: direct comp nodes (vs summed in krim) in proportion to graph size * M: likely distant match,
-comp individual nodes in node-mediated krims, replacing krims and ExtH layers, 
-adding links overlap for segmentation.
+add rng+/seg+: direct comp nodes (vs summed in krim) if graph size * M: likely distant match,
+comp individual nodes in node-mediated krims, replacing krims and ExtH layers
 '''
 def segment_parallel(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster assignment
-    '''
-    kernels = get_max_kernels(Q)  # for selective link tracing?
-    grapht_ = select_merge(kernels)  # refine by match to max, or only use it to selectively merge?
-    '''
-    node_,root_ = [],[]
-    for i, N in enumerate(Q):
-        N.root = i  # index in root_,node_
-        rim = get_rim(N, fd)
+
+    max_ = get_max_kernels(Q)  # seeds for floodfill via rim tracing
+    iGt_ = []  # graphts
+    for i, N in enumerate(max_):
+        rim = get_rim(N)
         _N_ = [link.node_[0] if link.node_[1] is N else link.node_[1] for link in rim]
-        root_ += [[[],[N], [[0,0,0,0]]]]  # init link_=N.rim, node_=[N], oEt_
-        node_ += [[N, rim,_N_, [i], []]]  # root_ indices, empty nEt_
-    r = 0  # recursion count
-    _OEt = [0,0,0,0]
-    while True:
-        OEt = [0,0,0,0]
-        for N,rim,_N_,nroot_,_oEt_ in node_:  # update node roots
-            oEt_ = []
-            for i,(link_,N_,nEt_) in enumerate(root_):
-                olink_,oEt = [],[0,0,0,0]
-                for L,_N in zip(rim,_N_):  # get overlap between N rim and root link_
-                    if _N in N_:  # in both N rim and root link_
-                        oEt = np.add(oEt, L.Et)
-                        olink_ += [L]
-                if olink_:
-                    OEt = np.add(OEt,oEt)
-                    oEt_ += [oEt]
-                # feedback to roots: add/remove N from rN_, adjusting next-loop overlap:
-                if oEt[fd] > ave * oEt[2+fd]:  # N in root
-                    if N not in N_:
-                        nroot_ += [i]; N_ += [N]; nEt_ += [oEt]; link_[:] = list(set(link_).union(olink_))  # not directional
-                elif N in N_:
-                    Ni = N_.index(N); nroot_.pop(Ni); nEt_.pop(Ni); N_.remove(N); link_[:] = list(set(link_).difference(olink_))
-            _oEt_[:] = oEt_
-        r += 1
-        if OEt[fd] - _OEt[fd] < ave:  # low total overlap update
-            break
-        _OEt = OEt
+        Gt = [[[N,rim,_N_,[0,0,0,0],i]], [],rim,[0,0,0,0]]  # nodet_,link_,Rim,Et # N, rim, _N_, Et, i = nodet
+        N.root = Gt
+        iGt_ += [Gt]
+    _Gt_ = copy(iGt_)
+    r = 1
+    while _Gt_:  # breadth-first for parallelization
+        Gt_ = []
+        for Gt in copy(_Gt_):
+            nodet,_N_,link_,_rim, Et = Gt
+            rim = []  # per node
+            for link in _rim:  # floodfill Gt by rim tracing
+                link_ += [link]
+                _N,N = link.node_ if link.node_[1] in _N_ else [link.node_[1],link.node_[0]]  # reverse order
+                Et = np.add(Et,link.Et)  # eval link, not node
+                for n in _N,N:
+                    # draft:
+                    et = n.root[0][0][-1]  # n.root[0][0] is self nodet, actually use i?
+                    n.root[0][0][-1] = np.add(et,link.Et)  # bilateral
+                if _N.root is not Gt:  # root was not previously merged?
+                    # add eval|comp: keep Gt separate even if connected?
+                    merge_Gt(Gt,_N.root, rim); _Gt_.remove(_N.root)
+                # rim should be appended inside merge_Gt?:
+                # rim += [L for L in get_rim(_N) if L.Et[fd] > ave * L.Et[2+fd]]  # for next breadth-first loop
 
-    # exclusive N assignment to clusters based on final oV:
-    for N,rim, _N_, nroot_,oEt_ in node_:
-         if len(nroot_) == 1:
-             continue  # keep isolated Ns
-         nroot_ = [root_[i] for i in nroot_]
-         nroot_ = sorted(nroot_, key=lambda root: root[2][root[1].index(N)][fd])  # sort by NoV in roots
-         N.root = nroot_.pop()  # max root
-         for root in nroot_:  # remove N from other roots
-             root[0][:] = list(set(root[0]).difference(rim))  # remove rim
-             i = root[1].index(N); root[1].pop(i); root[2].pop(i)  # remove N and NoV
-    '''
-    This pruning should actually be recursive too, it reduces overlap. May as well merge graphs via floodfill.
-    Which is sequential, the only parallelization is reusing merged-graph processor for some other root graph. 
-    Or subdividing processing of large graphs, but that's a lot of overhead.
-    '''
-    return [sum2graph(root, grapht, fd, nrng) for grapht in root_ if grapht[1]]  # not-empty clusters
+            if rim: Gt_ += [Gt]
+        _Gt_ = Gt_
+        r += 1  # recursion depth
 
+    return [sum2graph(root, Gt, fd, nrng) for Gt in iGt_ if Gt]  # not-empty clusters
 
-def get_rim(N, fd):
-    if fd:  # N is Clink
+def get_rim(N):
+
+    if isinstance(N, Clink):  # N is Clink
         if isinstance(N.node_[0],CG):
-            rim = [G.rim for G in N.node_]
+            rim = [link for G in N.node_ for link in G.rim]
         else:  # get link node rim_t dirs opposite from each other, else covered by the other link rim_t[1-dir]?
-            rim = [(link.rim_t[1-dir][-1] if link.rim_t[dir] else []) for dir, link in zip((0,1), N.node_)]
+            rim = [ L for dir, link in zip((0,1), N.node_) for L in (link.rim_t[1-dir][-1] if link.rim_t[dir] else [])]  # flat
     else:   rim = N.rim
+    return  rim
 
-    return rim
+# draft:
+def get_max_(Q):  # use local-max kernels to init sub-graphs for segmentation
+    kernel_ = []
 
-def segment_graph(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster assignment
-    '''
-    kernels = get_max_kernels(Q)  # parallelization of link tracing, not urgent
-    grapht_ = select_merge(kernels)  # refine by match to max, or only use it to selectively merge?
-    '''
-    _node_ = G_ = copy(Q)
-    r = 0
-    grapht_ = []
-    while True:
-        node_ = []
-        for node in _node_:  # depth-first eval merge node_|link_ connected via their rims:
-            if node not in G_: continue  # merged?
-            if not node.root:  # init in 1st loop or empty root after root removal
-                grapht = [[node],[],[0,0,0,0]]  # G_, Link_, Et
-                grapht_ += [grapht]
-                node.root = grapht
-            upV, remaining_node_ = merge_node(grapht_, G_, node, fd, upV=0)  # G_ to remove merged node
-            if upV > ave:  # graph update value, accumulate?
-                node_ += [node]
-            G_ += remaining_node_; node_ += remaining_node_    # re-add for next while loop
-        if node_:
-            _node_ = G_ = copy(node_)
-        else:
-            break  # no updates
-        r += 1  # recursion count
-    graph_ = [sum2graph(root, grapht[:3], fd, nrng) for grapht in grapht_ if  grapht[2][fd] > ave * grapht[2][2+fd]]
-
-    return graph_
-
-# not revised, sequential version
-def merge_node(grapht_, iG_, G, fd, upV):
-
-    if G in iG_: iG_.remove(G)
-    G_, Link_, Et = G.root
-    ave = G_aves[fd]
-    remaining_node_ = []  # from grapht removed from grapht_
-    fagg = isinstance(G,CG)
-
-    for link in (G.rim if fagg else G.rim_t[0][-1] if G.rim_t[0] else [] + G.rim_t[1][-1] if G.rim_t[1] else []):  # be empty
-        if link.Et[fd] > ave:  # fork eval
-            if link not in Link_: Link_ += [link]
+    for G in copy(Q):
+        _G_ = []; fmax = 1
+        for link in G.rim:
             _G = link.node_[0] if link.node_[1] is G else link.node_[1]
-            if _G in G_:
-                continue  # _G is already in graph
-            # get link overlap between graph and node.rim:
-            olink_ = list(set(Link_).intersection(_G.rim))
-            oV = sum([olink.Et[fd] for olink in olink_])  # link overlap V
-            if oV > ave and oV > _G.Et[fd]:  # higher inclusion value in new vs. current root
-                upV += oV
-                _G.Et[fd] = oV  # graph-specific, rdn?
-                G_ += [_G]; Link_ += [link]; Et = np.add(Et,_G.Et)
-                if _G.root:  # remove _G from root
-                    _G_, _Link_, _Et = _G.root
-                    _G_.remove(_G)
-                    if link in _Link_: _Link_.remove(link)  # empty at grapht init in r==0
-                    _Et = np.subtract(_Et, Et)
-                    if _Et[fd] < ave*_Et[2+fd]:
-                        grapht_.remove(_G.root)
-                        for __G in _G_: __G.root = []   # reset root
-                        remaining_node_ += _G_
+            if _G.DerH.Et[0] > G.DerH.Et[0]:  # kernel-specific
+                fmax = 0
+                break
+            _G_ += [_G]
+        if fmax:
+            kernel = [G] + _G_  # immediate kernel
+            for k in kernel:
+                k.root += [kernel]  # node in overlapped area may get more than 1 kernel
+                if k in Q: Q.remove(k)
+            kernel_ += [kernel]
+    for G in Q:  # remaining Gs are not in any kernels, append to the nearest kernel
+        _G_ = [link.node_[0] if link.node_[1] is G else link.node_[1] for link in G.rim]  # directly connected Gs already checked
+        __G_ = []
+        while _G_:
+            while True:
+                for _G in _G_:
+                    for link in _G.rim:
+                        __G = link.node_[0] if link.node_[1] is _G else link.node_[1]  # indirectly connected Gs
+                        if __G not in Q:  # in some kernel, append G to it:
+                            G.root = __G.root
+                            __G.root[-1] += [G]
+                            break
+                        __G_ += [__G]
+                _G_ = __G_
+    # each kernel may still have overlapped nodes
+    return kernel_
 
-                _G.root = G.root  # temporary
-                upV, up_remaining_node_ = merge_node(grapht_, iG_, _G, fd, upV)
-                remaining_node_ += up_remaining_node_
-
-    return upV, [rnode for rnode in remaining_node_ if not rnode.root]  # skip node if they added to grapht during the subsequent merge_node process
-
-# compatible with segment_parallel
+# not revised
 def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
     Link_, G_, oEt_ = grapht
@@ -490,40 +433,73 @@ def feedback(root):  # called from form_graph_, append new der layers to root
             if fback_ and len(fback_) == len(rroot.node_[1]):  # after all nodes' sub+
                 feedback(rroot)  # sum2graph adds higher aggH, feedback adds deeper aggH layers
 
-# not updated, for parallelization only
-def get_max_kernels(G_):  # use local-max kernels to init sub-graphs for segmentation
+# old:
+def segment_graph(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster assignment
+    '''
+    kernels = get_max_kernels(Q)  # parallelization of link tracing, not urgent
+    grapht_ = select_merge(kernels)  # refine by match to max, or only use it to selectively merge?
+    '''
+    _node_ = G_ = copy(Q)
+    r = 0
+    grapht_ = []
+    while True:
+        node_ = []
+        for node in _node_:  # depth-first eval merge node_|link_ connected via their rims:
+            if node not in G_: continue  # merged?
+            if not node.root:  # init in 1st loop or empty root after root removal
+                grapht = [[node],[],[0,0,0,0]]  # G_, Link_, Et
+                grapht_ += [grapht]
+                node.root = grapht
+            upV, remaining_node_ = merge_node(grapht_, G_, node, fd, upV=0)  # G_ to remove merged node
+            if upV > ave:  # graph update value, accumulate?
+                node_ += [node]
+            G_ += remaining_node_; node_ += remaining_node_    # re-add for next while loop
+        if node_:
+            _node_ = G_ = copy(node_)
+        else:
+            break  # no updates
+        r += 1  # recursion count
+    graph_ = [sum2graph(root, grapht[:3], fd, nrng) for grapht in grapht_ if  grapht[2][fd] > ave * grapht[2][2+fd]]
 
-    kernel_ = []
-    for G in copy(G_):
-        _G_ = []; fmax = 1
-        for link in G.rim:
+    return graph_
+
+# replace with merge_Gt
+def merge_node(grapht_, iG_, G, fd, upV):
+
+    if G in iG_: iG_.remove(G)
+    G_, Link_, Et = G.root
+    ave = G_aves[fd]
+    remaining_node_ = []  # from grapht removed from grapht_
+    fagg = isinstance(G,CG)
+
+    for link in (G.rim if fagg else G.rim_t[0][-1] if G.rim_t[0] else [] + G.rim_t[1][-1] if G.rim_t[1] else []):  # be empty
+        if link.Et[fd] > ave:  # fork eval
+            if link not in Link_: Link_ += [link]
             _G = link.node_[0] if link.node_[1] is G else link.node_[1]
-            if _G.DerH.Et[0] > G.DerH.Et[0]:  # kernel-specific
-                fmax = 0
-                break
-            _G_ += [_G]
-        if fmax:
-            kernel = [G]+_G_  # immediate kernel
-            for k in kernel:
-                k.root += [kernel]  # node in overlapped area may get more than 1 kernel
-                if k in G_: G_.remove(k)
-            kernel_ += [kernel]
-    for G in G_:  # remaining Gs are not in any kernels, append to the nearest kernel
-        _G_ = [link.node_[0] if link.node_[1] is G else link.node_[1] for link in G.rim]  # directly connected Gs already checked
-        __G_ = []
-        while _G_:
-            while True:
-                for _G in _G_:
-                    for link in _G.rim:
-                        __G = link.node_[0] if link.node_[1] is _G else link.node_[1]  # indirectly connected Gs
-                        if __G not in G_:  # in some kernel, append G to it:
-                            G.root = __G.root
-                            __G.root[-1] += [G]
-                            break
-                        __G_ += [__G]
-                _G_ = __G_
-    # each kernel may still have overlapped nodes
-    return kernel_
+            if _G in G_:
+                continue  # _G is already in graph
+            # get link overlap between graph and node.rim:
+            olink_ = list(set(Link_).intersection(_G.rim))
+            oV = sum([olink.Et[fd] for olink in olink_])  # link overlap V
+            if oV > ave and oV > _G.Et[fd]:  # higher inclusion value in new vs. current root
+                upV += oV
+                _G.Et[fd] = oV  # graph-specific, rdn?
+                G_ += [_G]; Link_ += [link]; Et = np.add(Et,_G.Et)
+                if _G.root:  # remove _G from root
+                    _G_, _Link_, _Et = _G.root
+                    _G_.remove(_G)
+                    if link in _Link_: _Link_.remove(link)  # empty at grapht init in r==0
+                    _Et = np.subtract(_Et, Et)
+                    if _Et[fd] < ave*_Et[2+fd]:
+                        grapht_.remove(_G.root)
+                        for __G in _G_: __G.root = []   # reset root
+                        remaining_node_ += _G_
+
+                _G.root = G.root  # temporary
+                upV, up_remaining_node_ = merge_node(grapht_, iG_, _G, fd, upV)
+                remaining_node_ += up_remaining_node_
+
+    return upV, [rnode for rnode in remaining_node_ if not rnode.root]  # skip node if they added to grapht during the subsequent merge_node process
 
 # very initial draft, to merge overlapped kernels and form grapht
 def select_merge(kernel_):
