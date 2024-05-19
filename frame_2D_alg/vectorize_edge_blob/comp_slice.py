@@ -4,8 +4,9 @@ from copy import deepcopy, copy
 from itertools import zip_longest, combinations
 import sys
 sys.path.append("..")
-from frame_blobs import CH, CBase, CG, imread
-from .slice_edge import comp_angle, CP, Clink, CsliceEdge
+from frame_blobs import CBase, imread
+if __name__ == "__main__": from slice_edge import comp_angle, CsliceEdge
+else: from .slice_edge import comp_angle, CsliceEdge
 
 '''
 Vectorize is a terminal fork of intra_blob.
@@ -39,7 +40,7 @@ ave_dI = ave_inv = 20  # ave inverse m, change to Ave from the root intra_blob?
 ave_Gm = 50
 aves = ave_mI, ave_mG, ave_mM, ave_mMa, ave_mA, ave_mL = ave, 10, 2, .1, .2, 2
 P_aves = ave_Pm, ave_Pd = 10, 10
-PP_aves = ave_PPm, ave_PPd = 30, 30
+PP_aves = ave_PPm, ave_PPd = 50, 50
 
 class CcompSliceFrame(CsliceEdge):
 
@@ -47,10 +48,183 @@ class CcompSliceFrame(CsliceEdge):
 
         def vectorize(edge):  # overrides in CsliceEdge.CEdge.vectorize
             edge.slice_edge()
-            if edge.latuple[-1] * (len(edge.P_)-1) > PP_aves[0]:  # eval PP, rdn=1
+            if edge.latuple[-1] * (len(edge.P_)-1) > ave_PPm:  # eval PP, rdn=1
+                edge.iderH = CH()
+                edge.fback_ = []
+                for P in edge.P_:
+                    P.derH = CH()   # create derH
+                    P.link_ = [[Clink([_P, P]) for _P in P.link_]]  # prelinks for comp_slice
                 ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
 
     CBlob = CEdge
+
+class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
+
+    def __init__(G, root=None, rng=1, fd=0, node_=None, link_=None, Et=None, n=0):  # we need P_ to init PP, Et in init graph
+        super().__init__()
+        # PP:
+        G.root = [] if root is None else root  # mgraphs that contain this G, single-layer
+        G.rng = rng
+        G.S = 0  # sparsity: distance between node centers
+        G.A = 0, 0  # angle: summed dy,dx in links
+        G.area = 0
+        G.Et = [0,0,0,0] if Et is None else Et  # external eval tuple, summed from rng++ before forming new graph and appending G.extH
+        G.latuple = [0,0,0,0,0,[0,0]]  # lateral I,G,M,Ma,L,[Dy,Dx]
+        G.iderH = CH()  # summed from PPs
+        G.derH = CH()  # nested derH in Gs: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
+        G.DerH = CH()  # summed kernel rims
+        G.node_ = [] if node_ is None else node_  # convert to node_t in sub_recursion
+        G.link_ = [] if link_ is None else link_  # links per comp layer, nest in rng+)der+
+        G.box = [np.inf, np.inf, -np.inf, -np.inf]  # y,x,y0,x0,yn,xn
+        G.kH = []
+        # graph-external, +level per root sub+:
+        G.n = n  # external n (last layer n)
+        G.rim = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
+        G.extH = CH()  # G-external daggH( dsubH( dderH, summed from rim links
+        G.ExtH = CH()  # summed link.DerH
+        G.alt_graph_ = []  # adjacent gap+overlap graphs, vs. contour in frame_graphs
+        # dynamic attrs:
+        G.Rim = []  # links to the most mediated nodes
+        G.fback_ = []  # feedback [[aggH,valt,rdnt,dect]] per node layer, maps to node_H
+        G.compared_ = []
+        # Rdn: int = 0  # for accumulation or separate recursion count?
+        # it: list = z([None,None])  # graph indices in root node_s, implicitly nested
+        # depth: int = 0  # n sub_G levels over base node_, max across forks
+        # nval: int = 0  # of open links: base alt rep
+        # id_H: list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
+        # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
+        # top Lay from links, lower Lays from nodes, hence nested tuple?
+
+    def __bool__(G): return G.n != 0  # to test empty
+
+
+class Clink(CBase):  # product of comparison between two nodes or links
+    name = "link"
+
+    def __init__(l, node_=None,rim=None, derH=None, extH=None, root=None, distance=0, angle=None, box=None ):
+        super().__init__()
+
+        l.node_ = [] if node_ is None else node_  # e_ in kernels, else replaces _node,node: not used in kernels?
+        l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
+        l.distance = distance  # distance between node centers
+        l.S = 0  # initially summed from node_
+        l.n = 1  # or min(node_.n)?
+        l.area = 0  # sum node area
+        l.latuple = []  # sum node I,G,M,Ma,L,[Dy,Dx], no need to specify here
+        l.yx_ = []  # or box
+        l.Et = [0,0,0,0]  # graph-specific, accumulated from surrounding nodes in node_connect
+        l.relt = [0,0]
+        l.derH = CH() if derH is None else derH
+        l.DerH = CH()  # ders from G.DerH
+        # add in der+:
+        l.extH = CH() if extH is None else extH  # for der+
+        l.ExtH = CH()  # summed from kernels in der+
+        l.root = None if root is None else root  # dgraphs containing link
+        l.rim_t = []  # dual tree of _links, each may have its own node-mediated links, instead of rim
+        l.compared_ = []
+        l.box = [np.inf, np.inf, -np.inf, -np.inf] if box is None else box  # y,x,y0,x0,yn,xn
+        l.dir = bool  # direction of comparison if not G0,G1, for comp link?
+        # add in sum2graph: graph is Clink?
+        l.link_ = []
+
+    def __bool__(l): return bool(l.derH.H)
+
+
+class CH(CBase):  # generic derivation hierarchy with variable nesting
+    '''
+    len layer +extt: 2, 3, 6, 12, 24,
+    or without extt: 1, 1, 2, 4, 8..: max n of tuples per der layer = summed n of tuples in all lower layers:
+    lay1: par     # derH per param in vertuple, layer is derivatives of all lower layers:
+    lay2: [m,d]   # implicit nesting, brackets for clarity:
+    lay3: [[m,d], [md,dd]]: 2 sLays,
+    lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
+    '''
+    name = "H"
+    def __init__(He, n=0, Et=None, relt=None, H=None):
+        super().__init__()
+        # He.nest = nest  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH
+        He.n = n  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
+        He.Et = [0,0,0,0] if Et is None else Et   # evaluation tuple: valt, rdnt
+        He.relt = [0,0] if relt is None else relt  # m,d relative to max possible m,d
+        He.H = [] if H is None else H  # hierarchy of der layers or md_
+
+    def __bool__(H): return H.n != 0
+
+    def add_(HE, He, irdnt=None):  # unpack down to numericals and sum them
+
+        if irdnt is None: irdnt = []
+        if HE:
+            if isinstance(HE.H[0], CH):
+                H = []
+                for Lay, lay in zip_longest(HE.H, He.H, fillvalue=None):
+                    if lay:  # to be summed
+                        if Lay is None: Lay = CH()
+                        Lay.add_(lay, irdnt)  # recursive unpack to sum md_s
+                    H += [Lay]
+                HE.H = H
+            else:
+                HE.H = [V+v for V,v in zip_longest(HE.H, He.H, fillvalue=0)]  # both Hs are md_s
+            # default:
+            Et, et = HE.Et, He.Et
+            HE.Et = np.add(HE.Et, He.Et); HE.relt = np.add(HE.relt, He.relt)
+            if any(irdnt): HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
+            HE.n += He.n  # combined param accumulation span
+        else:
+            HE.copy(He)  # initialization
+
+
+    def append_(HE,He, irdnt=None, flat=0):
+
+        if irdnt is None: irdnt = []
+        if flat: HE.H += deepcopy(He.H)  # append flat
+        else:    HE.H += [He]  # append nested
+        Et, et = HE.Et, He.Et
+        HE.Et = np.add(HE.Et, He.Et); HE.relt = np.add(HE.relt, He.relt)
+        if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
+        HE.n += He.n  # combined param accumulation span
+
+
+    def comp_(_He, He, dderH, rn=1, fagg=0, flat=1):  # unpack tuples (formally lists) down to numericals and compare them
+
+        n = 0
+        if isinstance(_He.H[0], CH):  # _lay is He_, same for lay: they are aligned above
+            Et = [0,0,0,0]  # Vm,Vd, Rm,Rd
+            relt = [0,0]  # Dm,Dd
+            dH = []
+            for _lay,lay in zip(_He.H,He.H):  # md_| ext| derH| subH| aggH, eval nesting, unpack,comp ds in shared lower layers:
+                if _lay and lay:  # ext is empty in single-node Gs
+                    dlay = _lay.comp_(lay, CH(), rn, fagg=fagg, flat=1)  # dlay is dderH
+                    Et = np.add(Et, dlay.Et)
+                    relt = np.add(relt, dlay.relt)
+                    dH += [dlay]; n += dlay.n
+                else:
+                    dH += [CH()]  # empty?
+        else:  # H is md_, numerical comp:
+            vm,vd,rm,rd, decm,decd = 0,0,0,0,0,0
+            dH = []
+            for i, (_d,d) in enumerate(zip(_He.H[1::2], He.H[1::2])):  # compare ds in md_ or ext
+                d *= rn  # normalize by comparand accum span
+                diff = _d-d
+                match = min(abs(_d),abs(d))
+                if (_d<0) != (d<0): match = -match  # if only one comparand is negative
+                if fagg:
+                    maxm = max(abs(_d), abs(d))
+                    decm += abs(match) / maxm if maxm else 1  # match / max possible match
+                    maxd = abs(_d) + abs(d)
+                    decd += abs(diff) / maxd if maxd else 1  # diff / max possible diff
+                vm += match - aves[i]  # fixed param set?
+                vd += diff
+                dH += [match,diff]  # flat
+            Et = [vm,vd,rm,rd]; relt= [decm,decd]
+            n = len(_He.H)/12  # unit n = 6 params, = 12 in md_
+
+        dderH.append_(CH(Et=Et, relt=relt, H=dH, n=n), flat=flat)  # currently flat=1
+        return dderH
+
+    def copy(_H, H):
+        for attr, value in H.__dict__.items():
+            if attr != '_id' and attr in _H.__dict__.keys():  # copy only the available attributes and skip id
+                setattr(_H, attr, deepcopy(value))
 
 def ider_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
 
@@ -68,15 +242,15 @@ def rng_recursion(PP, fd=0):  # similar to agg+ rng_recursion, but looping and c
         iP_ = PP.link_
         for link in PP.link_:
             if link.node_[0].link_: # empty in top row
-                link.link_ += [copy(link.node_[0].link_[-1])] # add upper node uplinks as prelinks
+                link_ = copy(link.node_[0].link_[-1])
+                assert not hasattr(link, "link_")  # no link_ yet
+                link.link_ = [link_]  # add upper node uplinks as prelinks
     else: iP_ = PP.P_
     rng = 1  # cost of links added per rng+
     while True:
         P_ = []; V = 0
         for P in iP_:
-            if P.link_:
-                if len(P.link_) < rng: continue  # no _rnglink_ or top row
-            else: continue  # top row
+            if not hasattr(P, "link_") or len(P.link_) < rng: continue  # no _rnglink_ or top row
             _prelink_ = P.link_.pop()
             rnglink_, prelink_ = [],[]  # both per rng+
             for link in _prelink_:
@@ -87,7 +261,7 @@ def rng_recursion(PP, fd=0):  # similar to agg+ rng_recursion, but looping and c
                     _P_ = [link.node_[0]]
                 else: continue
                 for _P in _P_:
-                    if len(_P.link_) < rng: continue
+                    if not hasattr(_P, "link_") or len(_P.link_) < rng: continue
                     mlink = comp_P(Clink(node_=[_P, P]) if fd else link, fd)
                     if mlink: # return if match
                         V += mlink.derH.Et[0]
@@ -111,7 +285,7 @@ def comp_P(link, fd):
     aveP = P_aves[fd]
     _P, P, distance, angle = link.node_[0], link.node_[1], link.distance, link.angle
 
-    if fd:  # der+, comp derPs
+    if fd:  # der+, comp derPs, no comp_latuple?
         rn = (_P.derH.n if P.derH else len(_P.dert_)) / P.derH.n
         derH = _P.derH.comp_(P.derH, CH(), rn=rn, flat=0)
         vm,vd,rm,rd = derH.Et
@@ -146,8 +320,7 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
         mlink_,_mP_,dlink_,_dP_ = [],[],[],[]  # per P
         mLink_+=[mlink_]; _mP__+=[_mP_]
         dLink_+=[dlink_]; _dP__+=[_dP_]
-        if not P.link_:
-            continue
+        if not (hasattr(P, "link_") and P.link_): continue
         for link in [L for L_ in P.link_ for L in L_]:  # flatten P.link_ nested by rng
             if isinstance(link.derH.H[0],CH): m,d,mr,dr = link.derH.H[-1].Et  # last der+ layer vals
             else:                             m,d,mr,dr = link.derH.Et  # H is md_
@@ -159,7 +332,7 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
     for fd, (Link_,_P__) in zip((0,1),((mLink_,_mP__),(dLink_,_dP__))):
         CP_ = []  # all clustered Ps
         for P in P_:
-            if P in CP_ or not P.link_: continue  # already packed in some sub-PP
+            if P in CP_ or not (hasattr(P, "link_") and P.link_): continue  # already packed in some sub-PP
             cP_, clink_ = [P], []  # cluster per P
             if P in P_:
                 P_index = P_.index(P)
@@ -177,7 +350,7 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
 
     # eval der+/ PP.link_: correlation clustering, after form_PP_t -> P.root
     for PP in PP_t[1]:
-        if PP.iderH.Et[0] * len(PP.link_) > PP_aves[1] * PP.iderH.Et[2]:
+        if PP.iderH.Et[0] * len(PP.link_) > ave_PPd * PP.iderH.Et[2]:
             ider_recursion(root, PP, fd=1)
         if root.fback_:
             feedback(root)  # after der+ in all nodes, no single node feedback

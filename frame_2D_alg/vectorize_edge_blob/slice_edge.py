@@ -1,11 +1,9 @@
 import numpy as np
-from collections import defaultdict
 from math import atan2, cos, floor, pi
-from weakref import ref
 import sys
 sys.path.append("..")
-from frame_blobs import CBase, CH, Clink, imread   # for CP
-from intra_blob import CsubFrame
+from frame_blobs import CBase, CFrame, imread
+
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
 Potential object is proximate low-gradient (flat) blobs, with rough / thick boundary of adjacent high-gradient (edge) blobs.
@@ -19,6 +17,7 @@ This process is very complex, so it must be selective. Selection should be by co
 and inverse gradient deviation of flat blobs. But the latter is implicit here: high-gradient areas are usually quite sparse.
 A stable combination of a core flat blob with adjacent edge blobs is a potential object.
 '''
+# filters:
 octant = 0.3826834323650898  # radians per octant
 aveG = 10  # for vectorize
 ave_g = 30  # change to Ave from the root intra_blob?
@@ -27,9 +26,10 @@ ave_dist = 3
 max_dist = 15
 ave_dangle = .95  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
 
-class CsliceEdge(CsubFrame):
 
-    class CEdge(CsubFrame.CBlob): # replaces CBlob
+class CsliceEdge(CFrame):
+
+    class CEdge(CFrame.CBlob): # replaces CBlob
 
         def term(blob):  # extension of CsubFrame.CBlob.term(), evaluate for vectorization right after rng+ in intra_blob
             super().term()
@@ -52,7 +52,7 @@ class CsliceEdge(CsubFrame):
 
             edge.P_.sort(key=lambda P: P.yx, reverse=True)
             edge.trace()
-            # del edge.rootd
+            # del edge.rootd    # still being used for visual verification
             return edge
 
         def select_max(edge):
@@ -78,16 +78,13 @@ class CsliceEdge(CsubFrame):
                 for y, x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:
                     try:  # if yx has _P, try to form link
                         P = edge.rootd[y, x]
-                        if _P is not P and _P not in P.link_[0] and P not in _P.link_[0]:
-                            if _P.yx < P.yx: P.link_[0] += [_P]
-                            else:            _P.link_[0] += [P]
+                        if _P is not P and _P not in P.link_ and P not in _P.link_:
+                            if _P.yx < P.yx: P.link_ += [_P]
+                            else:            _P.link_ += [P]
                     except KeyError:    # if yx empty, keep tracing
                         if (y, x) not in edge.dert_: continue   # stop if yx outside the edge
                         edge.rootd[y, x] = _P
                         adjacent_ += [(_P, y, x)]
-            for P in edge.P_:
-                P.link_[0] = [Clink([_P, P]) for _P in P.link_[0]]  # prelinks for comp_slice
-
     CBlob = CEdge
 
 class CP(CBase):
@@ -102,7 +99,7 @@ class CP(CBase):
         pivot += ma,m
         edge.rootd[y, x] = P
         I,G,M,Ma,L,Dy,Dx = i,g,m,ma,1,gy,gx
-        P.yx_, P.dert_, P.link_ = [yx], [pivot], [[]]
+        P.yx_, P.dert_, P.link_ = [yx], [pivot], []
 
         for dy,dx in [(-ay,-ax),(ay,ax)]:  # scan in 2 opposite directions to add derts to P
             P.yx_.reverse(); P.dert_.reverse()
@@ -127,9 +124,6 @@ class CP(CBase):
 
         P.yx = tuple(np.mean([P.yx_[0], P.yx_[-1]], axis=0))
         P.latuple = I, G, M, Ma, L, (Dy, Dx)
-        P.derH = CH()
-
-    def __repr__(P): return f"P(id={P.id})"
 
 
 def interpolate2dert(edge, y, x):
@@ -167,14 +161,6 @@ def comp_angle(_A, A):  # rn doesn't matter for angles
 
     return [mangle, dangle]
 
-def project(y, x, s, c, r):
-    dist = s*y + c*x - r
-    # Subtract left and right side by dist:
-    # 0 = s*y + c*x - r - dist
-    # 0 = s*y + c*x - r - dist*(s*s + c*c)
-    # 0 = s*(y - dist*s) + c*(x - dist*c) - r
-    # therefore, projection of y, x onto the line is:
-    return y - dist*s, x - dist*c
 
 if __name__ == "__main__":
 
@@ -225,8 +211,7 @@ if __name__ == "__main__":
                     x_ = x_[0]-u/2, x_[0]+u/2
                 plt.plot(x_, y_, "k-", linewidth=3)
                 yp, xp = P.yx - yx0
-                for link in P.link_[0]:
-                    _P = link.node_[0]
+                for _P in P.link_:
                     assert _P.yx < P.yx
                     _yp, _xp = _P.yx - yx0
                     plt.plot([_xp, xp], [_yp, yp], "ko--", alpha=0.5)
