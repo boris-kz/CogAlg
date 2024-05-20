@@ -1,15 +1,10 @@
-from typing_extensions import Unpack
-
 import numpy as np
 from copy import deepcopy, copy
 from itertools import combinations, product, zip_longest
-from .slice_edge import comp_angle, CsliceEdge, Clink
-from .comp_slice import ider_recursion, comp_latuple, get_match
+from .slice_edge import comp_angle, CsliceEdge
+from .comp_slice import ider_recursion, comp_latuple, get_match, Clink, CH, CG
 from .filters import aves, ave_mL, ave_dangle, ave, G_aves, ave_Gm, ave_Gd, ave_dist, ave_mA, max_dist
 from utils import box2center, extend_box
-import sys
-sys.path.append("..")
-from frame_blobs import CH, CG
 
 '''
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
@@ -48,6 +43,11 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
 
     for edge in frame.blob_:
         if hasattr(edge, 'P_') and edge.latuple[-1] * (len(edge.P_)-1) > G_aves[0]:  # eval G, rdn=1
+            edge.Et = [0,0,0,0]  # for ider_recursion?
+            edge.fback_ = []
+            for P in edge.P_:
+                P.link_ = [[Clink(node_=[_P, P]) for _P in P.link_]]
+                P.derH = CH()
             ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
 
             for fd, node_ in enumerate(edge.node_):  # always node_t
@@ -62,6 +62,7 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
                                 pruned_node_ += [PP]
                         if len(pruned_node_) > 10:  # discontinuous PP rng+ cross-comp, cluster -> G_t:
                             edge.node_ = pruned_node_  # agg+ of PP nodes:
+                            edge.link_ = []
                             agg_recursion(None, edge, fagg=1)
 
 def agg_recursion(rroot, root, fagg=0):
@@ -299,12 +300,19 @@ comp individual nodes in node-mediated krims, replacing krims and ExtH layers?
 '''
 def segment_parallel(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster assignment
 
-    max_ = get_max_(Q)  # seeds for floodfill via rim tracing
+    rim_link_Et_x_olp(Q, fd)  # recursive link.Et += link.relt * (node_rim_overlap - link)
+    # rim link Et should be potentiated by overlap between their node_ rims, AKA Shared Nearest Neighbours
+
+    max_ = []  # local max are seeds for floodfill via rim tracing, def max range: mediation step incr if no maxes in rrim?
+    for G in Q:
+        _G_ = [link.node_[0] if link.node_[1] is G else link.node_[1] for link in get_rim(G)]  # all connected G' rim's _Gs
+        if not any([_G.DerH.Et[0] > G.DerH.Et[0] or (_G in max_) for _G in _G_]):  # _G if _G.V==G.V
+            max_ += [G]
     iGt_ = []  # graphts
     for i, N in enumerate(max_):
         rim = get_rim(N)
         _N_ = [link.node_[0] if link.node_[1] is N else link.node_[1] for link in rim]
-        Gt = [[[N,rim,[0,0,0,0]]], [rim],rim,[_N_],[0,0,0,0]]  # nodet_,link_,Rim,_N_,Et; nodet: N,rim,Et
+        Gt = [[[N,rim]], copy(rim),copy(rim),_N_,[0,0,0,0]]  # nodet_,link_,Rim,_N_,Et; nodet: N,rim
         N.root = Gt
         iGt_ += [Gt]
     _Gt_ = copy(iGt_)
@@ -312,27 +320,60 @@ def segment_parallel(root, Q, fd, nrng):  # recursive eval node_|link_ rims for 
     while _Gt_:  # breadth-first for parallelization
         Gt_ = []
         for Gt in copy(_Gt_):
-            nodet_,_N_,link_,_rim, Et = Gt
+            nodet_,link_,_rim, _N_, Et = Gt
             rim = []  # per node
             for link in _rim:  # floodfill Gt by rim tracing and _N.root merge
                 link_ += [link]
-                Et = np.add(Et,link.Et)  # not evaluated; # N is in, _N is outside _N_:
-                _N,N = link.node_ if link.node_[1] in _N_ else [link.node_[1],link.node_[0]]  # reverse node_
-                # _N.Et = np.add(_N.Et,et); N.Et = np.add(N.Et,et)  # node inclusion value, eval in floodfill?
+                Et[:] = np.add(Et,link.Et)
+                _N,N = link.node_ if link.node_[1] in _N_ else [link.node_[1],link.node_[0]]  # N is in, _N is outside _N_
                 if _N.root:
                     if _N.root is not Gt:  # root was not merged, + eval|comp to keep connected Gt separate?
-                        merge_Gt(Gt,_N.root, rim, fd); _Gt_.remove(_N.root)
+                        merge_Gt(Gt,_N.root, rim, fd)
                 else:
                     _N_ += [_N]
-                    rim += [L for L in get_rim(_N) if L.Et[fd] > ave * L.Et[2+fd]]
-                    # for next breadth-first loop
-            if rim: Gt_ += [Gt]
+                    rim += [L for L in get_rim(_N) if L.Et[fd] > ave * L.Et[2+fd]]  # for next breadth-first loop
+            if rim:
+                _rim[:] = rim; Gt_ += [Gt]
         _Gt_ = Gt_
         r += 1  # recursion depth
 
     return [sum2graph(root, Gt, fd, nrng) for Gt in iGt_ if Gt]  # not-empty clusters
 
+# draft
+def rim_link_Et_x_olp(iQ, fd):
+    # recursive link.Et += link.relt * (node_ rim overlap - link)
+    _OEt = [0,0,0,0]
+    _oEt_ = [[0,0,0,0] for n in iQ]
+    _Q = copy(iQ)
+    r = 1
+    while True:
+        OEt = [0,0,0,0]
+        oEt_ = []
+        DOV = 0
+        Q = []
+        for N, _oEt in zip(_Q, _oEt_):  # update node rim Ets
+            oEt = [0,0,0,0]  # not sure
+            DoV = 0
+            rim = get_rim(N)
+            for link in rim:
+                _N = link.node_[0] if link.node_[1] is N else link.node_[1]
+                _rim = get_rim(_N)
+                olink_ = list(set(rim).intersection(set(_rim)))
+                [np.add(oEt, L.Et) for L in olink_ if L is not link]
+                V = link.Et[fd]
+                doV = oEt[fd] - _oEt[fd]  # oV update to adjust V, not sure we need the rest of oEts:
+                link.Et[fd] = V + link.relt[fd] * doV
+                DoV += doV
 
+            DOV += DoV; np.add(OEt, oEt); _oEt = oEt
+            if DoV > ave:
+                Q += [N]; oEt_ += [oEt]
+
+        if DOV < ave: break  # low update value
+        _Q = Q; _oEt_ = oEt_; _OEt = OEt
+        r += 1
+
+# not revised
 def merge_Gt(Gt, gt, rim, fd):
 
     Nodet_,N_,Link_,Rim, Et = Gt; nodet_,n_,link_,rim, et = gt
@@ -349,33 +390,22 @@ def merge_Gt(Gt, gt, rim, fd):
 
     Rim += [L for L in rim if L not in Rim]
 
-
 def get_rim(N):
 
     if isinstance(N, Clink):  # N is Clink
         if isinstance(N.node_[0],CG):
             rim = [link for G in N.node_ for link in G.rim]
-        else:  # get link node rim_t dirs opposite from each other, else covered by the other link rim_t[1-dir]?
+        else:
+            # get link node rim_t dirs opposite from each other, else covered by the other link rim_t[1-dir]?
             rim = [ L for dir, link in zip((0,1), N.node_) for L in (link.rim_t[1-dir][-1] if link.rim_t[dir] else [])]  # flat
     else:   rim = N.rim
     return  rim
 
 
-# unpack?
-def get_max_(Q):  # use local-max kernels to init sub-graphs for segmentation
-                  # make recursive to define max range: increase mediation step if no maxes in prior rim?
-    max_ = []
-    for G in Q:
-        _G_ = [link.node_[0] if link.node_[1] is G else link.node_[1] for link in get_rim(G)]  # all connected G' rim's _Gs
-        if not any([_G.DerH.Et[0] > G.DerH.Et[0]  for _G in _G_]):  # check if any _G.DerH.Et > G.DerH.Et
-            max_ += [G]
-    return max_
-
-
 # not revised
 def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
-    _, G_, Link_, _, Et = grapht
+    _, Link_, _, G_, Et = grapht
     graph = CG(fd=fd, node_=G_,link_=Link_, rng=nrng, Et=Et)
     if fd:
         graph.root = root

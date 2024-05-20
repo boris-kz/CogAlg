@@ -98,6 +98,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
     def __bool__(G): return G.n != 0  # to test empty
 
 
+# replace with CdP here?
 class Clink(CBase):  # product of comparison between two nodes or links
     name = "link"
 
@@ -289,11 +290,12 @@ def comp_P(link, fd):
         rn = (_P.derH.n if P.derH else len(_P.dert_)) / P.derH.n
         derH = _P.derH.comp_(P.derH, CH(), rn=rn, flat=0)
         vm,vd,rm,rd = derH.Et
-        rm += vd > vm; rd += vm >= vd
-        He = link.derH  # append link derH:
-        if He and not isinstance(He.H[0], CH): He = link.derH = CH(Et=[*He.Et], H=[He])  # nest md_ as derH
-        He.Et = np.add(He.Et, (vm,vd,rm,rd))
-        He.H += [derH]
+        # rm += vd > vm; rd += vm >= vd
+        # He = link.derH  # append link derH:
+        # if He and not isinstance(He.H[0], CH): He = link.derH = CH(Et=[*He.Et], H=[He])  # nest md_ as derH
+        # He.Et = np.add(He.Et, (vm,vd,rm,rd))
+        # He.H += [derH]
+        link.derH = CH(Et=[*derH.Et], H=[derH])  # distance, angle?
     else:  # rng+, comp Ps
         rn = len(_P.dert_) / len(P.dert_)
         H = comp_latuple(_P.latuple, P.latuple, rn)
