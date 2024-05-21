@@ -78,9 +78,9 @@ class CsliceEdge(CFrame):
                 for y, x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:
                     try:  # if yx has _P, try to form link
                         P = edge.rootd[y, x]
-                        if _P is not P and _P not in P.link_ and P not in _P.link_:
-                            if _P.yx < P.yx: P.link_ += [_P]
-                            else:            _P.link_ += [P]
+                        if _P is not P and _P not in P.rim_ and P not in _P.rim_:
+                            if _P.yx < P.yx: P.rim_ += [_P]
+                            else:            _P.rim_ += [P]
                     except KeyError:    # if yx empty, keep tracing
                         if (y, x) not in edge.dert_: continue   # stop if yx outside the edge
                         edge.rootd[y, x] = _P
@@ -99,7 +99,7 @@ class CP(CBase):
         pivot += ma,m
         edge.rootd[y, x] = P
         I,G,M,Ma,L,Dy,Dx = i,g,m,ma,1,gy,gx
-        P.yx_, P.dert_, P.link_ = [yx], [pivot], []
+        P.yx_, P.dert_, P.rim_ = [yx], [pivot], []
 
         for dy,dx in [(-ay,-ax),(ay,ax)]:  # scan in 2 opposite directions to add derts to P
             P.yx_.reverse(); P.dert_.reverse()
@@ -211,7 +211,7 @@ if __name__ == "__main__":
                     x_ = x_[0]-u/2, x_[0]+u/2
                 plt.plot(x_, y_, "k-", linewidth=3)
                 yp, xp = P.yx - yx0
-                for _P in P.link_:
+                for _P in P.rim_:
                     assert _P.yx < P.yx
                     _yp, _xp = _P.yx - yx0
                     plt.plot([_xp, xp], [_yp, yp], "ko--", alpha=0.5)
