@@ -1,9 +1,9 @@
 CogAlg
 ======
 
-This process is directly derived from the definition of general intelligence / cognitive ability as the ability to predict from experience. That includes planning, which is technically a self-prediction. Any prediction is interactive projection of known patterns, hence primary process must be pattern discovery (AKA unsupervised learning: an obfuscating negation-first term). This perspective is not novel, pattern recognition is a core of any IQ test, the problem is consistency. 
+This algorithm is a strictly bottom-up connectivity-based clustering, from pixels to eternity. It is directly derived from my definition of general intelligence: the ability to predict from prior / adjacent input. That includes planning, which is technically a self-prediction. Any prediction is interactive projection of known patterns, hence primary process must be pattern discovery (AKA unsupervised learning: an obfuscating negation-first term). This perspective is not novel, pattern recognition a main focus in ML, and a core of any IQ test. The problem I have with current ML is conceptual consistency. 
 
-Pattern recognition is also a default mode in Neural Nets, but they work indirectly, in a very coarse statistical fashion. Basic NNs, such as [multi-layer perceptrons](https://towardsdatascience.com/what-the-hell-is-perceptron-626217814f53), perform lossy stochastic chain-rule fitting. Each node outputs normalized sum of weighted inputs, then adjusts the weights in proportion to numeric similarity between input and output. In Deep Learning this adjustment is by backpropagated and decomposed error (inverse similarity) in the output layer, while in Hebbian Learning the adjustment is local, by input-output coincidence: binary version of their direct similarity. 
+Pattern recognition is a default mode in Neural Nets, but they work indirectly, in a very coarse statistical fashion. Basic NNs, such as [multi-layer perceptrons](https://towardsdatascience.com/what-the-hell-is-perceptron-626217814f53), perform lossy stochastic chain-rule fitting. Each node outputs normalized sum of weighted inputs, then adjusts the weights in proportion to numeric similarity between input and output. In Deep Learning this adjustment is by backpropagated and decomposed error (inverse similarity) in the output layer, while in Hebbian Learning the adjustment is local, by input-output coincidence: binary version of their direct similarity. 
 
 Modern ANNs combine such vertical training with lateral cross-correlation, within an input vector. CNN filters are designed to converge on edge-detection in initial layers. Edge detection means computing lateral gradient, by weighted pixel cross-comparison within kernels. Graph NNs embed lateral edges, representing similarity or/and difference between nodes, also produced by their cross-comparison. Popular [transformers](https://www.quantamagazine.org/researchers-glimpse-how-ai-gets-so-good-at-language-processing-20220414/) can be seen as a [variation of Graph NN](https://towardsdatascience.com/transformers-are-graph-neural-networks-bca9f75412aa). Their first step is self-attention: computing dot-product between query-key pairs within input vector. Dot-product serves as a measure of similarity in these pairs, so it's also a form of cross-comparison, but the measure is not principled.
 
@@ -79,7 +79,6 @@ Some notes:
 - Most people who aspire to work on AGI think in terms behavior and robotics. I think this is far too coarse to make progress, the most significant mechanisms are on the level of perception. Feedforward (perception) must drive feedback (action), not the other way around.
 - Other distractions are supervision and reinforcement. These are optional task-specific add-ons, core cognitive process is unsupervised pattern discovery, and main problem here is scaling in complexity.
 - Don’t even start me on chatbots.  
-
 
 
 ### Comparison to Artificial and Biological Neural Networks
