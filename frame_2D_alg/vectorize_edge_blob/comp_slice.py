@@ -5,8 +5,8 @@ from itertools import zip_longest, combinations
 import sys
 sys.path.append("..")
 from frame_blobs import CBase, imread
-if __name__ == "__main__": from slice_edge import comp_angle, CsliceEdge
-else: from .slice_edge import comp_angle, CsliceEdge
+if __name__ == "__main__": from slice_edge import CP, comp_angle, CsliceEdge
+else: from .slice_edge import CP, comp_angle, CsliceEdge
 
 '''
 Vectorize is a terminal fork of intra_blob.
@@ -47,12 +47,12 @@ class CcompSliceFrame(CsliceEdge):
     class CEdge(CsliceEdge.CEdge): # replaces CBlob
 
         def vectorize(edge):  # overrides in CsliceEdge.CEdge.vectorize
+
             edge.slice_edge()
             if edge.latuple[-1] * (len(edge.P_)-1) > ave_PPm:  # eval PP, rdn=1
-                edge.iderH = CH()
-                edge.fback_ = []
+                edge.iderH = CH(); edge.fback_ = []
                 for P in edge.P_:
-                    P.derH = CH()   # create derH
+                    P.derH = CH()
                     P.rim_ = [[CdP([_P, P]) for _P in P.rim_]]  # prelinks for comp_slice
                 ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
 
@@ -76,7 +76,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.node_ = [] if node_ is None else node_  # convert to node_t in sub_recursion
         G.link_ = [] if link_ is None else link_  # links per comp layer, nest in rng+)der+
         G.box = [np.inf, np.inf, -np.inf, -np.inf]  # y,x,y0,x0,yn,xn
-        G.kH = []
+        G.kH = []  # kernel: hierarchy of rim layers
         # graph-external, +level per root sub+:
         G.n = n  # external n (last layer n)
         G.rim = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
@@ -97,9 +97,9 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
     def __bool__(G): return G.n != 0  # to test empty
 
-class CdP(CBase):
-    name = "derP"
-    def __init__(l, node_=None, derH=None, root=None, distance=0, angle=None):
+class CdP(CBase):  # comp_slice version of Clink
+    name = "dP"
+    def __init__(l, node_=None, derH=None, root=None, distance=None, angle=None):
         super().__init__()
 
         l.node_ = [] if node_ is None else node_  # e_ in kernels, else replaces _node,node: not used in kernels?
@@ -107,6 +107,7 @@ class CdP(CBase):
         l.distance = distance  # distance between node centers
         l.latuple = []  # sum node_
         l.yx = []  # sum node_
+        l.rim = []
         l.derH = CH() if derH is None else derH
         l.root = None if root is None else root  # PPds containing dP
 
@@ -211,11 +212,11 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
 
 def ider_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
 
-    Q = comp_link_(PP) if fd else rng_recursion(PP)  # extend PP.link_, derHs by same-der rng+ comp
+    Q = comp_link_(PP) if fd else rng_recursion(PP)
+    # replace PP node_,link_, append derH by der+ or extend PP.link_ by rng++ cross-comp
     form_PP_t(PP, Q)  # calls der+
 
     if root is not None and PP.iderH: root.fback_ += [PP.iderH]  # feedback per PPd?
-
 
 def rng_recursion(PP, fd=0):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
@@ -224,23 +225,21 @@ def rng_recursion(PP, fd=0):  # similar to agg+ rng_recursion, but looping and c
     while True:
         P_ = []; V = 0
         for P in iP_:
-            if not hasattr(P, "rim_") or len(P.rim_) < rng: continue  # no _rnglink_ or top row
+            if len(P.rim_) < rng: continue  # no _rnglink_ or top row
             _prelink_ = P.rim_.pop()
             rnglink_, prelink_ = [],[]  # both per rng+
-            for link in _prelink_:
-                if fd:
-                    if link.node_[0].rim_: _P_ = link.node_[0].rim_[-1]  # rng uplinks in _P
-                    else: continue
-                elif link.distance <= rng:  # | rng * ((P.val+_P.val)/ ave_rval)?
-                    _P_ = [link.node_[0]]
-                else: continue
-                for _P in _P_:
-                    if not hasattr(_P, "rim_") or len(_P.rim_) < rng: continue
-                    mlink = comp_P(CdP(node_=[_P, P]) if fd else link, fd)
-                    if mlink: # return if match
+            for _P in _prelink_:
+                _y,_x = _P.yx; y,x = P.yx
+                angle = np.subtract([y,x], [_y,_x]) # dy,dx between node centers
+                distance = np.hypot(*angle)  # between node centers
+                # or rng * ((P.val+_P.val)/ ave_rval)?:
+                if distance <= rng:
+                    if len(_P.rim_) < rng: continue
+                    mlink = comp_P(_P,P, angle,distance)
+                    if mlink:  # return if match
                         V += mlink.derH.Et[0]
                         rnglink_ += [mlink]
-                        prelink_ += _P.rim_[-1]  # connected __Ps links (can't be prelinks?)
+                        prelink_ += [dP.node_[0] for dP in _P.rim_[-1]]  # connected __Ps
             if rnglink_:
                 P.rim_ += [rnglink_]
                 if prelink_:
@@ -255,46 +254,58 @@ def rng_recursion(PP, fd=0):  # similar to agg+ rng_recursion, but looping and c
 
     return iP_
 
+def comp_link_(PP):  # node_- mediated: comp node.rim dPs
 
-# draft
-def comp_link_(PP):
+    dlink_ = []
+    ''' 
+    this dlink_ is flat, but input may be nested rim_: some input info is lost.
+    consistent dlink_ may be double-nested, from rim_ and _rim_, too complex? 
+    '''
+    for dP in PP.link_:
+        rim = [link for rim in dP.rim_ for link in rim]  # flatten P.rim_ or layer dlink_ by root rng+?
+        for link in rim:
+            _node = link.node_[0]
+            if not _node.rim_: continue # empty in top row
+            _rim = [link for rim in _node.rim_ for link in rim] if isinstance(_node,CP) else _node.rim
+            for _link in _rim:  # comp all rng rims?
+                dlink = comp_P(_link,link)
+                if dlink:  # return if match
+                    dlink.rim += [_link]
+                    dlink_ += [dlink]
+    return dlink_
 
-    for link in PP.link_:
-        if link.node_[0].rim_:  # empty in top row
-            rim_ = copy(link.node_[0].rim_[-1])
-            assert not hasattr(link, "rim_")  # no link_ yet
-            link.rim_ = [rim_]  # add upper node uplinks as prelinks
+def comp_P(_P,P, angle=None, distance=None):  # comp dPs if fd else Ps
 
-
-def comp_P(link, fd):
+    fd = isinstance(P,CdP)
     aveP = P_aves[fd]
-    _P, P, distance, angle = link.node_[0], link.node_[1], link.distance, link.angle
-
-    if fd:  # der+, comp derPs, comp_latuple is not significant?
-        rn = (_P.derH.n if P.derH else len(_P.dert_)) / P.derH.n
-        derH = _P.derH.comp_(P.derH, CH(), rn=rn, flat=0)
-        link.derH = CH(Et=[*derH.Et], H=[derH])
-        # distance, angle?
-    else:  # rng+, comp Ps
+    if fd:
+        # der+: comp dPs
+        rn = _P.derH.n / P.derH.n
+        # H = comp_latuple(_P.latuple, P.latuple, rn)?
+        derH = _P.derH.comp_(P.derH, CH(), rn=rn, flat=1)
+        _y,_x = _P.yx; y,x = P.yx
+        angle = np.subtract([y,x],[_y,_x]) # dy,dx between node centers
+        distance = np.hypot(*angle) # between node centers
+    else:
+        # rng+: comp Ps
         rn = len(_P.dert_) / len(P.dert_)
         H = comp_latuple(_P.latuple, P.latuple, rn)
         vm = sum(H[::2]); vd = sum(abs(d) for d in H[1::2])
         rm = 1 + vd > vm; rd = 1 + vm >= vd
         n = (len(_P.dert_)+len(P.dert_)) / 2  # der value = ave compared n?
+        derH = CH(Et=[vm,vd,rm,rd],H=H,n=n)
         _y,_x = _P.yx; y,x = P.yx
-        angle = np.subtract([y,x], [_y,_x]) # dy,dx between node centers
-        distance = np.hypot(*angle)      # distance between node centers
-        link = CdP(node_=[_P, P], derH = CH(Et=[vm,vd,rm,rd],H=H,n=n),angle=angle,distance=distance)
+    # get aves:
+    yx = [(_c+c)/2 for _c,c in zip((_y,_x),(y,x))]
+    latuple = [(P+p)/2 for P,p in zip(_P.latuple[:-1],P.latuple[:-1])] + [[(A+a)/2 for A,a in zip(_P.latuple[-1],P.latuple[-1])]]
 
-    # to sum in PP
-    link.latuple = [P+p for P,p in zip(_P.latuple[:-1],P.latuple[:-1])] + [[A+a for A,a in zip(_P.latuple[-1],P.latuple[-1])]]
-    link.yx_     = _P.yx_ + P.yx_
-
+    link = CdP(node_=[_P,P],derH=derH,angle=angle,distance=distance,yx=yx,latuple=latuple)
     if link.derH.Et[0] > aveP * link.derH.Et[2]:  # always rng+? (vm > aveP * rm)
         return link
 
+
 # not revised:
-def form_PP_t(root, P_):  # form PPs of derP.valt[fd] + connected Ps val
+def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
 
     PP_t = [[],[]]
     mLink_,_mP__,dLink_,_dP__ = [],[],[],[]  # per PP, !PP.link_?
@@ -340,21 +351,25 @@ def form_PP_t(root, P_):  # form PPs of derP.valt[fd] + connected Ps val
     root.node_ = PP_t  # nested in der+, add_alt_PPs_?
 
 
-def sum2PP(root, P_, derP_, fd):  # sum links in Ps and Ps in PP
+# not revised
+def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
 
-    PP = CG(fd=fd, root=root, rng=root.rng+1); PP.P_ = P_  # init P_
+    PP = CG(fd=fd, root=root, rng=root.rng+1)
+    PP.P_ = P_  # P_ is CdPs if fd, but summed in CG PP?
     iRt = root.iderH.Et[2:4] if root.iderH else [0,0]  # add to rdnt
     # += uplinks:
-    for derP in derP_:
-        if derP.node_[0] not in P_ or derP.node_[1] not in P_: continue
-        if derP.derH:
-            derP.node_[1].derH.add_(derP.derH, iRt)
-            derP.node_[0].derH.add_(negate(deepcopy(derP.derH)), iRt)  # negate reverses uplink ds direction
-        PP.link_ += [derP]
-        if fd: derP.root = PP
-        PP.A = np.add(PP.A,derP.angle)
-        PP.S += np.hypot(*derP.angle)  # links are contiguous but slanted
-        PP.n += derP.derH.n  # *= ave compared P.L?
+    for dP in dP_:
+        if dP.node_[0] not in P_ or dP.node_[1] not in P_: continue
+        if dP.derH:
+            # dP.node_[1].derH nesting is lower than dP.derH, append them instead? But how about negate?
+            if not isinstance(P_[0], CdP):
+                dP.node_[1].derH.add_(dP.derH, iRt)
+                dP.node_[0].derH.add_(negate(deepcopy(dP.derH)), iRt)  # negate reverses uplink ds direction
+        PP.link_ += [dP]
+        if fd: dP.root = PP
+        PP.A = np.add(PP.A,dP.angle)
+        PP.S += np.hypot(*dP.angle)  # links are contiguous but slanted
+        PP.n += dP.derH.n  # *= ave compared P.L?
     # += Ps:
     celly_,cellx_ = [],[]
     for P in P_:
@@ -365,7 +380,7 @@ def sum2PP(root, P_, derP_, fd):  # sum links in Ps and Ps in PP
             PP.iderH.add_(P.derH)  # no separate extH, the links are unique here
         for y,x in P.yx_:
             y = int(round(y)); x = int(round(x))  # summed with float dy,dx in slice_edge?
-        PP.box = accum_box(PP.box, y, x); celly_+=[y]; cellx_+=[x]
+        PP.box = accum_box(PP.box,y,x); celly_+=[y]; cellx_+=[x]
         if not fd: P.root = PP
     if PP.iderH:
         PP.iderH.Et[2:4] = [R+r for R,r in zip(PP.iderH.Et[2:4], iRt)]
@@ -392,7 +407,6 @@ def feedback(root):  # in form_PP_, append new der layers to root PP, single vs.
         fback_ += [HE]
         if len(fback_)==len(node_):  # all nodes terminated and fed back
             feedback(rroot)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
-
 
 def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
 
@@ -434,7 +448,6 @@ def negate(He):
         He.H[1::2] = [-d for d in He.H[1::2]]
     return He
 
-
 def accum_box(box, y, x):
     """Box coordinate accumulation."""
     y0, x0, yn, xn = box
@@ -444,5 +457,25 @@ if __name__ == "__main__":
 
     image_file = '../images/raccoon_eye.jpeg'
     image = imread(image_file)
+    # verification:
+    frame = CcompSliceFrame(image).segment()
+    import matplotlib.pyplot as plt
+    from slice_edge import unpack_edge_
+    num_to_show = 5
 
-    frame = CcompSliceFrame(image).segment()  # verification
+    edge_ = sorted(
+        filter(lambda edge: hasattr(edge, "node_") and edge.node_, unpack_edge_(frame)),
+        key=lambda edge: len(edge.yx_), reverse=True)
+    for edge in edge_[:num_to_show]:
+        yx_ = np.array(edge.yx_)
+        yx0 = yx_.min(axis=0) - 1
+        # show edge-blob
+        shape = yx_.max(axis=0) - yx0 + 2
+        mask_nonzero = tuple(zip(*(yx_ - yx0)))
+        mask = np.zeros(shape, bool)
+        mask[mask_nonzero] = True
+        plt.imshow(mask, cmap='gray', alpha=0.5)
+        plt.title(f"area = {edge.area}")
+
+        print(len(edge.node_[0]), len(edge.node_[1]))  # TODO: show PP graph and layer info (der, rng)
+        plt.show()

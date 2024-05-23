@@ -221,6 +221,15 @@ def imread(filename, raise_if_not_read=True):  # Read an image in grayscale, ret
         if raise_if_not_read: raise SystemError('image is not read')
         else: print('Warning: image is not read')
 
+def unpack_blob_(frame):
+    blob_ = []
+    q_ = list(frame.blob_)
+    while q_:
+        blob = q_.pop(0)
+        blob_ += [blob]
+        if hasattr(blob, "rnode_") and blob.rnode_.blob_:  # if blob is extended with rnode_
+            q_ += blob.rnode_.blob_
+    return blob_
 
 if __name__ == "__main__":
 
@@ -229,16 +238,12 @@ if __name__ == "__main__":
     frame = CFrame(image).segment()
 
     # verification (intra):
-    blob_ = list(frame.blob_)
-    while blob_:
-        blob = blob_.pop(0)
+    for blob in unpack_blob_(frame):
         print(f"{blob}'s parent is {blob.root}", end="")
         if hasattr(blob, "rnode_") and blob.rnode_.blob_:  # if blob is extended with rnode_
-            blobs = blob.rnode_.blob_
-            print(f", has {len(blob_)} sub-blob{'' if len(blob_) == 1 else 's'}")
-            if blobs: blob_ += blobs
-        else:
-            print()  # the blob is not extended, skip
+            cnt = len(blob.rnode_.blob_)
+            print(f", has {cnt} sub-blob{'' if cnt == 1 else 's'}")
+        else: print()  # the blob is not extended, skip
 
     I, Dy, Dx, G = frame.latuple
     # verification:

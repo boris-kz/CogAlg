@@ -2,7 +2,7 @@ import numpy as np
 from math import atan2, cos, floor, pi
 import sys
 sys.path.append("..")
-from frame_blobs import CBase, CFrame, imread
+from frame_blobs import CBase, CFrame, imread, unpack_blob_
 
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
@@ -126,6 +126,9 @@ class CP(CBase):
         P.latuple = I, G, M, Ma, L, (Dy, Dx)
 
 
+# --------------------------------------------------------------------------------------------------------------
+# utility functions
+
 def interpolate2dert(edge, y, x):
     if (y, x) in edge.dert_: return edge.dert_[y, x]  # if edge has (y, x) in it
 
@@ -161,6 +164,8 @@ def comp_angle(_A, A):  # rn doesn't matter for angles
 
     return [mangle, dangle]
 
+def unpack_edge_(frame):
+    return [blob for blob in unpack_blob_(frame) if hasattr(blob, "P_")]
 
 if __name__ == "__main__":
 
@@ -171,18 +176,16 @@ if __name__ == "__main__":
     # verification:
     import matplotlib.pyplot as plt
 
-    # show first largest n edges
-    edge_, edgeQue = [], list(frame.blob_)
-    while edgeQue:
-        blob = edgeQue.pop(0)
-        if hasattr(blob, "P_"): edge_ += [blob]
-        elif hasattr(blob, "rlay"): edgeQue += blob.rlay.blob_
-
+    # settings
     num_to_show = 5
     show_gradient = True
     show_slices = True
-    sorted_edge_ = sorted(edge_, key=lambda edge: len(edge.yx_), reverse=True)
-    for edge in sorted_edge_[:num_to_show]:
+
+    # unpack and sort edges
+    edge_ = sorted(unpack_edge_(frame), key=lambda edge: len(edge.yx_), reverse=True)
+
+    # show first largest n edges
+    for edge in edge_[:num_to_show]:
         yx_ = np.array(edge.yx_)
         yx0 = yx_.min(axis=0) - 1
 

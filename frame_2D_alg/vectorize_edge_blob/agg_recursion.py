@@ -76,23 +76,15 @@ class Clink(CBase):  # product of comparison between two nodes or links
 def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cluster:
 
     frame = CsliceEdge(image).segment()
-
     for edge in frame.blob_:
         if hasattr(edge, 'P_') and edge.latuple[-1] * (len(edge.P_)-1) > G_aves[0]:  # eval G, rdn=1
-            edge.iderH = CH()  # for iRt and feedback
-            edge.fback_ = []
-            for P in edge.P_:  # add comp_slice attrs
-                P.rim_ = [[CdP(node_=[_P,P]) for _P in P.rim_]]
-                P.derH = CH()
-            ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
+            add_attrs(edge)
 
+            ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
             node_t, link_t = [[],[]], [[],[]]
             for fd, node_ in enumerate(edge.node_):  # always node_t
                 if edge.iderH and any(edge.iderH.Et):  # any for np array
                     if edge.iderH.Et[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.iderH.Et[2+fd]:
-                        if not hasattr(edge, "Et"):  # init for agg+
-                            edge.Et = [0,0,0,0]  # to eval for deeper agg_recursion
-                            edge.link_ = []
                         pruned_node_ = []
                         for PP in node_:  # PP -> G
                             if PP.iderH and PP.iderH.Et[fd] > G_aves[fd] * PP.iderH.Et[2+fd]:
@@ -107,6 +99,14 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
                             link_t[fd] = edge.link_
             if any(node_t):
                 edge.node_ = node_t; edge.link_ = link_t
+
+def add_attrs(edge):
+    edge.iderH = CH()  # for iRt and feedback
+    edge.fback_ = []
+    edge.Et = [0,0,0,0]
+    edge.link_ = []
+    for P in edge.P_:  # add comp_slice attrs
+        P.rim_ = [[CdP(node_=[_P,P]) for _P in P.rim_]]; P.derH = CH()
 
 
 def agg_recursion(rroot, root, fagg=0):
@@ -161,7 +161,7 @@ def rng_convolve(root, Et, fagg):  # comp Gs|kernels in agg+, links | link rim_t
             for G in G_:
                 if len(G.rim) < 2: continue  # one link is always overlapped
                 for link in G.rim:
-                    if link.Et[0] > ave:  # link.Et+ per rng
+                    if link.derH.Et[0] > ave:  # link.Et+ per rng
                         comp_krim(link, _G_, nrng)  # + kernel rim / loop, sum in G.extH, derivatives in link.extH?
             G_ = _G_
         # G.extH+ for segmentation
@@ -189,7 +189,7 @@ def rng_convolve(root, Et, fagg):  # comp Gs|kernels in agg+, links | link rim_t
                         _rim = _G.rim if isinstance(_G,CG) else (copy(_G.rim_t[dir][-1]) if _G.rim_t and _G.rim_t[dir] else [])
                         for _link in _rim:
                             if _link is link: continue
-                            if not hasattr(_link.rim_t): add_der_attrs(link_=[_link])
+                            if not hasattr(_link, "rim_t"): add_der_attrs(link_=[_link])
                             Link = Clink(node_=[_link,link])
                             comp_G(Link, Et, L_, dir=dir)  # update Link.rim_t, L_
             _L_= L_
@@ -199,14 +199,19 @@ def rng_convolve(root, Et, fagg):  # comp Gs|kernels in agg+, links | link rim_t
     return nrng, Et
 
 def add_der_attrs(link_):
-    pass
-
+    for link in link_:
+        link.extH = CH()  # for der+
+        link.ExtH = CH()  # sum from kernels in der+
+        link.root = None  # dgraphs containing link
+        link.rim_t = []   # dual tree of _links, each may have its own node-mediated links, instead of rim
+        link.compared_ = []
+        link.dir = 0      # direction of comparison if not G0,G1, for comp link?
 '''
 G.DerH sums krim _G.derHs, not from links, so it's empty in the first loop.
 _G.derHs can't be empty in comp_krim: init in loop link.derHs
 link.DerH is ders from comp G.DerH in comp_krim
-G.extH sums link.DerHs
-'''
+G.extH sums link.DerHs: '''
+
 def comp_krim(link, G_, nrng, fd=0):  # sum rim _G.derHs, compare to form link.DerH layer
 
     _G,G = link.node_  # same direction
@@ -336,7 +341,7 @@ def form_graph_t(root,Q, Et, nrng):  # form Gm_,Gd_ from same-root nodes
                 q = graph.link_ if fd else graph.node_
                 if len(q) > ave_L and graph.Et[fd] > G_aves[fd] * graph.Et[fd]:  # olp-modulated Et
                     if fd:
-                        if nrng==1: add_der_attr(Q)  # 1st der+
+                        if not hasattr(Q[0],"rim_t"): add_der_attrs(Q)  # 1st der+
                     else:
                         for G in q: G.compared_ = []
                     agg_recursion(root, graph, fagg=(1-fd))  # graph.node_ is not node_t yet
@@ -353,14 +358,13 @@ def form_graph_t(root,Q, Et, nrng):  # form Gm_,Gd_ from same-root nodes
 
 def segment_Q(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster assignment
 
-    link_Et_xolp(Q, fd)  # recursive N Et += link.V + link.relt * node'_N_ overlap v
+    link_V_xolp(Q, fd)  # recursive N Et += link.V + link.relt * node'_N_ overlap v
     # rim link Vt is potentiated by overlap between _N_s of their nodes, AKA Shared Nearest Neighbours
-
-    max_ = []  # local maxes: seeds for floodfill via rim tracing, V * k * max range: mediation step++ if no maxes in rrim?
+    max_ = []
     for G in Q:
         _G_ = [link.node_[0] if link.node_[1] is G else link.node_[1] for link in get_rim(G)]  # all connected G' rim's _Gs
         if not any([_G.DerH.Et[0] > G.DerH.Et[0] or (_G in max_) for _G in _G_]):  # _G if _G.V==G.V
-            max_ += [G]
+            max_ += [G]  # local maxes are seeds for floodfill, V* k * max range: add mediation step if no maxes in rrim?
     # init graphts:
     iGt_ = []
     for N in max_:
@@ -378,14 +382,14 @@ def segment_Q(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster
             rim = []  # per node
             for link in _rim:  # floodfill Gt by rim tracing and _N.root merge
                 link_ += [link]
-                Et[:2] = np.add(Et,link.Vt); Et[2:] = np.add(Et,link.derH.Et[2:])
+                Et[:2] = np.add(Et[:2],link.Vt); Et[2:] = np.add(Et[2:],link.derH.Et[2:])
                 _N,N = link.node_ if link.node_[1] in _N_ else [link.node_[1],link.node_[0]]  # N is in, _N is outside _N_
                 if _N.root:
                     if _N.root is not Gt:  # root was not merged, + eval|comp to keep connected Gt separate?
                         merge_Gt(Gt,_N.root, rim, fd)
                 else:
                     _N_ += [_N]  # for next loop:
-                    rim += [L for L in get_rim(_N) if L.Vt[fd] > ave*L.Et[2+fd]]  # link Vt x= link node_'__N_'olp
+                    rim += [L for L in get_rim(_N) if L.Vt[fd] > ave*L.derH.Et[2+fd]]  # link Vt x= link node_'__N_'olp
             if rim:
                 _rim[:] = rim; Gt_ += [Gt]
         _Gt_ = Gt_
@@ -393,7 +397,24 @@ def segment_Q(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster
 
     return [sum2graph(root, Gt, fd, nrng) for Gt in iGt_ if Gt]  # not-empty clusters
 
-def link_Et_xolp(iQ, fd):  # recursive N.V += link.relv * node'_N_ overlap Et
+def merge_Gt(Gt, gt, rim, fd):
+
+    Nodet_,N_,Link_,Rim, Et = Gt; nodet_,n_,link_,rim, et = gt
+
+    for link in link_:
+        if link.derH.Et[fd] > ave * link.derH.Et[2+fd] and link not in Link_:
+            N = link.node_[1] if link.node_[1] in n_ else link.node_[0]  # the node of current link in gt
+            if N not in N_:
+                N_ += [N]  # add other node of link into N_
+                for nodet in nodet_:
+                    if nodet[0] is N and nodet not in Nodet_:  # find nodet based on N
+                        Nodet_ += [nodet]  # merge nodet
+                Link_ += [link]  # merge link
+
+    Rim += [L for L in rim if L not in Rim]
+
+
+def link_V_xolp(iQ, fd):  # recursive N.V += link.relv * node'_N_ overlap Et
 
     _oV_ = [0 for n in iQ]
     _Q = copy(iQ)
@@ -420,26 +441,9 @@ def link_Et_xolp(iQ, fd):  # recursive N.V += link.relv * node'_N_ overlap Et
         if DOV < ave:
             break
         for N in Q:  # sum node Ets from updated node rim link Ets:
-            N.Et[fd] = sum([link.Et[fd] for link in get_rim(N)])
+            N.Et[fd] = sum([link.derH.Et[fd] for link in get_rim(N)])
         r += 1
         _Q = Q; _oV_ = oV_
-
-# not revised
-def merge_Gt(Gt, gt, rim, fd):
-
-    Nodet_,N_,Link_,Rim, Et = Gt; nodet_,n_,link_,rim, et = gt
-
-    for link in link_:
-        if link.Et[fd] > ave * link.Et[2+fd] and link not in Link_:
-            N = link.node_[1] if link.node_[1] in n_ else link.node_[0]  # the node of current link in gt
-            if N not in N_:
-                N_ += [N]  # add other node of link into N_
-                for nodet in nodet_:
-                    if nodet[0] is N and nodet not in Nodet_:  # find nodet based on N
-                        Nodet_ += [nodet]  # merge nodet
-                Link_ += [link]  # merge link
-
-    Rim += [L for L in rim if L not in Rim]
 
 def get_rim(N):
 
