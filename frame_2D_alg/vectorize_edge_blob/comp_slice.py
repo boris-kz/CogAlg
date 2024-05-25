@@ -218,18 +218,17 @@ def ider_recursion(root, PP, fd=0):  # node-mediated correlation clustering: kee
 
     if root is not None and PP.iderH: root.fback_ += [PP.iderH]  # feedback per PPd?
 
-def rng_recursion(PP):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
+def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
-    iP_ = PP.P_
+    iP_, i_P__ = edge.P_, edge._P__  # rng++ and prelink per edge, not PPs
     rng = 1  # cost of links added per rng+
     while True:
         P_ = []; V = 0
-        # revise to zip i_P_ with iP_:
-        for P in iP_:
-            if len(P.rim_) < rng: continue  # no _rnglink_ or top row
-            i_P_ = P.rim_.pop()  # prelink_
-            rng_link_, _P_  = [],[]  # both per rng+
-            for _P in i_P_:
+        _P__ = [[] for _ in edge.P_]
+        for i, (P, i_P_) in enumerate(zip(iP_, i_P__)):
+            if len(P.rim_) < rng: continue  # no _rng_link_ or top row
+            rng_link_, _P_ = [],[]  # both per rng+
+            for _P in i_P_:  # prelinks
                 _y,_x = _P.yx; y,x = P.yx
                 angle = np.subtract([y,x], [_y,_x]) # dy,dx between node centers
                 distance = np.hypot(*angle)  # between node centers
@@ -240,15 +239,14 @@ def rng_recursion(PP):  # similar to agg+ rng_recursion, but looping and contigu
                     if mlink:  # return if match
                         V += mlink.derH.Et[0]
                         rng_link_ += [mlink]
-                        _P_ += [dP.node_[0] for dP in _P.rim_[-1]]  # connected __Ps
+                        _P__[i] += [dP.node_[0] for dP in _P.rim_[-1]]  # connected __Ps
             if rng_link_:
                 P.rim_ += [rng_link_]
-                if _P_:
-                    P.rim_ += [_P_]; P_ += [P]  # Ps with prelinks for next rng+
+                if _P__[i]: P_ += [P]  # Ps with prelinks for next rng+
 
         if V <= ave * rng * len(P_) * 6:  # implied val of all __P_s, 6: len mtuple
-            for P in P_: P.rim_.pop()  # remove prelinks
             break
+        else: i_P__ = _P__
         rng += 1
     # der++ in PPds from rng++, no der++ inside rng++: high diff @ rng++ termination only?
     PP.rng=rng  # represents rrdn
@@ -339,7 +337,7 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
     # eval der+/ PP.link_: correlation clustering, after form_PP_t -> P.root
     for PP in PP_t[1]:
         if PP.iderH.Et[0] * len(PP.link_) > ave_PPd * PP.iderH.Et[2]:
-            ider_recursion(root, PP)
+            ider_recursion(root, PP, fd=1)
         if root.fback_:
             feedback(root)  # after der+ in all nodes, no single node feedback
 
@@ -372,17 +370,20 @@ def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
         PP.latuple = [P+p for P,p in zip(PP.latuple[:-1],P.latuple[:-1])] + [[A+a for A,a in zip(PP.latuple[-1],P.latuple[-1])]]
         if P.derH:
             PP.iderH.add_(P.derH)  # no separate extH, the links are unique here
-        for y,x in P.yx_:
-            y = int(round(y)); x = int(round(x))  # summed with float dy,dx in slice_edge?
-        PP.box = accum_box(PP.box,y,x); celly_+=[y]; cellx_+=[x]
+        if isinstance(P, CP):
+            for y,x in P.yx_:
+                y = int(round(y)); x = int(round(x))  # summed with float dy,dx in slice_edge?
+                PP.box = accum_box(PP.box,y,x); celly_+=[y]; cellx_+=[x]
         if not fd: P.root = PP
     if PP.iderH:
         PP.iderH.Et[2:4] = [R+r for R,r in zip(PP.iderH.Et[2:4], iRt)]
-    # pixmap:
-    y0,x0,yn,xn = PP.box
-    PP.mask__ = np.zeros((yn-y0, xn-x0), bool)
-    celly_ = np.array(celly_); cellx_ = np.array(cellx_)
-    PP.mask__[(celly_-y0, cellx_-x0)] = True
+
+    if isinstance(P_[0], CP):  # skip if P is CdP because it doens't have box and yx
+        # pixmap:
+        y0,x0,yn,xn = PP.box
+        PP.mask__ = np.zeros((yn-y0, xn-x0), bool)
+        celly_ = np.array(celly_); cellx_ = np.array(cellx_)
+        PP.mask__[(celly_-y0, cellx_-x0)] = True
 
     return PP
 

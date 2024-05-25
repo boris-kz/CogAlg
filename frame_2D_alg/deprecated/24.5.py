@@ -124,42 +124,42 @@ def segment_recursive(root, Q, fd, nrng):  # recursive eval node_|link_ rims for
 
     return graph_
 
-def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
+def rng_recursion(PP):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
-    iP_  = PP.P_
-    rng = 0  # cost of links added per rng+
+    iP_ = PP.P_
+    rng = 1  # cost of links added per rng+
     while True:
-        rng += 1
         P_ = []; V = 0
+        # revise to zip i_P_ with iP_:
         for P in iP_:
-            if P.link_:
-                if len(P.link)<rng: continue  # no current-rng link_
-            else: continue  # top P_ in PP?
-            _prelink_ = P.link_.pop()
-            rng_link_, prelink_ = [],[]  # both per rng+
-            for link in _prelink_:
-                if link.distance <= rng:  # | rng * ((P.val+_P.val)/ ave_rval)?
-                    _P = link.node_[0]
-                    if fd and not (P.derH and _P.derH): continue  # nothing to compare
-                    mlink = comp_P(link, fd)
-                    if mlink: # return if match
+            if len(P.rim_) < rng: continue  # no _rnglink_ or top row
+            i_P_ = P.rim_.pop()  # prelink_
+            rng_link_, _P_  = [],[]  # both per rng+
+            for _P in i_P_:
+                _y,_x = _P.yx; y,x = P.yx
+                angle = np.subtract([y,x], [_y,_x]) # dy,dx between node centers
+                distance = np.hypot(*angle)  # between node centers
+                # or rng * ((P.val+_P.val)/ ave_rval)?:
+                if distance <= rng:
+                    if len(_P.rim_) < rng: continue
+                    mlink = comp_P(_P,P, angle,distance)
+                    if mlink:  # return if match
                         V += mlink.derH.Et[0]
                         rng_link_ += [mlink]
-                        prelink_ += _P.link_[-1]  # connected __Ps links (_P.link_[-1] is prelinks)
+                        _P_ += [dP.node_[0] for dP in _P.rim_[-1]]  # connected __Ps
             if rng_link_:
-                P.link_ += [rng_link_]
-                if prelink_: P.link_ += [rng_link_]  # temporary pre-links
-            if prelink_:
-                P_ += [P]
-        if V > ave * rng * len(P_) * 6:  #  implied val of all __P_s, 6: len mtuple
-            iP_ = P_; fd = 0
-        else:
-            for P in PP.P_: P.link_.pop()  # remove prelinks
+                P.rim_ += [rng_link_]
+                if _P_:
+                    P.rim_ += [_P_]; P_ += [P]  # Ps with prelinks for next rng+
+
+        if V <= ave * rng * len(P_) * 6:  # implied val of all __P_s, 6: len mtuple
+            for P in P_: P.rim_.pop()  # remove prelinks
             break
+        rng += 1
     # der++ in PPds from rng++, no der++ inside rng++: high diff @ rng++ termination only?
     PP.rng=rng  # represents rrdn
 
-    return P_
+    return iP_
 
 def unpack_last_link_(link_):  # unpack last link layer
 
