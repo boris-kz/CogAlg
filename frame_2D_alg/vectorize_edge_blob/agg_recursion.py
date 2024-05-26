@@ -78,8 +78,9 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
     frame = CsliceEdge(image).segment()
     for edge in frame.blob_:
         if hasattr(edge, 'P_') and edge.latuple[-1] * (len(edge.P_)-1) > G_aves[0]:  # eval G, rdn=1
-            add_attrs(edge)
-
+            edge.iderH = CH(); edge.fback_=[]; edge.Et=[0,0,0,0]; edge.link_=[]
+            for P in edge.P_[0]:
+                P.derH = CH()
             ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
             node_t, link_t = [[],[]], [[],[]]
             for fd, node_ in enumerate(edge.node_):  # always node_t
@@ -99,12 +100,6 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
                             link_t[fd] = edge.link_
             if any(node_t):
                 edge.node_ = node_t; edge.link_ = link_t
-
-def add_attrs(edge):
-
-    edge.iderH = CH(); edge.fback_=[]; edge.Et=[0,0,0,0]; edge.link_=[]
-    for P in edge.P_:  # add comp_slice attrs
-        P.rim_ = [[_P for _P in P.rim_]]; P.derH = CH()
 
 
 def agg_recursion(rroot, root, fagg=0):
@@ -177,24 +172,23 @@ def comp_trace_link(root, Et): # comp Clinks: der+'rng+ in root.link_ rim_t node
         for L in _L_:
             if not hasattr(L, "rim_t"): add_der_attrs(link_=[L])
             if L.rim_t:
-                rimt = [copy(L.rim_t[0][med-1]) if L.rim_t[0] else [], copy(L.rim_t[1][med-1]) if L.rim_t[1] else []]
+                rimt = [copy(L.rim_t[0][med-1]) if len(L.rim_t[0])==med else [], copy(L.rim_t[1][med-1]) if len(L.rim_t[1]) ==med else []]
             elif isinstance(L.node_[0],CG):
                 rimt = [L.node_[0].rim, L.node_[1].rim]  # med=1
             else:  # Clink nodes if med>1
                 rimt = [copy(L.node_[0].rim_t[0][-1]) if L.node_[0].rim_t[0] else [], copy(L.node_[1].rim_t[1][-1]) if L.node_[1].rim_t[1] else []]
             # two directions per rim layer:
             for dir,rim in zip((0,1),rimt):
-                for _L in rim:
-                    _G = _L.node_[0] if _L.node_[1] in L.node_ else _L.node_[1]  # mediating node
-                    _rim = _G.rim if isinstance(_G,CG) else flatten(_G.rim_t)  # comp all _L link layers to a unique L
-                    for __L in _rim:
-                        if __L is L or __L in L.compared: continue
-                        L.compared += [__L]
-                        if not hasattr(__L, "rim_t"):  # __L is outside the root
-                            add_der_attrs(link_=[__L])
-                        Link = Clink(node_=[__L,L], box=extend_box(__L.box, L.box))
-                        comp_G(Link, Et, L_, dir=dir, nrng=med)
-        if L_: link_ += L_  # only new Links?
+                for medL in rim:
+                    medN = medL.node_[0] if medL.node_[1] in L.node_ else medL.node_[1]  # mediating node of mediating link
+                    _rim = medN.rim if isinstance(medN,CG) else flatten(medN.rim_t)  # comp all _L link layers to a unique L
+                    for _L in _rim:
+                        if _L is L or _L in L.compared_: continue
+                        L.compared_ += [_L]
+                        if not hasattr(_L, "rim_t"):  # __L is outside the root
+                            add_der_attrs(link_=[_L])
+                        Link = Clink(node_=[_L,L], box=extend_box(_L.box, L.box))
+                        comp_G(Link, Et, link_, dir=dir, nrng=med, L_=L_)
         _L_= L_; med += 1
 
     for L in link_:
@@ -284,7 +278,7 @@ def sum_krim(krim):  # sum last kernel layer
     return n, L, S, A, latuple, iderH, derH, Et  # not sure about Et
 
 
-def comp_G(link, iEt, link_, dir=None, nrng=1):  # add dderH to link and link to the rims of comparands: Gs or links
+def comp_G(link, iEt, link_, dir=None, nrng=1, L_=None):  # add dderH to link and link to the rims of comparands: Gs or links
 
     fd = dir is not None  # compared links have binary relative direction?
     dderH = CH()  # new layer of link.dderH
@@ -310,7 +304,7 @@ def comp_G(link, iEt, link_, dir=None, nrng=1):  # add dderH to link and link to
     if _G.derH and G.derH: _G.derH.comp_(G.derH, dderH, rn, fagg=1, flat=0)  # append and sum new dderH to base dderH
     if _G.extH and G.extH: _G.extH.comp_(G.extH, dderH, rn, fagg=1, flat=1)
 
-    if fd: link.derH.append_(dderH, flat=0)  # append dderH.H to link.derH.H
+    if fd: link.derH.append_(dderH, flat=1)  # append dderH.H to link.derH.H
     else:  link.derH = dderH
     iEt[:] = np.add(iEt,dderH.Et)  # init eval rng+ and form_graph_t by total m|d?
     fin = 0
@@ -332,6 +326,7 @@ def comp_G(link, iEt, link_, dir=None, nrng=1):  # add dderH to link and link to
             link.S += _G.S + G.S
             for node in _G,G: node.rim += [link]
         link_ += [link]
+        if L_: L_ += [_G, G]  # for der+
 
 
 def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
@@ -378,7 +373,6 @@ def form_graph_t(root,Q, Et, nrng):  # form Gm_,Gd_ from same-root nodes
         root.node_[:] = node_t  # else keep root.node_
         return node_t
 
-
 def segment_Q(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster assignment
 
     link_V_xolp(Q, fd)  # recursive N Et += link.V + link.relt * node.rim _N_ overlap V:
@@ -420,7 +414,6 @@ def segment_Q(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster
 
     return [sum2graph(root, Gt, fd, nrng) for Gt in iGt_ if Gt]  # not-empty clusters
 
-
 def merge_Gt(Gt, gt, rim, fd):
 
     Nodet_,N_,Link_,Rim, Et = Gt; nodet_,n_,link_,rim, et = gt
@@ -437,13 +430,12 @@ def merge_Gt(Gt, gt, rim, fd):
 
     Rim += [L for L in rim if L not in Rim]
 
-
 def link_V_xolp(iQ, fd):  # recursive N.V += link.relv * node'_N_ overlap Et
 
     _oV_ = [0 for n in iQ]
     _Q = copy(iQ)
     r = 1
-    while True:
+    while True:  # refine overlap between N.rim _N_s of linked Ns, depending on prior-loop overlap
         OV, DOV = 0,0
         Q, oV_ = [],[]
         for N, _oV in zip(_Q, _oV_):  # update node rim link Ets

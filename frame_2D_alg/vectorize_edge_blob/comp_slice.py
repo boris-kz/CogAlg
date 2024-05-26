@@ -43,11 +43,9 @@ P_aves = ave_Pm, ave_Pd = 10, 10
 PP_aves = ave_PPm, ave_PPd = 50, 50
 
 class CcompSliceFrame(CsliceEdge):
-
     class CEdge(CsliceEdge.CEdge): # replaces CBlob
 
         def vectorize(edge):  # overrides in CsliceEdge.CEdge.vectorize
-
             edge.slice_edge()
             if edge.latuple[-1] * (len(edge.P_)-1) > ave_PPm:  # eval PP, rdn=1
                 edge.iderH = CH(); edge.fback_ = []
@@ -96,7 +94,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
     def __bool__(G): return G.n != 0  # to test empty
 
-class CdP(CBase):  # comp_slice version of Clink
+class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
     name = "dP"
     def __init__(l, node_=None, derH=None, root=None, distance=None, angle=None, yx=None, latuple=None):
         super().__init__()
@@ -164,8 +162,7 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
         Et, et = HE.Et, He.Et
         HE.Et = np.add(HE.Et, He.Et); HE.relt = np.add(HE.relt, He.relt)
         if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
-        HE.n += He.n  # combined param accumulation span
-
+        HE.n += He.n
 
     def comp_(_He, He, dderH, rn=1, fagg=0, flat=1):  # unpack tuples (formally lists) down to numericals and compare them
 
@@ -212,47 +209,54 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
 
 def ider_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
 
-    Q = comp_link_(PP) if fd else rng_recursion(PP)
-    # replace PP node_,link_, derH+=derLay by der+, or extend PP.link_ by rng++ cross-comp
-    form_PP_t(PP, Q)  # calls der+
+    comp_link_(PP) if fd else rng_recursion(PP) # edge only
 
-    if root is not None and PP.iderH: root.fback_ += [PP.iderH]  # feedback per PPd?
+    # der+: PP P_,link_'replace, derH+ or rng++: PP.link_+
+    form_PP_t(PP, PP.link_ if fd else PP.P_)  # calls der+
+
+    if root is not None and PP.iderH:
+        root.fback_ += [PP.iderH]
+        # feedback per PPd
 
 def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
-    iP_, i_P__ = edge.P_, edge._P__  # rng++ and prelink per edge, not PPs
     rng = 1  # cost of links added per rng+
-    while True:
-        P_ = []; V = 0
-        _P__ = [[] for _ in edge.P_]
-        for i, (P, i_P_) in enumerate(zip(iP_, i_P__)):
-            if len(P.rim_) < rng: continue  # no _rng_link_ or top row
-            rng_link_, _P_ = [],[]  # both per rng+
-            for _P in i_P_:  # prelinks
+    _P_ = copy(edge.P_) # includes prelink
+
+    while True:  # extend mediated comp rng by adding prelinks
+        P_ = []  # with new prelinks
+        V = 0
+        for P,_pre_ in _P_:
+            if len(P.rim_) < rng-1: continue  # no _rng_link_ or top row
+            rng_link_ = []  # per rng+
+            for _P in _pre_:  # prelinks
+                pre_ = []
                 _y,_x = _P.yx; y,x = P.yx
                 angle = np.subtract([y,x], [_y,_x]) # dy,dx between node centers
                 distance = np.hypot(*angle)  # between node centers
                 # or rng * ((P.val+_P.val)/ ave_rval)?:
                 if distance <= rng:
-                    if len(_P.rim_) < rng: continue
+                    if len(_P.rim_) < rng-1: continue
                     mlink = comp_P(_P,P, angle,distance)
                     if mlink:  # return if match
                         V += mlink.derH.Et[0]
                         rng_link_ += [mlink]
-                        _P__[i] += [dP.node_[0] for dP in _P.rim_[-1]]  # connected __Ps
+                        if _P.rim_:  # higher rng
+                            pre_ += [dP.node_[0] for dP in _P.rim_[-1]]  # connected __Ps
+                if pre_:
+                    P_ += [[P,pre_]]  # next P_ must have prelinks
             if rng_link_:
                 P.rim_ += [rng_link_]
-                if _P__[i]: P_ += [P]  # Ps with prelinks for next rng+
-
-        if V <= ave * rng * len(P_) * 6:  # implied val of all __P_s, 6: len mtuple
+        if not P_ or V <= ave * rng * len(P_) * 6:  # implied val of all __P_s, 6: len mtuple
             break
-        else: i_P__ = _P__
-        rng += 1
+        else:
+            _P_ = P_
+            rng += 1
     # der++ in PPds from rng++, no der++ inside rng++: high diff @ rng++ termination only?
-    PP.rng=rng  # represents rrdn
+    edge.rng=rng  # represents rrdn
+    edge.P_ = [Pt[0] for Pt in edge.P_]
 
-    return iP_
-
+# need to review
 def comp_link_(PP):  # node_- mediated: comp node.rim dPs
 
     dlink_ = []
@@ -265,7 +269,10 @@ def comp_link_(PP):  # node_- mediated: comp node.rim dPs
                     dP.rim += [dlink]
                     dlink_ += [dlink]
                     dlink.nmed = nmed
-    return dlink_
+
+    # we just need to update dP.rim, no return?
+    # return dlink_
+
 
 def comp_P(_P,P, angle=None, distance=None):  # comp dPs if fd else Ps
 

@@ -72,21 +72,26 @@ class CsliceEdge(CFrame):
             return axisd
 
         def trace(edge):  # fill and trace across slices
+
             adjacent_ = [(P, y,x) for P in edge.P_ for y,x in edge.rootd if edge.rootd[y,x] is P]
-            _P__ = [[] for _ in edge.P_]  # prelinks
+            pre__ = [[] for _ in edge.P_]  # prelinks
             while adjacent_:
                 _P, _y,_x = adjacent_.pop(0)  # also pop _P__
                 for y,x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:
                     try:  # if yx has _P, try to form link
                         P = edge.rootd[y,x]
                         if _P is not P and _P not in P.rim_ and P not in _P.rim_:
-                            if _P.yx < P.yx: _P__[edge.P_.index(P)] += [_P]  # edge.P_'s uplinks
-                            else:            _P__[edge.P_.index(_P)] += [P]
+                            if _P.yx < P.yx:
+                                if _P not in pre__[edge.P_.index(P)]:
+                                    pre__[edge.P_.index(P)] += [_P]  # edge.P_'s uplinks
+                            elif P not in pre__[edge.P_.index(_P)]:
+                                pre__[edge.P_.index(_P)] += [P]
                     except KeyError:    # if yx empty, keep tracing
                         if (y,x) not in edge.dert_: continue   # stop if yx outside the edge
                         edge.rootd[y,x] = _P
                         adjacent_ += [(_P, y,x)]
-            edge._P__ = _P__
+            edge.P_ = [[P,pre_] for P,pre_ in zip(edge.P_,pre__)]
+
     CBlob = CEdge
 
 class CP(CBase):
