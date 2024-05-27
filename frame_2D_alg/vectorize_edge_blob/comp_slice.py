@@ -243,6 +243,10 @@ def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and conti
                         rng_link_ += [mlink]
                         if _P.rim_:  # higher rng
                             pre_ += [dP.node_[0] for dP in _P.rim_[-1]]  # connected __Ps
+                        else:  # rng == 1 (we need this because _P.rim is empty when rng == 1)
+                            pre_index = [Pt[0] for Pt in edge.P_].index(_P)  # index of _P's pre in edge.P_
+                            pre_ += edge.P_[pre_index][1]
+
                 if pre_:
                     P_ += [[P,pre_]]  # next P_ must have prelinks
             if rng_link_:
@@ -312,8 +316,8 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
         mlink_,_mP_,dlink_,_dP_ = [],[],[],[]  # per P
         mLink_+=[mlink_]; _mP__+=[_mP_]
         dLink_+=[dlink_]; _dP__+=[_dP_]
-        if hasattr(P, "rim"): link_ = P.node_[0].rim  # CdP (get upper mediating link)
-        else:                 link_ = [link for rim in P.rim_ for link in rim]# flatten P.link_ nested by rng
+        if hasattr(P, "rim"): link_ = [link for rim in P.node_[0].rim_ for link in rim]  # CdP: get upper links: all layers of rim_
+        else:                 link_ = [link for rim in P.rim_ for link in rim]  # flatten P.link_ nested by rng
         for link in link_:
             if isinstance(link.derH.H[0],CH): m,d,mr,dr = link.derH.H[-1].Et  # last der+ layer vals
             else:                             m,d,mr,dr = link.derH.Et  # H is md_
