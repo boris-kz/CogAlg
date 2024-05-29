@@ -236,41 +236,55 @@ def comp_krim(link, G_, nrng, fd=0):  # sum rim _G.derHs, compare to form link.D
                 else:         node.DerH = deepcopy(__node.derH)  # init
         node.kH += [krim]
         G_ += [node]
-    # sum G-specific kernel rim:
-    _n,_L,_S,_A,_latuple,_iderH,_derH,_Et = sum_krim(list(set(_G.kH[-1])-set(G.kH[-1])))
-    n, L, S, A, latuple, iderH, derH, Et  = sum_krim(list(set(G.kH[-1])-set(_G.kH[-1])))
-    rn = _n / n
-    dderH = CH()
-    et, rt, md_ = comp_ext(_L,L,_S,S/rn,_A,A)
-    Et, Rt, Md_ = comp_latuple(_latuple, latuple, rn, fagg=1)
-    dderH.n = 1; dderH.Et = np.add(Et,et); dderH.relt = np.add(Rt,rt)
-    dderH.H = [CH(Et=et,relt=rt,H=md_,n=.5),CH(Et=Et,relt=Rt,H=Md_,n=1)]
-    # / PP:
-    _iderH.comp_(iderH, dderH, rn, fagg=1, flat=0)
-    # / G, if >1 PPs | Gs:
-    if _derH and derH: _derH.comp_(derH, dderH, rn, fagg=1, flat=0)  # append and sum new dderH to base dderH
-    # empty extH
+    _xrim = list(set(_G.kH[-1]) - set(G.kH[-1]))  # G-exclusive kernel rim
+    xrim = list(set(G.kH[-1]) - set(_G.kH[-1]))
+    dderH = comp_N_(_xrim, xrim, fd=0)
+
     if dderH.Et[0] > ave * dderH.Et[2]:  # use nested link.derH vs DerH?
         link.DerH.H[-1].add_(dderH, irdnt=dderH.H[-1].Et[2:]) if len(link.DerH.H)==nrng else link.DerH.append_(dderH,flat=1)
 
     # connectivity eval in segment_graph via decay = (link.relt[fd] / (link.derH.n * 6)) ** nrng  # normalized decay at current mediation
 
-def sum_krim(krim):  # sum last kernel layer
+def sum_N_(N_, fd=0):  # to sum kernel layer and partial graph comp
 
-    _G = krim[0]
-    n,L,S,A = _G.n,len(_G.node_),_G.S,_G.A
-    latuple = deepcopy(_G.latuple)
-    iderH = deepcopy(_G.iderH)
-    derH = deepcopy(_G.derH)
-    Et = copy(_G.Et)
-    for G in krim[1:]:
-        latuple = [P+p for P,p in zip(latuple[:-1],G.latuple[:-1])] + [[A+a for A,a in zip(latuple[-1],G.latuple[-1])]]
-        n+=G.n; L+=len(G.node_); S+=G.S; A=[Angle+angle for Angle,angle in zip(A,G.A)]
-        if G.iderH: iderH.add_(G.iderH)
-        if G.derH: derH.add_(G.derH)
-        np.add(Et,G.Et)
-    return n, L, S, A, latuple, iderH, derH, Et  # not sure about Et
+    N = N_[0]
+    n = N.n; S = N.S
+    L, A = (N.distance, N.angle) if fd else (len(N.node_), N.A)
+    latuple = deepcopy(N.latuple)  # ignore if Clink?
+    if not fd: iderH = deepcopy(N.iderH)
+    derH = deepcopy(N.derH)
+    Et = copy(N.Et)
+    for N in N_[1:]:
+        latuple = [P+p for P,p in zip(latuple[:-1],N.latuple[:-1])] + [[A+a for A,a in zip(latuple[-1],N.latuple[-1])]]
+        n += N.n; S += N.S
+        L += N.distance if fd else len(N.node_)
+        A = [Angle+angle for Angle,angle in zip(angle,N.angle if fd else A,N.A)]
+        if N.iderH: iderH.add_(N.iderH)
+        if N.derH: derH.add_(N.derH)
+        np.add(Et,N.Et)
 
+    return n, L, S, A, derH, Et, latuple, iderH  # the last two if not fd, not sure about Et
+
+def comp_N_(_node_, node_, fd):  # first part of comp_G to compare partial graphs for merge
+    dderH = CH()
+
+    _n, _L, _S, _A, _derH, _extH, _latuple, _iderH = sum_N_(_node_, fd)
+    n, L, S, A, derH, extH, latuple, iderH = sum_N_(node_, fd)
+    rn = _n/n
+    et, rt, md_ = comp_ext(_L,L, _S,S/rn, _A,A)
+    if fd:
+        dderH.n = 1; dderH.Et = et; dderH.relt = rt
+        dderH.H = [CH(Et=copy(et),relt=copy(rt),H=md_,n=1)]
+    else:
+        Et, Rt, Md_ = comp_latuple(_latuple, latuple, rn, fagg=1)
+        dderH.n = 1; dderH.Et = np.add(Et,et); dderH.relt = np.add(Rt,rt)
+        dderH.H = [CH(Et=et,relt=rt,H=md_,n=.5),CH(Et=Et,relt=Rt,H=Md_,n=1)]
+        _iderH.comp_(iderH, dderH, rn, fagg=1, flat=0)
+
+    if _derH and derH: _derH.comp_(derH, dderH, rn, fagg=1, flat=0)  # append and sum new dderH to base dderH
+    if _extH and extH: _extH.comp_(extH, dderH, rn, fagg=1, flat=1)
+
+    return dderH
 
 def comp_G(link, iEt, Q, dir=None, nrng=1):  # add dderH to link and link to the rims of comparands: Gs or links
 
@@ -366,41 +380,45 @@ def form_graph_t(root,Q, Et, nrng):  # form Gm_,Gd_ from same-root nodes
     if any(node_t):
         root.node_[:] = node_t  # else keep root.node_
         return node_t
-
-
+'''
+level of clustering based on combined weights of shared links and similarity between clusters,
+recursive node reassignment doesn't seem to be tractable:
+'''
 def segment_Q(root, iQ, fd, nrng):
-    '''
-    one level of agglomerative clustering based on combined weights of external links Lrim shared between clusters Gts:
-    eval Gt Lrim overlap to merge graphts. Lrim: set of out-of-cluster links in all nodes of cluster Gt
-    '''
+
+    Q = []  # init Gts per node in iQ, eval Lrim overlap + internal node_ similarity to merge them
     max_ = []
-    for N in iQ:  # use local maxes as sparse Gt seeds, or affinity clustering for better parallelization?
-        # connected N rim _Ns:
-        _N_ = [link.node_[0] if link.node_[1] is N else link.node_[1] for link in get_rim(N)]
-        # _Nt_ = [link.node_ if link.node_[1] is N else reversed(link.node_) for link in get_rim(N)]
-        if not any([_N.DerH.Et[0] > N.DerH.Et[0] or (_N in max_) for _N in _N_]):  # _N if _N.V==N.V
-            # V * k * max_rng: + mediation if no max in rrim?
-            max_ += [N]
-    Q = []
-    for N in iQ:  # init graphts
-        rim = get_rim(N)
-        _N_ = [link.node_[0] if link.node_[1] is N else link.node_[1] for link in rim]
-        Gt = [[N],[],copy(rim),_N_,[0,0,0,0]]  # node_,link_, Lrim, Nrim, Et
+    for N in iQ:
+        # init graphts:
+        rim = get_rim(N)  # init Lrim: set of out-of-cluster links in all nodes of cluster Gt
+        _Nt_ = [link.node_ if link.node_[1] is N else reversed(link.node_) for link in rim]
+        _N_t = list(zip(*_Nt_))  # [[extN,intN]] -> [extN_,intN_]
+        # node_,link_, Lrim, Nrim_t, Et:
+        Gt = [[N],[],copy(rim),_N_t,[0,0,0,0]]
         N.root = Gt
         Q += [Gt]
-    for Gt in Q: Gt[3] = [_N.root for _N in Gt[3]]  # replace Ns with their Gts
+        # get local maxes for parallel Gt seeds, or affinity clustering or sampling?:
+        if not any([eN.DerH.Et[0] > N.DerH.Et[0] or (eN in max_) for eN in _N_t[0]]):  # _N if _N.V==N.V
+            # V * k * max_rng: + mediation if no max in rrim?
+            max_ += [N]
+    for Gt in Q: Gt[3][0] = [_N.root for _N in Gt[3][0]]  # replace extNs with their Gts
     max_ = [N.root for N in max_]
+    # merge with connected _Gts:
     for Gt in max_:
-        # merge with connected _Gts:
-        node_, link_, Lrim, Nrim, Et = Gt
+        node_, link_, Lrim, Nrim_t, Et = Gt
+        Nrim = Nrim_t[0]
         for _Gt,_link in zip(Nrim, Lrim):
-            if _Gt not in Q: continue  # was merged
-            oL_ = list(set(Lrim).intersection(set(_Gt[3])))  # shared external links, if exclusive clustering
-            oV = sum([L.derH.Et[fd] - ave * L.derH.Et[2+fd] for L in oL_])  # sum V deviation of overlapping rim links
-            '''            
-            oV is node similarity, add partial graph similarity * rel distance and resolution decay coefs,
-            exclude Nrim (known): comp_internal sum( set(Gt[0]) - set(Gt[3][0]))? transient in agg+
-            '''
+            if _Gt not in Q:
+                continue  # was merged
+            oL_ = list(set(Lrim).intersection(set(_Gt[2])))  # shared external links, including _link
+            oV = sum([L.derH.Et[fd] - ave * L.derH.Et[2+fd] for L in oL_])
+            # Nrim similarity = olp Lrim V deviation,
+            # + partial G similarity:
+            if len(node_)/len(Nrim) > ave_L and len(_Gt[0])/len(_Gt[3][1]) > ave_L:
+                _int_node_ = list(set(_Gt[0]) - set(_Gt[3][1]))
+                int_node_ = list(set(node_) - set(Nrim_t[1]))
+                dderH = comp_N_(_int_node_, int_node_, fd)
+                oV += dderH.Et.fd - ave * dderH.Et[2+fd]
             if oV > ave:
                 merge(Gt,_Gt); Gt[1] += [_link]
                 Q.remove(_Gt)
@@ -409,13 +427,13 @@ def segment_Q(root, iQ, fd, nrng):
 
 def merge(Gt, gt):
 
-    N_,L_, Lrim, Nrim, Et = Gt
-    n_,l_, lrim, grim, et = gt
+    N_,L_, Lrim, Nrim_t, Et = Gt
+    n_,l_, lrim, nrim_t, et = gt
     N_ += n_
     L_ += l_  # internal, no overlap
     Lrim[:] = list(set(Lrim + lrim))  # exclude shared external links
-    Nrim[:] = list(set(Nrim + grim))  # exclude shared external nodes
-    Et[:]   = np.add(Et,et)
+    Nrim_t[:] = [[G for G in nrim_t[0] if G not in Nrim_t[0]], list(set(Nrim_t[1] + nrim_t[1]))]  # exclude shared external nodes
+    Et[:] = np.add(Et,et)
 
 def get_rim(N):
 
