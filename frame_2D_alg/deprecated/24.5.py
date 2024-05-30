@@ -403,7 +403,7 @@ def comp_P(link, fd):
     if vm > aveP * rm:  # always rng+?
         return link
 
-def segment_Q(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster assignment
+def segment_relt(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster assignment
     # eval Rim_ overlap for merge graphts, extending the Rim_?
 
     link_V_xolp(Q, fd)  # recursive N Et += link.V + link.relt * node.rim _N_ overlap V:
@@ -475,4 +475,90 @@ def link_V_xolp(iQ, fd):  # recursive N.V += link.relv * node'_N_ overlap Et
             N.Et[fd] = sum([link.derH.Et[fd] for link in get_rim(N)])
         r += 1
         _Q = Q; _oV_ = oV_
+
+def segment_xL_(root, iQ, fd, nrng):
+
+    Q = []  # init Gts per node in iQ, eval Lrim overlap + internal node_ similarity to merge them
+    max_ = []
+    for N in iQ:
+        # init graphts:
+        rim = get_rim(N)  # init Lrim: set of out-of-cluster links in all nodes of cluster Gt
+        _Nt_ = [link.node_ if link.node_[1] is N else reversed(link.node_) for link in rim]
+        _N_t = [[],[]]
+        for ext_N, int_N in _Nt_:
+            _N_t[0] += [ext_N]; _N_t[1] += [int_N]
+        # node_,link_, Lrim, Nrim_t, Et:
+        Gt = [[N],[],copy(rim),_N_t,[0,0,0,0]]
+        N.root = Gt
+        Q += [Gt]
+        # get local maxes for parallel Gt seeds, or affinity clustering or sampling?:
+        if not any([eN.DerH.Et[0] > N.DerH.Et[0] or (eN in max_) for eN in _N_t[0]]):  # _N if _N.V==N.V
+            # V * k * max_rng: + mediation if no max in rrim?
+            max_ += [N]
+    for Gt in Q: Gt[3][0] = [_N.root for _N in Gt[3][0]]  # replace extNs with their Gts
+    max_ = [N.root for N in max_]
+    # merge with connected _Gts:
+    for Gt in max_:
+        node_, link_, Lrim, Nrim_t, Et = Gt
+        Nrim = Nrim_t[0]
+        for _Gt,_link in zip(Nrim, Lrim):
+            if _Gt not in Q:
+                continue  # was merged
+            sLrim = set(Lrim); _sLrim = set(_Gt[2])
+            oL_ = sLrim.intersection(_sLrim)  # shared external links, including _link
+            xL_ = (sLrim-oL_).union((_sLrim-oL_))  # exclusive external links
+            oV = sum([L.derH.Et[fd] - ave * L.derH.Et[2+fd] for L in oL_])
+            xV = sum([L.derH.Et[fd] - ave * L.derH.Et[2+fd] for L in xL_])
+            roV = oV / xV  # Nrim similarity = relative V deviation,
+            # + partial G similarity:
+            if len(node_)/len(Nrim) > ave_L and len(_Gt[0])/len(_Gt[3][1]) > ave_L:
+                _int_node_ = list(set(_Gt[0]) - set(_Gt[3][1]))
+                int_node_ = list(set(node_) - set(Nrim_t[1]))
+                if _int_node_ and int_node_:
+                    dderH = comp_N_(_int_node_, int_node_)
+                    roV *= 1 + (dderH.Et[fd] - ave * dderH.Et[2+fd])
+            if roV > ave:
+                merge(Gt,_Gt); Gt[1] += [_link]
+                Q.remove(_Gt)
+
+    return [sum2graph(root, Gt, fd, nrng) for Gt in Q]
+
+def rng_trace_link(root, Et): # comp Clinks: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
+
+    node_,link_ = [],[]
+    _L_ = root.link_
+    med = 1
+    while _L_:
+        L_ = []
+        for L in _L_:
+            if L.rim_t:
+                rimt = [copy(L.rim_t[0][med-1]) if len(L.rim_t[0])==med else [], copy(L.rim_t[1][med-1]) if len(L.rim_t[1]) ==med else []]
+            elif isinstance(L.node_[0],CG):
+                rimt = [L.node_[0].rim, L.node_[1].rim]  # med=1
+            else:  # Clink nodes if med>1
+                rimt = [copy(L.node_[0].rim_t[0][-1]) if L.node_[0].rim_t[0] else [], copy(L.node_[1].rim_t[1][-1]) if L.node_[1].rim_t[1] else []]
+
+            for dir,rim in zip((0,1),rimt):  # two directions per rim layer
+                for medL in rim:  # new Links
+                    for _L in medL.node_:  # old links in node_, may comp both
+                        if _L is L or _L in L.compared_: continue
+                        if not hasattr(_L, "rim_t"):  # _L is outside root.link_, still same derivation
+                            add_der_attrs(link_=[_L])
+                        L.compared_ += [_L]; _L.compared_ += [L]
+                        Link = Clink(node_=[_L,L], box=extend_box(_L.box, L.box))
+                        comp_G(Link, Et, link_, dir=dir, nrng=med)  # node_ is Ls, link_ is new Links
+        _L_= L_; med += 1
+
+    return med, Et, link_
+
+def flatten(rim_t):
+    rim = []
+    if rim_t:
+        for dir in rim_t:
+            if dir:
+                for lay in dir:
+                    for L in lay: rim += [L]
+    return rim
+
+
 
