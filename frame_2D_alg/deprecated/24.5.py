@@ -560,5 +560,47 @@ def flatten(rim_t):
                     for L in lay: rim += [L]
     return rim
 
+def rng_convolve(root, Et):  # comp Gs|kernels in agg+, links | link rim_t node rims in sub+
+                             # similar to graph convolutional network but without backprop
+    nrng = 1
+    # comp CGs, summed in krims for rng>1
+    N_ = []  # Gs with updated rim
+    G_ = root.node_
+    # init kernels:
+    for link in list(combinations(G_,r=2)):
+        _G, G = link
+        if _G in G.compared_: continue
+        cy, cx = box2center(G.box); _cy, _cx = box2center(_G.box)
+        dy = cy-_cy; dx = cx-_cx;  dist = np.hypot(dy,dx)
+        if nrng==1: fcomp = dist <= ave_dist  # eval distance between node centers
+        else:
+            M = (G.Et[0]+_G.Et[0])/2; R = (G.Et[2]+_G.Et[2])/2  # local
+            fcomp = M / (dist/ave_dist) > ave * R
+        if fcomp:
+            G.compared_ += [_G]; _G.compared_ += [G]
+            Link = Clink(nodet=[_G,G], distance=dist, angle=[dy,dx], box=extend_box(G.box,_G.box))
+            comp_G(Link, Et, N_, nrng=nrng)  # add N_: updated node_-> next loop?
+    for G in G_:  # init kernel with 1st krim
+        krim = []
+        for link in G.rim:
+            if G.derH: G.derH.add_(link.derH)
+            else: G.derH = deepcopy(link.derH)
+            krim += [link.nodet[0] if link.nodet[1] is G else link.nodet[1]]
+        G.kH = [krim]
+    # aggregate rng+: recursive center node DerH += linked node derHs for next-loop cross-comp
+    iG_ = G_
+    while len(G_) > 2:
+        nrng += 1; _G_ = []
+        for G in G_:
+            if len(G.rim) < 2: continue  # one link is always overlapped
+            for link in G.rim:
+                if link.derH.Et[0] > ave:  # link.Et+ per rng
+                    comp_krim(link, _G_, nrng)  # + kernel rim / loop, sum in G.extH, derivatives in link.extH?
+        G_ = _G_
+    for G in iG_:
+        for i, link in enumerate(G.rim):
+            G.extH.add_(link.DerH) if i else G.extH.append_(link.DerH, flat=1)  # for segmentation
+
+    return nrng, Et, G_
 
 
