@@ -603,4 +603,19 @@ def rng_convolve(root, Et):  # comp Gs|kernels in agg+, links | link rim_t node 
 
     return nrng, Et, G_
 
+def get_med_link_(nodet, rng, med, Rimt=[[],[]]):  # get node-mediated links in two directions
+
+    fd = isinstance(nodet[0], Clink)
+    # xdir rims mostly overlap: rimt = [rimt[0][0],rimt[1][1]]?
+    # flat node-mediated dir link_s:
+    rimt = [[*N.rimt[0], *N.rimt[1]] if fd else N.rim for N in nodet]
+    for rim, Rim in zip(rimt, Rimt):
+        for _L in rim:
+            Rim += [_L]  # new links of all mediation ranges
+            if med < rng:
+                get_med_link_(_L.nodet, rng, med+1, Rimt)
+                # += _L.nodet rim links
+    return Rimt
+
+
 
