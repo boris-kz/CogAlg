@@ -77,7 +77,7 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
                     if edge.iderH.Et[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.iderH.Et[2+fd]:
                         pruned_node_ = []
                         for PP in node_:  # PP -> G
-                            if PP.iderH and PP.iderH.Et[fd] > G_aves[fd] * PP.iderH.Et[2+fd]:
+                            if PP.iderH and PP.iderH.Et[fd] > G_aves[fd] * PP.iderH.Et[2+fd]:  # v> ave*r
                                 PP.root_ = []  # no feedback to edge?
                                 PP.node_ = PP.P_  # revert base node_
                                 PP.Et = [0,0,0,0]  # [] in comp_slice
@@ -96,17 +96,17 @@ def agg_recursion(rroot, root, rng=1, fagg=0):  # rng for sub+'rng+ only
     # rng+: comp nodes|links mediated by previously compared N|Ls -> N_|L_:
     rng, Et = rng_convolve(root,Et,rng) if fagg else rng_trace_rim(root,Et)
 
-    node_t = form_graph_t(root, Et, rng, fagg)  # der++ and feedback per Gd?
+    node_t = form_graph_t(root, Et, rng, fagg)  # sub+ and feedback
     if node_t:
         for fd, node_ in enumerate(node_t):
-            if root.derH.Et[0] * ((len(node_)-1)*root.rng) > G_aves[1] * root.Et[2]:
+            N_ = [n for n in node_ if n.derH.Et[0] > G_aves[fd] * n.derH.Et[2]]  # pruned node_
+            # comp val is proportional to n comparands:
+            if root.derH.Et[0] * ((len(N_)-1)*root.rng) > G_aves[1]*root.derH.Et[2]:
                 # agg+ / node_t, vs. sub+ / node_, always rng+:
-                pruned_node_ = [node for node in node_ if node.derH.Et[0] > G_aves[fd] * node.derH.Et[2]]  # not be needed?
-                if len(pruned_node_) > 10:
-                    agg_recursion(rroot, root, fagg=1)
-                    if rroot and fd and root.derH:  # der+ only (check not empty root.derH)
-                        rroot.fback_ += [root.derH]
-                        feedback(rroot)  # update root.root..
+                agg_recursion(rroot, root, fagg=1)
+                if rroot and root.derH:
+                    rroot.fback_ += [root.derH]
+                    feedback(rroot, fd)  # update root.root..
         root.node_[:] = node_t  # else keep root.node_
 
 
@@ -149,23 +149,22 @@ def rng_convolve(root, Et, rng=1):  # comp Gs|kernels in agg+, links | link rim_
 
 def rng_trace_rim(root, Et):  # comp Clinks: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
 
-    _L_ = root.link_
+    _L_ = root.link_, []  # added rL to remove CG from rim
     rng = 1
     while _L_:
         L_ = []
         for L in _L_:
-            for dir, rim_ in zip((0,1), L.rim_t):  # rng layers of _L-mediating Links | Gs
-                for mLink in rim_[-1]:  # last rim layer mediates next _L layer:
-                    rim = mLink.rim if isinstance(mLink,CG) \
-                        else list(mLink.nodet) # nodet= Clink rim
+            for dir, rim_ in zip((0,1), L.rim_t):  # Link rng layers
+                for mL in rim_[-1]:  # last rng
+                    N = mL.nodet[0] if mL.nodet[1] in L.nodet else mL.nodet[1]  # one N in L.nodet, another mediates new _Ls:
+                    rim = N.rim if isinstance(N,CG) else list(N.nodet)  # N.nodet is base mL rim, get rng+ mL.rim_t layers via med nodets
                     for _L in rim:
                         if _L is L or _L in L.compared_: continue
                         if not hasattr(_L,"rimt"): add_der_attrs( link_=[_L])  # _L is outside root.link_, still same derivation
                         L.compared_ += [_L]; _L.compared_ += [L]
                         Link = Clink(nodet =[_L,L], box=extend_box(_L.box, L.box))
-                        comp_N(Link, L_, Et, rng, dir)  # L_+=nodet, L.rim_t+=Link
-        _L_ = L_
-        rng += 1
+                        comp_N(Link, L_, Et, rng, dir) # L_+=nodet, L.rim_t+=Link
+        _L_=L_; rng+=1
     return rng, Et
 
 '''
@@ -277,15 +276,14 @@ def comp_N(Link, node_, iEt, rng=None, dir=None):  # rng,dir if fd, Link+=dderH,
     if fin:
         Link.S += (_N.S + N.S) / 2
         Link.n = min(_N.n,N.n) # comp shared layers
-        node_ += [_N,N]  # for selective kernel init or der+'rng+
-        if fd:
-            for i, node in zip((1,0),(_N,N)):
-                node.rimt[i] += [Link]  # in the opposite direction
-                if len(N.rim_t[dir]) == rng:
-                    node.rim_t[dir][-1] += [Link]  # arg dir,-> med_L in rng+
-                else: node.rim_t[dir] += [[Link]]  # add init rng layer
-        else:
-            for node in _N,N:
+        for node in _N,N:
+            node_ += [node]  # for selective kernel init or der+'rng+
+            if fd:
+                if len(N.rim_t[1-dir]) == rng:  # rim_t direction is opposite of _N,N
+                    node.rim_t[1-dir][-1] += [Link]  # add medL in last rng layer
+                else:
+                    node.rim_t[1-dir] += [[Link]]  # add init rng layer
+            else:
                 node.rim += [Link]
 
 def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
@@ -309,8 +307,8 @@ def form_graph_t(root, Et, rng, fagg):  # form Gm_,Gd_ from same-root nodes
     '''
     Q = [root.link_,root.node_][fagg]
     node_t = []
-    for fd in 0, 1:
-        if Et[fd] > ave * Et[2+fd]:  # v>ave*r
+    for fd in 0,1:
+        if Et[fd] > ave * Et[2+fd]:
             if not fd:  # nodes have roots
                 for G in Q: G.root = []
             graph_ = segment_Q(root, Q, fd, rng)
@@ -323,18 +321,18 @@ def form_graph_t(root, Et, rng, fagg):  # form Gm_,Gd_ from same-root nodes
                     agg_recursion(root, graph, rng+1, fagg=1-fd)  # graph.node_ is not node_t yet, rng for rng+ only
                 elif graph.derH:
                     root.fback_ += [graph.derH]
-                    feedback(root)  # update root.root.. per sub+
+                    feedback(root, fd)  # update root.root.. per sub+
             node_t += [graph_]  # may be empty
         else:
             node_t += [[]]
 
     return node_t
-'''
-cluster by combined weights of shared links and similarity between partial clusters,
-as in parallelized https://en.wikipedia.org/wiki/Watershed_(image_processing)
 
-recursive node assign by in-graph weights: may increase in merging?
-that's in more selective divisive sub-clustering? 
+'''
+cluster by weights of shared links + similarity of partial clusters, initially single linkage,
+similar to parallelized https://en.wikipedia.org/wiki/Watershed_(image_processing).
+
+Then recursive sub-clustering: node assign by in-graph weights, added in merges. 
 '''
 def segment_Q(root, iQ, fd, rng):
 
@@ -342,12 +340,10 @@ def segment_Q(root, iQ, fd, rng):
     max_ = []
     for N in iQ:
         # init graphts:
-        rim = N.rim if isinstance(N,CG) else [L for rim_ in N.rim_t for rim in rim_ for L in rim]  # flat N.rim_t
-        _Nt_ = [link.nodet if link.nodet[1] is N else reversed(link.nodet) for link in rim]
-        _N_t = [[],[]]
-        for ext_N, int_N in _Nt_:
-            _N_t[0] += [ext_N]; _N_t[1] += [int_N]
-        Gt = [[N],[],copy(rim),_N_t,[0,0,0,0]]  # node_,link_, Lrim, Nrim_t, Et
+        rim = N.rim if isinstance(N,CG) else [L for rim_ in N.rim_t for rim in rim_ for L in rim]  # flat rim_t
+        _N_t = [[_N for L in rim for _N in L.nodet if _N is not N], [N]]  # [ext_N_, int_N_]
+        # node_, link_, Lrim, Nrim_t, Et:
+        Gt = [[N],[],copy(rim),_N_t,[0,0,0,0]]
         N.root = Gt
         Q += [Gt]
         # def Gt seeds as local maxes, | affinity clusters | samples?:
@@ -363,7 +359,7 @@ def segment_Q(root, iQ, fd, rng):
         for _Gt,_link in zip(Nrim, Lrim):
             if _Gt not in Q:
                 continue  # was merged
-            oL_ = set(Lrim).intersection(set(_Gt[2]))  # shared external links, including _link
+            oL_ = set(Lrim).intersection(set(_Gt[2])) + {_link}  # shared external links + potential _link
             oV = sum([L.derH.Et[fd] - ave * L.derH.Et[2+fd] for L in oL_])
             # Nrim similarity = relative V deviation,
             # + partial G similarity:
@@ -376,8 +372,8 @@ def segment_Q(root, iQ, fd, rng):
                     dderH = comp_N_(_xN_, xN_)
                     oV + (dderH.Et[fd] - ave * dderH.Et[2+fd])  # norm by R, * dist_coef * agg_coef?
             if oV > ave:
-                merge(Gt,_Gt); Gt[1] += [_link]
-                Q.remove(_Gt)
+                Gt[1] += [_link]
+                merge(Gt,_Gt); Q.remove(_Gt)
 
     return [sum2graph(root, Gt, fd, rng) for Gt in Q]
 
@@ -395,8 +391,7 @@ def add_der_attrs(link_):
     for link in link_:
         link.extH = CH()  # for der+
         link.root = None  # dgraphs containing link
-        link.rimt = [[],[]]  # direct new links, or access via rim_t?:
-        link.rim_t = [[[link.nodet[0]]],[[link.nodet[1]]]]  # dual tree of link-mediating nodes, += layer per rng+
+        link.rim_t = [[link.nodet[0].rim],[link.nodet[1].rim]]  # dual tree of node-mediated link layers, add per rng+
         link.compared_ = []
         link.med = 1  # comp med rng, replaces len rim_
         link.dir = 0  # direction of comparison if not G0,G1, for comp link?
@@ -438,17 +433,17 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
                         G.alt_graph_ += [alt_G]
     return graph
 
-def feedback(root):  # called from form_graph_, append new der layers to root
+def feedback(root, fd):  # called from form_graph_, append new der layers to root
 
     DerH = deepcopy(root.fback_.pop(0))  # init
     while root.fback_:
         derH = root.fback_.pop(0)
         DerH.add_(derH)
-    if DerH.Et[1] > G_aves[1] * DerH.Et[3]:
+    if DerH.Et[fd] > G_aves[fd] * DerH.Et[fd+2]:
         root.derH.add_(DerH)
     if root.root and isinstance(root.root, CG):  # not Edge
         rroot = root.root
         if rroot:
             fback_ = rroot.fback_  # always node_t if feedback
-            if fback_ and len(fback_) == len(rroot.node_[1]):  # after all nodes' sub+
-                feedback(rroot)  # sum2graph adds higher aggH, feedback adds deeper aggH layers
+            if fback_ and len(fback_) == len(rroot.node_):  # after all nodes sub+
+                feedback(rroot, fd)  # sum2graph adds higher aggH, feedback adds deeper aggH layers

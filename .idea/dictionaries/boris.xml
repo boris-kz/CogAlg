@@ -34,6 +34,7 @@
       <w>dderived</w>
       <w>ddert</w>
       <w>ddirection</w>
+      <w>ders</w>
       <w>dert</w>
       <w>dertn</w>
       <w>derts</w>
@@ -50,6 +51,7 @@
       <w>equimediated</w>
       <w>faga</w>
       <w>fangle</w>
+      <w>fback</w>
       <w>fcar</w>
       <w>fcrit</w>
       <w>fder</w>
@@ -66,6 +68,7 @@
       <w>grada</w>
       <w>gradg</w>
       <w>gradi</w>
+      <w>graphts</w>
       <w>gsub</w>
       <w>hblob</w>
       <w>hforks</w>
@@ -93,6 +96,7 @@
       <w>kwidth</w>
       <w>layerf</w>
       <w>layerff</w>
+      <w>lrim</w>
       <w>mang</w>
       <w>marg</w>
       <w>mblob</w>
@@ -106,6 +110,8 @@
       <w>ncomp</w>
       <w>nfold</w>
       <w>nforks</w>
+      <w>nodet</w>
+      <w>nrim</w>
       <w>omnilateral</w>
       <w>paral</w>
       <w>parallelizable</w>
@@ -124,6 +130,7 @@
       <w>reinput</w>
       <w>restorable</w>
       <w>rrdn</w>
+      <w>rrim</w>
       <w>rroot</w>
       <w>sblob</w>
       <w>sdert</w>
