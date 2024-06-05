@@ -46,7 +46,7 @@ class Clink(CBase):  # product of comparison between two nodes or links
 
     def __init__(l, nodet=None,rim=None, derH=None, extH=None, root=None, distance=0, angle=None, box=None ):
         super().__init__()
-        # Clink is binary tree of Gs:
+        # Clink = Ltree: binary tree of Gs,
         # Ltree depth+ / der+: Clink is 2 connected Gs, Clink with Clink nodet is 4 connected Gs, etc, unpack sequentially.
         l.nodet = [] if nodet is None else nodet  # e_ in kernels, else replaces _node,node: not used in kernels?
         l.n = 1  # min(node_.n)
@@ -73,7 +73,7 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
                 P.derH = CH()
             ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
             node_t, link_t = [[],[]], [[],[]]
-            for fd, node_ in enumerate(edge.node_):  # always node_t
+            for fd, node_ in enumerate(copy(edge.node_)):  # always node_t
                 if edge.iderH and any(edge.iderH.Et):  # any for np array
                     if edge.iderH.Et[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.iderH.Et[2+fd]:
                         pruned_node_ = []
@@ -85,7 +85,7 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
                                 pruned_node_ += [PP]
                         if len(pruned_node_) > 10:  # discontinuous PP rng+ cross-comp, cluster -> G_t:
                             node_t[fd] = pruned_node_
-                            agg_recursion(None, edge, N_= pruned_node_, fagg=1)
+                            agg_recursion(None, edge, N_=pruned_node_, fagg=1)
                             link_t[fd] = edge.link_
             if any(node_t):
                 edge.node_ = node_t; edge.link_ = link_t
@@ -154,21 +154,20 @@ def rng_trace_rim(N_, Et):  # comp Clinks: der+'rng+ in root.link_ rim_t node ri
     while _L_:
         L_ = []
         for L in _L_:
-            for dir, rim_ in zip((0,1), L.rim_t):  # Link rng layers
-                for mL in rim_[-1]:
-                    for N in mL.nodet:  # N in L.nodet, _N in _L.nodet
-                        if N.root is not L.nodet:  # N.root = nodet
-                            _L = N.root[-1]     # nodet[-1] = L
-                            if _L is L or _L in L.compared_:
-                                continue
-                            if not hasattr(_L,"rimt"):
-                                add_der_attrs( link_=[_L])  # _L is outside root.link_, still same derivation
-                            L.compared_ += [_L]
-                            _L.compared_ += [L]
-                            Link = Clink(nodet =[_L,L], box=extend_box(_L.box, L.box))
-                            comp_N(Link, L_, Et, rng, dir) # L_+=nodet, L.rim_t+=Link
-                            break  # only one N mediates _L
-        _L_=L_; rng+=1
+            for nodet in L.nodet[-1]:  # variable nesting _L-mediating nodes, init Gs
+                for N_ in nodet:
+                    if not isinstance(N_,list): N_ = [N_]
+                    for N in N_:
+                        rim = N.rim if isinstance(N,CG) else list(N.rimt_[0])  # concat dirs
+                        for _L in rim:
+                            if _L is L or _L in L.compared_: continue
+                        if not hasattr(_L,"rimt_"):
+                            add_der_attrs( link_=[_L])  # _L is outside root.link_, still same derivation
+                        L.compared_ += [_L]
+                        _L.compared_ += [L]
+                        Link = Clink(nodet =[_L,L], box=extend_box(_L.box, L.box))
+                        comp_N(Link, L_, Et, rng, dir)  # L_+=nodet, L.rim_t+=Link
+    _L_=L_; rng+=1
     return N_, rng, Et
 
 '''
@@ -283,10 +282,10 @@ def comp_N(Link, node_, iEt, rng=None, dir=None):  # rng,dir if fd, Link+=dderH,
         for node in _N,N:
             node_ += [node]  # for selective kernel init or der+'rng+
             if fd:
-                if len(N.rim_t[1-dir]) == rng:  # rim_t direction is opposite of _N,N
-                    node.rim_t[1-dir][-1] += [Link]  # add medL in last rng layer
+                if len(N.rimt_) == rng:
+                    node.rimt_[-1][1-dir] += [Link]  # add in last rng layer, dir opposite of _N,N
                 else:
-                    node.rim_t[1-dir] += [[Link]]  # add init rng layer
+                    node.rimt_ += [[Link],[]] if dir else [[],[Link]]  # add init rng layer
             else:
                 node.rim += [Link]
 
@@ -316,12 +315,12 @@ def form_graph_t(root, N_, Et, rng):  # form Gm_,Gd_ from same-root nodes
                 for G in N_: G.root = []
             graph_ = segment_N_(root, N_, fd, rng)
             for graph in graph_:
-                q = graph.link_ if fd else graph.node_
-                if len(q) > ave_L and graph.Et[fd] > G_aves[fd] * graph.Et[fd]:
+                Q = graph.link_ if fd else graph.node_
+                if len(Q) > ave_L and graph.Et[fd] > G_aves[fd] * graph.Et[fd]:
                     if fd:  # der+
-                        if not hasattr(N_[0],"rimt"): add_der_attrs(q)  # 1st der+
+                        if not hasattr(N_[0],"rim_t"): add_der_attrs(Q)  # 1st der+
                     # else sub+'rng+: direct comp at distance < max_dist * rng+1:
-                    agg_recursion(root, graph, rng+1, fagg=1-fd)  # graph.node_ is not node_t yet, rng for rng+ only
+                    agg_recursion(root, graph, Q, rng+1, fagg=1-fd)  # graph.node_ is not node_t yet, rng for rng+ only
                 elif graph.derH:
                     root.fback_ += [graph.derH]
                     feedback(root, fd)  # update root.root.. per sub+
@@ -335,7 +334,7 @@ def form_graph_t(root, N_, Et, rng):  # form Gm_,Gd_ from same-root nodes
 cluster by weights of shared links + similarity of partial clusters, initially single linkage,
 similar to parallelized https://en.wikipedia.org/wiki/Watershed_(image_processing).
 
-Then recursive sub-clustering: node assign by in-graph weights, added in merges. 
+Then recursive sub-clustering: node assign by all in-graph weights, added in merges. 
 '''
 def segment_N_(root, iN_, fd, rng):
 
@@ -343,17 +342,16 @@ def segment_N_(root, iN_, fd, rng):
     max_ = []
     for N in iN_:
         # init graphts:
-        rim = N.rim if isinstance(N,CG) else [L for rim_ in N.rim_t for rim in rim_ for L in rim]  # flat rim_t
+        rim = N.rim if isinstance(N,CG) else [L for rim_ in N.rim_t for rim in rim_ for L in rim]  # flatten rim_t
         _N_t = [[_N for L in rim for _N in L.nodet if _N is not N], [N]]  # [ext_N_, int_N_]
         # node_, link_, Lrim, Nrim_t, Et:
         Gt = [[N],[],copy(rim),_N_t,[0,0,0,0]]
         N.root = Gt
         N_ += [Gt]
         if not fd:  # def Gt seeds as local maxes, | affinity clusters | samples?:
-            if not any([eN.DerH.Et[0] > N.DerH.Et[0] or (eN in max_) for eN in _N_t[0]]):  # _N if _N.V==N.V
-                # V * k * max_rng: + mediation if no max in rrim?
-                max_ += [N]
-            max_ = [N.root for N in max_]
+            if not any([eN.DerH.Et[0] > N.DerH.Et[0] or (eN in max_) for eN in _N_t[0]]):  # _N if _N.V == N.V
+                max_ += [N]  # V * k * max_rng: + mediation if no max in rrim?
+    max_ = [N.root for N in max_]
     for Gt in N_: Gt[3][0] = [_N.root for _N in Gt[3][0]]  # replace extNs with their Gts
     # merge with connected _Gts:
     for Gt in max_ if max_ else N_:
@@ -394,10 +392,8 @@ def add_der_attrs(link_):
     for link in link_:
         link.extH = CH()  # for der+
         link.root = None  # dgraphs containing link
-        if isinstance(link.nodet[0], CG):
-            link.rim_t = [[copy(link.nodet[0].rim)],[copy(link.nodet[1].rim)]]  # dual tree of node-mediated link layers, add per rng+
-        else:
-            link.rim_t = [[],[]]
+        link.nodet = [link.nodet]  # nest dual tree of _L-mediating nodes layers, add [[],[]] per rng+
+        link.rimt_ = [link.rimt_]  # same structure as nodet?
         link.compared_ = []
         link.med = 1  # comp med rng, replaces len rim_
         link.dir = 0  # direction of comparison if not G0,G1, for comp link?
