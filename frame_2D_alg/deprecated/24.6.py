@@ -37,3 +37,25 @@ def rng_trace_rim(N_, Et):  # comp Clinks: der+'rng+ in root.link_ rim_t node ri
         _L_=L_; rng+=1
     return N_, rng, Et
 
+def rng_trace_rim(N_, Et):  # comp Clinks: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
+
+    _L_ = N_
+    rng = 1
+    while _L_:
+        L_ = []
+        for L in _L_:
+            for nodet in L.nodet[-1]:  # variable nesting _L-mediating nodes, init Gs
+                for dir, N_ in zip((0,1),nodet):  # Link direction
+                    if not isinstance(N_,list): N_ = [N_]
+                    for N in N_:
+                        rim = N.rim if isinstance(N,CG) else N.rimt_[-1][0]+N.rimt_[-1][1]  # concat dirs
+                        for _L in rim:
+                            if _L is L or _L in L.compared_: continue
+                            if not hasattr(_L,"rimt_"):
+                                add_der_attrs( link_=[_L])  # _L is outside root.link_, still same derivation
+                            L.compared_ += [_L]
+                            _L.compared_ += [L]
+                            Link = Clink(nodet =[_L,L], box=extend_box(_L.box, L.box))
+                            comp_N(Link, L_, Et, rng, dir)  # L_+=nodet, L.rim_t+=Link
+        _L_=L_; rng+=1
+    return N_, rng, Et

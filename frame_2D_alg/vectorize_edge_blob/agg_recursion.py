@@ -154,20 +154,15 @@ def rng_trace_rim(N_, Et):  # comp Clinks: der+'rng+ in root.link_ rim_t node ri
     while _L_:
         L_ = []
         for L in _L_:
-            for nodet in L.nodet[-1]:  # variable nesting _L-mediating nodes, init Gs
-                for N_ in nodet:
-                    if not isinstance(N_,list): N_ = [N_]
-                    for N in N_:
-                        rim = N.rim if isinstance(N,CG) else list(N.rimt_[0])  # concat dirs
-                        for _L in rim:
-                            if _L is L or _L in L.compared_: continue
-                        if not hasattr(_L,"rimt_"):
-                            add_der_attrs( link_=[_L])  # _L is outside root.link_, still same derivation
-                        L.compared_ += [_L]
-                        _L.compared_ += [L]
-                        Link = Clink(nodet =[_L,L], box=extend_box(_L.box, L.box))
-                        comp_N(Link, L_, Et, rng, dir)  # L_+=nodet, L.rim_t+=Link
-    _L_=L_; rng+=1
+            for dir, prerim in zip((0,1), L.prerimt):  # Link direction
+                for _L in prerim:
+                    if _L is L or _L in L.compared_: continue
+                    if not hasattr(_L,"rimt_"): add_der_attrs( link_=[_L])  # _L is outside root.link_, same derivation
+                    L.compared_ += [_L]
+                    _L.compared_ += [L]
+                    Link = Clink(nodet =[_L,L], box=extend_box(_L.box, L.box))
+                    comp_N(Link, L_, Et, rng, dir)  # L_+=nodet, L.rim_t+=Link
+        _L_=L_; rng+=1
     return N_, rng, Et
 
 '''
@@ -279,13 +274,15 @@ def comp_N(Link, node_, iEt, rng=None, dir=None):  # rng,dir if fd, Link+=dderH,
     if fin:
         Link.S += (_N.S + N.S) / 2
         Link.n = min(_N.n,N.n) # comp shared layers
-        for node in _N,N:
+        for node,_node in (_N,N),(N,_N):
             node_ += [node]  # for selective kernel init or der+'rng+
             if fd:
-                if len(N.rimt_) == rng:
-                    node.rimt_[-1][1-dir] += [Link]  # add in last rng layer, dir opposite of _N,N
+                if len(node.rimt_) == rng:
+                    node.rimt_[-1][1-dir] += [Link]  # add in last rng layer, opposite _N,N dir
                 else:
-                    node.rimt_ += [[Link],[]] if dir else [[],[Link]]  # add init rng layer
+                    node.rimt_ += [[[Link],[]]] if dir else [[[],[Link]]]  # add rng layer
+                # add prelinks for next rng+:
+                node.prerimt[1-dir] += _node.rimt[0][0] + _node.rimt[0][1]
             else:
                 node.rim += [Link]
 
@@ -317,9 +314,8 @@ def form_graph_t(root, N_, Et, rng):  # form Gm_,Gd_ from same-root nodes
             for graph in graph_:
                 Q = graph.link_ if fd else graph.node_
                 if len(Q) > ave_L and graph.Et[fd] > G_aves[fd] * graph.Et[fd]:
-                    if fd:  # der+
-                        if not hasattr(N_[0],"rim_t"): add_der_attrs(Q)  # 1st der+
-                    # else sub+'rng+: direct comp at distance < max_dist * rng+1:
+                    if fd: add_der_attrs(Q)
+                    # else sub+rng+: comp Gs at distance < max_dist * rng+1:
                     agg_recursion(root, graph, Q, rng+1, fagg=1-fd)  # graph.node_ is not node_t yet, rng for rng+ only
                 elif graph.derH:
                     root.fback_ += [graph.derH]
@@ -392,8 +388,8 @@ def add_der_attrs(link_):
     for link in link_:
         link.extH = CH()  # for der+
         link.root = None  # dgraphs containing link
-        link.nodet = [link.nodet]  # nest dual tree of _L-mediating nodes layers, add [[],[]] per rng+
-        link.rimt_ = [link.rimt_]  # same structure as nodet?
+        link.rimt_ = [[[],[]]]  # dirt per rng layer
+        link.prerimt = [N.rim if isinstance(N,CG) else N.rimt_[0][0] + N.rimt_[0][1] for N in link.nodet]  # next rng prelinks
         link.compared_ = []
         link.med = 1  # comp med rng, replaces len rim_
         link.dir = 0  # direction of comparison if not G0,G1, for comp link?
