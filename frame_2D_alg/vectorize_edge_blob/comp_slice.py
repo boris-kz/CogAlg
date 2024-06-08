@@ -72,7 +72,8 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.DerH = CH()  # summed kernel rims
         G.node_ = [] if node_ is None else node_  # convert to node_t in sub_recursion
         G.link_ = [] if link_ is None else link_  # links per comp layer, nest in rng+)der+
-        G.box = [np.inf, np.inf, -np.inf, -np.inf]  # y,x,y0,x0,yn,xn
+        G.box = [np.inf, np.inf, -np.inf, -np.inf]  # y0,x0,yn,xn
+        G.yx = [0,0]  # init PP.yx = [(y0+yn)/2,(x0,xn)/2], then ave node yx
         G.kH = []  # kernel: hierarchy of rim layers
         # graph-external, +level per root sub+:
         G.n = n  # external n (last layer n)
