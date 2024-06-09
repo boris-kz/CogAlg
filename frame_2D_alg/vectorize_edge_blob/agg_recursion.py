@@ -44,7 +44,7 @@ max_dist = 2
 class Clink(CBase):  # product of comparison between two nodes or links
     name = "link"
 
-    def __init__(l, nodet=None,rim=None, derH=None, extH=None, root=None, distance=0, angle=None, box=None ):
+    def __init__(l, nodet=None,rim=None, derH=None, extH=None, root=None, span=0, angle=None, box=None ):
         super().__init__()
         # Clink = Ltree: binary tree of Gs,
         # Ltree depth+ / der+: Clink is 2 connected Gs, Clink with Clink nodet is 4 connected Gs, etc, unpack sequentially.
@@ -52,7 +52,7 @@ class Clink(CBase):  # product of comparison between two nodes or links
         l.n = 1  # min(node_.n)
         l.S = 0  # sum nodet
         l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
-        l.distance = distance  # distance between node centers
+        l.span = span  # distance between nodet centers
         l.box = [] if box is None else box  # sum nodet
         l.area = 0  # sum nodet
         l.latuple = []  # sum nodet
@@ -81,8 +81,7 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
                             if PP.iderH and PP.iderH.Et[fd] > G_aves[fd] * PP.iderH.Et[2+fd]:  # v> ave*r
                                 PP.root_ = []  # no feedback to edge?
                                 PP.node_ = PP.P_  # revert base node_
-                                y0,x0,yn,xn = PP.box
-                                PP.yx = [(y0+yn)/2, (x0+xn)/2]
+                                y0,x0,yn,xn = PP.box; PP.yx = [(y0+yn)/2, (x0+xn)/2]
                                 PP.Et = [0,0,0,0]  # [] in comp_slice
                                 pruned_node_ += [PP]
                         if len(pruned_node_) > 10:  # discontinuous PP rng+ cross-comp, cluster -> G_t:
@@ -91,6 +90,7 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
                             link_t[fd] = edge.link_
             if any(node_t):
                 edge.node_ = node_t; edge.link_ = link_t
+
 
 def agg_recursion(rroot, root, N_, rng=1, fagg=0):  # rng for sub+'rng+ only
 
@@ -120,14 +120,12 @@ def rng_convolve(N_, Et, rng=1):  # comp Gs|kernels in agg+, links | link rim_t 
         _G, G = link
         if _G in G.compared_:
             continue
-        aRad = np.divide( sum([ abs(np.subtract(G.yx,node.yx)) for node in G.node_]), len(G.node_))  # ave G radius
-        _aRad = np.divide( sum([ abs(np.subtract(G.yx,node.yx)) for node in _G.node_]), len(_G.node_))
         dy,dx = np.subtract(_G.yx, G.yx)
-        dist = np.hypot(dy,dx); coverage = (aRad+_aRad)/2
+        dist = np.hypot(dy,dx); aRad = (G.aRad+_G.aRad) /2  # ave radius
         # eval relative distance between G centers:
-        if dist / coverage <= max_dist *rng:
+        if dist/aRad <= max_dist *rng:
             G.compared_ += [_G]; _G.compared_ += [G]
-            Link = Clink(nodet=[_G,G], distance=dist, angle=[dy,dx], box=extend_box(G.box,_G.box))
+            Link = Clink(nodet=[_G,G], span=dist, angle=[dy,dx], box=extend_box(G.box,_G.box))
             if comp_N(Link, Et):
                 G_ += [_G,G]
     _G_ = list(set(G_))
@@ -162,10 +160,10 @@ def rng_trace_rim(N_, Et):  # comp Clinks: der+'rng+ in root.link_ rim_t node ri
     rng = 1
     while True:
         mN_t_ = [[[],[]] for _ in L_]
-        # comp, add rng+ mediating nodes /L:
-        for L,_mN_t, mN_t in zip(L_, _mN_t_, mN_t_):
-            # loop directions:
+        # comp, add rng+ mediating nodes per L:
+        for L, _mN_t, mN_t in zip(L_, _mN_t_, mN_t_):
             for dir, _mN_, mN_ in zip((0,1), _mN_t, mN_t):
+                # comp L, _Ls: 1st rim of nodet mN, directly mediated
                 _rim_ = [n.rim if isinstance(n,CG) else n.rimt_[0][0] + n.rimt_[0][1] for n in _mN_]
                 for _rim in _rim_:
                     for _L in _rim:
@@ -173,12 +171,17 @@ def rng_trace_rim(N_, Et):  # comp Clinks: der+'rng+ in root.link_ rim_t node ri
                         if not hasattr(_L,"rimt_"): add_der_attrs(link_=[_L])  # _L not in root.link_, same derivation
                         L.compared_ += [_L]
                         _L.compared_ += [L]
-                        cy, cx = box2center(L.box); _cy,_cx = box2center(_L.box); dy = cy-_cy; dx = cx-_cx
-                        # rGap = dist - sum(abs((G y,x) - node y,x)) / len node_: ave node radius,
-                        # none in 1st fd?
-                        Link = Clink(nodet=[_L,L], distance=np.hypot(dy,dx), box=extend_box(_L.box, L.box))
-                        if comp_N(Link, Et, rng, dir):  # L.rim_t += Link
-                            mN_ += [_L]  # multiple _Ls / L
+                        dy,dx = np.subtract(_L.yx,L.yx)
+                        dist = np.hypot(dy, dx)
+                        if rng > 1:  # draft
+                            coSpan = L.span * np.cos( np.arctan2( np.subtract(L.angle, (dy,dx))))
+                            _coSpan = _L.span * np.cos( np.arctan2( np.subtract(_L.angle, (dy,dx))))
+                            if dist / ((coSpan +_coSpan) / 2) > max_dist * rng:  # Ls are too distant
+                                continue
+                        Link = Clink(nodet=[_L,L], span=dist, angle=[dy,dx], box=extend_box(_L.box, L.box))
+                        if comp_N(Link, Et, rng, dir):  # L.rim_t += new Link
+                            # link order: nodet < L < rim_t, mN.rim order = L
+                            mN_ += [_L.nodet]   # get _Ls in mN.rim
                             if _L not in L_:  # not in root
                                 L_ += [_L]
                                 mN_t_ += [[[],[]]]
@@ -191,6 +194,9 @@ def rng_trace_rim(N_, Et):  # comp Clinks: der+'rng+ in root.link_ rim_t node ri
             L_ = _L_; rng += 1
         else:
             break
+        # Lt_ = [(L, mN_t) for L, mN_t in zip(L_, mN_t_) if any(mN_t)]
+        # if Lt_: L_,_mN_t_ = map(list, zip(*Lt_))  # map list to convert tuple from zip(*)
+
     return N_, rng, Et
 
 '''
@@ -227,7 +233,7 @@ def sum_N_(N_, fd=0):  # to sum kernel layer and partial graph comp
 
     N = N_[0]
     n = N.n; S = N.S
-    L, A = (N.distance, N.angle) if fd else (len(N.node_), N.A)
+    L, A = (N.span, N.angle) if fd else (len(N.node_), N.A)
     if not fd:
         latuple = deepcopy(N.latuple)  # ignore if Clink?
         iderH = deepcopy(N.iderH)
@@ -239,7 +245,7 @@ def sum_N_(N_, fd=0):  # to sum kernel layer and partial graph comp
             latuple = [P+p for P,p in zip(latuple[:-1],N.latuple[:-1])] + [[A+a for A,a in zip(latuple[-1],N.latuple[-1])]]
             if N.iderH: iderH.add_(N.iderH)
         n += N.n; S += N.S
-        L += N.distance if fd else len(N.node_)
+        L += N.span if fd else len(N.node_)
         A = [Angle+angle for Angle,angle in zip(A, N.angle if fd else N.A)]
         if N.derH: derH.add_(N.derH)
         if N.extH: extH.add_(N.extH)
@@ -270,6 +276,7 @@ def comp_N_(_node_, node_):  # first part of comp_G to compare partial graphs fo
 
     return dderH
 
+
 def comp_N(Link, iEt, rng=None, dir=None):  # rng,dir if fd, Link+=dderH, comparand rim+=Link
 
     fd = dir is not None  # compared links have binary relative direction?
@@ -277,7 +284,7 @@ def comp_N(Link, iEt, rng=None, dir=None):  # rng,dir if fd, Link+=dderH, compar
 
     if fd:  # Clink Ns
         _A, A = _N.angle, N.angle if dir else [-d for d in N.angle] # reverse angle direction for left link
-        Et, rt, md_ = comp_ext(_N.distance,N.distance, _N.S,N.S/rn, _A,A)
+        Et, rt, md_ = comp_ext(_N.span,N.span, _N.S,N.S/rn, _A,A)
         # Et, Rt, Md_ = comp_latuple(_G.latuple, G.latuple,rn,fagg=1)  # low-value comp in der+
         dderH.n = 1; dderH.Et = Et; dderH.relt = rt
         dderH.H = [CH(Et=copy(Et),relt=copy(rt),H=md_,n=1)]
@@ -303,8 +310,9 @@ def comp_N(Link, iEt, rng=None, dir=None):  # rng,dir if fd, Link+=dderH, compar
         _N.Et[2+i] += Rdn; N.Et[2+i] += Rdn  # per fork link in both Gs
         # if select fork links: iEt[i::2] = [V+v for V,v in zip(iEt[i::2], dderH.Et[i::2])]
     if fin:
-        Link.S += (_N.S + N.S) / 2
         Link.n = min(_N.n,N.n) # comp shared layers
+        Link.yx = np.divide( np.add(_N.yx,N.yx), 2)
+        Link.S += (_N.S + N.S) / 2
         for node,_node in (_N,N),(N,_N):
             if fd:
                 if len(node.rimt_) == rng:
@@ -427,9 +435,9 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
 
     G_, Link_, _, _, Et = grapht
     graph = CG(fd=fd, node_=G_,link_=Link_, rng=rng, Et=Et)
-    if fd:
-        graph.root = root
+    if fd: graph.root = root
     extH = CH()
+    yx = [0,0]
     for G in G_:
         extH.append_(G.extH,flat=1)if graph.extH else extH.add_(G.extH)
         graph.area += G.area
@@ -442,11 +450,13 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
         graph.derH.add_(G.derH)
         if fd: G.Et = [0,0,0,0]  # reset in last form_graph_t fork, Gs are shared in both forks
         else:  G.root = graph  # assigned to links if fd else to nodes?
-        np.add(graph.yx, G.yx)
-    graph.yx = np.divide(graph.yx,len(G_))
-
-    for link in Link_:  # sum last layer of unique current-layer links
-        graph.S += link.distance
+        yx = np.add(yx, G.yx)
+    L = len(G_); yx = np.divide(graph.yx,L)
+    graph.yx = yx
+    graph.aRad = np.divide( sum([np.hypot(np.subtract(yx,G.yx)) for G in G_]), L)  # average distance between graph center and node center
+    for link in Link_:
+        # sum last layer of unique current-layer links
+        graph.S += link.span
         np.add(graph.A,link.angle)
         if fd: link.root = graph
     graph.derH.append_(extH, flat=0)  # graph derH = node derHs + [summed Link_ derHs]
