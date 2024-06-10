@@ -53,8 +53,13 @@ def rng_trace_rim(N_, Et):  # comp Clinks: der+'rng+ in root.link_ rim_t node ri
                             if _L is L or _L in L.compared_: continue
                             if not hasattr(_L,"rimt_"):
                                 add_der_attrs( link_=[_L])  # _L is outside root.link_, still same derivation
-                            L.compared_ += [_L]
-                            _L.compared_ += [L]
+                            L.compared_ += [_L]; _L.compared_ += [L]
+                            # not needed?:
+                            if rng > 1:  # draft
+                                coSpan = L.span * np.cos( np.arctan2(*np.subtract(L.angle, (dy,dx))))
+                                _coSpan = _L.span * np.cos( np.arctan2(*np.subtract(_L.angle, (dy,dx))))
+                                if dist / ((coSpan +_coSpan) / 2) > max_dist * rng:  # Ls are too distant
+                                    continue
                             Link = Clink(nodet =[_L,L], box=extend_box(_L.box, L.box))
                             comp_N(Link, L_, Et, rng, dir)  # L_+=nodet, L.rim_t+=Link
         _L_=L_; rng+=1

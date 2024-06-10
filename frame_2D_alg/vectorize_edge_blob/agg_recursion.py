@@ -81,7 +81,9 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
                             if PP.iderH and PP.iderH.Et[fd] > G_aves[fd] * PP.iderH.Et[2+fd]:  # v> ave*r
                                 PP.root_ = []  # no feedback to edge?
                                 PP.node_ = PP.P_  # revert base node_
-                                y0,x0,yn,xn = PP.box; PP.yx = [(y0+yn)/2, (x0+xn)/2]
+                                y0,x0,yn,xn = PP.box
+                                PP.yx = [(y0+yn)/2, (x0+xn)/2]
+                                PP.aRad = np.subtract(PP.yx,(yn,xn))
                                 PP.Et = [0,0,0,0]  # [] in comp_slice
                                 pruned_node_ += [PP]
                         if len(pruned_node_) > 10:  # discontinuous PP rng+ cross-comp, cluster -> G_t:
@@ -95,8 +97,8 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
 def agg_recursion(rroot, root, N_, rng=1, fagg=0):  # rng for sub+'rng+ only
 
     Et = [0,0,0,0]
-    # rng+: comp nodes|links mediated by previously compared N|Ls -> N_|L_:
-    N_,rng, Et = rng_convolve(N_,Et,rng) if fagg else rng_trace_rim(N_,Et)
+    # rng+: comp nodes|links mediated by previously compared N|L -> N_|L_:
+    N_,rng, Et = rng_node_(N_,Et,rng) if fagg else rng_link_(N_,Et)
 
     node_t = form_graph_t(root, N_, Et, rng)  # sub+ and feedback
     if node_t:
@@ -112,18 +114,17 @@ def agg_recursion(rroot, root, N_, rng=1, fagg=0):  # rng for sub+'rng+ only
         root.node_[:] = node_t  # else keep root.node_
 
 
-def rng_convolve(N_, Et, rng=1):  # comp Gs|kernels in agg+, links | link rim_t node rims in sub+
-                                  # similar to graph convolutional network but without backprop
+def rng_node_(N_, Et, rng=1):  # comp Gs|kernels in agg+, links | link rim_t node rims in sub+
+                               # similar to graph convolutional network but without backprop
     _G_ = N_
     G_ = []  # eval comp_N -> G_:
     for link in list(combinations(_G_,r=2)):
         _G, G = link
-        if _G in G.compared_:
-            continue
-        dy,dx = np.subtract(_G.yx, G.yx)
-        dist = np.hypot(dy,dx); aRad = (G.aRad+_G.aRad) /2  # ave radius
-        # eval relative distance between G centers:
-        if dist/aRad <= max_dist *rng:
+        if _G in G.compared_: continue
+        dy,dx = np.subtract(_G.yx,G.yx)
+        dist = np.hypot(dy,dx)
+        aRad = (G.aRad+_G.aRad) /2  # ave radius to eval relative distance between G centers:
+        if dist / max(aRad,1) <= max_dist * rng:
             G.compared_ += [_G]; _G.compared_ += [G]
             Link = Clink(nodet=[_G,G], span=dist, angle=[dy,dx], box=extend_box(G.box,_G.box))
             if comp_N(Link, Et):
@@ -153,39 +154,31 @@ def rng_convolve(N_, Et, rng=1):  # comp Gs|kernels in agg+, links | link rim_t 
     return N_, rng, Et
 
 
-def rng_trace_rim(N_, Et):  # comp Clinks: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
+def rng_link_(N_, Et):  # comp Clinks: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
 
-    L_ = N_[:]
     _mN_t_ = [[[N.nodet[0]],[N.nodet[1]]] for N in N_]  # rim-mediating nodes
+    L_ = N_[:]
     rng = 1
     while True:
         mN_t_ = [[[],[]] for _ in L_]
-        # comp, add rng+ mediating nodes per L:
         for L, _mN_t, mN_t in zip(L_, _mN_t_, mN_t_):
             for dir, _mN_, mN_ in zip((0,1), _mN_t, mN_t):
-                # comp L, _Ls: 1st rim of nodet mN, directly mediated
+
                 _rim_ = [n.rim if isinstance(n,CG) else n.rimt_[0][0] + n.rimt_[0][1] for n in _mN_]
+                # comp L, _Ls: nodet mN 1st rim, latter get rng+ _Ls via rng+ mm..Ns:
                 for _rim in _rim_:
                     for _L in _rim:
                         if _L is L or _L in L.compared_: continue
                         if not hasattr(_L,"rimt_"): add_der_attrs(link_=[_L])  # _L not in root.link_, same derivation
-                        L.compared_ += [_L]
-                        _L.compared_ += [L]
+                        L.compared_ += [_L]; _L.compared_ += [L]
                         dy,dx = np.subtract(_L.yx,L.yx)
-                        dist = np.hypot(dy, dx)
-                        if rng > 1:  # draft
-                            coSpan = L.span * np.cos( np.arctan2( np.subtract(L.angle, (dy,dx))))
-                            _coSpan = _L.span * np.cos( np.arctan2( np.subtract(_L.angle, (dy,dx))))
-                            if dist / ((coSpan +_coSpan) / 2) > max_dist * rng:  # Ls are too distant
-                                continue
-                        Link = Clink(nodet=[_L,L], span=dist, angle=[dy,dx], box=extend_box(_L.box, L.box))
+                        Link = Clink(nodet=[_L,L], span=np.hypot(dy,dx), angle=[dy,dx], box=extend_box(_L.box, L.box))
                         if comp_N(Link, Et, rng, dir):  # L.rim_t += new Link
-                            # link order: nodet < L < rim_t, mN.rim order = L
-                            mN_ += [_L.nodet]   # get _Ls in mN.rim
+                            # add rng+ mediating nodes to L, link order: nodet < L < rim_t, mN.rim || L
+                            mN_ += _L.nodet  # get _Ls in mN.rim
                             if _L not in L_:  # not in root
-                                L_ += [_L]
-                                mN_t_ += [[[],[]]]
-                            mN_t_[L_.index(_L)][1-dir] += [L]
+                                L_ += [_L]; mN_t_ += [[[],[]]]
+                            mN_t_[L_.index(_L)][1-dir] += L.nodet
         _L_, _mN_t = [],[]
         for L, mN_t in zip(L_, mN_t_):
             if any(mN_t):
@@ -310,8 +303,8 @@ def comp_N(Link, iEt, rng=None, dir=None):  # rng,dir if fd, Link+=dderH, compar
         _N.Et[2+i] += Rdn; N.Et[2+i] += Rdn  # per fork link in both Gs
         # if select fork links: iEt[i::2] = [V+v for V,v in zip(iEt[i::2], dderH.Et[i::2])]
     if fin:
-        Link.n = min(_N.n,N.n) # comp shared layers
-        Link.yx = np.divide( np.add(_N.yx,N.yx), 2)
+        Link.n = min(_N.n,N.n)  # comp shared layers
+        Link.yx = np.add(_N.yx, N.yx) / 2
         Link.S += (_N.S + N.S) / 2
         for node,_node in (_N,N),(N,_N):
             if fd:
@@ -337,16 +330,15 @@ def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
     return [M,D,mrdn,drdn], [mdec,ddec], [mL,dL, mS,dS, mA,dA]
 
 
-def form_graph_t(root, N_, Et, rng):  # form Gm_,Gd_ from same-root nodes
-    '''
-    der+: comp link via link.node_ -> dual trees of matching links in der+rng+, more likely but complex: higher-order links
-    rng+: less likely: term by >d/<m, but G M projects interrupted match, and less complex?
-    '''
+def form_graph_t(root, N_, Et, rng):  # segment N_ to Nm_, Nd_
+
     node_t = []
     for fd in 0,1:
+        # der+: comp link via link.node_ -> dual trees of matching links in der+rng+, more likely but complex: higher-order links
+        # rng+: distant M / G.M, less likely: term by >d/<m, but less complex
         if Et[fd] > ave * Et[2+fd]:
-            if not fd:  # nodes have roots
-                for G in N_: G.root = []
+            if not fd:
+                for G in N_: G.root = []  # only nodes have roots?
             graph_ = segment_N_(root, N_, fd, rng)
             for graph in graph_:
                 Q = graph.link_ if fd else graph.node_
@@ -355,8 +347,9 @@ def form_graph_t(root, N_, Et, rng):  # form Gm_,Gd_ from same-root nodes
                     # else sub+rng+: comp Gs at distance < max_dist * rng+1:
                     agg_recursion(root, graph, Q, rng+1, fagg=1-fd)  # graph.node_ is not node_t yet, rng for rng+ only
                 elif graph.derH:
-                    root.fback_ += [graph.derH]
-                    feedback(root, fd)  # update root.root.. per sub+
+                    root.fback_t[fd] += [graph.derH]
+                    if len(root.fback_t[fd]) == len(root.node_):  # all nodes sub+ end
+                        feedback(root,fd)  # update root.root..
             node_t += [graph_]  # may be empty
         else:
             node_t += [[]]
@@ -430,7 +423,7 @@ def add_der_attrs(link_):
         link.dir = 0  # direction of comparison if not G0,G1, for comp link?
         link.Et = [0,0,0,0]
 
-# not revised
+
 def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
     G_, Link_, _, _, Et = grapht
@@ -451,9 +444,9 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
         if fd: G.Et = [0,0,0,0]  # reset in last form_graph_t fork, Gs are shared in both forks
         else:  G.root = graph  # assigned to links if fd else to nodes?
         yx = np.add(yx, G.yx)
-    L = len(G_); yx = np.divide(graph.yx,L)
-    graph.yx = yx
-    graph.aRad = np.divide( sum([np.hypot(np.subtract(yx,G.yx)) for G in G_]), L)  # average distance between graph center and node center
+    L = len(G_)
+    yx = np.divide(yx,L); graph.yx = yx
+    graph.aRad = sum([np.hypot(*np.subtract(yx,G.yx)) for G in G_]) / L  # average distance between graph center and node center
     for link in Link_:
         # sum last layer of unique current-layer links
         graph.S += link.span
@@ -472,15 +465,18 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
 
 def feedback(root, fd):  # called from form_graph_, append new der layers to root
 
-    DerH = deepcopy(root.fback_.pop(0))  # init
-    while root.fback_:
-        derH = root.fback_.pop(0)
+    # need to merge fback_ from both forks in the same higher layers of root.derH
+    DerH = deepcopy(root.fback_t[fd].pop(0))  # init DerH, maybe empty?
+    while root.fback_t[fd]:
+        derH = root.fback_t[fd].pop(0)
         DerH.add_(derH)
     if DerH.Et[fd] > G_aves[fd] * DerH.Et[fd+2]:
-        root.derH.add_(DerH)
+        root.derH.add_(DerH)  # or append_, higher layers summed from both forks?
+
+    # recursive feedback, initiated and propagated when all nodes sub+ ends:
     if root.root and isinstance(root.root, CG):  # not Edge
         rroot = root.root
         if rroot:
-            fback_ = rroot.fback_  # always node_t if feedback
-            if fback_ and len(fback_) == len(rroot.node_):  # after all nodes sub+
+            rroot.fback_t[fd] += [root.derH]
+            if len(rroot.fback_t[fd]) == len(rroot.node_):  # all nodes sub+ end
                 feedback(rroot, fd)  # sum2graph adds higher aggH, feedback adds deeper aggH layers
