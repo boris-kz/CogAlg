@@ -74,7 +74,7 @@ class CsliceEdge(CFrame):
         def trace(edge):  # fill and trace across slices
 
             adjacent_ = [(P, y,x) for P in edge.P_ for y,x in edge.rootd if edge.rootd[y,x] is P]
-            pre__ = [[] for _ in edge.P_]  # prelinks
+            edge.pre__ = [[] for _ in edge.P_]  # prelinks
             while adjacent_:
                 _P, _y,_x = adjacent_.pop(0)  # also pop _P__
                 for y,x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:
@@ -82,15 +82,14 @@ class CsliceEdge(CFrame):
                         P = edge.rootd[y,x]
                         if _P is not P and _P not in P.rim_ and P not in _P.rim_:
                             if _P.yx < P.yx:
-                                if _P not in pre__[edge.P_.index(P)]:
-                                    pre__[edge.P_.index(P)] += [_P]  # edge.P_'s uplinks
-                            elif P not in pre__[edge.P_.index(_P)]:
-                                pre__[edge.P_.index(_P)] += [P]
+                                if _P not in edge.pre__[edge.P_.index(P)]:
+                                    edge.pre__[edge.P_.index(P)] += [_P]  # edge.P_'s uplinks
+                            elif P not in edge.pre__[edge.P_.index(_P)]:
+                                edge.pre__[edge.P_.index(_P)] += [P]
                     except KeyError:    # if yx empty, keep tracing
                         if (y,x) not in edge.dert_: continue   # stop if yx outside the edge
                         edge.rootd[y,x] = _P
                         adjacent_ += [(_P, y,x)]
-            edge.P_ = [[P,pre_] for P,pre_ in zip(edge.P_,pre__)]
 
     CBlob = CEdge
 
@@ -213,7 +212,7 @@ if __name__ == "__main__":
 
         # show slices
         if show_slices:
-            for P in edge.P_:
+            for i, P in enumerate(edge.P_):
                 y_, x_ = zip(*(P.yx_ - yx0))
                 if len(P.yx_) == 1:
                     v, u = P.axis
@@ -221,7 +220,7 @@ if __name__ == "__main__":
                     x_ = x_[0]-u/2, x_[0]+u/2
                 plt.plot(x_, y_, "k-", linewidth=3)
                 yp, xp = P.yx - yx0
-                for _P in P.rim_:
+                for _P in edge.pre__[i]:
                     assert _P.yx < P.yx
                     _yp, _xp = _P.yx - yx0
                     plt.plot([_xp, xp], [_yp, yp], "ko--", alpha=0.5)
