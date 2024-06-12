@@ -52,8 +52,8 @@ class CcompSliceFrame(CsliceEdge):
                 edge.iderH = CH(); edge.fback_ = []
                 for P in edge.P_:
                     P.derH = CH()
-                # vertical, lateral-overlap P cross-comp -> PP clustering:
-                rng_recursion(edge)
+                    P.rim_ = []
+                rng_recursion(edge)  # vertical, lateral-overlap P cross-comp -> PP clustering:
                 form_PP_t(edge, edge.P_)  # calls der+: PP P_,link_'replace, derH+ or rng++: PP.link_+
 
     CBlob = CEdge
@@ -226,7 +226,7 @@ def ider_recursion(root, PP):  # node-mediated correlation clustering:
 def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
     rng = 1  # cost of links added per rng+
-    _Pt_ = zip(edge.P_, edge.pre__) # includes prelink
+    _Pt_ = [(P,edge.pre__[P]) for P in edge.P_] # includes prelink
 
     while True:  # extend mediated comp rng by adding prelinks
         Pt_ = []  # with new prelinks
@@ -249,8 +249,7 @@ def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and conti
                         if _P.rim_:  # higher rng
                             pre_ += [dP.node_[0] for dP in _P.rim_[-1]]  # connected __Ps
                         else:  # rng == 1 (we need this because _P.rim is empty when rng == 1)
-                            pre_index = edge.P_.index(_P)  # index of _P's pre in edge.P_
-                            pre_ += edge.pre__[pre_index]
+                            pre_ += edge.pre__[_P]
 
                 if pre_: Pt_ += [(P,pre_)]  # next P_ must have prelinks
             if rng_link_: P.rim_ += [rng_link_]
@@ -307,7 +306,8 @@ def comp_P(_P,P, angle=None, distance=None):  # comp dPs if fd else Ps
     if link.derH.Et[0] > aveP * link.derH.Et[2]:  # always rng+? (vm > aveP * rm)
         return link
 
-# not revised:
+# not revised below:
+
 def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
 
     PP_t = [[],[]]
@@ -354,7 +354,6 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
 
     root.node_ = PP_t  # nested in der+, add_alt_PPs_?
 
-# not revised
 def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
 
     PP = CG(fd=fd, root=root, rng=root.rng+1)
@@ -389,7 +388,7 @@ def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
     if PP.iderH:
         PP.iderH.Et[2:4] = [R+r for R,r in zip(PP.iderH.Et[2:4], iRt)]
 
-    if isinstance(P_[0], CP):  # skip if P is CdP because it doens't have box and yx
+    if isinstance(P_[0], CP):  # CdP has no box, yx
         # pixmap:
         y0,x0,yn,xn = PP.box
         PP.mask__ = np.zeros((yn-y0, xn-x0), bool)
@@ -398,7 +397,6 @@ def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
 
     return PP
 
-# not revised
 def feedback(root):  # in form_PP_, append new der layers to root PP, single vs. root_ per fork in agg+
 
     HE = deepcopy(root.fback_.pop(0))
@@ -463,7 +461,8 @@ if __name__ == "__main__":
 
     image_file = '../images/raccoon_eye.jpeg'
     image = imread(image_file)
-    # verification:
+
+    # ----- verification -----
     frame = CcompSliceFrame(image).segment()
     import matplotlib.pyplot as plt
     from slice_edge import unpack_edge_
@@ -485,7 +484,16 @@ if __name__ == "__main__":
             plt.imshow(mask, cmap='gray', alpha=0.5)
             plt.title(f"area={edge.area}, {'der+' if fd else 'rng+'}")
             for PP in PP_:
+                nodet_set = set()
                 for dP in PP.link_:
-                    (_y, _x), (y, x) = dP.node_[0].yx - yx0, dP.node_[1].yx - yx0
+                    _node, node = dP.node_
+                    if (_node.id, node.id) in nodet_set:  # verify link uniqueness
+                        raise ValueError(
+                            f"link not unique between {_node} and {node}. PP.link_:\n" +
+                            "\n".join(map(lambda dP: f"dP.id={dP.id}, _node={dP.node_[0]}, node={dP.node_[1]}", PP.link_))
+                        )
+                    nodet_set.add((_node.id, node.id))
+                    assert _node.yx < node.yx  # verify that link is up-link
+                    (_y, _x), (y, x) = _node.yx - yx0, node.yx - yx0
                     plt.plot([_x, x], [_y, y], "o-k")
             plt.show()

@@ -1,4 +1,5 @@
 import numpy as np
+from collections import defaultdict
 from math import atan2, cos, floor, pi
 import sys
 sys.path.append("..")
@@ -46,8 +47,8 @@ class CsliceEdge(CFrame):
             # form P per non-overlapped max yx
             edge.P_ = []; edge.rootd = {}
             while yx_:
-                yx = yx_.pop(); axis = axisd[yx]    # get max of maxes (highest g)
-                edge.P_ += [CP(edge, yx, axis)]     # form P
+                yx = yx_.pop(); axis = axisd[yx]  # get max of maxes (highest g)
+                edge.P_ += [CP(edge, yx, axis)]   # form P
                 yx_ = [yx for yx in yx_ if yx not in edge.rootd]    # remove merged maxes if any
 
             edge.P_.sort(key=lambda P: P.yx, reverse=True)
@@ -74,23 +75,21 @@ class CsliceEdge(CFrame):
         def trace(edge):  # fill and trace across slices
 
             adjacent_ = [(P, y,x) for P in edge.P_ for y,x in edge.rootd if edge.rootd[y,x] is P]
-            edge.pre__ = [[] for _ in edge.P_]  # prelinks
+            edge.pre__ = defaultdict(list)  # prelinks
             while adjacent_:
                 _P, _y,_x = adjacent_.pop(0)  # also pop _P__
+                _pre_ = edge.pre__[_P]
                 for y,x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:
                     try:  # if yx has _P, try to form link
                         P = edge.rootd[y,x]
-                        if _P is not P and _P not in P.rim_ and P not in _P.rim_:
-                            if _P.yx < P.yx:
-                                if _P not in edge.pre__[edge.P_.index(P)]:
-                                    edge.pre__[edge.P_.index(P)] += [_P]  # edge.P_'s uplinks
-                            elif P not in edge.pre__[edge.P_.index(_P)]:
-                                edge.pre__[edge.P_.index(_P)] += [P]
+                        pre_ = edge.pre__[P]
+                        if _P is not P and _P not in pre_ and P not in _pre_:
+                            if _P.yx < P.yx: pre_ += [_P]  # edge.P_'s uplinks
+                            else:            _pre_ += [P]
                     except KeyError:    # if yx empty, keep tracing
                         if (y,x) not in edge.dert_: continue   # stop if yx outside the edge
                         edge.rootd[y,x] = _P
                         adjacent_ += [(_P, y,x)]
-
     CBlob = CEdge
 
 class CP(CBase):
@@ -105,7 +104,7 @@ class CP(CBase):
         pivot += ma,m
         edge.rootd[y, x] = P
         I,G,M,Ma,L,Dy,Dx = i,g,m,ma,1,gy,gx
-        P.yx_, P.dert_, P.rim_ = [yx], [pivot], []
+        P.yx_, P.dert_ = [yx], [pivot]
 
         for dy,dx in [(-ay,-ax),(ay,ax)]:  # scan in 2 opposite directions to add derts to P
             P.yx_.reverse(); P.dert_.reverse()
@@ -212,7 +211,7 @@ if __name__ == "__main__":
 
         # show slices
         if show_slices:
-            for i, P in enumerate(edge.P_):
+            for P in edge.P_:
                 y_, x_ = zip(*(P.yx_ - yx0))
                 if len(P.yx_) == 1:
                     v, u = P.axis
@@ -220,8 +219,11 @@ if __name__ == "__main__":
                     x_ = x_[0]-u/2, x_[0]+u/2
                 plt.plot(x_, y_, "k-", linewidth=3)
                 yp, xp = P.yx - yx0
-                for _P in edge.pre__[i]:
-                    assert _P.yx < P.yx
+                pre_set = set()
+                for _P in edge.pre__[P]:
+                    assert _P.id not in pre_set     # verify pre-link uniqueness
+                    pre_set.add(_P.id)
+                    assert _P.yx < P.yx     # verify up-link
                     _yp, _xp = _P.yx - yx0
                     plt.plot([_xp, xp], [_yp, yp], "ko--", alpha=0.5)
 
