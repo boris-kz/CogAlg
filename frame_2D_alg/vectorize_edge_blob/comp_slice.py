@@ -53,9 +53,10 @@ class CcompSliceFrame(CsliceEdge):
                 for P in edge.P_:
                     P.derH = CH()
                     P.rim_ = []
+                    P.fdP_ = 0  # is linked
                 rng_recursion(edge)  # vertical, lateral-overlap P cross-comp -> PP clustering:
-                form_PP_t(edge, edge.P_)  # calls der+: PP P_,link_'replace, derH+ or rng++: PP.link_+
-
+                form_PP_t(edge, edge.P_)
+                # calls der+: PP P_,link_'replace, derH+ or rng++: PP.link_+
     CBlob = CEdge
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
@@ -138,7 +139,7 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
 
     def __bool__(H): return H.n != 0
 
-    def add_(HE, He, irdnt=None):  # unpack down to numericals and sum them
+    def add_(HE, He, irdnt=None):  # unpack down to numericals and sum them, abs ds if fabs
 
         if irdnt is None: irdnt = []
         if HE:
@@ -153,14 +154,13 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
             else:
                 HE.H = [V+v for V,v in zip_longest(HE.H, He.H, fillvalue=0)]  # both Hs are md_s
             # default:
-            Et, et = HE.Et, He.Et
             HE.Et = np.add(HE.Et, He.Et); HE.relt = np.add(HE.relt, He.relt)
             if any(irdnt): HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
             HE.n += He.n  # combined param accumulation span
         else:
             HE.copy(He)  # initialization
 
-    def append_(HE,He, irdnt=None, flat=0):
+    def append_(HE,He, irdnt=None, flat=0, fabs=0):
 
         if irdnt is None: irdnt = []
         if flat: HE.H += deepcopy(He.H)  # append flat
@@ -170,7 +170,7 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
         if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
         HE.n += He.n
 
-    def comp_(_He, He, dderH, rn=1, fagg=0, flat=1):  # unpack tuples (formally lists) down to numericals and compare them
+    def comp_(_He, He, dderH, rn=1, fagg=0, flat=1, frev=0):  # unpack tuples (formally lists) down to numericals and compare them
 
         n = 0
         if isinstance(_He.H[0], CH):  # _lay and lay is He_, they are aligned
@@ -179,7 +179,7 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
             dH = []
             for _lay,lay in zip(_He.H,He.H):  # md_| ext| derH| subH| aggH, eval nesting, unpack,comp ds in shared lower layers:
                 if _lay and lay:  # ext is empty in single-node Gs
-                    dlay = _lay.comp_(lay, CH(), rn, fagg=fagg, flat=1)  # dlay is dderH
+                    dlay = _lay.comp_(lay, CH(), rn, fagg=fagg, flat=1, frev=frev)  # dlay is dderH
                     Et = np.add(Et, dlay.Et)
                     relt = np.add(relt, dlay.relt)
                     dH += [dlay]; n += dlay.n
@@ -190,7 +190,8 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
             dH = []
             for i, (_d,d) in enumerate(zip(_He.H[1::2], He.H[1::2])):  # compare ds in md_ or ext
                 d *= rn  # normalize by comparand accum span
-                diff = _d-d
+                diff = _d - d
+                if frev: diff = -diff  # from link with reversed dir
                 match = min(abs(_d),abs(d))
                 if (_d<0) != (d<0): match = -match  # if only one comparand is negative
                 if fagg:
@@ -338,6 +339,7 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
                 while perimeter:
                     _P = perimeter.popleft()
                     if _P in cP_ or _P in CP_ or _P not in P_: continue  # clustering is exclusive
+                    _P.fdP_ = 1  # has links
                     cP_ += [_P]
                     clink_ += Link_[P_.index(_P)]
                     perimeter += _P__[P_.index(_P)]  # extend P perimeter with linked __Ps
@@ -363,10 +365,8 @@ def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
     for dP in dP_:
         if dP.node_[0] not in P_ or dP.node_[1] not in P_: continue
         if dP.derH:
-            # dP.node_[1].derH nesting is lower than dP.derH, append them instead? But how about negate?
             if not isinstance(P_[0], CdP):
-                dP.node_[1].derH.add_(dP.derH, iRt)
-                dP.node_[0].derH.add_(negate(deepcopy(dP.derH)), iRt)  # negate reverses uplink ds direction
+                dP.node_[1].derH.add_(dP.derH, iRt)  # add in lower node only
         PP.link_ += [dP]
         if fd: dP.root = PP
         PP.A = np.add(PP.A,dP.angle)
