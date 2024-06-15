@@ -44,10 +44,9 @@ max_dist = 2
 class Clink(CBase):  # product of comparison between two nodes or links
     name = "link"
 
-    def __init__(l, nodet=None,rim=None, derH=None, extH=None, root=None, span=0, angle=None, box=None ):
+    def __init__(l, nodet=None,derH=None, span=0, angle=None, box=None ):
         super().__init__()
-        # Clink = Ltree: binary tree of Gs,
-        # Ltree depth+ / der+: Clink is 2 connected Gs, Clink with Clink nodet is 4 connected Gs, etc, unpack sequentially.
+        # Clink = binary tree of Gs, depth+/der+: Clink nodet is 2 Gs, Clink + Clinks in nodet is 4 Gs, etc., unpack sequentially.
         l.nodet = [] if nodet is None else nodet  # e_ in kernels, else replaces _node,node: not used in kernels?
         l.n = 1  # min(node_.n)
         l.S = 0  # sum nodet
@@ -59,7 +58,6 @@ class Clink(CBase):  # product of comparison between two nodes or links
         l.Vt = [0,0]  # for rim-overlap modulated segmentation, init derH.Et[:2]
         l.derH = CH() if derH is None else derH
         l.DerH = CH()  # ders from kernels: G.DerH
-        l.frev = 0  # if frev: diff = -diff  # from link with reversed dir
 
     def __bool__(l): return bool(l.derH.H)
 
@@ -120,7 +118,7 @@ def agg_recursion(rroot, root, N_, rng=1, fagg=0):  # rng for sub+'rng+ only
 
 
 def rng_node_(N_, Et, rng=1):  # comp Gs|kernels in agg+, links | link rim_t node rims in sub+
-                               # similar to graph convolutional network but without backprop
+                               # ~ graph convolutional network without backprop
     G_ = []  # eval comp_N -> G_:
     for link in list(combinations(N_,r=2)):
         _G, G = link
@@ -134,7 +132,9 @@ def rng_node_(N_, Et, rng=1):  # comp Gs|kernels in agg+, links | link rim_t nod
             if comp_N(Link, Et):
                 for g in _G,G:
                     if g not in G_: G_ += [g]
-                    g.DerH.add_(Link.derH)  # init kernel ders
+                    # g.DerH.add_(Link.derH)  # init kernel ders
+                    if g.DerH: g.DerH.H[-1].add_(Link.derH, fabs=1)  # accumulate kernel ders
+                    else:      g.DerH.append_(Link.derH, flat=0, fabs=1)  # init kernel ders: pack Link.derH as new DerH layer
     # def kernel rim per G:
     for G in G_:
         G.krim = [link.nodet[0] if link.nodet[1] is G else link.nodet[1] for link in G.rim]
@@ -147,12 +147,12 @@ def rng_node_(N_, Et, rng=1):  # comp Gs|kernels in agg+, links | link rim_t nod
                 if _G in G.compared_: continue
                 G.compared_ += [_G]
                 _G.compared_ += [G]
-                dderH = _G.DerH.H[-1].comp_(G.DerH.H[-1], rn=1, fagg=1, flat=1)
+                dderH = _G.DerH.H[-1].comp_(G.DerH.H[-1], dderH=CH(), rn=1, fagg=1, flat=1)  # comp last krims
                 if dderH.Et[0] > ave * dderH.Et[2]:
                     for g in _G,G:  # bilateral assign
-                        g.DerH.H[-1].add_(dderH) if len(g.DerH.H)==rng else g.DerH.append_(dderH,flat=0)
+                        g.DerH.H[-1].add_(dderH) if len(g.DerH.H)==rng+1 else g.DerH.append_(dderH,flat=0)
             # eval update to continue rng+/G:
-            if G.DerH.H[-1].Et[0] - G.DerH.H[-2].Et[0] > ave:
+            if len(G.DerH.H)>rng and G.DerH.H[-1].Et[0] - G.DerH.H[-2].Et[0] > ave:  # G.DerH may not be updated
                 _G_ += [G]
         if _G_:
             for G in _G_: G.compared_ = []
@@ -175,17 +175,17 @@ def rng_link_(N_, Et):  # comp Clinks: der+'rng+ in root.link_ rim_t node rims: 
         mN_t_ = [[[],[]] for _ in L_]
         for L, _mN_t, mN_t in zip(L_, _mN_t_, mN_t_):
             for dir, _mN_, mN_ in zip((0,1), _mN_t, mN_t):
-
-                _rim_ = [n.rim if isinstance(n,CG) else n.rimt_[0][0] + n.rimt_[0][1] for n in _mN_]
-                # comp L, _Ls: nodet mN 1st rim, latter get rng+ _Ls via rng+ mm..Ns:
-                for _rim in _rim_:
-                    for _L in _rim:
+                # comp L, _Ls: nodet mN 1st rim, -> rng+ _Ls/ rng+ mm..Ns:
+                rim_ = [n.rim if isinstance(n,CG) else n.rimt_[0][0] + n.rimt_[0][1] for n in _mN_]
+                for rim in rim_:
+                    for _L,rev in rim:
                         if _L is L or _L in L.compared_: continue
                         if not hasattr(_L,"rimt_"): add_der_attrs(link_=[_L])  # _L not in root.link_, same derivation
                         L.compared_ += [_L]; _L.compared_ += [L]
                         dy,dx = np.subtract(_L.yx,L.yx)
                         Link = Clink(nodet=[_L,L], span=np.hypot(dy,dx), angle=[dy,dx], box=extend_box(_L.box, L.box))
-                        if comp_N(Link, Et, rng, dir):  # L.rim_t += new Link
+                        # not sure about dir^rev:
+                        if comp_N(Link, Et, rng, dir^rev):  # L.rim_t += new Link
                             # add rng+ mediating nodes to L, link order: nodet < L < rim_t, mN.rim || L
                             mN_ += _L.nodet  # get _Ls in mN.rim
                             if _L not in L_:  # not in root
@@ -205,13 +205,13 @@ def rng_link_(N_, Et):  # comp Clinks: der+'rng+ in root.link_ rim_t node rims: 
     return N_, rng, Et
 
 
-def comp_N(Link, iEt, rng=None, dir=None):  # rng,dir if fd, Link+=dderH, comparand rim+=Link
+def comp_N(Link, iEt, rng=None, rev=None):  # rng,dir if fd, Link+=dderH, comparand rim+=Link
 
-    fd = dir is not None  # compared links have binary relative direction?
+    fd = rev is not None  # compared links have binary relative direction?
     dderH = CH(); _N, N = Link.nodet; rn = _N.n / N.n
 
     if fd:  # Clink Ns
-        _A, A = _N.angle, N.angle if dir else [-d for d in N.angle] # reverse angle direction for left link
+        _A, A = _N.angle, N.angle if rev else [-d for d in N.angle] # reverse angle direction for left link
         Et, rt, md_ = comp_ext(_N.span,N.span, _N.S,N.S/rn, _A,A)
         # Et, Rt, Md_ = comp_latuple(_G.latuple, G.latuple,rn,fagg=1)  # low-value comp in der+
         dderH.n = 1; dderH.Et = Et; dderH.relt = rt
@@ -224,8 +224,8 @@ def comp_N(Link, iEt, rng=None, dir=None):  # rng,dir if fd, Link+=dderH, compar
         if N.iderH:  # not in Clink N
             _N.iderH.comp_(N.iderH, dderH, rn, fagg=1, flat=0)
     # / N, if >1 PPs | Gs:
-    if _N.derH and N.derH: _N.derH.comp_(N.derH, dderH, rn, fagg=1, flat=0)  # append and sum new dderH to base dderH
-    if _N.extH and N.extH: _N.extH.comp_(N.extH, dderH, rn, fagg=1, flat=1)
+    if _N.derH and N.derH: _N.derH.comp_(N.derH, dderH, rn, fagg=1, flat=0, frev=rev)  # append and sum new dderH to base dderH
+    if _N.extH and N.extH: _N.extH.comp_(N.extH, dderH, rn, fagg=1, flat=1, frev=rev)
 
     if fd: Link.derH.append_(dderH, flat=1)  # append dderH.H to link.derH.H
     else:  Link.derH = dderH
@@ -241,15 +241,14 @@ def comp_N(Link, iEt, rng=None, dir=None):  # rng,dir if fd, Link+=dderH, compar
         Link.n = min(_N.n,N.n)  # comp shared layers
         Link.yx = np.add(_N.yx, N.yx) / 2
         Link.S += (_N.S + N.S) / 2
-        for rev, (_node,node) in zip((0,1), ((_N,N), (N,_N))):
-            Link.frev = rev  # reversed Link direction
+        for rev, node in zip((0,1),(_N,N)):  # ?reversed Link direction
             if fd:
-                if len(_node.rimt_) == rng:
-                    _node.rimt_[-1][1-dir] += [Link]  # add in last rng layer, opposite _N,N dir
+                if len(node.rimt_) == rng:
+                    node.rimt_[-1][1-rev] += [[Link,rev]]  # add in last rng layer, opposite to _N,N dir
                 else:
-                    _node.rimt_ += [[[Link],[]]] if dir else [[[],[Link]]]  # add rng layer
+                    node.rimt_ += [[[[Link,rev]],[]]] if dir else [[[],[[Link,rev]]]]  # add rng layer
             else:
-                _node.rim += [Link]
+                node.rim += [[Link,rev]]
         return True
 
 def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
