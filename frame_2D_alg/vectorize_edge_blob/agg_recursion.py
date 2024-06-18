@@ -95,6 +95,7 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
             if any(node_t):
                 edge.node_ = node_t; edge.link_ = link_t
 
+# need to work out nested feedback and batch cross-comp per rroot:
 
 def agg_recursion(rroot, root, N_, rng=1, fagg=0):  # rng for sub+'rng+ only
 
@@ -120,12 +121,11 @@ def agg_recursion(rroot, root, N_, rng=1, fagg=0):  # rng for sub+'rng+ only
 def rng_node_(N_, Et, rng=1):  # comp Gs|kernels in agg+, links | link rim_t node rims in sub+
                                # ~ graph convolutional network without backprop
     G_ = []  # eval comp_N -> G_:
-    for link in list(combinations(N_,r=2)):
-        _G, G = link
+    for (_G, G) in list(combinations(N_,r=2)):
         if _G in G.compared_: continue
         dy,dx = np.subtract(_G.yx,G.yx)
         dist = np.hypot(dy,dx)
-        aRad = (G.aRad+_G.aRad) /2  # ave radius to eval relative distance between G centers:
+        aRad = (G.aRad+_G.aRad) / 2  # ave radius to eval relative distance between G centers:
         if dist / max(aRad,1) <= max_dist * rng:
             G.compared_ += [_G]; _G.compared_ += [G]
             Link = Clink(nodet=[_G,G], span=dist, angle=[dy,dx], box=extend_box(G.box,_G.box))
@@ -137,15 +137,13 @@ def rng_node_(N_, Et, rng=1):  # comp Gs|kernels in agg+, links | link rim_t nod
     # def kernel rim per G:
     for G in G_:
         G.krim = [link.nodet[0] if link.nodet[1] is G else link.nodet[1] for link, rev in G.rim]
-        G.compared_ = []
     rng = 1
     while True:  # rng+ convolution, cross-comp: recursive center node DerH += linked node derHs for next loop
         _G_ = []
         for G in G_:
             for _G in G.krim:
-                if _G in G.compared_: continue
-                G.compared_ += [_G]
-                _G.compared_ += [G]
+                if _G in G.compared_: continue  # need to reset compared per intermediate rng+, nest in sub+'rng+?
+                G.compared_ += [_G]; _G.compared_ += [G]
                 dderH = _G.DerH.H[-1].comp_(G.DerH.H[-1], dderH=CH(), rn=1, fagg=1, flat=1)  # comp last krims
                 if dderH.Et[0] > ave * dderH.Et[2]:
                     for g in _G,G:  # bilateral assign
@@ -154,14 +152,12 @@ def rng_node_(N_, Et, rng=1):  # comp Gs|kernels in agg+, links | link rim_t nod
             if len(G.DerH.H)>rng and G.DerH.H[-1].Et[0] - G.DerH.H[-2].Et[0] > ave:  # G.DerH may not be appended
                 _G_ += [G]
         if _G_:
-            for G in _G_: G.compared_ = []
             rng += 1; G_ = _G_
         else:
             break
     for G in G_:
         delattr(G, "krim")
-        for i, (link, rev) in enumerate(G.rim):
-            G.extH.add_(link.DerH) if i else G.extH.append_(link.DerH, flat=1)  # for segmentation
+        G.extH.append_(G.DerH, flat=0)  # for segmentation
 
     return N_, rng, Et
 
@@ -310,8 +306,8 @@ def segment_N_(root, iN_, fd, rng):
     max_ = []
     for N in iN_:
         # init graphts:
-        rim = N.rim if isinstance(N,CG) else [L for rimt in N.rimt_ for rim in rimt for L in rim]  # flatten rim_t
-        _N_t = [[_N for L, rev in rim for _N in L.nodet if _N is not N], [N]]  # [ext_N_, int_N_]
+        rim = [Lt[0] for Lt in N.rim] if isinstance(N,CG) else [Lt[0] for rimt in N.rimt_ for rim in rimt for Lt in rim]  # flatten rim_t
+        _N_t = [[_N for L in rim for _N in L.nodet if _N is not N], [N]]  # [ext_N_, int_N_]
         # node_, link_, Lrim, Nrim_t, Et:
         Gt = [[N],[],copy(rim),_N_t,[0,0,0,0]]
         N.root = Gt
@@ -325,7 +321,7 @@ def segment_N_(root, iN_, fd, rng):
     for Gt in max_ if max_ else N_:
         node_, link_, Lrim, Nrim_t, Et = Gt
         Nrim = Nrim_t[0]
-        for _Gt, (_L,rev) in zip(Nrim, Lrim):
+        for _Gt, _L in zip(Nrim, Lrim):
             if _Gt not in N_:
                 continue  # was merged
             oL_ = set(Lrim).intersection(set(_Gt[2])).union([_L])  # shared external links + potential _L # oL_ = [Lr[0] for Lr in _Gt[2] if Lr in Lrim]
