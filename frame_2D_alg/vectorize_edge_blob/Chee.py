@@ -74,55 +74,67 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
             # vertical, lateral-overlap P cross-comp -> PP clustering:
             rng_recursion(edge)
             form_PP_t(edge, edge.P_)  # calls der+: PP P_,link_'replace, derH+ or rng++: PP.link_+
-            node_t, link_t = [[],[]], [[],[]]
+            link_t = [[],[]]
             for fd, node_ in enumerate(copy(edge.node_)):  # always node_t
                 if edge.iderH and any(edge.iderH.Et):   # any for np array
                     if edge.iderH.Et[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.iderH.Et[2+fd]:
-                        pruned_node_ = []
-                        for PP in node_:  # PP -> G
-                            if PP.iderH and PP.iderH.Et[fd] > G_aves[fd] * PP.iderH.Et[2+fd]:  # v> ave*r
-                                PP.root_ = []  # no feedback to edge?
-                                PP.node_ = PP.P_  # revert node_
-                                y0,x0,yn,xn = PP.box
-                                PP.yx = [(y0+yn)/2, (x0+xn)/2]
-                                PP.aRad = np.hypot(*np.subtract(PP.yx,(yn,xn)))
-                                PP.Et = [0,0,0,0]  # [] in comp_slice
-                                pruned_node_ += [PP]
-                        if len(pruned_node_) > 10:  # discontinuous PP rng+ cross-comp, cluster -> G_t:
-                            node_t[fd] = pruned_node_
-                            agg_recursion(None, edge, N_=pruned_node_, fagg=1)
-                            link_t[fd] = edge.link_
-            if any(node_t):
-                edge.node_ = node_t; edge.link_ = link_t
+                        edge.fback_t = [[],[]]  # reset per call
+                        agg_recursion(None, graph_=[edge], ifd=fd, fagg=1)
+                        link_t[fd] = edge.link_
+            if any(link_t):
+                edge.link_ = link_t
 
 # need to work out nested feedback and batch cross-comp per rroot:
+# not revised
+def agg_recursion(root, graph_, rng=1, ifd=0, fagg=0):  # rng for sub+'rng+ only
 
-def agg_recursion(rroot, root, N_, rng=1, fagg=0):  # rng for sub+'rng+ only
+    for graph in graph_:
+        iN_ = convert_node_(graph, ifd, fagg)
+        Et = [0,0,0,0]
+        # rng+: comp nodes|links mediated by previously compared N|L -> N_|L_:
+        N_,rng, Et = rng_node_(iN_,Et,rng) if fagg else rng_link_(iN_,Et)
+        node_t = form_graph_t(root, N_, Et, rng, root_fd=1-fagg)  # sub+ and feedback
+        if node_t: graph.node_ = node_t
 
-    Et = [0,0,0,0]
-    xcomp = 2
-    while xcomp:  # tentative
-        if xcomp == 2: N_,rng,Et = rng_node_(N_,Et,rng) if fagg else rng_link_(N_,Et)  # 1st call
-        else:  # recursive xcomp of either fork
-            xcomp = 0
-            if Et[0] > ave*Et[2]:
-                N_,rng,Et = rng_node_(N_,Et,rng); xcomp = 1  # rng+ via convolution
-            if Et[1] > ave*Et[3]:
-                N_,rng,Et = rng_link_(N_,Et); xcomp = 1
-                # replace N_ with new link_ for next call? will multiply n forks?
-    node_t = form_graph_t(root, N_, Et, rng, root_fd=1-fagg)  # sub+ and feedback
-    if node_t:
-        for fd, node_ in enumerate(node_t):
-            N_ = [n for n in node_ if n.derH.Et[0] > G_aves[fd] * n.derH.Et[2]]  # pruned node_
-            # comp val is proportional to n comparands:
-            if root.derH.Et[0] * ((len(N_)-1)*root.rng) > G_aves[1]*root.derH.Et[2]:
-                # agg+ / node_t, vs. sub+ / node_, always rng+:
-                agg_recursion(rroot, root, N_, fagg=1)
-                if rroot and root.derH:
-                    rroot.fback_t[fd] += [root.derH]  # each fork in agg+ fback_t sums both forks of sub+ fback_t
-                    if all(len(f_) == len(node_) for f_ in rroot.fback_t):  # both sub+ forks end for all nodes
-                        feedback(rroot, root_fd=1-fagg, fsub=0)  # update root.root..
-        root.node_[:] = node_t  # else keep root.node_
+    for fd in 0,1:
+        agg_root_ = []; fback_t = [[],[]]  # local fback_t prevent overwritten by sub+
+        for graph in graph_:
+            if graph.derH.Et[0] > G_aves[1]*graph.derH.Et[2]:
+                agg_root_ += [graph]
+            else:
+                fback_t[fd] += [graph.derH]  # each fork in agg+ fback_t sums both forks of sub+ fback_t
+        # agg+ / node_t, vs. sub+ / node_, always rng+:
+        if agg_root_: agg_recursion(root, agg_root_, ifd=fd, fagg=1)
+
+        # check feedback at the end, only true when fd == 1
+        if root and all(len(f_) == len(graph_) for f_ in fback_t):
+            root.fback_t = fback_t
+            feedback(root, root_fd=1-fagg, fsub=0)  # update root.root..
+
+def convert_node_(graph, fagg, fd):
+
+    if isinstance(graph, CG):  # CG
+        if fagg:
+            # nested node_t
+            if isinstance(graph.node_[0], list): N_ = graph.node_[fd]
+            else:                                N_ = graph.node_
+        else:
+            N_ = graph.link_
+            if fd: add_der_attrs(N_)
+        pruned_node_ = [n for n in N_ if n.derH.Et[0] > G_aves[fd] * n.derH.Et[2]]  # pruned node_
+    else:  # edge
+        pruned_node_ = []
+        for PP in graph.node_[fd]:  # PP -> G
+            if PP.iderH and PP.iderH.Et[fd] > G_aves[fd] * PP.iderH.Et[2+fd]:  # v> ave*r
+                PP.root_ = []  # no feedback to edge?
+                PP.node_ = PP.P_  # revert node_
+                y0,x0,yn,xn = PP.box
+                PP.yx = [(y0+yn)/2, (x0+xn)/2]
+                PP.aRad = np.hypot(*np.subtract(PP.yx,(yn,xn)))
+                PP.Et = [0,0,0,0]  # [] in comp_slice
+                pruned_node_ += [PP]
+
+    return pruned_node_
 
 
 def rng_node_(N_, Et, rng=1):  # comp Gs|kernels in agg+, links | link rim_t node rims in sub+
@@ -277,16 +289,22 @@ def form_graph_t(root, N_, Et, rng, root_fd):  # segment N_ to Nm_, Nd_
             if not fd:
                 for G in N_: G.root = []  # only nodes have roots?
             graph_ = segment_N_(root, N_, fd, rng)
+
+            # eval for sub+
+            sub_root_ = []; fback_t = [[],[]]
             for graph in graph_:
                 Q = graph.link_ if fd else graph.node_
                 if len(Q) > ave_L and graph.Et[fd] > G_aves[fd] * graph.Et[fd]:
-                    if fd: add_der_attrs(Q)
-                    # else sub+rng+: comp Gs at distance < max_dist * rng+1:
-                    agg_recursion(root, graph, Q, rng+1, fagg=1-fd)  # graph.node_ is not node_t yet, rng for rng+ only
+                    sub_root_ += [graph]
                 else:
-                    root.fback_t[fd] += [graph.derH]  # sub+ fb -> root formed by intermediate agg+, -> original root
-                    if all(len(f_) == len(graph_) for f_ in root.fback_t):  # both forks of sub+ end for all nodes
-                        feedback(root, root_fd=root_fd)  # graph_ is new root.node_:
+                    fback_t[fd] += [graph.derH]  # sub+ fb -> root formed by intermediate agg+, -> original root
+
+            # else sub+rng+: comp Gs at distance < max_dist * rng+1:
+            if sub_root_: agg_recursion(root, sub_root_, rng+1, ifd=fd, fagg=1-fd)  # graph.node_ is not node_t yet, rng for rng+ only
+
+            if all(len(f_) == len(graph_) for f_ in fback_t):  # both forks of sub+ end for all nodes
+                root.fback_t = fback_t
+                feedback(root, root_fd=root_fd)  # graph_ is new root.node_:
             node_t += [graph_]  # may be empty
         else:
             node_t += [[]]
@@ -411,7 +429,7 @@ def comp_N_(_node_, node_):  # compare partial graphs in merge
 def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
     G_, Link_, _, _, Et = grapht
-    graph = CG(fd=fd, node_=G_,link_=[linkt[0] for linkt in Link_], rng=rng, Et=Et)
+    graph = CG(fd=fd, node_=G_,link_=Link_, rng=rng, Et=Et)
     if fd: graph.root = root
     extH = CH()
     yx = [0,0]
