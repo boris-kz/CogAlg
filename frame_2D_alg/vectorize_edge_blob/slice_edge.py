@@ -1,5 +1,6 @@
 import numpy as np
 from collections import defaultdict
+from itertools import combinations
 from math import atan2, cos, floor, pi
 import sys
 sys.path.append("..")
@@ -26,7 +27,7 @@ ave_mL = 2
 ave_dist = 3
 max_dist = 15
 ave_dangle = .95  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
-
+ave_olp = 5
 
 class CsliceEdge(CFrame):
 
@@ -50,7 +51,6 @@ class CsliceEdge(CFrame):
                 yx = yx_.pop(); axis = axisd[yx]  # get max of maxes (highest g)
                 edge.P_ += [CP(edge, yx, axis)]   # form P
                 yx_ = [yx for yx in yx_ if yx not in edge.rootd]    # remove merged maxes if any
-
             edge.P_.sort(key=lambda P: P.yx, reverse=True)
             edge.trace()
             # del edge.rootd    # still being used for visual verification
@@ -75,21 +75,49 @@ class CsliceEdge(CFrame):
         def trace(edge):  # fill and trace across slices
 
             adjacent_ = [(P, y,x) for P in edge.P_ for y,x in edge.rootd if edge.rootd[y,x] is P]
-            edge.pre__ = defaultdict(list)  # prelinks
+            bi__ = defaultdict(list)  # prelinks (bi-lateral)
             while adjacent_:
                 _P, _y,_x = adjacent_.pop(0)  # also pop _P__
-                _pre_ = edge.pre__[_P]
+                _pre_ = bi__[_P]
                 for y,x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:
                     try:  # if yx has _P, try to form link
                         P = edge.rootd[y,x]
-                        pre_ = edge.pre__[P]
+                        pre_ = bi__[P]
                         if _P is not P and _P not in pre_ and P not in _pre_:
-                            if _P.yx < P.yx: pre_ += [_P]  # edge.P_'s uplinks
-                            else:            _pre_ += [P]
+                            pre_ += [_P]
+                            _pre_ += [P]
                     except KeyError:    # if yx empty, keep tracing
                         if (y,x) not in edge.dert_: continue   # stop if yx outside the edge
                         edge.rootd[y,x] = _P
                         adjacent_ += [(_P, y,x)]
+            # Remove redundant links
+            for P in edge.P_:
+                yx = P.yx
+                for __P, _P in combinations(bi__[P], r=2):
+                    if __P not in bi__[P] or _P not in bi__[P]: continue
+                    __yx, _yx = __P.yx, _P.yx   # center coords
+                    # starts & ends:
+                    __yx1 = np.subtract(__P.yx_[0], __P.axis)
+                    __yx2 = np.add(__P.yx_[-1], __P.axis)
+                    _yx1 = np.subtract(_P.yx_[0], _P.axis)
+                    _yx2 = np.add(_P.yx_[-1], _P.axis)
+
+                    if xsegs(yx, _yx, __yx1, __yx2):
+                        # remove link(_P, P) (which crossed __P):
+                        bi__[P].remove(_P)
+                        bi__[_P].remove(P)
+                    elif xsegs(yx, __yx, _yx1, _yx2):
+                        # remove link(__P, P) (which crossed _P):
+                        bi__[P].remove(__P)
+                        bi__[__P].remove(P)
+            for P in edge.P_:
+                for _P in bi__[P]:
+                    if P in bi__[_P]:
+                        if _P.yx < P.yx: bi__[_P].remove(P)
+                        else:            bi__[P].remove(_P)
+
+            edge.pre__ = bi__  # prelinks
+
     CBlob = CEdge
 
 class CP(CBase):
@@ -171,6 +199,17 @@ def comp_angle(_A, A):  # rn doesn't matter for angles
 
 def unpack_edge_(frame):
     return [blob for blob in unpack_blob_(frame) if hasattr(blob, "P_")]
+
+def xsegs(yx1, yx2, yx3, yx4):   # return True if segments (yx1, yx2) & (yx3, yx4) crossed
+    (y1, x1), (y2, x2), (y3, x3), (y4, x4) = yx1, yx2, yx3, yx4
+
+    v1 = (y2 - y1)*(x3 - x2) - (x2 - x1)*(y3 - y2)
+    v2 = (y2 - y1)*(x4 - x2) - (x2 - x1)*(y4 - y2)
+
+    v3 = (y4 - y3)*(x1 - x4) - (x4 - x3)*(y1 - y4)
+    v4 = (y4 - y3)*(x2 - x4) - (x4 - x3)*(y2 - y4)
+
+    return (v1*v2 <= 0 and v3*v4 <= 0)
 
 if __name__ == "__main__":
 
