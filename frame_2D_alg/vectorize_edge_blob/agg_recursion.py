@@ -101,29 +101,34 @@ def agg_recursion(rroot, root, N_, rng=1, fagg=0):  # rng for sub+'rng+ only
     Et = [0,0,0,0]
     N_,Et,_ = rng_node_(N_,Et,rng) if fagg else rng_link_(N_,Et)  # 1st call
     rng += fagg  # was incremented above
-    fcomp = 1
-    while fcomp:  # eval comp recursion of either fork, while last-loop comp
-        if Et[0] > ave * Et[2]:  # init rng+ via convolution
-            N_,Et, fcomp = rng_node_(N_,Et,rng) if isinstance(N_[0],CG) else rng_link_(N_,Et)
+    fcompr,fcompd = 1,1
+    while fcompr or fcompd:  # eval comp recursion per fork, while any last-loop comp
+        fcompr,fcompd = 0,0
+        if Et[0] > ave*Et[2]:  # init rng+ via convolution
+            N_,Et, fcompr = rng_node_(N_,Et,rng) if isinstance(N_[0],CG) else rng_link_(N_,Et)
             rng += 1
         if Et[1] > ave*Et[3]:  # concat links from initial or recursive xcomp:
             if isinstance(N_[0],CG): N_ = list(set([linkt[0] for N in N_ for linkt in N.rim]))
             else:                    N_ = list(set([linkt[0] for N in N_ for linkt in N.rimt_[-1][0]+N.rimt_[-1][1]]))
             add_der_attrs(link_= N_)
-            N_,Et,fcomp = rng_link_(N_,Et)
-
-    node_t = form_graph_t(root, N_, Et, rng)  # sub+ and feedback
+            N_,Et,fcompd = rng_link_(N_,Et)  # N_ is higher-derivation links
+    # sub+, fback_ sum in sub_roots, passed to root fback_:
+    node_t = form_graph_t(root, N_, Et, rng)
     if node_t:
+        fback_t = [[],[]]
         for fd, node_ in zip((0,1), node_t):
             N_ = [n for n in node_ if n.derH.Et[0] > G_aves[fd] * n.derH.Et[2]]  # pruned node_
             # comp val is proportional to n comparands:
             if root.derH.Et[0] * ((len(N_)-1)*root.rng) > G_aves[1]*root.derH.Et[2]:
                 # agg+ / node_t, vs. sub+ / node_, always rng+:
                 agg_recursion(rroot, root, N_, fagg=1)
-                # map node feedback to sub-roots before passing it to the root here?
-                if rroot: rroot.fback_t[fd] += [root.derH]  # each fork in agg+ fback_t sums both forks of sub+ fback_t
-        if rroot and rroot.fback_: feedback(rroot, fsub=0)
+                if rroot:  # each fork in agg+ fback_t sums both forks of sub+ fback_t:
+                    fback_t[fd] += [root.derH] if fd else [root.derH[-1]]  # from last rng+ only
+        if rroot and any(fback_t):
+            rroot.fback_t = fback_t
+            feedback(rroot, fsub=0)
         root.node_[:] = node_t  # else keep root.node_
+
 
 def rng_node_(N_, Et, rng):  # comp Gs|kernels in agg+, links | link rim_t node rims in sub+
                              # ~ graph convolutional network without backprop
@@ -146,6 +151,7 @@ def rng_node_(N_, Et, rng):  # comp Gs|kernels in agg+, links | link rim_t node 
     for G in G_:
         G.compared_ = []
         G.krim = [link.nodet[0] if link.nodet[1] is G else link.nodet[1] for link, rev in G.rim]
+    n = 1  # n convolutions = DerH layers
     while True:
         _G_ = []  # rng+ convolution, cross-comp: recursive center node DerH += linked node derHs for next loop:
         for G in G_:
@@ -155,13 +161,14 @@ def rng_node_(N_, Et, rng):  # comp Gs|kernels in agg+, links | link rim_t node 
                 dderH = _G.DerH.H[-1].comp_(G.DerH.H[-1], dderH=CH(), rn=1, fagg=1, flat=1)  # comp last krims
                 if dderH.Et[0] > ave * dderH.Et[2]:
                     for g in _G,G:  # bilateral assign
-                        g.DerH.H[-1].add_(dderH) if len(g.DerH.H)==rng+1 else g.DerH.append_(dderH,flat=0)
+                        g.DerH.H[-1].add_(dderH) if len(g.DerH.H)==n+1 else g.DerH.append_(dderH,flat=0)
             # eval update to continue rng+/G:
-            if len(G.DerH.H)>rng and G.DerH.H[-1].Et[0] - G.DerH.H[-2].Et[0] > ave:  # G.DerH may not be appended
+            if len(G.DerH.H)>n and G.DerH.H[-1].Et[0] - G.DerH.H[-2].Et[0] > ave:  # G.DerH may not be appended
                 _G_ += [G]
         if _G_:
             G_ = _G_
-            for _G in _G_: _G.compared_ = []  # reset compared per intermediate rng+ only, nest in sub+'rng+
+            for _G in _G_: _G.compared_ = []  # reset in intermediate rng+ only, nest in sub+'rng+
+            n += 1
         else:
             break
     for G in G_:
@@ -285,13 +292,15 @@ def form_graph_t(root, N_, Et, rng):  # segment N_ to Nm_, Nd_
                     if fd: add_der_attrs(Q)
                     # else sub+rng+: comp Gs at distance < max_dist * rng+1:
                     agg_recursion(root, graph, Q, rng+1, fagg=1-fd)  # graph.node_ is not node_t yet, rng for rng+ only
-            # all sub+ feedback:
-            for graph in graph_:
-                root.fback_t[fd] += [graph.derH]  # sub+ -> sub root -> init root
-            if fd: feedback(root)  # after fd: last fork
             node_t += [graph_]  # may be empty
         else:
             node_t += [[]]
+    # all sub+ feedback, after fd fork because it may pop root.fback_t[0]:
+    for fd, graph_ in enumerate(node_t):
+        for graph in graph_:
+            root.fback_t[fd] += [graph.derH] if fd else [graph.derH[-1]]  # rng+ adds single new layer
+            # sub+ -> sub root -> init root
+    if any(root.fback_t): feedback(root)
 
     return node_t
 
@@ -450,7 +459,8 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
 
 def feedback(root, fsub=1):  # called from form_graph_, append new der layers to root
 
-    DerH = deepcopy(root.fback_t[0].pop(0))  # init DerH merged from both forks
+    # each agg+ cycle may form one empty fork:
+    DerH = deepcopy(root.fback_t[0].pop(0) if root.fback_t[0] else root.fback_t[1].pop(0))  # init DerH merged from both forks
     for fd in 0,1:
         while root.fback_t[fd]:
             derH = root.fback_t[fd].pop(0)

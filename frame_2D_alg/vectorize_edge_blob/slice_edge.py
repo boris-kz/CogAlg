@@ -200,7 +200,9 @@ def comp_angle(_A, A):  # rn doesn't matter for angles
 def unpack_edge_(frame):
     return [blob for blob in unpack_blob_(frame) if hasattr(blob, "P_")]
 
-def xsegs(yx1, yx2, yx3, yx4):   # return True if segments (yx1, yx2) & (yx3, yx4) crossed
+def xsegs(yx1, yx2, yx3, yx4):
+    # return True if segments (yx1, yx2) & (yx3, yx4) crossed
+    # https://www.geeksforgeeks.org/check-if-two-given-line-segments-intersect/
     (y1, x1), (y2, x2), (y3, x3), (y4, x4) = yx1, yx2, yx3, yx4
 
     v1 = (y2 - y1)*(x3 - x2) - (x2 - x1)*(y3 - y2)

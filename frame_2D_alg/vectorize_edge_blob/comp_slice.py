@@ -474,20 +474,31 @@ if __name__ == "__main__":
         mask = np.zeros(shape, bool)
         mask[mask_nonzero] = True
 
-        for fd, PP_ in enumerate(edge.node_):
-            plt.imshow(mask, cmap='gray', alpha=0.5)
-            plt.title(f"area={edge.area}, {'der+' if fd else 'rng+'}")
-            for PP in PP_:
-                nodet_set = set()
-                for dP in PP.link_:
-                    _node, node = dP.node_
-                    if (_node.id, node.id) in nodet_set:  # verify link uniqueness
-                        raise ValueError(
-                            f"link not unique between {_node} and {node}. PP.link_:\n" +
-                            "\n".join(map(lambda dP: f"dP.id={dP.id}, _node={dP.node_[0]}, node={dP.node_[1]}", PP.link_))
-                        )
-                    nodet_set.add((_node.id, node.id))
-                    assert _node.yx < node.yx  # verify that link is up-link
-                    (_y, _x), (y, x) = _node.yx - yx0, node.yx - yx0
-                    plt.plot([_x, x], [_y, y], "o-k")
-            plt.show()
+        def draw_PP(_PP):
+            if _PP.node_: print(_PP, "has node_")
+            for fd, PP_ in enumerate(_PP.node_):
+                if not PP_: continue
+                
+                plt.imshow(mask, cmap='gray', alpha=0.5)
+                plt.title(f"Number of PPs: {len(PP_)}, {'der+' if fd else 'rng+'}")
+                for PP in PP_:
+                    nodet_set = set()
+                    for P in PP.P_:
+                        (y, x) = P.yx - yx0
+                        plt.plot(x, y, "ok")
+                    for dP in PP.link_:
+                        _node, node = dP.nodet
+                        assert isinstance(_node, CP)
+                        if (_node.id, node.id) in nodet_set:  # verify link uniqueness
+                            raise ValueError(
+                                f"link not unique between {_node} and {node}. PP.link_:\n" +
+                                "\n".join(map(lambda dP: f"dP.id={dP.id}, _node={dP.node_[0]}, node={dP.node_[1]}", PP.link_))
+                            )
+                        nodet_set.add((_node.id, node.id))
+                        assert _node.yx < node.yx  # verify that link is up-link
+                        (_y, _x), (y, x) = _node.yx - yx0, node.yx - yx0
+                        plt.plot([_x, x], [_y, y], "-k")
+                plt.show()
+                for PP in PP_: draw_PP(PP)
+
+        draw_PP(edge)
