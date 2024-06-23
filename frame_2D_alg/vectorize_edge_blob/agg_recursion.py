@@ -89,14 +89,12 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
                                 pruned_node_ += [PP]
                         if len(pruned_node_) > 10:  # discontinuous PP rng+ cross-comp, cluster -> G_t:
                             node_t[fd] = pruned_node_
-                            agg_recursion(None, edge, N_=pruned_node_, fagg=1)
+                            agg_recursion(edge, N_=pruned_node_, fagg=1)
                             link_t[fd] = edge.link_
             if any(node_t):
                 edge.node_ = node_t; edge.link_ = link_t
 
-# need to work out nested feedback and batch cross-comp per rroot:
-
-def agg_recursion(rroot, root, N_, rng=1, fagg=0):  # rng for sub+'rng+ only
+def agg_recursion(root, N_, rng=1, fagg=0):  # rng for sub+'rng+ only
 
     Et = [0,0,0,0]
     N_,Et,_ = rng_node_(N_,Et,rng) if fagg else rng_link_(N_,Et)  # 1st call
@@ -121,12 +119,12 @@ def agg_recursion(rroot, root, N_, rng=1, fagg=0):  # rng for sub+'rng+ only
             # comp val is proportional to n comparands:
             if root.derH.Et[0] * ((len(N_)-1)*root.rng) > G_aves[1]*root.derH.Et[2]:
                 # agg+ / node_t, vs. sub+ / node_, always rng+:
-                agg_recursion(rroot, root, N_, fagg=1)
-                if rroot:  # each fork in agg+ fback_t sums both forks of sub+ fback_t:
-                    fback_t[fd] += [root.derH] if fd else [root.derH[-1]]  # from last rng+ only
-        if rroot and any(fback_t):
-            rroot.fback_t = fback_t
-            feedback(rroot, fsub=0)
+                agg_recursion(root, N_, fagg=1)
+                # each fork in agg+ fback_t sums both forks of sub+ fback_t:
+                fback_t[fd] += [root.derH] if fd else [root.derH[-1]]  # from last rng+ only
+        if any(fback_t):
+            root.fback_t = fback_t
+            feedback(root, fsub=0)
         root.node_[:] = node_t  # else keep root.node_
 
 
@@ -151,7 +149,8 @@ def rng_node_(N_, Et, rng):  # comp Gs|kernels in agg+, links | link rim_t node 
     for G in G_:
         G.compared_ = []
         G.krim = [link.nodet[0] if link.nodet[1] is G else link.nodet[1] for link, rev in G.rim]
-    n = 1  # n convolutions = DerH layers
+    n = 1  # n convolutions = n DerH layers
+    iG_ = copy(G_)  # copy a list of G_ with added DerH
     while True:
         _G_ = []  # rng+ convolution, cross-comp: recursive center node DerH += linked node derHs for next loop:
         for G in G_:
@@ -171,7 +170,7 @@ def rng_node_(N_, Et, rng):  # comp Gs|kernels in agg+, links | link rim_t node 
             n += 1
         else:
             break
-    for G in G_:
+    for G in iG_:
         delattr(G, "krim")
         G.extH.append_(G.DerH, flat=0)  # for segmentation
 
@@ -291,14 +290,14 @@ def form_graph_t(root, N_, Et, rng):  # segment N_ to Nm_, Nd_
                 if len(Q) > ave_L and graph.Et[fd] > G_aves[fd] * graph.Et[fd]:
                     if fd: add_der_attrs(Q)
                     # else sub+rng+: comp Gs at distance < max_dist * rng+1:
-                    agg_recursion(root, graph, Q, rng+1, fagg=1-fd)  # graph.node_ is not node_t yet, rng for rng+ only
+                    agg_recursion(graph, Q, rng+1, fagg=1-fd)  # graph.node_ is not node_t yet, rng for rng+ only
             node_t += [graph_]  # may be empty
         else:
             node_t += [[]]
     # all sub+ feedback, after fd fork because it may pop root.fback_t[0]:
     for fd, graph_ in enumerate(node_t):
         for graph in graph_:
-            root.fback_t[fd] += [graph.derH] if fd else [graph.derH[-1]]  # rng+ adds single new layer
+            root.fback_t[fd] += [graph.derH] if fd else [graph.derH.H[-1]]  # rng+ adds single new layer
             # sub+ -> sub root -> init root
     if any(root.fback_t): feedback(root)
 
