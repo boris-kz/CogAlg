@@ -222,7 +222,6 @@ def ider_recursion(root, PP):  # node-mediated correlation clustering:
     if PP.iderH:  # PPd feedback
         root.fback_ += [PP.iderH]
 
-
 def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
     rng = 1  # cost of links added per rng+
@@ -243,7 +242,7 @@ def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and conti
                     if link and link.derH.Et[0] > aves[0]*link.derH.Et[2]:  # mlink
                         V += link.derH.Et[0]
                         rng_link_ += [link]
-                        if _P.rim_: pre_ += [dP.nodet[0] for dP in _P.rim_[-1]]  # connected __Ps. Misses 2 cases of __P
+                        if _P.rim_: pre_ += [dP.nodet[0] for dP in _P.rim_[-1]]  # connected __Ps
                         else:       pre_ += edge.pre__[_P]  # rng == 1
             # next P_ has prelinks:
             if pre_: Pt_ += [(P,pre_)]
@@ -311,7 +310,7 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
         # get upper links from all rngs of CP.rim_ | CdP.rim
         for link in link_:
             m,d,mr,dr = link.derH.H[-1].Et if isinstance(link.derH.H[0],CH) else link.derH.Et  # H is md_; last der+ layer vals
-            _P = [link.nodet[1] if link.nodet[0] is P else link.nodet[0]]
+            _P = link.nodet[1] if link.nodet[0] is P else link.nodet[0]
             if m >= ave * mr:
                 mlink_+= [link]; _mP_+= [_P]
             if d > ave * dr:  # ?link in both forks?
@@ -333,8 +332,7 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
             PP = sum2PP(root, cP_, clink_, fd)
             PP_t[fd] += [PP]
             CP_ += cP_
-
-    # eval der+/ PP.link_: correlation clustering, after form_PP_t -> P.root
+    # eval PP.link_ for der+: correlation clustering, after form_PP_t -> P.root
     for PP in PP_t[1]:
         if PP.iderH.Et[0] * len(PP.link_) > ave_PPd * PP.iderH.Et[2]:
             ider_recursion(root, PP)

@@ -1,4 +1,4 @@
-9import numpy as np
+import numpy as np
 from copy import deepcopy, copy
 from itertools import combinations, product, zip_longest
 from .slice_edge import comp_angle, CsliceEdge
@@ -118,14 +118,16 @@ def agg_recursion(root, N_, rng=1, fagg=0):  # rng for sub+'rng+ only
         for fd, node_ in zip((0,1), node_t):
             N_ = [n for n in node_ if n.derH.Et[0] > G_aves[fd] * n.derH.Et[2]]  # pruned node_
             # comp val is proportional to n comparands:
-            if root.derH.Et[0] * ((len(N_)-1)*root.rng) > G_aves[1]*root.derH.Et[2]:
+            if root.derH.Et[0] * (max(0,(len(N_)-1)*root.rng)) > G_aves[1]*root.derH.Et[2]:
                 # agg+ / node_t, vs. sub+ / node_, always rng+:
                 agg_recursion(root, N_, fagg=1)
+                for N in root.node_t[0]+root.node_t[1]: fback_t[fd] += [N.derH if fd else N.derH.H[-1]]
+            else:  # feedback per subroot if any, else pruned node
+                for N in N_: fback_t[fd] += [N.derH if fd else N.derH.H[-1]]
         if any(fback_t):
             root.fback_t = fback_t
             feedback(root, fsub=0)
         root.node_[:] = node_t  # else keep root.node_
-
 
 def rng_node_(N_, Et, rng):  # comp Gs|kernels in agg+, links | link rim_t node rims in sub+
                              # ~ graph convolutional network without backprop
@@ -221,12 +223,12 @@ def comp_N(Link, iEt, rng=None, rev=None):  # rng,dir if fd, Link+=dderH, compar
 
     if fd:  # Clink Ns
         _A, A = _N.angle, N.angle if rev else [-d for d in N.angle] # reverse angle direction for left link
-        Et, rt, md_ = comp_ext(_N.span,N.span, _N.S,N.S/rn, _A,A)
+        Et, rt, md_ = comp_ext(2,2,_N.S,N.S/rn,_A,A)  # 2 nodes in nodet
         # Et, Rt, Md_ = comp_latuple(_G.latuple, G.latuple,rn,fagg=1)  # low-value comp in der+
         dderH.n = 1; dderH.Et = Et; dderH.relt = rt
         dderH.H = [CH(Et=copy(Et),relt=copy(rt),H=md_,n=1)]
     else:  # CG Ns
-        et, rt, md_ = comp_ext(len(_N.node_),len(N.node_), _N.S,N.S/rn, _N.A,N.A)
+        et, rt, md_ = comp_ext(len(_N.node_),len(N.node_),_N.S,N.S/rn,_N.A,N.A)
         Et, Rt, Md_ = comp_latuple(_N.latuple, N.latuple, rn,fagg=1)
         dderH.n = 1; dderH.Et = np.add(Et,et); dderH.relt = np.add(Rt,rt)
         dderH.H = [CH(Et=et,relt=rt,H=md_,n=.5),CH(Et=Et,relt=Rt,H=Md_,n=1)]
@@ -354,7 +356,7 @@ def segment_N_(root, iN_, fd, rng):
                     dderH = comp_N_(_xN_, xN_)
                     oV += (dderH.Et[fd] - ave * dderH.Et[2+fd])  # norm by R, * dist_coef * agg_coef?
             if oV > ave:
-                Gt[1] += [_L]
+                link_ += [_L]
                 merge(Gt,_Gt); N_.remove(_Gt)
 
     return [sum2graph(root, Gt, fd, rng) for Gt in N_]
@@ -405,6 +407,7 @@ def comp_N_(_node_, node_):  # compare partial graphs in merge
         dderH.n = 1; dderH.Et = et; dderH.relt = rt
         dderH.H = [CH(Et=copy(et),relt=copy(rt),H=md_,n=1)]
     else:
+        # skip iderH and latuple if empty in links
         _latuple, _iderH = _pars[6:]; latuple, iderH = pars[6:]
         Et, Rt, Md_ = comp_latuple(_latuple, latuple, rn, fagg=1)
         dderH.n = 1; dderH.Et = np.add(Et,et); dderH.relt = np.add(Rt,rt)
@@ -416,7 +419,6 @@ def comp_N_(_node_, node_):  # compare partial graphs in merge
 
     return dderH
 
-
 def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
     G_, Link_, _, _, Et = grapht
@@ -425,7 +427,7 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
     extH = CH()
     yx = [0,0]
     for G in G_:
-        extH.append_(G.extH,flat=1)if graph.extH else extH.add_(G.extH)
+        extH.append_(G.extH,flat=1) if graph.extH else extH.add_(G.extH)
         graph.area += G.area
         graph.box = extend_box(graph.box, G.box)
         if isinstance(G, CG):  # add latuple to Clink too?
@@ -445,7 +447,7 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
         graph.S += link.span
         graph.A = np.add(graph.A,link.angle)  # np.add(graph.A, [-link.angle[0],-link.angle[1]] if rev else link.angle)
         if fd: link.root = graph
-    graph.derH.append_(extH, flat=0)  # graph derH = node derHs + [summed Link_ derHs]
+    if extH: graph.derH.append_(extH, flat=0)  # graph derH = node derHs + [summed Link_ derHs]
     if fd:
         # assign alt graphs from d graph, after both linked m and d graphs are formed
         for link in graph.link_:
@@ -456,9 +458,9 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
                         G.alt_graph_ += [alt_G]
     return graph
 
-def feedback(root, root_fd, fsub=1):  # called from form_graph_, append new der layers to root
+def feedback(root, fsub=1):  # called from form_graph_, append new der layers to root
 
-    # each agg+ cycle may form one empty fork:
+    # agg+ may add one empty fork:
     DerH = deepcopy(root.fback_t[0].pop(0) if root.fback_t[0] else root.fback_t[1].pop(0))  # init DerH merged from both forks
     for fd in 0,1:
         while root.fback_t[fd]:
@@ -467,11 +469,3 @@ def feedback(root, root_fd, fsub=1):  # called from form_graph_, append new der 
         if DerH.Et[fd] > G_aves[fd] * DerH.Et[fd+2]:  # merge combined DerH into root.derH
             if fsub: root.derH.append_(DerH, flat=1)  # append higher layers
             else:    root.derH.add_(DerH)  # sum shared layers, append the rest
-
-    # recursive feedback, propagated when sub+ ends in all nodes of both forks:
-    if root.root and isinstance(root.root, CG):  # not Edge
-        rroot = root.root
-        if rroot:
-            rroot.fback_t[root_fd] += [DerH]
-            if all(len(f_) == len(rroot.node_) for f_ in rroot.fback_t):  # both forks of sub+ end for all nodes
-                feedback(rroot, root_fd=root_fd, fsub=fsub)  # sum2graph adds higher aggH, feedback adds deeper aggH layers
