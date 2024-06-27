@@ -1,7 +1,7 @@
 import numpy as np
 from collections import deque, defaultdict
 from copy import deepcopy, copy
-from itertools import zip_longest, combinations
+from itertools import zip_longest
 import sys
 sys.path.append("..")
 from frame_blobs import CBase, imread
@@ -60,7 +60,7 @@ class CcompSliceFrame(CsliceEdge):
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    def __init__(G, root=None, rng=1, fd=0, node_=None, link_=None, Et=None, n=0):  # we need P_ to init PP, Et in init graph
+    def __init__(G, root=None, rng=1, fd=0, node_=None, link_=None, Et=None, n=0):
         super().__init__()
         # PP:
         G.root = [] if root is None else root  # mgraphs that contain this G, single-layer
@@ -110,7 +110,7 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
         l.span = span  # distance between node centers
         l.latuple = [] if latuple is None else latuple  # sum node_
         l.yx = [0,0] if yx is None else yx  # sum node_
-        l.rim = []  # upper link links in der+
+        l.rim = []  # upper 2nd der links
         l.derH = CH() if derH is None else derH
         l.root = None if root is None else root  # PPds containing dP
         l.nmed = 0  # comp rng: n of mediating Ps between node_ Ps
@@ -135,7 +135,7 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
         He.Et = [0,0,0,0] if Et is None else Et   # evaluation tuple: valt, rdnt
         He.relt = [0,0] if relt is None else relt  # m,d relative to max possible m,d
         He.H = [] if H is None else H  # hierarchy of der layers or md_
-        He.root = None if root is None else root
+        # He.root = None if root is None else root
     def __bool__(H): return H.n != 0
 
     def add_(HE, He, irdnt=None):  # unpack down to numericals and sum them
@@ -213,12 +213,11 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
                 setattr(_H, attr, deepcopy(value))
 
 
-def ider_recursion(root, PP):  # node-mediated correlation clustering:
-    # keep same Ps and links, increment link derH, then P derH in sum2PP
+def second_der_(root, PP):  # node-mediated correlation clustering, increment link derH, then P derH in sum2PP
 
     comp_link_(PP)
-    form_PP_t(PP, PP.link_)  # calls der+: PP P_,link_'replace, derH+ or rng++: PP.link_+
-
+    form_PP_t(PP, PP.link_)
+    # no der++
     if PP.iderH:  # PPd feedback
         root.fback_ += [PP.iderH]
 
@@ -253,7 +252,6 @@ def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and conti
         else:
             _Pt_ = Pt_
             rng += 1
-    # der++ in PPds from rng++, no der++ inside rng++: high diff @ rng++ termination only?
     edge.rng=rng  # represents rrdn
     del edge.pre__
 
@@ -261,8 +259,8 @@ def comp_link_(PP):  # node_- mediated: comp node.rim dPs
 
     for dP in PP.link_:
         if dP.derH.Et[1] > aves[1]:
-           for nmed, _rim_ in enumerate(dP.nodet[0].rim_):  # link.nodet is CP in 1st der+
-               for _dP in _rim_:    # add fork for CdP node_?
+           for nmed, _rim_ in enumerate(dP.nodet[0].rim_):  # link.nodet is CP
+               for _dP in _rim_:
                    dlink = comp_P(_dP,dP)
                    if dlink:
                        dP.rim += [dlink]  # in lower node uplinks
@@ -271,7 +269,6 @@ def comp_link_(PP):  # node_- mediated: comp node.rim dPs
 def comp_P(_P,P, angle=None, distance=None):  # comp dPs if fd else Ps
 
     fd = isinstance(P,CdP)
-    aveP = P_aves[fd]
     if fd:
         # der+: comp dPs
         rn = _P.derH.n / P.derH.n
@@ -334,8 +331,10 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
             CP_ += cP_
     # eval PP.link_ for der+: correlation clustering, after form_PP_t -> P.root
     for PP in PP_t[1]:
+        if isinstance(PP.link_[0].nodet[0], CdP):
+            continue  # no der++ for Ps
         if PP.iderH.Et[0] * len(PP.link_) > ave_PPd * PP.iderH.Et[2]:
-            ider_recursion(root, PP)
+            second_der_(root, PP)
         if root.fback_:
             feedback(root)  # after der+ in all nodes, no single node feedback
 
@@ -468,7 +467,6 @@ if __name__ == "__main__":
             if _PP.node_: print(_PP, "has node_")
             for fd, PP_ in enumerate(_PP.node_):
                 if not PP_: continue
-
                 plt.imshow(mask, cmap='gray', alpha=0.5)
                 plt.title(f"Number of PPs: {len(PP_)}, {'der+' if fd else 'rng+'}")
                 for PP in PP_:
@@ -478,7 +476,6 @@ if __name__ == "__main__":
                         plt.plot(x, y, "ok")
                     for dP in PP.link_:
                         _node, node = dP.nodet
-                        assert isinstance(_node, CP)
                         if (_node.id, node.id) in nodet_set:  # verify link uniqueness
                             raise ValueError(
                                 f"link not unique between {_node} and {node}. PP.link_:\n" +
