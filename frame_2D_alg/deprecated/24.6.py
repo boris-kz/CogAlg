@@ -461,3 +461,132 @@ def form_graph_t(root, N_, Et, rng, root_fd):  # segment N_ to Nm_, Nd_
             node_t += [[]]
 
     return node_t
+
+def agg_recursion(root, N_, rng=1, fagg=0):  # rng for sub+'rng+ only
+
+    Et = [0,0,0,0]
+    N_,Et,_ = rng_node_(N_,Et,rng) if isinstance(N_[0], CG) else rng_link_(N_,Et)  # 1st call
+    rng += fagg  # was incremented above
+    fcompr,fcompd = 1,1
+    while fcompr or fcompd:  # eval comp recursion per fork, while any last-loop comp
+        fcompr,fcompd = 0,0
+        if Et[0] > ave*Et[2]:  # init rng+ via convolution
+            N_,Et, fcompr = rng_node_(N_,Et,rng) if isinstance(N_[0],CG) else rng_link_(N_,Et)
+            rng += 1
+        if Et[1] > ave*Et[3]:  # concat links from initial or recursive xcomp:
+            if isinstance(N_[0],CG): N_ = list(set([linkt[0] for N in N_ for linkt in N.rim]))
+            else:                    N_ = list(set([linkt[0] for N in N_ for linkt in N.rimt_[-1][0]+N.rimt_[-1][1]]))
+            add_der_attrs(link_= N_)
+            N_,Et, fcompd = rng_link_(N_,Et)  # N_ is higher-derivation links
+    # sub+, fback_ sum in sub_roots, passed to root fback_:
+    node_t = form_graph_t(root, N_, Et, rng)
+    if node_t:
+        for fd, node_ in zip((0,1), node_t):
+            N_ = [n for n in node_ if n.derH.Et[0] > G_aves[fd] * n.derH.Et[2]]  # pruned node_
+            # comp val is proportional to n comparands:
+            if root.derH.Et[0] * (max(0,(len(N_)-1)*root.rng)) > G_aves[1]*root.derH.Et[2]:
+                # agg+ / node_t, vs. sub+ / node_, always rng+:
+                agg_recursion(root, N_, fagg=1)
+        root.node_[:] = node_t
+    # else keep node_
+
+def rng_node_(N_, Et, rng):  # comp Gs|kernels in agg+, links | link rim_t node rims in sub+
+                             # ~ graph convolutional network without backprop
+    G_ = []
+    fcomp=0
+    for (_G, G) in list(combinations(N_,r=2)):  # eval comp_N-> G_
+        if _G in G.compared_: continue
+        dy,dx = np.subtract(_G.yx,G.yx)
+        dist = np.hypot(dy,dx)
+        aRad = (G.aRad+_G.aRad) / 2  # ave radius to eval relative distance between G centers:
+        if dist / max(aRad,1) <= max_dist * rng:
+            fcomp = 1; G.compared_ += [_G]; _G.compared_ += [G]
+            Link = Clink(nodet=[_G,G], span=2, angle=[dy,dx], box=extend_box(G.box,_G.box))
+            if comp_N(Link, Et):  # in highder der+ rng++, G maybe a Clink
+                for g in _G,G:
+                    if g not in G_: G_ += [g]
+                    if g.DerH: g.DerH.H[-1].add_(Link.derH)  # accum last DerH layer
+                    else:      g.DerH.append_(Link.derH, flat=0)  # init DerH layer with Link.derH
+    # def kernel rim per G:
+    for G in G_:
+        G.compared_ = []
+        G.krim = [link.nodet[0] if link.nodet[1] is G else link.nodet[1] for link, rev in G.rim]
+    n = 1  # n convolutions = n DerH layers
+    iG_ = copy(G_)  # copy a list of G_ with added DerH
+    while True:
+        _G_ = []  # rng+ convolution, cross-comp: recursive center node DerH += linked node derHs for next loop:
+        for G in G_:
+            for _G in G.krim:
+                if _G in G.compared_: continue
+                G.compared_ += [_G]; _G.compared_ += [G]
+                dderH = _G.DerH.H[-1].comp_(G.DerH.H[-1], dderH=CH(), rn=1, fagg=1, flat=1)  # comp last krims
+                if dderH.Et[0] > ave * dderH.Et[2]:
+                    for g in _G,G:  # bilateral assign
+                        g.DerH.H[-1].add_(dderH) if len(g.DerH.H)==n+1 else g.DerH.append_(dderH,flat=0)
+            # eval update to continue rng+/G:
+            if len(G.DerH.H)>n and G.DerH.H[-1].Et[0] - G.DerH.H[-2].Et[0] > ave:  # G.DerH may not be appended
+                _G_ += [G]
+        if _G_:
+            G_ = _G_
+            for _G in _G_: _G.compared_ = []  # reset in intermediate rng+ only, nest in sub+'rng+
+            n += 1
+        else:
+            break
+    for G in iG_:
+        delattr(G, "krim")
+        G.extH.append_(G.DerH, flat=0)  # for segmentation
+
+    return N_, Et, fcomp
+
+def rng_link_(N_, Et):  # comp Clinks: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
+
+    _mN_t_ = [[[N.nodet[0]],[N.nodet[1]]] for N in N_]  # rim-mediating nodes
+    fcomp = 0; rng = 1
+    L_ = N_[:]
+    while True:
+        mN_t_ = [[[],[]] for _ in L_]
+        for L, _mN_t, mN_t in zip(L_, _mN_t_, mN_t_):
+            for rev, _mN_, mN_ in zip((0,1), _mN_t, mN_t):
+                # comp L, _Ls: nodet mN 1st rim, -> rng+ _Ls/ rng+ mm..Ns:
+                rim_ = [n.rim if isinstance(n,CG) else n.rimt_[0][0] + n.rimt_[0][1] for n in _mN_]
+                for rim in rim_:
+                    for _L,_rev in rim:  # _L is reversed relative to its 2nd node
+                        if _L is L or _L in L.compared_: continue
+                        if not hasattr(_L,"rimt_"): add_der_attrs(link_=[_L])  # _L not in root.link_, same derivation
+                        fcomp = 1; L.compared_ += [_L]; _L.compared_ += [L]
+                        dy,dx = np.subtract(_L.yx,L.yx)
+                        Link = Clink(nodet=[_L,L], span=2, angle=[dy,dx], box=extend_box(_L.box, L.box))
+                        # L.rim_t += new Link
+                        if comp_N(Link, Et, rng, rev^_rev):  # negate ds if only one L is reversed
+                            # add rng+ mediating nodes to L, link order: nodet < L < rim_t, mN.rim || L
+                            mN_ += _L.nodet  # get _Ls in mN.rim
+                            if _L not in L_:  # not in root
+                                L_ += [_L]; mN_t_ += [[[],[]]]
+                            mN_t_[L_.index(_L)][1-rev] += L.nodet
+        _L_, _mN_t = [],[]
+        for L, mN_t in zip(L_, mN_t_):
+            if any(mN_t):
+                _L_ += [L]; _mN_t_ += [mN_t]
+        if _L_:
+            L_ = _L_; rng += 1
+        else:
+            break
+        # Lt_ = [(L, mN_t) for L, mN_t in zip(L_, mN_t_) if any(mN_t)]
+        # if Lt_: L_,_mN_t_ = map(list, zip(*Lt_))  # map list to convert tuple from zip(*)
+
+    return N_, Et, fcomp
+
+def feedback(root):  # in form_PP_, append new der layers to root PP, single vs. root_ per fork in agg+
+
+    HE = deepcopy(root.fback_.pop(0))
+    for He in root.fback_:
+        HE.add_(He)
+    root.iderH.add_(HE.H[-1] if isinstance(HE.H[0], CH) else HE)  # last md_ in H or sum md_
+
+    if root.root and isinstance(root.root, CG):
+        rroot = root.root  # single PP.root, can't be P
+        fback_ = rroot.fback_
+        node_ = rroot.node_[1] if rroot.node_ and isinstance(rroot.node_[0],list) else rroot.P_  # node_ is updated to node_t in sub+
+        fback_ += [HE]
+        if len(fback_)==len(node_):  # all nodes terminated and fed back
+            feedback(rroot)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
