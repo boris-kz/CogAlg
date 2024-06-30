@@ -68,7 +68,7 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
         if hasattr(edge, 'P_') and edge.latuple[-1] * (len(edge.P_)-1) > G_aves[0]:  # eval PP, rdn=1  (ave_PPm or G_aves[0]?)
             comp_slice(edge)
             # for agg+:
-            edge.derH=CH(); edge.link_= []; edge.fback_t=[[],[]]
+            edge.derH = CH(); edge.link_ = []; edge.fback_ = []
             node_t, link_t = [[],[]], [[],[]]
             for fd, node_ in enumerate(copy(edge.node_)):  # always node_t
                 if edge.iderH and any(edge.iderH.Et):   # any for np array
@@ -105,16 +105,17 @@ def agg_recursion(root, N_, fL, rng=1):  # fL: compare node-mediated links, else
         root.node_[:] = node_t
     # else keep root.node_
 
-def rng_node_(_N_, rng):  # forms discrete rng+ links, vs indirect rng+ in rng_kern_, still no sub_Gs / rng+
+def rng_node_(_N_, irng):  # forms discrete rng+ links, vs indirect rng+ in rng_kern_, still no sub_Gs / rng+
 
+    rng = irng; rN_ = []
     while True:
         N_, Et = rng_kern_(_N_, rng)  # incr rng
         if Et[0] > ave*Et[2]:
-            if rng==1: rN_ = N_  # return nodes with any added rim
+            if rng==irng: rN_ = N_[:]  # return nodes with any added rim
             rng += 1
             _N_ = N_
         else:
-            break
+             break
     return rN_, Et, rng
 
 def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backprop, not for Clinks?
@@ -138,20 +139,19 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
         G.compared_ = []
         G.krim = [link.nodet[0] if link.nodet[1] is G else link.nodet[1] for link, rev in G.rim]
     n = 1  # n convolutions = n DerH layers
-    iG_ = copy(G_)  # copy a list of G_ with added DerH
+    iG_ = copy(G_)  # G_ with added DerH
     while True:
         _G_ = []  # rng+ convolution, cross-comp: recursive center node DerH += linked node derHs for next loop:
         for G in G_:
             for _G in G.krim:
-                if _G in G.compared_: continue
+                if _G in G.compared_: continue  # was compared when _G was G
                 G.compared_ += [_G]; _G.compared_ += [G]
                 dderH = _G.DerH.H[-1].comp_(G.DerH.H[-1], dderH=CH(), rn=1, fagg=1, flat=1)  # comp last krim
                 if dderH.Et[0] > ave * dderH.Et[2] * n:  # n adds to costs
                     for g in _G,G:  # bilateral assign
                         g.DerH.H[-1].add_(dderH) if len(g.DerH.H)==n+1 else g.DerH.append_(dderH,flat=0)
-                        # these layers are not represented in root?
             # eval update to continue rng+/G:
-            if G.DerH.H[-1].Et[0] > ave * G.DerH.H[-1].Et[2] * n:  # G.DerH may not be appended
+            if len(G.DerH.H > n) and G.DerH.H[-1].Et[0] > ave * G.DerH.H[-1].Et[2] * n:  # G.DerH may not be appended
                 _G_ += [G]  # else G kernel is not extended
         if _G_:
             G_ = _G_
@@ -284,9 +284,9 @@ def form_graph_t(root, N_, Et, rng):  # segment N_ to Nm_, Nd_
             node_t += [[]]
     for fd, graph_ in enumerate(node_t):  # mix forks fb
         for graph in graph_:
-            root.fback_ += [graph.derH] if fd else [graph.derH.H[-1]]  # rng+ adds single new layer
-            # sub+ -> sub root -> init root
-    if root.fback_: feedback(root)
+            root.fback_t[fd] += [graph.derH] if fd else [graph.derH.H[-1]]  # rng+ adds single new layer
+            # sub+-> sub root-> init root
+    if any(root.fback_t): feedback(root)
 
     return node_t
 
@@ -330,16 +330,16 @@ def segment_N_(root, iN_, fd, rng):
                 continue  # was merged
             oL_ = set(Lrim).intersection(set(_Gt[2])).union([_L])  # shared external links + potential _L # oL_ = [Lr[0] for Lr in _Gt[2] if Lr in Lrim]
             oV = sum([L.derH.Et[fd] - ave * L.derH.Et[2+fd] for L in oL_])
-            _node_ = _Gt[0]; _Nrim = _Gt[3][1]
-            # Nrim similarity = V + (G,_G olp), if potential olp:
-            if len(Nrim) / len(node_) > ave_L or len(_Nrim) / len(_node_) > ave_L:
-                sN_ = set(node_); _sN_ = set(_Gt[0])
-                oN_ = sN_.intersection(_sN_)  # Nrim overlap
-                xN_ = list(sN_- oN_) # exclusive node_
-                _xN_ = list(_sN_- oN_)
-                if _xN_ and xN_:
-                    dderH = comp_N_(_xN_, xN_)
-                    oV += (dderH.Et[fd] - ave * dderH.Et[2+fd])  # norm by R, * dist_coef * agg_coef?
+            # eval by Nrim similarity = oV + olp between G,_G,
+            # if preval by max olp: _node_ = _Gt[0]; _Nrim = _Gt[3][0],
+            # if len(Nrim)/len(node_) > ave_L or len(_Nrim)/len(_node_) > ave_L:
+            sN_ = set(node_); _sN_ = set(_Gt[0])
+            oN_ = sN_.intersection(_sN_)  # Nrim overlap
+            xN_ = list(sN_- oN_) # exclusive node_
+            _xN_ = list(_sN_- oN_)
+            if _xN_ and xN_:
+                dderH = comp_N_(_xN_, xN_)
+                oV += (dderH.Et[fd] - ave * dderH.Et[2+fd])  # norm by R, * dist_coef * agg_coef?
             if oV > ave:
                 link_ += [_L]
                 merge(Gt,_Gt); N_.remove(_Gt)
@@ -446,10 +446,17 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
 
 def feedback(root):  # called from form_graph_, always sub+, append new der layers to root
 
-    DerH = CH()
-    for derH in root.fback_.pop():  # combined dderH_ from sub_Gs
-        if DerH: DerH.H[-1].add_(derH)
-        else:    DerH.append_(derH, flat=0)
+    for fd, fback_ in zip((0,1), root.fback_t):
+        DerH = CH()
+        while root.fback_:
+            derH = root.fback_.pop()  # dderH_ from sub_Gs
+            if DerH: DerH.H[-1].add_(derH)
+            else:    DerH.append_(derH, flat=0)
+        if fd:
+            if _DerH: DerH = _DerH.append(DerH, flat=1)  # DerHd
+            # or need to represent empty DerHm too?
+        else: _DerH = DerH  # DerHm
+
     m,d, mr,dr = DerH.Et
     if m+d > sum(G_aves) * (mr+dr):
         root.derH.append_(DerH, flat=1)  # append new derLays
