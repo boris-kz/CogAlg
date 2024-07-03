@@ -82,7 +82,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         # dynamic attrs:
         G.Rim = []  # links to the most mediated nodes
         G.fback_t = [[],[]]  # dderHm_, dderHd_
-        G.compared_ = []
+        G.compared__ = []  # nested in rng++
         # Rdn: int = 0  # for accumulation or separate recursion count?
         # it: list = z([None,None])  # graph indices in root node_s, implicitly nested
         # depth: int = 0  # n sub_G levels over base node_, max across forks
@@ -161,6 +161,8 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
         HE.Et = np.add(HE.Et, He.Et); HE.relt = np.add(HE.relt, He.relt)
         if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
         HE.n += He.n
+
+        return HE  # for feedback in agg+
 
     def comp_(_He, He, dderH, rn=1, fagg=0, flat=1, frev=0):  # unpack tuples (formally lists) down to numericals and compare them
 
