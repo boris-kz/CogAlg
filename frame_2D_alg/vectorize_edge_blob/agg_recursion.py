@@ -98,8 +98,7 @@ def agg_recursion(root, N_, fL, rng=1):  # fL: compare node-mediated links, else
     node_t = form_graph_t(root, N_, Et, rng)  # rng for sub+, sub_Gs += fback_
     if node_t:
         for fd, node_ in zip((0,1), node_t):
-            N_ = [n for n in node_ if n.derH.Et[fd] > G_aves[fd] * n.derH.Et[2+fd]]
-            # prune node_
+            N_ = [n for n in node_ if n.derH.Et[fd] > G_aves[fd] * n.derH.Et[2+fd]]  # prune node_
             if root.derH.Et[0] * (max(0,(len(N_)-1)*root.rng)) > G_aves[1]*root.derH.Et[2]:
                 # agg+: rng+ val *= n comparands, forms CGs:
                 agg_recursion(root, N_, fL=0)
@@ -108,62 +107,60 @@ def agg_recursion(root, N_, fL, rng=1):  # fL: compare node-mediated links, else
 
 def rng_node_(_N_, rng):  # forms discrete rng+ links, vs indirect rng+ in rng_kern_, still no sub_Gs / rng+
 
+    rEt = [0,0,0,0]
+    n = 0
     while True:
-        for G in _N_:
-            G.extH.H += [CH()]; G.compared__ += [[]]
         N_, Et = rng_kern_(_N_, rng)  # += rng layer
+        if not n: rN_ = N_
+        n += 1
+        rEt = [V+v for V, v in zip(rEt, Et)]
         if Et[0] > ave * Et[2]:
             rng += 1; _N_ = N_
         else:
             for G in _N_: G.extH.H.pop()  # low-value extH layer
             break
-    return N_, Et, rng
+    return rN_, rEt, rng
 
 def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backprop, not for Clinks
 
     G_ = []
     Et = [0,0,0,0]
     for (_G, G) in list(combinations(N_,r=2)):
-        if _G in [G for compared_ in G.compared__ for G in compared_]:  # in any rng++
+        if _G in [G for compared_ in G.compared__ for G in compared_]:  # compared in any rng++
             continue
         dy,dx = np.subtract(_G.yx,G.yx)
         dist = np.hypot(dy,dx)
         aRad = (G.aRad+_G.aRad) / 2  # ave radius to eval relative distance between G centers:
         if dist / max(aRad,1) <= max_dist * rng:
-            G.compared__[-1] += [_G]; _G.compared__[-1] += [G]
+            for _g,g in (_G,G),(G,_G):
+                if len(g.extH.H)==rng: g.compared__[-1]+=[_g]
+                else: g.compared__ += [[_g]] # init layer
             Link = Clink(nodet=[_G,G], span=2, angle=[dy,dx], box=extend_box(G.box,_G.box))
-            if comp_N(Link, Et):
-                ''' move to comp_N:
+            if comp_N(Link, Et, rng):
                 for g in _G,G:
                     if g not in G_: G_ += [g]
-                    DerH = g.extH.H[-1]
-                    if DerH: DerH.H[-1].add_(Link.derH)  # accum last DerH layer
-                    else:    DerH.append_(Link.derH, flat=0)  # init DerH layer with Link.derH
-                '''
-    # + kernel rim per G:
+    # + G kernel rim:
     for G in G_:
-        G.compared__ += [[]]
+        G.compared__ += [[]]  # temporary
         G.krim = [link.nodet[0] if link.nodet[1] is G else link.nodet[1] for link, rev in G.rim]
-    n = 1  # n convolutions = len DerH
-    iG_ = copy(G_)  # has added DerH
+    n = 1  # n convolutions = len extH.H[-1]
+    iG_ = copy(G_)  # has added extLay
     while True:
         _G_ = []  # rng+ convolution, cross-comp: recursive center node DerH += linked node derHs for next loop:
         for G in G_:
-            H = G.derH  # comparand
-            eH = G.extH  # comp ders
+            H,eH = G.derH, G.extH  # comparand, ders
             for _G in G.krim:
                 if _G in [G for compared_ in G.compared__ for G in compared_]:  # in any rng++ or when _G was G
                     continue
                 G.compared__[-1] += [_G]; _G.compared__[-1] += [G]
-                _H = _G.derH  # comparand
-                _eH = _G.derH  # comp ders
+                _H,_eH = _G.derH, _G.extH  # comparand, ders
                 dderH = _H.comp_(H, dderH=CH(), rn=1, fagg=1, flat=1)  # comp last krim
-                if dderH.Et[0] > ave * dderH.Et[2] * n:  # n adds to costs
-                    for eh in _eH, eH:
-                        eh.H[n].add_(dderH) if len(eh.H)>=n+1 else eh.append_(dderH,flat=0)  # bilateral assign
-            eh  = G.extH
-            if len(eh.H) > n and eh.H[-1].Et[0] > ave * eh.H[-1].Et[2] * n:  # G.extH may not be appended
-                _G_ += [G]   # else G kernel is not extended
+                if dderH.Et[0] > ave * dderH.Et[2] * (n+1):  # n adds to costs
+                    for h in _eH, eH:
+                        h.H[n].add_(dderH) if len(h.H)>=n+1 else h.append_(dderH,flat=0)  # bilateral assign
+            h = G.extH
+            if len(h.H) > n and h.H[-1].Et[0] > ave * h.H[-1].Et[2] * n:  # G.extH may not be appended
+                _G_ += [G]  # else G kernel is not extended
         if _G_:
             G_ = _G_
             for _G in _G_: _G.compared__[-1] = []  # reset in intermediate rng+, nest in rng++
@@ -171,7 +168,6 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
         else:
             for G in iG_: delattr(G, "krim")
             break
-
     return iG_, Et  # Gs with added rim
 
 
@@ -215,7 +211,7 @@ def rng_link_(_L_):  # comp Clinks: der+'rng+ in root.link_ rim_t node rims: dir
 
     return rL_, Et, rng
 
-def comp_N(Link, iEt, rng=None, rev=None):  # rng,dir if fd, Link+=dderH, comparand rim+=Link
+def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link+=dderH, comparand rim+=Link
 
     fd = rev is not None  # compared links have binary relative direction?
     dderH = CH(); _N, N = Link.nodet; rn = _N.n / N.n
@@ -259,6 +255,11 @@ def comp_N(Link, iEt, rng=None, rev=None):  # rng,dir if fd, Link+=dderH, compar
                     node.rimt_ += [[[[Link,rev]],[]]] if dir else [[[],[[Link,rev]]]]  # add rng layer
             else:
                 node.rim += [[Link,rev]]
+                eH = node.extH
+                if len(eH.H)==rng:  # accum last layer
+                    eH.H[-1].add_(Link.derH)
+                else:               # init last layer
+                    eH.H.append_(Link.derH, flat=0)
         return True
 
 def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
@@ -342,11 +343,11 @@ def segment_N_(root, iN_, fd, rng):
             oL_ = set(Lrim).intersection(set(_Gt[2])).union([_L])  # shared external links + potential _L # oL_ = [Lr[0] for Lr in _Gt[2] if Lr in Lrim]
             oV = sum([L.derH.Et[fd] - ave * L.derH.Et[2+fd] for L in oL_])
             # eval by Nrim similarity = oV + olp between G,_G,
-            # if preval by max olp: _node_ = _Gt[0]; _Nrim = _Gt[3][0],
+            # ?pre-eval by max olp: _node_ = _Gt[0]; _Nrim = _Gt[3][0],
             # if len(Nrim)/len(node_) > ave_L or len(_Nrim)/len(_node_) > ave_L:
             sN_ = set(node_); _sN_ = set(_Gt[0])
             oN_ = sN_.intersection(_sN_)  # Nrim overlap
-            xN_ = list(sN_- oN_) # exclusive node_
+            xN_ = list(sN_- oN_)  # exclusive node_
             _xN_ = list(_sN_- oN_)
             if _xN_ and xN_:
                 dderH = comp_N_(_xN_, xN_)

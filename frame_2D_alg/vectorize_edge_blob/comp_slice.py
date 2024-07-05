@@ -128,7 +128,8 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
         He.Et = [0,0,0,0] if Et is None else Et   # evaluation tuple: valt, rdnt
         He.relt = [0,0] if relt is None else relt  # m,d relative to max possible m,d
         He.H = [] if H is None else H  # hierarchy of der layers or md_
-        # He.root = None if root is None else root
+        He.root = None if root is None else root
+
     def __bool__(H): return H.n != 0
 
     def add_(HE, He, irdnt=None):  # unpack down to numericals and sum them
@@ -151,6 +152,12 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
             HE.n += He.n  # combined param accumulation span
         else:
             HE.copy(He)  # initialization
+        root = HE.root
+        while root:
+            root.Et = np.add(root.Et, He.Et)
+            root.relt = np.add(root.relt, He.relt)
+            root.n += He.n
+            root = root.root
 
     def append_(HE,He, irdnt=None, flat=0):
 
@@ -161,8 +168,14 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
         HE.Et = np.add(HE.Et, He.Et); HE.relt = np.add(HE.relt, He.relt)
         if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
         HE.n += He.n
-
+        root = HE.root
+        while root:
+            root.Et = np.add(root.Et, He.Et)
+            root.relt = np.add(root.relt, He.relt)
+            root.n += He.n
+            root = root.root
         return HE  # for feedback in agg+
+
 
     def comp_(_He, He, dderH, rn=1, fagg=0, flat=1, frev=0):  # unpack tuples (formally lists) down to numericals and compare them
 
