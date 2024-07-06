@@ -115,9 +115,9 @@ def rng_node_(_N_, rng):  # forms discrete rng+ links, vs indirect rng+ in rng_k
         n += 1
         rEt = [V+v for V, v in zip(rEt, Et)]
         if Et[0] > ave * Et[2]:
-            rng += 1; _N_ = N_
+            rng += 1
+            _N_ = N_
         else:
-            for G in _N_: G.extH.H.pop()  # low-value extH layer
             break
     return rN_, rEt, rng
 
@@ -133,40 +133,42 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
         aRad = (G.aRad+_G.aRad) / 2  # ave radius to eval relative distance between G centers:
         if dist / max(aRad,1) <= max_dist * rng:
             for _g,g in (_G,G),(G,_G):
-                if len(g.extH.H)==rng: g.compared__[-1]+=[_g]
-                else: g.compared__ += [[_g]] # init layer
+                if len(g.extH.H)==rng: g.compared__[-1] += [_g]
+                else: g.compared__ += [[_g]]  # init layer
             Link = Clink(nodet=[_G,G], span=2, angle=[dy,dx], box=extend_box(G.box,_G.box))
             if comp_N(Link, Et, rng):
                 for g in _G,G:
                     if g not in G_: G_ += [g]
-    # + G kernel rim:
+    compared__=[]
     for G in G_:
-        G.compared__ += [[]]  # temporary
+        compared__ += [G.compared_[-1]]  # buffer full compared_s
         G.krim = [link.nodet[0] if link.nodet[1] is G else link.nodet[1] for link, rev in G.rim]
     n = 1  # n convolutions = len extH.H[-1]
-    iG_ = copy(G_)  # has added extLay
+    iG_ = copy(G_)  # has ext_Lay
     while True:
         _G_ = []  # rng+ convolution, cross-comp: recursive center node DerH += linked node derHs for next loop:
         for G in G_:
-            H,eH = G.derH, G.extH  # comparand, ders
+            G.compared__[-1] = []  # reset per krim
+            H,eH = G.derH, G.extH  # comparand,ders
             for _G in G.krim:
                 if _G in [G for compared_ in G.compared__ for G in compared_]:  # in any rng++ or when _G was G
                     continue
                 G.compared__[-1] += [_G]; _G.compared__[-1] += [G]
-                _H,_eH = _G.derH, _G.extH  # comparand, ders
-                dderH = _H.comp_(H, dderH=CH(), rn=1, fagg=1, flat=1)  # comp last krim
-                if dderH.Et[0] > ave * dderH.Et[2] * (n+1):  # n adds to costs
+                _H,_eH = _G.derH, _G.extH  # comparand,ders
+                dH = _H.comp_(H, DH=CH(),rn=1,fagg=1,flat=1)  # comp last krim
+                deH = _eH.comp_(eH[:-1], DH=CH(),rn=1,fagg=1,flat=1)  # no comp last rng: incomplete
+                dH.append_(deH)
+                if dH.Et[0] > ave * dH.Et[2] * (n+1):  # n adds to costs
                     for h in _eH, eH:
-                        h.H[n].add_(dderH) if len(h.H)>=n+1 else h.append_(dderH,flat=0)  # bilateral assign
+                        h.H[n].add_(dH) if len(h.H)>=n+1 else h.append_(dH,flat=0)  # bilateral assign
             h = G.extH
             if len(h.H) > n and h.H[-1].Et[0] > ave * h.H[-1].Et[2] * n:  # G.extH may not be appended
                 _G_ += [G]  # else G kernel is not extended
         if _G_:
-            G_ = _G_
-            for _G in _G_: _G.compared__[-1] = []  # reset in intermediate rng+, nest in rng++
-            n += 1
+            G_ = _G_; n += 1
         else:
-            for G in iG_: delattr(G, "krim")
+            for G, compared_ in zip (iG_, compared__):
+                G.compared__[-1] = compared_; delattr(G, "krim")
             break
     return iG_, Et  # Gs with added rim
 
@@ -214,35 +216,35 @@ def rng_link_(_L_):  # comp Clinks: der+'rng+ in root.link_ rim_t node rims: dir
 def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link+=dderH, comparand rim+=Link
 
     fd = rev is not None  # compared links have binary relative direction?
-    dderH = CH(); _N, N = Link.nodet; rn = _N.n / N.n
+    dH = CH(); _N, N = Link.nodet; rn = _N.n / N.n
 
     if fd:  # Clink Ns
         _A, A = _N.angle, N.angle if rev else [-d for d in N.angle] # reverse angle direction for left link
         Et, rt, md_ = comp_ext(2,2,_N.S,N.S/rn,_A,A)  # 2 nodes in nodet
         # Et, Rt, Md_ = comp_latuple(_G.latuple, G.latuple,rn,fagg=1)  # low-value comp in der+
-        dderH.n = 1; dderH.Et = Et; dderH.relt = rt
-        dderH.H = [CH(Et=copy(Et),relt=copy(rt),H=md_,n=1)]
+        dH.n = 1; dH.Et = Et; dH.relt = rt
+        dH.H = [CH(Et=copy(Et),relt=copy(rt),H=md_,n=1)]
     else:  # CG Ns
         et, rt, md_ = comp_ext(len(_N.node_),len(N.node_),_N.S,N.S/rn,_N.A,N.A)
         Et, Rt, Md_ = comp_latuple(_N.latuple, N.latuple, rn,fagg=1)
-        dderH.n = 1; dderH.Et = np.add(Et,et); dderH.relt = np.add(Rt,rt)
-        dderH.H = [CH(Et=et,relt=rt,H=md_,n=.5),CH(Et=Et,relt=Rt,H=Md_,n=1)]
+        dH.n = 1; dH.Et = np.add(Et,et); dH.relt = np.add(Rt,rt)
+        dH.H = [CH(Et=et,relt=rt,H=md_,n=.5),CH(Et=Et,relt=Rt,H=Md_,n=1)]
         if N.iderH:  # not in Clink N
-            _N.iderH.comp_(N.iderH, dderH, rn, fagg=1, flat=0)
+            _N.iderH.comp_(N.iderH, dH, rn, fagg=1, flat=0)
     # / N, if >1 PPs | Gs:
-    if _N.derH and N.derH: _N.derH.comp_(N.derH, dderH, rn, fagg=1, flat=0, frev=rev)  # append and sum new dderH to base dderH
-    if _N.extH and N.extH: _N.extH.comp_(N.extH, dderH, rn, fagg=1, flat=1, frev=rev)
+    if _N.derH and N.derH: _N.derH.comp_(N.derH, dH, rn, fagg=1, flat=0, frev=rev)  # append and sum new dH to base dH
+    if _N.extH and N.extH: _N.extH.comp_(N.extH, dH, rn, fagg=1, flat=1, frev=rev)
 
-    if fd: Link.derH.append_(dderH, flat=1)  # append dderH.H to link.derH.H
-    else:  Link.derH = dderH
-    iEt[:] = np.add(iEt,dderH.Et)  # init eval rng+ and form_graph_t by total m|d?
+    if fd: Link.derH.append_(dH, flat=1)  # append dH.H to link.derH.H
+    else:  Link.derH = dH
+    iEt[:] = np.add(iEt,dH.Et)  # init eval rng+ and form_graph_t by total m|d?
     fin = 0
     for i in 0,1:
-        Val, Rdn = dderH.Et[i::2]
+        Val, Rdn = dH.Et[i::2]
         if Val > G_aves[i] * Rdn: fin = 1
         _N.Et[i] += Val; N.Et[i] += Val  # not selective
         _N.Et[2+i] += Rdn; N.Et[2+i] += Rdn  # per fork link in both Gs
-        # if select fork links: iEt[i::2] = [V+v for V,v in zip(iEt[i::2], dderH.Et[i::2])]
+        # if select fork links: iEt[i::2] = [V+v for V,v in zip(iEt[i::2], dH.Et[i::2])]
     if fin:
         Link.n = min(_N.n,N.n)  # comp shared layers
         Link.yx = np.add(_N.yx, N.yx) / 2
@@ -256,11 +258,10 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link+=dderH, comparand rim+=
             else:
                 node.rim += [[Link,rev]]
                 eH = node.extH
-                if len(eH.H)==rng:  # accum last layer
-                    eH.H[-1].add_(Link.derH)
-                else:               # init last layer
-                    eH.H.append_(Link.derH, flat=0)
+                if len(eH.H)==rng: eH.H[-1].add_(Link.derH)  # accum last layer
+                else:  eH.append_(Link.derH, flat=0)  # init last layer
         return True
+
 
 def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
 

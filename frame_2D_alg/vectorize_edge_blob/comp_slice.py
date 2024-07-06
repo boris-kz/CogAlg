@@ -142,6 +142,7 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
                     if lay:  # to be summed
                         if Lay is None: Lay = deepcopy(lay)
                         else: Lay.add_(lay, irdnt)  # recursive unpack to sum md_s
+                    Lay.root = HE
                     H += [Lay]
                 HE.H = H
             else:
@@ -153,31 +154,35 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
         else:
             HE.copy(He)  # initialization
         root = HE.root
-        while root:
-            root.Et = np.add(root.Et, He.Et)
-            root.relt = np.add(root.relt, He.relt)
-            root.n += He.n
-            root = root.root
+        HE.root.update_root(He)
 
     def append_(HE,He, irdnt=None, flat=0):
 
         if irdnt is None: irdnt = []
-        if flat: HE.H += deepcopy(He.H)  # append flat
-        else:    HE.H += [He]  # append nested
+        if flat:
+            for H in He.H:
+                if isinstance(H, CH): H.root = HE
+            HE.H += He.H  # append flat
+        else:
+            He.root = HE
+            HE.H += [He]  # append nested
         Et, et = HE.Et, He.Et
         HE.Et = np.add(HE.Et, He.Et); HE.relt = np.add(HE.relt, He.relt)
         if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
         HE.n += He.n
-        root = HE.root
+        HE.root.update_root(He)
+
+        return HE  # for feedback in agg+
+
+    def update_root(root, He):
+
         while root:
             root.Et = np.add(root.Et, He.Et)
             root.relt = np.add(root.relt, He.relt)
             root.n += He.n
             root = root.root
-        return HE  # for feedback in agg+
 
-
-    def comp_(_He, He, dderH, rn=1, fagg=0, flat=1, frev=0):  # unpack tuples (formally lists) down to numericals and compare them
+    def comp_(_He, He, DH, rn=1, fagg=0, flat=1, frev=0):  # unpack tuples (formally lists) down to numericals and compare them
 
         n = 0
         if isinstance(_He.H[0], CH):  # _lay and lay is He_, they are aligned
@@ -187,8 +192,8 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
             for _lay,lay in zip(_He.H,He.H):  # md_| ext| derH| subH| aggH, eval nesting, unpack,comp ds in shared lower layers:
                 if _lay and lay:  # ext is empty in single-node Gs
                     dlay = _lay.comp_(lay, CH(), rn, fagg=fagg, flat=1, frev=frev)  # dlay is dderH, frev in agg+ only
-                    Et = np.add(Et, dlay.Et)
-                    relt = np.add(relt, dlay.relt)
+                    Et = np.add(Et,dlay.Et)
+                    relt = np.add(relt,dlay.relt)
                     dH += [dlay]; n += dlay.n
                 else:
                     dH += [CH()]  # empty?
@@ -213,10 +218,10 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
             Et = [vm,vd,rm,rd]; relt= [decm,decd]
             n = len(_He.H)/12  # unit n = 6 params, = 12 in md_
 
-        dderH.append_(CH(Et=Et, relt=relt, H=dH, n=n), flat=flat)  # currently flat=1
-        return dderH
+        return DH.append_(CH(Et=Et, relt=relt, H=dH, n=n), flat=flat)  # currently flat=1
 
     def copy(_H, H):
+
         for attr, value in H.__dict__.items():
             if attr != '_id' and attr in _H.__dict__.keys():  # copy only the available attributes and skip id
                 setattr(_H, attr, deepcopy(value))
