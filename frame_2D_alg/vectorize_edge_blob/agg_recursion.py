@@ -68,14 +68,14 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
         if hasattr(edge, 'P_') and edge.latuple[-1] * (len(edge.P_)-1) > G_aves[0]:  # eval PP, rdn=1  (ave_PPm or G_aves[0]?)
             comp_slice(edge)
             # for agg+:
-            edge.derH = CH(); edge.link_ = []; edge.fback_t = [[],[]]
+            edge.link_ = []; edge.fback_t = [[],[]]
             node_t, link_t = [[],[]], [[],[]]
             for fd, node_ in enumerate(copy(edge.node_)):  # always node_t
-                if edge.iderH and any(edge.iderH.Et):   # any for np array
-                    if edge.iderH.Et[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.iderH.Et[2+fd]:
+                if edge.derH and any(edge.derH.Et):   # any for np array
+                    if edge.derH.Et[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.derH.Et[2+fd]:
                         pruned_node_ = []
                         for PP in node_:  # PP -> G
-                            if PP.iderH and PP.iderH.Et[fd] > G_aves[fd] * PP.iderH.Et[2+fd]:  # v> ave*r
+                            if PP.derH and PP.derH.Et[fd] > G_aves[fd] * PP.derH.Et[2+fd]:  # v> ave*r
                                 PP.root_ = []  # no feedback to edge?
                                 PP.node_ = PP.P_  # revert node_
                                 y0,x0,yn,xn = PP.box
@@ -141,7 +141,7 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
                     if g not in G_: G_ += [g]
     compared__=[]
     for G in G_:
-        compared__ += [G.compared_[-1]]  # buffer full compared_s
+        compared__ += [G.compared__[-1]]  # buffer full compared_s
         G.krim = [link.nodet[0] if link.nodet[1] is G else link.nodet[1] for link, rev in G.rim]
     n = 1  # n convolutions = len extH.H[-1]
     iG_ = copy(G_)  # has ext_Lay
@@ -154,9 +154,9 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
                 if _G in [G for compared_ in G.compared__ for G in compared_]:  # in any rng++ or when _G was G
                     continue
                 G.compared__[-1] += [_G]; _G.compared__[-1] += [G]
-                _H,_eH = _G.derH, _G.extH  # comparand,ders
+                _H,_eH = _G.derH, _G.extH  # comparand, ders
                 dH = _H.comp_(H, DH=CH(),rn=1,fagg=1,flat=1)  # comp last krim
-                deH = _eH.comp_(eH[:-1], DH=CH(),rn=1,fagg=1,flat=1)  # no comp last rng: incomplete
+                deH = _eH.comp_(eH, DH=CH(),rn=1,fagg=1,flat=1)  # skip last rng: incomplete?
                 dH.append_(deH)
                 if dH.Et[0] > ave * dH.Et[2] * (n+1):  # n adds to costs
                     for h in _eH, eH:
@@ -213,29 +213,31 @@ def rng_link_(_L_):  # comp Clinks: der+'rng+ in root.link_ rim_t node rims: dir
 
     return rL_, Et, rng
 
+# G.derH = [der_latuple, der_iderH,.. der_ext]?
+
 def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link+=dderH, comparand rim+=Link
 
     fd = rev is not None  # compared links have binary relative direction?
     dH = CH(); _N, N = Link.nodet; rn = _N.n / N.n
 
     if fd:  # Clink Ns
-        _A, A = _N.angle, N.angle if rev else [-d for d in N.angle] # reverse angle direction for left link
-        Et, rt, md_ = comp_ext(2,2,_N.S,N.S/rn,_A,A)  # 2 nodes in nodet
-        # Et, Rt, Md_ = comp_latuple(_G.latuple, G.latuple,rn,fagg=1)  # low-value comp in der+
-        dH.n = 1; dH.Et = Et; dH.relt = rt
-        dH.H = [CH(Et=copy(Et),relt=copy(rt),H=md_,n=1)]
+        _N.derH.comp_(N.derH, dH, rn, fagg=1, flat=0, frev=rev)  # append and sum new dH to base dH
+        # reverse angle direction for left link:
+        _A, A = _N.angle, N.angle if rev else [-d for d in N.angle]
+        Et, rt, md_ = comp_ext(2,2, _N.S,N.S/rn, _A,A)  # 2 nodes in nodet
+        dH.append_(CH(Et=Et,relt=rt,H=md_,n=0.5,root=dH), flat=0)  # der_ext is top layer
     else:  # CG Ns
-        et, rt, md_ = comp_ext(len(_N.node_),len(N.node_),_N.S,N.S/rn,_N.A,N.A)
-        Et, Rt, Md_ = comp_latuple(_N.latuple, N.latuple, rn,fagg=1)
-        dH.n = 1; dH.Et = np.add(Et,et); dH.relt = np.add(Rt,rt)
-        dH.H = [CH(Et=et,relt=rt,H=md_,n=.5),CH(Et=Et,relt=Rt,H=Md_,n=1)]
-        if N.iderH:  # not in Clink N
-            _N.iderH.comp_(N.iderH, dH, rn, fagg=1, flat=0)
+        et, rt, md_ = comp_latuple(_N.latuple, N.latuple, rn,fagg=1)
+        # init dH with der_latuple:
+        dH.append_(CH(Et=et,relt=rt, H=md_,n=1,root=dH), flat=0)
+        _N.derH.comp_(N.derH, dH,rn,fagg=1,flat=1,frev=rev)  # += dderH
+        Et, Rt, Md_ = comp_ext(len(_N.node_),len(N.node_),_N.S,N.S/rn,_N.A,N.A)
+        dH.append_(CH(Et=Et,relt=Rt,H=Md_,n=0.5,root=dH), flat=0)  # dH += [der_ext]
     # / N, if >1 PPs | Gs:
-    if _N.derH and N.derH: _N.derH.comp_(N.derH, dH, rn, fagg=1, flat=0, frev=rev)  # append and sum new dH to base dH
-    if _N.extH and N.extH: _N.extH.comp_(N.extH, dH, rn, fagg=1, flat=1, frev=rev)
-
-    if fd: Link.derH.append_(dH, flat=1)  # append dH.H to link.derH.H
+    if _N.extH and N.extH:
+        _N.extH.comp_(N.extH, dH, rn, fagg=1, flat=1, frev=rev)
+    # link.derH += dH:
+    if fd: Link.derH.append_(dH, flat=1)
     else:  Link.derH = dH
     iEt[:] = np.add(iEt,dH.Et)  # init eval rng+ and form_graph_t by total m|d?
     fin = 0

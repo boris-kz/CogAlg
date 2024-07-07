@@ -54,7 +54,7 @@ class CcompSliceFrame(CsliceEdge):
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    def __init__(G, root=None, rng=1, fd=0, node_=None, link_=None, Et=None, n=0):
+    def __init__(G, root=None, rng=1, fd=0, node_=None, link_=None, Et=None, derH=None, n=0):
         super().__init__()
         # PP:
         G.root = [] if root is None else root  # mgraphs that contain this G, single-layer
@@ -64,9 +64,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.area = 0
         G.Et = [0,0,0,0] if Et is None else Et  # external eval tuple, summed from rng++ before forming new graph and appending G.extH
         G.latuple = [0,0,0,0,0,[0,0]]  # lateral I,G,M,Ma,L,[Dy,Dx]
-        G.iderH = CH() # summed from PPs
-        G.derH = CH()  # nested derH in Gs: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
-        G.DerH = CH()  # summed kernel rims
+        G.derH = CH() if derH is None else derH  # nested derH in Gs: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
         G.node_ = [] if node_ is None else node_  # convert to node_t in sub_recursion
         G.link_ = [] if link_ is None else link_  # links per comp layer, nest in rng+)der+
         G.aRad = 0  # average distance between graph center and node center
@@ -77,7 +75,6 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.n = n  # external n (last layer n)
         G.rim = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
         G.extH = CH()  # G-external daggH( dsubH( dderH, summed from rim links
-        G.ExtH = CH()  # summed link.DerH
         G.alt_graph_ = []  # adjacent gap+overlap graphs, vs. contour in frame_graphs
         # dynamic attrs:
         G.Rim = []  # links to the most mediated nodes
@@ -153,8 +150,7 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
             HE.n += He.n  # combined param accumulation span
         else:
             HE.copy(He)  # initialization
-        root = HE.root
-        HE.root.update_root(He)
+        if HE.root is not None: HE.root.update_root(He)
 
     def append_(HE,He, irdnt=None, flat=0):
 
@@ -170,13 +166,13 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
         HE.Et = np.add(HE.Et, He.Et); HE.relt = np.add(HE.relt, He.relt)
         if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
         HE.n += He.n
-        HE.root.update_root(He)
+        if HE.root is not None: HE.root.update_root(He)
 
         return HE  # for feedback in agg+
 
     def update_root(root, He):
 
-        while root:
+        while root is not None:
             root.Et = np.add(root.Et, He.Et)
             root.relt = np.add(root.relt, He.relt)
             root.n += He.n
@@ -223,13 +219,13 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
     def copy(_H, H):
 
         for attr, value in H.__dict__.items():
-            if attr != '_id' and attr in _H.__dict__.keys():  # copy only the available attributes and skip id
+            if attr != '_id' and attr != 'root' and attr in _H.__dict__.keys():  # copy only the available attributes and skip id
                 setattr(_H, attr, deepcopy(value))
 
 
 def comp_slice(edge):  # root function
 
-    edge.iderH = CH()
+    edge.derH = CH()
     for P in edge.P_:
         P.derH = CH()
         P.rim_ = []  # higher links for derH accum
@@ -238,14 +234,14 @@ def comp_slice(edge):  # root function
     form_PP_t(edge, edge.P_)
     fback_ = []
     for PP in edge.node_[1]:  # PPd_
-        if PP.iderH.Et[1] * len(PP.link_) > ave_PPd * PP.iderH.Et[3]:
+        if PP.derH.Et[1] * len(PP.link_) > ave_PPd * PP.derH.Et[3]:
             comp_link_(PP)  # node-mediated correlation clustering, increment link derH, then P derH in sum2PP:
             form_PP_t(PP, PP.link_)
-            if PP.iderH:
-                fback_ += [PP.iderH]
+            if PP.derH:
+                fback_ += [PP.derH]
     DerLay = CH()
     for derLay in fback_: DerLay.add_(derLay)  # append with single layer formed in comp_link
-    edge.iderH.append_(DerLay)
+    edge.derH.append_(DerLay)
 
 
 def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
@@ -362,9 +358,10 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
 
 def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
 
-    PP = CG(fd=fd, root=root, rng=root.rng+1)
+    PP = CG(fd=fd, root=root, derH=CH(H=[CH()]), rng=root.rng+1)  # 1st layer of derH is iderH
+    PP.derH.H[-1].root = PP.derH  # update root
     PP.P_ = P_  # P_ is CdPs if fd, but summed in CG PP?
-    iRt = root.iderH.Et[2:4] if root.iderH else [0,0]  # add to rdnt
+    iRt = root.derH.H[-1].Et[2:4] if root.derH else [0,0]  # add to rdnt
     # += uplinks:
     for dP in dP_:
         if dP.nodet[0] not in P_ or dP.nodet[1] not in P_: continue
@@ -381,14 +378,14 @@ def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
         PP.area += L; PP.n += L  # no + P.derH.n: current links only?
         PP.latuple = [P+p for P,p in zip(PP.latuple[:-1],P.latuple[:-1])] + [[A+a for A,a in zip(PP.latuple[-1],P.latuple[-1])]]
         if P.derH:
-            PP.iderH.add_(P.derH)  # no separate extH, the links are unique here
+            PP.derH.H[-1].add_(P.derH)  # sum in iderH, no separate extH, the links are unique
         if isinstance(P, CP):
             for y,x in P.yx_:
                 y = int(round(y)); x = int(round(x))  # summed with float dy,dx in slice_edge?
                 PP.box = accum_box(PP.box,y,x); celly_+=[y]; cellx_+=[x]
         if not fd: P.root = PP
-    if PP.iderH:
-        PP.iderH.Et[2:4] = [R+r for R,r in zip(PP.iderH.Et[2:4], iRt)]
+    if PP.derH:
+        PP.derH.Et[2:4] = [R+r for R,r in zip(PP.derH.Et[2:4], iRt)]
 
     if isinstance(P_[0], CP):  # CdP has no box, yx
         # pixmap:
