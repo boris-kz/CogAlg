@@ -125,6 +125,7 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
 
     G_ = []
     Et = [0,0,0,0]
+    # init conv kernels per N:
     for (_G, G) in list(combinations(N_,r=2)):
         if _G in [G for compared_ in G.compared__ for G in compared_]:  # compared in any rng++
             continue
@@ -143,7 +144,7 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
     for G in G_:
         compared__ += [G.compared__[-1]]  # buffer full compared_s
         G.krim = [link.nodet[0] if link.nodet[1] is G else link.nodet[1] for link, rev in G.rim]
-    n = 1  # n convolutions = len extH.H[-1]
+    n = 1  # n convolutions
     iG_ = copy(G_)  # has ext_Lay
     while True:
         _G_ = []  # rng+ convolution, cross-comp: recursive center node DerH += linked node derHs for next loop:
@@ -160,9 +161,15 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
                 dH.append_(deH)
                 if dH.Et[0] > ave * dH.Et[2] * (n+1):  # n adds to costs
                     for h in _eH, eH:
-                        h.H[n].add_(dH) if len(h.H)>=n+1 else h.append_(dH,flat=0)  # bilateral assign
+                        h.H[-1].H[n].add_(dH) if len(h.H[-1].H)>=n+1 else h.H[-1].append_(dH,flat=0)  # bilateral assign                                                                                        flat=0)  # bilateral assign
             h = G.extH
             if len(h.H) > n and h.H[-1].Et[0] > ave * h.H[-1].Et[2] * n:  # G.extH may not be appended
+                Dlay= CH(); lay = h.H[-1].H[0]; L = len(h.H[-1].H); i=1
+                while L>=i:
+                    _lay = lay; lay = h.H[-1].H[i]
+                    Dlay.add_(_lay.comp_(lay, DH=h.H[-1], rn=1,fagg=1,flat=1))
+                    i+=1
+                if Dlay.Et[0] < ave * Dlay.Et[2]: h.H[-1].H = []  # remove krim layers, keep only summed representation: h.H[-1]
                 _G_ += [G]  # else G kernel is not extended
         if _G_:
             G_ = _G_; n += 1
@@ -221,18 +228,17 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link+=dderH, comparand rim+=
     dH = CH(); _N, N = Link.nodet; rn = _N.n / N.n
 
     if fd:  # Clink Ns
-        _N.derH.comp_(N.derH, dH, rn, fagg=1, flat=0, frev=rev)  # append and sum new dH to base dH
+        _N.derH.comp_(N.derH, dH, rn, fagg=1, flat=1, frev=rev)  # dH += [*dderH]
         # reverse angle direction for left link:
         _A, A = _N.angle, N.angle if rev else [-d for d in N.angle]
         Et, rt, md_ = comp_ext(2,2, _N.S,N.S/rn, _A,A)  # 2 nodes in nodet
-        dH.append_(CH(Et=Et,relt=rt,H=md_,n=0.5,root=dH), flat=0)  # der_ext is top layer
+        dH.append_(CH(Et=Et,relt=rt,H=md_,n=0.5,root=dH),flat=0)  # dH += [dext]
     else:  # CG Ns
         et, rt, md_ = comp_latuple(_N.latuple, N.latuple, rn,fagg=1)
-        # init dH with der_latuple:
-        dH.append_(CH(Et=et,relt=rt, H=md_,n=1,root=dH), flat=0)
-        _N.derH.comp_(N.derH, dH,rn,fagg=1,flat=1,frev=rev)  # += dderH
-        Et, Rt, Md_ = comp_ext(len(_N.node_),len(N.node_),_N.S,N.S/rn,_N.A,N.A)
-        dH.append_(CH(Et=Et,relt=Rt,H=Md_,n=0.5,root=dH), flat=0)  # dH += [der_ext]
+        dH.append_(CH(Et=et,relt=rt,H=md_,n=1,root=dH),flat=0)  # dH = [dlatuple]
+        _N.derH.comp_(N.derH, dH,rn,fagg=1,flat=1,frev=rev)      # dH += [*dderH]
+        Et, Rt, Md_ = comp_ext(len(_N.node_),len(N.node_), _N.S,N.S/rn,_N.A,N.A)
+        dH.append_(CH(Et=Et,relt=Rt,H=Md_,n=0.5,root=dH),flat=0)  # dH += [dext]
     # / N, if >1 PPs | Gs:
     if _N.extH and N.extH:
         _N.extH.comp_(N.extH, dH, rn, fagg=1, flat=1, frev=rev)

@@ -229,18 +229,15 @@ def comp_slice(edge):  # root function
     for P in edge.P_:
         P.derH = CH()
         P.rim_ = []  # higher links for derH accum
-
-    rng_recursion(edge)  # vertical P cross-comp if lateral overlap, -> PP clustering:
+    # vertical P cross-comp -> PP clustering, if lateral overlap:
+    rng_recursion(edge)
     form_PP_t(edge, edge.P_)
-    fback_ = []
+    DerLay = CH()
     for PP in edge.node_[1]:  # PPd_
         if PP.derH.Et[1] * len(PP.link_) > ave_PPd * PP.derH.Et[3]:
             comp_link_(PP)  # node-mediated correlation clustering, increment link derH, then P derH in sum2PP:
             form_PP_t(PP, PP.link_)
-            if PP.derH:
-                fback_ += [PP.derH]
-    DerLay = CH()
-    for derLay in fback_: DerLay.add_(derLay)  # append with single layer formed in comp_link
+            if PP.derH: DerLay.add_(PP.derH)  # append with single layer formed in comp_link
     edge.derH.append_(DerLay)
 
 
