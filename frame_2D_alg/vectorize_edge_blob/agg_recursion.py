@@ -143,38 +143,50 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
     compared__=[]
     for G in G_:
         compared__ += [G.compared__[-1]]  # buffer full compared_s
-        G.krim = [link.nodet[0] if link.nodet[1] is G else link.nodet[1] for link, rev in G.rim]
-    n = 1  # n convolutions
-    iG_ = copy(G_)  # has ext_Lay
+        krim = [link.nodet[0] if link.nodet[1] is G else link.nodet[1] for link, rev in G.rim]
+        Lay = CH()
+        [Lay.add_(_G.derH) for _G in krim]  # init with DerH of immediate krim, then sum mediated krims
+        G.DerH.append_(Lay, flat=0)  # comp -> G.extH
+        G.kH = [krim]
+    n = 1 # convo rng
+    iG_ = copy(G_) # has extLay
     while True:
         _G_ = []  # rng+ convolution, cross-comp: recursive center node DerH += linked node derHs for next loop:
         for G in G_:
-            G.compared__[-1] = []  # reset per krim
-            H,eH = G.derH, G.extH  # comparand,ders
+            G.ext.H.H += [CH()]; G.compared__[-1] = []; krim = []  # fill and reset per krim
+            for _G in G.kH[-1]:
+                for link, rev in _G.rim:
+                    __G = link.nodet[0] if link.nodet[1] is G else link.nodet[1]
+                    if __G not in krim:
+                        krim += [__G]  # mediated krim
+            Lay = CH()
+            [Lay.add_(_G.derH) for _G in krim]  # comp -> G.extLay
+            G.DerH += [CH(H=[Lay], Et=copy(Lay.Et), root=G.DerH)]
+        for G in G_:
             for _G in G.krim:
                 if _G in [G for compared_ in G.compared__ for G in compared_]:  # in any rng++ or when _G was G
                     continue
                 G.compared__[-1] += [_G]; _G.compared__[-1] += [G]
-                _H,_eH = _G.derH, _G.extH  # comparand, ders
-                dH = _H.comp_(H, DH=CH(),rn=1,fagg=1,flat=1)  # comp last krim
-                deH = _eH.comp_(eH, DH=CH(),rn=1,fagg=1,flat=1)  # skip last rng: incomplete?
-                dH.append_(deH)
+                # comp last DerLay, sum of last krim:
+                dH = _G.DerH[-1].comp_(G.DerH[-1], DH=CH(),rn=1,fagg=1,flat=1)
                 if dH.Et[0] > ave * dH.Et[2] * (n+1):  # n adds to costs
-                    for h in _eH, eH:
-                        h.H[-1].H[n].add_(dH) if len(h.H[-1].H)>=n+1 else h.H[-1].append_(dH,flat=0)  # bilateral assign                                                                                        flat=0)  # bilateral assign
+                    for h in _G.extH, G.extH:
+                        h.H[-1].H[n].add_(dH)  # bilateral assign
             h = G.extH
             if len(h.H) > n and h.H[-1].Et[0] > ave * h.H[-1].Et[2] * n:  # G.extH may not be appended
-                Dlay= CH(); lay = h.H[-1].H[0]; L = len(h.H[-1].H); i=1
+                Dlay= CH(); lay = h.H[-1].H[0]; L = len(h.H[-1].H)
+                i=1
                 while L>=i:
                     _lay = lay; lay = h.H[-1].H[i]
                     Dlay.add_(_lay.comp_(lay, DH=h.H[-1], rn=1,fagg=1,flat=1))
                     i+=1
-                if Dlay.Et[0] < ave * Dlay.Et[2]: h.H[-1].H = []  # remove krim layers, keep only summed representation: h.H[-1]
+                if Dlay.Et[0] < ave * Dlay.Et[2]: h.H[-1].H = []  # remove individual layers, keep their sum in h.H[-1]
                 _G_ += [G]  # else G kernel is not extended
         if _G_:
             G_ = _G_; n += 1
         else:
             for G, compared_ in zip (iG_, compared__):
+                G.ext.H.H.pop()  # initialized only?
                 G.compared__[-1] = compared_; delattr(G, "krim")
             break
     return iG_, Et  # Gs with added rim
@@ -235,8 +247,8 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link+=dderH, comparand rim+=
         dH.append_(CH(Et=Et,relt=rt,H=md_,n=0.5,root=dH),flat=0)  # dH += [dext]
     else:  # CG Ns
         et, rt, md_ = comp_latuple(_N.latuple, N.latuple, rn,fagg=1)
-        dH.append_(CH(Et=et,relt=rt,H=md_,n=1,root=dH),flat=0)  # dH = [dlatuple]
-        _N.derH.comp_(N.derH, dH,rn,fagg=1,flat=1,frev=rev)      # dH += [*dderH]
+        dH.append_(CH(Et=et,relt=rt,H=md_,n=1,root=dH),flat=0)  # dH = [dlatuple], or also pack in derH? then same sequence as in fd?
+        _N.derH.comp_(N.derH, dH,rn,fagg=1,flat=1,frev=rev)     # dH += [*dderH]
         Et, Rt, Md_ = comp_ext(len(_N.node_),len(N.node_), _N.S,N.S/rn,_N.A,N.A)
         dH.append_(CH(Et=Et,relt=Rt,H=Md_,n=0.5,root=dH),flat=0)  # dH += [dext]
     # / N, if >1 PPs | Gs:
