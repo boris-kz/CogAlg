@@ -35,3 +35,54 @@ def rng_link_(N_):  # comp Clinks: der+'rng+ in root.link_ rim_t node rims: dire
         # if Lt_: L_,_mN_t_ = map(list, zip(*Lt_))  # map list to convert tuple from zip(*)
 
     return N_, Et, rng
+
+def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link+=dderH, comparand rim+=Link
+
+    fd = rev is not None  # compared links have binary relative direction?
+    dH = CH(); _N, N = Link.nodet; rn = _N.n / N.n
+
+    if fd:  # Clink Ns
+        _N.derH.comp_(N.derH, dH, rn, fagg=1, flat=1, frev=rev)  # dH += [*dderH]
+        # reverse angle direction for left link:
+        _A, A = _N.angle, N.angle if rev else [-d for d in N.angle]
+        Et, rt, md_ = comp_ext(2,2, _N.S,N.S/rn, _A,A)  # 2 nodes in nodet
+        dH.append_(CH(Et=Et,relt=rt,H=md_,n=0.5,root=dH),flat=0)  # dH += [dext]
+    else:  # CG Ns
+        et, rt, md_ = comp_latuple(_N.latuple, N.latuple, rn,fagg=1)
+        dH.append_(CH(Et=et,relt=rt,H=md_,n=1,root=dH),flat=0)  # dH = [dlatuple], or also pack in derH? then same sequence as in fd?
+        _N.derH.comp_(N.derH, dH,rn,fagg=1,flat=1,frev=rev)     # dH += [*dderH]
+        Et, Rt, Md_ = comp_ext(len(_N.node_),len(N.node_), _N.S,N.S/rn,_N.A,N.A)
+        dH.append_(CH(Et=Et,relt=Rt,H=Md_,n=0.5,root=dH),flat=0)  # dH += [dext]
+    # / N, if >1 PPs | Gs:
+    if _N.extH and N.extH:
+        _N.extH.comp_(N.extH, dH, rn, fagg=1, flat=1, frev=rev)
+    # link.derH += dH:
+    if fd: Link.derH.append_(dH, flat=1)
+    else:  Link.derH = dH
+    iEt[:] = np.add(iEt,dH.Et)  # init eval rng+ and form_graph_t by total m|d?
+    fin = 0
+    for i in 0,1:
+        Val, Rdn = dH.Et[i::2]
+        if Val > G_aves[i] * Rdn: fin = 1
+        _N.Et[i] += Val; N.Et[i] += Val  # not selective
+        _N.Et[2+i] += Rdn; N.Et[2+i] += Rdn  # per fork link in both Gs
+        # if select fork links: iEt[i::2] = [V+v for V,v in zip(iEt[i::2], dH.Et[i::2])]
+    if fin:
+        Link.n = min(_N.n,N.n)  # comp shared layers
+        Link.yx = np.add(_N.yx, N.yx) / 2
+        Link.S += (_N.S + N.S) / 2
+        for rev, node in zip((0,1),(_N,N)):  # ?reversed Link direction
+            if fd:
+                if len(node.rimt_) == rng:
+                    node.rimt_[-1][1-rev] += [[Link,rev]]  # add in last rng layer, opposite to _N,N dir
+                else:
+                    node.rimt_ += [[[[Link,rev]],[]]] if dir else [[[],[[Link,rev]]]]  # add rng layer
+            else:
+                node.rim += [[Link,rev]]
+                if len(node.extH.H)==rng:
+                    node.extH.H[-1].H[-1].add_(Link.derH)  # accum last layer
+                else:
+                    rngLay = CH()
+                    rngLay.append_(Link.derH, flat=0)
+                    node.extH.append_(rngLay, flat=0)  # init last layer
+        return True
