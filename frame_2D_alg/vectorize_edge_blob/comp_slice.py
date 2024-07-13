@@ -80,7 +80,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         # dynamic attrs:
         G.Rim = []  # links to the most mediated nodes
         G.fback_t = [[],[]]  # dderHm_, dderHd_
-        G.compared__ = []  # nested in rng++
+        G.visited__ = []  # nested in rng++
         # Rdn: int = 0  # for accumulation or separate recursion count?
         # it: list = z([None,None])  # graph indices in root node_s, implicitly nested
         # depth: int = 0  # n sub_G levels over base node_, max across forks
@@ -136,10 +136,11 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
         if HE:
             if isinstance(HE.H[0], CH):
                 H = []
-                for Lay, lay in zip_longest(HE.H, He.H, fillvalue=None):
-                    if lay:  # to be summed
-                        if Lay is None: Lay = deepcopy(lay)
-                        else: Lay.add_(lay, irdnt)  # recursive unpack to sum md_s
+                for Lay,lay in zip_longest(HE.H, He.H, fillvalue=None):
+                    if lay is not None:  # to be summed
+                        if Lay:
+                            if lay: Lay.add_(lay, irdnt)  # recursive unpack to sum md_s
+                        else:       Lay = deepcopy(lay) if lay else []  # deleted kernel lays
                     Lay.root = HE
                     H += [Lay]
                 HE.H = H
