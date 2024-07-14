@@ -141,7 +141,8 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
                         if Lay:
                             if lay: Lay.add_(lay, irdnt)  # recursive unpack to sum md_s
                         else:       Lay = deepcopy(lay) if lay else []  # deleted kernel lays
-                    Lay.root = HE
+                    if Lay:  # may be empty
+                        Lay.root = HE
                     H += [Lay]
                 HE.H = H
             else:
