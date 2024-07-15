@@ -143,11 +143,9 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
                     Lay = CH()
                     for _g in krim: Lay.add_(_g.derH)
                     if g in _G_:
-                        g.kH[-1] += krim  # append lay, | g.kHH: [rng][kern]?
-                        g.DerH.H[-1][-1].add_(Lay, flat=0)  # comp -> G.extH
+                        g.kH[-1] += krim; g.DerH.H[-1].H[-1].add_(Lay)  # append lay, | g.kHH: [rng][kern]?
                     else:
-                        g.kH = [krim]  # init lay with direct krim, then sum mediated krims
-                        g.DerH[-1].append_(Lay, flat=0)
+                        g.kH = [krim]; g.DerH.H[-1].append_(Lay,flat=0)  # init lay with direct krim, then sum mediated krims
                         _G_ += [g]
     iG_ = deepcopy(_G_)  # new kH
     n = 1  # n klays, convolution / kernel rim: def, sum, comp in separate loops for bilateral G,_G assign:
@@ -173,10 +171,10 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
         for G in G_:
             for _G in G.kH[-1]:  # add last krim
                 if _G in G.visited__[-1] or _G not in _G_:  # skip if _G not in _G_
-                    continue  # / _G is G (in prior comparison, _G is G)
+                    continue  # _G was previously compared as G
                 G.visited__[-1] += [_G]; _G.visited__[-1] += [G]
-                G.DerH.H[-1].add_(_G.derH)
-                _G.DerH.H[-1].add_(G.derH)
+                G.DerH.H[-1].H[-1].add_(_G.derH)
+                _G.DerH.H[-1].H[-1].add_(G.derH)
         # reset/ += subH sublay:
         for G in G_: G.visited__[-1] = []
         for G in G_:
@@ -184,7 +182,7 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
                 if _G in G.visited__[-1] or _G not in G_: continue
                 G.visited__[-1] += [_G]; _G.visited__[-1] += [G]
                 # comp last DerLay:
-                dH = _G.DerH.H[-1].comp_(G.DerH.H[-1], DH=CH(),rn=1,fagg=1,flat=1)
+                dH = _G.DerH.H[-1].H[-1].comp_(G.DerH.H[-1].H[-1], DH=CH(),rn=1,fagg=1,flat=1)
                 if dH.Et[0] > ave * dH.Et[2] * (n+1):  # n adds to costs
                     for h in _G.extH, G.extH:
                         h.H[-1].H[n].add_(dH)  # bilateral assign
@@ -262,15 +260,14 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link+=dderH, comparand rim+=
     else:   # CGs
         _L,L,_S,S,_A,A = len(_N.node_),len(N.node_), _N.S,N.S/rn, _N.A,N.A
         et, rt, md_ = comp_latuple(_N.latuple, N.latuple, rn,fagg=1)
-        # derH = [?dlatuple, *diderH -> dderH, dext]:
-        dH.append_(CH(Et=et,relt=rt,H=md_,n=1,root=dH),flat=0) # dH.H = [dlatuple]
+        dH.append_(CH(Et=et,relt=rt,H=md_,n=1,root=dH),flat=0)  # dH.H[0] = [dlatuple]
+        _N.iderH.comp_(N.iderH, dH.H[0], rn, fagg=1, flat=0)    # dH.H[0] += [diderH]
 
-    _N.derH.comp_(N.derH, dH, rn, fagg=1, flat=1, frev=rev)   # dH.H += [*dderH]
     Et, Rt, Md_ = comp_ext(_L,L, _S,S, _A,A)
-    dH.append_(CH(Et=Et,relt=Rt,H=Md_,n=0.5,root=dH),flat=0)  # dH.H += [dext]
-    # / N, if >1 PPs | Gs:
-    if _N.extH and N.extH: _N.extH.comp_(N.extH, dH, rn, fagg=1, flat=1, frev=rev)
-    # dH += [*dextH]
+    dH.H[0].append_(CH(Et=Et,relt=Rt,H=Md_,n=0.5,root=dH),flat=0)  # dH.H[0] += [dext]
+    _N.derH.comp_(N.derH, dH, rn, fagg=1, flat=1, frev=rev)        # dH.H += [*dderH]: higher derLays
+    # derH: ((dlatuple, diderH, dext), (ddlatuple, ddiderH, ddext),...), no comp extH: incomplete
+
     if fd: Link.derH.append_(dH, flat=1)
     else:  Link.derH = dH
     iEt[:] = np.add(iEt,dH.Et)  # init eval rng+ and form_graph_t by total m|d?
@@ -293,14 +290,12 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link+=dderH, comparand rim+=
                     node.rimt_ += [[[[Link,rev]],[]]] if dir else [[[],[[Link,rev]]]]  # add rng layer
             else:
                 node.rim += [[Link,rev]]
-                if len(node.extH.H)==rng:
-                    node.DerH.H[-1].H += [[]]  # to sum from klay
-                    node.extH.H[-1].H[-1].add_(Link.derH)  # accum last layer
-                else:
-                    rngLay = CH()
-                    rngLay.append_(Link.derH, flat=0)
-                    node.DerH.H += [[]]  # to sum from kernel
-                    node.extH.append_(rngLay, flat=0)  # init last layer
+                if len(node.extH.H) == rng:  # accum last layer
+                    node.extH.H[-1].H[-1].add_(Link.derH)
+                else:  # init last layer
+                    rngLay = CH(); rngLay.append_(Link.derH, flat=0)
+                    node.DerH.H += [CH(root=node.DerH)] # to sum kH
+                    node.extH.append_(rngLay, flat=0)
         return True
 
 
