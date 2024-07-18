@@ -75,7 +75,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.kH = []  # kernel: hierarchy of rim layers
         # graph-external, +level per root sub+:
         G.n = n  # external n (last layer n)
-        G.rim = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
+        G.rim_ = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
         G.extH = CH()  # G-external daggH( dsubH( dderH, summed from rim links ) krim nodes
         G.alt_graph_ = []  # adjacent gap+overlap graphs, vs. contour in frame_graphs
         # dynamic attrs:
@@ -127,9 +127,12 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
         He.Et = [0,0,0,0] if Et is None else Et   # evaluation tuple: valt, rdnt
         He.relt = [0,0] if relt is None else relt  # m,d relative to max possible m,d
         He.H = [] if H is None else H  # hierarchy of der layers or md_
+        #| HT: [[],..] with same root?
         He.root = None if root is None else root
 
     def __bool__(H): return H.n != 0
+
+    # below is not updated for nested H structure:
 
     def add_(HE, He, irdnt=None):  # unpack down to numericals and sum them
 
