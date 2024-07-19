@@ -143,14 +143,15 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
                 for g in _G,G:
                     if g not in _G_: _G_ += [g]
     # init conv kernels:
-    for g in _G_:
+    for g in reversed(_G_):
         Lay = CH(); krim = []
         for link, rev in g.rim_[-1]:
             if link.ft[0]:  # must be mlink
                 krim += [link.nodet[0] if link.nodet[1] is g else link.nodet[1]]
                 Lay.add_(link.derH)
         if krim:
-            g.kH += [krim]; g.DerH.H[-1].append_(Lay,flat=0)  # append lay, g.kHH[rng][kern]
+            g.kH += [krim]; g.DerH.H[-1].append_(Lay,flat=0)
+        else: _G_.remove(g)
     iG_ = copy(_G_)  # new kH
     n = 1  # n kernel rims
     # convolution: kernel rim Def,Sum,Comp, in separate loops for bilateral G,_G assign:
@@ -179,8 +180,8 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
                     continue  # _G was previously compared as G
                 G.visited__[-1] += [_G]; _G.visited__[-1] += [G]
                 # sum lower-krim alt DerH.H layer:
-                if _G.DerH.H[-1][-2]: G.DerH.H[-1].H[-1].add_(_G.DerH.H[-1][-2])
-                if G.DerH.H[-1][-2]: _G.DerH.H[-1].H[-1].add_(G.DerH.H[-1][-2])
+                if _G.DerH.H[-1].H[-2]: G.DerH.H[-1].H[-1].add_(_G.DerH.H[-1].H[-2])
+                if G.DerH.H[-1].H[-2]:_G.DerH.H[-1].H[-1].add_(G.DerH.H[-1].H[-2])
         # reset/ += subH sublay:
         for G in G_: G.visited__[-1] = []
         for G in G_:
@@ -226,7 +227,7 @@ def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
         mN_t_ = [[[],[]] for _ in _L_]  # for next loop
         for L, _mN_t, mN_t in zip(_L_, _mN_t_, mN_t_):
             for rev, _mN_, mN_ in zip((0,1), _mN_t, mN_t):
-                # comp L, _Ls: nodet mN 1st rim, -> rng+ _Ls/ rng+ mm..Ns:
+                # comp L, _Ls: nodet mN 1st rim, -> rng+ _Ls/ rng+ mm..Ns, flatten rim_s:
                 rim_ = [[l for rim in n.rim_ for l in rim] if isinstance(n,CG) else n.rimt_[0][0] + n.rimt_[0][1] for n in _mN_]
                 for rim in rim_:
                     for _L,_rev in rim:  # _L is reversed relative to its 2nd node
@@ -261,21 +262,21 @@ def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
 def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
 
     fd = rev is not None  # compared links have binary relative direction?
-    dH = CH(); _N, N = Link.nodet; rn = _N.n / N.n
+    _N, N = Link.nodet; rn = _N.n / N.n
 
-    if fd:  # CLs, form single-layer derT:
-        _N.derH.comp_(N.derH, dH, rn, fagg=1, flat=0)  # new link derH = local dH
+    if fd:  # CLs, forms single layer:
+        dH = _N.derH.comp_(N.derH, rn, fagg=1)  # new link derH = local dH
         N.mdext = comp_ext(2,2, _N.S,N.S/rn, _N.angle, N.angle if rev else [-d for d in N.angle])  # reverse for left link
-        N.Et = np.add(dH.Et, N.mdext[0])  # mdext: Et,Rt,Md_
+        N.Et = np.add(dH.Et, N.mdext[0])  # mdext: et,rt,md_
     else:   # CGs
-        mdlat = comp_latuple(_N.latuple, N.latuple, rn,fagg=1)
+        mdlat = comp_latuple(_N.latuple, N.latuple, rn,fagg=1)  # [et,rt,md_]
         mdext = comp_ext(len(_N.node_), len(N.node_), _N.S, N.S / rn, _N.A, N.A)
-        iderH = _N.iderH.comp_(N.iderH, None, rn, fagg=1, flat=0)
-        dH.Et = np.add(mdlat[0], iderH.Et, mdext[0])  # each mdT: [et,rt,md_]
-        dH.H = [[mdlat, iderH, mdext]]  # dH.H[0], hlay e = llay e ders, len lay[e].H = derH.H[i] + len derH.H[0][e]: >1 if agg+(sub+)?
+        iderH = _N.iderH.comp_(N.iderH, rn, fagg=1)  # not in CG formed from links?
+        dH = CH(H=[[mdlat,iderH,mdext]], Et=np.array(mdlat[0])+iderH.Et+mdext[0], n=1+iderH.n+0.5)  # init dH.H[0]
         if _N.derH and N.derH:
-            _N.derH.comp_(N.derH, dH, rn,fagg=1,flat=1,frev=rev)  # dH.H += higher lays in dderH
-        # extH: ders not comp
+            dderH = _N.derH.comp_(N.derH, rn, fagg=1, frev=rev)
+            dH.H += dderH.H; dH.Et = np.add(dH.Et,dderH.Et); dH.n += dderH.n  # += higher lays
+            # no comp extH: current ders
     if fd: Link.derH.append_(dH, flat=1)
     else:  Link.derH = dH
     iEt[:] = np.add(iEt,dH.Et)  # init eval rng+ and form_graph_t by total m|d?
@@ -305,7 +306,6 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
                     node.extH.append_(rngLay, flat=0)
                     node.rim_ += [[[Link, rev]]]
         return True
-
 
 def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
 

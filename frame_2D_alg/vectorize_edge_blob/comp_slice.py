@@ -110,15 +110,8 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
     def __bool__(l): return bool(l.derH.H)
 
 
-class CH(CBase):  # generic derivation hierarchy with variable nesting
-    '''
-    len layer +extt: 2, 3, 6, 12, 24,
-    or without extt: 1, 1, 2, 4, 8..: max n of tuples per der layer = summed n of tuples in all lower layers:
-    lay1: par     # derH per param in vertuple, layer is derivatives of all lower layers:
-    lay2: [m,d]   # implicit nesting, brackets for clarity:
-    lay3: [[m,d], [md,dd]]: 2 sLays,
-    lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
-    '''
+class CH(CBase):  # generic derivation hierarchy, may have additional nesting per layer: [mdlat,iderH,mdext]
+
     name = "H"
     def __init__(He, n=0, Et=None, relt=None, H=None, root=None):
         super().__init__()
@@ -126,31 +119,36 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
         He.n = n  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
         He.Et = [0,0,0,0] if Et is None else Et   # evaluation tuple: valt, rdnt
         He.relt = [0,0] if relt is None else relt  # m,d relative to max possible m,d
-        He.H = [] if H is None else H  # hierarchy of der layers or md_
-        #| HT: [[],..] with same root?
+        He.H = [] if H is None else H  # hierarchy of der layers or md_, may be [mdlat,iderH,mdext]s
         He.root = None if root is None else root
 
     def __bool__(H): return H.n != 0
 
-    # below is not updated for nested H structure:
-
+    # draft:
     def add_(HE, He, irdnt=None):  # unpack down to numericals and sum them
 
         if irdnt is None: irdnt = []
         if HE:
-            if isinstance(HE.H[0], CH):
-                H = []
-                for Lay,lay in zip_longest(HE.H, He.H, fillvalue=None):
-                    if lay is not None:  # to be summed
-                        if Lay:
-                            if lay: Lay.add_(lay, irdnt)  # recursive unpack to sum md_s
-                        else:       Lay = deepcopy(lay) if lay else []  # deleted kernel lays
-                    if Lay:  # may be empty
-                        Lay.root = HE
-                    H += [Lay]
-                HE.H = H
-            else:
-                HE.H = [V+v for V,v in zip_longest(HE.H, He.H, fillvalue=0)]  # both Hs are md_s
+            H = []
+            for Lay,lay in zip_longest(HE.H, He.H, fillvalue=None):
+                if lay is not None:  # to be summed
+                    if Lay:
+                        if lay:
+                            if isinstance(lay,CH):
+                                Lay.add_(lay, irdnt)  # recursive unpack to sum md_s
+                            elif isinstance(lay[0],list):  # [mdlat,iderH,mdext]
+                                for E,e in zip_longest(Lay, lay, fillvalue=0):
+                                    if isinstance(E,CH):
+                                        E.add_(e, irdnt)  # iderH in [mdlat,iderH,mdext]
+                                    else:  # list mdlat|mdext in [mdlat,iderH,mdext]
+                                        E[:] = [V+v for V,v in zip_longest(E,e, fillvalue=0)]
+                            else:  # sum md_s
+                                Lay[:] = [V+v for V,v in zip_longest(Lay, lay, fillvalue=0)]
+                    else: Lay = deepcopy(lay) if lay else []  # deleted kernel lays
+                if Lay:  # may be empty
+                    Lay.root = HE
+                H += [Lay]
+            HE.H = H
             # default:
             HE.Et = np.add(HE.Et, He.Et); HE.relt = np.add(HE.relt, He.relt)
             if any(irdnt): HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
@@ -159,6 +157,7 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
             HE.copy(He)  # initialization
         if HE.root is not None: HE.root.update_root(He)
 
+    # not needed, unpack?
     def append_(HE,He, irdnt=None, flat=0):
 
         if irdnt is None: irdnt = []
@@ -185,7 +184,8 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
             root.n += He.n
             root = root.root
 
-    def comp_(_He, He, DH, rn=1, fagg=0, flat=1, frev=0):  # unpack tuples (formally lists) down to numericals and compare them
+    # not updated:
+    def comp_(_He, He, rn=1, fagg=0, flat=1, frev=0):  # unpack tuples (formally lists) down to numericals and compare them
 
         n = 0
         if isinstance(_He.H[0], CH):  # _lay and lay is He_, they are aligned
@@ -221,7 +221,7 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
             Et = [vm,vd,rm,rd]; relt= [decm,decd]
             n = len(_He.H)/12  # unit n = 6 params, = 12 in md_
 
-        return DH.append_(CH(Et=Et, relt=relt, H=dH, n=n), flat=flat)  # currently flat=1
+        return CH(H=dH, Et=Et, relt=relt, n=n)
 
     def copy(_H, H):
 
@@ -423,7 +423,7 @@ def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
                 if fd: ddec += abs(par)/ abs(maxv) if maxv else 1
                 else:  mdec += (par+ave)/ (maxv+ave) if maxv else 1
 
-        ret = [mval, dval, mrdn, drdn], [mdec, ddec], ret
+        ret = [[mval, dval, mrdn, drdn], [mdec, ddec], ret]
     return ret
 
 def get_match(_par, par):
