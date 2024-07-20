@@ -189,7 +189,7 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
                 if _G in G.visited__[-1] or _G not in G_: continue
                 G.visited__[-1] += [_G]; _G.visited__[-1] += [G]
                 # comp last DerLay:
-                dH = _G.DerH.H[-1].H[-1].comp_(G.DerH.H[-1].H[-1], DH=CH(),rn=1,fagg=1,flat=1)
+                dH = _G.DerH.H[-1].H[-1].comp_(G.DerH.H[-1].H[-1],rn=1,fagg=1,flat=1)
                 if dH.Et[0] > ave * dH.Et[2] * (rng+n+1):  # each layer adds cost
                     for h in _G.extH, G.extH:
                         h.H[-1].H[n].add_(dH)  # bilateral assign
@@ -269,10 +269,11 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
         N.mdext = comp_ext(2,2, _N.S,N.S/rn, _N.angle, N.angle if rev else [-d for d in N.angle])  # reverse for left link
         N.Et = np.add(dH.Et, N.mdext[0])  # mdext: et,rt,md_
     else:   # CGs
-        mdlat = comp_latuple(_N.latuple, N.latuple, rn,fagg=1)  # [et,rt,md_]
-        mdext = comp_ext(len(_N.node_), len(N.node_), _N.S, N.S / rn, _N.A, N.A)
-        iderH = _N.iderH.comp_(N.iderH, rn, fagg=1)  # not in CG formed from links?
-        dH = CH(H=[[mdlat,iderH,mdext]], Et=np.array(mdlat[0])+iderH.Et+mdext[0], n=1+iderH.n+0.5)  # init dH.H[0]
+        Et,Rt,Md_ = comp_latuple(_N.latuple, N.latuple, rn,fagg=1)
+        et,rt,md_ = comp_ext(len(_N.node_), len(N.node_), _N.S, N.S / rn, _N.A, N.A)
+        iderH = _N.iderH.comp_(N.iderH, rn, fagg=1)
+        # not in CG of links?
+        dH = CH(H=[[[Md_,Rt], iderH, [md_,rt]]], Et=np.array(Et)+iderH.Et+et, n=1+iderH.n+0.5)  # init dH.H[0]
         if _N.derH and N.derH:
             dderH = _N.derH.comp_(N.derH, rn, fagg=1, frev=rev)
             dH.H += dderH.H; dH.Et = np.add(dH.Et,dderH.Et); dH.n += dderH.n  # += higher lays
