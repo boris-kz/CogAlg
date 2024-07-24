@@ -151,7 +151,7 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
                 lay.add_H(link.derH)
         if krim:
             g.kH += [krim]
-            g.DerH.append_(lay)
+            g.DerH.H[-1].append_(lay)
         else:
             _G_.remove(g)
     iG_ = copy(_G_)  # new kH
@@ -277,8 +277,8 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
         DLay = CH(  # 1st derLay:
             H=[mdlat,mdLay,mdext], Et=np.array(mdlat.Et)+mdLay.Et+mdext.Et, Rt=np.array(mdlat.Rt)+mdLay.Rt+mdext.Rt, n=2.5)
         if _N.derH and N.derH:
-            dLay = _N.derH.comp_H(N.derH, rn, fagg=1, frev=rev)
-            DLay.add_H(dLay)  # sum of higher derLays
+            dLay = _N.derH.comp_H(N.derH,rn,fagg=1,frev=rev)
+            DLay.add_H(dLay)  # also append discrete higher subLays in dLay.HH[0], if any?
             # no comp extH: current ders
     if fd:
         Link.derH.append_(DLay)
@@ -306,8 +306,8 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
                     node.extH.H[-1].H[-1].add_H(Link.derH)
                     node.rim_[-1] += [[Link, rev]]
                 else:  # init rng layer
-                    node.extH.H[-1].append_(Link.derH)
-                    node.DerH.H += [CH(root=node.DerH)]  # to sum kH?
+                    node.extH.append_(CH().append_(Link.derH, flat=0)) # add initialized rngLay
+                    node.DerH.H += [CH(root=node.DerH)]  # to sum kH
                     node.rim_ += [[[Link, rev]]]
         return True
 
@@ -434,7 +434,7 @@ def sum_N_(N_, fd=0):  # sum partial grapht in merge
     for N in N_[1:]:
         if not fd:
             latuple = [P+p for P,p in zip(latuple[:-1],N.latuple[:-1])] + [[A+a for A,a in zip(latuple[-1],N.latuple[-1])]]
-            if N.mdLay: mdLay.add_lay(N.mdLay)
+            if N.mdLay: mdLay.add_md_(N.mdLay)
         n += N.n; S += N.S
         L += N.span if fd else len(N.node_)
         A = [Angle+angle for Angle,angle in zip(A, N.angle if fd else N.A)]
