@@ -282,8 +282,10 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
             # no comp extH: current ders
     if fd:
         Link.derH.append_(DLay)
-    else:
-        Link.derH = DLay
+    elif _N.derH and N.derH:
+        Link.derH.H = DLay  # not sure
+    else: Link.derH = DLay
+
     iEt[:] = np.add(iEt,DLay.Et)  # init eval rng+ and form_graph_t by total m|d?
     for i in 0,1:
         Val, Rdn = DLay.Et[i::2]
