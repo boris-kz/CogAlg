@@ -114,23 +114,27 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
 
 class CH(CBase):  # generic derivation hierarchy of variable nesting, depending on effective agg++(sub++ depth
     '''
-    If nesting in derH.H may be deleted, we need to directly represent and compare deeper derH.H sub-layers:
-    node_H) derH: each layer represents multiple sub-nodes,
-    node_H) derH.H_) derH.D_ (nesting is from all prior xcomps, bottom 2D layer is [mdlat,mdLay,mdext])
+    If nesting in derH.H may be deleted, deleted H_[i] = n of deleted layers, with their summed Ders in O_[i],
+    we need to directly represent and compare deeper derH.H orders via O_:
 
-    deleted H_[i] = n if low-variance individual layers, but D_[i] still has their summed Ders
-    for indefinite nesting orders: CH( H = [Q__, Q_, Q...]), len Q__ = len H,
-    where each Q is a list of CHs or len of deleted list
+    if nested node_: node_ = top preserved node layer, sum,concat all layers in corr derH.H layers:
+    node_) derH.H: each layer represents multiple sub-node_s, otherwise accessible through nodes in node_
+
+    if nested derH: derH.H = top preserved derH order, sum,concat all orders in corr derH.O_ layers:
+    node_) derH.H ) derH.O_: nesting orders from prior xcomps, bottom 2D layer is [mdlat,mdLay,mdext]
     '''
     name = "H"
-    def __init__(He, n=0, Et=None, Rt=None, H=None, root=None):
+    def __init__(He, n=0, Et=None, Rt=None, H=None, O_=None, root=None):
         super().__init__()
-        # He.nest = nest  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH?
+
+        He.MD__ = []  # summed [mdlat,mdLay,mdext] in base case?
         He.H = [] if H is None else H  # hierarchy of der layers or md_, may be [mdlat,mdLay,mdext]s
         He.n = n  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
         He.Et = [0,0,0,0] if Et is None else Et    # evaluation tuple: valt, rdnt
         He.Rt = [0,0] if Rt is None else Rt  # m,d relative to max possible m,d
         He.root = None if root is None else root
+        He.O_ = [] if O_ is None else O_  # optional directly accessed nesting orders for agg++| sub++
+        # He.nest = nest  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH?
 
     def __bool__(H): return H.n != 0
 
@@ -143,22 +147,23 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         if any(irdnt): HE.Et[2:] = [E + e for E, e in zip(HE.Et[2:], irdnt)]
         HE.Rt = np.add(HE.Rt, He.Rt)
 
+
     def add_H(HE, He, irdnt=[]):  # unpack down to numericals and sum them
 
         if HE:
-            if isinstance(He.H, CH):  # tentative (H is CH)
-                HE.H.add_H(He.H, irdnt)
-            else:
-                for Lay,lay in zip_longest(HE.H, He.H, fillvalue=None):  # cross comp layer
-                    if lay is not None:
-                        if Lay and lay.H:  # empty after removing H from rnglay
-                            if isinstance(lay.H[0],CH):
-                                Lay.add_H(lay, irdnt)  # unpack to add
-                            else:
-                                Lay.add_md_(lay, irdnt)  # lat md_| Lay md_| ext md_
+            for Lay,lay in zip_longest(HE.H, He.H, fillvalue=None):  # cross comp layer
+                if lay is not None:
+                    if Lay and lay.H:  # empty after removing H from rnglay
+                        if isinstance(lay.H[0],CH):
+                            for MD_,md_ in zip(Lay.MD__,lay.MD__):  # lat MD_| Lay MD_| ext MD_
+                                MD_.add_md_(md_, irdnt)
+                            Lay.O_ += [lay]  # not sure
+                            Lay.add_H(lay, irdnt)  # unpack to add
                         else:
-                            if Lay is None: Lay = CH(root=HE)
-                            HE.H += [Lay.copy(lay) if lay else []]  # deleted kernel lays
+                            Lay.add_md_(lay, irdnt)  # lat md_| Lay md_| ext md_
+                    else:
+                        if Lay is None: Lay = CH(root=HE)
+                        HE.H += [Lay.copy(lay) if lay else []]  # deleted kernel lays
             # default
             HE.Et = np.add(HE.Et, He.Et); HE.Rt = np.add(HE.Rt, He.Rt)
             if any(irdnt): HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
@@ -169,6 +174,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
             HE.Et = np.add(HE.Et, He.Et); HE.Rt = np.add(HE.Rt, He.Rt); HE.n += He.n
             HE = HE.root
 
+# not updated:
 
     def append_(HE,He, irdnt=None, flat=0):
 
@@ -216,19 +222,14 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
     def comp_H(_He, He, rn=1, fagg=0, frev=0):  # unpack CHs down to numericals and compare them
         DLay = CH()  # merged dderH
 
-        if isinstance(_He.H, CH):  # tentative (H is CH)
-             dlay = _He.H.comp_H(He.H, rn, fagg, frev)
-             DLay.H = dlay  # same structure when DLay.H = CH
-             DLay.Et = copy(dlay.Et); DLay.Rt = copy(dlay.Rt); DLay.n = dlay.n; dlay.root = DLay
-        else:
-            for _Lay,Lay in zip(_He.H, He.H):  # loop extH s or [mdlat, mdLay, mdext] rng tuples
-                if _Lay and Lay:
-                    if isinstance(_Lay.H[0], CH):
-                        dLay = _Lay.comp_H(Lay, rn, fagg, frev)
-                        DLay.add_H(dLay)  # reduce resolution of derivation to fix Lays in derH
-                    else:
-                        dlay = _Lay.comp_md_(Lay, rn, fagg, frev)  # mdlat | mdLay | mdext
-                        DLay.append_(dlay, flat=0)
+        for _Lay,Lay in zip(_He.H, He.H):  # loop extH s or [mdlat, mdLay, mdext] rng tuples
+            if _Lay.H and Lay.H:
+                if isinstance(_Lay.H[0], CH):
+                    dLay = _Lay.comp_H(Lay, rn, fagg, frev)
+                    DLay.add_H(dLay)  # reduce resolution of derivation to fix Lays in derH
+                else:
+                    dlay = _Lay.comp_md_(Lay, rn, fagg, frev)  # mdlat | mdLay | mdext
+                    DLay.append_(dlay, flat=0)
         ''' 
         full:
         for _Lay,Lay in zip(_He.H, He.H):  # loop extH s
@@ -248,19 +249,15 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         for attr, value in H.__dict__.items():
             if attr != '_id' and attr != 'root' and attr in _H.__dict__.keys():  # copy only the available attributes and skip id
                 if attr == 'H':  # can't deepcopy CH.root
-                    if isinstance(H.H, CH):  # H is CH
-                        if not isinstance(_H.H, CH): _H.H = CH(root=_H)
-                        H = H.H; _H = _H.H
-                    else:
-                        if H.H:
-                            _H.H = []
-                            if isinstance(H.H[0], CH):
-                                for lay in H.H:
-                                    Lay = CH()
-                                    Lay.copy(lay)
-                                    _H.H += [Lay]
-                            else:  # md_
-                                _H.H = deepcopy(H.H)
+                    if H.H:
+                        _H.H = []
+                        if isinstance(H.H[0], CH):
+                            for lay in H.H:
+                                Lay = CH()
+                                Lay.copy(lay)
+                                _H.H += [Lay]
+                        else:  # md_
+                            _H.H = deepcopy(H.H)
                 else:
                     setattr(_H, attr, deepcopy(value))
         return _H

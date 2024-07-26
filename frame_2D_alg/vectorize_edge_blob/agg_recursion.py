@@ -113,6 +113,13 @@ def rng_node_(_N_, rng):  # forms discrete rng+ links, vs indirect rng+ in rng_k
     n = 0
     while True:
         N_, Et = rng_kern_(_N_, rng)  # += rng layer
+        for N in N_:
+            # draft:
+            rLay = N.extH.H[n]
+            for kLay in rLay.H:
+                for MD_, md_ in zip(rLay.MD__, kLay.MD__):  # lat MD_| Lay MD_| ext MD_
+                    MD_.add_md_(md_)
+                rLay.O_[0] += [kLay]  # not sure
         if not n: rN_ = N_
         n += 1
         rEt = [V+v for V, v in zip(rEt, Et)]
@@ -280,12 +287,8 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
             dLay = _N.derH.comp_H(N.derH,rn,fagg=1,frev=rev)
             DLay.add_H(dLay)  # also append discrete higher subLays in dLay.HH[0], if any?
             # no comp extH: current ders
-    if fd:
-        Link.derH.append_(DLay)
-    elif _N.derH and N.derH:
-        Link.derH.H = DLay  # not sure
-    else: Link.derH = DLay
-
+    if fd: Link.derH.append_(DLay)
+    else:  Link.derH = DLay
     iEt[:] = np.add(iEt,DLay.Et)  # init eval rng+ and form_graph_t by total m|d?
     for i in 0,1:
         Val, Rdn = DLay.Et[i::2]
@@ -430,8 +433,8 @@ def sum_N_(N_, fd=0):  # sum partial grapht in merge
     if not fd:
         latuple = deepcopy(N.latuple)  # ignore if CL?
         mdLay = deepcopy(N.mdLay)
-    derH = deepcopy(N.derH)
-    extH = deepcopy(N.extH)
+    derH = CH(); derH.copy(N.derH)
+    extH = CH(); extH.copy(N.extH)
     # Et = copy(N.Et)
     for N in N_[1:]:
         if not fd:
