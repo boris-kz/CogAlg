@@ -1,6 +1,6 @@
 import numpy as np
 from copy import deepcopy, copy
-from itertools import combinations
+from itertools import combinations, zip_longest
 from .slice_edge import comp_angle, CsliceEdge
 from .comp_slice import comp_slice, comp_latuple, CH, CG
 from utils import extend_box
@@ -114,13 +114,27 @@ def rng_node_(_N_, rng):  # forms discrete rng+ links, vs indirect rng+ in rng_k
     while True:
         N_, Et = rng_kern_(_N_, rng)  # += rng layer
         for N in N_:
+            # moved from rng_kern_, should be revised:
+            for rlay in N.extH.H:  # rng layer
+                if rlay.H:  # popped if weak?
+                    Dlay = CH()
+                    _klay = rlay.H[0]
+                    for klay in rlay.H[1:]:  # comp consecutive kernel layers:
+                        Dlay.add_H(_klay.comp_H(klay, rn=1,fagg=1))  # no DH, local Dlay
+                        _klay = klay
+                    if Dlay.Et[0] < ave * Dlay.Et[2]: rlay.H = []  # remove discrete k layers, keep sum in extH.H[n]
             # draft:
             rLay = N.extH.H[n]
             for kLay in rLay.H:
-                for MD_, md_ in zip(rLay.MD__, kLay.MD__):  # lat MD_| Lay MD_| ext MD_
+                for MD_, md_ in zip(rLay.md_t, kLay.md_t):  # latMD_,layMD_,extMD_
                     MD_.add_md_(md_)
-                rLay.O_[0] += [kLay]  # not sure
-        if not n: rN_ = N_
+            rH = []
+            for KLay, kLay in zip_longest(rLay.O_, rLay.H, fillvalue=None):
+                if KLay is None: KLay = CH()
+                KLay.add_H(kLay)
+                rH += [KLay]
+            if rH: rLay.nestH = rH
+            if not n: rN_ = N_
         n += 1
         rEt = [V+v for V, v in zip(rEt, Et)]
         if Et[0] > ave * Et[2]:
@@ -214,15 +228,6 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
             _G_ = G_; n += 1
         else:
             break
-    for G in iG_:
-        for rlay in G.extH.H:  # rng layer
-            if rlay.H:  # popped if weak?
-                Dlay = CH()
-                _klay = rlay.H[0]
-                for klay in rlay.H[1:]:  # comp consecutive kernel layers:
-                    Dlay.add_H(_klay.comp_H(klay, rn=1,fagg=1))  # no DH, local Dlay
-                    _klay = klay
-                if Dlay.Et[0] < ave * Dlay.Et[2]: rlay.H = []  # remove discrete k layers, keep sum in extH.H[n]
 
     return iG_, Et  # Gs with added rim
 
