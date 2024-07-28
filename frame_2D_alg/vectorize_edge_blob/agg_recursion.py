@@ -44,7 +44,7 @@ max_dist = 2
 class CL(CBase):  # link or edge, a product of comparison between two nodes or links
     name = "link"
 
-    def __init__(l, nodet=None,derH=None, span=0, angle=None, box=None):
+    def __init__(l, nodet=None,derH=None, span=0, angle=None, box=None, md_t=None, subH=None):
         super().__init__()
         # CL = binary tree of Gs, depth+/der+: CL nodet is 2 Gs, CL + CLs in nodet is 4 Gs, etc.,
         # unpack sequentially
@@ -54,9 +54,11 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         l.area = 0  # sum nodet
         l.box = [] if box is None else box  # sum nodet
         l.latuple = []  # sum nodet
+        l.md_t = [] if md_t is None else md_t  # [mdlat,mdLay,mdext] per layer
         l.derH = CH() if derH is None else derH
         l.DerH = CH()  # ders from kernels: G.DerH
         l.mdext = []  # Et, Rt, Md_
+        l.subH = [] if subH is None else subH  # nesting orders per layer, if agg++| sub++
         l.ft = [0,0]  # fork inclusion tuple, may replace Vt:
         l.Vt = [0,0]  # for rim-overlap modulated segmentation, init derH.Et[:2]
         l.n = 1  # min(node_.n)
@@ -106,6 +108,8 @@ def agg_recursion(root, N_, fL, rng=1):  # fL: compare node-mediated links, else
                 agg_recursion(root, N_, fL=0)
         root.node_[:] = node_t
     # else keep root.node_
+    # eval max derH.H[i].node_ as node_,
+    # eval max derH.subH[i].H as H?
 
 def rng_node_(_N_, rng):  # forms discrete rng+ links, vs indirect rng+ in rng_kern_, still no sub_Gs / rng+
 
@@ -114,27 +118,21 @@ def rng_node_(_N_, rng):  # forms discrete rng+ links, vs indirect rng+ in rng_k
     while True:
         N_, Et = rng_kern_(_N_, rng)  # += rng layer
         for N in N_:
-            # moved from rng_kern_, should be revised:
-            for rlay in N.extH.H:  # rng layer
-                if rlay.H:  # popped if weak?
-                    Dlay = CH()
-                    _klay = rlay.H[0]
-                    for klay in rlay.H[1:]:  # comp consecutive kernel layers:
-                        Dlay.add_H(_klay.comp_H(klay, rn=1,fagg=1))  # no DH, local Dlay
-                        _klay = klay
-                    if Dlay.Et[0] < ave * Dlay.Et[2]: rlay.H = []  # remove discrete k layers, keep sum in extH.H[n]
             # draft:
-            rLay = N.extH.H[n]
+            rLay = N.extH.H[n]  # formed in rng_kern_
             for kLay in rLay.H:
-                for MD_, md_ in zip(rLay.md_t, kLay.md_t):  # latMD_,layMD_,extMD_
-                    MD_.add_md_(md_)
-            rH = []
-            for KLay, kLay in zip_longest(rLay.O_, rLay.H, fillvalue=None):
-                if KLay is None: KLay = CH()
-                KLay.add_H(kLay)
-                rH += [KLay]
-            if rH: rLay.nestH = rH
-            if not n: rN_ = N_
+                for MD_, md_ in zip(rLay.md_t, kLay.md_t):
+                    MD_.add_md_(md_)  # lat|lay|ext md_
+            kH = CH()
+            maxV = 0  # to select strongest kLay in rLay
+            for i, kLay in enumerate(rLay.H):
+                V = kLay.Et[0] - ave * kLay.Et[2]
+                if V > maxV:  # draft
+                    maxV = V; rLay.H = kLay.H; rLay.i = i
+                kH.append_H(kLay)
+            if kH: rLay.subH = kH  # nested sublayers
+            # nested in extH
+        if not n: rN_ = N_  # first popped N_
         n += 1
         rEt = [V+v for V, v in zip(rEt, Et)]
         if Et[0] > ave * Et[2]:
@@ -165,11 +163,12 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
                     if g not in _G_: _G_ += [g]
     # init conv kernels:
     for g in reversed(_G_):
-        lay = CH(); krim = []
+        lay = CH(md_t=[CH(), CH(), CH()])
+        krim = []
         for link, rev in g.rim_[-1]:
             if link.ft[0]:  # must be mlink
                 krim += [link.nodet[0] if link.nodet[1] is g else link.nodet[1]]
-                lay.add_H(link.derH)
+                lay.add_md_t(link.derH, fL=1)
         if krim:
             g.kH += [krim]
             g.DerH.H[-1].append_(lay)
@@ -182,8 +181,8 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
         G_ = []
         for G in _G_:  # += krim
             G.kH += [[]]; G.visited__ += [[]]
-            G.DerH.H[-1].H += [CH(root=G.DerH.H[-1])]  # comparands
-            G.extH.H[-1].H += [CH(root=G.extH.H[-1])]  # derivatives
+            G.DerH.H[-1].H += [CH(root=G.DerH.H[-1], md_t=[CH(), CH(), CH()])]  # comparands
+            G.extH.H[-1].H += [CH(root=G.extH.H[-1], md_t=[CH(), CH(), CH()])]  # derivatives
         for G in _G_:
             for _G in G.kH[-2]:  # after += klay
                 for link, rev in _G.rim_[-1]:
@@ -312,11 +311,13 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
                 else:
                     node.rimt_ += [[[[Link,rev]],[]]] if dir else [[[],[[Link,rev]]]]  # add rng layer
             else:
+                Lay = CH(md_t=Link.derH.H)  # empty H, bottom layer
+                rngLay = CH().append_(Lay, flat=0)  # new rng layer
                 if len(node.extH.H) == rng:  # accum last rng layer
-                    node.extH.H[-1].H[-1].add_H(Link.derH)
+                    node.extH.H[-1].H[-1].add_H(rngLay)
                     node.rim_[-1] += [[Link, rev]]
                 else:  # init rng layer
-                    node.extH.append_(CH().append_(Link.derH, flat=0)) # add initialized rngLay
+                    node.extH.append_(rngLay,flat=0)  # add initialized rngLay
                     node.DerH.H += [CH(root=node.DerH)]  # to sum kH
                     node.rim_ += [[[Link, rev]]]
         return True

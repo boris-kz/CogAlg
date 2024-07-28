@@ -315,3 +315,40 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
                     setattr(_H, attr, deepcopy(value))
         return _H
 
+def rng_node_(_N_, rng):  # forms discrete rng+ links, vs indirect rng+ in rng_kern_, still no sub_Gs / rng+
+
+    rEt = [0,0,0,0]
+    n = 0
+    while True:
+        N_, Et = rng_kern_(_N_, rng)  # += rng layer
+        for N in N_:
+            # moved from rng_kern_, should be revised:
+            for rlay in N.extH.H:  # rng layer
+                if rlay.H:  # popped if weak?
+                    Dlay = CH()
+                    _klay = rlay.H[0]
+                    for klay in rlay.H[1:]:  # comp consecutive kernel layers:
+                        Dlay.add_H(_klay.comp_H(klay, rn=1,fagg=1))  # no DH, local Dlay
+                        _klay = klay
+                    if Dlay.Et[0] < ave * Dlay.Et[2]: rlay.H = []  # remove discrete k layers, keep sum in extH.H[n]
+            # draft:
+            rLay = N.extH.H[n]
+            for kLay in rLay.H:
+                for MD_, md_ in zip(rLay.md_t, kLay.md_t):  # latMD_,layMD_,extMD_
+                    MD_.add_md_(md_)
+            rH = []
+            for KLay, kLay in zip_longest(rLay.nestH, rLay.H, fillvalue=None):
+                if KLay is None: KLay = CH()
+                KLay.add_H(kLay)
+                rH += [KLay]
+            if rH: rLay.nestH = rH
+        if not n: rN_ = N_  # first popped N_
+        n += 1
+        rEt = [V+v for V, v in zip(rEt, Et)]
+        if Et[0] > ave * Et[2]:
+            rng += 1
+            _N_ = N_
+        else:
+            break
+    return rN_, rEt, rng
+
