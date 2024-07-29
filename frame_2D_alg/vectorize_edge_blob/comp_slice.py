@@ -65,7 +65,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.Et = [0,0,0,0] if Et is None else Et  # external eval tuple, summed from rng++ before forming new graph and appending G.extH
         G.latuple = [0,0,0,0,0,[0,0]]  # lateral I,G,M,Ma,L,[Dy,Dx]
         G.mdLay = CH() if derH is None else derH
-        G.derH = CH() if derH is None else derH  # nested derH in Gs: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
+        G.derH = CH() if derH is None else derH  # nested derH in Gs: [[HH,valt,rdnt,dect]], HH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
         G.DerH = CH() if DerH is None else DerH  # _G.derH summed from krim
         G.node_ = [] if node_ is None else node_  # convert to node_t in sub_recursion
         G.link_ = [] if link_ is None else link_  # links per comp layer, nest in rng+)der+
@@ -76,7 +76,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         # graph-external, +level per root sub+:
         G.n = n  # external n (last layer n)
         G.rim_ = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
-        G.extH = CH()  # G-external daggH( dsubH( dderH, summed from rim links ) krim nodes
+        G.extH = CH()  # G-external daggH( dHH( dderH, summed from rim links ) krim nodes
         G.alt_graph_ = []  # adjacent gap+overlap graphs, vs. contour in frame_graphs
         # dynamic attrs:
         G.Rim = []  # links to the most mediated nodes
@@ -113,26 +113,18 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
 
 
 class CH(CBase):  # generic derivation hierarchy of variable nesting, depending on effective agg++(sub++ depth
-    '''
-    If nesting in derH.H may be deleted, deleted H_[i] = n of deleted layers, with their summed Ders in subH[i],
-    we need to directly represent and compare deeper derH.H orders via subH:
-
-    if nested node_: node_ = max node layer, sum,concat all layers in corr derH.H layers:
-    node_) derH.H: each layer represents multiple sub-node_s, otherwise accessible through nodes in node_
-
-    if nested derH: derH.H = max derH order, sum,concat all orders in corr derH.subH layers:
-    node_) derH.H ) derH.subH: nesting orders from prior xcomps, bottom 2D layer is [mdlat,mdLay,mdext]
-    '''
     name = "H"
-    def __init__(He, md_t=None, n=0, Et=None, Rt=None, H=None, subH=None, root=None):
+    def __init__(He, md_t=None, n=0, Et=None, Rt=None, H=None, HH=None, root=None):
         super().__init__()
-
         He.md_t = [] if md_t is None else md_t  # compared [mdlat,mdLay,mdext] per layer
-        He.node_ = []  # strongest concat node_ layer in H
-        He.i = 0  # index of node_ in H, assign after eval
-        He.H = [] if H is None else H  # strongest concat H in subH: lower der layers or md_ in md_C, empty in bottom layer
-        He.ii = 0  # index of H in subH
-        He.subH = [] if subH is None else subH  # sublayers nested in layer, in agg++|sub++
+        '''
+        nesting: node_) derH ) HH.., add to CG at comp lower order
+        start at max/exemplar, possibly multiple, trace in both directions:
+        node_[0]'[N,i]) derH[0]'[Lay,i]) HH[0]'[H,i].., concat all lower nesting orders:
+        '''
+        He.node_ = []  # may be redundant to G.node_
+        He.H = [] if H is None else H  # lower derLays or md_ in md_C, empty in bottom layer, may be redundant to root HH[0][0]
+        He.HH = [] if HH is None else HH  # lower Hs added in agg++|sub++
         He.n = n  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
         He.Et = [0,0,0,0] if Et is None else Et    # evaluation tuple: valt, rdnt
         He.Rt = [0,0] if Rt is None else Rt  # m,d relative to max possible m,d
@@ -167,13 +159,13 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
                 if lay is not None:
                     if Lay and lay:  # empty after removing H from rnglay
                         if Lay.H:  # empty in bottom layer
-                            Lay.subH += [lay]  # for direct access?
+                            Lay.HH[-1] += [lay]  # for direct access?
                             Lay.add_H(lay, irdnt)  # unpack, add deeper layers
                     else:
                         if Lay is None: Lay = CH(root=HE)
                         HE.H += [Lay.copy(lay)]
             # default
-            HE.md_t.add_md_t(He.md_t) # [lat_md_C, lay_md_C, ext_md_C]
+            HE.add_md_t(He) # [lat_md_C, lay_md_C, ext_md_C]
             HE.Et = np.add(HE.Et, He.Et); HE.Rt = np.add(HE.Rt, He.Rt)
             if any(irdnt): HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
             HE.n += He.n  # combined param accumulation span
@@ -190,11 +182,11 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         if flat:
             for H in He.H: H.root = HE
             HE.H += He.H  # append flat
-            HE.subH += He.subH  # not sure
+            HE.HH += He.HH  # not sure
         else:
             He.root = HE
             HE.H += [He]  # append nested
-            HE.subH += [He.subH]  # deeper sublayers of nested derH?
+            HE.HH += [He.HH]  # deeper sublayers of nested derH?
         if HE.md_t:
             HE.add_md_t(He)  # accumulate [lat_md_C,lay_md_C,ext_md_C]
         else: # init
@@ -236,7 +228,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         der_md_t = []; Et = [0,0,0,0]; Rt = [0,0]
         for _md_C, md_C in zip(_He.md_t, He.md_t):
 
-            der_md_C = _md_C.H.comp_md_(md_C.H, rn=1, fagg=0, frev=0)
+            der_md_C = _md_C.comp_md_(md_C, rn=1, fagg=0, frev=0)  # H is a list, we should use md_C instead
             der_md_t += [der_md_C]; Et = np.add(Et, der_md_C.Et); Rt = np.add(Rt, der_md_C.Rt)
 
         return CH(md_t=der_md_t, Et=Et, Rt=Rt, n=2.5)
@@ -263,11 +255,14 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
                         _H.H = []
                         if isinstance(H.H[0], CH):
                             for lay in H.H:
-                                Lay = CH()
-                                Lay.copy(lay)
-                                _H.H += [Lay]
+                                _H.H += [CH().copy(lay)]
                         else:  # md_
                             _H.H = deepcopy(H.H)
+                elif attr == "md_t":  # can't deepcopy CH.root
+                    _H.md_t = []
+                    for md_ in H.md_t:
+                        _H.md_t += [CH().copy(md_)]
+
                 else:
                     setattr(_H, attr, deepcopy(value))
         return _H
