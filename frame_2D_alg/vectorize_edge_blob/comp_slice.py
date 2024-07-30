@@ -65,7 +65,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.Et = [0,0,0,0] if Et is None else Et  # external eval tuple, summed from rng++ before forming new graph and appending G.extH
         G.latuple = [0,0,0,0,0,[0,0]]  # lateral I,G,M,Ma,L,[Dy,Dx]
         G.mdLay = CH() if derH is None else derH
-        G.derH = CH() if derH is None else derH  # nested derH in Gs: [[HH,valt,rdnt,dect]], HH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
+        G.derH = CH() if derH is None else derH  # nested derH in Gs: [[H_,valt,rdnt,dect]], H_: [[derH,valt,rdnt,dect]]: 2-fork composition layers
         G.DerH = CH() if DerH is None else DerH  # _G.derH summed from krim
         G.node_ = [] if node_ is None else node_  # convert to node_t in sub_recursion
         G.link_ = [] if link_ is None else link_  # links per comp layer, nest in rng+)der+
@@ -75,8 +75,8 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.kH = []  # kernel: hierarchy of rim layers
         # graph-external, +level per root sub+:
         G.n = n  # external n (last layer n)
-        G.rim_ = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
-        G.extH = CH()  # G-external daggH( dHH( dderH, summed from rim links ) krim nodes
+        G.rim_ = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tH_ in cpr sub+
+        G.extH = CH()  # G-external daggH( dH_( dderH, summed from rim links ) krim nodes
         G.alt_graph_ = []  # adjacent gap+overlap graphs, vs. contour in frame_graphs
         # dynamic attrs:
         G.Rim = []  # links to the most mediated nodes
@@ -114,17 +114,17 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
 
 class CH(CBase):  # generic derivation hierarchy of variable nesting, depending on effective agg++(sub++ depth
     name = "H"
-    def __init__(He, md_t=None, n=0, Et=None, Rt=None, H=None, HH=None, root=None):
+    def __init__(He, md_t=None, n=0, Et=None, Rt=None, H=None, H_=None, root=None):
         super().__init__()
         He.md_t = [] if md_t is None else md_t  # compared [mdlat,mdLay,mdext] per layer
         '''
-        nesting: node_) derH ) HH.., add to CG at comp lower order
+        nesting: node_) derH ) H_.., add to CG at comp lower order
         start at max/exemplar, possibly multiple, trace in both directions:
-        node_[0]'[N,i]) derH[0]'[Lay,i]) HH[0]'[H,i].., concat all lower nesting orders:
+        node_[0]'[N,i]) derH[0]'[Lay,i]) H_[0]'[H,i].., concat all lower nesting orders:
         '''
         He.node_ = []  # may be redundant to G.node_
-        He.H = [] if H is None else H  # lower derLays or md_ in md_C, empty in bottom layer, may be redundant to root HH[0][0]
-        He.HH = [] if HH is None else HH  # lower Hs added in agg++|sub++
+        He.H = [] if H is None else H  # lower derLays or md_ in md_C, empty in bottom layer, may be redundant to root H_[0][0]
+        He.H_ = [] if H_ is None else H_  # lower Hs added in agg++|sub++
         He.n = n  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
         He.Et = [0,0,0,0] if Et is None else Et    # evaluation tuple: valt, rdnt
         He.Rt = [0,0] if Rt is None else Rt  # m,d relative to max possible m,d
@@ -159,7 +159,9 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
                 if lay is not None:
                     if Lay and lay:  # empty after removing H from rnglay
                         if Lay.H:  # empty in bottom layer
-                            Lay.HH[-1] += [lay]  # for direct access?
+                            if Lay.H_: Lay.H_[-1].add_H(lay)
+                            else:  Lay.H_.append_(CH().append_(lay))
+                            # lay.H is redundant?
                             Lay.add_H(lay, irdnt)  # unpack, add deeper layers
                     else:
                         if Lay is None: Lay = CH(root=HE)
@@ -180,13 +182,13 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
 
         if irdnt is None: irdnt = []
         if flat:
-            for H in He.H: H.root = HE
+            for H in He.H_: H.root = HE
             HE.H += He.H  # append flat
-            HE.HH += He.HH  # not sure
+            HE.H_.append_(He.H_, flat=1)  # seems redundant, add nesting instead?
         else:
             He.root = HE
             HE.H += [He]  # append nested
-            HE.HH += [He.HH]  # deeper sublayers of nested derH?
+            HE.H_.append_(He.H_, flat=0)  # deeper sublayers of nested derH?
         if HE.md_t:
             HE.add_md_t(He)  # accumulate [lat_md_C,lay_md_C,ext_md_C]
         else: # init
@@ -236,7 +238,8 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
 
     def comp_H(_He, He, rn=1, fagg=0, frev=0):  # unpack CHs down to numericals and compare them
 
-        DLay = CH()  # may be nested
+        # assigned H_ with _He.H_?
+        DLay = CH(H_=_He.H_)  # may be nested
         DLay.add_H(_He.comp_md_t(He))
 
         for _lay, lay in zip(_He.H, He.H):  # loop extH s or [mdlat, mdLay, mdext] rng tuples

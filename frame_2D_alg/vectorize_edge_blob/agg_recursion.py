@@ -44,7 +44,7 @@ max_dist = 2
 class CL(CBase):  # link or edge, a product of comparison between two nodes or links
     name = "link"
 
-    def __init__(l, nodet=None,derH=None, span=0, angle=None, box=None, md_t=None, HH=None):
+    def __init__(l, nodet=None,derH=None, span=0, angle=None, box=None, md_t=None, H_=None):
         super().__init__()
         # CL = binary tree of Gs, depth+/der+: CL nodet is 2 Gs, CL + CLs in nodet is 4 Gs, etc.,
         # unpack sequentially
@@ -57,7 +57,7 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         l.md_t = [] if md_t is None else md_t  # [mdlat,mdLay,mdext] per layer
         l.derH = CH() if derH is None else derH
         l.DerH = CH()  # ders from kernels: G.DerH
-        l.HH = [] if HH is None else HH  # if agg++| sub++
+        l.H_ = [] if H_ is None else H_  # if agg++| sub++
         l.mdext = []  # Et, Rt, Md_
         l.ft = [0,0]  # fork inclusion tuple, may replace Vt:
         l.Vt = [0,0]  # for rim-overlap modulated segmentation, init derH.Et[:2]
@@ -109,7 +109,7 @@ def agg_recursion(root, N_, fL, rng=1):  # fL: compare node-mediated links, else
         root.node_[:] = node_t
     # else keep root.node_
     # eval max derH.H[i].node_ as node_,
-    # eval max derH.HH[i].H as H?
+    # eval max derH.H_[i].H as H?
 
 def rng_node_(_N_, rng):  # forms discrete rng+ links, vs indirect rng+ in rng_kern_, still no sub_Gs / rng+
 
@@ -119,7 +119,7 @@ def rng_node_(_N_, rng):  # forms discrete rng+ links, vs indirect rng+ in rng_k
         N_, Et = rng_kern_(_N_, rng)  # += rng layer
         for N in N_:
             # draft:
-            rLay = N.extH.H[n]  # formed in rng_kern_
+            rLay = N.kH  # temporary, formed in rng_kern_
             for kLay in rLay.H:
                 for MD_, md_ in zip(rLay.md_t, kLay.md_t):
                     MD_.add_md_(md_)  # lat|lay|ext md_
@@ -131,7 +131,9 @@ def rng_node_(_N_, rng):  # forms discrete rng+ links, vs indirect rng+ in rng_k
                         maxV = V; _Lay = kLay; _i = i
                     kH += [kLay]
                 else: break
-            if kH: rLay.HH += [[[_Lay,_i]] + kH]  # add exemplar kLay in kH[0]
+            if kH:
+                N.extH.H_.append_(CH().append_(CH( H=[[[_Lay,_i]] + kH])))  # rLay with exemplar kLay in kH[0]
+                # N.extH.H is now redundant?
         if not n: rN_ = N_  # first popped N_
         n += 1
         rEt = [V+v for V, v in zip(rEt, Et)]
@@ -163,7 +165,7 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
                     if g not in _G_: _G_ += [g]
     # init conv kernels:
     for g in reversed(_G_):
-        lay = CH(md_t=[CH(), CH(), CH()])
+        lay = CH(md_t=[CH(),CH(),CH()])
         krim = []
         for link, rev in g.rim_[-1]:
             if link.ft[0]:  # must be mlink
@@ -181,7 +183,9 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
         G_ = []
         for G in _G_:  # += krim
             G.kH += [[]]; G.visited__ += [[]]
+            # this is now G.extH.H_[-1]: lower derivation layer, or kCH_[0]?
             G.DerH.H[-1].H += [CH(root=G.DerH.H[-1], md_t=[CH(), CH(), CH()])]  # comparands
+            # temporary, use kCH[1] instead of extH until eval in rng_node_?
             G.extH.H[-1].H += [CH(root=G.extH.H[-1], md_t=[CH(), CH(), CH()])]  # derivatives
         for G in _G_:
             for _G in G.kH[-2]:  # after += klay
@@ -204,7 +208,7 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
                 # sum lower-krim alt DerH.H layer:
                 if _G.DerH.H[-1].H[-2]: G.DerH.H[-1].H[-1].add_H(_G.DerH.H[-1].H[-2])
                 if G.DerH.H[-1].H[-2]: _G.DerH.H[-1].H[-1].add_H(G.DerH.H[-1].H[-2])
-        # reset/ += HH sublay:
+        # reset/ += H_ sublay:
         for G in G_: G.visited__[-1] = []
         for G in G_:
             for _G in G.kH[0]:  # comp direct kernel
@@ -290,7 +294,7 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
         mdlat.root = DLay; mdLay.root = DLay; mdext.root = DLay
         if _N.derH and N.derH:
             dLay = _N.derH.comp_H(N.derH,rn,fagg=1,frev=rev)
-            DLay.add_H(dLay)  # also append discrete higher subLays in dLay.HH[0], if any?
+            DLay.add_H(dLay)  # also append discrete higher subLays in dLay.H_[0], if any?
             # no comp extH: current ders
     if fd: Link.derH.append_(DLay)
     else:  Link.derH = DLay
