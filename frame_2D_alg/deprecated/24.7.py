@@ -322,26 +322,23 @@ def rng_node_(_N_, rng):  # forms discrete rng+ links, vs indirect rng+ in rng_k
     while True:
         N_, Et = rng_kern_(_N_, rng)  # += rng layer
         for N in N_:
-            # moved from rng_kern_, should be revised:
-            for rlay in N.extH.H:  # rng layer
-                if rlay.H:  # popped if weak?
-                    Dlay = CH()
-                    _klay = rlay.H[0]
-                    for klay in rlay.H[1:]:  # comp consecutive kernel layers:
-                        Dlay.add_H(_klay.comp_H(klay, rn=1,fagg=1))  # no DH, local Dlay
-                        _klay = klay
-                    if Dlay.Et[0] < ave * Dlay.Et[2]: rlay.H = []  # remove discrete k layers, keep sum in extH.H[n]
             # draft:
-            rLay = N.extH.H[n]
+            rLay = N.kCH_.H[1]  # temporary, ders formed in rng_kern_
             for kLay in rLay.H:
-                for MD_, md_ in zip(rLay.md_t, kLay.md_t):  # latMD_,layMD_,extMD_
-                    MD_.add_md_(md_)
-            rH = []
-            for KLay, kLay in zip_longest(rLay.nestH, rLay.H, fillvalue=None):
-                if KLay is None: KLay = CH()
-                KLay.add_H(kLay)
-                rH += [KLay]
-            if rH: rLay.nestH = rH
+                for MD_, md_ in zip(rLay.md_t, kLay.md_t):
+                    MD_.add_md_(md_)  # lat|lay|ext md_
+            kH = []; maxV = 0
+            for i, kLay in enumerate(rLay.H):
+                V = kLay.Et[0] - ave * kLay.Et[2]
+                if V > 0:
+                    if V > maxV:
+                        maxV = V; _Lay = kLay; _i = i
+                    kH += [kLay]
+                else: break
+            if kH:
+                N.extH.i = _i  # max krim, or just krng?
+                N.extH.H_.append_(CH().append_(CH( H=[[[_Lay,_i]] + kH])))  # rLay with exemplar kLay in kH[0]
+                # so it's just just N.extH.H (rngH) at this point, converted to H_ in agg++|sub++?
         if not n: rN_ = N_  # first popped N_
         n += 1
         rEt = [V+v for V, v in zip(rEt, Et)]
@@ -352,3 +349,101 @@ def rng_node_(_N_, rng):  # forms discrete rng+ links, vs indirect rng+ in rng_k
             break
     return rN_, rEt, rng
 
+def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backprop, not for CLs
+
+    _G_ = []
+    Et = [0,0,0,0]
+    # comp_N:
+    for (_G, G) in list(combinations(N_,r=2)):
+        if _G in [G for visited_ in G.visited__ for G in visited_]:  # compared in any rng++
+            continue
+        dy,dx = np.subtract(_G.yx,G.yx)
+        dist = np.hypot(dy,dx)
+        aRad = (G.aRad+_G.aRad) / 2  # ave radius to eval relative distance between G centers:
+        if dist / max(aRad,1) <= max_dist * rng:
+            for _g,g in (_G,G),(G,_G):
+                if len(g.extH.H)==rng: g.visited__[-1] += [_g]
+                else: g.visited__ += [[_g]]  # init layer
+            Link = CL(nodet=[_G,G], span=2, angle=[dy,dx], box=extend_box(G.box,_G.box))
+            if comp_N(Link, Et, rng):
+                for g in _G,G:
+                    if g not in _G_: _G_ += [g]
+    # init conv kernels:
+    for g in reversed(_G_):
+        lay = CH(md_t=[CH(),CH(),CH()])
+        krim = []
+        for link, rev in g.rim_[-1]:
+            if link.ft[0]:  # must be mlink
+                krim += [link.nodet[0] if link.nodet[1] is g else link.nodet[1]]
+                lay.add_md_t(link.derH)
+        if krim:
+            g.kH += [krim]
+            g.DerH.H[-1].append_(lay)
+            comparands = CH(H=[lay])  # init comparands, with lay as 1st layer of comparand
+            derivatives = CH(H=[])  # init derivatives, with empty derivative layer
+            g.kCH_ = CH(H=[comparands, derivatives])  # init comparand and der (previous DerH and extH)
+        else:
+            _G_.remove(g)
+    iG_ = copy(_G_)  # new kH
+    n = 1  # n kernel rims
+    # convolution: kernel rim Def,Sum,Comp, in separate loops for bilateral G,_G assign:
+    while True:
+        G_ = []
+        for G in _G_:  # += krim
+            G.kH += [[]]; G.visited__ += [[]]
+            comparand = CH(root=G.kCH_.H[0], md_t=[CH(), CH(), CH()])  # comparands per n in convolution
+            der = CH(root=G.kCH_.H[1], md_t=[CH(), CH(), CH()])  # derivatives per n in convolution
+            G.kCH_.H[0].append_(comparand,flat=0)  # pack comparands
+            G.kCH_.H[1].append_(der,flat=0)        # pack derivatives
+        for G in _G_:
+            for _G in G.kH[-2]:  # after += klay
+                for link, rev in _G.rim_[-1]:
+                    __G = link.nodet[0] if link.nodet[1] is G else link.nodet[1]
+                    if __G in _G_:
+                        if __G not in G.kH[-1] + [g for visited_ in G.visited__ for g in visited_]:
+                            G.kH[-1] += [__G]; __G.kH[-1] += [G]  # bilateral add layer of unique mediated nodes
+                            for g,_g in zip((G,__G),(__G,G)):
+                                g.visited__[-1] += [_g]
+                                if g not in G_:  # in G_ only if in visited__[-1]
+                                    G_ += [g]
+        # local/ += DerH sublay:
+        for G in G_: G.visited__ += [[]]
+        for G in G_:
+            for _G in G.kH[-1]:  # add last krim
+                if _G in G.visited__[-1] or _G not in _G_:  # skip if _G not in _G_
+                    continue  # _G was previously compared as G
+                G.visited__[-1] += [_G]; _G.visited__[-1] += [G]
+                # sum lower-krim alt DerH.H layer:
+                if _G.kCH_.H[0].H[-2]:
+                    G.kCH_.H[0].H[-1].add_H(_G.kCH_.H[0].H[-2])
+                if G.kCH_.H[0].H[-2]:
+                    _G.kCH_.H[0].H[-1].add_H(G.kCH_.H[0].H[-2])
+
+        # reset/ += H_ sublay:
+        for G in G_: G.visited__[-1] = []
+        for G in G_:
+            for _G in G.kH[0]:  # comp direct kernel
+                if _G in G.visited__[-1] or _G not in G_: continue
+                _comparand, comparand   = _G.kCH_.H[0].H[-1], _G.kCH_.H[0].H[-1]
+                _derivative, derivative = _G.kCH_.H[1].H[-1], _G.kCH_.H[1].H[-1]
+                G.visited__[-1] += [_G]; _G.visited__[-1] += [G]
+                # comp last DerLay:
+                DLay = _comparand.comp_H(comparand,rn=1,fagg=1)
+                if DLay.Et[0] > ave * DLay.Et[2] * (rng+n+1):  # each layer adds cost
+                    for h in _derivative, derivative:
+                        h.add_H(DLay)  # bilateral assign
+        # eval extH sublay:
+        for G in reversed(G_):
+            G.visited__.pop()  # loop-specific layer
+            if G.kCH_.H[1].H[-1].Et[0] <= ave * G.kCH_.H[1].H[-1].Et[2] * (rng+n+1):
+                G_.remove(G)
+        for G in _G_:
+            if G not in G_:
+                G.visited__.pop()  # init or weak
+                # delattr(G, 'kCH_') (not sure, i think we still need it later right?)
+        if G_:
+            _G_ = G_; n += 1
+        else:
+            break
+
+    return iG_, Et  # Gs with added rim
