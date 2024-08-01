@@ -54,28 +54,28 @@ class CcompSliceFrame(CsliceEdge):
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    def __init__(G, root=None, rng=1, fd=0, node_=None, link_=None, Et=None, mdLay=None, derH=None, n=0):
+    def __init__(G, root=None, rng=1, fd=0, node_=None, link_=None, Et=None, mdLay=None, derH=None, extH=None, n=0):
         super().__init__()
-        # PP:
+
         G.root = [] if root is None else root  # mgraphs that contain this G, single-layer
+        G.node_ = [] if node_ is None else node_  # convert to node_t in sub_recursion
+        G.link_ = [] if link_ is None else link_  # links per comp layer, nest in rng+)der+
+        G.Et = [0,0,0,0] if Et is None else Et  # extH.Et + derH.Et + mdLay.Et?
+        G.latuple = [0,0,0,0,0,[0,0]]  # lateral I,G,M,Ma,L,[Dy,Dx]
+        G.mdLay = CH(root=G) if mdLay is None else mdLay
+        # indefinitely nested in agg+|sub+:
+        G.derH = CH(root=G) if derH is None else derH  # internal, sum from node_
+        G.extH = CH(root=G) if extH is None else extH  # external, sum from rim_) krim links
+        G.kHH = []  # kernel: hierarchy of rim layers
+        G.rim_ = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tH_ in cpr sub+
+        G.n = n  # external n (last layer n)
         G.rng = rng
         G.S = 0  # sparsity: distance between node centers
         G.A = 0, 0  # angle: summed dy,dx in links
         G.area = 0
-        G.Et = [0,0,0,0] if Et is None else Et  # external eval tuple, summed from rng++ before forming new graph and appending G.extH
-        G.latuple = [0,0,0,0,0,[0,0]]  # lateral I,G,M,Ma,L,[Dy,Dx]
-        G.mdLay = CH() if derH is None else derH
-        G.derH = CH() if derH is None else derH  # nested derH in Gs: [[H_,valt,rdnt,dect]], H_: [[derH,valt,rdnt,dect]]: 2-fork composition layers
-        G.node_ = [] if node_ is None else node_  # convert to node_t in sub_recursion
-        G.link_ = [] if link_ is None else link_  # links per comp layer, nest in rng+)der+
         G.aRad = 0  # average distance between graph center and node center
         G.box = [np.inf, np.inf, -np.inf, -np.inf]  # y0,x0,yn,xn
         G.yx = [0,0]  # init PP.yx = [(y0+yn)/2,(x0,xn)/2], then ave node yx
-        G.kH = []  # kernel: hierarchy of rim layers
-        # graph-external, +level per root sub+:
-        G.n = n  # external n (last layer n)
-        G.rim_ = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tH_ in cpr sub+
-        G.extH = CH()  # G-external daggH( dH_( dderH, summed from rim links ) krim nodes
         G.alt_graph_ = []  # adjacent gap+overlap graphs, vs. contour in frame_graphs
         # dynamic attrs:
         G.Rim = []  # links to the most mediated nodes
@@ -121,11 +121,11 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         He.ni = 0  # exemplar index in node_, then trace in both directions?
         He.H = [] if H is None else H  # lower derLays or md_ in md_C, empty in bottom layer
         He.i = 0  # exemplar index in H
-        He.depth = 0  # nesting in H[0], -=i in H[i], added in agg++|sub++
+        He.depth = 0  # nesting in H[0], -=i in H[i], added in agg++|sub++, currently not used
         He.n = n  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
         He.Et = [0,0,0,0] if Et is None else Et    # evaluation tuple: valt, rdnt
         He.Rt = [0,0] if Rt is None else Rt  # m,d relative to max possible m,d
-        He.root = None if root is None else root
+        He.root = None if root is None else root  # N or higher-composition He
         # He.nest = nest  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH?
 
     def __bool__(H): return H.n != 0
@@ -154,8 +154,8 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
             for Lay,lay in zip_longest(HE.H, He.H, fillvalue=None):  # cross comp layer
                 if lay is not None:
                     if Lay and lay:  # empty after removing H from rnglay
-                        if Lay.H:  # Lay is subH, add unpack sublays:
-                            Lay.add_H(lay, irdnt)  # multiple parallel unpack if Lay.depth?
+                        if Lay.H:  # Lay is subH, add unpack sublays, depth unpack?
+                            Lay.add_H(lay, irdnt)
                     else:
                         if Lay is None: Lay = CH(root=HE)
                         HE.H += [Lay.copy(lay)]
@@ -166,10 +166,12 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
             HE.n += He.n  # combined param accumulation span
         else:
             HE.copy(He)  # init
-        while HE is not None:
-            HE.Et = np.add(HE.Et, He.Et); HE.Rt = np.add(HE.Rt, He.Rt); HE.n += He.n
-            HE = HE.root
-
+        # feedback, ideally buffered from all elements before summing in root, ultimately G|L:
+        root = HE.root
+        while root is not None:
+            root.Et = np.add(root.Et, He.Et); root.Rt = np.add(root.Rt, He.Rt); root.n += He.n
+            root = root.root
+        return HE
 
     def append_(HE,He, irdnt=None, flat=0):
 
@@ -191,6 +193,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
             root.Et = np.add(root.Et, He.Et); root.Rt = np.add(root.Rt, He.Rt); root.n += He.n
             root = root.root
         return HE  # for feedback in agg+
+
 
     def comp_md_(_He, He, rn=1, fagg=0, frev=0):
 
@@ -238,22 +241,18 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         return DLay
 
     def copy(_H, H):
-
         for attr, value in H.__dict__.items():
             if attr != '_id' and attr != 'root' and attr in _H.__dict__.keys():  # copy only the available attributes and skip id
                 if attr == 'H':  # can't deepcopy CH.root
                     if H.H:
                         _H.H = []
                         if isinstance(H.H[0], CH):
-                            for lay in H.H:
-                                _H.H += [CH().copy(lay)]
-                        else:  # md_
-                            _H.H = deepcopy(H.H)
+                            for lay in H.H: _H.H += [CH().copy(lay)]
+                        else:               _H.H = deepcopy(H.H)  # md_
                 elif attr == "md_t":  # can't deepcopy CH.root
                     _H.md_t = []
                     for md_ in H.md_t:
                         _H.md_t += [CH().copy(md_)]
-
                 else:
                     setattr(_H, attr, deepcopy(value))
         return _H
@@ -502,7 +501,7 @@ if __name__ == "__main__":
                         _node, node = dP.nodet
                         if (_node.id, node.id) in nodet_set:  # verify link uniqueness
                             raise ValueError(
-                                f"link not unique between {_node} and {node}. PP.link_:\n" +
+                                "link not unique between {_node} and {node}. PP.link_:\n" +
                                 "\n".join(map(lambda dP: f"dP.id={dP.id}, _node={dP.nodet[0]}, node={dP.nodet[1]}", PP.link_))
                             )
                         nodet_set.add((_node.id, node.id))
