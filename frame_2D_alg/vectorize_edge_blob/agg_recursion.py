@@ -2,7 +2,7 @@ import numpy as np
 from copy import deepcopy, copy
 from itertools import combinations, zip_longest
 from .slice_edge import comp_angle, CsliceEdge
-from .comp_slice import comp_slice, comp_latuple, CH, CG
+from .comp_slice import comp_slice, comp_latuple, add_lat, CH, CG
 from utils import extend_box
 from frame_blobs import CBase
 
@@ -73,7 +73,7 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
             comp_slice(edge)
             # init for agg+:
             edge.derH = CH(H=[CH()]); edge.derH.H[0].root = edge.derH
-            edge.link_ = []; edge.fback_t = [[],[]]
+            edge.link_ = []; edge.fback_t = [[],[]]; edge.Et = [0,0,0,0]
             node_t, link_t = [[],[]], [[],[]]
             for fd, node_ in enumerate(copy(edge.node_)):  # always node_t
                 if edge.mdLay.Et[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.mdLay.Et[2+fd]:
@@ -151,11 +151,10 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
         for link,rev in G.rim_[-1]:
             if link.ft[0]:  # must be mlink
                 _G = link.nodet[0] if link.nodet[1] is G else link.nodet[1]
-                krim += [_G]
-                if hasattr(G,'dLay'):
-                    G.dLay.add_H(link.derH); G._kLay.add_H(_G.derH)
-                else:
-                    G.dLay = CH().copy(link.derH); G._kLay = CH().copy(_G.derH)  # init ders, next krim comparand
+                krim += [_G]; G.kLay = []
+                if hasattr(G,'dLay'): G.dLay.add_H(link.derH)
+                else:            G.dLay = CH().copy(link.derH)
+                G._kLay = sum_kLay(G,_G)  # next krim comparand
         if krim:
             if rng>1: G.kHH[-1] += [krim]  # kH = lays ( nodes
             else:     G.kHH = [[krim]]
@@ -180,7 +179,6 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
                             for g,_g in zip((G,__G),(__G,G)):
                                 g.visited__[-1] += [_g]
                                 if g not in G_:  # in G_ only if in visited__[-1]
-                                    g.kLay = CH()  # init
                                     G_ += [g]
         for G in G_: G.visited__ += [[]]
         for G in G_: # sum kLay:
@@ -189,21 +187,20 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
                     continue  # Gs krim appended when _G was G
                 G.visited__[-1] += [_G]; _G.visited__[-1] += [G]
                 # sum alt G lower kLay:
-                G.kLay.add_H(_G._kLay); _G.kLay.add_H(G._kLay)
+                sum_kLay(_G,G); G.klay = _G.klay  # bilateral sum
         for G in G_: G.visited__[-1] = []
         for G in G_:
             for _G in G.kHH[-1][0]:  # convo in direct kernel only
                 if _G in G.visited__[-1] or _G not in G_: continue
                 G.visited__[-1] += [_G]; _G.visited__[-1] += [G]
                 # comp G kLay:
-                dlay = G.kLay.comp_H(_G.kLay,rn=1,fagg=1)
+                dlay = comp_core(_G.kLay, G.kLay, fmerge=0)
                 if dlay.Et[0] > ave * dlay.Et[2] * (rng+n):  # layers add cost
-                    _G.dLay = _G.dLay.add_H(dlay) if hasattr(_G,'dLay') else CH().copy(dlay)
-                    G.dLay = G.dLay.add_H(dlay) if hasattr(G,'dLay') else CH().copy(dlay)  # bilateral
+                    _G.dLay.add_H(dlay); G.dLay.add_H(dlay)  # bilateral
         # eval dLay:
         for G in reversed(G_):
             G.visited__.pop()  # loop-specific layer
-            if not hasattr(G,'dLay') or G.dLay.Et[0] <= ave * G.dLay.Et[2] * (rng+n+1):
+            if G.dLay.Et[0] <= ave * G.dLay.Et[2] * (rng+n+1):
                 G_.remove(G)
         for G in _G_:
             if G in G_: G._kLay = G.kLay  # comp in next krng
@@ -212,11 +209,22 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
             _G_ = G_; n += 1
         else:
             for G in Gd_:
-                if rng: G.extH[-1].append(G.dLay)
-                else:   G.extH.append(CH().append(G.dLay))
+                if rng>1: G.extH.H[-1].append_(G.dLay)  # rng starts with 1, instead of 0
+                else:     G.extH.append_(CH().append_(G.dLay))
                 delattr(G,'dLay'); delattr(G,'kLay'); delattr(G,'_kLay')
             break
     return Gd_, Et  # all Gs with dLay added in 1st krim
+
+
+def sum_kLay(_G, G):  # init kLay is G attrs, then G.kLay
+
+    _n,_L,_S,_A,_derH,_lat,_mdLay = _G._kLay if hasattr(_G,"_kLay") \
+        else _G.n,len(_G.node_),_G.S,_G.A, CH().copy(_G.derH) if _G.derH else None, deepcopy(_G.latuple), CH().copy(_G.mdLay)
+    n,L,S,A,derH,lat,mdLay = G._kLay if hasattr(G,"_kLay") \
+        else G.n,len(G.node_),G.S,G.A, CH().copy(G.derH) if G.derH else None, deepcopy(G.latuple), CH().copy(G.mdLay)
+    return [
+        _n+n, add_lat(_lat,lat), _mdLay.add_md_(mdLay), _L+L,_S+S,[_A[0]+A[0],_A[1]+A[1]],
+        _derH.add_H(derH) if derH else None ]
 
 
 def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
@@ -246,6 +254,10 @@ def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
                             elif _L not in rL_: rL_ += [_L]
                             if L not in rL_:    rL_ += [L]
                             mN_t_[_L_.index(_L)][1 - rev] += L.nodet
+                            for node in (L, _L):
+                                if len(node.extH.H) < rng:
+                                    node.extH.append_(Link.derH)
+                                else: node.extH.H[-1].add_H(Link.derH)
         L_, mN_t_ = [],[]
         for L, mN_t in zip(_L_, mN_t_):
             if any(mN_t):
@@ -268,7 +280,8 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
     if fd:  # CLs, form single layer:
         DLay = _N.derH.comp_H(N.derH, rn, fagg=1)  # new link derH = local dH
         N.mdext = comp_ext(2,2, _N.S,N.S/rn, _N.angle, N.angle if rev else [-d for d in N.angle])  # reverse for left link
-        N.Et = np.add(DLay.Et, N.mdext.Et)
+        N.Et = np.array(N.Et) + DLay.Et + N.mdext.Et
+        DLay.root = Link
     else:   # CGs
         mdlat = comp_latuple(_N.latuple, N.latuple, rn,fagg=1)
         mdLay = _N.mdLay.comp_md_(N.mdLay, rn, fagg=1)  # not in CG of links?
@@ -394,7 +407,7 @@ def segment_N_(root, iN_, fd, rng):
             xN_ = list(sN_- oN_)  # exclusive node_
             _xN_ = list(_sN_- oN_)
             if _xN_ and xN_:
-                dderH = comp_N_(_xN_, xN_)
+                dderH = comp_core(_xN_, xN_)
                 oV += (dderH.Et[fd] - ave * dderH.Et[2+fd])  # norm by R, * dist_coef * agg_coef?
             if oV > ave:
                 link_ += [_L]
@@ -419,14 +432,14 @@ def sum_N_(N_, fd=0):  # sum partial grapht in merge
     n = N.n; S = N.S
     L, A = (N.span, N.angle) if fd else (len(N.node_), N.A)
     if not fd:
-        latuple = deepcopy(N.latuple)  # ignore if CL?
-        mdLay = deepcopy(N.mdLay)
-    derH = CH(); derH.copy(N.derH)
-    extH = CH(); extH.copy(N.extH)
+        latuple = deepcopy(N.latuple)
+        mdLay = CH().copy(N.mdLay)
+        extH = CH().copy(N.extH)
+    derH = CH().copy(N.derH)
     # Et = copy(N.Et)
     for N in N_[1:]:
         if not fd:
-            latuple = [P+p for P,p in zip(latuple[:-1],N.latuple[:-1])] + [[A+a for A,a in zip(latuple[-1],N.latuple[-1])]]
+            add_lat(latuple, N.latuple)
             if N.mdLay: mdLay.add_md_(N.mdLay)
         n += N.n; S += N.S
         L += N.span if fd else len(N.node_)
@@ -437,19 +450,20 @@ def sum_N_(N_, fd=0):  # sum partial grapht in merge
     if fd: return n, L, S, A, derH, extH
     else:  return n, L, S, A, derH, extH, latuple, mdLay  # no comp Et
 
-def comp_N_(_node_, node_):  # compare partial graphs in merge
+def comp_core(_node_, node_, fmerge=1):  # compare partial graphs in merge or kLay in rng_kern_
 
     dderH = CH()
     fd = isinstance(_node_[0], CL)
-    _pars = sum_N_(_node_,fd); _n,_L,_S,_A,_derH,_extH = _pars[:6]
-    pars = sum_N_(node_,fd);    n, L, S, A, derH, extH = pars[:6]
+    _pars = sum_N_(_node_,fd) if fmerge else _node_
+    pars = sum_N_(node_,fd) if fmerge else node_
+    n, L, S, A, derH = pars[:5]; _n,_L,_S,_A,_derH = _pars[:5]
     rn = _n/n
     mdext = comp_ext(_L,L, _S,S/rn, _A,A)
     dderH.n = mdext.n;  dderH.Et = np.array(mdext.Et); dderH.Rt = np.array(mdext.Rt)
     if fd:
         dderH.H = [[mdext]]
     else:
-        _latuple, _mdLay = _pars[6:]; latuple, mdLay = pars[6:]
+        _latuple, _mdLay = _pars[5:]; latuple, mdLay = pars[5:]
         if any(_latuple[:5]) and any(latuple[:5]):  # latuple is empty in CL
             mdlat = comp_latuple(_latuple, latuple, rn, fagg=1)
             dderH.n+=mdlat.n; dderH.Et+=mdlat.Et; dderH.Rt+=mdlat.Rt
@@ -475,8 +489,8 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
         extH.add_H(G.extH) if extH else extH.append_(G.extH,flat=1)
         graph.area += G.area
         graph.box = extend_box(graph.box, G.box)
-        if isinstance(G, CG):  # add latuple to CL too?
-            graph.latuple = [P+p for P,p in zip(graph.latuple[:-1],G.latuple[:-1])] + [[A+a for A,a in zip(graph.latuple[-1],G.latuple[-1])]]
+        if isinstance(G, CG):
+            add_lat(graph.latuple, G.latuple)
         graph.n += G.n  # non-derH accumulation?
         if G.derH:
             graph.derH.add_H(G.derH)

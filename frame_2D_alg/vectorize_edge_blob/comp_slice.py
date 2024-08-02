@@ -57,15 +57,15 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
     def __init__(G, root=None, rng=1, fd=0, node_=None, link_=None, Et=None, mdLay=None, derH=None, extH=None, n=0):
         super().__init__()
 
-        G.root = [] if root is None else root  # mgraphs that contain this G, single-layer
+        G.root  = [] if root is None else root    # mgraphs that contain this G, single-layer
         G.node_ = [] if node_ is None else node_  # convert to node_t in sub_recursion
-        G.link_ = [] if link_ is None else link_  # links per comp layer, nest in rng+)der+
-        G.Et = [0,0,0,0] if Et is None else Et  # extH.Et + derH.Et + mdLay.Et?
+        G.link_ = [] if link_ is None else link_  # internal links per comp layer, nest in rng+)der+
+        G.Et = [0,0,0,0] if Et is None else Et    # extH.Et + derH.Et + mdLay.Et?
         G.latuple = [0,0,0,0,0,[0,0]]  # lateral I,G,M,Ma,L,[Dy,Dx]
         G.mdLay = CH(root=G) if mdLay is None else mdLay
-        # indefinitely nested in agg+|sub+:
+        # map to node_H, nested in agg+|sub+:
         G.derH = CH(root=G) if derH is None else derH  # internal, sum from node_
-        G.extH = CH(root=G) if extH is None else extH  # external, sum from rim_) krim links
+        G.extH = CH(root=G) if extH is None else extH  # external, sum from rim_) krim
         G.kHH = []  # kernel: hierarchy of rim layers
         G.rim_ = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tH_ in cpr sub+
         G.n = n  # external n (last layer n)
@@ -169,8 +169,11 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         # feedback, ideally buffered from all elements before summing in root, ultimately G|L:
         root = HE.root
         while root is not None:
-            root.Et = np.add(root.Et, He.Et); root.Rt = np.add(root.Rt, He.Rt); root.n += He.n
-            root = root.root
+            root.Et = np.add(root.Et, He.Et)
+            if isinstance(root, CH):
+                root.Rt = np.add(root.Rt, He.Rt); root.n += He.n
+                root = root.root
+            else: break  # break if root is G or L
         return HE
 
     def append_(HE,He, irdnt=None, flat=0):
@@ -190,8 +193,11 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
         root = HE.root
         while root is not None:
-            root.Et = np.add(root.Et, He.Et); root.Rt = np.add(root.Rt, He.Rt); root.n += He.n
-            root = root.root
+            root.Et = np.add(root.Et,He.Et)
+            if isinstance(root, CH):
+                root.Rt = np.add(root.Rt, He.Rt); root.n += He.n
+                root = root.root
+            else: break  # break if root is G or L
         return HE  # for feedback in agg+
 
 
@@ -399,7 +405,7 @@ def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
     for P in P_:
         L = P.latuple[-2]
         PP.area += L; PP.n += L  # no + P.mdLay.n: current links only?
-        PP.latuple = [P+p for P,p in zip(PP.latuple[:-1],P.latuple[:-1])] + [[A+a for A,a in zip(PP.latuple[-1],P.latuple[-1])]]
+        add_lat(PP.latuple, P.latuple)
         if P.mdLay:
             PP.mdLay.add_md_(P.mdLay)  # no separate extH, the links are unique here
         if isinstance(P, CP):
@@ -417,6 +423,8 @@ def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
         PP.mask__[(celly_-y0, cellx_-x0)] = True
 
     return PP
+
+def add_lat(Lat,lat): Lat[:] = [P+p for P,p in zip(Lat[:-1],lat[:-1])] + [[A+a for A,a in zip(Lat[-1],lat[-1])]]
 
 def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
 
