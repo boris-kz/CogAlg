@@ -138,6 +138,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         HE.Et = np.add(HE.Et, He.Et)
         if any(irdnt): HE.Et[2:] = [E + e for E, e in zip(HE.Et[2:], irdnt)]
         HE.Rt = np.add(HE.Rt, He.Rt)
+        return HE
 
     def add_md_t(HE, He, irdnt=[]):  # sum derLays
 
@@ -424,7 +425,9 @@ def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
 
     return PP
 
-def add_lat(Lat,lat): Lat[:] = [P+p for P,p in zip(Lat[:-1],lat[:-1])] + [[A+a for A,a in zip(Lat[-1],lat[-1])]]
+def add_lat(Lat,lat):
+    Lat[:] = [P+p for P,p in zip(Lat[:-1],lat[:-1])] + [[A+a for A,a in zip(Lat[-1],lat[-1])]]
+    return Lat
 
 def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
 
