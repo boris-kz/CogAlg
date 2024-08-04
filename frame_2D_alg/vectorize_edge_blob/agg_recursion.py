@@ -62,6 +62,7 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         l.Vt = [0,0]  # for rim-overlap modulated segmentation, init derH.Et[:2]
         l.n = 1  # min(node_.n)
         l.S = 0  # sum nodet
+        l.Et = [0,0,0,0]
     def __bool__(l): return bool(l.derH.H)
 
 
@@ -151,7 +152,7 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
         for link,rev in G.rim_[-1]:
             if link.ft[0]:  # must be mlink
                 _G = link.nodet[0] if link.nodet[1] is G else link.nodet[1]
-                krim += [_G]; G.kLay = []
+                krim += [_G]
                 if hasattr(G,'dLay'): G.dLay.add_H(link.derH)
                 else:                 G.dLay = CH().copy(link.derH)
                 G._kLay = sum_kLay(G,_G); _G._kLay = sum_kLay(_G,G)  # next krim comparands
@@ -206,24 +207,29 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
             _G_ = G_; n += 1
         else:
             for G in Gd_:
-                if rng>1: G.extH.H[-1].append_(G.dLay)  # rng starts with 1, instead of 0
+                if rng>1: G.extH.H[-1].append_(G.dLay)
                 else:     G.extH.append_(CH().append_(G.dLay))
-                delattr(G,'dLay'); delattr(G,'kLay'); delattr(G,'_kLay')
-                G.visited__.pop()  # kH-specific layer
+                delattr(G,'dLay'); delattr(G,'_kLay')
+                if hasattr(G,"kLay)"): delattr(G,'kLay')
+                G.visited__.pop()  # kH - specific layer
             break
     return Gd_, Et  # all Gs with dLay added in 1st krim
 
-def sum_kLay(_G, G):  # init kLay = G attrs, then G.kLay
+def sum_kLay(G, g):  # sum next-rng kLay from krim of current _kLays, init with G attrs
 
-    _n,_L,_S,_A,_lat,_mdLay,_derH = _G.kLay if hasattr(_G,"kLay") else _G._kLay  # if from init conv kernels, then _kLay is G attrs:
-    n,L,S,A,lat,mdLay,derH = G._kLay if hasattr(G,"kLay") \
-        else (G.n,len(G.node_),G.S,G.A, CH().copy(G.derH) if G.derH else None, deepcopy(G.latuple), CH().copy(G.mdLay))
+    KLay = (G.kLay if hasattr(G,"kLay")
+                   else (G._kLay if hasattr(G,"_kLay")  # init conv kernels, also below:
+                                 else G.n,len(G.node_),G.S,G.A, CH().copy(G.derH) if G.derH else None, deepcopy(G.latuple), CH().copy(G.mdLay)))
+    kLay = (G._kLay if hasattr(G,"_kLay")
+                    else g.n, len(g.node_),g.S,g.A, CH().copy(g.derH) if g.derH else None, deepcopy(g.latuple), CH().copy(g.mdLay))
+                    # init conv kernels
+    N,L,S,A, Lat,MdLay,DerH = KLay
+    n,l,s,a, lat,mdLay,derH = kLay
     return [
-            _n+n,_L+L,_S+S,[_A[0]+A[0],_A[1]+A[1]], # n,L,S,A
-            add_lat(_lat,lat),                      # latuple
-            _mdLay.add_md_(mdLay),                  # mdLay
-            _derH.add_H(derH) if derH else None ]   # derH
-
+            N+n, L+l, S+s, [A[0]+a[0],A[1]+a[1]], # n,L,S,A
+            add_lat(Lat,lat),                     # latuple
+            MdLay.add_md_(mdLay),                 # mdLay
+            DerH.add_H(derH) if derH else None ]  # derH
 
 def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
 
@@ -277,10 +283,13 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
     # no comp extH, it's current ders
     if fd:  # CLs
         DLay = _N.derH.comp_H(N.derH, rn, fagg=1)  # new link derH = local dH
+        _A,A = _N.angle, N.angle if rev else [-d for d in N.angle] # reverse if left link
     else:   # CGs
-        DLay = comp_G([_N.n,len(_N.node_),_N.S,_N.A,_N.latuple,_N.mdLay,_N.derH], [N.n,len(N.node_),N.S,N.A,N.latuple,N.mdLay,N.derH])
+        DLay = comp_G([_N.n,len(_N.node_),_N.S,_N.A,_N.latuple,_N.mdLay,_N.derH],
+                      [N.n, len(N.node_), N.S, N.A, N.latuple, N.mdLay, N.derH])
+        _A,A = _N.A,N.A
     DLay.root = Link
-    Link.mdext = comp_ext(2,2, _N.S,N.S/rn, _N.angle, N.angle if rev else [-d for d in N.angle])  # reverse if left link
+    Link.mdext = comp_ext(2,2, _N.S,N.S/rn, _A,A)
     if fd:
         Link.derH.append_(DLay)
     else:  Link.derH = DLay
@@ -309,15 +318,19 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
 
 def comp_G(_pars, pars):  # compare kLays or partial graphs in merging
 
-    _n,_L,_S,_A,_latuple,_mdLay,_derH = _pars; n, L,S,A, latuple, mdLay, derH = pars
-    rn = _n/n
-    mdlat = comp_latuple(_latuple, latuple, rn, fagg=1)
-    mdLay = _mdLay.comp_md_(mdLay, rn, fagg=1)
+    _n,_L,_S,_A,_latuple,_mdLay,_derH = _pars
+    n, L,S,A, latuple,mdLay,derH = pars; rn = _n/n
+
     mdext = comp_ext(_L,L,_S,S/rn,_A,A)
-    n = mdlat.n + mdLay.n + mdext.n
-    md_t = [mdlat, mdLay, mdext]
-    Et = np.array(mdlat.Et) + mdLay.Et + mdext.Et
-    Rt = np.array(mdlat.Rt) + mdLay.Rt + mdext.Rt
+    if mdLay:  # += CG nodes
+        mdLay = _mdLay.comp_md_(mdLay, rn, fagg=1)
+        mdlat = comp_latuple(_latuple, latuple, rn, fagg=1)
+        n = mdlat.n + mdLay.n + mdext.n
+        md_t = [mdlat, mdLay, mdext]
+        Et = np.array(mdlat.Et) + mdLay.Et + mdext.Et
+        Rt = np.array(mdlat.Rt) + mdLay.Rt + mdext.Rt
+    else:  # += CL nodes
+        n = mdext.n; md_t = [mdext]; Et = mdext.Et; Rt = mdext.Rt
     # single-layer H:
     derH = CH( H=[CH(n=n,md_t=md_t,Et=Et,Rt=Rt)], n=n, md_t=CH().copy(md_t), Et=copy(Et), Rt=copy(Rt))
     if _derH and derH:
@@ -413,7 +426,7 @@ def segment_N_(root, iN_, fd, rng):
             xN_ = list(sN_- oN_)  # exclusive node_
             _xN_ = list(_sN_- oN_)
             if _xN_ and xN_:
-                dderH = comp_G( sum_N_(_xN_,fd), sum_N_(xN_, fd))
+                dderH = comp_G( sum_N_(_xN_), sum_N_(xN_))
                 oV += (dderH.Et[fd] - ave * dderH.Et[2+fd])  # norm by R, * dist_coef * agg_coef?
             if oV > ave:
                 link_ += [_L]
@@ -421,9 +434,10 @@ def segment_N_(root, iN_, fd, rng):
 
     return [sum2graph(root, Gt, fd, rng) for Gt in N_]
 
-def sum_N_(N_, fd=0):  # sum partial grapht in merge
+def sum_N_(N_):  # sum partial grapht in merge
 
     N = N_[0]
+    fd = isinstance(N, CL)
     n = N.n; S = N.S
     L, A = (N.span, N.angle) if fd else (len(N.node_), N.A)
     if not fd:
@@ -474,8 +488,7 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
     L = len(G_)
     yx = np.divide(yx,L); graph.yx = yx
     graph.aRad = sum([np.hypot(*np.subtract(yx,G.yx)) for G in G_]) / L  # average distance between graph center and node center
-    for link in Link_:
-        # sum last layer of unique current-layer links
+    for link in Link_:  # sum last layer of unique current-layer links
         graph.S += link.span
         graph.A = np.add(graph.A,link.angle)  # np.add(graph.A, [-link.angle[0],-link.angle[1]] if rev else link.angle)
         if fd: link.root = graph

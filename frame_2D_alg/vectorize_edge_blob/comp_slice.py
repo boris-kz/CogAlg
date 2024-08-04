@@ -68,8 +68,8 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.extH = CH(root=G) if extH is None else extH  # external, sum from rim_) krim
         G.kHH = []  # kernel: hierarchy of rim layers
         G.rim_ = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tH_ in cpr sub+
-        G.n = n  # external n (last layer n)
         G.rng = rng
+        G.n = n  # external n (last layer n)
         G.S = 0  # sparsity: distance between node centers
         G.A = 0, 0  # angle: summed dy,dx in links
         G.area = 0
@@ -97,11 +97,11 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
         super().__init__()
 
         l.nodet = [] if nodet is None else nodet  # e_ in kernels, else replaces _node,node: not used in kernels?
-        l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
-        l.span = span  # distance between node centers
+        l.rim = []  # upper 2nd der links
         l.latuple = [] if latuple is None else latuple  # sum node_
         l.mdLay = [] if mdLay is None else mdLay  # same as md_C
-        l.rim = []  # upper 2nd der links
+        l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
+        l.span = span  # distance between node centers
         l.yx = [0,0] if yx is None else yx  # sum node_
         l.Et = [0,0,0,0] if Et is None else Et
         l.Rt = [] if Rt is None else Rt
@@ -154,9 +154,8 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         if HE:
             for Lay,lay in zip_longest(HE.H, He.H, fillvalue=None):  # cross comp layer
                 if lay is not None:
-                    if Lay and lay:  # empty after removing H from rnglay
-                        if Lay.H:  # Lay is subH, add unpack sublays, depth unpack?
-                            Lay.add_H(lay, irdnt)
+                    if Lay and Lay.H:  # Lay is subH, add unpack sublays, depth unpack?
+                        Lay.add_H(lay, irdnt)
                     else:
                         if Lay is None: Lay = CH(root=HE)
                         HE.H += [Lay.copy(lay)]
