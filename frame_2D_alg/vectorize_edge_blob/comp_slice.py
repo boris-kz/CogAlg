@@ -114,20 +114,23 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
 class CH(CBase):  # generic derivation hierarchy of variable nesting, depending on effective agg++(sub++ depth
 
     name = "H"
-    def __init__(He, md_t=None, n=0, Et=None, Rt=None, H=None, H_=None, root=None):
+    def __init__(He, md_t=None, n=0, Et=None, Rt=None, H=None, root=None):
         super().__init__()
-        He.md_t = [] if md_t is None else md_t  # compared [mdlat,mdLay,mdext] per layer
         He.node_ = []  # concat, may be redundant to G.node_, lowest nesting order
-        He.ni = 0  # exemplar index in node_, then trace in both directions?
+        He.md_t = [] if md_t is None else md_t  # compared [mdlat,mdLay,mdext] per layer
         He.H = [] if H is None else H  # lower derLays or md_ in md_C, empty in bottom layer
-        He.i = 0  # exemplar index in H
-        He.depth = 0  # nesting in H[0], -=i in H[i], added in agg++|sub++, currently not used
-        He.n = n  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
-        He.Et = [0,0,0,0] if Et is None else Et    # evaluation tuple: valt, rdnt
+        He.n = n  # number of params compared to form derH, sum in comp_G, from nodes in sum2graph
+        He.Et = [0,0,0,0] if Et is None else Et  # evaluation tuple: valt, rdnt
         He.Rt = [0,0] if Rt is None else Rt  # m,d relative to max possible m,d
         He.root = None if root is None else root  # N or higher-composition He
+        # He.i = 0  # exemplar in node_, trace in both directions?
+        # He.Hi = 0  # exemplar in H if unpacked, trace down?
+        # He.depth = 0  # nesting in H[0], -=i in H[Hi], added in agg++|sub++
         # He.nest = nest  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH?
-
+        '''
+        optional deprecate higher derH layers: delete their H and md_t while keeping them in lower layers.
+        then add_H comp_H don't stop at empty lay.H, and comp_H starts at i with not-empty md_t?
+        '''
     def __bool__(H): return H.n != 0
 
     def add_md_(HE, He, irdnt=[]):  # p may be derP, sum derLays
@@ -154,13 +157,13 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         if HE:
             for Lay,lay in zip_longest(HE.H, He.H, fillvalue=None):  # cross comp layer
                 if lay is not None:
-                    if Lay and Lay.H:  # Lay is subH, add unpack sublays, depth unpack?
+                    if Lay and Lay.H:  # Lay is subH, add unpack sublays
                         Lay.add_H(lay, irdnt)
                     else:
                         if Lay is None: Lay = CH(root=HE)
                         HE.H += [Lay.copy(lay)]
             # default
-            HE.add_md_t(He) # [lat_md_C, lay_md_C, ext_md_C]
+            HE.add_md_t(He)  # [lat_md_C, lay_md_C, ext_md_C]
             HE.Et = np.add(HE.Et, He.Et); HE.Rt = np.add(HE.Rt, He.Rt)
             if any(irdnt): HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
             HE.n += He.n  # combined param accumulation span
@@ -236,32 +239,33 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
 
     def comp_H(_He, He, rn=1, fagg=0, frev=0):  # unpack CHs down to numericals and compare them
 
-        DLay = CH(H=_He.H)  # each lay may be nested
-        DLay.add_H(_He.comp_md_t(He))
+        DLay = CH().add_H(_He.comp_md_t(He))  # default comp He.md_t per layer
+        # if md_t: may be deleted later, but still in lower lays?
 
         for _lay, lay in zip(_He.H, He.H):  # loop extH s or [mdlat, mdLay, mdext] rng tuples
             if _lay.H and lay.H:
-                # lays is subH, comp unpack sublayers, multiple parallel unpack if Lay.depth?
+                # subHs, H=[] if deprecated, comp subH layers
                 dLay = _lay.comp_H(lay, rn, fagg, frev)
                 DLay.append_(dLay, flat=0)
+                # new process for subHH (subH?
         return DLay
 
-    def copy(_H, H):
-        for attr, value in H.__dict__.items():
-            if attr != '_id' and attr != 'root' and attr in _H.__dict__.keys():  # copy only the available attributes and skip id
-                if attr == 'H':  # can't deepcopy CH.root
-                    if H.H:
-                        _H.H = []
-                        if isinstance(H.H[0], CH):
-                            for lay in H.H: _H.H += [CH().copy(lay)]
-                        else:               _H.H = deepcopy(H.H)  # md_
+    def copy(_He, He):
+        for attr, value in He.__dict__.items():
+            if attr != '_id' and attr != 'root' and attr in _H.__dict__.keys():  # copy attributes, skip id, root
+                if attr == 'He':  # can't deepcopy CH.root
+                    if He.H:
+                        _He.H = []
+                        if isinstance(He.H[0], CH):
+                            for lay in He.H: _He.H += [CH().copy(lay)]
+                        else:               _He.H = deepcopy(He.H)  # md_
                 elif attr == "md_t":  # can't deepcopy CH.root
-                    _H.md_t = []
-                    for md_ in H.md_t:
-                        _H.md_t += [CH().copy(md_)]
+                    _He.md_t = []
+                    for md_ in He.md_t:
+                        _He.md_t += [CH().copy(md_)]
                 else:
-                    setattr(_H, attr, deepcopy(value))
-        return _H
+                    setattr(_He, attr, deepcopy(value))
+        return _He
 
 
 def comp_slice(edge):  # root function
@@ -441,13 +445,13 @@ def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
     mAngle, dAngle = comp_angle((_Dy,_Dx), (Dy,Dx))
 
     ret = [mL,dL,mI,dI,mG,dG,mM,dM,mMa,dMa,mAngle-aves[5],dAngle]
-    if fagg:  # add norm m,d, ret= [ret,Ret]:
-        # max possible m,d per compared param
-        Ret = [max(_L,L),abs(_L)+abs(L), max(_I,I),abs(_I)+abs(I), max(_G,G),abs(_G)+abs(G), max(_M,M),abs(_M)+abs(M), max(_Ma,Ma),abs(_Ma)+abs(Ma), 1,.5]
+    if fagg:  # add norm m,d, ret=[ret,Ret]:
+        # get max possible m and d per compared param to compute relt:
+        Mx_ = [max(_L,L),abs(_L)+abs(L), max(_I,I),abs(_I)+abs(I), max(_G,G),abs(_G)+abs(G), max(_M,M),abs(_M)+abs(M), max(_Ma,Ma),abs(_Ma)+abs(Ma), 1,.5]
         mval, dval = sum(ret[::2]),sum(ret[1::2])
         mrdn, drdn = dval>mval, mval>dval
         mdec, ddec = 0, 0
-        for fd, (ptuple,Ptuple) in enumerate(zip((ret[::2],ret[1::2]),(Ret[::2],Ret[1::2]))):
+        for fd, (ptuple,Ptuple) in enumerate(zip((ret[::2],ret[1::2]),(Mx_[::2],Mx_[1::2]))):
             for i, (par, maxv, ave) in enumerate(zip(ptuple, Ptuple, aves)):
                 # compute link decay coef: par/ max(self/same):
                 if fd: ddec += abs(par)/ abs(maxv) if maxv else 1

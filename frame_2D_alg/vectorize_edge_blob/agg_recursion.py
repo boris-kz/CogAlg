@@ -49,6 +49,7 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         # CL = binary tree of Gs, depth+/der+: CL nodet is 2 Gs, CL + CLs in nodet is 4 Gs, etc.,
         # unpack sequentially
         l.nodet = [] if nodet is None else nodet  # e_ in kernels, else replaces _node,node: not used in kernels?
+        # rim_t = [[],[]]  # for direct tracing?
         l.angle = [0,0] if angle is None else angle  # dy,dx between nodet centers
         l.span = span  # distance between nodet centers
         l.area = 0  # sum nodet
@@ -207,8 +208,8 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
             _G_ = G_; n += 1
         else:
             for G in Gd_:
-                if rng>1: G.extH.H[-1].append_(G.dLay)
-                else:     G.extH.append_(CH().append_(G.dLay))
+                if rng==1: G.extH.append_(CH().append_(G.dLay))
+                else:      G.extH.H[-1].append_(G.dLay)
                 delattr(G,'dLay'); delattr(G,'_kLay')
                 if hasattr(G,"kLay)"): delattr(G,'kLay')
                 G.visited__.pop()  # kH - specific layer
@@ -219,12 +220,11 @@ def sum_kLay(G, g):  # sum next-rng kLay from krim of current _kLays, init with 
 
     KLay = (G.kLay if hasattr(G,"kLay")
                    else (G._kLay if hasattr(G,"_kLay")  # init conv kernels, also below:
-                                 else G.n,len(G.node_),G.S,G.A, CH().copy(G.derH) if G.derH else None, deepcopy(G.latuple), CH().copy(G.mdLay)))
+                                 else (G.n,len(G.node_),G.S,G.A,deepcopy(G.latuple),CH().copy(G.mdLay),CH().copy(G.derH) if G.derH else None)))
     kLay = (G._kLay if hasattr(G,"_kLay")
-                    else g.n, len(g.node_),g.S,g.A, CH().copy(g.derH) if g.derH else None, deepcopy(g.latuple), CH().copy(g.mdLay))
-                    # init conv kernels
-    N,L,S,A, Lat,MdLay,DerH = KLay
-    n,l,s,a, lat,mdLay,derH = kLay
+                    else (g.n,len(g.node_),g.S,g.A,deepcopy(g.latuple),CH().copy(g.mdLay),CH().copy(g.derH) if g.derH else None))  # init conv kernels
+    N,L,S,A,Lat,MdLay,DerH = KLay
+    n,l,s,a,lat,mdLay,derH = kLay
     return [
             N+n, L+l, S+s, [A[0]+a[0],A[1]+a[1]], # n,L,S,A
             add_lat(Lat,lat),                     # latuple
@@ -272,8 +272,7 @@ def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
             break
         # Lt_ = [(L, mN_t) for L, mN_t in zip(L_, mN_t_) if any(mN_t)]
         # if Lt_: L_,_mN_t_ = map(list, zip(*Lt_))  # map list to convert tuple from zip(*)
-
-    return rL_, Et, rng
+    return rL_,Et,rng
 
 
 def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
@@ -287,8 +286,7 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
     else:   # CGs
         DLay = comp_G([_N.n,len(_N.node_),_N.S,_N.A,_N.latuple,_N.mdLay,_N.derH],
                       [N.n, len(N.node_), N.S, N.A, N.latuple, N.mdLay, N.derH])
-        _A,A = _N.A,N.A
-    DLay.root = Link
+        _A,A = _N.A,N.A; DLay.root = Link
     Link.mdext = comp_ext(2,2, _N.S,N.S/rn, _A,A)
     if fd:
         Link.derH.append_(DLay)
@@ -332,7 +330,7 @@ def comp_G(_pars, pars):  # compare kLays or partial graphs in merging
     else:  # += CL nodes
         n = mdext.n; md_t = [mdext]; Et = mdext.Et; Rt = mdext.Rt
     # single-layer H:
-    derH = CH( H=[CH(n=n,md_t=md_t,Et=Et,Rt=Rt)], n=n, md_t=CH().copy(md_t), Et=copy(Et), Rt=copy(Rt))
+    derH = CH( H=[CH(n=n,md_t=md_t,Et=Et,Rt=Rt)], n=n, md_t=[CH().copy(md_) for md_ in md_t], Et=copy(Et), Rt=copy(Rt))
     if _derH and derH:
         dderH = _derH.comp_H(derH, rn, fagg=1)  # new link derH = local dH
         derH.append_(dderH, flat=1)
@@ -388,27 +386,26 @@ def add_der_attrs(link_):
         link.med = 1  # comp med rng, replaces len rim_
         link.Et = [0,0,0,0]
         link.aRad = 0
-'''
-cluster by weights of shared links + similarity of partial clusters, initially single linkage,
-similar to parallelized https://en.wikipedia.org/wiki/Watershed_(image_processing).
-sub-cluster: node assign by all in-graph weights, added in merges. 
-'''
-def segment_N_(root, iN_, fd, rng):
+
+def segment_N_(root, iN_, fd, rng):  # ~ parallelized https://en.wikipedia.org/wiki/Watershed_(image_processing)
+    # cluster by shared links weight + similarity of partial clusters, initially single linkage,
+    # sub-cluster by in-graph weights, added in merges.
 
     N_ = []  # init Gts per node in iN_, merge if Lrim overlap + similarity of exclusive node_s
     max_ = []
-    for N in iN_:
-        # init graphts:
-        rim = [Lt[0] for rim in N.rim_ for Lt in rim] if isinstance(N,CG) else [Lt[0] for rimt in N.rimt_ for rim in rimt for Lt in rim]
-        _N_t = [[_N for L in rim for _N in L.nodet if _N is not N], [N]]  # [ext_N_, int_N_]
+    for N in iN_:  # init graphts:
+        if isinstance(N,CG): rim = [Lt[0] for rim in N.rim_ for Lt in rim]
+        else: rim = [Lt[0] for rimt in N.rimt_ for rim in rimt for Lt in rim]
+        # get [ext_N_,int_N_], no extH if not in iN_:
+        _N_t = [[_N for L in rim for _N in L.nodet if _N is not N and _N in iN_], [N]]
         Gt = [[N],[],copy(rim),_N_t,[0,0,0,0]]  # [node_, link_, Lrim, Nrim_t, Et]
         N.root = Gt; N_ += [Gt]
-        if not fd:
-            if not any([(eN.extH.H[-1].Et[0] > N.extH.H[-1].Et[0]) or (eN in max_)  # _N if _N.V == N.V
-                        for eN in _N_t[0]]):  # use local maxes as Gt seeds or exemplars:
-                max_ += [N]  # V * k * max_rng: + mediation if no max in rrim?
+        if not fd:  # if local maxes = Gt exemplars:
+            if not any([(eN.extH.H[-1].Et[0] > N.extH.H[-1].Et[0]) or (eN in max_) for eN in _N_t[0]]):  # _N if _N.V==N.V
+                max_ += [N]  # add mediation if no max in rrim: V * k * max_rng?
     max_ = [N.root for N in max_]
-    for Gt in N_: Gt[3][0] = [_N.root for _N in Gt[3][0]]  # replace extNs with their Gts
+    # replace extNs with their Gts:
+    for Gt in N_: Gt[3][0] = [_N.root for _N in Gt[3][0]]
     # merge with connected _Gts:
     for Gt in max_ if max_ else N_:
         node_, link_, Lrim, Nrim_t, Et = Gt
