@@ -156,15 +156,17 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
 
         if HE:
             for Lay,lay in zip_longest(HE.H, He.H, fillvalue=None):  # cross comp layer
-                if lay is not None:
-                    if Lay and Lay.H:  # Lay is subH, add unpack sublays
+                if lay:
+                    if Lay:
                         Lay.add_H(lay, irdnt)
                     else:
-                        if Lay is None: Lay = CH(root=HE)
-                        HE.H += [Lay.copy(lay)]
+                        lay = copy(lay); lay.root=HE
+                        if Lay is None: HE.H += lay
+                        else: Lay[:] = lay  # was []
             # default
             HE.add_md_t(He)  # [lat_md_C, lay_md_C, ext_md_C]
             HE.Et = np.add(HE.Et, He.Et); HE.Rt = np.add(HE.Rt, He.Rt)
+            HE.node_ += [node for node in He.node if node not in HE.node_]
             if any(irdnt): HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
             HE.n += He.n  # combined param accumulation span
         else:
@@ -193,6 +195,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         HE.n += He.n
         Et, et = HE.Et, He.Et
         HE.Et = np.add(HE.Et, He.Et); HE.Rt = np.add(HE.Rt, He.Rt)
+        HE.node_ += [node for node in He.node if node not in HE.node_]
         if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
         root = HE.root
         while root is not None:
@@ -239,21 +242,24 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
 
     def comp_H(_He, He, rn=1, fagg=0, frev=0):  # unpack CHs down to numericals and compare them
 
-        DLay = CH().add_H(_He.comp_md_t(He))  # default comp He.md_t per layer
-        # if md_t: may be deleted later, but still in lower lays?
-
+        # this is probably wrong:
+        DLay = CH().add_H(_He.comp_md_t(He))  # default comp He.md_t per He?
+                                              # or redundant to comp_md_t / lay below:
         for _lay, lay in zip(_He.H, He.H):  # loop extH s or [mdlat, mdLay, mdext] rng tuples
-            if _lay.H and lay.H:
-                # subHs, H=[] if deprecated, comp subH layers
-                dLay = _lay.comp_H(lay, rn, fagg, frev)
-                DLay.append_(dLay, flat=0)
-                # new process for subHH (subH?
+            if _lay and lay:  # must have md_t:
+                dlay = CH().add_H(_lay.comp_md_t(lay))  # default comp He.md_t per layer
+                #  may be deleted later, but still in lower lays?
+                if _lay.H and lay.H:
+                    # subHs, H=[] if deprecated, comp subH layers
+                    dLay = _lay.comp_H(lay, rn, fagg, frev)
+                    DLay.append_(dLay, flat=0)
+                    # new process for subHH (subH?
         return DLay
 
     def copy(_He, He):
         for attr, value in He.__dict__.items():
-            if attr != '_id' and attr != 'root' and attr in _H.__dict__.keys():  # copy attributes, skip id, root
-                if attr == 'He':  # can't deepcopy CH.root
+            if attr != '_id' and attr != 'root' and attr in _He.__dict__.keys():  # copy attributes, skip id, root
+                if attr == 'H':  # can't deepcopy CH.root
                     if He.H:
                         _He.H = []
                         if isinstance(He.H[0], CH):
@@ -263,6 +269,8 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
                     _He.md_t = []
                     for md_ in He.md_t:
                         _He.md_t += [CH().copy(md_)]
+                elif attr == "node_":
+                    _He.node_ = [CH().copy(node) for node in He.node_]
                 else:
                     setattr(_He, attr, deepcopy(value))
         return _He

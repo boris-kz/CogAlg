@@ -106,6 +106,8 @@ def agg_recursion(root, N_, fL, rng=1):  # fL: compare node-mediated links, else
             for fd, node_ in zip((0,1), node_t):
                 N_ = [n for n in node_ if n.derH.Et[fd] > G_aves[fd] * n.derH.Et[2+fd]]  # prune node_
                 if root.derH.Et[0] * (max(0,(len(N_)-1)*root.rng)) > G_aves[1]*root.derH.Et[2]:
+                    # for lay in sorted( root.derH.H, Et[fd]:
+                    # reassign rdn, reeval, per fork?
                     # agg+ rng+, val *= n comparands, forms CGs:
                     agg_recursion(root, N_, fL=0)
             root.node_[:] = node_t
@@ -222,7 +224,8 @@ def sum_kLay(G, g):  # sum next-rng kLay from krim of current _kLays, init with 
                    else (G._kLay if hasattr(G,"_kLay")  # init conv kernels, also below:
                                  else (G.n,len(G.node_),G.S,G.A,deepcopy(G.latuple),CH().copy(G.mdLay),CH().copy(G.derH) if G.derH else None)))
     kLay = (G._kLay if hasattr(G,"_kLay")
-                    else (g.n,len(g.node_),g.S,g.A,deepcopy(g.latuple),CH().copy(g.mdLay),CH().copy(g.derH) if g.derH else None))  # init conv kernels
+                    else (g.n,len(g.node_),g.S,g.A,deepcopy(g.latuple),CH().copy(g.mdLay),CH().copy(g.derH) if g.derH else None))
+                    # in init conv kernels
     N,L,S,A,Lat,MdLay,DerH = KLay
     n,l,s,a,lat,mdLay,derH = kLay
     return [
@@ -503,9 +506,11 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
 def feedback(root):  # called from form_graph_, always sub+, append new der layers to root
 
     mDerLay = CH()  # added per rng+, | kern+, | single kernel?
-    while root.fback_t[0]: mDerLay.add_H(root.fback_t[0].pop())
+    while root.fback_t[0]:
+        mDerLay.add_H(root.fback_t[0].pop())
     dDerH = CH()  # from higher-order links
-    while root.fback_t[1]: dDerH.add_H(root.fback_t[1].pop())
+    while root.fback_t[1]:
+        dDerH.add_H(root.fback_t[1].pop())
     DderH = mDerLay.append_(dDerH, flat=1)
     m,d, mr,dr = DderH.Et
     if m+d > sum(G_aves) * (mr+dr):
