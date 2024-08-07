@@ -103,12 +103,18 @@ def agg_recursion(root, N_, fL, rng=1):  # fL: compare node-mediated links, else
     if len(N_) > ave_L:
         node_t = form_graph_t(root, N_,Et,rng)  # fork Et eval, depth-first sub+, sub_Gs += fback_
         if node_t:
-            for fd, node_ in zip((0,1), node_t):
-                N_ = [n for n in node_ if n.derH.Et[fd] > G_aves[fd] * n.derH.Et[2+fd]]  # prune node_
+            for fd, node_ in zip((0,1), node_t):  # after sub++ in form_graph_t
+                N_ = []  # pruned and revalued node_
+                for N in node_:
+                    if N.derH.Et[fd] > G_aves[fd] * N.derH.Et[2+fd]:  # reorder layers by val
+                        N.derH.H = sorted(N.derH.H, key=lay.Et[fd], reverse=True)
+                        for i,lay in enumerate(N.derH.H):
+                            di = lay.i - i  # lay.i: index in original H, di: difference between default and value-specific rdn
+                            lay.Et[2+fd] += di  # update to value-specific rdn
+                            if not i: N.node_ = lay.node_
+                        N_ += [N]
                 if root.derH.Et[0] * (max(0,(len(N_)-1)*root.rng)) > G_aves[1]*root.derH.Et[2]:
-                    # for lay in sorted( root.derH.H, Et[fd]:
-                    # reassign rdn, reeval, per fork?
-                    # agg+ rng+, val *= n comparands, forms CGs:
+                    # agg+rng+, val *= n comparands, forms CGs:
                     agg_recursion(root, N_, fL=0)
             root.node_[:] = node_t
         # else keep root.node_
@@ -289,7 +295,8 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
     else:   # CGs
         DLay = comp_G([_N.n,len(_N.node_),_N.S,_N.A,_N.latuple,_N.mdLay,_N.derH],
                       [N.n, len(N.node_), N.S, N.A, N.latuple, N.mdLay, N.derH])
-        _A,A = _N.A,N.A; DLay.root = Link
+        _A,A = _N.A,N.A; DLay.root = Link; DLay.node_ = [_N, N]
+
     Link.mdext = comp_ext(2,2, _N.S,N.S/rn, _A,A)
     if fd:
         Link.derH.append_(DLay)
@@ -372,7 +379,7 @@ def form_graph_t(root, N_, Et, rng):  # segment N_ to Nm_, Nd_
             node_t += [graph_]  # may be empty
         else:
             node_t += [[]]
-    for fd, graph_ in enumerate(node_t):  # mix forks fb
+    for fd, graph_ in enumerate(node_t):  # combined-fork fb
         for graph in graph_:
             root.fback_t[fd] += [graph.derH] if fd else [graph.derH.H[-1]]  # der+ forms new links, rng+ adds new layer
             # sub+-> sub root-> init root
@@ -470,7 +477,7 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
 
     G_, Link_, _, _, Et = grapht
     graph = CG(fd=fd, node_=G_,link_=Link_, rng=rng, Et=Et)  # it's Link_ only now
-    if fd: graph.root = root
+    graph.roott[fd] = root
     extH = CH()  # convert to graph derH
     yx = [0,0]
     for G in G_:
@@ -483,7 +490,7 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
         if G.derH:
             graph.derH.add_H(G.derH)
         if fd: G.Et = [0,0,0,0]  # reset in last form_graph_t fork, Gs are shared in both forks
-        else:  G.root = graph  # assigned to links if fd else to nodes?
+        else:  G.roott[fd] = graph  # assigned to links if fd else to nodes?
         yx = np.add(yx, G.yx)
     L = len(G_)
     yx = np.divide(yx,L); graph.yx = yx
@@ -491,7 +498,7 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
     for link in Link_:  # sum last layer of unique current-layer links
         graph.S += link.span
         graph.A = np.add(graph.A,link.angle)  # np.add(graph.A, [-link.angle[0],-link.angle[1]] if rev else link.angle)
-        if fd: link.root = graph
+        if fd: link.roott[fd] = graph
     if extH: graph.derH.append_(extH, flat=0)  # graph derH = node derHs + [summed Link_ derHs], may be nested by rng
     if fd:
         # assign alt graphs from d graph, after both linked m and d graphs are formed
@@ -505,7 +512,7 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
 
 def feedback(root):  # called from form_graph_, always sub+, append new der layers to root
 
-    mDerLay = CH()  # added per rng+, | kern+, | single kernel?
+    mDerLay = CH()  # added per rng+
     while root.fback_t[0]:
         mDerLay.add_H(root.fback_t[0].pop())
     dDerH = CH()  # from higher-order links
@@ -514,6 +521,13 @@ def feedback(root):  # called from form_graph_, always sub+, append new der laye
     DderH = mDerLay.append_(dDerH, flat=1)
     m,d, mr,dr = DderH.Et
     if m+d > sum(G_aves) * (mr+dr):
-        root.derH.H[-1].append_(DderH, flat=0)  # append new derLay, maybe nested
-    # eval max derH.H[i].node_ as node_,
-    # max subH = derH.H[i]
+        root.derH.append_(DderH, flat=1)  # append new derLay, maybe nested
+
+    # draft recursive feedback, propagated when sub+ ends in all nodes of both forks:
+    if root.roott:  # not Edge
+        for fd, rroot in zip((0,1), root.roott):  # root may belong to graphs of both forks
+            if rroot:  # empty if root is not in this fork
+                rroot.fback_t[fd] += [DderH]
+                if all(len(f_) == len(rroot.node_) for f_ in rroot.fback_t):  # both forks of sub+ end for all nodes
+                    feedback(rroot)  # sum2graph adds higher aggH, feedback adds deeper aggH layers
+
