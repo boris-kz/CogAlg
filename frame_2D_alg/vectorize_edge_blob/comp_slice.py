@@ -54,10 +54,10 @@ class CcompSliceFrame(CsliceEdge):
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    def __init__(G, root=None, rng=1, fd=0, node_=None, link_=None, Et=None, mdLay=None, derH=None, extH=None, n=0):
+    def __init__(G, roott=None, rng=1, fd=0, node_=None, link_=None, Et=None, mdLay=None, derH=None, extH=None, n=0):
         super().__init__()
 
-        G.root  = [] if root is None else root    # mgraphs that contain this G, single-layer
+        G.roott = [[],[]] if roott is None else roott  # node may belong to graphs of both forks
         G.node_ = [] if node_ is None else node_  # convert to node_t in sub_recursion
         G.link_ = [] if link_ is None else link_  # internal links per comp layer, nest in rng+)der+
         G.Et = [0,0,0,0] if Et is None else Et    # extH.Et + derH.Et + mdLay.Et?
@@ -123,7 +123,8 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         He.Et = [0,0,0,0] if Et is None else Et  # evaluation tuple: valt, rdnt
         He.Rt = [0,0] if Rt is None else Rt  # m,d relative to max possible m,d
         He.root = None if root is None else root  # N or higher-composition He
-        # He.i = 0  # exemplar in node_, trace in both directions?
+        He.i = 0  # He index in root.H,
+        # He.ni = 0  # exemplar in node_, trace in both directions?
         # He.Hi = 0  # exemplar in H if unpacked, trace down?
         # He.depth = 0  # nesting in H[0], -=i in H[Hi], added in agg++|sub++
         # He.nest = nest  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH?
@@ -157,16 +158,14 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         if HE:
             for Lay,lay in zip_longest(HE.H, He.H, fillvalue=None):  # cross comp layer
                 if lay:
-                    if Lay:
-                        Lay.add_H(lay, irdnt)
+                    if Lay: Lay.add_H(lay, irdnt)
                     else:
-                        lay = copy(lay); lay.root=HE
-                        if Lay is None: HE.H += lay
-                        else: Lay[:] = lay  # was []
+                        if Lay is None: HE.append_(CH().copy(lay))  # pack a copy of new lay in HE.H
+                        else:           HE.H[HE.H.index(Lay)] = CH(root=HE).copy(lay)  # Lay was []
             # default
             HE.add_md_t(He)  # [lat_md_C, lay_md_C, ext_md_C]
             HE.Et = np.add(HE.Et, He.Et); HE.Rt = np.add(HE.Rt, He.Rt)
-            HE.node_ += [node for node in He.node if node not in HE.node_]
+            HE.node_ += [node for node in He.node_ if node not in HE.node_]
             if any(irdnt): HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
             HE.n += He.n  # combined param accumulation span
         else:
@@ -175,10 +174,11 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         root = HE.root
         while root is not None:
             root.Et = np.add(root.Et, He.Et)
-            if isinstance(root, CH):
+            if isinstance(root, CH):  
                 root.Rt = np.add(root.Rt, He.Rt); root.n += He.n
+                root.node_ += [node for node in He.node_ if node not in HE.node_]
                 root = root.root
-            else: break  # break if root is G or L
+            else: break  # root is G|L
         return HE
 
     def append_(HE,He, irdnt=None, flat=0):
@@ -195,13 +195,13 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         HE.n += He.n
         Et, et = HE.Et, He.Et
         HE.Et = np.add(HE.Et, He.Et); HE.Rt = np.add(HE.Rt, He.Rt)
-        HE.node_ += [node for node in He.node if node not in HE.node_]
+        HE.node_ += [node for node in He.node_ if node not in HE.node_]
         if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
         root = HE.root
         while root is not None:
             root.Et = np.add(root.Et,He.Et)
             if isinstance(root, CH):
-                root.Rt = np.add(root.Rt, He.Rt); root.n += He.n
+                root.Rt = np.add(root.Rt, He.Rt); root.n += He.n; root.node_ += [node for node in He.node_ if node not in HE.node_]
                 root = root.root
             else: break  # break if root is G or L
         return HE  # for feedback in agg+
@@ -242,19 +242,14 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
 
     def comp_H(_He, He, rn=1, fagg=0, frev=0):  # unpack CHs down to numericals and compare them
 
-        # this is probably wrong:
-        DLay = CH().add_H(_He.comp_md_t(He))  # default comp He.md_t per He?
-                                              # or redundant to comp_md_t / lay below:
-        for _lay, lay in zip(_He.H, He.H):  # loop extH s or [mdlat, mdLay, mdext] rng tuples
-            if _lay and lay:  # must have md_t:
-                dlay = CH().add_H(_lay.comp_md_t(lay))  # default comp He.md_t per layer
-                #  may be deleted later, but still in lower lays?
-                if _lay.H and lay.H:
-                    # subHs, H=[] if deprecated, comp subH layers
-                    dLay = _lay.comp_H(lay, rn, fagg, frev)
-                    DLay.append_(dLay, flat=0)
-                    # new process for subHH (subH?
+        DLay = CH().add_H(_He.comp_md_t(He))  # default comp He.md_t per He: nesting level,
+                                             # empty H in bottom or deprecated layer:
+        for _lay, lay in zip(_He.H, He.H):  # loop extHs or [mdlat,mdLay,mdext] rng tuples, flat
+            if _lay and lay:
+                dLay = _lay.comp_H(lay, rn, fagg, frev)  # comp He.md_t, comp,unpack lay.H
+                DLay.append(dLay, flat=0)               # subHH( subH?
         return DLay
+
 
     def copy(_He, He):
         for attr, value in He.__dict__.items():
