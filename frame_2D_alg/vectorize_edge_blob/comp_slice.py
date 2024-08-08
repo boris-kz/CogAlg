@@ -54,10 +54,10 @@ class CcompSliceFrame(CsliceEdge):
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    def __init__(G, roott=None, rng=1, fd=0, node_=None, link_=None, Et=None, mdLay=None, derH=None, extH=None, n=0):
+    def __init__(G, root = None, rng=1, fd=0, node_=None, link_=None, Et=None, mdLay=None, derH=None, extH=None, n=0):
         super().__init__()
 
-        G.roott = [[],[]] if roott is None else roott  # node may belong to graphs of both forks
+        G.root = None if root is None else root  # mgraph (dgraph.node_ is CLs)
         G.node_ = [] if node_ is None else node_  # convert to node_t in sub_recursion
         G.link_ = [] if link_ is None else link_  # internal links per comp layer, nest in rng+)der+
         G.Et = [0,0,0,0] if Et is None else Et    # extH.Et + derH.Et + mdLay.Et?
@@ -114,7 +114,7 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
 class CH(CBase):  # generic derivation hierarchy of variable nesting, depending on effective agg++(sub++ depth
 
     name = "H"
-    def __init__(He, md_t=None, n=0, Et=None, Rt=None, H=None, root=None):
+    def __init__(He, md_t=None, n=0, Et=None, Rt=None, H=None, root=None, i=None):
         super().__init__()
         He.node_ = []  # concat, may be redundant to G.node_, lowest nesting order
         He.md_t = [] if md_t is None else md_t  # compared [mdlat,mdLay,mdext] per layer
@@ -123,7 +123,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         He.Et = [0,0,0,0] if Et is None else Et  # evaluation tuple: valt, rdnt
         He.Rt = [0,0] if Rt is None else Rt  # m,d relative to max possible m,d
         He.root = None if root is None else root  # N or higher-composition He
-        He.i = 0  # He index in root.H,
+        He.i = 0 if i is None else i  # He index in root.H,
         # He.ni = 0  # exemplar in node_, trace in both directions?
         # He.Hi = 0  # exemplar in H if unpacked, trace down?
         # He.depth = 0  # nesting in H[0], -=i in H[Hi], added in agg++|sub++
@@ -174,7 +174,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         root = HE.root
         while root is not None:
             root.Et = np.add(root.Et, He.Et)
-            if isinstance(root, CH):  
+            if isinstance(root, CH):
                 root.Rt = np.add(root.Rt, He.Rt); root.n += He.n
                 root.node_ += [node for node in He.node_ if node not in HE.node_]
                 root = root.root
@@ -184,12 +184,13 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
     def append_(HE,He, irdnt=None, flat=0):
 
         if irdnt is None: irdnt = []
+        I = len(HE.H)  # min index
         if flat:
-            for lay in He.H: lay.root = HE
-            HE.H += He.H  # append flat
+            for i, lay in enumerate(He.H):
+                lay.root = HE; lay.i = I+i; HE.H += [lay]
         else:
-            He.root = HE
-            HE.H += [He]  # append nested
+            He.root = HE; He.i = I; HE.H += [He]
+
         if HE.md_t: HE.add_md_t(He)  # accumulate [lat_md_C,lay_md_C,ext_md_C]
         else:       HE.md_t = [CH().copy(md_) for md_ in He.md_t]
         HE.n += He.n
@@ -197,13 +198,14 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         HE.Et = np.add(HE.Et, He.Et); HE.Rt = np.add(HE.Rt, He.Rt)
         HE.node_ += [node for node in He.node_ if node not in HE.node_]
         if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
-        root = HE.root
+        root = HE
         while root is not None:
             root.Et = np.add(root.Et,He.Et)
             if isinstance(root, CH):
-                root.Rt = np.add(root.Rt, He.Rt); root.n += He.n; root.node_ += [node for node in He.node_ if node not in HE.node_]
-                root = root.root
-            else: break  # break if root is G or L
+                root.Rt = np.add(root.Rt,He.Rt); root.n += He.n; root = root.root
+                root.node_ += [node for node in He.node_ if node not in HE.node_]
+            else:
+               break  # root is G|L
         return HE  # for feedback in agg+
 
 
@@ -247,25 +249,23 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         for _lay, lay in zip(_He.H, He.H):  # loop extHs or [mdlat,mdLay,mdext] rng tuples, flat
             if _lay and lay:
                 dLay = _lay.comp_H(lay, rn, fagg, frev)  # comp He.md_t, comp,unpack lay.H
-                DLay.append(dLay, flat=0)               # subHH( subH?
+                DLay.append_(dLay, flat=0)               # subHH( subH?
         return DLay
 
 
     def copy(_He, He):
         for attr, value in He.__dict__.items():
             if attr != '_id' and attr != 'root' and attr in _He.__dict__.keys():  # copy attributes, skip id, root
-                if attr == 'H':  # can't deepcopy CH.root
+                if attr == 'H':
                     if He.H:
                         _He.H = []
                         if isinstance(He.H[0], CH):
-                            for lay in He.H: _He.H += [CH().copy(lay)]
-                        else:               _He.H = deepcopy(He.H)  # md_
-                elif attr == "md_t":  # can't deepcopy CH.root
-                    _He.md_t = []
-                    for md_ in He.md_t:
-                        _He.md_t += [CH().copy(md_)]
+                            for lay in He.H: _He.H += [CH().copy(lay)]  # can't deepcopy CH.root
+                        else: _He.H = deepcopy(He.H)  # md_
+                elif attr == "md_t":
+                    _He.md_t += [CH().copy(md_) for md_ in He.md_t]  # can't deepcopy CH.root
                 elif attr == "node_":
-                    _He.node_ = [CH().copy(node) for node in He.node_]
+                    _He.node_ = copy(He.node_)
                 else:
                     setattr(_He, attr, deepcopy(value))
         return _He

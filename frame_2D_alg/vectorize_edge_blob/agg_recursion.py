@@ -49,7 +49,6 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         # CL = binary tree of Gs, depth+/der+: CL nodet is 2 Gs, CL + CLs in nodet is 4 Gs, etc.,
         # unpack sequentially
         l.nodet = [] if nodet is None else nodet  # e_ in kernels, else replaces _node,node: not used in kernels?
-        # rim_t = [[],[]]  # for direct tracing?
         l.angle = [0,0] if angle is None else angle  # dy,dx between nodet centers
         l.span = span  # distance between nodet centers
         l.area = 0  # sum nodet
@@ -64,6 +63,7 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         l.n = 1  # min(node_.n)
         l.S = 0  # sum nodet
         l.Et = [0,0,0,0]
+        # rim_t = [[],[]]  # if der+
     def __bool__(l): return bool(l.derH.H)
 
 
@@ -100,18 +100,20 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
 def agg_recursion(root, N_, fL, rng=1):  # fL: compare node-mediated links, else < rng-distant CGs
 
     N_,Et,rng = rng_link_(N_) if fL else rng_node_(N_, rng)  # both rng-recursive
+    # N_: Link_ if fL else G_
     if len(N_) > ave_L:
-        node_t = form_graph_t(root, N_,Et,rng)  # fork Et eval, depth-first sub+, sub_Gs += fback_
+        node_t = form_graph_t(root, N_, Et,rng)  # fork Et eval, depth-first sub+, sub_Gs += fback_
         if node_t:
             for fd, node_ in zip((0,1), node_t):  # after sub++ in form_graph_t
-                N_ = []  # pruned and revalued node_
-                for N in node_:
-                    if N.derH.Et[fd] > G_aves[fd] * N.derH.Et[2+fd]:  # reorder layers by val
-                        N.derH.H = sorted(N.derH.H, key=lay.Et[fd], reverse=True)
-                        for i,lay in enumerate(N.derH.H):
-                            di = lay.i - i  # lay.i: index in original H, di: difference between default and value-specific rdn
-                            lay.Et[2+fd] += di  # update to value-specific rdn
-                            if not i: N.node_ = lay.node_
+                N_ = []
+                for N in node_:  # prune, set exemplar node_, derH.i
+                    derH = N.derH
+                    if derH.Et[fd] > G_aves[fd] * derH.Et[2+fd]:
+                        for i,lay in enumerate(sorted(derH.H, key=lambda lay:lay.Et[fd], reverse=True)):
+                            di = lay.i-i  # lay.i: index in H, di: der rdn - value rdn
+                            lay.Et[2+fd] += di  # update der rdn to val rdn
+                            if not i:  # max val is exemplar lay
+                                N.node_ = lay.node_; derH.i = lay.i  # exemplar pointer, not i in root H
                         N_ += [N]
                 if root.derH.Et[0] * (max(0,(len(N_)-1)*root.rng)) > G_aves[1]*root.derH.Et[2]:
                     # agg+rng+, val *= n comparands, forms CGs:
@@ -369,8 +371,8 @@ def form_graph_t(root, N_, Et, rng):  # segment N_ to Nm_, Nd_
         # rng+: distant M / G.M, less likely: term by >d/<m, but less complex
         if Et[fd] > ave * Et[2+fd]:
             if not fd:
-                for G in N_: G.root = []  # only nodes have roots?
-            graph_ = segment_N_(root, N_, fd, rng)
+                for G in N_: G.root = []  # link.root is empty anyway?
+            graph_ = segment_N_(root, N_, fd, rng)  # N_ is Link_ if fd else G_
             for graph in graph_:
                 Q = graph.link_ if fd else graph.node_  # xcomp -> max_dist * rng+1
                 if len(Q) > ave_L and graph.derH.Et[fd] > G_aves[fd] * graph.derH.Et[fd+2]:
@@ -398,9 +400,10 @@ def add_der_attrs(link_):
         link.aRad = 0
 
 def segment_N_(root, iN_, fd, rng):  # ~ parallelized https://en.wikipedia.org/wiki/Watershed_(image_processing)
-    # cluster by shared links weight + similarity of partial clusters, initially single linkage,
-    # sub-cluster by in-graph weights, added in merges.
-
+    '''
+    cluster by weight of shared links, initially single linkage, + similarity of partial clusters in merge
+    iN_ Link_ if fd else G_
+    '''
     N_ = []  # init Gts per node in iN_, merge if Lrim overlap + similarity of exclusive node_s
     max_ = []
     for N in iN_:  # init graphts:
@@ -410,9 +413,9 @@ def segment_N_(root, iN_, fd, rng):  # ~ parallelized https://en.wikipedia.org/w
         _N_t = [[_N for L in rim for _N in L.nodet if _N is not N and _N in iN_], [N]]
         Gt = [[N],[],copy(rim),_N_t,[0,0,0,0]]  # [node_, link_, Lrim, Nrim_t, Et]
         N.root = Gt; N_ += [Gt]
-        if not fd:  # if local maxes = Gt exemplars:
-            if not any([(eN.extH.H[-1].Et[0] > N.extH.H[-1].Et[0]) or (eN in max_) for eN in _N_t[0]]):  # _N if _N.V==N.V
-                max_ += [N]  # add mediation if no max in rrim: V * k * max_rng?
+        # if use exemplar G|Ls:
+        if not any([(eN.extH.H[-1].Et[fd] > N.extH.H[-1].Et[fd]) or (eN in max_) for eN in _N_t[0]]):  # _N if _N.V==N.V
+            max_ += [N]  # add mediation if no max in rrim: V * k * max_rng?
     max_ = [N.root for N in max_]
     # replace extNs with their Gts:
     for Gt in N_: Gt[3][0] = [_N.root for _N in Gt[3][0]]
@@ -441,7 +444,7 @@ def segment_N_(root, iN_, fd, rng):  # ~ parallelized https://en.wikipedia.org/w
 
     return [sum2graph(root, Gt, fd, rng) for Gt in N_]
 
-def sum_N_(N_):  # sum partial grapht in merge
+def sum_N_(N_):  # sum params of partial grapht for comp_G in merge
 
     N = N_[0]
     fd = isinstance(N, CL)
@@ -476,12 +479,11 @@ def merge(Gt, gt):
 def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
     G_, Link_, _, _, Et = grapht
-    graph = CG(fd=fd, node_=G_,link_=Link_, rng=rng, Et=Et)  # it's Link_ only now
+    graph = CG(fd=fd, node_= Link_ if fd else G_, link_=Link_, rng=rng, Et=Et)  # add default G_=G_?
     graph.roott[fd] = root
     extH = CH()  # convert to graph derH
     yx = [0,0]
     for G in G_:
-        extH.add_H(G.extH) if extH else extH.append_(G.extH,flat=1)
         graph.area += G.area
         graph.box = extend_box(graph.box, G.box)
         if isinstance(G, CG):
@@ -489,8 +491,12 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
         graph.n += G.n  # non-derH accumulation?
         if G.derH:
             graph.derH.add_H(G.derH)
-        if fd: G.Et = [0,0,0,0]  # reset in last form_graph_t fork, Gs are shared in both forks
-        else:  G.roott[fd] = graph  # assigned to links if fd else to nodes?
+        # if fd: G.Et = [0,0,0,0]  # reset in last form_graph_t fork, Gs are shared in both forks
+        # G.Et[1,3] should be summed from Link_ anyway?
+        if not fd:
+            G.root = graph  # root is assigned to links if fd else to nodes
+            extH.add_H(G.extH) if extH else extH.append_(G.extH, flat=1)
+            extH.node_ = G_
         yx = np.add(yx, G.yx)
     L = len(G_)
     yx = np.divide(yx,L); graph.yx = yx
@@ -498,8 +504,11 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
     for link in Link_:  # sum last layer of unique current-layer links
         graph.S += link.span
         graph.A = np.add(graph.A,link.angle)  # np.add(graph.A, [-link.angle[0],-link.angle[1]] if rev else link.angle)
-        if fd: link.roott[fd] = graph
-    if extH: graph.derH.append_(extH, flat=0)  # graph derH = node derHs + [summed Link_ derHs], may be nested by rng
+        if fd:
+            link.root = graph
+            extH.add_H(link.extH) if extH else extH.append_(link.extH, flat=1)
+            extH.node_ = Link_
+    graph.derH.append_(extH, flat=0)  # graph derH = node derHs + [summed Link_ derHs], may be nested by rng
     if fd:
         # assign alt graphs from d graph, after both linked m and d graphs are formed
         for link in graph.link_:
@@ -521,13 +530,4 @@ def feedback(root):  # called from form_graph_, always sub+, append new der laye
     DderH = mDerLay.append_(dDerH, flat=1)
     m,d, mr,dr = DderH.Et
     if m+d > sum(G_aves) * (mr+dr):
-        root.derH.append_(DderH, flat=1)  # append new derLay, maybe nested
-
-    # draft recursive feedback, propagated when sub+ ends in all nodes of both forks:
-    if root.roott:  # not Edge
-        for fd, rroot in zip((0,1), root.roott):  # root may belong to graphs of both forks
-            if rroot:  # empty if root is not in this fork
-                rroot.fback_t[fd] += [DderH]
-                if all(len(f_) == len(rroot.node_) for f_ in rroot.fback_t):  # both forks of sub+ end for all nodes
-                    feedback(rroot)  # sum2graph adds higher aggH, feedback adds deeper aggH layers
-
+        root.derH.append_(DderH, flat=0)  # new derLay maybe nested

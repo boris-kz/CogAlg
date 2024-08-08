@@ -103,3 +103,13 @@ def comp_L(_pars, pars):  # compare partial graphs in merge
     mdext = comp_ext(_L,L, _S,S/rn, _A,A)
     return dderH, mdext
 
+'''
+    # draft recursive feedback, propagated when sub+ ends in all nodes of both forks:
+    if root.roott:  # not Edge
+        for fd, rroot in zip((0,1), root.roott):  # root may belong to graphs of both forks
+            if rroot:  # empty if root is not in this fork
+                rroot.fback_t[fd] += [DderH]
+                if all(len(f_) == len(rroot.node_) for f_ in rroot.fback_t):  # both forks of sub+ end for all nodes
+                    feedback(rroot)  # sum2graph adds higher aggH, feedback adds deeper aggH layers
+
+'''
