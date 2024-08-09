@@ -114,18 +114,17 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
 class CH(CBase):  # generic derivation hierarchy of variable nesting, depending on effective agg++(sub++ depth
 
     name = "H"
-    def __init__(He, md_t=None, n=0, Et=None, Rt=None, H=None, root=None, i=None):
+    def __init__(He, node_=None, md_t=None, n=0, Et=None, Rt=None, H=None, root=None, i=None):
         super().__init__()
-        He.node_ = []  # concat, may be redundant to G.node_, lowest nesting order
+        He.node_ = [] if node_ is None else node_  # concat, may be redundant to G.node_, lowest nesting order
         He.md_t = [] if md_t is None else md_t  # compared [mdlat,mdLay,mdext] per layer
         He.H = [] if H is None else H  # lower derLays or md_ in md_C, empty in bottom layer
         He.n = n  # number of params compared to form derH, sum in comp_G, from nodes in sum2graph
         He.Et = [0,0,0,0] if Et is None else Et  # evaluation tuple: valt, rdnt
         He.Rt = [0,0] if Rt is None else Rt  # m,d relative to max possible m,d
         He.root = None if root is None else root  # N or higher-composition He
-        He.i = 0 if i is None else i  # He index in root.H,
+        He.i = 0 if i is None else i  # lay index in root.H if lay, else derH.H exemplar, trace in both directions?
         # He.ni = 0  # exemplar in node_, trace in both directions?
-        # He.Hi = 0  # exemplar in H if unpacked, trace down?
         # He.depth = 0  # nesting in H[0], -=i in H[Hi], added in agg++|sub++
         # He.nest = nest  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH?
         '''
@@ -202,8 +201,9 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         while root is not None:
             root.Et = np.add(root.Et,He.Et)
             if isinstance(root, CH):
-                root.Rt = np.add(root.Rt,He.Rt); root.n += He.n; root = root.root
                 root.node_ += [node for node in He.node_ if node not in HE.node_]
+                root.Rt = np.add(root.Rt,He.Rt); root.n += He.n
+                root = root.root
             else:
                break  # root is G|L
         return HE  # for feedback in agg+

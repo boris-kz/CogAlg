@@ -113,3 +113,122 @@ def comp_L(_pars, pars):  # compare partial graphs in merge
                     feedback(rroot)  # sum2graph adds higher aggH, feedback adds deeper aggH layers
 
 '''
+
+def segment_N_(root, iN_, fd, rng):  # iN_: Link_ if fd else G_, ~ parallelized https://en.wikipedia.org/wiki/Watershed_(image_processing)
+    '''
+    cluster by weight of shared links, initially single linkage, + similarity of partial clusters in merge
+    '''
+    N_ = []  # init Gts per node in iN_, merge if Lrim overlap + similarity of exclusive node_s
+    max_ = []
+    for N in iN_:  # init graphts:
+        if isinstance(N,CG):            rim = [Lt[0] for rim in N.rim_ for Lt in rim]
+        elif isinstance(N.nodet[0],CG): rim = [Lt[0] for _N in N.nodet for rim in _N.rim_ for Lt in rim]
+        else:                           rim = [Lt[0] for rimt in N.rimt_ for rim in rimt for Lt in rim]
+        # get [ext_N_,int_N_], no extH if not in iN_:
+        _N_t = [[_N for L in rim for _N in L.nodet if _N is not N and _N in iN_], [N]]
+        Gt = [[N],[],copy(rim),_N_t,[0,0,0,0]]  # [node_, link_, Lrim, Nrim_t, Et]
+        N.root = Gt; N_ += [Gt]
+        emax_ = [] # if exemplar G|Ls:
+        for eN in _N_t[0]:
+            eEt,Et = (eN.derH.Et, N.derH.Et) if fd else (eN.extH.Et, N.extH.Et)
+            if eEt[fd] >= Et[fd] or eN in max_: emax_ += [eN]  # _N if _N == N
+        if not emax_: max_ += [N]  # no higher-val neighbors
+        # add rrim mediation: V * k * max_rng?
+    max_ = [N.root for N in max_]
+    # replace extNs with their Gts:
+    for Gt in N_: Gt[3][0] = [_N.root for _N in Gt[3][0]]
+    # merge with connected _Gts:
+    for Gt in max_ if max_ else N_:
+        node_, link_, Lrim, Nrim_t, Et = Gt
+        Nrim = Nrim_t[0]
+        for _Gt, _L in zip(Nrim, Lrim):
+            if _Gt not in N_:
+                continue  # was merged
+            oL_ = set(Lrim).intersection(set(_Gt[2])).union([_L])  # shared external links + potential _L # oL_ = [Lr[0] for Lr in _Gt[2] if Lr in Lrim]
+            oV = sum([L.derH.Et[fd] - ave * L.derH.Et[2+fd] for L in oL_])
+            # eval by Nrim similarity = oV + olp between G,_G,
+            # ?pre-eval by max olp: _node_ = _Gt[0]; _Nrim = _Gt[3][0],
+            # if len(Nrim)/len(node_) > ave_L or len(_Nrim)/len(_node_) > ave_L:
+            sN_ = set(node_); _sN_ = set(_Gt[0])
+            oN_ = sN_.intersection(_sN_)  # Nrim overlap
+            xN_ = list(sN_- oN_)  # exclusive node_
+            _xN_ = list(_sN_- oN_)
+            if _xN_ and xN_:
+                dderH = comp_G( sum_N_(_xN_), sum_N_(xN_))
+                oV += (dderH.Et[fd] - ave * dderH.Et[2+fd])  # norm by R, * dist_coef * agg_coef?
+            if oV > ave:
+                link_ += [_L]
+                merge(Gt,_Gt); N_.remove(_Gt)
+
+    return [sum2graph(root, Gt, fd, rng) for Gt in N_]
+
+def sum_N_(N_):  # sum params of partial grapht for comp_G in merge
+
+    N = N_[0]
+    fd = isinstance(N, CL)
+    n = N.n; S = N.S
+    L, A = (N.span, N.angle) if fd else (len(N.node_), N.A)
+    if not fd:
+        latuple = deepcopy(N.latuple)
+        mdLay = CH().copy(N.mdLay)
+    derH = CH().copy(N.derH) if N.derH else None
+    for N in N_[1:]:
+        if not fd:
+            add_lat(latuple, N.latuple)
+            mdLay.add_md_(N.mdLay)
+        n += N.n; S += N.S
+        L += N.span if fd else len(N.node_)
+        A = [Angle+angle for Angle,angle in zip(A, N.angle if fd else N.A)]
+        if N.derH: derH.add_H(N.derH)
+
+    return n, L, S, A, None if fd else latuple, None if fd else mdLay, derH
+
+def merge(Gt, gt):
+
+    N_,L_, Lrim, Nrim_t, Et = Gt
+    n_,l_, lrim, nrim_t, et = gt
+    N_ += n_
+    L_ += l_  # internal, no overlap
+    Lrim[:] = list(set(Lrim + lrim))  # exclude shared external links, direction doesn't matter?
+    Nrim_t[:] = [[G for G in nrim_t[0] if G not in Nrim_t[0]], list(set(Nrim_t[1] + nrim_t[1]))]  # exclude shared external nodes
+    Et[:] = np.add(Et,et)
+
+# not fully updated
+def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, aggH in agg+ or player in sub+
+
+    N_,L_,_,_,Et = grapht  # [node_, link_, Lrim, Nrim_t, Et]
+    graph = CG(fd=fd, node_=node_, link_= [] if fd else L_, rng=rng, Et=Et)  # reset link_ if fd?
+    graph.root = root
+    extH = CH(node_=node_)  # convert to graph derH
+    yx = [0,0]
+    for N in N_:
+        graph.area += N.area
+        graph.box = extend_box(graph.box, N.box)
+        if isinstance(N,CG):
+            graph.add_md_t(N.md_t)
+            add_lat(graph.latuple, N.latuple)
+        graph.n += N.n  # non-derH accumulation?
+        if N.derH: graph.derH.add_H(N.derH)
+        if not fd:
+            N.root = graph  # root is assigned to links if fd else to nodes
+            extH.add_H(N.extH) if extH else extH.append_(N.extH, flat=1)  # G.extH.i is not relevant right?
+        yx = np.add(yx, N.yx)
+    L = len(N_)
+    yx = np.divide(yx,L); graph.yx = yx
+    graph.aRad = sum([np.hypot(*np.subtract(yx,N.yx)) for N in N_]) / L  # average distance between graph center and node center
+    for link in L_:  # sum last layer of unique current-layer links
+        graph.S += link.span
+        graph.A = np.add(graph.A,link.angle)  # np.add(graph.A, [-link.angle[0],-link.angle[1]] if rev else link.angle)
+        if fd:
+            link.root = graph
+            extH.add_H(link.derH) if extH else extH.append_(link.derH, flat=1)
+    graph.derH.append_(extH, flat=0)  # graph derH = node derHs + [summed Link_ derHs], may be nested by rng
+    if fd:
+        # assign alt graphs from d graph, after both linked m and d graphs are formed
+        for link in graph.link_:
+            mgraph = link.root
+            if mgraph:
+                for fd, (G, alt_G) in enumerate(((mgraph,graph), (graph,mgraph))):  # bilateral assign:
+                    if G not in alt_G.alt_graph_:
+                        G.alt_graph_ += [alt_G]
+    return graph
