@@ -63,11 +63,11 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.Et = [0,0,0,0] if Et is None else Et    # extH.Et + derH.Et + mdLay.Et?
         G.latuple = [0,0,0,0,0,[0,0]]  # lateral I,G,M,Ma,L,[Dy,Dx]
         G.mdLay = CH(root=G) if mdLay is None else mdLay
-        # map to node_H, nested in agg+|sub+:
+        # maps to node_H from agg+|sub+:
         G.derH = CH(root=G) if derH is None else derH  # internal, sum from node_
-        G.extH = CH(root=G) if extH is None else extH  # external, sum from rim_) krim
-        G.kHH = []  # kernel: hierarchy of rim layers
+        G.extH = CH(root=G) if extH is None else extH  # external, sum from rim_) kernel rim
         G.rim_ = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tH_ in cpr sub+
+        G.kHH = []  # kernel: hierarchy of rim layers
         G.rng = rng
         G.n = n  # external n (last layer n)
         G.S = 0  # sparsity: distance between node centers
@@ -114,7 +114,7 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
 class CH(CBase):  # generic derivation hierarchy of variable nesting, depending on effective agg++(sub++ depth
 
     name = "H"
-    def __init__(He, node_=None, md_t=None, n=0, Et=None, Rt=None, H=None, root=None, i=None):
+    def __init__(He, node_=None, md_t=None, n=0, Et=None, Rt=None, H=None, root=None, i=None, ii=None):
         super().__init__()
         He.node_ = [] if node_ is None else node_  # concat, may be redundant to G.node_, lowest nesting order
         He.md_t = [] if md_t is None else md_t  # compared [mdlat,mdLay,mdext] per layer
@@ -123,14 +123,11 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         He.Et = [0,0,0,0] if Et is None else Et  # evaluation tuple: valt, rdnt
         He.Rt = [0,0] if Rt is None else Rt  # m,d relative to max possible m,d
         He.root = None if root is None else root  # N or higher-composition He
-        He.i = 0 if i is None else i  # lay index in root.H if lay, else derH.H exemplar, trace in both directions?
+        He.i = 0 if i is None else i   # lay index in root.H, to revise rdn
+        He.ii = 0 if ii is None else ii  # max lay in He.H: init add,comp if deleted higher layers' H,md_t
         # He.ni = 0  # exemplar in node_, trace in both directions?
         # He.depth = 0  # nesting in H[0], -=i in H[Hi], added in agg++|sub++
         # He.nest = nest  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH?
-        '''
-        optional deprecate higher derH layers: delete their H and md_t while keeping them in lower layers.
-        then add_H comp_H don't stop at empty lay.H, and comp_H starts at i with not-empty md_t?
-        '''
     def __bool__(H): return H.n != 0
 
     def add_md_(HE, He, irdnt=[]):  # p may be derP, sum derLays
@@ -186,9 +183,8 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         I = len(HE.H)  # min index
         if flat:
             for i, lay in enumerate(He.H):
-                lay.root = HE; lay.i = I+i; HE.H += [lay]
-        else:
-            He.root = HE; He.i = I; HE.H += [He]
+                lay.i = I+i; lay.root = HE; HE.H += [lay]
+        else: He.i = I; He.root = HE; HE.H += [He]
 
         if HE.md_t: HE.add_md_t(He)  # accumulate [lat_md_C,lay_md_C,ext_md_C]
         else:       HE.md_t = [CH().copy(md_) for md_ in He.md_t]

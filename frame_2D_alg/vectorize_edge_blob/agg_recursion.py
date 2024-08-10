@@ -63,7 +63,8 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         l.n = 1  # min(node_.n)
         l.S = 0  # sum nodet
         l.Et = [0,0,0,0]
-        # rim_t = [[],[]]  # if der+
+        l.root = None
+        # rimt_ = [[],[]]  # if der+
     def __bool__(l): return bool(l.derH.H)
 
 
@@ -102,9 +103,9 @@ def agg_recursion(root, N_, fL, rng=1):  # fL: compare node-mediated links, else
     der+ forms Link_, link.node_ -> dual trees of matching links in der+rng+, complex higher links
     rng+ keeps N_ + distant M / G.M, less likely: term by >d/<m, less complex
     '''
-    N_,L_, Et,rng = rng_link_(N_) if fL else rng_node_(N_, rng)  # N_ = L_ if fL else G_, both rng++
+    N_,L_,Et,rng = rng_link_(N_) if fL else rng_node_(N_, rng)  # N_ = L_ if fL else G_, both rng++
     if len(N_) > ave_L:
-        node_t = form_graph_t(root, N_, L_, Et,rng)  # fork eval, depth-first sub+, sub_Gs += fback_
+        node_t = form_graph_t(root, N_,L_, Et,rng)  # fork eval, depth-first sub+, sub_Gs += fback_
         if node_t:
             for fd, node_ in zip((0,1), node_t):  # after sub++ in form_graph_t
                 N_ = []
@@ -115,7 +116,7 @@ def agg_recursion(root, N_, fL, rng=1):  # fL: compare node-mediated links, else
                             di = lay.i-i  # lay.i: index in H, di: der rdn - value rdn
                             lay.Et[2+fd] += di  # update der rdn to val rdn
                             if not i:  # max val lay
-                                N.node_ = lay.node_; derH.i = lay.i  # exemplar, index
+                                N.node_ = lay.node_; derH.ii = lay.i  # exemplar lay index
                         N_ += [N]
                 if root.derH.Et[0] * (max(0,(len(N_)-1)*root.rng)) > G_aves[1]*root.derH.Et[2]:
                     # agg+rng+, val *= n comparands, forms CGs:
@@ -137,7 +138,9 @@ def rng_node_(_N_, rng):  # forms discrete rng+ links, vs indirect rng+ in rng_k
             n += 1
         else:
             break
-    return rN_, [], rEt, rng  # return empty L_ for now, probably need to fill it?
+    rL_ = list(set([Lt[0]for N in rN_ for rim in N.rim_ for Lt in rim]))
+
+    return rN_, rL_, rEt, rng
 
 def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backprop, not for CLs
 
@@ -376,7 +379,7 @@ def form_graph_t(root, N_, L_, Et, rng):  # segment N_ to Nm_, Nd_
         if Et[fd] > ave * Et[2+fd]:
             if isinstance(N_[0],CG):  # link.root is empty?
                  for G in N_: G.root = []  # new root will be intermediate graph
-            # G: Ls/ D if fd: directional, else Ns/ M: symmetrical:
+            # G: Ls/D if fd: directional, else Ns/M: symmetric, sum in node:
             graph_ = segment_N_(root, L_ if fd else N_, fd, rng)
             for graph in graph_:
                 Q = graph.link_ if fd else graph.node_  # xcomp -> max_dist * rng+1
@@ -409,38 +412,39 @@ def segment_N_(root, iN_, fd, rng):  # iN_: Link_ if fd else G_, ~ parallelized 
     # cluster by weight of shared links, initially single linkage, + similarity of partial clusters in merge
     N_ = []
     max_ = []
-    for N in iN_:  # init Gt/N, merge / Lrim overlap + similarity of exclusive node_s:
-        if isinstance(N,CG):            rim = [Lt[0] for rim in N.rim_ for Lt in rim]
-        elif isinstance(N.nodet[0],CG): rim = [Lt[0] for _N in N.nodet for rim in _N.rim_ for Lt in rim]
-        else:                           rim = [Lt[0] for rimt in N.rimt_ for rim in rimt for Lt in rim]
-        # get [ext_N_,int_N_], no extH if not in iN_:
-        _N_t = [[_N for L in rim for _N in L.nodet if _N is not N and _N in iN_], [N]]
-        Gt = [[N],[],copy(rim),_N_t,[0,0,0,0]]  # [node_, link_, Lrim, Nrim_t, Et]
+    for N in iN_:
+        # init Gt per N:
+        med_ = N.nodet if fd else [Lt[0] for Lt in N.rim_[-1]]  # mediator is iN if fd else iL
+        if fd: eN_ = [_Lt[0] for _N in med_ for _Lt in _N.rim_[-1]]  # links of nodet
+        else:  eN_ = [_N for _L in med_ for _N in _L.nodet]  # _nodes of rim
+        ext_N_ = [e for e in eN_ if e is not N and e in iN_]
+        _N_t = [ext_N_, [N]]
+        Gt = [[N], [], copy(med_), _N_t, [0,0,0,0]]  # [node_, link_, Lrim, Nrim_t, Et]
         N.root = Gt; N_ += [Gt]
-        emax_ = [] # if exemplar G|Ls:
+        emax_ = []  # if exemplar G|Ls:
         for eN in _N_t[0]:
             eEt,Et = (eN.derH.Et, N.derH.Et) if fd else (eN.extH.Et, N.extH.Et)
             if eEt[fd] >= Et[fd] or eN in max_: emax_ += [eN]  # _N if _N == N
         if not emax_: max_ += [N]  # no higher-val neighbors
         # add rrim mediation: V * k * max_rng?
     max_ = [N.root for N in max_]
-    # replace extNs with their Gts:
-    for Gt in N_: Gt[3][0] = [_N.root for _N in Gt[3][0]]
-    # merge with connected _Gts:
+    for Gt in N_: Gt[3][0] = [_N.root for _N in Gt[3][0]]  # replace ext Ns with their Gts
     for Gt in max_ if max_ else N_:
+        # merge connected _Gts if >ave shared external links (Lrim) + internal similarity (summed node_)
         node_, link_, Lrim, Nrim_t, Et = Gt
-        Nrim = Nrim_t[0]
+        Nrim = Nrim_t[0]  # ext N Gts, connected by Gt-external links, not added to node_ yet
         for _Gt, _L in zip(Nrim, Lrim):
             if _Gt not in N_:
                 continue  # was merged
-            oL_ = set(Lrim).intersection(set(_Gt[2])).union([_L])  # shared external links + potential _L # oL_ = [Lr[0] for Lr in _Gt[2] if Lr in Lrim]
+            oL_ = set(Lrim).intersection(set(_Gt[2])).union([_L])  # shared external links + potential _L, or oL_ = [Lr[0] for Lr in _Gt[2] if Lr in Lrim]
             oV = sum([L.derH.Et[fd] - ave * L.derH.Et[2+fd] for L in oL_])
             # eval by Nrim similarity = oV + olp between G,_G,
             # ?pre-eval by max olp: _node_ = _Gt[0]; _Nrim = _Gt[3][0],
             # if len(Nrim)/len(node_) > ave_L or len(_Nrim)/len(_node_) > ave_L:
             sN_ = set(node_); _sN_ = set(_Gt[0])
-            oN_ = sN_.intersection(_sN_)  # Nrim overlap
-            xN_ = list(sN_- oN_)  # exclusive node_
+            # or int_N_, ext_N_ is not in node_:
+            oN_ = sN_.intersection(_sN_)  # ext N_ overlap
+            xN_ = list(sN_- oN_)  # exclusive node_: remove overlap
             _xN_ = list(_sN_- oN_)
             if _xN_ and xN_:
                 dderH = comp_G( sum_N_(_xN_), sum_N_(xN_) )
