@@ -44,30 +44,6 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
 
         return True
 
-def sum_N_(N_, fd=0):  # sum partial grapht in merge
-
-    N = N_[0]
-    n = N.n; S = N.S
-    L, A = (N.span, N.angle) if fd else (len(N.node_), N.A)
-    if not fd:
-        latuple = deepcopy(N.latuple)
-        mdLay = CH().copy(N.mdLay)
-        extH = CH().copy(N.extH)
-    derH = CH().copy(N.derH)
-    # Et = copy(N.Et)
-    for N in N_[1:]:
-        if not fd:
-            add_lat(latuple, N.latuple)
-            if N.mdLay: mdLay.add_md_(N.mdLay)
-        n += N.n; S += N.S
-        L += N.span if fd else len(N.node_)
-        A = [Angle+angle for Angle,angle in zip(A, N.angle if fd else N.A)]
-        if N.derH: derH.add_H(N.derH)
-        if N.extH: extH.add_H(N.extH)
-
-    if fd: return n, L, S, A, derH, extH
-    else:  return n, L, S, A, derH, extH, latuple, mdLay  # no comp Et
-
 def comp_core(_node_, node_, fmerge=1):  # compare partial graphs in merge or kLay in rng_kern_
 
     dderH = CH()
@@ -114,47 +90,49 @@ def comp_L(_pars, pars):  # compare partial graphs in merge
 
 '''
 
-def segment_N_(root, iN_, fd, rng):  # iN_: Link_ if fd else G_, ~ parallelized https://en.wikipedia.org/wiki/Watershed_(image_processing)
-    '''
-    cluster by weight of shared links, initially single linkage, + similarity of partial clusters in merge
-    '''
-    N_ = []  # init Gts per node in iN_, merge if Lrim overlap + similarity of exclusive node_s
+def segment_N_(root, iN_, fd, rng):  # form proto sub-graphs in iN_: Link_ if fd else G_
+
+    # cluster by weight of shared links, initially single linkage, + similarity of partial clusters in merge
+    N_ = []
     max_ = []
-    for N in iN_:  # init graphts:
-        if isinstance(N,CG):            rim = [Lt[0] for rim in N.rim_ for Lt in rim]
-        elif isinstance(N.nodet[0],CG): rim = [Lt[0] for _N in N.nodet for rim in _N.rim_ for Lt in rim]
-        else:                           rim = [Lt[0] for rimt in N.rimt_ for rim in rimt for Lt in rim]
-        # get [ext_N_,int_N_], no extH if not in iN_:
-        _N_t = [[_N for L in rim for _N in L.nodet if _N is not N and _N in iN_], [N]]
-        Gt = [[N],[],copy(rim),_N_t,[0,0,0,0]]  # [node_, link_, Lrim, Nrim_t, Et]
+    for N in iN_:   # init Gt per N:
+        # mediator: iN if fd else iL
+        med_ = N.nodet if fd else [Lt[0] for Lt in (N.rim_[-1] if isinstance(N,CG) else N.rimt_[-1][0] + N.rimt_[-1][1])]
+        if fd:  # get links of nodet
+            eN_ = [Lt[0] for _N in med_ for Lt in (_N.rim_[-1] if isinstance(_N,CG) else _N.rimt_[-1][0]+_N.rimt_[-1][1])]
+        else:   # get nodes of rim links
+            eN_ = [_N for _L in med_ for _N in _L.nodet]
+        ext_N_ = [e for e in eN_ if e is not N and e in iN_]
+        _N_t = [ext_N_, [N]]
+        Gt = [[N], [], copy(med_), _N_t, [0,0,0,0]]  # [node_, link_, Lrim, Nrim_t, Et]
         N.root = Gt; N_ += [Gt]
-        emax_ = [] # if exemplar G|Ls:
+        emax_ = []  # if exemplar G|Ls:
         for eN in _N_t[0]:
             eEt,Et = (eN.derH.Et, N.derH.Et) if fd else (eN.extH.Et, N.extH.Et)
             if eEt[fd] >= Et[fd] or eN in max_: emax_ += [eN]  # _N if _N == N
         if not emax_: max_ += [N]  # no higher-val neighbors
         # add rrim mediation: V * k * max_rng?
     max_ = [N.root for N in max_]
-    # replace extNs with their Gts:
-    for Gt in N_: Gt[3][0] = [_N.root for _N in Gt[3][0]]
-    # merge with connected _Gts:
+    for Gt in N_: Gt[3][0] = [_N.root for _N in Gt[3][0]]  # replace ext Ns with their Gts
     for Gt in max_ if max_ else N_:
+        # merge connected _Gts if >ave shared external links (Lrim) + internal similarity (summed node_)
         node_, link_, Lrim, Nrim_t, Et = Gt
-        Nrim = Nrim_t[0]
+        Nrim = Nrim_t[0]  # ext N Gts, connected by Gt-external links, not added to node_ yet
         for _Gt, _L in zip(Nrim, Lrim):
             if _Gt not in N_:
                 continue  # was merged
-            oL_ = set(Lrim).intersection(set(_Gt[2])).union([_L])  # shared external links + potential _L # oL_ = [Lr[0] for Lr in _Gt[2] if Lr in Lrim]
+            oL_ = set(Lrim).intersection(set(_Gt[2])).union([_L])  # shared external links + potential _L, or oL_ = [Lr[0] for Lr in _Gt[2] if Lr in Lrim]
             oV = sum([L.derH.Et[fd] - ave * L.derH.Et[2+fd] for L in oL_])
             # eval by Nrim similarity = oV + olp between G,_G,
             # ?pre-eval by max olp: _node_ = _Gt[0]; _Nrim = _Gt[3][0],
             # if len(Nrim)/len(node_) > ave_L or len(_Nrim)/len(_node_) > ave_L:
             sN_ = set(node_); _sN_ = set(_Gt[0])
-            oN_ = sN_.intersection(_sN_)  # Nrim overlap
-            xN_ = list(sN_- oN_)  # exclusive node_
+            # or int_N_, ext_N_ is not in node_:
+            oN_ = sN_.intersection(_sN_)  # ext N_ overlap
+            xN_ = list(sN_- oN_)  # exclusive node_: remove overlap
             _xN_ = list(_sN_- oN_)
             if _xN_ and xN_:
-                dderH = comp_G( sum_N_(_xN_), sum_N_(xN_))
+                dderH = comp_G( sum_N_(_xN_), sum_N_(xN_));  dderH.node_ = xN_+_xN_  # ?
                 oV += (dderH.Et[fd] - ave * dderH.Et[2+fd])  # norm by R, * dist_coef * agg_coef?
             if oV > ave:
                 link_ += [_L]
@@ -193,7 +171,6 @@ def merge(Gt, gt):
     Nrim_t[:] = [[G for G in nrim_t[0] if G not in Nrim_t[0]], list(set(Nrim_t[1] + nrim_t[1]))]  # exclude shared external nodes
     Et[:] = np.add(Et,et)
 
-# not fully updated
 def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
     N_,L_,_,_,Et = grapht  # [node_, link_, Lrim, Nrim_t, Et]
