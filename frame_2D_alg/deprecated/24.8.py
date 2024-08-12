@@ -209,3 +209,45 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
                     if G not in alt_G.alt_graph_:
                         G.alt_graph_ += [alt_G]
     return graph
+
+def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
+
+    fd = rev is not None  # compared links have binary relative direction?
+    _N, N = Link.nodet; rn = _N.n/N.n
+    # no comp extH, it's current ders
+    if fd:  # CLs
+        DLay = _N.derH.comp_H(N.derH, rn, fagg=1)  # new link derH = local dH
+        _A,A = _N.angle, N.angle if rev else [-d for d in N.angle] # reverse if left link
+    else:   # CGs
+        DLay = comp_G([_N.n,len(_N.node_),_N.S,_N.A,_N.latuple,_N.mdLay,_N.derH],
+                      [N.n, len(N.node_), N.S, N.A, N.latuple, N.mdLay, N.derH])
+        DLay.root = Link
+        _A,A = _N.A,N.A
+    DLay.node_ = [_N,N]
+    Link.mdext = comp_ext(2,2, _N.S,N.S/rn, _A,A)
+    if fd:
+        Link.derH.append_(DLay)
+    else:  Link.derH = DLay
+    iEt[:] = np.add(iEt,DLay.Et)  # init eval rng+ and form_graph_t by total m|d?
+    for i in 0,1:
+        Val, Rdn = DLay.Et[i::2]
+        if Val > G_aves[i] * Rdn * (rng+1): Link.ft[i] = 1  # fork inclusion tuple
+        _N.Et[i] += Val; N.Et[i] += Val  # not selective
+        _N.Et[2+i] += Rdn; N.Et[2+i] += Rdn  # per fork link in both Gs
+        # if select fork links: iEt[i::2] = [V+v for V,v in zip(iEt[i::2], dH.Et[i::2])]
+    if any(Link.ft):
+        Link.n = min(_N.n,N.n)  # comp shared layers
+        Link.yx = np.add(_N.yx, N.yx) / 2
+        Link.S += (_N.S + N.S) / 2
+        for rev, node in zip((0,1),(_N,N)):  # ?reversed Link direction
+            if fd:
+                if len(node.rimt_) == rng:
+                    node.rimt_[-1][1-rev] += [[Link,rev]]  # add in last rng layer, opposite to _N,N dir
+                else: node.rimt_ += [[[[Link,rev]],[]]] if dir else [[[],[[Link,rev]]]]  # add rng layer
+            else:
+                if len(node.extH.H) == rng:
+                    node.rim_[-1] += [[Link, rev]]  # accum last rng layer
+                else: node.rim_ += [[[Link, rev]]]  # init rng layer
+
+        return True
+

@@ -44,24 +44,23 @@ max_dist = 2
 class CL(CBase):  # link or edge, a product of comparison between two nodes or links
     name = "link"
 
-    def __init__(l, nodet=None,derH=None, span=0, angle=None, box=None, md_t=None, H_=None):
+    def __init__(l, nodet=None,extH=None, S=0, A=None, box=None, md_t=None, H_=None):
         super().__init__()
         # CL = binary tree of Gs, depth+/der+: CL nodet is 2 Gs, CL + CLs in nodet is 4 Gs, etc.,
         # unpack sequentially
         l.nodet = [] if nodet is None else nodet  # e_ in kernels, else replaces _node,node: not used in kernels?
-        l.angle = [0,0] if angle is None else angle  # dy,dx between nodet centers
-        l.span = span  # distance between nodet centers
+        l.A = [0,0] if A is None else A  # dy,dx between nodet centers
+        l.S = 0 if S is None else S  # span: distance between nodet centers, summed into sparsity in CGs
         l.area = 0  # sum nodet
         l.box = [] if box is None else box  # sum nodet
         l.latuple = []  # sum nodet
         l.md_t = [] if md_t is None else md_t  # [mdlat,mdLay,mdext] per layer
-        l.derH = CH(root=l) if derH is None else derH
+        l.extH = CH(root=l) if extH is None else extH
         l.H_ = [] if H_ is None else H_  # if agg++| sub++
         l.mdext = []  # Et, Rt, Md_
         l.ft = [0,0]  # fork inclusion tuple, may replace Vt:
         l.Vt = [0,0]  # for rim-overlap modulated segmentation, init derH.Et[:2]
         l.n = 1  # min(node_.n)
-        l.S = 0  # sum nodet
         l.Et = [0,0,0,0]
         l.root = None
         # rimt_ = [[],[]]  # if der+
@@ -130,7 +129,7 @@ def rng_node_(_N_, rng):  # forms discrete rng+ links, vs indirect rng+ in rng_k
 
     while True:
         N_, Et = rng_kern_(_N_, rng)  # += rng layer
-        if Et[0] > ave * Et[2]:
+        if Et[0] > ave * Et[2] * rng:
             _N_ = N_
             rEt = [V+v for V,v in zip(rEt, Et)]
             if not n: rN_ = N_  # 1st pruned N_
@@ -138,14 +137,18 @@ def rng_node_(_N_, rng):  # forms discrete rng+ links, vs indirect rng+ in rng_k
             n += 1
         else:
             break
-    rL_ = list(set([Lt[0]for N in rN_ for rim in N.rim_ for Lt in rim]))
+    rL_ = []
+    for N in rN_: rL_ += [Lt[0] for Lt in N.rim]
 
-    return rN_, rL_, rEt, rng
+    return rN_, list(set(rL_)), rEt, rng
 
 def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backprop, not for CLs
 
     _G_ = []
     Et = [0,0,0,0]
+    for N in N_:
+        if hasattr(N._rim): N.rim += N._rim
+        N._rim = []  # for current rng links
     # comp_N:
     for (_G, G) in list(combinations(N_,r=2)):
         if _G in [G for visited_ in G.visited__ for G in visited_]:  # compared in any rng++
@@ -158,14 +161,14 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
             for _g,g in (_G,G),(G,_G):
                 if len(g.extH.H)==rng: g.visited__[-1] += [_g]
                 else: g.visited__ += [[_g]]  # init layer
-            Link = CL(nodet=[_G,G], span=2, angle=[dy,dx], box=extend_box(G.box,_G.box))
+            Link = CL(nodet=[_G,G],S=2,A=[dy,dx], box=extend_box(G.box,_G.box))
             if comp_N(Link, Et, rng):
                 for g in _G,G:
                     if g not in _G_: _G_ += [g]
     G_ = []  # init conv kernels:
     for G in (_G_):
         krim = []
-        for link,rev in G.rim_[-1]:
+        for link,rev in G._rim:  # current links
             if link.ft[0]:  # must be mlink
                 _G = link.nodet[0] if link.nodet[1] is G else link.nodet[1]
                 krim += [_G]
@@ -266,7 +269,7 @@ def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
                         if not hasattr(_L,"rimt_"): add_der_attrs(link_=[_L])  # _L not in root.link_, same derivation
                         L.visited_ += [_L]; _L.visited_ += [L]
                         dy,dx = np.subtract(_L.yx, L.yx)
-                        Link = CL(nodet=[_L,L], span=2, angle=[dy,dx], box=extend_box(_L.box, L.box))
+                        Link = CL(nodet=[_L,L], S=2, A=[dy,dx], box=extend_box(_L.box, L.box))
                         # L.rim_t += new Link
                         if comp_N(Link, Et, rng, rev ^ _rev):  # negate ds if only one L is reversed
                             # L += rng+'mediating nodes, link orders: nodet < L < rimt_, mN.rim || L
@@ -298,41 +301,34 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
 
     fd = rev is not None  # compared links have binary relative direction?
     _N, N = Link.nodet; rn = _N.n/N.n
-    # no comp extH, it's current ders
     if fd:  # CLs
-        DLay = _N.derH.comp_H(N.derH, rn, fagg=1)  # new link derH = local dH
-        _A,A = _N.angle, N.angle if rev else [-d for d in N.angle] # reverse if left link
-    else:   # CGs
+        DLay = _N.extH.comp_H(N.extH, rn, fagg=1)  # new link derH = local dH
+        _A,A = _N.A,N.A if rev else [-d for d in N.A]  # reverse if left link
+    else:  # CGs
         DLay = comp_G([_N.n,len(_N.node_),_N.S,_N.A,_N.latuple,_N.mdLay,_N.derH],
-                      [N.n, len(N.node_), N.S, N.A, N.latuple, N.mdLay, N.derH])
-        DLay.root = Link
-        _A,A = _N.A,N.A
-    DLay.node_ = [_N,N]
-    Link.mdext = comp_ext(2,2, _N.S,N.S/rn, _A,A)
-    if fd:
-        Link.derH.append_(DLay)
-    else:  Link.derH = DLay
-    iEt[:] = np.add(iEt,DLay.Et)  # init eval rng+ and form_graph_t by total m|d?
+                      [ N.n, len(N.node_), N.S, N.A, N.latuple, N.mdLay, N.derH])
+        _A,A = _N.A,N.A  # no comp extH: current ders
+    mdext = comp_ext(2,2,_N.S,N.S/rn,_A,A)
+    Et = np.add(DLay.Et, mdext.Et)
+    iEt[:] = np.add(iEt,Et)  # init eval rng+ and form_graph_t by total m|d?
     for i in 0,1:
-        Val, Rdn = DLay.Et[i::2]
+        Val, Rdn = Et[i::2]
         if Val > G_aves[i] * Rdn * (rng+1): Link.ft[i] = 1  # fork inclusion tuple
         _N.Et[i] += Val; N.Et[i] += Val  # not selective
         _N.Et[2+i] += Rdn; N.Et[2+i] += Rdn  # per fork link in both Gs
         # if select fork links: iEt[i::2] = [V+v for V,v in zip(iEt[i::2], dH.Et[i::2])]
     if any(Link.ft):
-        Link.n = min(_N.n,N.n)  # comp shared layers
-        Link.yx = np.add(_N.yx, N.yx) / 2
-        Link.S += (_N.S + N.S) / 2
+        Link.extH = DLay; DLay.root = Link; Link.Et = Et; Link.n = min(_N.n,N.n)  # comp shared layers
+        Link.nodet = [_N,N]; Link.mdext = mdext; Link.yx = np.add(_N.yx,N.yx) /2
+        # S,A set before comp_N
         for rev, node in zip((0,1),(_N,N)):  # ?reversed Link direction
             if fd:
                 if len(node.rimt_) == rng:
                     node.rimt_[-1][1-rev] += [[Link,rev]]  # add in last rng layer, opposite to _N,N dir
                 else: node.rimt_ += [[[[Link,rev]],[]]] if dir else [[[],[[Link,rev]]]]  # add rng layer
             else:
-                if len(node.extH.H) == rng:
-                    node.rim_[-1] += [[Link, rev]]  # accum last rng layer
-                else: node.rim_ += [[[Link, rev]]]  # init rng layer
-
+                node._rim += [[Link, rev]]  # temporary for current-rng, then merged in rim
+                # rim is flat because it's not mediated as in der+
         return True
 
 def comp_G(_pars, pars):  # compare kLays or partial graphs in merging
@@ -380,10 +376,10 @@ def form_graph_t(root, N_, L_, Et, rng):  # segment N_ to Nm_, Nd_
         if Et[fd] > ave * Et[2+fd]:
             if isinstance(N_[0],CG):  # link.root is empty?
                  for G in N_: G.root = []  # new root will be intermediate graph
-            # G: Ls/D if fd: directional, else Ns/M: symmetric, sum in node:
+            # G: Ls/D: directional if fd, else Ns/M: symmetric, sum in node:
             graph_ = segment_N_(root, L_ if fd else N_, fd, rng)
             for graph in graph_:
-                Q = graph.link_ if fd else graph.node_  # xcomp -> max_dist * rng+1
+                Q = graph.node_  # xcomp -> max_dist * rng+1, nodes are links if fd
                 if len(Q) > ave_L and graph.derH.Et[fd] > G_aves[fd] * graph.derH.Et[fd+2]:
                     if fd: add_der_attrs(Q)
                     agg_recursion(graph, Q, fL=isinstance(Q[0],CL), rng=rng)  # fd rng+
@@ -392,7 +388,8 @@ def form_graph_t(root, N_, L_, Et, rng):  # segment N_ to Nm_, Nd_
             node_t += [[]]
     for fd, graph_ in enumerate(node_t):  # combined-fork fb
         for graph in graph_:
-            root.fback_t[fd] += [graph.derH] if fd else [graph.derH.H[-1]]  # der+ forms new links, rng+ adds new layer
+            if graph.derH:  # single G's graph doesn't have any derH.H to feedback
+                root.fback_t[fd] += [graph.derH] if fd else [graph.derH.H[-1]]  # der+ forms new links, rng+ adds new layer
             # sub+-> sub root-> init root
     if any(root.fback_t): feedback(root)
 
@@ -402,34 +399,30 @@ def add_der_attrs(link_):
     for link in link_:
         link.extH = CH()  # for der+
         link.root = None  # dgraphs containing link
-        link.rimt_ = [[[],[]]]  # dirt per rng layer
+        link.rimt_ = [[[],[]]]  # 2 dirs per rng layer
         link.visited_ = []
         link.med = 1  # comp med rng, replaces len rim_
         link.Et = [0,0,0,0]
         link.aRad = 0
 
-def segment_N_(root, iN_, fd, rng):  # form proto sub-graphs in iN_: Link_ if fd else G_
+def segment_N_(root, iN_, fd, rng):  # cluster iN_ by weight of shared links, initially single linkage (L_ if fd else N_)
     '''
-    Cluster by weight of shared links, initially single linkage.
-    Link clustering (der+) is secondary and node-mediated, contained in a graph formed by these links.
-    That makes link clustering a divisive phase of agglomerative node clustering (agg+), constraining search space.
+    rng+ node clustering: ave*rng / node(rim_: shorter links still connect Ns, *= N.M * Rt[0]: directional projection?
+    der+ link clustering is node-mediated: within a graph formed by prior agg+ node clustering (divisive within agglomerative)
     '''
-    N_ = []
-    max_ = []
+    N_ = []; max_ = []
     for N in iN_:   # init Gt per N:
         # mediator: iN if fd else iL
-        med_ = N.nodet if fd else [Lt[0] for Lt in (N.rim_[-1] if isinstance(N,CG) else N.rimt_[-1][0] + N.rimt_[-1][1])]
-        if fd:  # get links of nodet
-            eN_ = [Lt[0] for _N in med_ for Lt in (_N.rim_[-1] if isinstance(_N,CG) else _N.rimt_[-1][0]+_N.rimt_[-1][1])]
-        else:   # get nodes of rim links
+        med_ = N.nodet if fd else [Lt[0] for Lt in (N.rim if isinstance(N,CG) else N.rimt_[-1][0] + N.rimt_[-1][1])]
+        if fd: # get links of nodet
+            eN_ = [Lt[0] for _N in med_ for Lt in (_N.rim if isinstance(_N,CG) else _N.rimt_[-1][0]+_N.rimt_[-1][1])]
+        else:  # get nodes of rim links
             eN_ = [_N for _L in med_ for _N in _L.nodet]
         Nrim = [e for e in eN_ if e is not N and e in iN_]  # Ns connected by Gt-external links, not in node_ yet
-        Gt = [[N], [], copy(med_), Nrim, [0,0,0,0]]  # [node_, link_, Lrim, Nrim, Et]
+        Gt = [[N],[],copy(med_),Nrim,[0,0,0,0]]  # node_,link_, Lrim,Nrim, Et
         N.root = Gt; N_ += [Gt]
-        emax_ = []  # if exemplar G|Ls:
-        for eN in Nrim:
-            eEt,Et = (eN.derH.Et, N.derH.Et) if fd else (eN.extH.Et, N.extH.Et)
-            if eEt[fd] >= Et[fd] or eN in max_: emax_ += [eN]  # _N if _N == N
+        # segment per exemplar: cluster up to midpoints to adjacent exemplars?
+        emax_ = [eN for eN in Nrim if eN.Et[fd] >= N.Et[fd] or eN in max_]  # _N if _N == N
         if not emax_: max_ += [N]  # no higher-val neighbors
         # add rrim mediation: V * k * max_rng?
     max_ = [N.root for N in max_]
@@ -440,7 +433,7 @@ def segment_N_(root, iN_, fd, rng):  # form proto sub-graphs in iN_: Link_ if fd
             if _Gt not in N_:
                 continue  # was merged
             oL_ = set(Lrim).intersection(set(_Gt[2])).union([_L])  # shared external links + potential _L, or oL_ = [Lr[0] for Lr in _Gt[2] if Lr in Lrim]
-            oV = sum([L.derH.Et[fd] - ave * L.derH.Et[2+fd] for L in oL_])
+            oV = sum([L.extH.Et[fd] - ave * L.extH.Et[2+fd] for L in oL_])  # CG|CL
             if oV > ave:
                 link_ += [_L]
                 merge(Gt,_Gt)
@@ -450,12 +443,12 @@ def segment_N_(root, iN_, fd, rng):  # form proto sub-graphs in iN_: Link_ if fd
 
 def merge(Gt, gt):
 
-    N_,L_, Lrim, Nrim_t, Et = Gt
-    n_,l_, lrim, nrim_t, et = gt
+    N_,L_, Lrim, Nrim, Et = Gt
+    n_,l_, lrim, nrim, et = gt
     N_ += n_
     L_ += l_  # internal, no overlap
     Lrim[:] = list(set(Lrim + lrim))  # exclude shared external links, direction doesn't matter?
-    Nrim_t[:] = [[G for G in nrim_t[0] if G not in Nrim_t[0]], list(set(Nrim_t[1] + nrim_t[1]))]  # exclude shared external nodes
+    Nrim[:] += [root for root in nrim if root not in Nrim]  # Nrim is roots of ext Ns
     Et[:] = np.add(Et,et)
 
 def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, aggH in agg+ or player in sub+
@@ -471,23 +464,24 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
             graph.mdLay.add_md_(N.mdLay)
             add_lat(graph.latuple, N.latuple)
         graph.n += N.n  # non-derH accumulation?
-        if N.derH: graph.derH.add_H(N.derH)
+        if   N.derH: graph.derH.add_H(N.derH)  # CGs
+        elif N.extH: graph.extH.add_H(N.extH)  # CLs
         N.root = graph
         yx = np.add(yx, N.yx)
     L = len(N_)
     yx = np.divide(yx,L); graph.yx = yx
     # ave distance from graph center to node centers:
     graph.aRad = sum([np.hypot(*np.subtract(yx,N.yx)) for N in N_]) / L
-    extH = CH(node_ = N_)
-    for link in L_:  # unique current-layer links
-        graph.S += link.span
-        graph.A = np.add(graph.A,link.angle)  # np.add(graph.A, [-link.angle[0],-link.angle[1]] if rev else link.angle)
-        extH.add_H(link.derH) if extH else extH.append_(link.derH, flat=1)
+    extH = CH(node_= N_)
+    for link in L_:  # unique current-layer mediators: Ns if fd else Ls
+        graph.S += link.S
+        graph.A = np.add(graph.A,link.A)  # np.add(graph.A, [-link.angle[0],-link.angle[1]] if rev else link.angle)
+        extH.add_H(link.extH) if extH else extH.append_(link.extH, flat=1)
     if extH: graph.derH.append_(extH, flat=0)
     if fd:
         # assign alt graphs from d graph, after both linked m and d graphs are formed
-        for link in graph.link_:
-            mgraph = link.root
+        for node in graph.node_:  # CG or CL
+            mgraph = node.root
             if mgraph:
                 for fd, (G, alt_G) in enumerate(((mgraph,graph), (graph,mgraph))):  # bilateral assign:
                     if G not in alt_G.alt_graph_:
