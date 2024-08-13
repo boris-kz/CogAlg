@@ -64,9 +64,8 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.latuple = [0,0,0,0,0,[0,0]]  # lateral I,G,M,Ma,L,[Dy,Dx]
         G.mdLay = CH(root=G) if mdLay is None else mdLay
         # maps to node_H from agg+|sub+:
-        G.derH = CH(root=G) if derH is None else derH  # internal, sum from node_
-        G.extH = CH(root=G) if extH is None else extH  # external, sum from rim_) kernel rim
-        G.rim_ = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tH_ in cpr sub+
+        G.derH = CH(root=G) if derH is None else derH  # sum H[:-1] from nodes, sum H[-1] from rim_) kernel rim
+        G.rim = []  # direct links of all rngs;  link_tH in base sub+ | cpr rd+, link_tH_ in cpr sub+?
         G.kHH = []  # kernel: hierarchy of rim layers
         G.rng = rng
         G.n = n  # external n (last layer n)
@@ -81,6 +80,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.Rim = []  # links to the most mediated nodes
         G.fback_t = [[],[]]  # dderHm_, dderHd_
         G.visited__ = []  # nested in rng++
+        G.Nrim = []  # nodes on artificial frame | exemplar margin
         # Rdn: int = 0  # for accumulation or separate recursion count?
         # it: list = z([None,None])  # graph indices in root node_s, implicitly nested
         # depth: int = 0  # n sub_G levels over base node_, max across forks
