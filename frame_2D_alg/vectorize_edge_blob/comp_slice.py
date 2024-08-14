@@ -81,6 +81,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.fback_t = [[],[]]  # dderHm_, dderHd_
         G.visited__ = []  # nested in rng++
         G.Nrim = []  # nodes on artificial frame | exemplar margin
+        # G.elay = CH()  # summed from rim, former extH
         # Rdn: int = 0  # for accumulation or separate recursion count?
         # it: list = z([None,None])  # graph indices in root node_s, implicitly nested
         # depth: int = 0  # n sub_G levels over base node_, max across forks

@@ -146,8 +146,9 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
     _G_ = []
     Et = [0,0,0,0]
     for N in N_:
-        if hasattr(N,'crim'): N.rim += N._rim
-        N.crim = []  # current rng links, added in comp_N
+        if hasattr(N,'crim'): N.rim += N.crim
+        N.crim = []  # current rng links, add in comp_N
+        N.visited__ += [[]]  # init layer for all
     # comp_N:
     for (_G, G) in list(combinations(N_,r=2)):
         if _G in [G for visited_ in G.visited__ for G in visited_]:  # compared in any rng++
@@ -158,7 +159,8 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
         # eval relative distance between G centers:
         if dist / max(aRad,1) <= max_dist * rng:
             for _g,g in (_G,G),(G,_G):
-                if len(g.extH.H)==rng: g.visited__[-1] += [_g]
+                if len(g.elay.H) == rng:
+                    g.visited__[-1] += [_g]
                 else: g.visited__ += [[_g]]  # init layer
             Link = CL(nodet=[_G,G], S=2,A=[dy,dx], box=extend_box(G.box,_G.box))
             if comp_N(Link, Et, rng):
@@ -171,8 +173,8 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
             if link.ft[0]:  # must be mlink
                 _G = link.nodet[0] if link.nodet[1] is G else link.nodet[1]
                 krim += [_G]
-                if hasattr(G,'dLay'): G.dLay.add_H(link.extH)
-                else:                 G.dLay = CH().copy(link.extH)
+                if hasattr(G,'elay'): G.elay.add_H(link.derH)
+                else:                 G.elay = CH().copy(link.derH)
                 G._kLay = sum_kLay(G,_G); _G._kLay = sum_kLay(_G,G)  # next krim comparands
         if krim:
             if rng>1: G.kHH[-1] += [krim]  # kH = lays(nodes
@@ -211,25 +213,26 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
             for _G in G.kHH[-1][0]:  # convo in direct kernel only
                 if _G in G.visited__[-1] or _G not in G_: continue
                 G.visited__[-1] += [_G]; _G.visited__[-1] += [G]
-                # comp G kLay:
-                dlay = comp_G(_G._kLay, G._kLay)
-                if dlay.Et[0] > ave * dlay.Et[2] * (rng+n):  # layers add cost
-                    _G.dLay.add_H(dlay); G.dLay.add_H(dlay)  # bilateral
+                # comp G kLay -> rng derLay:
+                rlay = comp_G(_G._kLay, G._kLay)
+                if rlay.Et[0] > ave * rlay.Et[2] * (rng+n):  # layers add cost
+                    _G.elay.add_H(rlay); G.elay.add_H(rlay)  # bilateral
         _G_ = G_; G_ = []
         for G in _G_:  # eval dLay
             G.visited__.pop()  # loop-specific layer
-            if G.dLay.Et[0] > ave * G.dLay.Et[2] * (rng+n+1):
+            if G.elay.H[-1].Et[0] > ave * G.elay.H[-1].Et[2] * (rng+n+1):
                 G_ += [G]
         if G_:
             for G in G_: G._kLay = G.kLay  # comp in next krng
             _G_ = G_; n += 1
         else:
             for G in Gd_:
-                # I think this should be done in sum2graph:
-                if rng==1: G.derH.append_(CH().append_(G.dLay))
-                else:      G.derH.H[-1].append_(G.dLay)
+                # not sure we need to merge elay, it's still external to G:
+                # if rng==1: G.derH.append_(CH().append_(G.elay))
+                # else:      G.derH.H[-1].append_(G.elay)
                 delattr(G,'dLay'); delattr(G,'_kLay'); delattr(G,'crim')
                 if hasattr(G,"kLay)"): delattr(G,'kLay')
+                G.rim += G.crim
                 G.visited__.pop()  # kH - specific layer
             break
     return Gd_, Et  # all Gs with dLay added in 1st krim
@@ -262,7 +265,7 @@ def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
         for L, _mN_t, mN_t in zip(_L_, _mN_t_, mN_t_):
             for rev, _mN_, mN_ in zip((0,1), _mN_t, mN_t):
                 # comp L, _Ls: nodet mN 1st rim, -> rng+ _Ls/ rng+ mm..Ns, flatten rim_s:
-                rim_ = [[n.rim] if isinstance(n,CG) else n.rimt_[0][0] + n.rimt_[0][1] for n in _mN_]
+                rim_ = [n.rim if isinstance(n,CG) else n.rimt_[0][0] + n.rimt_[0][1] for n in _mN_]
                 for rim in rim_:
                     for _L,_rev in rim:  # _L is reversed relative to its 2nd node
                         if _L is L or _L in L.visited_: continue
@@ -328,6 +331,7 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
             else:
                 node.crim += [[Link, rev]]  # current-rng links, later merged in rim
                 # rim is flat: not mediated as in der+
+            # n.elay += Link.derH in rng_kern_
         return True
 
 def comp_G(_pars, pars):  # compare kLays or partial graphs in merging
@@ -345,11 +349,14 @@ def comp_G(_pars, pars):  # compare kLays or partial graphs in merging
         Rt = np.array(mdlat.Rt) + mdLay.Rt + mdext.Rt
     else:  # += CL nodes
         n = mdext.n; md_t = [mdext]; Et = mdext.Et; Rt = mdext.Rt
-    # single-layer H:
-    dlay = CH( H=[CH(n=n,md_t=md_t,Et=Et,Rt=Rt)], n=n, md_t=[CH().copy(md_) for md_ in md_t], Et=copy(Et), Rt=copy(Rt))
+
+    dlay = CH()
     if _derH and derH:
         dderH = _derH.comp_H(derH, rn, fagg=1)  # new link derH = local dH
         dlay.append_(dderH, flat=1)
+
+    # single-layer H (this new layer should be after the comparison of derH above?)
+    dlay.append_(CH(n=n,md_t=md_t,Et=Et,Rt=Rt), flat=0)
 
     return dlay
 
@@ -396,7 +403,6 @@ def form_graph_t(root, N_, L_, Et, rng):  # segment N_ to Nm_, Nd_
 
 def add_der_attrs(link_):
     for link in link_:
-        link.derH.H += [CH()]  # for der+
         link.root = None  # dgraphs containing link
         link.rimt_ = [[[],[]]]  # 2 dirs per rng layer
         link.visited_ = []
@@ -408,22 +414,23 @@ def segment_N_(root, iN_, fd, rng):  # cluster iN_ by weight of shared links, in
     '''
     rng+ node clustering: ave*rng / node( rim: shorter links still connect Ns, *= N.M * Rt[0]: directional projection?
     der+ link clustering is node-mediated: within a graph formed by prior agg+ node clustering (divisive within agglomerative)
-    segs may continue beyond iN_ margin, add G.Nrim to represent it
+    cluster beyond iN_ if G.Lrim: positive marginal links
     '''
     N_ = []; max_ = []
     for N in iN_:   # init Gt per N:
         # mediator: iN if fd else iL
         med_ = N.nodet if fd else [Lt[0] for Lt in (N.rim if isinstance(N,CG) else N.rimt_[-1][0] + N.rimt_[-1][1])]
         if fd:  # get links of nodet
-            eN_ = [Lt[0] for _N in med_ for Lt in (_N.rim if isinstance(_N,CG) else _N.rimt_[-1][0]+_N.rimt_[-1][1])]
+            eN_ = [Lt[0] for _N in med_ for Lt in (_N.rim if isinstance(_N, CG) else _N.rimt_[-1][0] + _N.rimt_[-1][1])]
         else:   # get nodes of rim links
             eN_ = [_N for _L in med_ for _N in _L.nodet]
         Nrim = [e for e in eN_ if e is not N and e in iN_]  # Ns connected by Gt-external links, not in node_ yet
         Gt = [[N],[],copy(med_),Nrim,[0,0,0,0]]  # node_,link_, Lrim,Nrim, Et
-        N.root = Gt; N_ += [Gt]
-        # segment per exemplar: cluster up to midpoints (margin) to adjacent exemplars?
+        N.root = Gt
+        N_ += [Gt]
         emax_ = [eN for eN in Nrim if eN.Et[fd] >= N.Et[fd] or eN in max_]  # _N if _N == N
         if not emax_: max_ += [N]  # no higher-val neighbors
+        # add eframe: non-maxes assigned to the nearest max?
         # + rrim mediation: V * k * max_rng?
     max_ = [N.root for N in max_]
     for Gt in N_: Gt[3] = [_N.root for _N in Gt[3]]  # replace ext Ns with their Gts
@@ -456,6 +463,13 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
     graph = CG(fd=fd, node_=N_, link_=L_, rng=rng, Et=Et)
     graph.root = root
     yx = [0,0]
+    lay0 = CH(node_= N_)
+    for link in L_:  # unique current-layer mediators: Ns if fd else Ls
+        graph.S += link.S
+        graph.A = np.add(graph.A,link.A)  # np.add(graph.A, [-link.angle[0],-link.angle[1]] if rev else link.angle)
+        lay0.add_H(link.derH) if lay0 else lay0.append_(link.derH)
+    graph.derH.append_(lay0)  # empty for single-node graph
+    lay1 = CH()
     for N in N_:
         graph.area += N.area
         graph.box = extend_box(graph.box, N.box)
@@ -463,20 +477,15 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
             graph.mdLay.add_md_(N.mdLay)
             add_lat(graph.latuple, N.latuple)
         graph.n += N.n  # +derH.n
-        if N.derH and len(N.derH.H)>1: graph.derH.add_H(N.derH.H[-1])
-        # exclude current layer added from rim in segment_N_?
+        if N.derH and len(N.derH.H)>1:
+            lay1.add_H(N.derH)  # layer added from rim in segment_N_ is G.elay
         N.root = graph
         yx = np.add(yx, N.yx)
+    graph.derH.append(lay1)  # 2-layer derH, each may be empty to preserve len, higher layers are added by feedback
     L = len(N_)
     yx = np.divide(yx,L); graph.yx = yx
     # ave distance from graph center to node centers:
     graph.aRad = sum([np.hypot(*np.subtract(yx,N.yx)) for N in N_]) / L
-    dlay = CH(node_= N_)
-    for link in L_:  # unique current-layer mediators: Ns if fd else Ls
-        graph.S += link.S
-        graph.A = np.add(graph.A,link.A)  # np.add(graph.A, [-link.angle[0],-link.angle[1]] if rev else link.angle)
-        dlay.add_H(link.derH) if dlay else dlay.append_(link.derH)
-    if dlay: graph.derH.append_(dlay)
     if fd:
         # assign alt graphs from d graph, after both linked m and d graphs are formed
         for node in graph.node_:  # CG or CL
