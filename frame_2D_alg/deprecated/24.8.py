@@ -250,4 +250,25 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
                 else: node.rim_ += [[[Link, rev]]]  # init rng layer
 
         return True
+'''
+rL_ = list(set([Lt[0] for N in rN_ for Lt in N.rim]))
+Lt_ = [(L, mN_t) for L, mN_t in zip(L_, mN_t_) if any(mN_t)]; if Lt_: L_,_mN_t_ = map(list, zip(*Lt_))  # map list to convert tuple from zip(*)?
 
+# form exemplar seg_ to segment (parallelize) clustering:
+    if max_:
+        seg_ = [[] for _ in max_]  # non-maxes assigned to the nearest max
+        # not revised
+        for Gt in N_:
+            if Gt in max_: continue
+            node_,link_, Lrim, Nrim, Et = Gt
+            yx = np.mean([N.yx for N in (link_ if fd else node_)], axis=0)  # mean yx of pre-graph
+            min_dist = np.inf  # init min distance
+            for max in max_:
+                _node_,_link_,_Lrim,_Nrim,_Et = max
+                _yx = np.mean([N.yx for N in (link_ if fd else node_)], axis=0)  # mean yx of max
+                dy, dx = np.subtract(_yx, yx)
+                dist = np.hypot(dy, dx)  # distance between max and Gt
+                if dist < min_dist: new_max = max  # nearest max for current Gt in N_
+            max_index = max_.index(new_max)
+            seg_[max_index] += [Gt]
+'''
