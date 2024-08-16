@@ -117,7 +117,7 @@ def agg_recursion(root, N_, fL, rng=1):  # fL: compare node-mediated links, else
                             lay.Et[2+fd] += di  # der rdn -> val rdn
                             if not i:  # max val lay
                                 N.node_ = lay.node_; derH.ii = lay.i  # exemplar lay index
-                        N.elay = CH() # for der+agg+ below?
+                        N.elay = CH()  # fill in agg+ below
                         N_ += [N]
                 if root.derH.Et[0] * (max(0,(len(N_)-1)*root.rng)) > G_aves[1]*root.derH.Et[2]:
                     # agg+rng+, val *= n comparands, forms CGs:
@@ -236,7 +236,7 @@ def sum_kLay(G, g):  # sum next-rng kLay from krim of current _kLays, init with 
 
     KLay = (G.kLay if hasattr(G,"kLay")
                    else (G._kLay if hasattr(G,"_kLay")  # init conv kernels, also below:
-                                 else (G.n,len(G.node_),G.S,G.A,deepcopy(G.latuple),CH().copy(G.mdLay),CH().copy(G.derH) if G.derH else None)))
+                                 else (G.n,len(G.node_),G.S,G.A,deepcopy(G.latuple),CH().copy(G.mdLay),CH().copy(G.derH) if G.derH else CH())))  # init DerH if empty
     kLay = (G._kLay if hasattr(G,"_kLay")
                     else (g.n,len(g.node_),g.S,g.A,deepcopy(g.latuple),CH().copy(g.mdLay),CH().copy(g.derH) if g.derH else None))
                     # in init conv kernels
@@ -295,8 +295,8 @@ def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
 def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
 
     fd = rev is not None  # compared links have binary relative direction?
-    _N, N = Link.nodet; rn = _N.n/N.n; _A,A = _N.A,N.A
-
+    _N, N = Link.nodet; rn = _N.n/N.n
+    _A, A = _N.A, N.A
     if fd:  # CLs
         derH = _N.derH.comp_H(N.derH, rn, fagg=1)  # new link derH = local dH
         if rev: A = [-d for d in A]  # reverse angle direction if N is left link?
@@ -324,7 +324,7 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
             else:
                 node.crim += [[Link, rev]]  # current-rng links, later merged in rim
                 # rim is flat: not mediated as in der+
-            # n.elay +=derH in rng_kern_
+            # elay+=derH in rng_kern_
         return True
 
 def comp_G(_pars, pars):  # compare kLays or partial graphs in merging
@@ -375,7 +375,7 @@ def form_graph_t(root, N_, Et, rng):  # segment N_ to Nm_, Nd_
             # G: Ls/D: directional if fd, else Ns/M: symmetric, sum in node:
             graph_ = segment_N_(root, N_, fd, rng)
             for graph in graph_:
-                Q = graph.node_  # xcomp -> max_dist * rng+1, nodes are links if fd
+                Q = graph.link_ if fd else graph.node_  # xcomp -> max_dist * rng+1, comp links if fd
                 if len(Q) > ave_L and graph.derH.Et[fd] > G_aves[fd] * graph.derH.Et[fd+2] * rng:
                     if fd: add_der_attrs(Q)
                     agg_recursion(graph, Q, fL=isinstance(Q[0],CL), rng=rng)  # fd rng+
@@ -407,18 +407,18 @@ def segment_N_(root, iN_, fd, rng):  # cluster iN_ by weight of shared links, in
     '''
     N_ = []; max_ = []
     for N in iN_:  # init Gt per G|L node:
-        Lrim = N.rim if isinstance(N,CG) else [Lt[0] for Lt in N.rimt_[-1][0] + N.rimt_[-1][1]]  # external links
-        Nrim = [_N for L in Lrim for _N in L.nodet if _N is not N and _N in iN_]  # external nodes
-        Gt = [[N],[], *Lrim,*Nrim, [0,0,0,0]]  # node_,link_,Lrim,Nrim, Et
+        Lrim = [Lt[0] for Lt in N.rim] if isinstance(N,CG) else [Lt[0] for Lt in N.rimt_[-1][0] + N.rimt_[-1][1]]  # external links
+        Nrim = [_N for L in Lrim for _N in L.nodet if (_N is not N and _N in iN_)]  # external nodes
+        Gt = [[N],[], Lrim, Nrim, [0,0,0,0]]  # node_,link_,Lrim,Nrim, Et
         N.root = Gt
         N_ += [Gt]  # select exemplar maxes to segment clustering:
         emax_ = [eN for eN in Nrim if eN.Et[fd] >= N.Et[fd] or eN in max_]  # _N if _N == N
-        if not emax_: max_ += [N]  # or N.root? no higher-val neighbors
+        if not emax_: max_ += [Gt]  # N.root, if no higher-val neighbors
         # extended rrim max: V * k * max_rng?
-        # cluster beyond iN_ if +ve marginal links in Lrim
+        # merge clusters across iN_s if +ve links in Lrim
     for Gt in N_: Gt[3] = [_N.root for _N in Gt[3]]  # replace eNs with Gts
     for Gt in max_ if max_ else N_:
-        node_,link_, Lrim, Nrim, Et = Gt
+        node_,link_,Lrim,Nrim, Et = Gt
         for _Gt, _L in zip(Nrim,Lrim):  # merge connected _Gts if >ave shared external links (Lrim)
             if _Gt not in N_:
                 continue  # was merged
@@ -446,13 +446,13 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
     graph = CG(fd=fd, node_=N_, link_=L_, rng=rng, Et=Et)
     graph.root = root
     yx = [0,0]
-    lay0 = CH(node_= N_)
+    lay0 = CH(node_= L_)  # not sure about L_
     for link in L_:  # unique current-layer mediators: Ns if fd else Ls
         graph.S += link.S
         graph.A = np.add(graph.A,link.A)  # np.add(graph.A, [-link.angle[0],-link.angle[1]] if rev else link.angle)
         lay0.add_H(link.derH) if lay0 else lay0.append_(link.derH)
     graph.derH.append_(lay0)  # empty for single-node graph
-    lay1 = CH()
+    derH = CH(node_= N_)
     for N in N_:
         graph.area += N.area
         graph.box = extend_box(graph.box, N.box)
@@ -460,10 +460,10 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
             graph.mdLay.add_md_(N.mdLay)
             add_lat(graph.latuple, N.latuple)
         graph.n += N.n  # +derH.n
-        if N.derH: lay1.add_H(N.derH)
+        if N.derH: derH.add_H(N.derH)
         N.root = graph
         yx = np.add(yx, N.yx)
-    graph.derH.append_(lay1)  # 2-layer derH, each may be empty to preserve len, higher layers are added by feedback
+    graph.derH.append_(derH, flat=1)  # comp(derH) forms new layer, higher layers are added by feedback
     L = len(N_)
     yx = np.divide(yx,L); graph.yx = yx
     # ave distance from graph center to node centers:
@@ -489,4 +489,4 @@ def feedback(root):  # called from form_graph_, always sub+, append new der laye
     DderH = mDerLay.append_(dDerH, flat=1)
     m,d, mr,dr = DderH.Et
     if m+d > sum(G_aves) * (mr+dr):
-        root.derH.append_(DderH, flat=0)  # new derLay maybe nested
+        root.derH.append_(DderH, flat=1)  # multiple lays appended upward
