@@ -241,8 +241,10 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
 
     def comp_H(_He, He, rn=1, fagg=0, frev=0):  # unpack CHs down to numericals and compare them
 
-        DLay = CH().add_H(_He.comp_md_t(He))  # default comp He.md_t per He (nesting level)
+        DLay = CH(node_=_He.node_+He.node_).add_H(_He.comp_md_t(He))
+        # node_ is mediated comparands, default comp He.md_t per He,
         # H=[] in bottom | deprecated layer
+
         for _lay, lay in zip(_He.H, He.H):  # loop extHs or [mdlat,mdLay,mdext] rng tuples, flat
             if _lay and lay:
                 dLay = _lay.comp_H(lay, rn, fagg, frev)  # comp He.md_t, comp,unpack lay.H

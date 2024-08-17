@@ -48,16 +48,15 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         super().__init__()
         # CL = binary tree of Gs, depth+/der+: CL nodet is 2 Gs, CL + CLs in nodet is 4 Gs, etc.,
         # unpack sequentially
-        l.nodet = [] if nodet is None else nodet  # e_ in kernels, else replaces _node,node: not used in kernels?
+        l.nodet = [] if nodet is None else nodet  # e_ in kernels, else replaces _node,node: not used in kernels
+        l.node_ = []  # _N.node_+N.node_
         l.A = [0,0] if A is None else A  # dy,dx between nodet centers
         l.S = 0 if S is None else S  # span: distance between nodet centers, summed into sparsity in CGs
         l.area = 0  # sum nodet
         l.box = [] if box is None else box  # sum nodet
-        l.latuple = []  # sum nodet
-        l.md_t = [] if md_t is None else md_t  # [mdlat,mdLay,mdext] per layer
+        # l.md_t = [] if md_t is None else md_t  # replace with [mdext] in lay0
         l.derH = CH(root=l) if derH is None else derH
         l.H_ = [] if H_ is None else H_  # if agg++| sub++?
-        l.mdext = []  # Et, Rt, Md_
         l.ft = [0,0]  # fork inclusion tuple, may replace Vt:
         l.Vt = [0,0]  # for rim-overlap modulated segmentation, init derH.Et[:2]
         l.n = 1  # min(node_.n)
@@ -117,7 +116,7 @@ def agg_recursion(root, N_, fL, rng=1):  # fL: compare node-mediated links, else
                             lay.Et[2+fd] += di  # der rdn -> val rdn
                             if not i:  # max val lay
                                 N.node_ = lay.node_; derH.ii = lay.i  # exemplar lay index
-                        N.elay = CH()  # fill in agg+ below
+                        N.elay = CH()  # reset for agg+ below
                         N_ += [N]
                 if root.derH.Et[0] * (max(0,(len(N_)-1)*root.rng)) > G_aves[1]*root.derH.Et[2]:
                     # agg+rng+, val *= n comparands, forms CGs:
@@ -181,7 +180,7 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
             G_ += [G]
     Gd_ = copy(G_)  # Gs with 1st layer kH, dLay, _kLay
     _G_ = G_; n=0  # n higher krims
-    # convolution: kernel rim Def,Sum,Comp, in separate loops for bilateral G,_G assign:
+    # convolution: Def,Sum,Comp kernel rim, in separate loops for bilateral G,_G assign:
     while True:
         G_ = []
         for G in _G_:  # += krim
@@ -213,7 +212,7 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
                 if _G in G.visited__[-1] or _G not in G_: continue
                 G.visited__[-1] += [_G]; _G.visited__[-1] += [G]
                 # comp G kLay -> rng derLay:
-                rlay = comp_G(_G._kLay, G._kLay)
+                rlay = comp_pars(_G._kLay, G._kLay)
                 if rlay.Et[0] > ave * rlay.Et[2] * (rng+n):  # layers add cost
                     _G.elay.H[-1].add_H(rlay); G.elay.H[-1].add_H(rlay)  # bilateral
         _G_ = G_; G_ = []
@@ -251,12 +250,12 @@ def sum_kLay(G, g):  # sum next-rng kLay from krim of current _kLays, init with 
 
 def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
 
-    _mN_t_ = [[[L.nodet[0]],[L.nodet[1]]] for L in _L_]  # rim-mediating nodes
+    _mN_t_ = [[[L.nodet[0]],[L.nodet[1]]] for L in _L_]  # rim-mediating nodes in both directions
     Et = [0,0,0,0]
     rL_ = []
     rng = 1
     while True:
-        mN_t_ = [[[],[]] for _ in _L_]  # for next loop
+        mN_t_ = [[[],[]] for _ in _L_]  # new rng lay of mediating nodes, traced from all prior layers?
         for L, _mN_t, mN_t in zip(_L_, _mN_t_, mN_t_):
             for rev, _mN_, mN_ in zip((0,1), _mN_t, mN_t):
                 # comp L, _Ls: nodet mN 1st rim, -> rng+ _Ls/ rng+ mm..Ns, flatten rim_s:
@@ -278,10 +277,8 @@ def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
                             if L not in rL_:    rL_ += [L]
                             mN_t_[_L_.index(_L)][1 - rev] += L.nodet
                             for node in (L, _L):
-                                if len(node.derH.H) < rng:
-                                    node.derH.append_(Link.derH)
-                                else: node.derH.H[-1].add_H(Link.derH)
-        L_, mN_t_ = [],[]
+                                node.derH.H[-1].add_H(Link.derH)  # if lay/rng++, elif fagg: derH.H[der][rng]?
+        L_, _mN_t_ = [],[]
         for L, mN_t in zip(_L_, mN_t_):
             if any(mN_t):
                 L_ += [L]; _mN_t_ += [mN_t]
@@ -295,16 +292,16 @@ def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
 def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
 
     fd = rev is not None  # compared links have binary relative direction?
-    _N, N = Link.nodet; rn = _N.n/N.n
-    _A, A = _N.A, N.A
+    _N, N = Link.nodet; _S,S = _N.S,N.S; _A,A = _N.A,N.A; _n=_N.n; n=N.n
+
     if fd:  # CLs
-        derH = _N.derH.comp_H(N.derH, rn, fagg=1)  # new link derH = local dH
         if rev: A = [-d for d in A]  # reverse angle direction if N is left link?
+        _L=2; L=2; _lat=None; _mdLay=None; lat=None; mdLay=None
     else:  # CGs
-        derH = comp_G([_N.n,len(_N.node_),_N.S,_N.A,_N.latuple,_N.mdLay,_N.derH],
-                      [ N.n, len(N.node_), N.S, N.A, N.latuple, N.mdLay, N.derH])
-    mdext = comp_ext(2,2,_N.S,N.S/rn,_A,A)
-    Et = np.add(derH.Et, mdext.Et)
+        _L=len(_N.node_); L=len(_N.node_); _lat=_N.latuple; _mdLay=_N.mdLay; lat=N.latuple; mdLay=N.mdLay
+
+    derH = comp_pars([_n,_L,_S,_A,_lat,_mdLay,_N.derH], [n,L,S,A, lat,mdLay,N.derH])
+    Et = derH.Et
     iEt[:] = np.add(iEt,Et)  # init eval rng+ and form_graph_t by total m|d?
     for i in 0,1:
         Val, Rdn = Et[i::2]
@@ -314,7 +311,7 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
         # if select fork links: iEt[i::2] = [V+v for V,v in zip(iEt[i::2], dH.Et[i::2])]
     if any(Link.ft):
         Link.derH = derH; derH.root = Link; Link.Et = Et; Link.n = min(_N.n,N.n)  # comp shared layers
-        Link.nodet = [_N,N]; Link.mdext = mdext; Link.yx = np.add(_N.yx,N.yx) /2
+        Link.nodet = [_N,N]; Link.node_=_N.node_+N.node_; Link.yx = np.add(_N.yx,N.yx) /2
         # S,A set before comp_N
         for rev, node in zip((0,1),(_N,N)):  # ?reversed Link direction
             if fd:
@@ -327,10 +324,10 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
             # elay+=derH in rng_kern_
         return True
 
-def comp_G(_pars, pars):  # compare kLays or partial graphs in merging
+def comp_pars(_pars, pars):  # compare Ns, kLays or partial graphs in merging
 
     _n,_L,_S,_A,_latuple,_mdLay,_derH = _pars
-    n, L,S,A, latuple,mdLay,derH = pars; rn = _n/n
+    n, L, S, A, latuple, mdLay, derH = pars; rn = _n/n
 
     mdext = comp_ext(_L,L,_S,S/rn,_A,A)
     if mdLay:  # += CG nodes
@@ -343,7 +340,8 @@ def comp_G(_pars, pars):  # compare kLays or partial graphs in merging
     else:  # += CL nodes
         n = mdext.n; md_t = [mdext]; Et = mdext.Et; Rt = mdext.Rt
     # init H = [lay0]:
-    dlay = CH( H=[CH(n=n,md_t=md_t,Et=Et,Rt=Rt)], n=n, md_t=[CH().copy(md_) for md_ in md_t], Et=copy(Et), Rt=copy(Rt))
+    dlay = CH( H=[CH(n=n,md_t=md_t,Et=Et,Rt=Rt)],
+               n=n,md_t=[CH().copy(md_) for md_ in md_t], Et=copy(Et),Rt=copy(Rt))
     if _derH and derH:
         dderH = _derH.comp_H(derH, rn, fagg=1)  # new link derH = local dH
         dlay.append_(dderH, flat=1)
@@ -399,6 +397,7 @@ def add_der_attrs(link_):
         link.med = 1  # comp med rng, replaces len rim_
         link.Et = [0,0,0,0]
         link.aRad = 0
+        link.derH.H += [CH()]  # new derLay
 
 def segment_N_(root, iN_, fd, rng):  # cluster iN_ by weight of shared links, initially single linkage (L_ if fd else N_)
     '''
@@ -423,7 +422,7 @@ def segment_N_(root, iN_, fd, rng):  # cluster iN_ by weight of shared links, in
             if _Gt not in N_:
                 continue  # was merged
             sL_ = set(Lrim).intersection(set(_Gt[2])).union([_L])  # shared external links + potential _L, or oL_ = [Lr[0] for Lr in _Gt[2] if Lr in Lrim]
-            if sum([L.derH.Et[fd] - ave * L.derH.Et[2+fd] * rng for L in sL_]) > 0:  # value of shared links, CL|CG
+            if sum([L.derH.Et[fd] - ave * L.derH.Et[2+fd] * rng for L in sL_]) > 0:  # value of shared links
                 link_ += [_L]
                 merge(Gt,_Gt)
                 N_.remove(_Gt)
@@ -446,13 +445,13 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
     graph = CG(fd=fd, node_=N_, link_=L_, rng=rng, Et=Et)
     graph.root = root
     yx = [0,0]
-    lay0 = CH(node_= L_)  # not sure about L_
+    lay0 = CH(node_= N_)  # comparands, vs. L_: summands?
     for link in L_:  # unique current-layer mediators: Ns if fd else Ls
         graph.S += link.S
         graph.A = np.add(graph.A,link.A)  # np.add(graph.A, [-link.angle[0],-link.angle[1]] if rev else link.angle)
         lay0.add_H(link.derH) if lay0 else lay0.append_(link.derH)
     graph.derH.append_(lay0)  # empty for single-node graph
-    derH = CH(node_= N_)
+    derH = CH()
     for N in N_:
         graph.area += N.area
         graph.box = extend_box(graph.box, N.box)
