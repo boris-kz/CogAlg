@@ -54,19 +54,20 @@ class CcompSliceFrame(CsliceEdge):
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    def __init__(G, root = None, rng=1, fd=0, node_=None, link_=None, Et=None, mdLay=None, derH=None, extH=None, n=0):
+    def __init__(G, root = None, rng=1, fd=0, node_=None, link_=None, Et=None, mdLay=None, derH=None, elay=None, n=0):
         super().__init__()
 
         G.root = None if root is None else root  # mgraph (dgraph.node_ is CLs)
-        G.node_ = [] if node_ is None else node_  # convert to node_t in sub_recursion
-        G.link_ = [] if link_ is None else link_  # internal links per comp layer, nest in rng+)der+
-        G.Et = [0,0,0,0] if Et is None else Et    # extH.Et + derH.Et + mdLay.Et?
+        G.node_ = [] if node_ is None else node_ # convert to node_t in sub_recursion
+        G.link_ = [] if link_ is None else link_ # internal links per comp layer in rng+
+        G.Et = [0,0,0,0] if Et is None else Et   # extH.Et + derH.Et + mdLay.Et?
         G.latuple = [0,0,0,0,0,[0,0]]  # lateral I,G,M,Ma,L,[Dy,Dx]
         G.mdLay = CH(root=G) if mdLay is None else mdLay
-        # maps to node_H from agg+|sub+:
-        G.derH = CH(root=G) if derH is None else derH  # sum H[:-1] from nodes, sum H[-1] from rim_) kernel rim
-        G.rim = []  # direct links of all rngs;  link_tH in base sub+ | cpr rd+, link_tH_ in cpr sub+?
-        G.kHH = []  # kernel: hierarchy of rim layers
+        # maps to node_H / agg+|sub+:
+        G.derH = CH(root=G) if derH is None else derH  # sum from nodes, then append from feedback
+        G.elay = CH(root=G) if elay is None else elay  # sum from rim kernels
+        G.rim = []  # direct external links from rng+
+        G.kHH = []  # kernel: hierarchy of rng layers
         G.rng = rng
         G.n = n  # external n (last layer n)
         G.S = 0  # sparsity: distance between node centers

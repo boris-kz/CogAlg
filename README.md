@@ -20,11 +20,12 @@ Connectivity clustering is among the oldest approaches in ML, what I think makes
 - nested derivatives parameterize resulting clusters for higher-order cross-comp, selectively incremental in range, derivation, and composition of comparands and their param sets.
 Such compressed encoding should be far more meaningful than huge flat weigh matrices in ANNs. But it’s very complex to consistently design and parallelize, precluding immediate trial and error that dominates ML. 
 
-Below I describe the process in more detail, then extend comparisons to ANN and BNN. This is an open project: [WIKI](https://github.com/boris-kz/CogAlg/wiki), we need help with design and implementation. I pay for contributions or monthly if there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
+Below I describe the process in more detail, then elaborate on comparisons to ANN and BNN (addendum 1). 
+This is an open project: [WIKI](https://github.com/boris-kz/CogAlg/wiki), we need help with design and implementation. I pay for contributions or monthly if there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
 Longer but partly obsolete introduction: <www.cognitivealgorithm.info>
 This content is published under Creative Commons Attribution 4.0 International License.
 
-###Outline of my approach
+### Outline of my approach
 
 Initial clustering levels, positional resolution (macro) lags value resolution (micro) by one quantization order:
 
@@ -42,26 +43,23 @@ Consistent process must start with cross-comp of adjacent atomic inputs: sensory
 
 This low-level process, directly translated into my code, seems like quite a jump from the generalities above. But it really isn’t, internally consistent pattern discovery must be strictly bottom-up, in the complexity of both inputs and operations. And there is no ambiguity at the bottom: initial predictive value that defines patterns is a match from cross-comparison among their elements, starting with pixels. So, I think my process is uniquely consistent with these definitions, please let me know if you see any discrepancy in either.
 
-#### Comparison, more in part 1:
+#### Comparison (addendum 2):
 
 Basic comparison is inverse arithmetic operation between single-variable comparands, of incremental power: Boolean, subtraction, division, etc. Each order of comparison forms miss or loss: XOR, difference, ratio, etc., and match or similarity, which can be defined directly or as inverse deviation of miss. Direct match is compression of represented magnitude by replacing larger input with corresponding miss between the inputs: Boolean AND, the smaller input in comp by subtraction, integer part of ratio in comp by division, etc.
 
 These direct similarity measures work if input intensity represents some stable physical property, which anti-correlates with variation. This is the case in tactile but not in visual input: brightness doesn’t correlate with inertia or invariance, dark objects are just as stable as bright ones. Thus, initial match in vision should be defined indirectly, as inverse deviation of variation in intensity. 1D variation is difference, ratio, etc., while multi-D comparison has to combine them into Euclidean distance and gradient, as in common edge detectors.
 
-#### Patterns, more in part 2:
-
 Cross-comparison among patterns forms match and miss per parameter, as well as dimensions and distances: external match and miss (these are separate parameters: total value = precision of what * precision of where). Comparison is limited by max. distance between patterns. Overall hierarchy has incremental dimensionality: search levels ( param levels ( pattern levels)).., and pattern comparison is selectively incremental per such level. This is hard to explain in NL, please see the code, starting with [line_Ps](https://github.com/boris-kz/CogAlg/blob/master/line_1D_alg/line_Ps.py) and [line_PPs](https://github.com/boris-kz/CogAlg/blob/master/line_1D_alg/line_PPs.py).
   
 Resulting matches and misses are summed into lateral match and miss per pattern. Proximate input patterns with above-average match to their nearest neighbors are clustered into higher-level patterns. This adds two pattern levels: of composition and derivation, per level of search. Conditional cross-comp over incremental range and derivation, among the same inputs, may also add sub-levels in selected newly formed patterns. On a pixel level, incremental range is using larger kernels, and incremental derivation starts with using Laplacian. 
 
-#### Feedback: attention, imagination, action, more in part 3 (tentative, not in the code)
+#### Feedback: attention, imagination, action (tentative, addendum 3)
 
 Higher-level feedback will adjust filters, starting with average match, then ave per parameter derived by deeper cross-comp. More precisely, these should be co-averages: values coincident with an average value of combined higher-level param. There are also positional or external filters, starting with pixel size and kernel size, which determine external dimensions of the input. Quantization (bit, integer, float..) of internal and external filters corresponds to the order of comparison. The filters are similar to hyperparameters in Neural Nets, with the same values across a level. The equivalent to weight matrix are links (edges) between nodes of a graph, but they are lateral vs. implicitly vertical when formed via backprop or [Hebbian learning](https://data-flair.training/blogs/learning-rules-in-neural-network/#:~:text=The%20Hebbian%20rule%20was%20the,of%20nodes%20of%20a%20network.&text=For%20neurons%20operating%20in%20the,weight%20between%20them%20should%20decrease.) in NNs.
 
-In a broader frame of reference, the above-mentioned external filters will define source locations for selective input to higher-level patterns. This is similar to conventionally understood attention, and ultimately decision making. And these locations can be projected vs. actually observed, generating input for imagination and hypothetical reasoning.
+In a broader frame of reference, the above-mentioned external filters will define source locations for selective input to higher-level patterns. This is similar to conventional notion of attention, and ultimately decision-making. These locations can be projected vs. actually observed, generating input for imagination and hypothetical reasoning.
 
-
-#### Hierarchy, part 4 is out of date:
+#### Hierarchy:
 
 There is a single global hierarchy: feedforward inputs and feedback filters pass through the same levels of search and composition. Each higher level is a nested hierarchy, with depth proportional to elevation, but sub-hierarchies are unfolded sequentially. That’s why I don’t have many diagrams: they are good at showing relations in 2D, but I have a simple 1D sequence of levels. Nested sub-hierarchies are generated by the process itself, depending on elevation in a higher-order hierarchy. That means I can’t show them in a generic diagram. 
 
@@ -81,7 +79,7 @@ Some notes:
 - Don’t even start me on chatbots.  
 
 
-### Comparison to Artificial and Biological Neural Networks
+### 1: Comparison to Artificial and Biological Neural Networks
 
 
 All unsupervised learning is some form of pattern discovery, where patterns are some kind of similarity clusters. There are two fundamentally different ways to cluster inputs: centroid-based and connectivity-based. All [statistical learning](https://en.wikipedia.org/wiki/Statistical_learning_theory), including Neural Nets, is best understood as distributed [centroid-based clustering](https://en.wikipedia.org/wiki/Cluster_analysis#Centroid-based_clustering). Centroid is whatever the model fits to, not necessarily a single value. Template line in linear regression can be considered one-dimensional centroid, and the whole training set a multi-dimensional centroid. 
@@ -110,8 +108,7 @@ Uri Hasson, Samuel Nastase, Ariel Goldstein reach a similar conclusion in “[Di
 
 
 
-### Atomic comparison: quantifying match and miss between variables
-
+### 2: Atomic comparison: quantifying match and miss between variables (which define patterns)
 
 
 First, we need to quantify predictive value. Algorithmic information theory defines it as compressibility of representation, which is perfectly fine. But compression is currently computed only for sequences of inputs, while I think a logical start is analog input digitization: a rock bottom of organic compression hierarchy. The next level is cross-comparison among resulting pixels, commonly known as edge detection, and higher levels will cross-compare resulting patterns. Partial match computed by comparison is a measure of compression.
@@ -151,7 +148,34 @@ The lossy part comes after evaluation of resulting patterns on the next level of
 Compression also depends on resolution of coordinate (input summation span), and of input magnitude. Projected match can be kept above system’s average by adjusting corresponding resolution filters: most significant bits and least significant bits of both coordinate and magnitude.
 
 
-### Implementation
+### 3: Feedback: maximizing novelty vs. generality
+ 
+
+A system must have a common selection criterion: fitness value. Two cognitive criteria are novelty (miss or variance) and generality (match or similarity) within input. We can’t select for both, they exhaust all possibilities. Novelty can’t be primary: it would select for noise and filter out patterns, defined by match. But to directly maximize match of inputs to memory we can simply stare at a wall: lock into predictable environments. On the contrary, natural curiosity actively skips predictable locations, reducing expected match.
+ 
+This dilemma is resolved by maximizing predictive power: projected vs. actual match of inputs to memory. To the extent that new match was projected from derivatives of past inputs, it doesn’t add to such projection. But neither does noise: novelty that won't persist (match) later. Such projection is only computed over some discontinuity, as feedback from terminated patterns:
+Additive projected match = new match - down-projected match (where projection is m + Dm / 2).
+
+Vertical evaluation computes deviations, to form positive or negative higher-level patterns. This is relative to higher-level averages of past inputs. Due to their scope, averages should be projected over feedback delay: average += average difference * (delay / average span) /2. Average per input variable may also be a feedback, representing redundancy to higher level, which also depends on higher-level match rate: rM = match / input. If rM > average per cost of processing: additive match = input match - input-to-average match * rM.
+
+So novelty is selected by subtracting higher-level projection from corresponding input parameter. Higher-order selection is positional: skipping predictable input spans. Which is formally a *coordinate* filter: next coordinate of inputs with expected above-average *additive* predictive value. Thus, next input location is selected by (proximity - predictability): vertical attention is on the edge of predictable. And the range of prediction is increasing with elevation in hierarchy of generalization, that forms feedback.
+
+ 
+#### imagination, planning, action
+
+
+Imagination is never truly original, it's just an interactive projection of known patterns. As explained above, patterns send feedback to filter lower-level sources. This feedback is to future sources, where the patterns are projected to continue or re-occur. Stronger upstream patterns and correspondingly higher filters reduce resolution of or totally skip predictable input spans. But when multiple originally distant patterns are projected into the same location, their feedback cancels out in proportion to their relative difference.
+
+Thus combined filter is cancelled-out for mutually exclusive co-projected patterns: filter = max_pattern_feedback - alt_pattern_feedback * match_rate. By default, match_rate used here is average (match / max_comparand). But it has average error: average abs(match_rate - average_match_rate). To improve filter accuracy, we can derive actual match rate by cross-comparing co-projected patterns. I think imagination is just that: search across co-projected patterns, before accessing their external target sources. 
+
+A search is defined by next input location: contiguous coordinate span. In feedback, span of target = span of source input pattern: narrower than span of source output pattern. Search across co-projected patterns is performed on a conceptually lower level, but patterns themselves belong to higher level. Hence, search will be within intersection of co-projected patterns, vs. whole patterns. Intersection is a location within each of the patterns, and cross-comparison will be among pattern elements in that location.  
+
+Combined filter is then pre-valuated: projected value of positive patterns is compared to the cost of evaluating all inputs, both within a target location. If prevalue is negative: projected inputs are not worth evaluating, their location is skipped and “imagination” moves to the next nearest one. Filter search continues until prevalue turns positive (with above-average novelty) and the sensor is moved that location. This sensor movement, along with adjustment of its threshold, is the most basic form of motor feedback, AKA action.
+
+Cognitive component of action is planning: a form of imagination where projected patterns include those that represent the system itself. Feedback of such self-patterns eventually reaches the bottom of representational hierarchy: sensors and actuators, adjusting their sensitivity | intensity and coordinates. This adjustment is action. Such environmental interface is a part of any cognitive system, although actuators are optional.
+
+
+### 4: Implementation
 
 
 Any prediction has two components: what and where. We must have both: value of prediction = precision of what * precision of where. That “where” is currently neglected: statistical ML methods represent coordinates much more coarsely than the inputs. Hence, precision of where (spans of and distances between patterns) is degraded, and so is predictive value of combined representations. That's not the case here because my top-level patterns (multi-dimensional blobs) are contiguous.

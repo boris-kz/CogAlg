@@ -10,13 +10,16 @@ from frame_blobs import CBase
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
 in combination with spliced lower-composition patterns, etc, if only lower param-layers match.
 This may form closed edge patterns around flat core blobs, which defines stable objects. 
-Graphs are formed from blobs that match over < max distance. 
--
-They are also assigned adjacent alt-fork graphs, which borrow predictive value from the graph. 
+
+Graphs (predictive patterns) are formed from edges that match over < extendable max distance, 
+then internal cross-comp rng/der is incremented per relative M/D: induction from prior cross-comp
+(no lateral prediction skipping: overhead is only justified in vertical feedback?) 
+- 
 Primary value is match, diff.patterns borrow value from proximate match patterns, canceling their projected match. 
+Thus graphs are assigned adjacent alt-fork graphs, to which they lend predictive value.
 But alt match patterns borrow already borrowed value, which may be too tenuous to track, we use average borrowed value.
 -
-Clustering criterion is M|D, summed across >ave vars if selective comp (<ave vars are not compared and don't add costs).
+Clustering criterion is also M|D, summed across >ave vars if selective comp (<ave vars are not compared and don't add costs).
 Fork selection should be per var| der layer| agg level. Clustering is exclusive per fork,ave, overlapping between fork,aves.  
 (same fork,ave fuzzy clustering is possible if centroid-based, connectivity-based clusters merge)
 
@@ -54,7 +57,6 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         l.S = 0 if S is None else S  # span: distance between nodet centers, summed into sparsity in CGs
         l.area = 0  # sum nodet
         l.box = [] if box is None else box  # sum nodet
-        # l.md_t = [] if md_t is None else md_t  # replace with [mdext] in lay0
         l.derH = CH(root=l) if derH is None else derH
         l.H_ = [] if H_ is None else H_  # if agg++| sub++?
         l.ft = [0,0]  # fork inclusion tuple, may replace Vt:
@@ -62,7 +64,7 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         l.n = 1  # min(node_.n)
         l.Et = [0,0,0,0]
         l.root = None
-        # rimt_ = [[],[]]  # if der+
+        # rimt_, elay if der+
     def __bool__(l): return bool(l.derH.H)
 
 
@@ -157,7 +159,7 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
         # eval relative distance between G centers:
         if dist / max(aRad,1) <= max_dist * rng:
             for _g,g in (_G,G),(G,_G):
-                if len(g.elay.H) == rng:
+                if len(g.visited__) == rng:
                     g.visited__[-1] += [_g]
                 else: g.visited__ += [[_g]]  # init layer
             Link = CL(nodet=[_G,G], S=2,A=[dy,dx], box=extend_box(G.box,_G.box))
@@ -171,8 +173,7 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
             if link.ft[0]:  # must be mlink
                 _G = link.nodet[0] if link.nodet[1] is G else link.nodet[1]
                 krim += [_G]
-                if len(G.elay.H)==rng: G.elay.H[-1].add_H(link.derH)
-                else:                  G.elay.append_(link.derH)
+                G.elay.add_H(link.derH)
                 G._kLay = sum_kLay(G,_G); _G._kLay = sum_kLay(_G,G)  # next krim comparands
         if krim:
             if rng>1: G.kHH[-1] += [krim]  # kH = lays(nodes
@@ -212,13 +213,13 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
                 if _G in G.visited__[-1] or _G not in G_: continue
                 G.visited__[-1] += [_G]; _G.visited__[-1] += [G]
                 # comp G kLay -> rng derLay:
-                rlay = comp_pars(_G._kLay, G._kLay)
+                rlay = comp_pars(_G._kLay, G._kLay, _G.n/G.n)
                 if rlay.Et[0] > ave * rlay.Et[2] * (rng+n):  # layers add cost
-                    _G.elay.H[-1].add_H(rlay); G.elay.H[-1].add_H(rlay)  # bilateral
+                    _G.elay.add_H(rlay); G.elay.add_H(rlay)  # bilateral
         _G_ = G_; G_ = []
         for G in _G_:  # eval dLay
             G.visited__.pop()  # loop-specific layer
-            if G.elay.H[-1].Et[0] > ave * G.elay.H[-1].Et[2] * (rng+n+1):
+            if G.elay.Et[0] > ave * G.elay.Et[2] * (rng+n+1):
                 G_ += [G]
         if G_:
             for G in G_: G._kLay = G.kLay  # comp in next krng
@@ -292,15 +293,14 @@ def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
 def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
 
     fd = rev is not None  # compared links have binary relative direction?
-    _N, N = Link.nodet; _S,S = _N.S,N.S; _A,A = _N.A,N.A; _n=_N.n; n=N.n
-
-    if fd:  # CLs
+    _N, N = Link.nodet; _S,S = _N.S,N.S; _A,A = _N.A,N.A
+    if fd:  # CL
         if rev: A = [-d for d in A]  # reverse angle direction if N is left link?
         _L=2; L=2; _lat=None; _mdLay=None; lat=None; mdLay=None
     else:  # CGs
         _L=len(_N.node_); L=len(_N.node_); _lat=_N.latuple; _mdLay=_N.mdLay; lat=N.latuple; mdLay=N.mdLay
-
-    derH = comp_pars([_n,_L,_S,_A,_lat,_mdLay,_N.derH], [n,L,S,A, lat,mdLay,N.derH])
+    # dlay
+    derH = comp_pars([_L,_S,_A,_lat,_mdLay,_N.derH], [L,S,A,lat,mdLay,N.derH], rn=_N.n/N.n)
     Et = derH.Et
     iEt[:] = np.add(iEt,Et)  # init eval rng+ and form_graph_t by total m|d?
     for i in 0,1:
@@ -324,13 +324,13 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
             # elay+=derH in rng_kern_
         return True
 
-def comp_pars(_pars, pars):  # compare Ns, kLays or partial graphs in merging
+def comp_pars(_pars, pars, rn):  # compare Ns, kLays or partial graphs in merging
 
-    _n,_L,_S,_A,_latuple,_mdLay,_derH = _pars
-    n, L, S, A, latuple, mdLay, derH = pars; rn = _n/n
+    _L,_S,_A,_latuple,_mdLay,_derH = _pars
+    L, S, A, latuple, mdLay, derH = pars
 
     mdext = comp_ext(_L,L,_S,S/rn,_A,A)
-    if mdLay:  # += CG nodes
+    if mdLay:  # CG
         mdLay = _mdLay.comp_md_(mdLay, rn, fagg=1)
         mdlat = comp_latuple(_latuple, latuple, rn, fagg=1)
         n = mdlat.n + mdLay.n + mdext.n
@@ -340,7 +340,7 @@ def comp_pars(_pars, pars):  # compare Ns, kLays or partial graphs in merging
     else:  # += CL nodes
         n = mdext.n; md_t = [mdext]; Et = mdext.Et; Rt = mdext.Rt
     # init H = [lay0]:
-    dlay = CH( H=[CH(n=n,md_t=md_t,Et=Et,Rt=Rt)],
+    dlay = CH( H=[CH(n=n, md_t=md_t, Et=Et, Rt=Rt)],  # or n = (_n+n) / 2?
                n=n,md_t=[CH().copy(md_) for md_ in md_t], Et=copy(Et),Rt=copy(Rt))
     if _derH and derH:
         dderH = _derH.comp_H(derH, rn, fagg=1)  # new link derH = local dH
@@ -392,12 +392,12 @@ def form_graph_t(root, N_, Et, rng):  # segment N_ to Nm_, Nd_
 def add_der_attrs(link_):
     for link in link_:
         link.root = None  # dgraphs containing link
+        link.elay = CH(root=link.derH)  # += rimt_ derH:
         link.rimt_ = [[[],[]]]  # 2 dirs per rng layer
         link.visited_ = []
         link.med = 1  # comp med rng, replaces len rim_
         link.Et = [0,0,0,0]
         link.aRad = 0
-        link.derH.H += [CH()]  # new derLay
 
 def segment_N_(root, iN_, fd, rng):  # cluster iN_ by weight of shared links, initially single linkage (L_ if fd else N_)
     '''
@@ -411,7 +411,8 @@ def segment_N_(root, iN_, fd, rng):  # cluster iN_ by weight of shared links, in
         Gt = [[N],[], Lrim, Nrim, [0,0,0,0]]  # node_,link_,Lrim,Nrim, Et
         N.root = Gt
         N_ += [Gt]  # select exemplar maxes to segment clustering:
-        emax_ = [eN for eN in Nrim if eN.Et[fd] >= N.Et[fd] or eN in max_]  # _N if _N == N
+        emax_ = [eN for eN in Nrim if eN.Et[fd] >= N.Et[fd] or eN in max_]
+        # _N if _N == N
         if not emax_: max_ += [Gt]  # N.root, if no higher-val neighbors
         # extended rrim max: V * k * max_rng?
         # merge clusters across iN_s if +ve links in Lrim

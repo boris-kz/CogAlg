@@ -272,3 +272,93 @@ Lt_ = [(L, mN_t) for L, mN_t in zip(L_, mN_t_) if any(mN_t)]; if Lt_: L_,_mN_t_ 
             max_index = max_.index(new_max)
             seg_[max_index] += [Gt]
 '''
+def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backprop, not for CLs
+
+    _G_ = []
+    Et = [0,0,0,0]
+    for N in N_:
+        if hasattr(N,'crim'): N.rim += N.crim
+        N.crim = []  # current rng links, add in comp_N
+    # comp_N:
+    for (_G, G) in list(combinations(N_,r=2)):
+        if _G in [g for visited_ in G.visited__ for g in visited_]:  # compared in any rng++
+            continue
+        dy,dx = np.subtract(_G.yx,G.yx)
+        dist = np.hypot(dy,dx)
+        aRad = (G.aRad+_G.aRad) / 2  # ave G radius
+        # eval relative distance between G centers:
+        if dist / max(aRad,1) <= max_dist * rng:
+            for _g,g in (_G,G),(G,_G):
+                if len(g.elay.H) == rng:
+                    g.visited__[-1] += [_g]
+                else: g.visited__ += [[_g]]  # init layer
+            Link = CL(nodet=[_G,G], S=2,A=[dy,dx], box=extend_box(G.box,_G.box))
+            if comp_N(Link, Et, rng):
+                for g in _G,G:
+                    if g not in _G_: _G_ += [g]
+    G_ = []  # init conv kernels:
+    for G in (_G_):
+        krim = []
+        for link,rev in G.crim:  # form new krim from current-rng links
+            if link.ft[0]:  # must be mlink
+                _G = link.nodet[0] if link.nodet[1] is G else link.nodet[1]
+                krim += [_G]
+                if len(G.elay.H)==rng: G.elay.H[-1].add_H(link.derH)
+                else:                  G.elay.append_(link.derH)
+                G._kLay = sum_kLay(G,_G); _G._kLay = sum_kLay(_G,G)  # next krim comparands
+        if krim:
+            if rng>1: G.kHH[-1] += [krim]  # kH = lays(nodes
+            else:     G.kHH = [[krim]]
+            G_ += [G]
+    Gd_ = copy(G_)  # Gs with 1st layer kH, dLay, _kLay
+    _G_ = G_; n=0  # n higher krims
+    # convolution: Def,Sum,Comp kernel rim, in separate loops for bilateral G,_G assign:
+    while True:
+        G_ = []
+        for G in _G_:  # += krim
+            G.kHH[-1] += [[]]; G.visited__ += [[]]
+        for G in _G_:
+            #  append G.kHH[-1][-1]:
+            for _G in G.kHH[-1][-2]:
+                for link, rev in _G.crim:
+                    __G = link.nodet[0] if link.nodet[1] is G else link.nodet[1]
+                    if __G in _G_:
+                        if __G not in G.kHH[-1][-1] + [g for visited_ in G.visited__ for g in visited_]:
+                            # bilateral add layer of unique mediated nodes
+                            G.kHH[-1][-1] += [__G]; __G.kHH[-1][-1] += [G]
+                            for g,_g in zip((G,__G),(__G,G)):
+                                g.visited__[-1] += [_g]
+                                if g not in G_:  # in G_ only if in visited__[-1]
+                                    G_ += [g]
+        for G in G_: G.visited__ += [[]]
+        for G in G_: # sum kLay:
+            for _G in G.kHH[-1][-1]:  # add last krim
+                if _G in G.visited__[-1] or _G not in _G_:
+                    continue  # Gs krim appended when _G was G
+                G.visited__[-1] += [_G]; _G.visited__[-1] += [G]
+                # sum alt G lower kLay:
+                G.kLay = sum_kLay(G,_G); _G.kLay = sum_kLay(_G,G)
+        for G in G_: G.visited__[-1] = []
+        for G in G_:
+            for _G in G.kHH[-1][0]:  # convo in direct kernel only
+                if _G in G.visited__[-1] or _G not in G_: continue
+                G.visited__[-1] += [_G]; _G.visited__[-1] += [G]
+                # comp G kLay -> rng derLay:
+                rlay = comp_pars(_G._kLay, G._kLay)
+                if rlay.Et[0] > ave * rlay.Et[2] * (rng+n):  # layers add cost
+                    _G.elay.add_H(rlay); G.elay.add_H(rlay)  # bilateral
+        _G_ = G_; G_ = []
+        for G in _G_:  # eval dLay
+            G.visited__.pop()  # loop-specific layer
+            if G.elay.Et[0] > ave * G.elay.Et[2] * (rng+n+1):
+                G_ += [G]
+        if G_:
+            for G in G_: G._kLay = G.kLay  # comp in next krng
+            _G_ = G_; n += 1
+        else:
+            for G in Gd_:
+                G.rim += G.crim; G.visited__.pop()  # kH - specific layer
+                delattr(G,'_kLay'); delattr(G,'crim')
+                if hasattr(G,"kLay)"): delattr(G,'kLay')
+            break
+    return Gd_, Et  # all Gs with dLay added in 1st krim
