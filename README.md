@@ -57,7 +57,7 @@ Resulting matches and misses are summed into lateral match and miss per pattern.
 
 Higher-level feedback will adjust filters, starting with average match, then ave per parameter derived by deeper cross-comp. More precisely, these should be co-averages: values coincident with an average value of combined higher-level param. There are also positional or external filters, starting with pixel size and kernel size, which determine external dimensions of the input. Quantization (bit, integer, float..) of internal and external filters corresponds to the order of comparison. The filters are similar to hyperparameters in Neural Nets, with the same values across a level. The equivalent to weight matrix are links (edges) between nodes of a graph, but they are lateral vs. implicitly vertical when formed via backprop or [Hebbian learning](https://data-flair.training/blogs/learning-rules-in-neural-network/#:~:text=The%20Hebbian%20rule%20was%20the,of%20nodes%20of%20a%20network.&text=For%20neurons%20operating%20in%20the,weight%20between%20them%20should%20decrease.) in NNs.
 
-In a broader frame of reference, the above-mentioned external filters will define source locations for selective input to higher-level patterns. This is similar to conventional notion of attention, and ultimately decision-making. These locations can be projected vs. actually observed, generating input for imagination and hypothetical reasoning.
+In a broader frame of reference, the above-mentioned external filters will define source locations for selective input to higher-level patterns. This is similar to human attention and ultimately decision-making. These locations can be projected vs. actually observed, generating input for imagination and hypothetical reasoning.
 
 #### Hierarchy:
 
@@ -107,7 +107,6 @@ I see no way evolution could produce proposed algorithm, it is extremely limited
 Uri Hasson, Samuel Nastase, Ariel Goldstein reach a similar conclusion in “[Direct fit to nature: an evolutionary perspective on biological and artificial neural networks](https://www.cell.com/neuron/fulltext/S0896-6273(19)31044-X)”: “We argue that neural computation is grounded in brute-force direct fitting, which relies on over-parameterized optimization algorithms to increase predictive power (generalization) without explicitly modeling the underlying generative structure of the world. Although ANNs are indeed highly simplified models of BNNs, they belong to the same family of over-parameterized, direct-fit models, producing solutions that are mistakenly interpreted in terms of elegant design principles but in fact reflect the interdigitation of ‘‘mindless’’ optimization processes and the structure of the world.”
 
 
-
 ### 2: Atomic comparison: quantifying match and miss between variables (which define patterns)
 
 
@@ -151,7 +150,7 @@ Compression also depends on resolution of coordinate (input summation span), and
 ### 3: Feedback: maximizing novelty vs. generality
  
 
-General cognitive system must have a common input selection criterion: fitness value on all levels of generalization. This value may be novelty or generality: miss or match to expectations (we can’t select for both, they exhaust all possibilities). Novelty can’t be primary: it would select for noise and filter out patterns, defined by cross-similarity. But match (confirmation) can be maximized by staring at a wall: locking into predictable environments. While natural curiosity actively skips such locations, reducing expected match.
+General cognitive system must have a common input selection criterion: fitness value on all levels of generalization. This value can be novelty or generality: miss or match to expectations. We can’t select for both, they exhaust all possibilities. Novelty can’t be primary: it would select for noise and filter out patterns, defined by cross-similarity. But match (confirmation) can be maximized by staring at a wall: locking into predictable environments. While natural curiosity actively skips such locations, reducing expected match.
 
 My solution is selecting for expected match within a level of generalization (composition or clustering), comparing proximate nodes. But vertical feedback between levels should select for novelty, forcing lower levels to skip predictable input spans. Higher-scope downward selection is reversed from lower-scope upward selection: criterion sign flips with the direction of propagation. Such skipping increases generality of whole system: higher levels get novel patterns that extend their predictive power more than mere confirmations.
 

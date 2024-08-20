@@ -13,7 +13,7 @@ This may form closed edge patterns around flat core blobs, which defines stable 
 
 Graphs (predictive patterns) are formed from edges that match over < extendable max distance, 
 then internal cross-comp rng/der is incremented per relative M/D: induction from prior cross-comp
-(no lateral prediction skipping: overhead is only justified in vertical feedback?) 
+(no lateral prediction skipping: it requires overhead that can only be justified in vertical feedback) 
 - 
 Primary value is match, diff.patterns borrow value from proximate match patterns, canceling their projected match. 
 Thus graphs are assigned adjacent alt-fork graphs, to which they lend predictive value.
@@ -245,8 +245,8 @@ def sum_kLay(G, g):  # sum next-rng kLay from krim of current _kLays, init with 
             L+l, S+s, [A[0]+a[0],A[1]+a[1]], # L,S,A
             add_lat(Lat,lat),                # latuple
             MdLay.add_md_(mdLay),            # mdLay
-            DerH.add_H(derH) if derH else None ]
-
+            DerH.add_H(derH) if derH else DerH
+    ]
 
 def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
 
@@ -296,7 +296,7 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
     if fd:  # CL
         if rev: A = [-d for d in A]  # reverse angle direction if N is left link?
         _L=2; L=2; _lat,lat,_lay,lay = None,None,None,None
-    else:  # CGs
+    else:   # CG
         _L,L,_lat,lat,_lay,lay = len(_N.node_),len(_N.node_),_N.latuple,N.latuple,_N.mdLay,N.mdLay
     # dlay:
     derH = comp_pars([_L,_S,_A,_lat,_lay,_N.derH], [L,S,A,lat,lay,N.derH], rn=_N.n/N.n, node_=_N.node_+N.node_)
@@ -374,8 +374,8 @@ def form_graph_t(root, N_, Et, rng):  # segment N_ to Nm_, Nd_
             for graph in graph_:
                 Q = graph.link_ if fd else graph.node_  # xcomp -> max_dist * rng+1, comp links if fd
                 if len(Q) > ave_L and graph.derH.Et[fd] > G_aves[fd] * graph.derH.Et[fd+2] * rng:
-                    set_attrs(Q)
-                    agg_recursion(graph, Q, fL=isinstance(Q[0],CL), rng=rng)  # fd rng+
+                    set_attrs(Q)  # add/reset sub+ attrs
+                    agg_recursion(graph, Q, fL=isinstance(Q[0],CL), rng=rng)  # rng+, recursive in node_, no sub-clustering in link_?
             node_t += [graph_]  # may be empty
         else:
             node_t += [[]]
@@ -391,16 +391,14 @@ def form_graph_t(root, N_, Et, rng):  # segment N_ to Nm_, Nd_
 def set_attrs(Q):
     for e in Q:
         if isinstance(e,CL):
-            if hasattr(e,'rimt__'): e.rimt__ += [e.rimt_]
-            else: e.rimt__ = [e.rimt_]  # to trace later?
-            e.rimt_ = [[[],[]]]  # 2 dirs per rng layer
-            e.med = 1  # comp med rng, replaces len rim_
+            e.rimt_ = [[[],[]]]  # der+'rng+ is not recursive
+            e.med = 1  # med rng = len rimt_?
         else:
-            e.rim_ = [e.rim]; e.rim = []
+            e.rim = [e.rim, []]  # add nesting, rng layer / rng+'rng+
+            e.visited_ = []
         e.derH.append_(e.elay)
         e.elay = CH()  # set in sum2graph
         e.root = None
-        e.visited__ = []
         e.Et = [0,0,0,0]
         e.aRad = 0
 

@@ -163,7 +163,8 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
             # default
             HE.add_md_t(He)  # [lat_md_C, lay_md_C, ext_md_C]
             HE.Et = np.add(HE.Et, He.Et); HE.Rt = np.add(HE.Rt, He.Rt)
-            HE.node_ += [node for node in He.node_ if node not in HE.node_]
+            if isinstance(He.node_[0],CG):  # CL doesn't have node_
+                HE.node_ += [node for node in He.node_ if node not in HE.node_]
             if any(irdnt): HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
             HE.n += He.n  # combined param accumulation span
         else:
@@ -193,7 +194,6 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         HE.n += He.n
         Et, et = HE.Et, He.Et
         HE.Et = np.add(HE.Et, He.Et); HE.Rt = np.add(HE.Rt, He.Rt)
-        HE.node_ += [node for node in He.node_ if node not in HE.node_]
         if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
         root = HE
         while root is not None:
