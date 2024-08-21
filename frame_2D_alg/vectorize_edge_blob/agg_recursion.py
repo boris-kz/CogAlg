@@ -125,21 +125,20 @@ def agg_recursion(root, N_, fL, rng=1):  # fL: compare node-mediated links, else
             root.node_[:] = node_t
         # else keep root.node_
 
-def rng_node_(_N_, rng):  # forms discrete rng+ links, vs indirect rng+ in rng_kern_, still no sub_Gs / rng+
+def rng_node_(_N_):  # forms discrete rng+ links, vs indirect rng+ in rng_kern_, still no sub_Gs / rng+
 
-    rN_ = []; rEt = [0,0,0,0]
-    n = 0
+    rngH = []; HEt = [0,0,0,0]
+    rng = 1
     while True:
         N_, Et = rng_kern_(_N_, rng)  # adds single implicit layer of links to _N pars summed in G.kHH[-1]
         if Et[0] > ave * Et[2]* rng:
-            _N_ = N_
-            rEt = [V+v for V,v in zip(rEt, Et)]
-            if not n: rN_ = N_  # 1st pruned N_
+            rngH += [[N_,Et]]
+            np.add(HEt,Et)
             rng += 1
-            n += 1
+            _N_ = N_
         else:
             break
-    return rN_, rEt, rng
+    return rngH, HEt, rng
 
 def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backprop, not for CLs
 
@@ -149,14 +148,14 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
         if hasattr(N,'crim'): N.rim += N.crim
         N.crim = []  # current rng links, add in comp_N
     # comp_N:
-    for (_G, G) in list(combinations(N_,r=2)):
+    for _G,G in combinations(N_,r=2):
         if _G in [g for visited_ in G.visited__ for g in visited_]:  # compared in any rng++
             continue
         dy,dx = np.subtract(_G.yx,G.yx)
         dist = np.hypot(dy,dx)
         aRad = (G.aRad+_G.aRad) / 2  # ave G radius
         # eval relative distance between G centers:
-        if dist / max(aRad,1) <= max_dist * rng:
+        if dist / max(aRad,1) <= (max_dist * rng):
             for _g,g in (_G,G),(G,_G):
                 if len(g.visited__) == rng:
                     g.visited__[-1] += [_g]
@@ -176,7 +175,7 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
                 G._kLay = sum_kLay(G,_G); _G._kLay = sum_kLay(_G,G)  # next krim comparands
         if krim:
             if rng>1: G.kHH[-1] += [krim]  # kH = lays(nodes
-            else:     G.kHH = [[krim]]
+            else:     G.kHH += [[krim]]
             G_ += [G]
     Gd_ = copy(G_)  # Gs with 1st layer kH, dLay, _kLay
     _G_ = G_; n=0  # n higher krims
@@ -227,7 +226,7 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
             for G in Gd_:
                 G.rim += G.crim; G.visited__.pop()  # kH - specific layer
                 delattr(G,'_kLay'); delattr(G,'crim')
-                if hasattr(G,"kLay)"): delattr(G,'kLay')
+                if hasattr(G,'kLay'): delattr(G,'kLay')
             break
     return Gd_, Et  # all Gs with dLay added in 1st krim
 

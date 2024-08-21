@@ -66,8 +66,8 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         # maps to node_H / agg+|sub+:
         G.derH = CH(root=G) if derH is None else derH  # sum from nodes, then append from feedback
         G.elay = CH(root=G) if elay is None else elay  # sum from rim kernels
-        G.rim = []  # direct external links from rng+
-        G.kHH = []  # kernel: hierarchy of rng layers
+        G.rim_ = []  # direct external links, nested per rng
+        G.kHH = []  # kernel: hierarchy of rng layer _Ns
         G.rng = rng
         G.n = n  # external n (last layer n)
         G.S = 0  # sparsity: distance between node centers
@@ -163,8 +163,8 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
             # default
             HE.add_md_t(He)  # [lat_md_C, lay_md_C, ext_md_C]
             HE.Et = np.add(HE.Et, He.Et); HE.Rt = np.add(HE.Rt, He.Rt)
-            if isinstance(He.node_[0],CG):  # CL doesn't have node_
-                HE.node_ += [node for node in He.node_ if node not in HE.node_]
+            HE.node_ += [node for node in He.node_ if node not in HE.node_]
+            # node_ is empty in CL derH?
             if any(irdnt): HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
             HE.n += He.n  # combined param accumulation span
         else:
