@@ -362,3 +362,87 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
                 if hasattr(G,"kLay)"): delattr(G,'kLay')
             break
     return Gd_, Et  # all Gs with dLay added in 1st krim
+
+def agg_recursion(root, N_, fL, rng=1):  # fL: compare node-mediated links, else < rng-distant CGs
+    '''
+    der+ forms Link_, link.node_ -> dual trees of matching links in der+rng+, complex higher links
+    rng+ keeps N_ + distant M / G.M, less likely: term by >d/<m, less complex
+    '''
+    N_,Et,rng = rng_link_(N_) if fL else rng_node_(N_, rng)  # N_ = L_ if fL else G_, both rng++
+    if len(N_) > ave_L:
+        node_t = form_graph_t(root, N_, Et,rng)  # fork eval, depth-first sub+, sub_Gs += fback_
+        if node_t:
+            for fd, node_ in zip((0,1), node_t):  # after sub++ in form_graph_t
+                N_ = []
+                for N in node_:  # prune, select max node_ derH.i
+                    derH = N.derH
+                    if derH.Et[fd] > G_aves[fd] * derH.Et[2+fd]:
+                        for i,lay in enumerate(sorted(derH.H, key=lambda lay:lay.Et[fd], reverse=True)):
+                            di = lay.i-i # lay.i: index in H, di: der rdn - value rdn
+                            lay.Et[2+fd] += di  # der rdn -> val rdn
+                            if not i:  # max val lay
+                                N.node_ = lay.node_; derH.ii = lay.i  # exemplar lay index
+                        N.elay = CH()  # reset for agg+ below
+                        N_ += [N]
+                if root.derH.Et[0] * (max(0,(len(N_)-1)*root.rng)) > G_aves[1]*root.derH.Et[2]:
+                    # agg+rng+, val *= n comparands, forms CGs:
+                    agg_recursion(root, N_, fL=0)
+            root.node_[:] = node_t
+        # else keep root.node_
+
+def form_graph_t(root, N_, Et, rng):  # segment N_ to Nm_, Nd_
+
+    node_t = []
+    for fd in 0,1:
+        # N_ is Link_ if fd else G_
+        if Et[fd] > ave * Et[2+fd] * rng:
+            if isinstance(N_[0],CG):  # link.root is empty?
+                 for G in N_: G.root = []  # new root will be intermediate graph
+            # G: Ls/D: directional if fd, else Ns/M: symmetric, sum in node:
+            graph_ = segment_N_(root, N_, fd, rng)
+            for graph in graph_:
+                Q = graph.link_ if fd else graph.node_  # xcomp -> max_dist * rng+1, comp links if fd
+                if len(Q) > ave_L and graph.derH.Et[fd] > G_aves[fd] * graph.derH.Et[fd+2] * rng:
+                    set_attrs(Q)  # add/reset sub+ attrs
+                    agg_recursion(graph, Q, fL=isinstance(Q[0],CL), rng=rng)  # rng+, recursive in node_, no sub-clustering in link_?
+            node_t += [graph_]  # may be empty
+        else:
+            node_t += [[]]
+    for fd, graph_ in enumerate(node_t):  # combined-fork fb
+        for graph in graph_:
+            if graph.derH:  # single G's graph doesn't have any derH.H to feedback
+                root.fback_t[fd] += [graph.derH] if fd else [graph.derH.H[-1]]  # der+ forms new links, rng+ adds new layer
+            # sub+-> sub root-> init root
+    if any(root.fback_t): feedback(root)
+
+    return node_t
+
+def set_attrs(Q):
+    for e in Q:
+        if isinstance(e,CL):
+            e.rimt_ = [[[],[]]]  # der+'rng+ is not recursive
+            e.med = 1  # med rng = len rimt_?
+        else:
+            e.rim = [e.rim, []]  # add nesting, rng layer / rng+'rng+
+            e.visited_ = []
+        e.derH.append_(e.elay)
+        e.elay = CH()  # set in sum2graph
+        e.root = None
+        e.Et = [0,0,0,0]
+        e.aRad = 0
+
+def rng_node_(_N_):  # forms discrete rng+ links, vs indirect rng+ in rng_kern_, still no sub_Gs / rng+
+
+    rngH = []; HEt = [0,0,0,0]
+    rng = 1
+    while True:
+        N_, Et = rng_kern_(_N_, rng)  # adds single implicit layer of links to _N pars summed in G.kHH[-1]
+        for fd in 0,1:
+            if Et[0] > ave * Et[2]* rng:
+                rngH += [[N_,Et]]
+                np.add(HEt,Et)
+                rng += 1
+                _N_ = N_
+        else:
+            break
+    return rngH, HEt
