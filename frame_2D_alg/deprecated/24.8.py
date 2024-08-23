@@ -446,3 +446,45 @@ def rng_node_(_N_):  # forms discrete rng+ links, vs indirect rng+ in rng_kern_,
         else:
             break
     return rngH, HEt
+
+def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
+
+    _mN_t_ = [[[L.nodet[0]],[L.nodet[1]]] for L in _L_]  # rim-mediating nodes in both directions
+    HEt = [0,0,0,0]
+    rL_ = []
+    rng = 1
+    while True:
+        Et = [0,0,0,0]
+        mN_t_ = [[[],[]] for _ in _L_]  # new rng lay of mediating nodes, traced from all prior layers?
+        for L, _mN_t, mN_t in zip(_L_, _mN_t_, mN_t_):
+            for rev, _mN_, mN_ in zip((0,1), _mN_t, mN_t):
+                # comp L, _Ls: nodet mN 1st rim, -> rng+ _Ls/ rng+ mm..Ns, flatten rim_s:
+                rim_ = [n.rim_ if isinstance(n,CG) else n.rimt_[0][0] + n.rimt_[0][1] for n in _mN_]
+                for rim in rim_:
+                    for _L,_rev in rim:  # _L is reversed relative to its 2nd node
+                        if _L is L or _L in L.visited_: continue
+                        if not hasattr(_L,"rimt_"): set_attrs([_L])  # _L not in root.link_, same derivation
+                        L.visited_ += [_L]; _L.visited_ += [L]
+                        dy,dx = np.subtract(_L.yx, L.yx)
+                        Link = CL(nodet=[_L,L], S=2, A=[dy,dx], box=extend_box(_L.box, L.box))
+                        # L.rim_t += new Link
+                        if comp_N(Link, Et, rng, rev ^ _rev):  # negate ds if only one L is reversed
+                            # L += rng+'mediating nodes, link orders: nodet < L < rimt_, mN.rim || L
+                            mN_ += _L.nodet  # get _Ls in mN.rim
+                            if _L not in _L_:
+                                _L_ += [_L]; mN_t_ += [[[],[]]]  # not in root
+                            elif _L not in rL_: rL_ += [_L]
+                            if L not in rL_:    rL_ += [L]
+                            mN_t_[_L_.index(_L)][1 - rev] += L.nodet
+                            for node in (L, _L):
+                                node.elay.add_H(Link.derH)  # if lay/rng++, elif fagg: derH.H[der][rng]?
+        L_, _mN_t_ = [],[]
+        for L, mN_t in zip(_L_, mN_t_):
+            if any(mN_t):
+                L_ += [L]; _mN_t_ += [mN_t]
+        if L_:
+            _L_ = L_; rng += 1
+        else:
+            break
+    return list(set(rL_)), Et, rng
+
