@@ -488,3 +488,64 @@ def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
             break
     return list(set(rL_)), Et, rng
 
+def agg_recursion(root, N_):  # calls both cross-comp forks, first rng++
+
+    mH, Et = rng_node_(root, N_)  # recursive rng+ and layer clustering
+    Htt = [[mH,Et]]
+    if Et[1] > G_aves[1] * Et[3]:
+        L_ = set_attrs([Lt[0] for N in N_ for Lt in N.rim_[-1]])
+        # rng++ comp, cluster links from rng_node_:
+        dH,dEt = rng_link_(root, L_)
+        Et = np.add(Et, dEt)
+        Htt += [[dH, dEt]]
+    else:
+        Htt += [[]]  # empty dH and dEt
+        L_ = []
+    root.link_ = L_  # root.node_ is replaced in-place?
+    # 2 rng++ comp forks -> 4 cluster fork hierarchies:
+    for fd, Q, Ht in zip((0,1), (N_,L_), Htt):
+        for N in Q: # update lay derR to valR:
+            for i, lay in enumerate(sorted(N.derH.H, key=lambda lay: lay.Et[fd], reverse=True)):
+                di = lay.i - i  # lay.i: index in H
+                lay.Et[2+fd] += di  # derR-valR
+                if not i:  # max val lay
+                    N.node_ = lay.node_; N.derH.ii = lay.i  # exemplar lay index
+            N.elay = CH()   # for agg+:
+        for rng, H in enumerate(Ht[0]):  # two cluster forks per comp fork
+            (mG_, dG_), et = H  # each layer of [graph_t, Et]
+            for i, G_ in zip((0,1), (mG_,dG_)):
+                while len(G_) > ave_L and Et[i] > G_aves[i] * Et[2+i] * rng:
+                    # agg+/ rng layer, recursive?
+                    hHtt, hEt = agg_recursion(root, G_)
+                    if hHtt[0][0]:  # mH is not empty?
+                        Et = np.add(Et,hEt)
+                        G_[:] = hHtt  # else keep G_
+
+def segment_N_(root, iN_, rng):  # cluster iN_(G_|L_) by weight of shared links, initially single linkage
+
+    max_t = [[],[]]
+    N_t = [[],[]]
+    for N in iN_:  # init Gt per G|L node:
+        Lrim = [Lt[0] for Lt in N.rim_[-1]] if isinstance(N,CG) else [Lt[0] for Lt in N.rimt_[-1][0] + N.rimt_[-1][1]]  # external links
+        Nrim = [_N for L in Lrim for _N in L.nodet if (_N is not N and _N in iN_)]  # external nodes
+        Gt = [[N],[], Lrim, Nrim, [0,0,0,0]]  # node_,link_,Lrim,Nrim, Et
+        for fd in 0,1:
+            N_t[fd] += [Gt]  # select exemplar maxes to segment clustering:
+            emax_ = [eN for eN in Nrim if eN.Et[fd] >= N.Et[fd] or eN in max_t[fd]]  # _N if _N == N
+            if not emax_: max_t[fd] += [Gt]  # N.root, if no higher-val neighbors
+            # extended rrim max: V * k * max_rng?
+    for Gt in N_t[0]: Gt[3] = [_N.roott[fd] for _N in Gt[3]]  # replace eNs with Gts
+    for fd in 0,1:  # merge Gts with shared +ve links:
+        N_ = N_t[fd]
+        for Gt in max_t[fd] if max_t[fd] else N_t[fd]:
+            node_,link_,Lrim,Nrim, Et = Gt
+            for _Gt,_L in zip(Nrim,Lrim):  # merge connected _Gts if >ave shared external links (Lrim)
+                if _Gt not in N_:
+                    continue  # was merged
+                sL_ = set(Lrim).intersection(set(_Gt[2])).union([_L])  # shared external links + potential _L, or oL_ = [Lr[0] for Lr in _Gt[2] if Lr in Lrim]
+                if sum([L.derH.Et[fd] - ave * L.derH.Et[2+fd] * rng for L in sL_]) > 0:  # value of shared links
+                    link_ += [_L]
+                    merge(Gt,_Gt)
+                    N_.remove(_Gt)
+        N_t[fd] = [sum2graph(root, Gt, fd, rng) for Gt in N_]
+    return N_t
