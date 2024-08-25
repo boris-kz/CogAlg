@@ -54,10 +54,10 @@ class CcompSliceFrame(CsliceEdge):
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    def __init__(G, root = None, rng=1, fd=0, node_=None, link_=None, Et=None, mdLay=None, derH=None, elay=None, n=0):
+    def __init__(G, root_ = None, rng=1, fd=0, node_=None, link_=None, Et=None, mdLay=None, derH=None, elay=None, n=0):
         super().__init__()
 
-        G.root = None if root is None else root  # mgraph (dgraph.node_ is CLs)
+        G.root_ = [] if root_ is None else root_ # mgraph (dgraph.node_ is CLs)
         G.node_ = [] if node_ is None else node_ # convert to node_t in sub_recursion
         G.link_ = [] if link_ is None else link_ # internal links per comp layer in rng+
         G.Et = [0,0,0,0] if Et is None else Et   # extH.Et + derH.Et + mdLay.Et?
@@ -116,7 +116,7 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
 class CH(CBase):  # generic derivation hierarchy of variable nesting, depending on effective agg++(sub++ depth
 
     name = "H"
-    def __init__(He, node_=None, md_t=None, n=0, Et=None, Rt=None, H=None, root=None, i=None, ii=None):
+    def __init__(He, node_=None, md_t=None, n=0, Et=None, Rt=None, H=None, root=None, i=None, it=None):
         super().__init__()
         He.node_ = [] if node_ is None else node_  # concat, may be redundant to G.node_, lowest nesting order
         He.md_t = [] if md_t is None else md_t  # compared [mdlat,mdLay,mdext] per layer
@@ -126,7 +126,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         He.Rt = [0,0] if Rt is None else Rt  # m,d relative to max possible m,d
         He.root = None if root is None else root  # N or higher-composition He
         He.i = 0 if i is None else i   # lay index in root.H, to revise rdn
-        He.ii = 0 if ii is None else ii  # max lay in He.H: init add,comp if deleted higher layers' H,md_t
+        He.it = 0 if it is None else it  # max lay per fd in He.H: init add,comp if deleted higher layers' H,md_t
         # He.ni = 0  # exemplar in node_, trace in both directions?
         # He.depth = 0  # nesting in H[0], -=i in H[Hi], added in agg++|sub++
         # He.nest = nest  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH?
@@ -396,7 +396,7 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
 
 def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
 
-    PP = CG(fd=fd, root=root, rng=root.rng+1)  # 1st layer of derH is mdLay
+    PP = CG(fd=fd, root_=root, rng=root.rng+1)  # 1st layer of derH is mdLay
     PP.P_ = P_  # P_ is CdPs if fd, but summed in CG PP?
     iRt = root.mdLay.Et[2:4] if root.mdLay else [0,0]  # add to rdnt
     # += uplinks:
