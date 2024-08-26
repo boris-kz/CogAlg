@@ -521,6 +521,48 @@ def agg_recursion(root, N_):  # calls both cross-comp forks, first rng++
                         Et = np.add(Et,hEt)
                         G_[:] = hHtt  # else keep G_
 
+def agg_recursion(root, aggH):  # fork rng++, two clustering forks per layer: two separate recursion forks?
+
+    inG_, ilG_, iL_, iEt = aggH[0]  # top input aggLay, fixed syntax
+    mLay, dLay, LL_, LEt = [],[],[],[0,0,0,0]  # new aggLay
+    # or aggLay is rngH: combine lays?
+
+    for fd, N_ in zip((0,1), (inG_,ilG_)):
+        # rng++ cross-comp in both forks of top agg lay:
+        rngH, L_, Et = rng_node_(root, N_) if isinstance(N_[0],CG) else rng_link_(root, N_)
+        root.link_ = L_
+        for N in N_:
+            for f in 0,1:  # in rng++ elay: fd derR -> valR:
+                for i, lay in enumerate(sorted(N.elay.H, key=lambda lay: lay.Et[fd], reverse=True)):
+                    di = lay.i - i  # lay.i: index in H
+                    lay.Et[2+f] += di  # derR-valR
+                    if not i:  # max value lay
+                        N.node_ = lay.node_; N.derH.it[f] = lay.i  # assigns exemplar lay index per fd
+        # aggLay is rngH: combine lays?
+        hrH = []
+        hEt = [0,0,0,0]
+        for rng, rngLay in enumerate(rngH):
+            rnG_,rlG_,rL_,rEt = rngLay
+            for rfd,_G_ in zip((0,1),(rnG_,rlG_)):
+                dEt = rEt  # val / agg++/ rlay fd
+                while dEt[rfd] > G_aves[rfd] * dEt[2+rfd] * rng:  # and (np.add(len(_G_)) > ave_L: sum len elements in _G_, nested below?
+                    layH = agg_recursion(root, rngLay)
+                    if layH:
+                        dnG_,dlG_,dL_,dEt = layH[0]  # aggLay added to rngLay
+                        if dEt[0] > G_aves[0] * dEt[2]:
+                            rEt = np.add(rEt,dEt)
+                            hEt = np.add(hEt,rEt)
+                            _G_ = [dnG_,dlG_]  # for next agg+, additional nesting?
+            if hrH:
+                iH = [hH] + iH   # appendleft newly aggregated H
+                hHt += [hH]  # returns 2 higher agg forks?
+                iEt[:] = np.add(iEt, hEt)
+        LEt = np.add(LEt, hEt)
+
+    if sum(LEt[:1]) > sum(G_aves) * sum(LEt[2:]):
+        # else aggH is not extended
+        return [[mLay,dLay,LL_,LEt]] + aggH
+
 def segment_N_(root, iN_, rng):  # cluster iN_(G_|L_) by weight of shared links, initially single linkage
 
     max_t = [[],[]]
