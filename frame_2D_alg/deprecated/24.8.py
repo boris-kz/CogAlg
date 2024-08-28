@@ -431,22 +431,6 @@ def set_attrs(Q):
         e.Et = [0,0,0,0]
         e.aRad = 0
 
-def rng_node_(_N_):  # forms discrete rng+ links, vs indirect rng+ in rng_kern_, still no sub_Gs / rng+
-
-    rngH = []; HEt = [0,0,0,0]
-    rng = 1
-    while True:
-        N_, Et = rng_kern_(_N_, rng)  # adds single implicit layer of links to _N pars summed in G.kHH[-1]
-        for fd in 0,1:
-            if Et[0] > ave * Et[2]* rng:
-                rngH += [[N_,Et]]
-                np.add(HEt,Et)
-                rng += 1
-                _N_ = N_
-        else:
-            break
-    return rngH, HEt
-
 def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
 
     _mN_t_ = [[[L.nodet[0]],[L.nodet[1]]] for L in _L_]  # rim-mediating nodes in both directions
@@ -563,31 +547,56 @@ def agg_recursion(root, aggH):  # fork rng++, two clustering forks per layer: tw
         # else aggH is not extended
         return [[mLay,dLay,LL_,LEt]] + aggH
 
-def segment_N_(root, iN_, rng):  # cluster iN_(G_|L_) by weight of shared links, initially single linkage
+def rng_node_(root,_N_):  # each rng+ forms rim_ layer per N, then nG_,lG_,Et:
 
-    max_t = [[],[]]
-    N_t = [[],[]]
+    rngH, L__ = [],[]; HEt = [0,0,0,0]
+    rng = 1
+    while True:
+        N_,Et = rng_kern_(_N_,rng)  # adds a layer of links to _Ns with pars summed in G.kHH[-1]
+        nG_ = segment_N_(root, N_,0,rng)  # cluster N_ by link M
+        L_ = [link for G in nG_ for link in G.link_]; L__ += L_
+        if Et[1] > ave * Et[3] * rng:
+            # eval in agg++: incremental nesting?
+            # der+ conditional on D (no sum/N: direction is lost and D is redundant to M), recursive/ lrLay-> higher link orders?
+            lrH, lL_,lEt = rng_link_(root,L_)  # cluster L_ by llink Md
+            L_ = lrH  # or lG_: no nesting, else nested rng_link_, form lllinks?
+            Et = np.add(Et,lEt)
+        rngH += [[nG_,L_, Et]]
+        HEt = np.add(HEt, Et)
+        if Et[0] > ave * Et[2] * rng:
+            _N_ = N_; rng += 1
+        else:
+            break
+    return rngH, L_, HEt
+
+def segment_N_(root, iN_, fd, rng):  # cluster iN_(G_|L_) by weight of shared links, initially single linkage
+
+    max_, N_ = [],[]
     for N in iN_:  # init Gt per G|L node:
-        Lrim = [Lt[0] for Lt in N.rim_[-1]] if isinstance(N,CG) else [Lt[0] for Lt in N.rimt_[-1][0] + N.rimt_[-1][1]]  # external links
-        Nrim = [_N for L in Lrim for _N in L.nodet if (_N is not N and _N in iN_)]  # external nodes
+        if fd:
+            if isinstance(N.nodet[0],CG):
+                  Nrim = [Lt[0] for n in N.nodet for Lt in n.rim_[-1] if (Lt[0] is not N and Lt[0] in iN_)]  # external nodes
+            else: Nrim = [Lt[0] for Lt in N.rimt_[-1][0]+ N.rimt_[-1][1] if (Lt[0] is not N and Lt[0] in iN_)]  # nodet-mediated links, same der order as N
+            Lrim = Nrim  # mediated Ls to cluster, no L links yet (maybe simplified)
+        else:
+            Lrim = [Lt[0] for Lt in N.rim_[-1]] if isinstance(N,CG) else [Lt[0] for Lt in N.rimt_[-1][0] + N.rimt_[-1][1]]  # external links
+            Nrim = [_N for L in Lrim for _N in L.nodet if (_N is not N and _N in iN_)]  # external nodes
         Gt = [[N],[], Lrim, Nrim, [0,0,0,0]]  # node_,link_,Lrim,Nrim, Et
-        for fd in 0,1:
-            N_t[fd] += [Gt]  # select exemplar maxes to segment clustering:
-            emax_ = [eN for eN in Nrim if eN.Et[fd] >= N.Et[fd] or eN in max_t[fd]]  # _N if _N == N
-            if not emax_: max_t[fd] += [Gt]  # N.root, if no higher-val neighbors
-            # extended rrim max: V * k * max_rng?
-    for Gt in N_t[0]: Gt[3] = [_N.roott[fd] for _N in Gt[3]]  # replace eNs with Gts
-    for fd in 0,1:  # merge Gts with shared +ve links:
-        N_ = N_t[fd]
-        for Gt in max_t[fd] if max_t[fd] else N_t[fd]:
-            node_,link_,Lrim,Nrim, Et = Gt
-            for _Gt,_L in zip(Nrim,Lrim):  # merge connected _Gts if >ave shared external links (Lrim)
-                if _Gt not in N_:
-                    continue  # was merged
-                sL_ = set(Lrim).intersection(set(_Gt[2])).union([_L])  # shared external links + potential _L, or oL_ = [Lr[0] for Lr in _Gt[2] if Lr in Lrim]
-                if sum([L.derH.Et[fd] - ave * L.derH.Et[2+fd] * rng for L in sL_]) > 0:  # value of shared links
-                    link_ += [_L]
-                    merge(Gt,_Gt)
-                    N_.remove(_Gt)
-        N_t[fd] = [sum2graph(root, Gt, fd, rng) for Gt in N_]
-    return N_t
+        N.root_+= [Gt]
+        N_ += [Gt]  # select exemplar maxes to segment clustering:
+        emax_ = [eN for eN in Nrim if eN.Et[fd] >= N.Et[fd] or eN in max_]  # _N if _N == N
+        if not emax_: max_ += [Gt]  # N.root, if no higher-val neighbors
+        # extended rrim max: V * k * max_rng?
+    for Gt in N_: Gt[3] = [_N.root_[-1] for _N in Gt[3]]  # replace eNs with Gts
+    # merge Gts with shared +ve links:
+    for Gt in max_ if max_ else N_:
+        node_,link_, Lrim, Nrim, Et = Gt
+        for _Gt, _L in zip(Nrim,Lrim):  # merge connected _Gts if >ave shared external links (Lrim)
+            if _Gt not in N_: continue  # was merged
+            sL_ = set(Lrim).intersection(_Gt[2]).union([_L])  # shared external nodes if fd else links, + potential _N|_L
+            Et = np.sum([L.Et for L in sL_], axis=0)
+            if Et[fd] > ave * Et[2+fd] * rng:  # value of shared links or nodes
+                if not fd: link_ += [_L]
+                merge(Gt,_Gt)
+                N_.remove(_Gt)
+    return [sum2graph(root, Gt, fd, rng) for Gt in N_]
