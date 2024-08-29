@@ -79,16 +79,6 @@ def comp_L(_pars, pars):  # compare partial graphs in merge
     mdext = comp_ext(_L,L, _S,S/rn, _A,A)
     return dderH, mdext
 
-'''
-    # draft recursive feedback, propagated when sub+ ends in all nodes of both forks:
-    if root.roott:  # not Edge
-        for fd, rroot in zip((0,1), root.roott):  # root may belong to graphs of both forks
-            if rroot:  # empty if root is not in this fork
-                rroot.fback_t[fd] += [DderH]
-                if all(len(f_) == len(rroot.node_) for f_ in rroot.fback_t):  # both forks of sub+ end for all nodes
-                    feedback(rroot)  # sum2graph adds higher aggH, feedback adds deeper aggH layers
-
-'''
 
 def segment_N_(root, iN_, fd, rng):  # form proto sub-graphs in iN_: Link_ if fd else G_
 
@@ -600,3 +590,23 @@ def segment_N_(root, iN_, fd, rng):  # cluster iN_(G_|L_) by weight of shared li
                 merge(Gt,_Gt)
                 N_.remove(_Gt)
     return [sum2graph(root, Gt, fd, rng) for Gt in N_]
+
+def feedback(root):  # called from agg_recursion
+
+    mDerLay = CH()  # added per rng+
+    while root.fback_t[0]:
+        mDerLay.add_H(root.fback_t[0].pop())
+    dDerH = CH()  # from higher-order links
+    while root.fback_t[1]:
+        dDerH.add_H(root.fback_t[1].pop())
+    DderH = mDerLay.append_(dDerH, flat=1)
+    m,d, mr,dr = DderH.Et
+    if m+d > sum(G_aves) * (mr+dr):
+        root.derH.append_(DderH, flat=1)  # multiple lays appended upward
+    # recursion after agg++ in all nodes of both forks:
+    if root.roott:  # not Edge
+        for fd, rroot in zip((0,1), root.roott):  # root may belong to graphs of both forks
+            if rroot:  # empty if root is not in this fork
+                rroot.fback_t[fd] += [DderH]
+                if all(len(f_) == len(rroot.node_) for f_ in rroot.fback_t):  # both forks of sub+ end for all nodes
+                    feedback(rroot)  # sum2graph adds higher aggH, feedback adds deeper aggH layers
