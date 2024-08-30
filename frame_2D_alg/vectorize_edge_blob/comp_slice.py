@@ -58,8 +58,8 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         super().__init__()
 
         G.root_ = [] if root_ is None else root_ # mgraph agg+ layers (dgraph.node_ is CLs)
-        G.node_ = [] if node_ is None else node_ # convert to rngH in agg++, node_t if += new internal links
-        G.link_ = [] if link_ is None else link_ # internal links per comp layer in rng+
+        G.node_ = [] if node_ is None else node_ # convert to GG_ in agg++
+        G.link_ = [] if link_ is None else link_ # internal links per comp layer in rng+, convert to LG_ in agg++
         G.Et = [0,0,0,0] if Et is None else Et   # extH.Et + derH.Et + mdLay.Et?
         G.latuple = [0,0,0,0,0,[0,0]]  # lateral I,G,M,Ma,L,[Dy,Dx]
         G.mdLay = CH(root=G) if mdLay is None else mdLay
@@ -79,7 +79,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.alt_graph_ = []  # adjacent gap+overlap graphs, vs. contour in frame_graphs
         # dynamic attrs:
         G.Rim = []  # links to the most mediated nodes
-        G.fback_ = []  # always from CGs and fork merging, no [[],[]]  # dderHm_, dderHd_
+        G.fback_ = []  # always from CGs with fork merging, no dderHm_, dderHd_
         G.visited__ = []  # nested in rng++
         G.Nrim = []  # nodes on artificial frame | exemplar margin
         # G.elay = CH()  # summed from rim, former extH

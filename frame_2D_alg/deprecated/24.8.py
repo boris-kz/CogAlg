@@ -421,11 +421,10 @@ def set_attrs(Q):
         e.Et = [0,0,0,0]
         e.aRad = 0
 
-def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
+def rng_link_(root, _L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
 
     _mN_t_ = [[[L.nodet[0]],[L.nodet[1]]] for L in _L_]  # rim-mediating nodes in both directions
-    HEt = [0,0,0,0]
-    rL_ = []
+    rH = []; HEt = [0,0,0,0]; LL__ = []  # all links between Ls
     rng = 1
     while True:
         Et = [0,0,0,0]
@@ -433,11 +432,11 @@ def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
         for L, _mN_t, mN_t in zip(_L_, _mN_t_, mN_t_):
             for rev, _mN_, mN_ in zip((0,1), _mN_t, mN_t):
                 # comp L, _Ls: nodet mN 1st rim, -> rng+ _Ls/ rng+ mm..Ns, flatten rim_s:
-                rim_ = [n.rim_ if isinstance(n,CG) else n.rimt_[0][0] + n.rimt_[0][1] for n in _mN_]
+                rim_ = [rim for n in _mN_ for rim in (n.rim_ if isinstance(n, CG) else [n.rimt_[0][0] + n.rimt_[0][1]])]
                 for rim in rim_:
                     for _L,_rev in rim:  # _L is reversed relative to its 2nd node
                         if _L is L or _L in L.visited_: continue
-                        if not hasattr(_L,"rimt_"): set_attrs([_L])  # _L not in root.link_, same derivation
+                        if not hasattr(_L,"rimt_"): set_attrs([_L],root=root)  # _L not in root.link_, same derivation
                         L.visited_ += [_L]; _L.visited_ += [L]
                         dy,dx = np.subtract(_L.yx, L.yx)
                         Link = CL(nodet=[_L,L], S=2, A=[dy,dx], box=extend_box(_L.box, L.box))
@@ -447,20 +446,23 @@ def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
                             mN_ += _L.nodet  # get _Ls in mN.rim
                             if _L not in _L_:
                                 _L_ += [_L]; mN_t_ += [[[],[]]]  # not in root
-                            elif _L not in rL_: rL_ += [_L]
-                            if L not in rL_:    rL_ += [L]
                             mN_t_[_L_.index(_L)][1 - rev] += L.nodet
                             for node in (L, _L):
-                                node.elay.add_H(Link.derH)  # if lay/rng++, elif fagg: derH.H[der][rng]?
-        L_, _mN_t_ = [],[]
-        for L, mN_t in zip(_L_, mN_t_):
+                                node.elay.add_H(Link.derH)
+        graph_ = segment_N_(root, _L_, 0, rng)
+        if graph_:
+            LL_ = [link for graph in graph_ for link in graph.link_]
+            rH += [[graph_,LL_,Et]]; LL__+=LL_; _HEt = np.add(HEt,Et)
+        V = 0; L_,_mN_t_ = [],[]
+        for L, mN_t in zip(_L_,mN_t_):
             if any(mN_t):
                 L_ += [L]; _mN_t_ += [mN_t]
-        if L_:
+                V += L.derH.Et[0] - ave * L.derH.Et[2] * rng
+        if V > 0:  # rng+ if vM of Ls with extended mN_t_
             _L_ = L_; rng += 1
         else:
             break
-    return list(set(rL_)), Et, rng
+    return rH, LL__, HEt
 
 def agg_recursion(root, N_):  # calls both cross-comp forks, first rng++
 
@@ -610,3 +612,63 @@ def feedback(root):  # called from agg_recursion
                 rroot.fback_t[fd] += [DderH]
                 if all(len(f_) == len(rroot.node_) for f_ in rroot.fback_t):  # both forks of sub+ end for all nodes
                     feedback(rroot)  # sum2graph adds higher aggH, feedback adds deeper aggH layers
+
+def feedback(root):  # called from agg_recursion
+
+    DerH = root.fback_.pop()  # merged forks
+    while root.fback_:
+        DerH.add_H(root.fback_.pop())
+    if sum(DerH.Et[:1]) > sum(G_aves) * sum(DerH.Et[2:]):
+        root.derH.append_(DerH, flat=1)  # append lays from agg++, merge forks
+    # recursion after all agg++
+    if hasattr(root, 'root_'):  # not Edge
+        rroot = root.root_[-1]  # last layer from root agg+
+        rroot.fback_ += [DerH]
+        if all(len(f_) == len(rroot.derH.H[0].node_) for f_ in rroot.fback_):  # derH.H[0].node_ = original root.node_
+            feedback(rroot)  # adds new derH layers from all node_s after their agg++ ends
+
+def agg_recursion(root, iQ, iEt):  # breadth-first rng++-> two cluster,agg++ forks per rng layer:
+
+    rngH, L__, Et = rng_node_(root,iQ) if isinstance(iQ[0],CG) else rng_link_(root,iQ)
+    # root node_|link_ or nG_|L_ per rLay in rngH that replaced root node_|link_?
+    # iQ cross-comp,segment-> rngLays, L_ is secondary representation
+    for N in iQ:
+        for fd in 0,1:  # in rng++ elay: fd derR -> valR:
+            for i, lay in enumerate(sorted(N.elay.H, key=lambda lay: lay.Et[fd], reverse=True)):
+                di = lay.i - i  # lay.i: index in H
+                lay.Et[2+fd] += di  # derR-valR
+                if not i: N.derH.it[fd] = lay.i  # assigns exemplar lay index to max fdV lay
+    # agg++/ rLay:
+    for rng, rLay in enumerate(rngH, start=1):
+        nG_,L_,rEt = rLay  # formed in rng_node_|rng_link_
+        for fd, Q in zip((0,1),(nG_,L_)):
+            if len(Q) > ave_L and rEt[fd] > G_aves[fd] * rEt[2+fd] * rng:
+                if fd: set_attrs(Q,root=rLay)
+                agg_recursion(root, Q, rEt)  # may replace nG_|L_ with rngH([nrH,lrH].), recursively
+            elif not fd: # Q = nG_
+                for n in Q:  # recursive feedback from bottom Gs of both forks, merge in root.derH
+                    if n.derH: root.fback_ += [n.derH]  # rng++ derH
+        Et = np.add(Et,rEt)  # both forks
+    if root.fback_:
+        feedback(root) # from agg++ nested rngH
+    if sum(Et[:1]) > sum(G_aves) * sum(Et[2:]):  # combined val rngH
+        iQ[:] = rngH
+        iEt[:] = np.add(iEt, Et)
+        root.link_ = L__  # extended in rng++
+
+def rng_node_(root,_N_):  # each rng+ forms rim_ layer per N, then nG_,lG_,Et:
+
+    rngH, L__ = [],[]; HEt = [0,0,0,0]
+    rng = 1
+    while True:
+        N_,Et = rng_kern_(_N_,rng)  # adds a layer of links to _Ns with pars summed in G.kHH[-1]
+        nG_ = segment_N_(root, N_,0,rng)  # cluster N_ by link M
+        L_ = [link for G in nG_ for link in G.link_]
+        rngH += [[nG_,L_,Et]]; L__ += L_
+        HEt = np.add(HEt,Et)
+        if Et[0] > ave * Et[2] * rng:
+            _N_ = N_; rng += 1
+        else:
+            break
+    return rngH, L__, HEt
+
