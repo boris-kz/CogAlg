@@ -76,49 +76,61 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
             edge.latuple[-1] * (len(edge.P_)-1) > G_aves[0]):
             comp_slice(edge)
             # init for agg+:
-            edge.derH = CH(H=[CH()]); edge.derH.H[0].root = edge.derH
-            edge.link_ = []; edge.fback_ = []; edge.Et = [0,0,0,0]
+            edge.derH = CH(H=[CH()]); edge.derH.H[0].root = edge.derH; edge.fback_ = []; edge.Et = [0,0,0,0]
             # convert select PPs to Gs:
-            for fd, Q in zip((0,1), edge.node_):  # node_=[PPm_,PPd_], but there should be no PPd_ now?
-                if edge.mdLay.Et[fd] * (len(Q)-1)*(edge.rng+1) > G_aves[fd] * edge.mdLay.Et[2+fd]:
-                    pruned_Q = []
-                    for PP in Q:  # PP -> G
-                        if PP.mdLay and PP.mdLay.Et[fd] > G_aves[fd] * PP.mdLay.Et[2+fd]:  # v>ave*r
-                            PP.root_ = []  # no feedback to edge?
-                            PP.node_ = PP.P_  # revert node_t?
-                            y0,x0,yn,xn = PP.box
-                            PP.yx = [(y0+yn)/2, (x0+xn)/2]
-                            PP.aRad = np.hypot(*np.subtract(PP.yx,(yn,xn)))
-                            PP.Et = [0,0,0,0]  # [] in comp_slice
-                            pruned_Q += [PP]
-                            PP.elay = CH()  # init empty per agg+
-                    if len(pruned_Q) > 10:  # discontinuous PP rng+ cross-comp,cluster:
-                        agg_recursion(edge, pruned_Q, edge.Et)
+            if edge.mdLay.Et[0] * (len(edge.node)-1)*(edge.rng+1) > G_aves[0] * edge.mdLay.Et[2]:
+                pruned_Q = []
+                for PP in edge.node:  # PP -> G
+                    if PP.mdLay and PP.mdLay.Et[0] > G_aves[0] * PP.mdLay.Et[2]:  # v>ave*r
+                        PP.root_ = []  # no feedback to edge?
+                        PP.node_ = PP.P_  # revert node_t?
+                        y0,x0,yn,xn = PP.box
+                        PP.yx = [(y0+yn)/2, (x0+xn)/2]
+                        PP.aRad = np.hypot(*np.subtract(PP.yx,(yn,xn)))
+                        PP.Et = [0,0,0,0]  # [] in comp_slice
+                        pruned_Q += [PP]
+                        PP.elay = CH()  # init empty per agg+
+                if len(pruned_Q) > 10:
+                    # discontinuous PP rng+ cross-comp,cluster:
+                    agg_recursion(edge, pruned_Q)
 
-
-def agg_recursion(root, iQ, iEt):  # breadth-first rng++-> two cluster, agg++ forks per rng layer:
+def agg_recursion(root, iQ):  # breadth-first rng++ -> cluster, sub++, super++:
 
     if isinstance(iQ[0],CG): N_,L_,Et,rng = rng_node_(iQ)  # iQ cross-comp in rng increments
     else:
         set_attrs(iQ, root); N_,L_,Et,rng = rng_link_(iQ)
-    iEt[:] = np.add(iEt, Et)
-    for fd, Q in zip((0,1),(N_,L_)):
-        if Et[fd] > G_aves[fd] * Et[2+fd]:
-            if not fd and len(Q) > ave_L:  # cluster N_ by link M:
-                Q[:] = segment_N_(root, Q, fd, rng)  # replaces Q with sub_graph_
-            for n in Q:
-                if n.derH: root.fback_ += [n.derH]
-            root.fback_ += agg_recursion(root, Q, Et)  # merge fback of both forks in root.derH
+    rEt = root.Et
+    rEt[:] = np.add(rEt,Et)
+    for fd, Q in zip((0,1), (N_,L_)):  # recursion per fork
+        ave = G_aves[fd]
+        if Et[fd] > ave * Et[2+fd]:
+            if not fd and len(Q) > ave_L:
+                Q[:] = segment(root, Q, fd, rng)  # N_[:] = nG_
+                for G in Q:
+                    if len(G.node_) > ave_L and G.Et[fd] > ave * G.Et[2+fd]:
+                        agg_recursion(G, G.node_)  # sub++
+                        sum_new_ders(root, G, Et)
+            if len(Q) > ave_L and Et[fd] > ave * Et[2+fd]:  # Et+= in sub++
+                agg_recursion(root, Q)  # super++ / nG_|L_
+                for n in Q: sum_new_ders(root, n, Et)
     if root.fback_:
         for i, derH in enumerate(root.fback_):
             if i: DerH.add_H(derH)  # sum from both forks
             else: DerH = derH
         if sum(DerH.Et[:1]) > sum(G_aves) * sum(DerH.Et[2:]):
             root.derH.append_(DerH, flat=1)  # append lays from all sub-graphs added by agg++
-            return root.fback_  # recursive append rroot
 
-    return []  # default
+def sum_new_ders(root, n, Et):  # add new n ders
 
+    H = n.derH if isinstance(n,CL) else n.elay  # n is N| nG| L| lG?
+    if H:
+        root.fback_ += [H]; Et[:] = np.add(Et, H.Et)
+
+'''
+    Need to add elay per rng+ for divisive sub-clustering in graphs: 
+    shorter-rng Gs represent higher-density areas, meaningful for separate cross-comp?
+    We can restore elay per rng from kHH layers, but better to buffer them in eH, in rng_node_/rng_link_?
+'''
 def rng_node_(_N_):  # each rng+ forms rim_ layer per N, appends N__,L__,Et:
 
     N__, L__ = [],[]; HEt = [0,0,0,0]
@@ -137,7 +149,7 @@ def rng_node_(_N_):  # each rng+ forms rim_ layer per N, appends N__,L__,Et:
 def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
 
     _N_t_ = [[[L.nodet[0]],[L.nodet[1]]] for L in _L_]  # Ns are rim-mediating nodes, starting from L.nodet
-    HEt = [0,0,0,0]; L__ = _L_[:], LL__ = []  # all links between Ls in potentially extended L__
+    HEt = [0,0,0,0]; L__ = _L_[:]; LL__ = []  # all links between Ls in potentially extended L__
     rng = 1
     while True:
         Et = [0,0,0,0]
@@ -348,12 +360,12 @@ def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
     return CH(H=[mL,dL, mS,dS, mA,dA], Et=[M,D,mrdn,drdn], Rt=[mdec,ddec], n=0.5)
 
 
-def segment_N_(root, iN_, fd, rng):  # cluster iN_(G_|L_) by weight of shared links, initially single linkage
+def segment(root, Q, fd, rng):  # cluster iN_(G_|L_) by weight of shared links, initially single linkage
 
     N_, max_ = [],[]
-    for N in iN_:  # init Gt per G|L node:
+    for N in Q:  # init Gt per G|L node:
         Lrim = [Lt[0] for Lt in N.rim_[-1]] if isinstance(N,CG) else [Lt[0] for Lt in N.rimt_[-1][0] + N.rimt_[-1][1]]  # external links
-        Nrim = [_N for L in Lrim for _N in L.nodet if (_N is not N and _N in iN_)]  # external nodes
+        Nrim = [_N for L in Lrim for _N in L.nodet if (_N is not N and _N in Q)]  # external nodes
         Gt = [[N],[], Lrim, Nrim, [0,0,0,0]]  # node_,link_,Lrim,Nrim, Et
         N.root_ += [Gt]
         N_ += [Gt]
