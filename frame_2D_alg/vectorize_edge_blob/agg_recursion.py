@@ -78,9 +78,9 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
             # init for agg+:
             edge.derH = CH(H=[CH()]); edge.derH.H[0].root = edge.derH; edge.fback_ = []; edge.Et = [0,0,0,0]
             # convert select PPs to Gs:
-            if edge.mdLay.Et[0] * (len(edge.node)-1)*(edge.rng+1) > G_aves[0] * edge.mdLay.Et[2]:
+            if edge.mdLay.Et[0] * (len(edge.node_)-1)*(edge.rng+1) > G_aves[0] * edge.mdLay.Et[2]:
                 pruned_Q = []
-                for PP in edge.node:  # PP -> G
+                for PP in edge.node_:  # PP -> G
                     if PP.mdLay and PP.mdLay.Et[0] > G_aves[0] * PP.mdLay.Et[2]:  # v>ave*r
                         PP.root_ = []  # no feedback to edge?
                         PP.node_ = PP.P_  # revert node_t?
@@ -91,28 +91,25 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
                         pruned_Q += [PP]
                         PP.elay = CH()  # init empty per agg+
                 if len(pruned_Q) > 10:
-                    # discontinuous PP rng+ cross-comp,cluster:
-                    agg_recursion(edge, pruned_Q)
+                    # discontinuous PP rng++ cross-comp,cluster:
+                    agg_recursion(edge, pruned_Q, fd=0)
 
-def agg_recursion(root, iQ):  # breadth-first rng++ -> cluster, sub++, super++:
+def agg_recursion(root, Q, fd):  # breadth-first rng++ comp -> eval cluster, fork recursion
 
-    if isinstance(iQ[0],CG): N_,L_,Et,rng = rng_node_(iQ)  # iQ cross-comp in rng increments
-    else:
-        set_attrs(iQ, root); N_,L_,Et,rng = rng_link_(iQ)
-    rEt = root.Et
-    rEt[:] = np.add(rEt,Et)
-    for fd, Q in zip((0,1), (N_,L_)):  # recursion per fork
-        ave = G_aves[fd]
-        if Et[fd] > ave * Et[2+fd]:
-            if not fd and len(Q) > ave_L:
-                Q[:] = segment(root, Q, fd, rng)  # N_[:] = nG_
-                for G in Q:
-                    if len(G.node_) > ave_L and G.Et[fd] > ave * G.Et[2+fd]:
-                        agg_recursion(G, G.node_)  # sub++
-                        sum_new_ders(root, G, Et)
-            if len(Q) > ave_L and Et[fd] > ave * Et[2+fd]:  # Et+= in sub++
-                agg_recursion(root, Q)  # super++ / nG_|L_
-                for n in Q: sum_new_ders(root, n, Et)
+    L_,Et,rng = rng_link_(root,Q) if fd else rng_node_(Q)  # iQ cross-comp in rng increments
+    m,mr, d,dr = Et
+    # if vm:
+    if m > ave * mr:
+        if len(Q) > ave_L:  # min cluster L != min comp L?
+            Q[:] = segment(root, Q,0,rng, Et)  # Q=nG_, internal agg++ eval
+        for n in Q:  # sum new ders
+            root.fback_ += [n.elay]; Et[:] = np.add(Et, n.elay.Et)
+    root.Et[:] = np.add(root.Et, Et)
+    # if vd:
+    if d > ave * dr and len(L_) > ave_L:
+        agg_recursion(root, L_, fd=1)  # internal L_=lG_, segment, agg++, sum new ders and root.Et
+
+    # this should be in sum2graph after all agg++ inside list Gts, no need for separate feedback?:
     if root.fback_:
         for i, derH in enumerate(root.fback_):
             if i: DerH.add_H(derH)  # sum from both forks
@@ -120,36 +117,31 @@ def agg_recursion(root, iQ):  # breadth-first rng++ -> cluster, sub++, super++:
         if sum(DerH.Et[:1]) > sum(G_aves) * sum(DerH.Et[2:]):
             root.derH.append_(DerH, flat=1)  # append lays from all sub-graphs added by agg++
 
-def sum_new_ders(root, n, Et):  # add new n ders
 
-    H = n.derH if isinstance(n,CL) else n.elay  # n is N| nG| L| lG?
-    if H:
-        root.fback_ += [H]; Et[:] = np.add(Et, H.Et)
-
-'''
-    Need to add elay per rng+ for divisive sub-clustering in graphs: 
-    shorter-rng Gs represent higher-density areas, meaningful for separate cross-comp?
-    We can restore elay per rng from kHH layers, but better to buffer them in eH, in rng_node_/rng_link_?
-'''
 def rng_node_(_N_):  # each rng+ forms rim_ layer per N, appends N__,L__,Et:
-
-    N__, L__ = [],[]; HEt = [0,0,0,0]
+    '''
+    rng_node_,rng_link_: buffer elay per rng+-> eH for sub-clustering in graphs:
+    shorter-rng graphs represent higher-density areas, meaningful for separate cross-comp?
+    '''
+    L__ = [],[]; HEt = [0,0,0,0]
     rng = 1
     while True:
         N_,Et = rng_kern_(_N_,rng)
         # adds link_ to N.rim_ and _N_H to N.kHH, but elay and Et are summed across rng++
         L_ = [Lt[0] for N in N_ for Lt in N.rim_[-1]]
         if Et[0] > ave * Et[2] * rng:
-            N__+= N_; L__+= L_; HEt = np.add(HEt, Et)
+            L__+= L_; HEt = np.add(HEt, Et)
             _N_ = N_; rng += 1
         else:
             break
-    return list(set(N__)),L__, HEt, rng
+    return L__, HEt, rng
 
-def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
+
+def rng_link_(root, _L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
+    set_attrs(_L_, root)
 
     _N_t_ = [[[L.nodet[0]],[L.nodet[1]]] for L in _L_]  # Ns are rim-mediating nodes, starting from L.nodet
-    HEt = [0,0,0,0]; L__ = _L_[:]; LL__ = []  # all links between Ls in potentially extended L__
+    HEt = [0,0,0,0]; LL__ = []  # all links between Ls in potentially extended L__
     rng = 1
     while True:
         Et = [0,0,0,0]
@@ -169,7 +161,7 @@ def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
                             # L += rng+'mediating nodes, link orders: nodet < L < rimt_, mN.rim || L
                             N_ += _L.nodet  # get _Ls in mN.rim
                             if _L not in _L_:
-                                _L_ += [_L];  L__ += [_L]
+                                _L_ += [_L]
                                 N_t_ += [[[],[]]]  # not in root
                             N_t_[_L_.index(_L)][1 - rev] += L.nodet
                             for node in (L, _L):
@@ -183,7 +175,7 @@ def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
             _L_ = L_; rng += 1
         else:
             break
-    return list(set(L__)), LL__, HEt, rng
+    return LL__, HEt, rng
 
 
 def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backprop, not for CLs
@@ -360,10 +352,11 @@ def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
     return CH(H=[mL,dL, mS,dS, mA,dA], Et=[M,D,mrdn,drdn], Rt=[mdec,ddec], n=0.5)
 
 
-def segment(root, Q, fd, rng):  # cluster iN_(G_|L_) by weight of shared links, initially single linkage
+def segment(root, Q, fd, rng, Et):  # cluster iN_(G_|L_) by weight of shared links, initially single linkage
 
     N_, max_ = [],[]
-    for N in Q:  # init Gt per G|L node:
+    # init Gt per G|L node:
+    for N in Q:
         Lrim = [Lt[0] for Lt in N.rim_[-1]] if isinstance(N,CG) else [Lt[0] for Lt in N.rimt_[-1][0] + N.rimt_[-1][1]]  # external links
         Nrim = [_N for L in Lrim for _N in L.nodet if (_N is not N and _N in Q)]  # external nodes
         Gt = [[N],[], Lrim, Nrim, [0,0,0,0]]  # node_,link_,Lrim,Nrim, Et
@@ -385,7 +378,14 @@ def segment(root, Q, fd, rng):  # cluster iN_(G_|L_) by weight of shared links, 
                 link_ += [_L]
                 merge(Gt,_Gt)
                 N_.remove(_Gt)
-    return [sum2graph(root, Gt, fd, rng) for Gt in N_]
+    graph_ = [sum2graph(root, Gt, fd, rng) for Gt in N_]
+    # Et eval before nested segment calls
+    if len(graph_) > ave_L:
+        agg_recursion(root, graph_, Et)
+        # add bottom-up sum node.derH here instead of feedback,
+        # lower-composition Gts are formed first, so this is similar to rerun of sum2graph?
+
+    return graph_
 
 def merge(Gt, gt):
 
