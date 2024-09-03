@@ -96,27 +96,22 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
 
 def agg_recursion(root, Q, fd):  # breadth-first rng++ comp -> eval cluster, fork recursion
 
-    L_,Et,rng = rng_link_(root,Q) if fd else rng_node_(Q)  # iQ cross-comp in rng increments
+    L_,Et,rng = rng_link_(Q) if fd else rng_node_(Q)  # iQ cross-comp in rng increments
+    # new derH:
+    root.derH.append_(CH.copy(L_[0].derH))  # init
+    for L in L_[1:]: root.derH.H[-1].add_H_(L.derH)  # accum
+    # each agg+ forms L_ with new ders, node elay,derH are redundant
     m,mr, d,dr = Et
-    # if vm:
-    if m > ave * mr:
-        if len(Q) > ave_L:  # min cluster L != min comp L?
-            Q[:] = segment(root, Q,0,rng, Et)  # Q=nG_, internal agg++ eval
-        for n in Q:  # sum new ders
-            root.fback_ += [n.elay]; Et[:] = np.add(Et, n.elay.Et)
-    root.Et[:] = np.add(root.Et, Et)
-    # if vd:
     if d > ave * dr and len(L_) > ave_L:
-        agg_recursion(root, L_, fd=1)  # internal L_=lG_, segment, agg++, sum new ders and root.Et
-
-    # this should be in sum2graph after all agg++ inside list Gts, no need for separate feedback?:
-    if root.fback_:
-        for i, derH in enumerate(root.fback_):
-            if i: DerH.add_H(derH)  # sum from both forks
-            else: DerH = derH
-        if sum(DerH.Et[:1]) > sum(G_aves) * sum(DerH.Et[2:]):
-            root.derH.append_(DerH, flat=1)  # append lays from all sub-graphs added by agg++
-
+        set_attrs(L_, root)
+        agg_recursion(root, L_,fd=1)
+        # rng_link_, segment, fork agg++, append derH
+    if m > ave * mr and len(Q) > ave_L:
+        # cluster ave_L != xcomp ave_L?
+        Q[:] = segment(root, Q, fd,rng)  # Q = nG_
+        if len(Q) > ave_L:
+            agg_recursion(root, Q,fd=0)
+            # derH += derLays from comp GG / aggR(L_), aggR(Q)?
 
 def rng_node_(_N_):  # each rng+ forms rim_ layer per N, appends N__,L__,Et:
     '''
@@ -137,8 +132,7 @@ def rng_node_(_N_):  # each rng+ forms rim_ layer per N, appends N__,L__,Et:
     return L__, HEt, rng
 
 
-def rng_link_(root, _L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
-    set_attrs(_L_, root)
+def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
 
     _N_t_ = [[[L.nodet[0]],[L.nodet[1]]] for L in _L_]  # Ns are rim-mediating nodes, starting from L.nodet
     HEt = [0,0,0,0]; LL__ = []  # all links between Ls in potentially extended L__
@@ -352,7 +346,7 @@ def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
     return CH(H=[mL,dL, mS,dS, mA,dA], Et=[M,D,mrdn,drdn], Rt=[mdec,ddec], n=0.5)
 
 
-def segment(root, Q, fd, rng, Et):  # cluster iN_(G_|L_) by weight of shared links, initially single linkage
+def segment(root, Q, fd, rng):  # cluster iN_(G_|L_) by weight of shared links, initially single linkage
 
     N_, max_ = [],[]
     # init Gt per G|L node:
@@ -368,24 +362,24 @@ def segment(root, Q, fd, rng, Et):  # cluster iN_(G_|L_) by weight of shared lin
         # extended rrim max: V * k * max_rng?
     for Gt in N_: Gt[3] = [_N.root_[-1] for _N in Gt[3]]  # replace eNs with Gts
     for Gt in max_ if max_ else N_:
-        node_,link_, Lrim, Nrim, Et = Gt
-        for _Gt,_L in zip(Nrim,Lrim):  # merge Gts with shared +ve external links (Lrim)
-            if _Gt not in N_:
-                continue  # was merged
-            sL_ = set(Lrim).intersection(set(_Gt[2])).union([_L])  # shared external links + potential _L
-            Et = np.sum([L.Et for L in sL_], axis=0)
-            if Et[fd] > ave * Et[2 + fd] * rng:  # value of shared links or nodes
-                link_ += [_L]
-                merge(Gt,_Gt)
-                N_.remove(_Gt)
-    graph_ = [sum2graph(root, Gt, fd, rng) for Gt in N_]
-    # Et eval before nested segment calls
-    if len(graph_) > ave_L:
-        agg_recursion(root, graph_, Et)
-        # add bottom-up sum node.derH here instead of feedback,
-        # lower-composition Gts are formed first, so this is similar to rerun of sum2graph?
-
-    return graph_
+        node_,link_, Lrim,Nrim, Et = Gt
+        new_Nrim, new_Lrim = Nrim, Lrim
+        while new_Nrim:
+            _new_Nrim, _new_Lrim = [],[]
+            for _Gt,_L in zip(new_Nrim, new_Lrim):  # recursively merge Gts with shared +ve external links (Lrim)
+                if _Gt not in N_:
+                    continue  # was merged
+                sL_ = set(new_Lrim).intersection(set(_Gt[2])).union([_L])  # shared external links + potential _L
+                Et = np.sum([L.Et for L in sL_], axis=0)
+                if Et[fd] > ave * Et[2+fd] * rng:  # value of shared links or nodes
+                    link_ += [_L]
+                    merge(Gt,_Gt)
+                    N_.remove(_Gt)
+                    _new_Nrim[:], _new_Nrim[:] = list(set(_new_Nrim + _Gt[3])), list(set(_new_Nrim + _Gt[2]))
+                new_Nrim, new_Lrim = _new_Nrim, new_Lrim
+                # rims are for clustering only,
+                # contour: terminated rims?
+    return [sum2graph(root, Gt, fd, rng) for Gt in N_]
 
 def merge(Gt, gt):
 

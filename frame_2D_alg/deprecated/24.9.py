@@ -34,3 +34,10 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
             CP_ += cP_
 
     root.node_ = PP_t  # nested in der+, add_alt_PPs_?
+
+def add_lays(root, Q, fd):  # add link.derH if fd, else new eLays of higher-composition nodes:
+    # init:
+    root.derH.append_(Q[0].derH if fd else Q[0].derH.H[1:])
+    # accum:
+    for n in Q[1:]: root.derH.H[-1].add_H_(n.derH if fd else n.derH.H[1:])
+
