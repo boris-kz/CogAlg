@@ -78,14 +78,14 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.box = [np.inf, np.inf, -np.inf, -np.inf]  # y0,x0,yn,xn
         G.yx = [0,0]  # init PP.yx = [(y0+yn)/2,(x0,xn)/2], then ave node yx
         G.alt_graph_ = []  # adjacent gap+overlap graphs, vs. contour in frame_graphs
-        # dynamic attrs:
-        G.Rim = []  # links to the most mediated nodes
-        G.fback_ = []  # always from CGs with fork merging, no dderHm_, dderHd_
+        # dynamic:
         G.visited__ = []  # nested in rng++
         G.Nrim = []  # nodes on artificial frame | exemplar margin
-        # G.elay = CH()  # summed from rim, former extH
+        G.it = ([None,None])  # graph indices in root node_s, implicitly nested
+        # old:
+        # G.fback_ = []  # always from CGs with fork merging, no dderHm_, dderHd_
         # Rdn: int = 0  # for accumulation or separate recursion count?
-        # it: list = z([None,None])  # graph indices in root node_s, implicitly nested
+        # G.Rim = []  # links to the most mediated nodes
         # depth: int = 0  # n sub_G levels over base node_, max across forks
         # nval: int = 0  # of open links: base alt rep
         # id_H: list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
@@ -344,7 +344,7 @@ def form_PP_(root, P_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
     PPt_ = []
     for P in P_:  # init PPt_
         link_, _P_ = [],[]  # uprim per P
-        for link in [link for rim in P.rim_ for link in rim]:  # uplinks of all rngs
+        for link in ([link for rim in P.rim_ for link in rim] if isinstance(P, CP) else P.rim):  # uplinks of all rngs
             if link.mdLay.Et[fd] >P_aves[fd] * link.mdLay.Et[2+fd]:
                 link_ += [link]; _P_ += [link.nodet[0]]
         PPt = [[P],link_,_P_]
@@ -355,16 +355,16 @@ def form_PP_(root, P_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
         P_, link_, Prim = PPt
         new_Prim = Prim
         while new_Prim:
-            _new_Prim = []
+            nnew_Prim = []
             for _PPt in new_Prim:  # recursively merge mlinked PPts upward
                 if _PPt not in PPt_: continue  # was merged
                 _P_,_link_,_Prim = _PPt
                 for P in _P_: P.root = PPt  # update root
                 link_ += _link_
                 P_[:] = list(set(P_+_P_))
-                _new_Prim[:] = list(set(_new_Prim + _Prim))
+                nnew_Prim += [_Proot for _Proot in _Prim if _Proot not in _new_Prim]
                 PPt_.remove(_PPt)
-            new_Prim = _new_Prim  # Prim is for clustering only, or Prim = terminated rims as a contour?
+            new_Prim = nnew_Prim  # Prim is for clustering only, or Prim += terminated rims: contour?
     PP_ = []
     for PPt in PPt_:
         PP = sum2PP(root, PPt[0], PPt[1], fd)
@@ -412,6 +412,7 @@ def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
                 y = int(round(y)); x = int(round(x))  # summed with float dy,dx in slice_edge?
                 PP.box = accum_box(PP.box,y,x); celly_+=[y]; cellx_+=[x]
         if not fd: P.root = PP
+        # if P is CdP, accumulate their mdLay into graph too?
     if PP.mdLay:
         PP.mdLay.Et[2:4] = [R+r for R,r in zip(PP.mdLay.Et[2:4], iRt)]
     if isinstance(P_[0], CP):  # CdP has no box, yx
