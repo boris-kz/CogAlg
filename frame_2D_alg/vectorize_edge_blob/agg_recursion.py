@@ -95,30 +95,28 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
                     agg_recursion(edge, pruned_Q, fd=0)
 
 def agg_recursion(root, Q, fd):  # breadth-first rng++ comp -> eval cluster, fork recursion
-    '''
-    root.derH.append_(CH().copy(L_[0].derH))  # init if flat derH
-    for L in L_[1:]: root.derH.H[-1].add_H(L.derH)  # accum
-    new ders in L_, node elay and derH are redundant
-    '''
     if fd:
         set_attrs(Q, root)
-        Q, L_,Et,rng = rng_link_(Q)  # return in Q if new rim
-        root.derH.append_(CH().append_(CH().copy(L_[0].derH)))  # init 1st Lay of 1st aggLay
-        for L in L_[1:]: root.derH.H[0].H[0].add_H(L.derH)  # accum Lay
+        Q, L_,Et,rng = rng_link_(Q)  # return Q elements with rim added to L_: new ders, node elay is redundant
+        root.derH.append_(CH().append_(CH().copy(L_[0].derH)))  # init 1st Lay of new aggLay
+        for L in L_[1:]: root.derH.H[-1].H[0].add_H(L.derH)     # accum Lay
     else:
         Q, L_,Et,rng = rng_node_(Q)
-        root.derH.append_(CH().copy(L_[0].derH))  # init 1st Lay of last aggLay, append flat?
-        for L in L_[1:]: root.derH.H[-1].H[0].add_H(L.derH)  # accum Lay
-    m,mr, d,dr = Et
+        root.derH.H[-1].append_(L_[0].derH)  # append last aggLay, init in fd fork
+        for L in L_[1:]: root.derH.H[-1].H[-1].add_H(L.derH)  # accum Lay
+    m,d, mr,dr = Et
     # rng_link_:
     if d > ave * dr and len(L_) > ave_L:
-        agg_recursion(root, L_,fd=1)  # appends 1st aggLay, L_=lG_ if segment
+        agg_recursion(root, L_,fd=1)  # appends last aggLay, L_=lG_ if segment
     # rng_node_:
     if m > ave * mr and len(Q) > ave_L:  # cluster ave_L != xcomp ave_L?
-        Q[:] = segment(root, Q, fd,rng)  # Q=nG_ with deeper nested derH, so next aggR should add multiple lays?
+        Q[:] = segment(root, Q, fd,rng)  # Q = nG_ with deeper derH?
         if len(Q) > ave_L:
-            agg_recursion(root, Q,fd=0)  # appends derH with aggLays
-
+            agg_recursion(root, Q,fd=0)  # adds higher aggLay / recursive call
+    '''
+    root.derH.append_(CH().copy(L_[0].derH))  # init; if flat derH
+    for L in L_[1:]: root.derH.H[-1].add_H(L.derH)  # accum
+    '''
 
 def rng_node_(_N_):  # each rng+ forms rim_ layer per N, appends N__,L__,Et:
 
@@ -135,38 +133,38 @@ def rng_node_(_N_):  # each rng+ forms rim_ layer per N, appends N__,L__,Et:
             break
     return list(set(N__)), L__, HEt, rng
 '''
-    no rngH [[L_,Et]],
-    short-rng graphs represent higher-density areas, meaningful for separate cross-comp, need sub-clustering by rng:
-    comp links (with link.S:distance) in G.rim_, group matching-rng Ls in G, then sub-cluster lower-rng Gs in graph?
+    short-rng graphs represent higher-density areas, meaningful for separate cross-comp, sub-cluster by rng?
+    segment(L_ / mS) or inverted S: same as rngH [[L_,Et]] from rng_node_?
+    or comp links(G.rim_), segment by mS in G) graph?
 '''
 def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
 
     _N_t_ = [[[L.nodet[0]],[L.nodet[1]]] for L in _L_]  # Ns are rim-mediating nodes, starting from L.nodet
     HEt = [0,0,0,0]; L__ = _L_[:]; LL__ = []  # all links between Ls in potentially extended L__
-    rng = 1
+    rng = 1; iL_ = _L_[:]
     while True:
         Et = [0,0,0,0]
         N_t_ = [[[],[]] for _ in _L_]  # new rng lay of mediating nodes, traced from all prior layers?
         for L, _N_t, N_t in zip(_L_, _N_t_, N_t_):
             for rev, _N_, N_ in zip((0,1), _N_t, N_t):
-                # comp L, _Ls: nodet medN 1st rim, -> rng+ _Ls/ rng+ mmedNs, flatten rim_s:
+                # comp L, _L incrementally mediated by nodets, flatten rim_s:
                 rim_ = [rim for n in _N_ for rim in (n.rim_ if isinstance(n, CG) else [n.rimt_[0][0] + n.rimt_[0][1]])]
                 for rim in rim_:
                     for _L,_rev in rim:  # _L is reversed relative to its 2nd node
                         if _L is L or _L in L.visited_: continue
+                        if _L not in iL_: set_attrs([_L],_L_[0].root_[-1])
                         L.visited_ += [_L]; _L.visited_ += [L]
-                        dy,dx = np.subtract(_L.yx, L.yx)
-                        Link = CL(nodet=[_L,L], S=2, A=[dy,dx], box=extend_box(_L.box, L.box))
-                        # L.rim_t += new Link
-                        if comp_N(Link, Et, rng, rev ^ _rev):  # negate ds if only one L is reversed
-                            # L += rng+'mediating nodes, link orders: nodet < L < rimt_, mN.rim || L
+                        Link = CL(nodet=[_L,L], S=2, A=[np.subtract(_L.yx, L.yx)], box=extend_box(_L.box, L.box))
+                        if comp_N(Link, Et, rng, rev^_rev):  # L.rim_t +=new Link, d=-d if one L is reversed
+                            # L += rng+ -mediating nodes, link orders: nodet < L < rimt_, mN.rim || L
                             N_ += _L.nodet  # get _Ls in mN.rim
                             if _L not in _L_:
-                                _L_ += [_L];L__ += [_L]
-                                N_t_ += [[[],[]]]  # not in root
-                            N_t_[_L_.index(_L)][1 - rev] += L.nodet
-                            for node in (L, _L):
-                                node.elay.add_H(Link.derH)
+                                _L_ += [_L]; N_t_ += [[[],[]]]  # not in root
+                            L__ += [_L]
+                            LL__ += [Link]
+                            N_t_[_L_.index(_L)][1-rev] += L.nodet
+                            for node in (L,_L): node.elay.add_H(Link.derH)
+        HEt = np.add(HEt, Et)
         V = 0; L_,_N_t_ = [],[]
         for L, N_t in zip(_L_,N_t_):
             if any(N_t):

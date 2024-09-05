@@ -362,7 +362,7 @@ def form_PP_(root, P_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
                 for P in _P_: P.root = PPt  # update root
                 link_ += _link_
                 P_[:] = list(set(P_+_P_))
-                nnew_Prim += [_Proot for _Proot in _Prim if _Proot not in _new_Prim]
+                nnew_Prim += [_Proot for _Proot in _Prim if _Proot not in nnew_Prim]
                 PPt_.remove(_PPt)
             new_Prim = nnew_Prim  # Prim is for clustering only, or Prim += terminated rims: contour?
     PP_ = []
@@ -405,7 +405,7 @@ def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
         L = P.latuple[-2]
         PP.area += L; PP.n += L  # no + P.mdLay.n: current links only?
         add_lat(PP.latuple, P.latuple)
-        if P.mdLay:
+        if P.mdLay:  # CdP or lower P has mdLay
             PP.mdLay.add_md_(P.mdLay)  # no separate extH, the links are unique here
         if isinstance(P, CP):
             for y,x in P.yx_:
