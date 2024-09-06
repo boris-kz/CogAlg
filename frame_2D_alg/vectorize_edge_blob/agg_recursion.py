@@ -91,28 +91,29 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
                         pruned_Q += [PP]
                         PP.elay = CH()  # init empty per agg+
                 if len(pruned_Q) > 10:
-                    # discontinuous PP rng++ cross-comp,cluster:
+                    # discontinuous rng++ PP_ xcomp,cluster:
                     agg_recursion(edge, pruned_Q, fd=0)
 
 def agg_recursion(root, Q, fd):  # breadth-first rng++ comp -> eval cluster, fork recursion
-    if fd:
-        set_attrs(Q, root)
-        Q, L_,Et,rng = rng_link_(Q)  # return Q elements with rim added to L_: new ders, node elay is redundant
-        root.derH.append_(CH().append_(CH().copy(L_[0].derH)))  # init 1st Lay of new aggLay
-        for L in L_[1:]: root.derH.H[-1].H[0].add_H(L.derH)     # accum Lay
-    else:
-        Q, L_,Et,rng = rng_node_(Q)
-        root.derH.H[-1].append_(L_[0].derH)  # append last aggLay, init in fd fork
-        for L in L_[1:]: root.derH.H[-1].H[-1].add_H(L.derH)  # accum Lay
-    m,d, mr,dr = Et
-    # rng_link_:
-    if d > ave * dr and len(L_) > ave_L:
-        agg_recursion(root, L_,fd=1)  # appends last aggLay, L_=lG_ if segment
-    # rng_node_:
-    if m > ave * mr and len(Q) > ave_L:  # cluster ave_L != xcomp ave_L?
-        Q[:] = segment(root, Q, fd,rng)  # Q = nG_ with deeper derH?
-        if len(Q) > ave_L:
-            agg_recursion(root, Q,fd=0)  # adds higher aggLay / recursive call
+
+    Q, L_, Et,rng = rng_link_(Q)if fd else rng_node_(Q)  # init PP_ in edge|frame, never segmented?
+    if Q:  # return items with new rim, L_ with new ders, node elay is redundant
+        if fd:
+            root.derH.H[-1].append_(L_[0].derH)  # append last aggLay, init in fd fork
+            for L in L_[1:]: root.derH.H[-1].H[-1].add_H(L.derH)  # accum Lay
+        else:
+            root.derH.H[-1].append_(L_[0].derH)  # append last aggLay, init in fd fork
+            for L in L_[1:]: root.derH.H[-1].H[-1].add_H(L.derH)  # accum Lay
+        m,d, mr,dr = Et
+        # rng_link_:
+        if d > ave * dr and len(L_) > ave_L:
+            set_attrs(L_,root)  # sub-clustering by links only?
+            agg_recursion(root, L_,fd=1)  # appends last aggLay, L_=lG_ if segment
+        # rng_node_:
+        if m > ave * mr and len(Q) > ave_L:  # cluster ave_L != xcomp ave_L?
+            Q[:] = segment(root, Q, fd,rng)  # Q = nG_ with deeper derH?
+            if len(Q) > ave_L:
+                agg_recursion(root, Q,fd=0)  # adds higher aggLay / recursive call
     '''
     root.derH.append_(CH().copy(L_[0].derH))  # init; if flat derH
     for L in L_[1:]: root.derH.H[-1].add_H(L.derH)  # accum
@@ -133,9 +134,9 @@ def rng_node_(_N_):  # each rng+ forms rim_ layer per N, appends N__,L__,Et:
             break
     return list(set(N__)), L__, HEt, rng
 '''
-    short-rng graphs represent higher-density areas, meaningful for separate cross-comp, sub-cluster by rng?
-    segment(L_ / mS) or inverted S: same as rngH [[L_,Et]] from rng_node_?
-    or comp links(G.rim_), segment by mS in G) graph?
+    short-linked graphs represent higher-density areas, meaningful for separate cross-comp
+    sub-cluster by inverted link S: same as rngH [[L_,Et]] from rng_node_?
+    or comp links(G.rim_), segment by mS in G) graph, | segment(L_/mS)?
 '''
 def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
 
@@ -154,7 +155,7 @@ def rng_link_(_L_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
                         if _L is L or _L in L.visited_: continue
                         if _L not in iL_: set_attrs([_L],_L_[0].root_[-1])
                         L.visited_ += [_L]; _L.visited_ += [L]
-                        Link = CL(nodet=[_L,L], S=2, A=[np.subtract(_L.yx, L.yx)], box=extend_box(_L.box, L.box))
+                        Link = CL(nodet=[_L,L], S=2, A=np.subtract(_L.yx,L.yx), box=extend_box(_L.box, L.box))
                         if comp_N(Link, Et, rng, rev^_rev):  # L.rim_t +=new Link, d=-d if one L is reversed
                             # L += rng+ -mediating nodes, link orders: nodet < L < rimt_, mN.rim || L
                             N_ += _L.nodet  # get _Ls in mN.rim
@@ -289,7 +290,7 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
         _L=2; L=2; _lat,lat,_lay,lay = None,None,None,None
     else:   # CG
         _L,L,_lat,lat,_lay,lay = len(_N.node_),len(_N.node_),_N.latuple,N.latuple,_N.mdLay,N.mdLay
-    # dlay:
+    # form dlay:
     derH = comp_pars([_L,_S,_A,_lat,_lay,_N.derH], [L,S,A,lat,lay,N.derH], rn=_N.n/N.n)
     Et = derH.Et
     iEt[:] = np.add(iEt,Et)  # init eval rng+ and form_graph_t by total m|d?
@@ -357,8 +358,8 @@ def segment(root, Q, fd, rng):  # cluster iN_(G_|L_) by weight of shared links, 
     # init Gt per G|L node:
     for N in Q:
         Lrim = [Lt[0] for Lt in N.rim_[-1]] if isinstance(N,CG) else [Lt[0] for Lt in N.rimt_[-1][0] + N.rimt_[-1][1]]  # external links
-        Nrim = [_N for L in Lrim for _N in L.nodet if (_N is not N and _N in Q)]  # external nodes
-        Gt = [[N],[], Lrim, Nrim, [0,0,0,0]]  # node_,link_,Lrim,Nrim, Et
+        Nrim = [_N for L in Lrim for _N in L.nodet if _N is not N]  # external nodes
+        Gt = [[N],[], Lrim, Nrim, [0,0,0,0]]
         N.root_ += [Gt]
         N_ += [Gt]
         # select exemplar maxes to segment clustering:
@@ -376,13 +377,16 @@ def segment(root, Q, fd, rng):  # cluster iN_(G_|L_) by weight of shared links, 
                 if _Gt not in N_: continue  # was merged
                 # shared external links + potential _L, maps tp new_Nrim:
                 sL_ = set(new_Lrim).intersection(set(_Gt[2])).union([_L])
+                # draft, not sure we need TEt:
                 Et = np.sum([L.Et for L in sL_], axis=0)
-                if Et[fd] > ave * Et[2+fd] * rng:  # value of shared links or nodes
+                TEt = np.sum([L.Et for L in _Gt[2]], axis=0)
+                # we need single sequence to get both Et and total Et?
+                if Et[fd] / TEt[fd] > ave * (Et[2+fd] / TEt[2+fd]) * rng:  # val of shared links relative to val of all links in Lrim
                     link_ += [_L]
                     merge(Gt,_Gt); N_.remove(_Gt)
                     _new_Nrim += [_Nrim for _Nrim in _Gt[3] if _Nrim not in _new_Nrim and _Nrim is not Gt]  # Nrim is list of roots
                     _new_Lrim[:] = list(set(_new_Lrim + _Gt[2]))
-            new_Nrim, new_Lrim = _new_Nrim, new_Lrim  # for clustering only, contour = terminated rims?
+            new_Nrim, new_Lrim = _new_Nrim, _new_Lrim  # for clustering only, contour = terminated rims?
 
     return [sum2graph(root, Gt, fd, rng) for Gt in N_]
 
