@@ -41,3 +41,35 @@ def add_lays(root, Q, fd):  # add link.derH if fd, else new eLays of higher-comp
     # accum:
     for n in Q[1:]: root.derH.H[-1].add_H_(n.derH if fd else n.derH.H[1:])
 
+def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
+
+    fd = rev is not None  # compared links have binary relative direction?
+    _N, N = Link.nodet; _S,S = _N.S,N.S; _A,A = _N.A,N.A
+    if fd:  # CL
+        if rev: A = [-d for d in A]  # reverse angle direction if N is left link?
+        _L=2; L=2; _lat,lat,_lay,lay = None,None,None,None
+    else:   # CG
+        _L,L,_lat,lat,_lay,lay = len(_N.node_),len(_N.node_),_N.latuple,N.latuple,_N.mdLay,N.mdLay
+    # form dlay:
+    derH = comp_pars([_L,_S,_A,_lat,_lay,_N.derH], [L,S,A,lat,lay,N.derH], rn=_N.n/N.n)
+    Et = derH.Et
+    iEt[:] = np.add(iEt,Et)  # init eval rng+ and form_graph_t by total m|d?
+    for i in 0,1:
+        Val, Rdn = Et[i::2]
+        if Val > G_aves[i] * Rdn * (rng+1): Link.ft[i] = 1  # fork inclusion tuple
+        _N.Et[i] += Val; N.Et[i] += Val  # not selective
+        _N.Et[2+i] += Rdn; N.Et[2+i] += Rdn  # per fork link in both Gs
+        # if select fork links: iEt[i::2] = [V+v for V,v in zip(iEt[i::2], dH.Et[i::2])]
+    if any(Link.ft):
+        Link.derH = derH; derH.root = Link; Link.Et = Et; Link.n = min(_N.n,N.n)  # comp shared layers
+        Link.nodet = [_N,N]; Link.yx = np.add(_N.yx,N.yx) /2
+        # S,A set before comp_N
+        for rev, node in zip((0,1),(_N,N)):  # ?reversed Link direction
+            if fd:
+                if len(node.rimt_)==rng: node.rimt_[-1][1-rev] += [[Link,rev]]  # add in last rng layer, opposite to _N,N dir
+                else:                    node.rimt_ = [[[[Link,rev]],[]]] if dir else [[[],[[Link,rev]]]]  # add rng layer
+            else:
+                if len(node.rim_)==rng: node.rim_[-1] += [[Link, rev]]
+                else:                   node.rim_ += [[[Link, rev]]]
+            # elay += derH in rng_kern_
+        return True
