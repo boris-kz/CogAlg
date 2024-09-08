@@ -55,7 +55,7 @@ class CcompSliceFrame(CsliceEdge):
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    def __init__(G, root_ = None, rng=1, fd=0, node_=None, link_=None, Et=None, mdLay=None, derH=None, elay=None, n=0):
+    def __init__(G, root_ = None, rng=1, fd=0, node_=None, link_=None, Et=None, mdLay=None, derH=None, extH=None, n=0):
         super().__init__()
 
         G.root_ = [] if root_ is None else root_ # mgraph agg+ layers (dgraph.node_ is CLs)
@@ -66,7 +66,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.mdLay = CH(root=G) if mdLay is None else mdLay
         # maps to node_H / agg+|sub+:
         G.derH = CH(root=G) if derH is None else derH  # sum from nodes, then append from feedback
-        G.elay = CH(root=G) if elay is None else elay  # sum from rim kernels
+        G.extH = CH(root=G) if extH is None else extH  # sum from rim_ elays, H maybe deleted
         G.rim_ = []  # direct external links, nested per rng
         G.kHH = []  # kernel: hierarchy of rng layer _Ns
         G.rng = rng
