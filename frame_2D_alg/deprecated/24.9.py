@@ -161,3 +161,59 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
             break
 
     return Gd_, Et  # all Gs with dLay added in 1st krim
+
+def sum_kLay(G, g):  # sum next-rng kLay from krim of current _kLays, init with G attrs
+
+    KLay = (G.kLay if hasattr(G,"kLay")
+                   else (G._kLay if hasattr(G,"_kLay")  # init conv kernels, also below:
+                              else (len(G.node_),G.S,G.A,deepcopy(G.latuple),CH().copy(G.mdLay),CH().copy(G.derH) if G.derH else CH())))  # init DerH if empty
+    kLay = (G._kLay if hasattr(G,"_kLay")
+                    else (len(g.node_),g.S,g.A,deepcopy(g.latuple),CH().copy(g.mdLay),CH().copy(g.derH) if g.derH else None))  # in init conv kernels
+    L,S,A,Lat,MdLay,DerH = KLay
+    l,s,a,lat,mdLay,derH = kLay
+    return [
+            L+l, S+s, [A[0]+a[0],A[1]+a[1]], # L,S,A
+            add_lat(Lat,lat),                # latuple
+            MdLay.add_md_(mdLay),            # mdLay
+            DerH.add_H(derH) if derH else DerH
+    ]
+
+def rng_node_(_N_):  # each rng+ forms rim_ layer per N, appends N__,L__,Et:
+
+    N__ = []; L__ = []; HEt = [0,0,0,0]
+    rng = 1
+    while True:
+        N_,Et = rng_kern_(_N_,rng)
+        # adds link_ to N.rim_ and _N_H to N.kHH, but elay and Et are summed across rng++
+        L_ = [Lt[0] for N in N_ for Lt in N.rim_[-1]]
+        if Et[0] > ave * Et[2] * rng:
+            L__+= L_; HEt = np.add(HEt, Et)
+            N__ += N_; _N_ = N_; rng += 1
+        else:
+            break
+    return list(set(N__)), L__, HEt, rng
+
+
+def comp_pars(_pars, pars, rn):  # compare Ns, kLays or partial graphs in merging
+
+    _L,_S,_A,_latuple,_mdLay,_derH = _pars
+    L, S, A, latuple, mdLay, derH = pars
+
+    mdext = comp_ext(_L,L,_S,S/rn,_A,A)
+    if mdLay:  # CG
+        mdLay = _mdLay.comp_md_(mdLay, rn, fagg=1)
+        mdlat = comp_latuple(_latuple, latuple, rn, fagg=1)
+        n = mdlat.n + mdLay.n + mdext.n
+        md_t = [mdlat, mdLay, mdext]
+        Et = np.array(mdlat.Et) + mdLay.Et + mdext.Et
+        Rt = np.array(mdlat.Rt) + mdLay.Rt + mdext.Rt
+    else:  # += CL nodes
+        n = mdext.n; md_t = [mdext]; Et = mdext.Et; Rt = mdext.Rt
+    # init H = [lay0]:
+    dlay = CH( H=[CH(n=n, md_t=md_t, Et=Et, Rt=Rt)],  # or n = (_n+n) / 2?
+               n=n, md_t=[CH().copy(md_) for md_ in md_t], Et=copy(Et),Rt=copy(Rt))
+    if _derH and derH:
+        dderH = _derH.comp_H(derH, rn, fagg=1)  # new link derH = local dH
+        dlay.append_(dderH, flat=1)
+
+    return dlay
