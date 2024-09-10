@@ -217,3 +217,37 @@ def comp_pars(_pars, pars, rn):  # compare Ns, kLays or partial graphs in mergin
         dlay.append_(dderH, flat=1)
 
     return dlay
+
+def segment(root, Q, fd, rng):  # cluster iN_(G_|L_) by weight of shared links, initially single linkage
+
+    N_, max_ = [],[]
+    # init Gt per G|L node:
+    for N in Q:
+        Lrim = [Lt[0] for Lt in (N.rimt_[-1][0] + N.rimt_[-1][1] if fd else N.rim_[-1])]  # external links
+        Lrim = [L for L in Lrim if L.Et[fd] > ave * (L.Et[2+fd]) * rng]  # to merge if sL_ match
+        Nrim = [_N for L in Lrim for _N in L.nodet if _N is not N]  # external nodes
+        Gt = [[N],[], Lrim, Nrim, [0,0,0,0]]
+        N.root = Gt
+        N_ += [Gt]
+        # select exemplar maxes to segment clustering:
+        emax_ = [eN for eN in Nrim if eN.Et[fd] >= N.Et[fd] or eN in max_]  # _N if _N == N
+        if not emax_: max_ += [Gt]  # N.root, if no higher-val neighbors
+        # extended rrim max: V * k * max_rng?
+    for Gt in N_: Gt[3] = [_N.root for _N in Gt[3]]  # replace eNs with Gts
+    for Gt in max_ if max_ else N_:
+        node_,link_,Lrim,Nrim, Et = Gt
+        while True:  # while Nrim
+            _Nrim_,_Lrim_ = [],[]  # recursively merge Gts with >ave shared +ve external links
+            for _Gt,_L in zip(Nrim,Lrim):
+                if _Gt not in N_: continue  # was merged
+                sL_ = set(Lrim).intersection(set(_Gt[2])).union([_L])  # shared external links + potential _L
+                Et = np.sum([L.Et for L in sL_], axis=0)
+                if Et[0] > ave * (Et[2]) * rng:  # mval of shared links, not relative overlap: sL.V / Lrim.V?
+                    # or any +ve links, same as per N?
+                    link_ += [_L]
+                    merge(Gt,_Gt, _Nrim_,_Lrim_)
+                    N_.remove(_Gt)
+            if _Nrim_:
+                Nrim[:],Lrim[:] = _Nrim_,_Lrim_  # for clustering, else break, contour = term rims?
+            else: break
+    return [sum2graph(root, Gt, fd, rng) for Gt in N_]

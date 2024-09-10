@@ -55,10 +55,10 @@ class CcompSliceFrame(CsliceEdge):
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    def __init__(G, root_ = None, rng=1, fd=0, node_=None, link_=None, Et=None, mdLay=None, derH=None, extH=None, n=0):
+    def __init__(G, root = None, rng=1, fd=0, node_=None, link_=None, Et=None, mdLay=None, derH=None, extH=None, n=0):
         super().__init__()
 
-        G.root_ = [] if root_ is None else root_ # mgraph agg+ layers (dgraph.node_ is CLs)
+        G.root = root # mgraph agg+ layers (dgraph.node_ is CLs)
         G.node_ = [] if node_ is None else node_ # convert to GG_ in agg++
         G.link_ = [] if link_ is None else link_ # internal links per comp layer in rng+, convert to LG_ in agg++
         G.Et = [0,0,0,0] if Et is None else Et   # extH.Et + derH.Et + mdLay.Et?
@@ -79,7 +79,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.yx = [0,0]  # init PP.yx = [(y0+yn)/2,(x0,xn)/2], then ave node yx
         G.alt_graph_ = []  # adjacent gap+overlap graphs, vs. contour in frame_graphs
         # dynamic:
-        G.visited__ = []  # nested in rng++
+        G.visited_ = []
         G.Nrim = []  # nodes on artificial frame | exemplar margin
         G.it = ([None,None])  # graph indices in root node_s, implicitly nested
         # old:
@@ -388,7 +388,7 @@ def comp_link_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
 def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
 
-    PP = CG(fd=fd, root_=root, rng=root.rng+1)  # 1st layer of derH is mdLay
+    PP = CG(fd=fd, root=root, rng=root.rng+1)  # 1st layer of derH is mdLay
     PP.P_ = P_  # P_ is CdPs if fd, but summed in CG PP?
     iRt = root.mdLay.Et[2:4] if root.mdLay else [0,0]  # add to rdnt
     # += uplinks:
