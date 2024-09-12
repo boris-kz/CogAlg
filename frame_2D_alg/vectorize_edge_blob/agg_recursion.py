@@ -82,6 +82,8 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
             if edge.mdLay.Et[0] * (len(edge.node_)-1)*(edge.rng+1) > ave * edge.mdLay.Et[2]:
                 pruned_Q = []
                 for PP in edge.node_:  # PP -> G
+                    if not isinstance(PP, CG):  # convert CP to CG, empty rng, A, S
+                        y,x = PP.yx; PP = CG(fd=0,root=edge, node_=[PP],mdLay=PP.mdLay,latuple=PP.latuple, yx=[y,x], box=[y,x-len(PP.dert_),y,x])
                     if PP.mdLay and PP.mdLay.Et[0] > ave * PP.mdLay.Et[2]:  # v>ave*r
                         PP.node_ = PP.P_  # revert node_t?
                         y0,x0,yn,xn = PP.box
@@ -97,7 +99,7 @@ def agg_recursion(root, Q, fd):  # breadth-first rng++ cross-comp -> eval cluste
 
     N__,L__,Et,rng = rng_link_(Q) if fd else rng_node_(Q)  # cross-comp PP_/ edge|frame, sub++/ L_
     m,d,mr,dr = Et
-    fvd = d > ave_d * dr*(rng+1); fvm = m > ave * mr*(rng+1)
+    fvd = d > ave_d * dr*(rng+1); fvm = m > ave * mr*(rng+1) # operation/ V-rdn, result/ V alone?
     if fvd or fvm:
         root.Et = np.add(root.Et,Et); L_ = [L for L_ in L__ for L in L_]
         # root.derH += L.derH:
@@ -122,17 +124,18 @@ def agg_recursion(root, Q, fd):  # breadth-first rng++ cross-comp -> eval cluste
 '''
 
 def rng_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__,Et, ~ graph CNN without backprop
-                     # sub-cluster low-rng N_s: dense, | rng_link_-> segment/mS in G.rim_) graph | L_?
+
     N__ = []; L__ = []; ET = [0,0,0,0]
     rng = 1
     while True:
         N_ = []; Et = [0,0,0,0]
-        # full search, no mediation:
-        for _G,G in combinations(_N_,r=2):
-            if _G in G.visited_:  # compared in any rng++
-                continue
+        # full search, no mediation
+        for _G,G in combinations(_N_,r=2):  # or set rim_ for all Gs in one loop?
+            for g in G.visited_:
+                if g is _G: continue  # compared in any rng
+                elif _G in g.nrim: continue  # mediated match to G?
             dy,dx = np.subtract(_G.yx,G.yx); dist = np.hypot(dy,dx)
-            aRad = (G.aRad+_G.aRad) / 2  # ave G radius
+            aRad = (G.aRad +_G.aRad) / 2  # ave G radius
             # eval relative distance between G centers:
             if dist / max(aRad,1) <= (max_dist * rng):
                 for _g, g in (_G,G),(G,_G): g.visited_ += [_g]
@@ -161,7 +164,7 @@ def rng_link_(iL_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
         N_t_ = [[[],[]] for _ in _L_]  # new rng lay of mediating nodes, traced from all prior layers?
         for L, _N_t, N_t in zip(_L_, _N_t_, N_t_):
             for rev, _N_, N_ in zip((0,1), _N_t, N_t):
-                # comp L, _L incrementally mediated by nodets, flatten rim_, not only 1st layer in rimt_?
+                # comp L,_L mediated by nodets, flatten rim_, not only 1st layer in rimt_?
                 rim_ = [rim for n in _N_ for rim in (n.rim_ if isinstance(n, CG) else [n.rimt_[0][0] + n.rimt_[0][1]])]
                 for rim in rim_:
                     for _L,_rev in rim:  # _L is reversed relative to its 2nd node
@@ -195,7 +198,7 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
     fd = rev is not None  # compared links have binary relative direction?
     _N, N = Link.nodet
     _L,L = (2,2) if fd else (len(_N.node_),len(N.node_)); _S,S = _N.S,N.S; _A,A = _N.A,N.A
-    if rev: A = [-d for d in A]  # reverse angle direction if N is left link?
+    if rev: A = [-d for d in A]  # reverse angle direction if N is left link
     rn = _N.n / N.n
     mdext = comp_ext(_L,L, _S,S/rn, _A,A); md_t = [mdext]; Et = mdext.Et; Rt = mdext.Rt; n = mdext.n
     if not fd:  # CG
@@ -211,8 +214,11 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
     Link.derH = elay; elay.root = Link; Link.Et = Et; Link.n = min(_N.n,N.n)
     Link.nodet = [_N,N]; Link.yx = np.add(_N.yx,N.yx) /2
     # preset S,A
-    for rev, node in zip((0,1),(_N,N)):  # reverse Link direction for N
-        # add layer if len< rng:
+    for rev, node,_node in zip((0,1),(_N,N),(N,_N)):  # reverse Link direction for N
+        if Et[0] > ave:
+            # global +ve links, or add per layer for bottom-up segment?
+            node.lrim += Link; node.nrim +=[_node]; _node.nrim +=[node]
+        # add layer if len < rng for sub-clustering, redundant to lrim:
         if (len(node.rimt_) if fd else len(node.rim_)) == rng:
             node.extH.H[-1].add_H(elay)
             if fd: node.rimt_[-1][1-rev] += [[Link,rev]]  # add in last rng layer, opposite to _N,N dir
@@ -236,34 +242,36 @@ def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
     return CH(H=[mL,dL, mS,dS, mA,dA], Et=[M,D,mrdn,drdn], Rt=[mdec,ddec], n=0.5)
 
 def segment(root, Q, fd, rng):  # cluster Q: G_|L_, by value density of +ve links per node
-
-    N_, max_ = [], []
+    '''
+    convert to bottom-up:
+    '''
+    for N in Q: N.merged = 0  # reset if sub-clustering
+    N_ = []
     for N in Q:
-        lrim = [Lt[0] for Lt in (N.rimt_[-1][0] + N.rimt_[-1][1] if fd else N.rim_[-1])]  # | flat rng?
-        N.lrim = [L for L in lrim if L.Et[fd] > ave * (L.Et[2+fd]) * rng]  # +ve to prune _Ns:
-        N.nrim = [_N for L in N.lrim for _N in L.nodet if _N is not N]  # connected _Ns
-        N_ += [N]
-    for N in N_:
-        if not N.lrim: continue
+        if not N.lrim:
+            N_ += [N]; continue
         _nrim_ = N.nrim; _lrim_ = N.lrim
         node_ = {N}; link_ = set(); Et = [0,0,0,0]
         while _nrim_:
             nrim_,lrim_ = set(),set()  # eval,merge _nrim_, replace with extended nrim_
             for _N,_L in zip(_nrim_,_lrim_):
-                if _N not in N_: continue  # was merged
+                if _N.merged: continue
                 int_N = _L.nodet[0] if _L.nodet[1] is _N else _L.nodet[1]
-                # cluster by sum N_rim_Ms * L_rM:
-                if (int_N.Et[0]+_N.Et[0]) * (_L.Et[0]/ave) > ave:  # neg link rM < 1, rdn selects operation, doesn't affect results?
+                # cluster by sum N_rim_Ms * L_rM, mildly negating if include neg links:
+                if (int_N.Et[0]+_N.Et[0]) * (_L.Et[0]/ave) > ave:
                     node_.add(_N); link_.add(_L); Et = np.add(Et, _L.Et)
                     nrim_.update(set(_N.nrim) - node_)
                     lrim_.update(set(_N.lrim) - link_)
-                    N_.remove(_N)
+                    _N.merged = 1
             _nrim_, _lrim_ = nrim_, lrim_
-        N[:] = [[list(node_), list(link_), Et]]  # selective replace N with Gt
-    for N in N_:
-        if isinstance(N,list): N[:] = sum2graph(root, N, fd, rng)
-    return N_  # Gs and isolated Ns
-
+        G = sum2graph(root, [list(node_), list(link_), Et], fd, rng)
+        # low-rng sub-clustering in G:
+        sub_rng = rng-1; H = G.extH.H
+        while len(H) > sub_rng and H[sub_rng].Et[0] > ave * H[sub_rng].Et[2] * (sub_rng+1):
+            # segment sub_node_:
+            H[sub_rng].node_[:] = segment(G, H[sub_rng].node_, fd, rng)
+        N_ += [G]
+    return N_ # Gs and isolated Ns
 
 def par_segment(root, Q, fd, rng):  # parallelizable by merging Gts initialized with each N
     # mostly old

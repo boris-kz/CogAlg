@@ -55,14 +55,14 @@ class CcompSliceFrame(CsliceEdge):
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    def __init__(G, root = None, rng=1, fd=0, node_=None, link_=None, Et=None, mdLay=None, derH=None, extH=None, n=0):
+    def __init__(G, root = None, rng=1, fd=0, node_=None, link_=None, Et=None, latuple=None, mdLay=None, derH=None, extH=None, n=0):
         super().__init__()
 
         G.root = root # mgraph agg+ layers (dgraph.node_ is CLs)
         G.node_ = [] if node_ is None else node_ # convert to GG_ in agg++
         G.link_ = [] if link_ is None else link_ # internal links per comp layer in rng+, convert to LG_ in agg++
         G.Et = [0,0,0,0] if Et is None else Et   # rim_ Et, val to cluster, -rdn to eval xcomp
-        G.latuple = [0,0,0,0,0,[0,0]]  # lateral I,G,M,Ma,L,[Dy,Dx]
+        G.latuple = [0,0,0,0,0,[0,0]] if latuple is None else latuple  # lateral I,G,M,Ma,L,[Dy,Dx]
         G.mdLay = CH(root=G) if mdLay is None else mdLay
         # maps to node_H / agg+|sub+:
         G.derH = CH(root=G) if derH is None else derH  # sum from nodes, then append from feedback
@@ -339,47 +339,45 @@ def comp_P(_P,P, angle=None, distance=None):  # comp dPs if fd else Ps
     if link.mdLay.Et[0] > aves[0] * link.mdLay.Et[2] or link.mdLay.Et[1] > aves[1] * link.mdLay.Et[3]:
         return link
 
-def form_PP_(root, P_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
+def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
 
-    PPt_ = []
-    for P in P_:  # init PPt_
-        link_, _P_ = [],[]  # uprim per P
-        for link in ([link for rim in P.rim_ for link in rim] if isinstance(P, CP) else P.rim):  # uplinks of all rngs
-            if link.mdLay.Et[fd] >P_aves[fd] * link.mdLay.Et[2+fd]:
-                link_ += [link]; _P_ += [link.nodet[0]]
-        PPt = [[P],link_,_P_]
-        P.root = PPt; PPt_ += [PPt]
-    for PPt in PPt_:
-        PPt[2] = [_P.root for _P in PPt[2]]  # replace ePs with PPts
-    for PPt in PPt_:
-        P_, link_, Prim = PPt
-        new_Prim = Prim
-        while new_Prim:
-            nnew_Prim = []
-            for _PPt in new_Prim:  # recursively merge mlinked PPts upward
-                if _PPt not in PPt_: continue  # was merged
-                _P_,_link_,_Prim = _PPt
-                for P in _P_: P.root = PPt  # update root
-                link_ += _link_
-                P_[:] = list(set(P_+_P_))
-                nnew_Prim += [_Proot for _Proot in _Prim if _Proot not in nnew_Prim]
-                PPt_.remove(_PPt)
-            new_Prim = nnew_Prim  # Prim is for clustering only, or Prim += terminated rims: contour?
+    P_ = []
+    for P in iP_:
+        lrim =  [link for rim in P.rim_ for link in rim] if isinstance(P, CP) else P.rim  # uplinks of all rngs
+        P.lrim = [L for L in lrim if L.mdLay.Et[fd] >P_aves[fd] * L.mdLay.Et[2+fd]]
+        P.prim = [_P for L in P.lrim for _P in L.nodet if _P is not P]
+        P_ += [P]
+    for i,P in enumerate(reversed(P_)):
+        if not P.lrim: continue
+        _prim_ = P.prim; _lrim_ = P.lrim
+        _P_ = {P}; link_ = set(); Et = [0,0,0,0]
+        while _prim_:
+            prim_,lrim_ = set(),set()
+            for _P,_L in zip(_prim_,_lrim_):
+                if _P not in P_: continue  # was merged
+                # no eval by int_P?
+                _P_.add(_P); link_.add(_L); Et = np.add(Et, _L.mdLay.Et)
+                prim_.update(set(_P.prim) - _P_)
+                lrim_.update(set(_P.lrim) - link_)
+                P_.remove(_P)
+            _prim_, _lrim_ = prim_, lrim_
+        P_[P_.index(P)] = [list(_P_), list(link_), Et]  # replace P with PPt
     PP_ = []
-    for PPt in PPt_:
-        PP = sum2PP(root, PPt[0], PPt[1], fd)
-        if not fd and len(PP.P_) > ave_L and PP.mdLay.Et[fd] >PP_aves[fd] * PP.mdLay.Et[2+fd]:
-            comp_link_(PP)
-            # fd fork draft: cluster PP.link_ vs PP.P_?
-            form_PP_(PP, PP.link_, fd=1)  # form sub_PPd_ in select PPs, not recursive
-        PP_ += [PP]
+    for PP in P_:
+        if isinstance(PP, list):  # not CP
+            PP = sum2PP(root, PP[0], PP[1], fd)
+            if not fd and len(PP.P_) > ave_L and PP.mdLay.Et[fd] >PP_aves[fd] * PP.mdLay.Et[2+fd]:
+                comp_link_(PP)
+                # fd fork draft: cluster PP.link_ vs PP.P_?
+                form_PP_(PP, PP.link_, fd=1)  # form sub_PPd_ in select PPs, not recursive
+        PP_ += [PP]  # CPs will be converted to CG before agg+
     root.node_ = PP_
 
 def comp_link_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
     for dP in PP.link_:
         if dP.mdLay.Et[1] > aves[1]:
-            for nmed, _rim_ in enumerate(dP.nodet[0].rim_):  # link.nodet is CP
+            for nmed, _rim_ in enumerate(dP.nodet[1].rim_):  # link.nodet is CP
                 for _dP in _rim_:
                     dlink = comp_P(_dP,dP)
                     if dlink:
