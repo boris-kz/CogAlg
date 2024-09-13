@@ -65,6 +65,8 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         l.n = 1  # min(node_.n)
         l.Et = [0,0,0,0]
         l.root = root
+        l.lrim_ = []
+        l.nrim_ = []
         # add rimt_, elay if der+
     def __bool__(l): return bool(l.derH.H)
 
@@ -112,11 +114,12 @@ def agg_recursion(root, Q, fd):  # breadth-first rng++ cross-comp -> eval cluste
             set_attrs(L_,root)
             agg_recursion(root, L_,fd=1)  # appends last aggLay, L_=lG_ if segment
         # rng_node_:
-        Q = N__[0]  # rng+ N_s are redundant, unless rngH xcomp, sub-cluster
-        if fvm and len(Q) > ave_L:  # cluster ave_L != xcomp ave_L?
-            Q[:] = segment(root, Q, fd,rng)  # Q = nG_
-            if len(Q) > ave_L:
-                agg_recursion(root, Q,fd=0)  # adds higher aggLay / recursive call
+        # tentative: form a nested H of new graphs replacing root.node_?
+        if fvm and len(N__[0]) > ave_L:  # cluster ave_L != xcomp ave_L?
+            segment(root, N__, fd,rng)  # cluster rngLays in root.node_?
+            for N_ in N__:
+                if len(N_) > ave_L:
+                    agg_recursion(root, N__,fd=0)  # adds higher aggLay / recursive call
 '''
     if flat derH:
     root.derH.append_(CH().copy(L_[0].derH))  # init
@@ -131,9 +134,13 @@ def rng_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__,
         N_ = []; Et = [0,0,0,0]
         # full search, no mediation
         for _G,G in combinations(_N_,r=2):  # or set rim_ for all Gs in one loop?
+            fcont = 0
             for g in G.visited_:
-                if g is _G: continue  # compared in any rng
-                elif _G in g.nrim: continue  # mediated match to G?
+                if g is _G:
+                    fcont = 1; break  # compared in any rng
+                elif G in g.nrim_[-1] and _G in g.nrim_[1]:  # shorter match-mediated match
+                    fcont = 1; break  # or longer direct match priority?
+            if fcont: continue
             dy,dx = np.subtract(_G.yx,G.yx); dist = np.hypot(dy,dx)
             aRad = (G.aRad +_G.aRad) / 2  # ave G radius
             # eval relative distance between G centers:
@@ -200,12 +207,12 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
     _L,L = (2,2) if fd else (len(_N.node_),len(N.node_)); _S,S = _N.S,N.S; _A,A = _N.A,N.A
     if rev: A = [-d for d in A]  # reverse angle direction if N is left link
     rn = _N.n / N.n
-    mdext = comp_ext(_L,L, _S,S/rn, _A,A); md_t = [mdext]; Et = mdext.Et; Rt = mdext.Rt; n = mdext.n
+    mdext = comp_ext(_L,L, _S,S/rn, _A,A); md_t = [mdext]; Et = mdext.Et; n = mdext.n
     if not fd:  # CG
-        mdlat = comp_latuple(_N.latuple, N.latuple, rn, fagg=1); md_t += [mdlat]; Et = np.add(Et,mdlat.Et); Rt = np.add(Rt,mdlat.Rt); n += mdlat.n
-        mdLay = _N.mdLay.comp_md_(N.mdLay, rn, fagg=1);          md_t += [mdLay]; Et = np.add(Et,mdLay.Et); Rt = np.add(Rt,mdLay.Rt); n += mdLay.n
+        mdlat = comp_latuple(_N.latuple, N.latuple, rn,fagg=1); md_t += [mdlat]; Et = np.add(Et,mdlat.Et); n += mdlat.n
+        mdLay = _N.mdLay.comp_md_(N.mdLay, rn,fagg=1);          md_t += [mdLay]; Et = np.add(Et,mdLay.Et); n += mdLay.n
     # | n = (_n+n) / 2?
-    elay = CH( H=[CH(n=n, md_t=md_t, Et=Et, Rt=Rt)], n=n, md_t=[CH().copy(md_) for md_ in md_t], Et=copy(Et),Rt=copy(Rt))
+    elay = CH( H=[CH(n=n, md_t=md_t, Et=Et)], n=n, md_t=[CH().copy(md_) for md_ in md_t], Et=copy(Et))
     if _N.derH and N.derH:
         dderH = _N.derH.comp_H(N.derH, rn, fagg=1)  # comp shared layers
         elay.append_(dderH, flat=1)
@@ -215,18 +222,19 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
     Link.nodet = [_N,N]; Link.yx = np.add(_N.yx,N.yx) /2
     # preset S,A
     for rev, node,_node in zip((0,1),(_N,N),(N,_N)):  # reverse Link direction for N
-        if Et[0] > ave:
-            # global +ve links, or add per layer for bottom-up segment?
-            node.lrim += Link; node.nrim +=[_node]; _node.nrim +=[node]
-        # add layer if len < rng for sub-clustering, redundant to lrim:
-        if (len(node.rimt_) if fd else len(node.rim_)) == rng:
-            node.extH.H[-1].add_H(elay)
-            if fd: node.rimt_[-1][1-rev] += [[Link,rev]]  # add in last rng layer, opposite to _N,N dir
-            else:  node.rim_[-1] += [[Link, rev]]
-        else:
-            node.extH.append_(elay)
+        fv = Et[0] > ave; rim_rng = len(node.rimt_) if fd else len(node.rim_)
+        if rim_rng < rng:
+            if fv:  # add +ve layers for bottom-up segment
+                node.extH.append_(elay); node.lrim_ += [[Link]]; node.nrim_ +=[[_node]]; _node.nrim_ +=[[node]]
+            #> L_, includes negative links:
             if fd: node.rimt_ = [[[[Link,rev]],[]]] if dir else [[[],[[Link,rev]]]]  # add rng layer
             else:  node.rim_ += [[[Link, rev]]]
+        else:
+            if fv:  # append +ve layers for bottom-up segment
+                node.extH.H[-1].add_H(elay); node.lrim_[-1] += [Link]; node.nrim_[-1] +=[_node]; _node.nrim_[-1] +=[node]
+            #> L_, includes negative links:
+            if fd: node.rimt_[-1][1-rev] += [[Link,rev]]  # add in last rng layer, opposite to _N,N dir
+            else:  node.rim_[-1] += [[Link, rev]]
 
 def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
 
@@ -234,44 +242,58 @@ def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
     dS = _S/_L - S/L; mS = min(_S,S) - ave_L  # sparsity is accumulated over L
     mA, dA = comp_angle(_A,A)  # angle is not normalized
     M = mL + mS + mA
-    D = abs(dL) + abs(dS) + abs(dA)  # signed dA?
-    mrdn = M > D; drdn = D<= M
-    mdec = mL/ max(L,_L) + mS/ max(S,_S) if S or _S else 1 + mA  # Amax = 1
-    ddec = max_dist + mL/ (L+_L) + dS/ (S+_S) if S or _S else 1 + dA
+    D = abs(dL) + abs(dS) + abs(dA)  # normalize relative to M, signed dA?
 
-    return CH(H=[mL,dL, mS,dS, mA,dA], Et=[M,D,mrdn,drdn], Rt=[mdec,ddec], n=0.5)
+    return CH(H=[mL,dL, mS,dS, mA,dA], Et=[M,D,M>D,D<=M], n=0.5)
 
-def segment(root, Q, fd, rng):  # cluster Q: G_|L_, by value density of +ve links per node
-    '''
-    convert to bottom-up:
-    '''
-    for N in Q: N.merged = 0  # reset if sub-clustering
-    N_ = []
-    for N in Q:
-        if not N.lrim:
-            N_ += [N]; continue
-        _nrim_ = N.nrim; _lrim_ = N.lrim
-        node_ = {N}; link_ = set(); Et = [0,0,0,0]
-        while _nrim_:
-            nrim_,lrim_ = set(),set()  # eval,merge _nrim_, replace with extended nrim_
-            for _N,_L in zip(_nrim_,_lrim_):
-                if _N.merged: continue
-                int_N = _L.nodet[0] if _L.nodet[1] is _N else _L.nodet[1]
-                # cluster by sum N_rim_Ms * L_rM, mildly negating if include neg links:
-                if (int_N.Et[0]+_N.Et[0]) * (_L.Et[0]/ave) > ave:
-                    node_.add(_N); link_.add(_L); Et = np.add(Et, _L.Et)
-                    nrim_.update(set(_N.nrim) - node_)
-                    lrim_.update(set(_N.lrim) - link_)
-                    _N.merged = 1
-            _nrim_, _lrim_ = nrim_, lrim_
-        G = sum2graph(root, [list(node_), list(link_), Et], fd, rng)
-        # low-rng sub-clustering in G:
-        sub_rng = rng-1; H = G.extH.H
-        while len(H) > sub_rng and H[sub_rng].Et[0] > ave * H[sub_rng].Et[2] * (sub_rng+1):
-            # segment sub_node_:
-            H[sub_rng].node_[:] = segment(G, H[sub_rng].node_, fd, rng)
-        N_ += [G]
-    return N_ # Gs and isolated Ns
+
+def segment(root, _N__, fd, irng):  # cluster Q: G__|L__, by value density of +ve links per node
+
+    N__ = []
+    for rng, _N_ in enumerate(_N__, start=1):
+        for N in _N_: N.merged = 0
+        N_ = []
+        for N in N_:  # always CG?
+            if not N.lrim:  # then also not in Gt
+                N_ += [N]; continue
+            _nrim_ = N.nrim; _lrim_ = N.lrim
+            if N.root_: node_,link_,Et,_nrim_,_lrim_ = N.root_[-1]  # extend Gt formed in lower rng
+            else:
+                node_ = {N}; link_ = set(); Et = [0,0,0,0]; _nrim_ = N.nrim; _lrim_ = N.lrim
+            Gt = [node_,link_,Et,_nrim_,_lrim_]
+            N.root_ += [Gt]
+            while _nrim_:
+                nrim_,lrim_ = set(),set()  # eval,merge _nrim_, replace with extended nrim_
+                for _N,_L in zip(_nrim_,_lrim_):
+                    if _N.merged: continue
+                    int_N = _L.nodet[0] if _L.nodet[1] is _N else _L.nodet[1]
+                    # cluster by sum N_rim_Ms * L_rM, neg if neg link
+                    if (int_N.Et[0]+_N.Et[0]) * (_L.Et[0]/ave) > ave:
+                        if _N.root_:
+                            merge(Gt, _N.root_[-1])  # _nrim_,_lrim_ are in Gt now
+                        else:
+                            node_ += [_N]; link_ += [_L]; Et = np.add(Et, _L.Et)
+                            nrim_.update(set(_N.nrim) - node_)
+                            lrim_.update(set(_N.lrim) - link_)
+                            _N.merged = 1
+                _nrim_, _lrim_ = nrim_, lrim_
+            N_ += [sum2graph(root, [list(node_), list(link_), Et], fd, rng)]
+        N__ += [N_]
+    return N__  # Gs and isolated Ns
+
+def merge(Gt, gt):
+    N_, L_, Et, Lrim, Nrim = Gt
+    n_, l_, et, lrim, nrim = gt
+    for N in n_:
+        N.root = Gt
+        N.merged = 1
+    Et[:] = np.add(Et, et)
+    N_ += n_; Nrim -= set(n_)
+    L_ += l_; Lrim -= set(l_)
+
+    Nrim.update(nrim - set(N_))
+    Lrim.update(lrim - set(L_))
+
 
 def par_segment(root, Q, fd, rng):  # parallelizable by merging Gts initialized with each N
     # mostly old
@@ -303,20 +325,6 @@ def par_segment(root, Q, fd, rng):  # parallelizable by merging Gts initialized 
                 Nrim[:],Lrim[:] = _Nrim_,_Lrim_  # for clustering, else break, contour = term rims?
             else: break
     return [sum2graph(root, Gt[:3], fd, rng) for Gt in N_]
-
-def merge(Gt,gt, _Nrim_,_Lrim_):
-
-    N_,L_, Lrim, Nrim, Et = Gt
-    n_,l_, lrim, nrim, et = gt
-    for N in N_:
-        N.root = Gt
-    Et[:] = np.add(Et, et)
-    N_ += n_ # internal, no overlap
-    L_ += l_
-    for N, L in zip(nrim, lrim):
-        if N not in Nrim and N is not Gt:
-            _Nrim_ += [N]; _Lrim_ += [L]  # aligned
-            L += [L_]  # shared
 
 def set_attrs(Q, root):
 

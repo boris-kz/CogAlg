@@ -55,7 +55,7 @@ class CcompSliceFrame(CsliceEdge):
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    def __init__(G, root = None, rng=1, fd=0, node_=None, link_=None, Et=None, latuple=None, mdLay=None, derH=None, extH=None, n=0):
+    def __init__(G, root = None, rng=1, fd=0, node_=None, link_=None, Et=None, latuple=None, mdLay=None, derH=None, extH=None, box=None, yx=None, n=0):
         super().__init__()
 
         G.root = root # mgraph agg+ layers (dgraph.node_ is CLs)
@@ -75,12 +75,14 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.A = 0, 0  # angle: summed dy,dx in links
         G.area = 0
         G.aRad = 0  # average distance between graph center and node center
-        G.box = [np.inf, np.inf, -np.inf, -np.inf]  # y0,x0,yn,xn
-        G.yx = [0,0]  # init PP.yx = [(y0+yn)/2,(x0,xn)/2], then ave node yx
+        G.box = [np.inf, np.inf, -np.inf, -np.inf] if box is None else box  # y0,x0,yn,xn
+        G.yx = [0,0] if yx is None else yx  # init PP.yx = [(y0+yn)/2,(x0,xn)/2], then ave node yx
         G.alt_graph_ = []  # adjacent gap+overlap graphs, vs. contour in frame_graphs
         # dynamic:
         G.visited_ = []
         G.Nrim = []  # nodes on artificial frame | exemplar margin
+        G.lrim = []
+        G.nrim = []
         G.it = ([None,None])  # graph indices in root node_s, implicitly nested
         # old:
         # G.fback_ = []  # always from CGs with fork merging, no dderHm_, dderHd_
@@ -110,6 +112,8 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
         l.Rt = [] if Rt is None else Rt
         l.root = None if root is None else root  # PPds containing dP
         l.nmed = 0  # comp rng: n of mediating Ps between node_ Ps
+        l.lrim_ = []
+        l.prim_ = []
         # n = 1?
     def __bool__(l): return bool(l.mdLay.H)
 
@@ -274,7 +278,7 @@ def comp_slice(edge):  # root function
     edge.mdLay = CH()
     for P in edge.P_:  # add higher links
         P.mdLay = CH()  # for accumulation in sum2PP later (in lower P)
-        P.rim_ = []
+        P.rim_ = []; P.lrim = []; P.prim = []
     rng_recursion(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
     form_PP_(edge, edge.P_)
     for PP in edge.node_:  # feedback
@@ -296,8 +300,8 @@ def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and conti
                 dy,dx = np.subtract([y,x],[_y,_x]) # dy,dx between node centers
                 if abs(dy)+abs(dx) <= rng*2:  # <max Manhattan distance
                     if len(_P.rim_) < rng-1: continue
-                    link = comp_P(_P,P, angle=[dy,dx], distance=np.hypot(dy,dx))
-                    if link and link.mdLay.Et[0] > aves[0]*link.mdLay.Et[2]:  # mlink
+                    link = comp_P(_P,P, angle=[dy,dx], distance=np.hypot(dy,dx),fder=0)
+                    if link:  # mlink
                         V += link.mdLay.Et[0]
                         rng_link_ += [link]
                         if _P.rim_: pre_ += [dP.nodet[0] for dP in _P.rim_[-1]]  # connected __Ps
@@ -314,7 +318,7 @@ def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and conti
     edge.rng=rng  # represents rrdn
     del edge.pre__
 
-def comp_P(_P,P, angle=None, distance=None):  # comp dPs if fd else Ps
+def comp_P(_P,P, angle=None, distance=None, fder=0):  # comp dPs if fd else Ps
 
     fd = isinstance(P,CdP)
     _y,_x = _P.yx; y,x = P.yx
@@ -336,41 +340,33 @@ def comp_P(_P,P, angle=None, distance=None):  # comp dPs if fd else Ps
     latuple = [(P+p)/2 for P,p in zip(_P.latuple[:-1],P.latuple[:-1])] + [[(A+a)/2 for A,a in zip(_P.latuple[-1],P.latuple[-1])]]
     link = CdP(nodet=[_P,P], mdLay=derLay, angle=angle, span=distance, yx=[(_y+y)/2,(_x+x)/2], latuple=latuple)
     # if v > ave * r:
-    if link.mdLay.Et[0] > aves[0] * link.mdLay.Et[2] or link.mdLay.Et[1] > aves[1] * link.mdLay.Et[3]:
+    if link.mdLay.Et[fder] > aves[fder] * link.mdLay.Et[fder]:
+        P.lrim += [link]; P.prim +=[_P]; _P.prim +=[P]  # add Link as uplink in P.lrim only? Or bidirectional lrim?
         return link
 
 def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
 
-    P_ = []
+    for P in iP_: P.merged = 0
+    PP_ = []
     for P in iP_:
-        lrim =  [link for rim in P.rim_ for link in rim] if isinstance(P, CP) else P.rim  # uplinks of all rngs
-        P.lrim = [L for L in lrim if L.mdLay.Et[fd] >P_aves[fd] * L.mdLay.Et[2+fd]]
-        P.prim = [_P for L in P.lrim for _P in L.nodet if _P is not P]
-        P_ += [P]
-    for i,P in enumerate(reversed(P_)):
-        if not P.lrim: continue
+        if not P.lrim:
+            PP_ += [P]; continue
         _prim_ = P.prim; _lrim_ = P.lrim
         _P_ = {P}; link_ = set(); Et = [0,0,0,0]
         while _prim_:
             prim_,lrim_ = set(),set()
             for _P,_L in zip(_prim_,_lrim_):
-                if _P not in P_: continue  # was merged
-                # no eval by int_P?
+                if _P.merged: continue  # was merged
                 _P_.add(_P); link_.add(_L); Et = np.add(Et, _L.mdLay.Et)
                 prim_.update(set(_P.prim) - _P_)
                 lrim_.update(set(_P.lrim) - link_)
-                P_.remove(_P)
+                _P.merged = 1
             _prim_, _lrim_ = prim_, lrim_
-        P_[P_.index(P)] = [list(_P_), list(link_), Et]  # replace P with PPt
-    PP_ = []
-    for PP in P_:
-        if isinstance(PP, list):  # not CP
-            PP = sum2PP(root, PP[0], PP[1], fd)
-            if not fd and len(PP.P_) > ave_L and PP.mdLay.Et[fd] >PP_aves[fd] * PP.mdLay.Et[2+fd]:
-                comp_link_(PP)
-                # fd fork draft: cluster PP.link_ vs PP.P_?
-                form_PP_(PP, PP.link_, fd=1)  # form sub_PPd_ in select PPs, not recursive
-        PP_ += [PP]  # CPs will be converted to CG before agg+
+        PP = sum2PP(root, list(_P_), list(link_), fd)
+        PP_ += [PP]
+        if not fd and len(PP.P_) > ave_L and PP.mdLay.Et[fd] >PP_aves[fd] * PP.mdLay.Et[2+fd]:
+            comp_link_(PP)
+            form_PP_(PP, PP.link_, fd=1)  # form sub_PPd_ in select PPs, not recursive
     root.node_ = PP_
 
 def comp_link_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
@@ -379,7 +375,7 @@ def comp_link_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
         if dP.mdLay.Et[1] > aves[1]:
             for nmed, _rim_ in enumerate(dP.nodet[1].rim_):  # link.nodet is CP
                 for _dP in _rim_:
-                    dlink = comp_P(_dP,dP)
+                    dlink = comp_P(_dP,dP,fder=1)
                     if dlink:
                         dP.rim += [dlink]  # in lower node uplinks
                         dlink.nmed = nmed  # link mediation order0

@@ -251,3 +251,48 @@ def segment(root, Q, fd, rng):  # cluster iN_(G_|L_) by weight of shared links, 
                 Nrim[:],Lrim[:] = _Nrim_,_Lrim_  # for clustering, else break, contour = term rims?
             else: break
     return [sum2graph(root, Gt, fd, rng) for Gt in N_]
+
+def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
+
+    dL = _L - L; mL = min(_L,L) - ave_L  # direct match
+    dS = _S/_L - S/L; mS = min(_S,S) - ave_L  # sparsity is accumulated over L
+    mA, dA = comp_angle(_A,A)  # angle is not normalized
+    M = mL + mS + mA
+    D = abs(dL) + abs(dS) + abs(dA)  # signed dA?
+    mrdn = M > D; drdn = D<= M
+    mdec = mL/ max(L,_L) + mS/ max(S,_S) if S or _S else 1 + mA  # Amax = 1
+    ddec = max_dist + mL/ (L+_L) + dS/ (S+_S) if S or _S else 1 + dA
+
+    return CH(H=[mL,dL, mS,dS, mA,dA], Et=[M,D,mrdn,drdn], Rt=[mdec,ddec], n=0.5)
+
+def segment(root, Q, fd, rng):  # cluster Q: G_|L_, by value density of +ve links per node
+    '''
+    convert to bottom-up:
+    '''
+    for N in Q: N.merged = 0  # reset if sub-clustering
+    N_ = []
+    for N in Q:
+        if not N.lrim:
+            N_ += [N]; continue
+        _nrim_ = N.nrim; _lrim_ = N.lrim
+        node_ = {N}; link_ = set(); Et = [0,0,0,0]
+        while _nrim_:
+            nrim_,lrim_ = set(),set()  # eval,merge _nrim_, replace with extended nrim_
+            for _N,_L in zip(_nrim_,_lrim_):
+                if _N.merged: continue
+                int_N = _L.nodet[0] if _L.nodet[1] is _N else _L.nodet[1]
+                # cluster by sum N_rim_Ms * L_rM, mildly negating if include neg links:
+                if (int_N.Et[0]+_N.Et[0]) * (_L.Et[0]/ave) > ave:
+                    node_.add(_N); link_.add(_L); Et = np.add(Et, _L.Et)
+                    nrim_.update(set(_N.nrim) - node_)
+                    lrim_.update(set(_N.lrim) - link_)
+                    _N.merged = 1
+            _nrim_, _lrim_ = nrim_, lrim_
+        G = sum2graph(root, [list(node_), list(link_), Et], fd, rng)
+        # low-rng sub-clustering in G:
+        sub_rng = rng-1; H = G.extH.H
+        while len(H) > sub_rng and H[sub_rng].Et[0] > ave * H[sub_rng].Et[2] * (sub_rng+1):
+            # segment sub_node_:
+            H[sub_rng].node_[:] = segment(G, H[sub_rng].node_, fd, rng)
+        N_ += [G]
+    return N_ # Gs and isolated Ns
