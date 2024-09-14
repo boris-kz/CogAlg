@@ -52,50 +52,6 @@ class CcompSliceFrame(CsliceEdge):
                 comp_slice(edge)
     CBlob = CEdge
 
-
-class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
-
-    def __init__(G, root = None, rng=1, fd=0, node_=None, link_=None, Et=None, latuple=None, mdLay=None, derH=None, extH=None, box=None, yx=None, n=0):
-        super().__init__()
-
-        G.root = root # mgraph agg+ layers (dgraph.node_ is CLs)
-        G.node_ = [] if node_ is None else node_ # convert to GG_ in agg++
-        G.link_ = [] if link_ is None else link_ # internal links per comp layer in rng+, convert to LG_ in agg++
-        G.Et = [0,0,0,0] if Et is None else Et   # rim_ Et, val to cluster, -rdn to eval xcomp
-        G.latuple = [0,0,0,0,0,[0,0]] if latuple is None else latuple  # lateral I,G,M,Ma,L,[Dy,Dx]
-        G.mdLay = CH(root=G) if mdLay is None else mdLay
-        # maps to node_H / agg+|sub+:
-        G.derH = CH(root=G) if derH is None else derH  # sum from nodes, then append from feedback
-        G.extH = CH(root=G) if extH is None else extH  # sum from rim_ elays, H maybe deleted
-        G.rim_ = []  # direct external links, nested per rng
-        G.kHH = []  # kernel: hierarchy of rng layer _Ns
-        G.rng = rng
-        G.n = n  # external n (last layer n)
-        G.S = 0  # sparsity: distance between node centers
-        G.A = 0, 0  # angle: summed dy,dx in links
-        G.area = 0
-        G.aRad = 0  # average distance between graph center and node center
-        G.box = [np.inf, np.inf, -np.inf, -np.inf] if box is None else box  # y0,x0,yn,xn
-        G.yx = [0,0] if yx is None else yx  # init PP.yx = [(y0+yn)/2,(x0,xn)/2], then ave node yx
-        G.alt_graph_ = []  # adjacent gap+overlap graphs, vs. contour in frame_graphs
-        # dynamic:
-        G.visited_ = []
-        G.Nrim = []  # nodes on artificial frame | exemplar margin
-        G.lrim = []
-        G.nrim = []
-        G.it = ([None,None])  # graph indices in root node_s, implicitly nested
-        # old:
-        # G.fback_ = []  # always from CGs with fork merging, no dderHm_, dderHd_
-        # Rdn: int = 0  # for accumulation or separate recursion count?
-        # G.Rim = []  # links to the most mediated nodes
-        # depth: int = 0  # n sub_G levels over base node_, max across forks
-        # nval: int = 0  # of open links: base alt rep
-        # id_H: list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
-        # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
-        # top Lay from links, lower Lays from nodes, hence nested tuple?
-
-    def __bool__(G): return G.n != 0  # to test empty
-
 class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
     name = "dP"
     def __init__(l, nodet=None, mdLay=None, Et=None, Rt=None, root=None, span=None, angle=None, yx=None, latuple=None):
@@ -112,11 +68,10 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
         l.Rt = [] if Rt is None else Rt
         l.root = None if root is None else root  # PPds containing dP
         l.nmed = 0  # comp rng: n of mediating Ps between node_ Ps
-        l.lrim_ = []
-        l.prim_ = []
+        l.lrim = []
+        l.prim = []
         # n = 1?
     def __bool__(l): return bool(l.mdLay.H)
-
 
 class CH(CBase):  # generic derivation hierarchy of variable nesting, depending on effective agg++(sub++ depth
 
@@ -340,8 +295,8 @@ def comp_P(_P,P, angle=None, distance=None, fder=0):  # comp dPs if fd else Ps
     latuple = [(P+p)/2 for P,p in zip(_P.latuple[:-1],P.latuple[:-1])] + [[(A+a)/2 for A,a in zip(_P.latuple[-1],P.latuple[-1])]]
     link = CdP(nodet=[_P,P], mdLay=derLay, angle=angle, span=distance, yx=[(_y+y)/2,(_x+x)/2], latuple=latuple)
     # if v > ave * r:
-    if link.mdLay.Et[fder] > aves[fder] * link.mdLay.Et[fder]:
-        P.lrim += [link]; P.prim +=[_P]; _P.prim +=[P]  # add Link as uplink in P.lrim only? Or bidirectional lrim?
+    if link.mdLay.Et[fder] > aves[fder] * link.mdLay.Et[fder+2]:
+        P.lrim += [link]; P.prim +=[_P]; _P.prim +=[P]  # add Link as uplink in P.lrim
         return link
 
 def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
@@ -373,17 +328,19 @@ def comp_link_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
     for dP in PP.link_:
         if dP.mdLay.Et[1] > aves[1]:
-            for nmed, _rim_ in enumerate(dP.nodet[1].rim_):  # link.nodet is CP
+            for nmed, _rim_ in enumerate(dP.nodet[0].rim_):  # link.nodet is CP
                 for _dP in _rim_:
+                    if _dP not in PP.link_: continue  # skip those removed node's links
                     dlink = comp_P(_dP,dP,fder=1)
                     if dlink:
                         dP.rim += [dlink]  # in lower node uplinks
                         dlink.nmed = nmed  # link mediation order0
 
+# replace with PPt version:
 def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
 
-    PP = CG(fd=fd, root=root, rng=root.rng+1)  # 1st layer of derH is mdLay
-    PP.P_ = P_  # P_ is CdPs if fd, but summed in CG PP?
+    PP = [fd, root, P_, root[-1]]  # rng+1  # 1st layer of derH is mdLay
+    # P_ is CdPs if fd]
     iRt = root.mdLay.Et[2:4] if root.mdLay else [0,0]  # add to rdnt
     # += uplinks:
     for dP in dP_:
@@ -406,7 +363,6 @@ def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
                 y = int(round(y)); x = int(round(x))  # summed with float dy,dx in slice_edge?
                 PP.box = accum_box(PP.box,y,x); celly_+=[y]; cellx_+=[x]
         if not fd: P.root = PP
-        # if P is CdP, accumulate their mdLay into graph too?
     if PP.mdLay:
         PP.mdLay.Et[2:4] = [R+r for R,r in zip(PP.mdLay.Et[2:4], iRt)]
     if isinstance(P_[0], CP):  # CdP has no box, yx
@@ -436,17 +392,9 @@ def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
 
     ret = [mL,dL,mI,dI,mG,dG,mM,dM,mMa,dMa,mAngle-aves[5],dAngle]
     if fagg:  # add norm m,d, ret=[ret,Ret]:
-        # get max possible m and d per compared param to compute relt:
-        Mx_ = [max(_L,L),abs(_L)+abs(L), max(_I,I),abs(_I)+abs(I), max(_G,G),abs(_G)+abs(G), max(_M,M),abs(_M)+abs(M), max(_Ma,Ma),abs(_Ma)+abs(Ma), 1,.5]
         mval, dval = sum(ret[::2]),sum(ret[1::2])
         mrdn, drdn = dval>mval, mval>dval
-        mdec, ddec = 0, 0
-        for fd, (ptuple,Ptuple) in enumerate(zip((ret[::2],ret[1::2]),(Mx_[::2],Mx_[1::2]))):
-            for i, (par, maxv, ave) in enumerate(zip(ptuple, Ptuple, aves)):
-                # compute link decay coef: par/ max(self/same):
-                if fd: ddec += abs(par)/ abs(maxv) if maxv else 1
-                else:  mdec += (par+ave)/ (maxv+ave) if maxv else 1
-        ret = CH(H=ret, Et=[mval,dval,mrdn,drdn], Rt=[mdec,ddec], n=1)  # if fagg only
+        ret = CH(H=ret, Et=[mval,dval,mrdn,drdn], n=1)  # if fagg only
     return ret
 
 def get_match(_par, par):

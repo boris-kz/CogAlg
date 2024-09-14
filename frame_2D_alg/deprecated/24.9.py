@@ -296,3 +296,66 @@ def segment(root, Q, fd, rng):  # cluster Q: G_|L_, by value density of +ve link
             H[sub_rng].node_[:] = segment(G, H[sub_rng].node_, fd, rng)
         N_ += [G]
     return N_ # Gs and isolated Ns
+
+def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
+
+    _I, _G, _M, _Ma, _L, (_Dy, _Dx) = _latuple
+    I, G, M, Ma, L, (Dy, Dx) = latuple
+
+    dI = _I - I*rn;  mI = ave_dI - dI
+    dG = _G - G*rn;  mG = min(_G, G*rn) - aves[1]
+    dL = _L - L*rn;  mL = min(_L, L*rn) - aves[2]
+    dM = _M - M*rn;  mM = get_match(_M, M*rn) - aves[3]  # M, Ma may be negative
+    dMa= _Ma- Ma*rn; mMa = get_match(_Ma, Ma*rn) - aves[4]
+    mAngle, dAngle = comp_angle((_Dy,_Dx), (Dy,Dx))
+
+    ret = [mL,dL,mI,dI,mG,dG,mM,dM,mMa,dMa,mAngle-aves[5],dAngle]
+    if fagg:  # add norm m,d, ret=[ret,Ret]:
+        # get max possible m and d per compared param to compute relt:
+        Mx_ = [max(_L,L),abs(_L)+abs(L), max(_I,I),abs(_I)+abs(I), max(_G,G),abs(_G)+abs(G), max(_M,M),abs(_M)+abs(M), max(_Ma,Ma),abs(_Ma)+abs(Ma), 1,.5]
+        mval, dval = sum(ret[::2]),sum(ret[1::2])
+        mrdn, drdn = dval>mval, mval>dval
+        mdec, ddec = 0, 0
+        for fd, (ptuple,Ptuple) in enumerate(zip((ret[::2],ret[1::2]),(Mx_[::2],Mx_[1::2]))):
+            for i, (par, maxv, ave) in enumerate(zip(ptuple, Ptuple, aves)):
+                # compute link decay coef: par/ max(self/same):
+                if fd: ddec += abs(par)/ abs(maxv) if maxv else 1
+                else:  mdec += (par+ave)/ (maxv+ave) if maxv else 1
+        ret = CH(H=ret, Et=[mval,dval,mrdn,drdn], Rt=[mdec,ddec], n=1)  # if fagg only
+    return ret
+
+def rng_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__,Et, ~ graph CNN without backprop
+
+    N__ = []; L__ = []; ET = [0,0,0,0]
+    rng = 1
+    while True:
+        N_ = []; Et = [0,0,0,0]
+        # full search, no mediation
+        for _G,G in combinations(_N_,r=2):  # or set rim_ for all Gs in one loop?
+            fcont = 0
+            for g in G.visited_:
+                if g is _G:
+                    fcont = 1; break  # compared in any rng
+                elif G in g.nrim_[-1] and _G in g.nrim_[-1]:  # shorter match-mediated match
+                    fcont = 1; break  # or longer direct match priority?
+            if fcont: continue
+            dy,dx = np.subtract(_G.yx,G.yx); dist = np.hypot(dy,dx)
+            aRad = (G.aRad +_G.aRad) / 2  # ave G radius
+            # eval relative distance between G centers:
+            if dist / max(aRad,1) <= (max_dist * rng):
+                for _g, g in (_G,G),(G,_G): g.visited_ += [_g]
+                Link = CL(nodet=[_G,G], S=2, A=[dy,dx], box=extend_box(G.box,_G.box))
+                comp_N(Link, Et, rng)
+                if Link.Et[0] > ave * Link.Et[2] * (rng+1):
+                    for g in _G,G:
+                        if g not in N_: N_ += [g]
+        if Et[0] > ave * Et[2] * rng:
+            ET = np.add(ET, Et)
+            L__ += [list(set([Lt[0] for N in N_ for Lt in N.rim_[-1]]))]
+            N__ += [N_]  # nest to sub-cluster?
+            _N_ = N_
+            rng += 1
+        else:
+            break
+    return N__,L__,ET,rng
+
