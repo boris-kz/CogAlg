@@ -65,7 +65,6 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
         l.span = span  # distance between node centers
         l.yx = [0,0] if yx is None else yx  # sum node_
         l.Et = [0,0,0,0] if Et is None else Et
-        l.Rt = [] if Rt is None else Rt
         l.root = None if root is None else root  # PPds containing dP
         l.nmed = 0  # comp rng: n of mediating Ps between node_ Ps
         l.lrim = []
@@ -83,7 +82,6 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         He.H = [] if H is None else H  # lower derLays or md_ in md_C, empty in bottom layer
         He.n = n  # number of params compared to form derH, sum in comp_G, from nodes in sum2graph
         He.Et = [0,0,0,0] if Et is None else Et  # evaluation tuple: valt, rdnt
-        He.Rt = [0,0] if Rt is None else Rt  # m,d relative to max possible m,d
         He.root = None if root is None else root  # N or higher-composition He
         He.i = 0 if i is None else i   # lay index in root.H, to revise rdn
         He.it = [0,0] if it is None else it  # max fd lay in He.H: init add,comp if deleted higher layers' H,md_t
@@ -99,7 +97,6 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         HE.n += He.n  # combined param accumulation span
         HE.Et = np.add(HE.Et, He.Et)
         if any(irdnt): HE.Et[2:] = [E + e for E, e in zip(HE.Et[2:], irdnt)]
-        HE.Rt = np.add(HE.Rt, He.Rt)
         return HE
 
     def add_md_t(HE, He, irdnt=[]):  # sum derLays
@@ -109,7 +106,6 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         HE.n += He.n
         HE.Et = np.add(HE.Et, He.Et)
         if any(irdnt): HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
-        HE.Rt = np.add(HE.Rt, He.Rt)
 
     def add_H(HE, He, irdnt=[]):  # unpack down to numericals and sum them
 
@@ -122,7 +118,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
                         else:           HE.H[HE.H.index(Lay)] = CH(root=HE).copy(lay)  # Lay was []
             # default
             HE.add_md_t(He)  # [ext_md_C, lat_md_C, lay_md_C]
-            HE.Et = np.add(HE.Et, He.Et); HE.Rt = np.add(HE.Rt, He.Rt)
+            HE.Et = np.add(HE.Et, He.Et)
             HE.node_ += [node for node in He.node_ if node not in HE.node_]
             # node_ is empty in CL derH?
             if any(irdnt): HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
@@ -153,23 +149,22 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         else:       HE.md_t = [CH().copy(md_) for md_ in He.md_t]
         HE.n += He.n
         Et, et = HE.Et, He.Et
-        HE.Et = np.add(HE.Et, He.Et); HE.Rt = np.add(HE.Rt, He.Rt)
+        HE.Et = np.add(HE.Et, He.Et)
         if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
         root = HE
         while root is not None:
             root.Et = np.add(root.Et,He.Et)
             if isinstance(root, CH):
                 root.node_ += [node for node in He.node_ if node not in HE.node_]
-                root.Rt = np.add(root.Rt,He.Rt); root.n += He.n
+                root.n += He.n
                 root = root.root
             else:
                break  # root is G|L
         return HE  # for feedback in agg+
 
-
     def comp_md_(_He, He, rn=1, fagg=0, frev=0):
 
-        vm, vd, rm, rd, decm, decd = 0, 0, 0, 0, 0, 0
+        vm, vd, rm, rd = 0,0,0,0
         derLay = []
         for i, (_d, d) in enumerate(zip(_He.H[1::2], He.H[1::2])):  # compare ds in md_ or ext
             d *= rn  # normalize by compared accum span
@@ -177,27 +172,22 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
             if frev: diff = -diff  # from link with reversed dir
             match = min(abs(_d), abs(d))
             if (_d < 0) != (d < 0): match = -match  # negate if only one compared is negative
-            if fagg:
-                maxm = max(abs(_d), abs(d))
-                decm += abs(match) / maxm if maxm else 1  # match / max possible match
-                maxd = abs(_d) + abs(d)
-                decd += abs(diff) / maxd if maxd else 1  # diff / max possible diff
             vm += match - aves[i]  # fixed param set?
             vd += diff
             rm += vd > vm; rd += vm >= vd
             derLay += [match, diff]  # flat
 
-        return CH(H=derLay, Et=[vm,vd,rm,rd], Rt=[decm,decd], n=1)
+        return CH(H=derLay, Et=[vm,vd,rm,rd], n=1)
 
     def comp_md_t(_He, He):
 
         der_md_t = []; Et = [0,0,0,0]; Rt = [0,0]
         for _md_C, md_C in zip(_He.md_t, He.md_t):
 
-            der_md_C = _md_C.comp_md_(md_C, rn=1, fagg=0, frev=0)  # H is a list, use md_C
-            der_md_t += [der_md_C]; Et = np.add(Et, der_md_C.Et); Rt = np.add(Rt, der_md_C.Rt)
+            der_md_C = _md_C.comp_md_(md_C, rn=1, fagg=0,frev=0)  # H is a list, use md_C
+            der_md_t += [der_md_C]; Et = np.add(Et, der_md_C.Et)
 
-        return CH(md_t=der_md_t, Et=Et, Rt=Rt, n=2.5)
+        return CH(md_t=der_md_t, Et=Et, n=2.5)
 
     def comp_H(_He, He, rn=1, fagg=0, frev=0):  # unpack CHs down to numericals and compare them
 
@@ -236,8 +226,9 @@ def comp_slice(edge):  # root function
         P.rim_ = []; P.lrim = []; P.prim = []
     rng_recursion(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
     form_PP_(edge, edge.P_)
-    for PP in edge.node_:  # feedback
-        edge.mdLay.add_md_(PP.mdLay)
+    for PPt in edge.node_:
+        mdLay = PPt[4] if isinstance(PPt, list) else mdLay = PPt.mdLay  # CP
+        edge.mdLay.add_md_(mdLay)
 
 def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
@@ -290,7 +281,7 @@ def comp_P(_P,P, angle=None, distance=None, fder=0):  # comp dPs if fd else Ps
         vm = sum(H[::2]); vd = sum(abs(d) for d in H[1::2])
         rm = 1 + vd > vm; rd = 1 + vm >= vd
         n = (len(_P.dert_)+len(P.dert_)) / 2  # der value = ave compared n?
-        derLay = CH(Et=[vm,vd,rm,rd],H=H,n=n)
+        derLay = CH(Et=[vm,vd,rm,rd], H=H, n=n)
     # get aves:
     latuple = [(P+p)/2 for P,p in zip(_P.latuple[:-1],P.latuple[:-1])] + [[(A+a)/2 for A,a in zip(_P.latuple[-1],P.latuple[-1])]]
     link = CdP(nodet=[_P,P], mdLay=derLay, angle=angle, span=distance, yx=[(_y+y)/2,(_x+x)/2], latuple=latuple)
@@ -302,10 +293,10 @@ def comp_P(_P,P, angle=None, distance=None, fder=0):  # comp dPs if fd else Ps
 def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
 
     for P in iP_: P.merged = 0
-    PP_ = []
+    PPt_ = []
     for P in iP_:
         if not P.lrim:
-            PP_ += [P]; continue
+            PPt_ += [P]; continue
         _prim_ = P.prim; _lrim_ = P.lrim
         _P_ = {P}; link_ = set(); Et = [0,0,0,0]
         while _prim_:
@@ -317,62 +308,63 @@ def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
                 lrim_.update(set(_P.lrim) - link_)
                 _P.merged = 1
             _prim_, _lrim_ = prim_, lrim_
-        PP = sum2PP(root, list(_P_), list(link_), fd)
-        PP_ += [PP]
-        if not fd and len(PP.P_) > ave_L and PP.mdLay.Et[fd] >PP_aves[fd] * PP.mdLay.Et[2+fd]:
-            comp_link_(PP)
-            form_PP_(PP, PP.link_, fd=1)  # form sub_PPd_ in select PPs, not recursive
-    root.node_ = PP_
+        PPt = sum2PP(root, list(_P_), list(link_), fd)
+        PPt_ += [PPt]
+        P_, link_, mdLay = PPt[2:5]
+        if not fd and len(P_) > ave_L and mdLay.Et[fd] >PP_aves[fd] * mdLay.Et[2+fd]:
+            comp_link_(PPt)
+            form_PP_(PPt, link_, fd=1)  # form sub_PPd_ in select PPs, not recursive
+
+    if isinstance(root, list): root[2] = PPt_  # PPt
+    else: root.node_ = PPt_  # Cedge
+
 
 def comp_link_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
-    for dP in PP.link_:
+    link_ = PP[3]
+    for dP in link_:
         if dP.mdLay.Et[1] > aves[1]:
             for nmed, _rim_ in enumerate(dP.nodet[0].rim_):  # link.nodet is CP
                 for _dP in _rim_:
-                    if _dP not in PP.link_: continue  # skip those removed node's links
+                    if _dP not in link_: continue  # skip those removed node's links
                     dlink = comp_P(_dP,dP,fder=1)
                     if dlink:
                         dP.rim += [dlink]  # in lower node uplinks
                         dlink.nmed = nmed  # link mediation order0
 
-# replace with PPt version:
+# draft:
 def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
 
-    PP = [fd, root, P_, root[-1]]  # rng+1  # 1st layer of derH is mdLay
-    # P_ is CdPs if fd]
-    iRt = root.mdLay.Et[2:4] if root.mdLay else [0,0]  # add to rdnt
-    # += uplinks:
+    mdLay, latuple, link_, A, S, area, n, box = CH(), [0,0,0,0, 0, [0,0]], [], [0,0], 0, 0, 0, [0,0,0,0]
+    iRt = root[4].Et if isinstance(root,list) else root.mdLay.Et[2:4]   # add to rdnt
+    # add uplinks:
     for dP in dP_:
         if dP.nodet[0] not in P_ or dP.nodet[1] not in P_: continue
         dP.nodet[1].mdLay.add_md_(dP.mdLay, iRt)  # add to lower P
-        PP.link_ += [dP]
-        if fd: dP.root = PP
-        PP.A = np.add(PP.A,dP.angle)
-        PP.S += np.hypot(*dP.angle)  # links are contiguous but slanted
-    # += Ps:
+        link_ += [dP]  # link_
+        A = np.add(A,dP.angle)
+        S += np.hypot(*dP.angle)  # links are contiguous but slanted
+    # add Ps:
     celly_,cellx_ = [],[]
     for P in P_:
         L = P.latuple[-2]
-        PP.area += L; PP.n += L  # no + P.mdLay.n: current links only?
-        add_lat(PP.latuple, P.latuple)
+        area += L; n += L  # no + P.mdLay.n: current links only?
+        add_lat(latuple, P.latuple)
         if P.mdLay:  # CdP or lower P has mdLay
-            PP.mdLay.add_md_(P.mdLay)  # no separate extH, the links are unique here
-        if isinstance(P, CP):
-            for y,x in P.yx_:
-                y = int(round(y)); x = int(round(x))  # summed with float dy,dx in slice_edge?
-                PP.box = accum_box(PP.box,y,x); celly_+=[y]; cellx_+=[x]
-        if not fd: P.root = PP
-    if PP.mdLay:
-        PP.mdLay.Et[2:4] = [R+r for R,r in zip(PP.mdLay.Et[2:4], iRt)]
-    if isinstance(P_[0], CP):  # CdP has no box, yx
-        # pixmap:
-        y0,x0,yn,xn = PP.box
-        PP.mask__ = np.zeros((yn-y0, xn-x0), bool)
-        celly_ = np.array(celly_); cellx_ = np.array(cellx_)
-        PP.mask__[(celly_-y0, cellx_-x0)] = True
-
-    return PP
+            mdLay.add_md_(P.mdLay)
+        for y,x in P.yx_ if isinstance(P, CP) else [P.nodet[0].yx, P.nodet[1].yx]:  # CdP
+            y = int(round(y)); x = int(round(x))  # summed with float dy,dx in slice_edge?
+            box = accum_box(box,y,x); celly_+=[y]; cellx_+=[x]
+    if mdLay:
+        mdLay.Et[2:4] = [R+r for R,r in zip(mdLay.Et[2:4], iRt)]
+    y0,x0,yn,xn = box
+    mask__ = np.zeros((yn-y0, xn-x0), bool)  # pixmap
+    celly_ = np.array(celly_); cellx_ = np.array(cellx_)
+    mask__[(celly_-y0, cellx_-x0)] = True
+    # derH = [mdLay]
+    PPt = [root, P_, link_, mdLay, latuple, A, S, area, box, [[y0+yn]/2,[y0+yn]/2], n]
+    for P in P_: P.root = PPt
+    return PPt
 
 def add_lat(Lat,lat):
     Lat[:] = [P+p for P,p in zip(Lat[:-1],lat[:-1])] + [[A+a for A,a in zip(Lat[-1],lat[-1])]]

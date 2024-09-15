@@ -324,6 +324,29 @@ def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
         ret = CH(H=ret, Et=[mval,dval,mrdn,drdn], Rt=[mdec,ddec], n=1)  # if fagg only
     return ret
 
+def comp_md_(_He, He, rn=1, fagg=0, frev=0):
+
+        vm, vd, rm, rd, decm, decd = 0, 0, 0, 0, 0, 0
+        derLay = []
+        for i, (_d, d) in enumerate(zip(_He.H[1::2], He.H[1::2])):  # compare ds in md_ or ext
+            d *= rn  # normalize by compared accum span
+            diff = _d - d
+            if frev: diff = -diff  # from link with reversed dir
+            match = min(abs(_d), abs(d))
+            if (_d < 0) != (d < 0): match = -match  # negate if only one compared is negative
+            if fagg:
+                maxm = max(abs(_d), abs(d))
+                decm += abs(match) / maxm if maxm else 1  # match / max possible match
+                maxd = abs(_d) + abs(d)
+                decd += abs(diff) / maxd if maxd else 1  # diff / max possible diff
+            vm += match - aves[i]  # fixed param set?
+            vd += diff
+            rm += vd > vm; rd += vm >= vd
+            derLay += [match, diff]  # flat
+
+        return CH(H=derLay, Et=[vm,vd,rm,rd], Rt=[decm,decd], n=1)
+
+
 def rng_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__,Et, ~ graph CNN without backprop
 
     N__ = []; L__ = []; ET = [0,0,0,0]
@@ -358,4 +381,6 @@ def rng_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__,
         else:
             break
     return N__,L__,ET,rng
+
+
 
