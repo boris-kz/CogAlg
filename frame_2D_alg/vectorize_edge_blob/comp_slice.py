@@ -130,7 +130,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         while root is not None:
             root.Et = np.add(root.Et, He.Et)
             if isinstance(root, CH):
-                root.Rt = np.add(root.Rt, He.Rt); root.n += He.n
+                root.n += He.n
                 root.node_ += [node for node in He.node_ if node not in HE.node_]
                 root = root.root
             else: break  # root is G|L
@@ -226,8 +226,8 @@ def comp_slice(edge):  # root function
         P.rim_ = []; P.lrim = []; P.prim = []
     rng_recursion(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
     form_PP_(edge, edge.P_)
-    for PPt in edge.node_:
-        mdLay = PPt[4] if isinstance(PPt, list) else mdLay = PPt.mdLay  # CP
+    for N in edge.node_:
+        mdLay = N[3] if isinstance(N, list) else N.mdLay  # CP
         edge.mdLay.add_md_(mdLay)
 
 def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
@@ -310,7 +310,7 @@ def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
             _prim_, _lrim_ = prim_, lrim_
         PPt = sum2PP(root, list(_P_), list(link_), fd)
         PPt_ += [PPt]
-        P_, link_, mdLay = PPt[2:5]
+        P_, link_, mdLay = PPt[1:4]
         if not fd and len(P_) > ave_L and mdLay.Et[fd] >PP_aves[fd] * mdLay.Et[2+fd]:
             comp_link_(PPt)
             form_PP_(PPt, link_, fd=1)  # form sub_PPd_ in select PPs, not recursive
@@ -321,7 +321,7 @@ def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
 
 def comp_link_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
-    link_ = PP[3]
+    link_ = PP[2]
     for dP in link_:
         if dP.mdLay.Et[1] > aves[1]:
             for nmed, _rim_ in enumerate(dP.nodet[0].rim_):  # link.nodet is CP
@@ -336,7 +336,7 @@ def comp_link_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
 def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
 
     mdLay, latuple, link_, A, S, area, n, box = CH(), [0,0,0,0, 0, [0,0]], [], [0,0], 0, 0, 0, [0,0,0,0]
-    iRt = root[4].Et if isinstance(root,list) else root.mdLay.Et[2:4]   # add to rdnt
+    iRt = root[3].Et if isinstance(root,list) else root.mdLay.Et[2:4]   # add to rdnt
     # add uplinks:
     for dP in dP_:
         if dP.nodet[0] not in P_ or dP.nodet[1] not in P_: continue
@@ -362,7 +362,7 @@ def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
     celly_ = np.array(celly_); cellx_ = np.array(cellx_)
     mask__[(celly_-y0, cellx_-x0)] = True
     # derH = [mdLay]
-    PPt = [root, P_, link_, mdLay, latuple, A, S, area, box, [[y0+yn]/2,[y0+yn]/2], n]
+    PPt = [root, P_, link_, mdLay, latuple, A, S, area, box, [(y0+yn)/2,(y0+yn)/2], n]
     for P in P_: P.root = PPt
     return PPt
 

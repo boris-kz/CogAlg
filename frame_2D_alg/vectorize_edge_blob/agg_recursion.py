@@ -123,18 +123,17 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
             comp_slice(edge)
             # init for agg+:
             edge.derH = CH(H=[CH()]); edge.derH.H[0].root = edge.derH; edge.fback_ = []; edge.Et = [0,0,0,0]
-            # convert select Ps | PPts to CGs:
             if edge.mdLay.Et[0] * (len(edge.node_)-1)*(edge.rng+1) > ave * edge.mdLay.Et[2]:
                 pruned_Q = []
-                for N in edge.node_:  # PP -> G
-                    mdLay = N[4] if isinstance(N,list) else N.mdLay  # N is CP
+                for N in edge.node_:
+                    mdLay = N[3] if isinstance(N,list) else N.mdLay  # N is CP
                     if mdLay and mdLay.Et[0] > ave * mdLay.Et[2]:
-                        # convert to CG:
-                        if isinstance(N,list): fd, root, P_, link_, Lay, lat, A,S, area, box, [y,x], n = N
+                        # convert PP|P to G:
+                        if isinstance(N,list): root, P_, link_, Lay, lat, A,S, area, box, [y,x], n = N
                         else:  # single CP
-                            fd=0; root=edge; P_=[N]; link_=[]; Lay = N.mdLay; lat=N.latuple; [y,x]=N.yx; n=N.n
+                            root=edge; P_=[N]; link_=[]; Lay=N.mdLay; lat=N.latuple; [y,x]=N.yx; n=N.n
                             box = [y,x-len(N.dert_), y,x]; area = 1; A,S = None,None
-                        PP = CG(fd=fd, root=root, node_=P_, link_=link_, mdLay=Lay, latuple=lat, A=A,S=S, area=area, box=box, yx=[y,x], n=n)
+                        PP = CG(fd=0, root=root, node_=P_, link_=link_, mdLay=Lay, latuple=lat, A=A,S=S, area=area, box=box, yx=[y,x], n=n)
                         y0,x0,yn,xn = box
                         PP.aRad = np.hypot(*np.subtract(PP.yx,(yn,xn)))
                         PP.Et = [0,0,0,0]
@@ -173,48 +172,35 @@ def agg_recursion(root, Q, fd):  # breadth-first rng++ cross-comp -> eval cluste
 
 def rng_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__,Et, ~ graph CNN without backprop
 
-    Nt_ = []
-    for _G,G in combinations(_N_, r=2):  # set pre-rim_ and N__ for all G pairs
-        dy,dx = np.subtract(_G.yx, G.yx)
-        M = _G.Et[0]+G.Et[0]
-        rel_dist = np.hypot(dy,dx) / ((G.aRad+_G.aRad) + M)  # scale by G radii + M*coef, -rdn?
-        Nt_ += [[rel_dist, _G,G, dy,dx, _G.Et[0]+ G.Et[0]]]
-    _Nt_ = sorted(Nt_, key=lambda x: x[0])
     N__ = []; L__ = []; ET = [0,0,0,0]
-    rng = 1  # loop counter
+    _Nt_ = []
+    for _G, G in combinations(_N_, r=2):
+        radii = G.aRad + _G.aRad
+        dy,dx = np.subtract(_G.yx,G.yx)
+        dist = np.hypot(dy,dx)
+        _Nt_ += [[_G,G, dy,dx, radii,dist]]
+    icoef = .5
+    rng = 1  # redundant to len N__
     while _Nt_:
-        Nt_, N_, L_ = [],[],[]; Et = [0,0,0,0]
-        for i, Nt in enumerate(_Nt_):
-            #  skip match-mediated match: if G in g.nrim_[-1] and _G in g.nrim_[-1], or longer direct match priority?
-            rel_dist, _G, G, dy, dx, M = Nt
-            if rel_dist < max_dist:  # rng is not used in eval relative distance?
+        Nt_,N_,L_ = [],set(),[]; Et = [0,0,0,0]
+        for Nt in _Nt_:
+            _G,G, dy,dx, radii,dist = Nt
+            if set(_G.nrim_[-1]).intersection(G.nrim_[-1]):  # skip indirectly connected Gs, no direct match priority?
+                continue
+            M = _G.extH.Et[0] + G.extH.Et[0] if rng > 1 else (_G.derH.Et[0] + G.derH.Et[0]) * icoef  # internal vals coef: < external
+            if dist < max_dist * (radii*icoef) * M:  # max distance of likely matches *= prior G match * radius
                 Link = CL(nodet=[_G,G], S=2, A=[dy,dx], box=extend_box(G.box,_G.box))
                 comp_N(Link, Et, rng)
                 L_ += [Link]  # with -ve links
-                if Link.Et[0] > ave * Link.Et[2]:
-                    for g in _G,G:
-                        if g not in N_: N_ += [g]
-                    Et = np.add(Et,Link.Et)
-                else:  # matching pairs are not re-compared,
-                    Nt_ += _Nt_[i:]  # other pairs are weaker but their Ns may be strengthened by comp in prior pairs
-                    break
-            else: Nt_ += [Nt]  # re-eval N Ets
-        if Et[0] > ave * Et[2] * rng:
-            ET = np.add(ET, Et); L__ += [L_]; N__ += [N_]  # nest to sub-cluster?
-            _N_ = N_
-        rev_Nt_ = []; rM = 0; n = 0
-        for rel_dist, _G,G, dy,dx, M in Nt_:  # reval if extended N Ets
-            for g in [_G,G]:
-                if len(g.lrim_) > rng-1:  # matched in this loop
-                    for Lt in g.rim_[-1]:
-                        rM += Lt[0].Et[0] / ave; n+=1
-            if n:
-                rM /= n; rel_dist *= rM  # adjust by combined relative match
-                if rel_dist > max_dist:
-                    rev_Nt_ += [[rel_dist, _G,G, dy,dx, M * rM]]  # adjust pair value
-        if rev_Nt_:
-            _Nt_ = sorted(rev_Nt_, key=lambda x: x[0])  # only strong with current matches
-            rng += 1
+                if Link.Et[0] > ave:  # rdn is evaluated per layer, not individual comps?
+                    Et = np.add(Et, Link.Et)
+                    N_.update({_G,G})
+            else: Nt_ += [Nt]
+        if Et[0] > ave * Et[2]:
+            N__ += [N_]; L__ += [L_]; ET = np.add(ET, Et)
+            rng += 1  # sub-cluster / rng N_
+            _Nt_ = [Nt for Nt in Nt_ if Nt[0] in N_ or Nt[1] in N_]
+            # re-eval not-compared pairs with one incremented N.M
     return N__,L__,ET,rng
 
 
@@ -253,8 +239,9 @@ def rng_link_(iL_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
                     V += L.derH.Et[0] - ave * L.derH.Et[2] * rng
             if V > 0:  # rng+ if vM of extended N_t_
                 _L_ = L_; rng += 1
-            else:
-                break
+            else: break
+        else:
+            break
     return L__, LL__, ET, rng
 
 def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
@@ -285,7 +272,7 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
             else:  # append last layer
                 node.extH.H[-1].add_H(elay); node.lrim_[-1] += [Link]; node.nrim_[-1] +=[(_N,N)[rev]]
         # include negative links to form L_:
-        if len(node.rimt_) if fd else len(node.rim_) < rng:
+        if (len(node.rimt_) if fd else len(node.rim_)) < rng:
             if fd: node.rimt_ = [[[[Link,rev]],[]]] if dir else [[[],[[Link,rev]]]]  # add rng layer
             else:  node.rim_ += [[[Link, rev]]]
         else:
