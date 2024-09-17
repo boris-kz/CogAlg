@@ -48,12 +48,11 @@ max_dist = 2
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    def __init__(G, root_= None, root = None, rng=1, fd=0, node_=None, link_=None, Et=None, latuple=None, mdLay=None, derH=None, extH=None,
-                 box=None, yx=None, S=0, A=(0,0), n=0, area=0):
+    def __init__(G, root_= None, node_=None, link_=None, Et=None, latuple=None, mdLay=None, derH=None, extH=None,
+                 rng=1, fd=0, n=0, box=None, yx=None, S=0, A=(0,0), area=0):
         super().__init__()
         G.fd = 0 if fd else fd  # 1 if cluster of Ls | lGs?
-        G.root_ = [] if root_ is None else root_
-        G.root = root # mgraph agg+ layers (dgraph.node_ is CLs)
+        G.root_ = [] if root_ is None else root_ # same nodes in higher rng layers
         G.node_ = [] if node_ is None else node_ # convert to GG_ in agg++
         G.link_ = [] if link_ is None else link_ # internal links per comp layer in rng+, convert to LG_ in agg++
         G.Et = [0,0,0,0] if Et is None else Et   # rim_ Et, val to cluster, -rdn to eval xcomp
@@ -62,8 +61,9 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         # maps to node_H / agg+|sub+:
         G.derH = CH(root=G) if derH is None else derH  # sum from nodes, then append from feedback
         G.extH = CH(root=G) if extH is None else extH  # sum from rim_ elays, H maybe deleted
+        G.lrim_ = []  # +ve only
+        G.nrim_ = []
         G.rim_ = []  # direct external links, nested per rng
-        G.kHH = []  # kernel: hierarchy of rng layer _Ns
         G.rng = rng
         G.n = n   # external n (last layer n)
         G.S = S  # sparsity: distance between node centers
@@ -73,13 +73,8 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.box = [np.inf, np.inf, -np.inf, -np.inf] if box is None else box  # y0,x0,yn,xn
         G.yx = [0,0] if yx is None else yx  # init PP.yx = [(y0+yn)/2,(x0,xn)/2], then ave node yx
         G.alt_graph_ = []  # adjacent gap+overlap graphs, vs. contour in frame_graphs
-        # dynamic:
         G.visited_ = []
-        G.Nrim = []  # nodes on artificial frame | exemplar margin
-        G.lrim_ = []
-        G.nrim_ = []
         G.it = ([None,None])  # graph indices in root node_s, implicitly nested
-        # old:
         # G.fback_ = []  # always from CGs with fork merging, no dderHm_, dderHd_
         # Rdn: int = 0  # for accumulation or separate recursion count?
         # G.Rim = []  # links to the most mediated nodes
@@ -97,6 +92,7 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         super().__init__()
         # CL = binary tree of Gs, depth+/der+: CL nodet is 2 Gs, CL + CLs in nodet is 4 Gs, etc.,
         # unpack sequentially
+        l.root_ = [] if root_ is None else root_
         l.nodet = [] if nodet is None else nodet  # e_ in kernels, else replaces _node,node: not used in kernels
         l.A = [0,0] if A is None else A  # dy,dx between nodet centers
         l.S = 0 if S is None else S  # span: distance between nodet centers, summed into sparsity in CGs
@@ -107,7 +103,6 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         l.Vt = [0,0]  # for rim-overlap modulated segmentation, init derH.Et[:2]
         l.n = 1  # min(node_.n)
         l.Et = [0,0,0,0]
-        l.root_ =  [] if root_ is None else root_
         l.lrim_ = []
         l.nrim_ = []
         # add rimt_, elay if der+
@@ -133,7 +128,7 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
                         else:  # single CP
                             root=edge; P_=[N]; link_=[]; Lay=N.mdLay; lat=N.latuple; [y,x]=N.yx; n=N.n
                             box = [y,x-len(N.dert_), y,x]; area = 1; A,S = None,None
-                        PP = CG(fd=0, root=root, node_=P_, link_=link_, mdLay=Lay, latuple=lat, A=A,S=S, area=area, box=box, yx=[y,x], n=n)
+                        PP = CG(fd=0, root_=[root], node_=P_, link_=link_, mdLay=Lay, latuple=lat, A=A,S=S, area=area, box=box, yx=[y,x], n=n)
                         y0,x0,yn,xn = box
                         PP.aRad = np.hypot(*np.subtract(PP.yx,(yn,xn)))
                         PP.Et = [0,0,0,0]
@@ -181,14 +176,15 @@ def rng_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__,
         _Nt_ += [[_G,G, dy,dx, radii,dist]]
     icoef = .5
     rng = 1  # redundant to len N__
-    while _Nt_:
+    while True:  # if prior loop M
         Nt_,N_,L_ = [],set(),[]; Et = [0,0,0,0]
         for Nt in _Nt_:
             _G,G, dy,dx, radii,dist = Nt
-            if set(_G.nrim_[-1]).intersection(G.nrim_[-1]):  # skip indirectly connected Gs, no direct match priority?
+            if _G.nrim_ and G.nrim_ and set(_G.nrim_[-1]).intersection(G.nrim_[-1]):  # skip indirectly connected Gs, no direct match priority?
                 continue
-            M = _G.extH.Et[0] + G.extH.Et[0] if rng > 1 else (_G.derH.Et[0] + G.derH.Et[0]) * icoef  # internal vals coef: < external
-            if dist < max_dist * (radii*icoef) * M:  # max distance of likely matches *= prior G match * radius
+            M = (_G.mdLay.Et[0]+G.mdLay.Et[0])*icoef**2 + (_G.derH.Et[0]+G.derH.Et[0])*icoef + (_G.extH.Et[0]+G.extH.Et[0])
+            # nested icoef: internal M is less predictive than external M
+            if dist < max_dist * (radii*icoef**3) * M:  # max distance of likely matches *= prior G match * radius
                 Link = CL(nodet=[_G,G], S=2, A=[dy,dx], box=extend_box(G.box,_G.box))
                 comp_N(Link, Et, rng)
                 L_ += [Link]  # with -ve links
@@ -201,6 +197,8 @@ def rng_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__,
             rng += 1  # sub-cluster / rng N_
             _Nt_ = [Nt for Nt in Nt_ if Nt[0] in N_ or Nt[1] in N_]
             # re-eval not-compared pairs with one incremented N.M
+        else:
+            break
     return N__,L__,ET,rng
 
 
@@ -296,12 +294,12 @@ def segment(root, _N__, fd, irng):  # cluster Q: G__|L__, by value density of +v
     for rng, _N_ in enumerate(_N__, start=1):
         for N in _N_: N.merged = 0
         N_ = []
-        for N in N_:  # always CG?
-            if not N.lrim:  # then also not in Gt
+        for N in _N_:  # always CG?
+            if not N.lrim_[rng-1]:  # then also not in Gt
                 N_ += [N]; continue
-            if N.root_: node_,link_,Et,_nrim_,_lrim_ = N.root_[-1]  # extend Gt formed in lower rng
+            if N.root_: node_,link_,Et,_nrim_,_lrim_ = N.root_[-1]  # extend Gt formed in all lower rngs
             else:
-                node_ = {N}; link_ = set(); Et = [0,0,0,0]; _nrim_ = N.nrim; _lrim_ = N.lrim
+                node_ = {N}; link_ = set(); Et = [0,0,0,0]; _nrim_ = N.nrim_[rng-1]; _lrim_ = N.lrim_[rng-1]
             Gt = [node_,link_,Et,_nrim_,_lrim_]
             N.root_ += [Gt]
             while _nrim_:
@@ -311,16 +309,20 @@ def segment(root, _N__, fd, irng):  # cluster Q: G__|L__, by value density of +v
                     int_N = _L.nodet[0] if _L.nodet[1] is _N else _L.nodet[1]
                     # cluster by sum N_rim_Ms * L_rM, neg if neg link
                     if (int_N.Et[0]+_N.Et[0]) * (_L.Et[0]/ave) > ave:
-                        if _N.root_:
-                            merge(Gt, _N.root_[-1])  # _nrim_,_lrim_ are in Gt now
+                        if _N.root_ and isinstance(_N.root_[-1], list):
+                            merge(Gt, _N.root_[-1])
                         else:
-                            node_ += [_N]; link_ += [_L]; Et = np.add(Et, _L.Et)
-                            nrim_.update(set(_N.nrim) - node_)
-                            lrim_.update(set(_N.lrim) - link_)
+                            node_.add(_N); link_.add(_L); Et = np.add(Et, _L.Et); _N.root_ += [Gt]
+                            nrim_.update(set(_N.nrim_[rng-1]) - node_)
+                            lrim_.update(set(_N.lrim_[rng-1]) - link_)
                             _N.merged = 1
                 _nrim_, _lrim_ = nrim_, lrim_
-            N_ += [sum2graph(root, [list(node_), list(link_), Et], fd, rng)]
+            N_ += [Gt]
         N__ += [N_]
+    for i, N_ in enumerate(N__):  # batch conversion of Gts to CGs
+        for ii, N in enumerate(N_):
+            if isinstance(N, list):
+                N_[ii] = sum2graph(root, [list(N[0]), list(N[1]), N[2]], fd, rng=i)  # [node_,link_,Et], higher-rng Gs are supersets
     return N__  # Gs and isolated Ns
 
 def merge(Gt, gt):
@@ -331,11 +333,11 @@ def merge(Gt, gt):
         N.root_ += [Gt]
         N.merged = 1
     Et[:] = np.add(Et, et)
-    N_ += n_; Nrim -= set(n_)
-    L_ += l_; Lrim -= set(l_)
+    N_ += n_; Nrim = set(Nrim) - set(nrim)
+    L_ += l_; Lrim = set(Lrim) - set(lrim)
 
-    Nrim.update(nrim - set(N_))
-    Lrim.update(lrim - set(L_))
+    Nrim.update(set(nrim) - set(N_))
+    Lrim.update(set(lrim) - set(L_))
 
 def par_segment(root, Q, fd, rng):  # parallelizable by merging Gts initialized with each N
     # mostly old
