@@ -309,7 +309,7 @@ def segment(root, _N__, fd, irng):  # cluster Q: G__|L__, by value density of +v
                     int_N = _L.nodet[0] if _L.nodet[1] is _N else _L.nodet[1]
                     # cluster by sum N_rim_Ms * L_rM, neg if neg link
                     if (int_N.Et[0]+_N.Et[0]) * (_L.Et[0]/ave) > ave:
-                        if _N.root_ and isinstance(_N.root_[-1], list):
+                        if isinstance(_N.root_, list):
                             merge(Gt, _N.root_[-1])
                         else:
                             node_.add(_N); link_.add(_L); Et = np.add(Et, _L.Et); _N.root_ += [Gt]

@@ -141,10 +141,10 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         if irdnt is None: irdnt = []
         I = len(HE.H)  # min index
         if flat:
-            for i, lay in enumerate(He.H):
-                lay.i = I+i; lay.root = HE; HE.H += [lay]
-        else: He.i = I; He.root = HE; HE.H += [He]
-
+            for i, lay in enumerate(He.H):  # L.derH and root.derH.H should have different references?:
+                lay = CH().copy(lay); lay.i = I+i; lay.root = HE; HE.H += [lay]
+        else:
+            He = CH().copy(He); He.i = I; He.root = HE; HE.H += [He]
         if HE.md_t: HE.add_md_t(He)  # accumulate [lat_md_C,lay_md_C,ext_md_C]
         else:       HE.md_t = [CH().copy(md_) for md_ in He.md_t]
         HE.n += He.n

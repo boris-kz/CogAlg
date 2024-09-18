@@ -382,5 +382,18 @@ def rng_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__,
             break
     return N__,L__,ET,rng
 
+def merge(Gt, gt):
+
+    N_, L_, Et, Lrim, Nrim = Gt
+    n_, l_, et, lrim, nrim = gt
+    for N in n_:
+        N.root_ += [Gt]
+        N.merged = 1
+    Et[:] = np.add(Et, et)
+    N_.update(n_); Nrim = set(Nrim) - set(nrim)  # we need .update to concatenate set
+    L_.update(l_); Lrim = set(Lrim) - set(lrim)
+
+    Nrim.update(set(nrim) - set(N_))
+    Lrim.update(set(lrim) - set(L_))
 
 
