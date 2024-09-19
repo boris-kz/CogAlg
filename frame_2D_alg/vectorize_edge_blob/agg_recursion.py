@@ -290,46 +290,58 @@ def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
 
 def segment(root, iN__, fd, irng):  # cluster Q: G__|L__, by value density of +ve links per node
 
-    _re_N_, N_ = [],[]
-    for N in iN__[0]:  # 1st loop for CG Ns
-        if not N.lrim_[0]:
-            N_ += [N]; continue
-        node_ = {N}; link_ = set(); Et = np.array([0,0,0,0]); N.merged=0
-        nrim,lrim = set(),set()  # eval,merge _nrim_, replace with extended nrim_
-        Gt = [node_,link_,Et,0,nrim,lrim]
-        N.root_ = [Gt]
-        for _N,_L in zip(N.nrim_[0],N.lrim_[0]):
-            if _N.merged: continue
-            if (N.Et[0]+_N.Et[0]) * (_L.Et[0]/ave) > ave:  # cluster by sum N_rim_Ms * L_rM, neg if neg link
-                node_.add(_N); link_.add(_L); Et += _L.Et
-                nrim.update(set(_N.nrim_[0])-node_)
-                lrim.update(set(_N.lrim_[0])-link_)
-                _N.root_ += [Gt]; _N.merged = 1
-        _re_N_ += [Gt]
+    # 1st rnglay: init Gts with CG Ns
+    for G in iN__[0]: G.merged = 0
+    N_, _re_N_ = [],[]
+    for G in iN__[0]:
+        if not G.nrim_:
+            N_ += [G]; continue
+        node_,link_,Et, _nrim,_lrim = {G}, set(), np.array([.0,.0,.0,.0]), {G.nrim_[0]}, {G.lrim_[0]}
+        while _lrim:
+            nrim, lrim = set(), set()
+            for _G,_L in zip(_nrim,_lrim):
+                if _G.merged: continue
+                # cluster by sum G_rim_Ms * L_rM, neg if neg link
+                if (G.Et[0]+_G.Et[0]) * (_L.Et[0]/ave) > ave:
+                    node_.add(_G); link_.add(_L); Et += _L.Et
+                    nrim.update(set(_G.nrim_[0])-node_)
+                    lrim.update(set(_G.lrim_[0])-link_)
+                    _G.merged = 1
+            _nrim, _lrim = nrim,lrim  # replace with extended rims
+        Gt = [node_,link_, Et]
+        for n in node_: n.root_ = [Gt]
+        _re_N_ += [Gt]  # selective
         N_ += [Gt]
     N__ = [N_]
     rng = 1
-    while _re_N_:  # extend Gts with nrim formed in lower rng, not need for iN__[1:]?
-        # ET = np.array([0,0,0,0])
+    # higher rnglays: merge lower-rng Gts if current-rng lrims intersect, not need for iN__[1:]?
+    while _re_N_:
         re_N_, N_ = [],[]
         for Gt in _re_N_:
-            n_,l_,Et, mrg, nrim, lrim = Gt
-            n__,l__,Et_,mrg_,nrim_,lrim_ = n_[:],l_[:],Et[:],0,set(),set()
-            GT = [n__,l__,Et_,mrg_,nrim_,lrim_]  # rng Gt
-            for n in n_: n.root_ += [GT]
-            for _N,_L in zip(nrim,lrim):
-                _n_,_l_,_Et,_mrg,_nrim,_lrim = _N
-                if _mrg: continue  # was merged
-                # merge Gts: connected if nrims intersect, no new eval:
-                Et_ += Et; _N[3] = 1  # merged
-                for n in _n_: n.root_ += [GT]  # has no rng root yet
-                n__.update(_n_); nrim_.update(_nrim)
-                l__.update(_l_); lrim_.update(_lrim)
-            if nrim_:
-                re_N_ += [GT]  # has extended nrim
-            N_ += [GT]  # ET += Et_
-        N__ += [N_]
-        # if ET[0] > ave * ET[2]:
+            for G in Gt[0]: G.merged = 0
+        for Gt in _re_N_:
+            node_,link_,Et = Gt
+            Node_,Link_,ET = node_.copy(),link_.copy(),Et.copy()  # rng GT
+            for G in node_:
+                if len(G.nrim_) > rng and not G.merged:
+                    _nrim, _lrim = set(), set()  # still per G, not Gt?
+                    _nrim.update(set(G.nrim_[rng]) - node_)
+                    _lrim.update(set(G.lrim_[rng]) - link_)
+                    while _lrim:
+                        nrim,lrim = set(),set()
+                        for _G,_L in zip(_nrim,_lrim):
+                            if _G.merged: continue
+                            # cluster by sum G_rim_Ms * L_rM, neg if neg link
+                            if (G.Et[0]+_G.Et[0]) * (_L.Et[0]/ave) > ave:
+                                Node_.add(_G); Link_.add(_L); ET += _L.Et
+                                nrim.update(set(_G.nrim_[0])-Node_)
+                                lrim.update(set(_G.lrim_[0])-Link_)
+                            _G.merged = 1
+                        _nrim, _lrim = nrim,lrim  # replace with extended rims
+            Gt = [Node_,Link_, ET]
+            for n in Node_: n.root_ += [Gt]
+            _re_N_ += [Gt]  # selective
+        N__ += [re_N_]
         _re_N_ = re_N_
         rng += 1
     for i, N_ in enumerate(N__):  # batch conversion of Gts to CGs
