@@ -218,7 +218,7 @@ def comp_pars(_pars, pars, rn):  # compare Ns, kLays or partial graphs in mergin
 
     return dlay
 
-def segment(root, Q, fd, rng):  # cluster iN_(G_|L_) by weight of shared links, initially single linkage
+def segment0(root, Q, fd, rng):  # cluster iN_(G_|L_) by weight of shared links, initially single linkage
 
     N_, max_ = [],[]
     # init Gt per G|L node:
@@ -265,7 +265,7 @@ def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
 
     return CH(H=[mL,dL, mS,dS, mA,dA], Et=[M,D,mrdn,drdn], Rt=[mdec,ddec], n=0.5)
 
-def segment(root, Q, fd, rng):  # cluster Q: G_|L_, by value density of +ve links per node
+def segment1(root, Q, fd, rng):  # cluster Q: G_|L_, by value density of +ve links per node
     '''
     convert to bottom-up:
     '''
@@ -395,5 +395,121 @@ def merge(Gt, gt):
 
     Nrim.update(set(nrim) - set(N_))
     Lrim.update(set(lrim) - set(L_))
+
+def par_segment(root, Q, fd, rng):  # parallelizable by merging Gts initialized with each N
+    # mostly old
+    N_, max_ = [],[]
+    # init Gt per G|L node:
+    for N in Q:
+        Lrim = [Lt[0] for Lt in (N.rimt_[-1][0] + N.rimt_[-1][1] if fd else N.rim_[-1])]  # external links
+        Lrim = [L for L in Lrim if L.Et[fd] > ave * (L.Et[2+fd]) * rng]  # +ve to merge Gts
+        Nrim = [_N for L in Lrim for _N in L.nodet if _N is not N]  # external nodes
+        Gt = [[N],[],[0,0,0,0], Lrim,Nrim]
+        N.root = Gt
+        N_ += [Gt]
+        # select exemplar maxes to segment clustering:
+        emax_ = [eN for eN in Nrim if eN.Et[fd] >= N.Et[fd] or eN in max_]  # _N if _N == N
+        if not emax_: max_ += [Gt]  # N.root, if no higher-val neighbors
+        # extended rrim max: V * k * max_rng?
+    for Gt in N_: Gt[3] = [_N.root for _N in Gt[3]]  # replace eNs with Gts
+    for Gt in max_ if max_ else N_:
+        node_,link_,Et, Lrim,Nrim = Gt
+        while True:  # while Nrim, not revised
+            _Nrim_,_Lrim_ = [],[]  # recursive merge connected Gts
+            for _Gt,_L in zip(Nrim,Lrim):  # always single N unless parallelized
+                if _Gt not in N_: continue  # was merged
+                for L in _Gt[3]:
+                    if L in Lrim and (len(_Lrim_) > ave_L or len(Lrim) > ave_L):  # density-based
+                        merge(Gt,_Gt, _Nrim_,_Lrim_); N_.remove(_Gt)
+                        break  # merge if any +ve shared external links
+            if _Nrim_:
+                Nrim[:],Lrim[:] = _Nrim_,_Lrim_  # for clustering, else break, contour = term rims?
+            else: break
+    return [sum2graph(root, Gt[:3], fd, rng) for Gt in N_]
+
+
+def segment(root, iN__, fd, irng):  # cluster Q: G__|L__, by value density of +ve links per node
+
+    # rng=1: cluster connected Gs in Gts, then rng+: merge connected Gts into higher Gts
+    for G in iN__[0]:
+        G.merged = 0
+    N_,_re_N_ = [],[]
+    for G in iN__[0]:  # not need for iN__[1:]?
+        if not G.nrim_:
+            N_ += [G]; continue
+        node_,link_,Et, _nrim,_lrim = {G}, set(), np.array([.0,.0,.0,.0]), {G.nrim_[0]}, {G.lrim_[0]}
+        while _lrim:
+            nrim, lrim = set(), set()
+            for _G,_L in zip(_nrim,_lrim):
+                if _G.merged: continue
+                for g in node_:  # compare external _G to all internal nodes, include if any of them match
+                    L_ = g.lrim_[0].intersect(_G.lrim_[0])
+                    if L_:
+                        L = L_[0]  # <= 1 link between two nodes
+                        if (g.Et[0]+_G.Et[0]) * (L.Et[0]/ave) > ave:  # cluster by sum G_rim_Ms * L_rM, neg if neg link
+                            node_.add(_G); link_.add(_L); Et += _L.Et
+                            nrim.update(set(_G.nrim_[0])-node_)
+                            lrim.update(set(_G.lrim_[0])-link_)
+                            _G.merged = 1
+                            break
+            _nrim, _lrim = nrim,lrim  # replace with extended rims
+        Gt = [node_,link_, Et,0]
+        for n in node_: n.root_ = [Gt]
+        _re_N_ += [Gt]  # selective
+        N_ += [Gt]
+    N__ = [N_]
+    rng = 1
+    # rng+: merge Gts connected via G.lrim_[rng] in their node_s into higher Gts
+    while True:
+        re_N_, N_ = [],[]
+        for Gt in _re_N_:
+            for G in Gt[0]: G.merged = 0
+        for node_,link_,Et, mrg in _re_N_:
+            if mrg: continue
+            Node_,Link_,ET = node_.copy(),link_.copy(),Et.copy()  # rng GT
+            for G in node_:
+                if not G.merged and len(G.nrim_) > rng:
+                    _nrim = G.nrim_[rng] - Node_
+                    _lrim = G.lrim_[rng] - Link_
+                    while _lrim:
+                        nrim,lrim = set(),set()
+                        for _G,_L in zip(_nrim,_lrim):
+                            if _G.merged: continue  # or if _G.root_[-1][3]: same?
+                            if (G.Et[0]+_G.Et[0]) * (_L.Et[0]/ave) > ave:
+                                n_ = _G.root_[-1][0]; Node_.add(n_)
+                                for g in n_: g.merged = 0
+                                Link_.add(_L); Link_.add(_G.root_[-1][1])
+                                ET += _L.Et + _G.root_[-1][2]
+                                nrim.update(set(_G.nrim_[rng])-Node_)
+                                lrim.update(set(_G.lrim_[rng])-Link_)
+                            _G.merged = 1
+                            _G.root_[-1][3] = 1  # redundant?
+                        _nrim, _lrim = nrim,lrim  # replace with extended rims
+                Gt = [Node_,Link_, ET,0]
+                for n in Node_: n.root_ += [Gt]
+                re_N_ += [Gt]  # if len(G.nrim_) > rng
+        if re_N_:
+            rng += 1; N__ += [re_N_]; _re_N_ = re_N_
+        else:
+            break
+    for i, N_ in enumerate(N__):  # batch conversion of Gts to CGs
+        for ii, N in enumerate(N_):
+            if isinstance(N, list):  # not CG
+                N_[ii] = sum2graph(root, [list(N[0]), list(N[1]), N[2]], fd, rng=i)
+                # [node_,link_,Et], higher-rng Gs are supersets
+    iN__[:] = N__  # Gs and isolated Ns
+
+def set_attrs(Q, root):
+
+    for e in Q:
+        e.visited_ = []
+        if isinstance(e, CL):
+            e.rimt_ = []  # nodet-mediated links, same der order as e
+            e.root_ = [root]
+        if hasattr(e,'extH'): e.derH.append_(e.extH)  # no default CL.extH
+        else: e.extH = CH()  # set in sum2graph
+        e.Et = [0,0,0,0]
+        e.aRad = 0
+    return Q
 
 

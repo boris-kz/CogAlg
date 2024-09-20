@@ -194,7 +194,6 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         DLay = CH(node_=_He.node_+He.node_).add_H(_He.comp_md_t(He))
         # node_ is mediated comparands, default comp He.md_t per He,
         # H=[] in bottom | deprecated layer
-
         for _lay, lay in zip(_He.H, He.H):  # loop extHs or [mdlat,mdLay,mdext] rng tuples, flat
             if _lay and lay:
                 dLay = _lay.comp_H(lay, rn, fagg, frev)  # comp He.md_t, comp,unpack lay.H
@@ -242,8 +241,7 @@ def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and conti
             if len(P.rim_) < rng-1: continue  # no _rng_link_ or top row
             rng_link_ = []; pre_ = []  # per rng+
             for _P in _pre_:  # prelinks
-                _y,_x = _P.yx; y,x = P.yx
-                dy,dx = np.subtract([y,x],[_y,_x]) # dy,dx between node centers
+                dy,dx = np.subtract(P.yx,_P.yx) # dy,dx between node centers
                 if abs(dy)+abs(dx) <= rng*2:  # <max Manhattan distance
                     if len(_P.rim_) < rng-1: continue
                     link = comp_P(_P,P, angle=[dy,dx], distance=np.hypot(dy,dx),fder=0)
@@ -287,7 +285,7 @@ def comp_P(_P,P, angle=None, distance=None, fder=0):  # comp dPs if fd else Ps
     link = CdP(nodet=[_P,P], mdLay=derLay, angle=angle, span=distance, yx=[(_y+y)/2,(_x+x)/2], latuple=latuple)
     # if v > ave * r:
     if link.mdLay.Et[fder] > aves[fder] * link.mdLay.Et[fder+2]:
-        P.lrim += [link]; P.prim +=[_P]; _P.prim +=[P]  # add Link as uplink in P.lrim
+        P.lrim += [link]; P.prim +=[_P]  # add Link as uplink in P.lrim
         return link
 
 def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
@@ -296,12 +294,12 @@ def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
     PPt_ = []
     for P in iP_:
         if not P.lrim:
-            PPt_ += [P]; continue
+            PPt_ += [P]; continue   # also, P hasn't been mark as merged
         _prim_ = P.prim; _lrim_ = P.lrim
         _P_ = {P}; link_ = set(); Et = [0,0,0,0]
         while _prim_:
             prim_,lrim_ = set(),set()
-            for _P,_L in zip(_prim_,_lrim_):
+            for _P,_L in zip(_prim_,_lrim_):    # _P,_L won't align as _lrim_ contains only uplinks
                 if _P.merged: continue  # was merged
                 _P_.add(_P); link_.add(_L); Et = np.add(Et, _L.mdLay.Et)
                 prim_.update(set(_P.prim) - _P_)
@@ -310,12 +308,15 @@ def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
             _prim_, _lrim_ = prim_, lrim_
         PPt = sum2PP(root, list(_P_), list(link_), fd)
         PPt_ += [PPt]
-        P_, link_, mdLay = PPt[1:4]
-        if not fd and len(P_) > ave_L and mdLay.Et[fd] >PP_aves[fd] * mdLay.Et[2+fd]:
-            comp_link_(PPt)
-            form_PP_(PPt, link_, fd=1)  # form sub_PPd_ in select PPs, not recursive
 
-    if isinstance(root, list): root[2] = PPt_  # PPt
+    for PPt in PPt_:
+        if isinstance(PPt, list):   # PPt_ contains a mix of CPs and lists PPts
+            P_, link_, mdLay = PPt[1:4]
+            if not fd and len(P_) > ave_L and mdLay.Et[fd] >PP_aves[fd] * mdLay.Et[2+fd]:
+                comp_link_(PPt)
+                form_PP_(PPt, link_, fd=1)  # form sub_PPd_ in select PPs, not recursive
+
+    if isinstance(root, list): root[2] = PPt_  # PPt. PPt_ replaces link_ (root[2])?
     else: root.node_ = PPt_  # Cedge
 
 
@@ -429,30 +430,38 @@ if __name__ == "__main__":
         mask = np.zeros(shape, bool)
         mask[mask_nonzero] = True
 
-        def draw_PP(_PP):
-            if _PP.node_: print(_PP, "has node_")
-            for fd, PP_ in enumerate(_PP.node_):
-                if not PP_: continue
-                plt.imshow(mask, cmap='gray', alpha=0.5)
-                fork = 'der+' if isinstance(PP_[0].P_[0], CdP) else 'rng+'
-                plt.title(f"Number of PP{'d' if fd else 'm'}s: {len(PP_)}, {fork}")
-                for PP in PP_:
-                    nodet_set = set()
-                    for P in PP.P_:
-                        (y, x) = P.yx - yx0
-                        plt.plot(x, y, "ok")
-                    for dP in PP.link_:
-                        _node, node = dP.nodet
-                        if (_node.id, node.id) in nodet_set:  # verify link uniqueness
-                            raise ValueError(
-                                "link not unique between {_node} and {node}. PP.link_:\n" +
-                                "\n".join(map(lambda dP: f"dP.id={dP.id}, _node={dP.nodet[0]}, node={dP.nodet[1]}", PP.link_))
-                            )
-                        nodet_set.add((_node.id, node.id))
-                        assert _node.yx < node.yx  # verify that link is up-link
-                        (_y, _x), (y, x) = _node.yx - yx0, node.yx - yx0
-                        plt.plot([_x, x], [_y, y], "-k")
-                plt.show()
-                for PP in PP_: draw_PP(PP)
+        def draw_PP(rootPPt):
+            root, P_, link_, mdLay, latuple, A, S, area, box, yx, n = rootPPt
+            if not link_:
+                print("PP has no link, len(P_) == 1?")
+                assert len(P_) == 1
+                return
 
-        draw_PP(edge)
+            if not isinstance(link_[0], CdP):   # subPPt_ replaces link_?
+                print("PP has children")
+                assert isinstance(link_[0], list)
+                for PPt in link_:
+                    draw_PP(PPt)
+            print("Drawing PP...")
+
+            plt.imshow(mask, cmap='gray', alpha=0.5)
+            # plt.title("")
+            nodet_set = set()
+            for P in P_:
+                (y, x) = P.yx - yx0
+                plt.plot(x, y, "ok")
+            for dP in link_:
+                if not isinstance(dP, CdP): break
+                _node, node = dP.nodet
+                if (_node.id, node.id) in nodet_set:  # verify link uniqueness
+                    raise ValueError(
+                        "link not unique between {_node} and {node}. PP.link_:\n" +
+                        "\n".join(map(lambda dP: f"dP.id={dP.id}, _node={dP.nodet[0]}, node={dP.nodet[1]}", PP.link_))
+                    )
+                nodet_set.add((_node.id, node.id))
+                assert _node.yx < node.yx  # verify that link is up-link
+                (_y, _x), (y, x) = _node.yx - yx0, node.yx - yx0
+                plt.plot([_x, x], [_y, y], "-k")
+            plt.show()
+        for PPt in edge.node_:
+            draw_PP(PPt)
