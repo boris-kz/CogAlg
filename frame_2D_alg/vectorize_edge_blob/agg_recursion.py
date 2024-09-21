@@ -139,9 +139,9 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
 
 def agg_recursion(root, Q, fd):  # breadth-first rng++ cross-comp -> eval cluster, fd recursion
 
-    N__,L__,Et,rng = rng_link_(Q) if fd else rng_node_(Q)  # cross-comp PP_/ edge|frame, sub++/ L_
+    N__,L__,Et,rng = rng_link_(Q) if fd else rng_node_(Q)  # cross-comp edge|frame PP_) node_
     m,d,mr,dr = Et
-    fvd = d > ave_d * dr*(rng+1); fvm = m > ave * mr*(rng+1) # operation/ V-rdn, result/ V alone?
+    fvd = d > ave_d * dr*(rng+1); fvm = m > ave * mr*(rng+1)  # op eval/ V-rdn, result eval/ V
     if fvd or fvm:
         root.Et = np.add(root.Et,Et); L_ = [L for L_ in L__ for L in L_]
         # root += L.derH:
@@ -155,7 +155,7 @@ def agg_recursion(root, Q, fd):  # breadth-first rng++ cross-comp -> eval cluste
             agg_recursion(root, L_,fd=1)  # appends last aggLay, L_=lG_ if segment
         # rng_node_:
         if fvm and len(N__[0]) > ave_L:  # cluster ave_L != xcomp ave_L?
-            segment(root, N__, fd,rng)  # cluster rngLays in root.node_?
+            cluster_N__(root, N__, fd)  # cluster rngLays in root.node_?
             for N_ in N__:  # replace root.node_ with nested H of graphs
                 if len(N_) > ave_L:
                     agg_recursion(root, N_,fd=0)  # adds higher aggLay / recursive call
@@ -200,7 +200,6 @@ def rng_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__,
         else:
             break
     return N__,L__,ET,rng
-
 
 def rng_link_(iL_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
 
@@ -266,9 +265,9 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
     for rev, node in zip((0,1),(N,_N)):  # reverse Link direction for N
         if Et[0] > ave:  # for bottom-up segment:
             if len(node.lrim_) < rng:  # add +ve layer
-                node.extH.append_(elay); node.lrim_ += [[Link]]; node.nrim_ +=[[(_N,N)[rev]]] # _node
+                node.extH.append_(elay); node.lrim_ += [{Link}]; node.nrim_ += [{(_N,N)[rev]}]  # _node
             else:  # append last layer
-                node.extH.H[-1].add_H(elay); node.lrim_[-1] += [Link]; node.nrim_[-1] +=[(_N,N)[rev]]
+                node.extH.H[-1].add_H(elay); node.lrim_[-1].update(Link); node.nrim_[-1].update((_N,N)[rev])
         # include negative links to form L_:
         if (len(node.rimt_) if fd else len(node.rim_)) < rng:
             if fd: node.rimt_ = [[[[Link,rev]],[]]] if dir else [[[],[[Link,rev]]]]  # add rng layer
@@ -294,17 +293,16 @@ def cluster_from_G(G, _nrim, _lrim, rng=0):
     while _lrim:
         nrim, lrim = set(), set()
         for _G,_L in zip(_nrim, _lrim):
-            if _G.merged: continue
+            if _G.merged or len(_G.lrim_) < rng: continue
             for g in node_:  # compare external _G to all internal nodes, include if any of them match
                 L_ = g.lrim_[rng] & _G.lrim_[rng]  # intersect
                 if L_:
                     L = L_.pop()  # the only element
                     if (g.Et[0] + _G.Et[0]) * (L.Et[0]/ave) > ave:  # cluster by sum G_rim_Ms * L_rM, neg if neg link
-                        if isinstance(_G.root_,list):
-                            Gt = _G.root_[-1]  # root_[rng]?
-                            for g in Gt[0]: g.merged = 0
+                        if isinstance(_G.root_,list) and len(_G.root_)>rng:
+                            Gt = _G.root_[rng]
                             node_.update(Gt[0])
-                            link_.update(Gt[1],_L)
+                            link_.update(Gt[1]); link_.add(_L)  # previously external
                             Et += _L.Et + Gt[2]
                             Gt[3] = 1
                         else:
@@ -312,31 +310,31 @@ def cluster_from_G(G, _nrim, _lrim, rng=0):
                         nrim.update(set(_G.nrim_[rng]) - node_)
                         lrim.update(set(_G.lrim_[rng]) - link_)
                         _G.merged = 1
-                        break  # match found
+                        # match found
+                        break
         _nrim,_lrim = nrim, lrim
-
     return node_, link_, Et
 
 def cluster_N__(root, iN__, fd):  # cluster G__|L__ by value density of +ve links per node
 
     # rng=1: cluster connected Gs into Gts
-    for G in iN__[0]: G.merged = 0
+    for G in iN__[0]:
+        G.merged = 0
     N_, _re_N_ = [],[]
     for G in iN__[0]:
         if not G.nrim_:
             N_.append(G); continue
         node_, link_, Et = cluster_from_G(G, G.nrim_[0], G.lrim_[0])
         Gt = [node_, link_, Et, 0]
-        for n in node_: n.root_ = [Gt]
+        for n in node_:
+            n.root_ = [Gt]
         _re_N_.append(Gt)
         N_.append(Gt)
     N__ = [N_]
     rng = 1
     # rng+: merge Gts connected via G.lrim_[rng] in their node_s into higher Gts
     while True:
-        re_N_ = []
-        for Gt in _re_N_:
-            for G in Gt[0]: G.merged = 0
+        re_N_ = []; reset_merged(_re_N_, rng)
         for _node_,_link_,_Et, mrg in _re_N_:
             if mrg: continue
             Node_, Link_, ET = _node_.copy(),_link_.copy(),_Et.copy()
@@ -346,9 +344,10 @@ def cluster_N__(root, iN__, fd):  # cluster G__|L__ by value density of +ve link
                     Node_.update(node_)
                     Link_.update(link_)
                     ET += Et
-            Gt = [Node_, Link_, ET, 0]
-            for n in Node_: n.root_.append(Gt)
-            re_N_.append(Gt)
+            if ET[fd] > _Et[fd] * ave:
+                Gt = [Node_, Link_, ET, 0]
+                for n in Node_: n.root_.append(Gt)
+                re_N_.append(Gt)
         if re_N_:
             N__.append(re_N_)
             _re_N_ = re_N_
@@ -361,12 +360,32 @@ def cluster_N__(root, iN__, fd):  # cluster G__|L__ by value density of +ve link
                 N_[ii] = sum2graph(root, [list(N[0]), list(N[1]), N[2]], fd, rng=i)
     iN__[:] = N__
 
+def reset_merged(Gt_,rng):
+
+    for Gt in Gt_:
+        for G in Gt[0]:
+            G.merged = 0
+            if len(G.nrim_) > rng:
+                for n in G.nrim_[rng]: n.merged = 0
+
+def set_attrs(Q, root):
+
+    for e in Q:
+        e.visited_ = []
+        if isinstance(e, CL):
+            e.rimt_ = []  # nodet-mediated links, same der order as e
+            e.root_ = [root]
+        if hasattr(e,'extH'): e.derH.append_(e.extH)  # no default CL.extH
+        else: e.extH = CH()  # set in sum2graph
+        e.Et = [0,0,0,0]
+        e.aRad = 0
+    return Q
 
 def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
     N_, L_, Et = grapht  # [node_, link_, Et]
     # flattened N__, L__ if segment / rng++
-    graph = CG(fd=fd, root_ = [root], node_=N_, link_=L_, rng=rng, Et=Et)
+    graph = CG(fd=fd, root_ = root, node_=N_, link_=L_, rng=rng, Et=Et)  # root_ will be updated to list roots in rng_node later?
     yx = [0,0]
     lay0 = CH(node_= N_)  # comparands, vs. L_: summands?
     for link in L_:  # unique current-layer mediators: Ns if fd else Ls
