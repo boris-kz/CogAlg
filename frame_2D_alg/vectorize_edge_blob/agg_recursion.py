@@ -56,7 +56,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.root_ = [] if root_ is None else root_ # same nodes in higher rng layers
         G.node_ = [] if node_ is None else node_ # convert to GG_ in agg++
         G.link_ = [] if link_ is None else link_ # internal links per comp layer in rng+, convert to LG_ in agg++
-        G.Et = [0,0,0,0] if Et is None else Et   # rim_ Et, val to cluster, -rdn to eval xcomp
+        G.Et = [0,0,0,0] if Et is None else Et   # redundant to extH.Et? rim_ Et, val to cluster, -rdn to eval xcomp
         G.latuple = [0,0,0,0,0,[0,0]] if latuple is None else latuple  # lateral I,G,M,Ma,L,[Dy,Dx]
         G.mdLay = CH(root=G) if mdLay is None else mdLay
         # maps to node_H / agg+|sub+:
@@ -103,10 +103,10 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         l.H_ = [] if H_ is None else H_  # if agg++| sub++?
         l.Vt = [0,0]  # for rim-overlap modulated segmentation, init derH.Et[:2]
         l.n = 1  # min(node_.n)
-        l.Et = [0,0,0,0]
+        l.Et = [0,0,0,0]  # redundant to derH.Et?
         l.lrim_ = []
         l.nrim_ = []
-        # add rimt_, elay if der+
+        # add rimt_, elay | extH if der+
     def __bool__(l): return bool(l.derH.H)
 
 
@@ -258,13 +258,12 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link.derH=dH, comparand rim+
     if _N.derH and N.derH:
         dderH = _N.derH.comp_H(N.derH, rn, fagg=1)  # comp shared layers
         elay.append_(dderH, flat=1)
-    Et = elay.Et
-    iEt[:] = np.add(iEt,Et); N.Et[:] = np.add(N.Et,Et); _N.Et[:] = np.add(_N.Et,Et)
-    Link.derH = elay; elay.root = Link; Link.Et = Et; Link.n = min(_N.n,N.n)
-    Link.nodet = [_N,N]; Link.yx = np.add(_N.yx,N.yx) /2
+
+    iEt[:] = np.add(iEt,elay.Et)
+    Link.derH = elay; elay.root = Link; Link.n = min(_N.n,N.n); Link.nodet = [_N,N]; Link.yx = np.add(_N.yx,N.yx) /2
     # prior S,A
     for rev, node in zip((0,1),(N,_N)):  # reverse Link direction for N
-        if Et[0] > ave:  # for bottom-up segment:
+        if elay.Et[0] > ave:  # for bottom-up segment:
             if len(node.lrim_) < rng:  # add +ve layer
                 node.extH.append_(elay); node.lrim_ += [{Link}]; node.nrim_ += [{(_N,N)[rev]}]  # _node
             else:  # append last layer
@@ -290,25 +289,25 @@ def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
 
 def cluster_from_G(G, _nrim, _lrim, rng=0):
 
-    node_, link_, Et = {G}, set(), np.array([0.0, 0.0, 0.0, 0.0])
+    node_, link_, Et = {G}, set(), np.array([0.0,0.0,0.0,0.0])  # m,r only?
     while _lrim:
         nrim, lrim = set(), set()
         for _G,_L in zip(_nrim, _lrim):
-            if _G.merged or len(_G.lrim_) < rng: continue
+            if _G.merged or len(_G.lrim_) < rng:
+                continue
             for g in node_:  # compare external _G to all internal nodes, include if any of them match
-                L_ = g.lrim_[rng] & _G.lrim_[rng]  # intersect
-                if L_:
-                    L = L_.pop()  # the only element
-                    if ((g.Et[0]- ave*g.Et[2]) + (_G.Et[0]- ave*_G.Et[2])) * (L.Et[0] / ave) > ave * ccoef:
-                        # cluster by sum G_rim_V * L_rM, neg if neg link
-                        if isinstance(_G.root_,list) and len(_G.root_)>rng:
+                L = next(iter(g.lrim_[rng] & _G.lrim_[rng]), None)  # intersect = [+link] | None
+                if L:
+                    if ((g.Et[0]-ave*g.Et[2]) + (_G.Et[0]-ave*_G.Et[2])) * (L.derH.Et[0]/ave) > ave * ccoef:  # cluster/ sum G_rim_V * L_rM
+                        if isinstance(_G.root_, list) and len(_G.root_) > rng:
+                            # rng+: merge rng-1 roots
                             Gt = _G.root_[rng]
                             node_.update(Gt[0])
-                            link_.update(Gt[1]); link_.add(_L)  # _L was external
-                            Et += _L.Et + Gt[2]
+                            link_.update(Gt[1],[_L])  # L was external
+                            Et += _L.derH.Et + Gt[2]
                             Gt[3] = 1
-                        else:
-                            node_.add(_G); link_.add(_L); Et += _L.Et
+                        else:  # rng=1: add Ns
+                            node_.add(_G); link_.add(_L); Et += _L.derH.Et
                         nrim.update(set(_G.nrim_[rng]) - node_)
                         lrim.update(set(_G.lrim_[rng]) - link_)
                         _G.merged = 1
@@ -340,7 +339,7 @@ def cluster_N__(root, iN__, fd):  # cluster G__|L__ by value density of +ve link
         re_N_ = []; reset_merged(_re_N_, rng)
         for _node_,_link_,_Et, mrg in _re_N_:
             if mrg: continue
-            Node_, Link_, ET = _node_.copy(),_link_.copy(),_Et.copy()
+            Node_, Link_, ET = set(),set(), np.array([0.0,0.0,0.0,0.0])  # m,r only?
             for G in _node_:
                 if not G.merged and len(G.nrim_) > rng:
                     node_ = G.nrim_[rng]-Node_
@@ -349,8 +348,8 @@ def cluster_N__(root, iN__, fd):  # cluster G__|L__ by value density of +ve link
                     Node_.update(node_)
                     Link_.update(link_)
                     ET += Et
-            if ET[0] > _Et[2] * ave:
-                Gt = [Node_, Link_, ET, 0]
+            if ET[0] > ET[2] * ave:  # additive current-layer V: form higher Gt
+                Gt = [Node_.update(_node_), Link_.update(_link_), ET+_Et, 0]
                 for n in Node_: n.root_.append(Gt)
                 re_N_.append(Gt)
         if re_N_:
