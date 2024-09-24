@@ -499,17 +499,12 @@ def segment(root, iN__, fd, irng):  # cluster Q: G__|L__, by value density of +v
                 # [node_,link_,Et], higher-rng Gs are supersets
     iN__[:] = N__  # Gs and isolated Ns
 
-def set_attrs(Q, root):
-
-    for e in Q:
-        e.visited_ = []
-        if isinstance(e, CL):
-            e.rimt_ = []  # nodet-mediated links, same der order as e
-            e.root_ = [root]
-        if hasattr(e,'extH'): e.derH.append_(e.extH)  # no default CL.extH
-        else: e.extH = CH()  # set in sum2graph
-        e.Et = [0,0,0,0]
-        e.aRad = 0
-    return Q
+def negate(He):  # negate is no longer useful?
+    if isinstance(He.H[0], CH):
+        for i,lay in enumerate(He.H):
+            He.H[i] = negate(lay)
+    else:  # md_
+        He.H[1::2] = [-d for d in He.H[1::2]]
+    return He
 
 
