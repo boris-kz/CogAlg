@@ -76,7 +76,7 @@ def add_md_(HE, He,  irdnt=[]):  # p may be derP, sum derLays
 
     if HE:
         HE[0] = [V + v for V, v in zip_longest(HE[0], He[0], fillvalue=0)]  # H
-        HE[1] = np.add(HE[1], He[1])  # Et
+        HE[1] += He[1]  # Et
         HE[2] += He[2]  # n: combined param accumulation span
         if any(irdnt): HE[1][2:] = [E + e for E, e in zip(HE[1][2:], irdnt)]
     else:
@@ -97,20 +97,30 @@ def comp_md_(_H, H, rn=1, frev=0):
         rm += vd > vm; rd += vm >= vd
         derLay += [match, diff]  # flat
 
-    return [derLay, [vm,vd,rm,rd], 1]  # [H, Et, n]
+    return [derLay, np.array([vm,vd,rm,rd]), 1]  # [H, Et, n]
 
 
 def comp_slice(edge):  # root function
 
-    edge.mdLay = [[],[0,0,0,0],0]  # H, Et, n
+    edge.mdLay = [[],np.array([.0,.0,.0,.0]),0]  # H, Et, n
     for P in edge.P_:  # add higher links
-        P.mdLay = [[],[0,0,0,0],0]  # for accumulation in sum2PP later (in lower P)
+        P.mdLay = [[],np.array([.0,.0,.0,.0]),0]  # for accumulation in sum2PP later (in lower P)
         P.rim_ = []; P.lrim = []; P.prim = []
+
     rng_recursion(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
-    form_PP_(edge, edge.P_)
-    for N in edge.node_:
-        mdLay = N[3] if isinstance(N, list) else N.mdLay  # CP
-        add_md_(edge.mdLay,mdLay)
+    edge.node_ = form_PP_(edge, edge.P_)
+
+    for PPm in edge.node_:  # eval sub-clustering, not recursive
+        if isinstance(PPm, list):  # PPt, not CP
+            P_, link_, mdLay = PPm[1:4]
+            Et = mdLay[1]
+            if len(link_) > ave_L and Et[0] >PP_aves[0] * Et[2]:
+                comp_link_(PPm)
+                PPm[2] = form_PP_(PPm, link_)  # add PPds within PPm link_
+            mdLay = PPm[3]
+        else:
+            mdLay = PPm.mdLay  # PPm is actually CP
+        add_md_(edge.mdLay, mdLay)
 
 def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
@@ -137,7 +147,7 @@ def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and conti
             if pre_: Pt_ += [(P,pre_)]
             if rng_link_: P.rim_ += [rng_link_]
 
-        if not Pt_ or V <= ave * rng * len(Pt_) * 6:  # implied val of all __P_s, 6: len mtuple
+        if not Pt_ or V <= ave * rng * len(Pt_) * 6:  # implied __P_s val, 6: len mtuple
             break
         else:
             _Pt_ = Pt_
@@ -184,7 +194,7 @@ def comp_link_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
                     comp_P(_dP,dP, fder=1)
                     # if dlink: dlink.nmed = nmed  # link mediation order, not used?
 
-def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
+def form_PP_(root, iP_):  # form PPs of dP.valt[fd] + connected Ps val
 
     for P in iP_: P.merged = 0
     PPt_ = []
@@ -204,25 +214,15 @@ def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
                 lrim_.update(set(_P.lrim) - link_)
                 _P.merged = 1
             _prim_, _lrim_ = prim_, lrim_
-        PPt = sum2PP(root, list(_P_), list(link_), fd)
+        PPt = sum2PP(root, list(_P_), list(link_))
         PPt_ += [PPt]
 
-    if fd:  # terminal fork
-        root[2] = PPt_  # replace PPm link_ with a mix of CdPs and PPds
-    else:
-        for PPt in PPt_:  # eval sub-clustering, not recursive
-            if isinstance(PPt, list):  # a mix of CPs and PPms
-                P_, link_, [_, Et, _] = PPt[1:4]
-                if len(link_) > ave_L and Et[fd] >PP_aves[fd] * Et[2+fd]:
-                    comp_link_(PPt)
-                    form_PP_(PPt, link_, fd=1)
-                    # += PPds within PPm link_
-        root.node_ = PPt_  # edge.node_
+    return PPt_
 
 
-def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
+def sum2PP(root, P_, dP_):  # sum links in Ps and Ps in PP
 
-    mdLay, latuple, link_, A, S, area, n, box = [[],[0,0,0,0],0], [0,0,0,0,0,[0,0]], [], [0,0], 0, 0, 0, [0,0,0,0]
+    mdLay, latuple, link_, A, S, area, n, box = [[],np.array([.0,.0,.0,.0]),0], [0,0,0,0,0,[0,0]], [],[0,0],0,0,0, [0,0,0,0]
     iRt = root[3][1] if isinstance(root,list) else root.mdLay[1][2:4]   # add to rdnt in root.mdLay.Et or root Et
     # add uplinks:
     for dP in dP_:
@@ -273,7 +273,7 @@ def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
     if fagg:  # add norm m,d, ret=[ret,Ret]:
         mval, dval = sum(ret[::2]),sum(ret[1::2])
         mrdn, drdn = dval>mval, mval>dval
-        ret = [ret, [mval,dval,mrdn,drdn], 1]  # if fagg only
+        ret = [ret, np.array([mval,dval,mrdn,drdn]), 1]  # if fagg only
     return ret
 
 def get_match(_par, par):

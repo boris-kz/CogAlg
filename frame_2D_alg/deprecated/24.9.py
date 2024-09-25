@@ -508,3 +508,38 @@ def negate(He):  # negate is no longer useful?
     return He
 
 
+def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
+
+    for P in iP_: P.merged = 0
+    PPt_ = []
+
+    for P in iP_:  # for dP in link_ if fd
+        if P.merged: continue
+        if not P.lrim:
+            PPt_ += [P]; continue
+        _prim_ = P.prim; _lrim_ = P.lrim
+        _P_ = {P}; link_ = set(); Et = np.array([.0,.0,.0,.0])
+        while _prim_:
+            prim_,lrim_ = set(),set()
+            for _P,_L in zip(_prim_,_lrim_):
+                if _P.merged: continue  # was merged
+                _P_.add(_P); link_.add(_L); Et += _L.mdLay[1]  # _L.mdLay.Et
+                prim_.update(set(_P.prim) - _P_)
+                lrim_.update(set(_P.lrim) - link_)
+                _P.merged = 1
+            _prim_, _lrim_ = prim_, lrim_
+        PPt = sum2PP(root, list(_P_), list(link_), fd)
+        PPt_ += [PPt]
+
+    if fd:  # terminal fork
+        root[2] = PPt_  # replace PPm link_ with a mix of CdPs and PPds
+    else:
+        for PPt in PPt_:  # eval sub-clustering, not recursive
+            if isinstance(PPt, list):  # a mix of CPs and PPms
+                P_, link_, [_, Et, _] = PPt[1:4]
+                if len(link_) > ave_L and Et[fd] >PP_aves[fd] * Et[2+fd]:
+                    comp_link_(PPt)
+                    form_PP_(PPt, link_, fd=1)
+                    # += PPds within PPm link_
+        root.node_ = PPt_  # edge.node_
+
