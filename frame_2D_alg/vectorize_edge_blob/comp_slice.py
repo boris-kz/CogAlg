@@ -330,13 +330,11 @@ if __name__ == "__main__":
         plt.imshow(mask, cmap='gray', alpha=0.5)
         # plt.title("")
 
-        # draw Ps
         print("Drawing Ps...")
         for P in P_:
             (y, x) = P.yx - yx0
             plt.plot(x, y, "ok")
 
-        # draw dPs and ddPs
         print("Drawing dPs...")
         nodet_set = set()
         for dP in dP_:
@@ -353,7 +351,19 @@ if __name__ == "__main__":
             nodet_set.add((_node.id, node.id))
             assert _node.yx < node.yx  # verify that link is up-link
             (_y, _x), (y, x) = _node.yx - yx0, node.yx - yx0
-            style = "-r" if isinstance(_node, CdP) else "-k"
-            plt.plot([_x, x], [_y, y], "-k")
+            style = "o-r" if isinstance(_node, CdP) else "-k"
+            plt.plot([_x, x], [_y, y], style)
+
+        # print("Drawing PPm boxes...")
+        # for PPm in PPm_:
+        #     _, _, _, _, _, _, _, _, (y0, x0, yn, xn), _, _ = PPm
+        #     (y0, x0), (yn, xn) = ((y0, x0), (yn, xn)) - yx0
+        #     plt.plot([x0, x0, xn, xn, x0], [y0, yn, yn, y0, y0], '-k', alpha=0.3)
+        #
+        # print("Drawing PPd boxes...")
+        # for PPd in PPd_:
+        #     _, _, _, _, _, _, _, _, (y0, x0, yn, xn), _, _ = PPd
+        #     (y0, x0), (yn, xn) = ((y0, x0), (yn, xn)) - yx0
+        #     plt.plot([x0, x0, xn, xn, x0], [y0, yn, yn, y0, y0], '-r', alpha=0.3)
 
         plt.show()

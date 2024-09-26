@@ -543,3 +543,12 @@ def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
                     # += PPds within PPm link_
         root.node_ = PPt_  # edge.node_
 
+def reset_merged(Gt_,rng):
+
+    for Gt in Gt_:
+        for G in Gt[0]:
+            G.merged = 0
+            if len(G.nrim_) > rng:
+                for n in G.nrim_[rng]:
+                    if len(n.nrim_) > rng:  # we need to check their nrim too?
+                        n.merged = 0
