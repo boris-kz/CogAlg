@@ -552,3 +552,42 @@ def reset_merged(Gt_,rng):
                 for n in G.nrim_[rng]:
                     if len(n.nrim_) > rng:  # we need to check their nrim too?
                         n.merged = 0
+
+def cluster_N__(root, iN__, fd):  # cluster G__|L__ by value density of +ve links per node
+
+    # merged rng
+    N__ = []
+    rng = 0
+    _re_N_ = [ [[N],[],[0,0,0,0],0] for N in iN__[0]]
+    while True:
+        re_N_ = []
+        for G in set.union(*iN__): G.merged = 0  # Reset all merged flags
+        for  _node_,_link_,_Et, mrg in (_re_N_):
+            if mrg: continue  # Skip if merged
+            Node_, Link_, ET = set(),set(), np.array([.0,.0,.0,.0])  # m,r only?
+            for G in _node_:
+                if not G.merged and len(G.nrim_) > rng:
+                    node_ = G.nrim_[rng]- Node_
+                    if not node_: continue  # no new rim nodes
+                    node_,link_,Et = cluster_from_G(G, node_, G.lrim_[rng]-Link_, rng)
+                    Node_.update(node_)
+                    Link_.update(link_)
+                    ET += Et
+            if ET[0] > ET[2] * ave:  # additive current-layer V: form higher Gt
+                Node_.update(_node_); Link_.update(_link_)
+                Gt = [Node_, Link_, ET+_Et, 0]
+                for n in Node_:
+                    if isinstance(n.root_,list): n.root_.append(Gt)
+                    else: n.root_ = [Gt]
+                re_N_.append(Gt)
+        if re_N_:
+            N__.append(re_N_)
+            _re_N_ = re_N_
+            rng += 1
+        else:
+            break
+    for i, N_ in enumerate(N__):  # convert Gts to CGs
+        for ii, N in enumerate(N_):
+            if isinstance(N, list):
+                N_[ii] = sum2graph(root, [list(N[0]), list(N[1]), N[2]], fd, rng=i)
+    iN__[:] = N__

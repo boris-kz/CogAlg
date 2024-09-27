@@ -82,14 +82,13 @@ def add_md_(HE, He,  irdnt=[]):  # p may be derP, sum derLays
     else:
         HE[:] = deepcopy(He)
 
-def comp_md_(_H, H, rn=1, frev=0):
+def comp_md_(_H, H, rn=1):
 
     vm, vd, rm, rd = 0,0,0,0
     derLay = []
     for i, (_d, d) in enumerate(zip(_H[1::2], H[1::2])):  # compare ds in md_ or ext
         d *= rn  # normalize by compared accum span
         diff = _d - d
-        if frev: diff = -diff  # from link with reversed dir
         match = min(abs(_d), abs(d))
         if (_d < 0) != (d < 0): match = -match  # negate if only one compared is negative
         vm += match - aves[i]  # fixed param set?
@@ -222,7 +221,7 @@ def form_PP_(root, iP_):  # form PPs of dP.valt[fd] + connected Ps val
 
 def sum2PP(root, P_, dP_):  # sum links in Ps and Ps in PP
 
-    mdLay, latuple, link_, A, S, area, n, box = [[],np.array([.0,.0,.0,.0]),0], [0,0,0,0,0,[0,0]], [],[0,0],0,0,0, [0,0,0,0]
+    mdLay, latuple, link_, A, S, area, n, box = [[],np.array([.0,.0,.0,.0]),0], [0,0,0,0,0,[0,0]], [],[0,0],0,0,0, [np.inf,np.inf,0,0]
     iRt = root[3][1] if isinstance(root,list) else root.mdLay[1][2:4]   # add to rdnt in root.mdLay.Et or root Et
     # add uplinks:
     for dP in dP_:
@@ -232,7 +231,6 @@ def sum2PP(root, P_, dP_):  # sum links in Ps and Ps in PP
         A = np.add(A,dP.angle)
         S += np.hypot(*dP.angle)  # links are contiguous but slanted
     # add Ps:
-    celly_,cellx_ = [],[]
     for P in P_:
         L = P.latuple[-2]
         area += L; n += L  # no + P.mdLay.n: current links only?
@@ -240,14 +238,10 @@ def sum2PP(root, P_, dP_):  # sum links in Ps and Ps in PP
         if P.mdLay:  # CdP or lower P has mdLay
             add_md_(mdLay, P.mdLay)
         for y,x in P.yx_ if isinstance(P, CP) else [P.nodet[0].yx, P.nodet[1].yx]:  # CdP
-            y = int(round(y)); x = int(round(x))  # summed with float dy,dx in slice_edge?
-            box = accum_box(box,y,x); celly_+=[y]; cellx_+=[x]
+            box = accum_box(box,y,x)
     if mdLay:
         mdLay[1][2:4] = [R+r for R,r in zip(mdLay[1][2:4], iRt)]  # mdLay[1] = Et
     y0,x0,yn,xn = box
-    mask__ = np.zeros((yn-y0, xn-x0), bool)  # pixmap
-    celly_ = np.array(celly_); cellx_ = np.array(cellx_)
-    mask__[(celly_-y0, cellx_-x0)] = True
     # derH = [mdLay]
     PPt = [root, P_, link_, mdLay, latuple, A, S, area, box, [(y0+yn)/2,(y0+yn)/2], n]
     for P in P_: P.root = PPt
@@ -283,7 +277,7 @@ def get_match(_par, par):
 def accum_box(box, y, x):
     """Box coordinate accumulation."""
     y0, x0, yn, xn = box
-    return min(y0, y), min(x0, x), max(yn, y+1), max(xn, x+1)
+    return min(y0, y), min(x0, x), max(yn, y), max(xn, x)
 
 if __name__ == "__main__":
 
@@ -354,16 +348,16 @@ if __name__ == "__main__":
             style = "o-r" if isinstance(_node, CdP) else "-k"
             plt.plot([_x, x], [_y, y], style)
 
-        # print("Drawing PPm boxes...")
-        # for PPm in PPm_:
-        #     _, _, _, _, _, _, _, _, (y0, x0, yn, xn), _, _ = PPm
-        #     (y0, x0), (yn, xn) = ((y0, x0), (yn, xn)) - yx0
-        #     plt.plot([x0, x0, xn, xn, x0], [y0, yn, yn, y0, y0], '-k', alpha=0.3)
-        #
-        # print("Drawing PPd boxes...")
-        # for PPd in PPd_:
-        #     _, _, _, _, _, _, _, _, (y0, x0, yn, xn), _, _ = PPd
-        #     (y0, x0), (yn, xn) = ((y0, x0), (yn, xn)) - yx0
-        #     plt.plot([x0, x0, xn, xn, x0], [y0, yn, yn, y0, y0], '-r', alpha=0.3)
+        print("Drawing PPm boxes...")
+        for PPm in PPm_:
+            _, _, _, _, _, _, _, _, (y0, x0, yn, xn), _, _ = PPm
+            (y0, x0), (yn, xn) = ((y0, x0), (yn, xn)) - yx0
+            plt.plot([x0, x0, xn, xn, x0], [y0, yn, yn, y0, y0], '-k', alpha=0.4)
+
+        print("Drawing PPd boxes...")
+        for PPd in PPd_:
+            _, _, _, _, _, _, _, _, (y0, x0, yn, xn), _, _ = PPd
+            (y0, x0), (yn, xn) = ((y0, x0), (yn, xn)) - yx0
+            plt.plot([x0, x0, xn, xn, x0], [y0, yn, yn, y0, y0], '-r', alpha=0.4)
 
         plt.show()

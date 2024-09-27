@@ -114,7 +114,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         if irdnt is None: irdnt = []
         I = len(HE.H)  # min index
         if flat:
-            for i, lay in enumerate(He.H):  # L.derH and root.derH.H should have different references?:
+            for i, lay in enumerate(He.H):  # different refs for L.derH and root.derH.H:
                 lay = CH().copy(lay); lay.i = I+i; lay.root = HE; HE.H += [lay]
         else:
             He = CH().copy(He); He.i = I; He.root = HE; HE.H += [He]
@@ -140,7 +140,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         derLay = []
         for i, (_d, d) in enumerate(zip(_He.H[1::2], He.H[1::2])):  # compare ds in md_ or ext
             d *= rn  # normalize by compared accum span
-            diff = (_d - d) * dir  # -1 if reversed nodet else 1
+            diff = (_d - d) * dir  # in comp link: -1 if reversed nodet else 1
             match = min(abs(_d), abs(d))
             if (_d < 0) != (d < 0): match = -match  # negate if only one compared is negative
             vm += match - aves[i]  # fixed param set?
@@ -162,7 +162,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
 
     def comp_H(_He, He, rn=1, dir=1):  # unpack each layer of CH down to numericals and compare each pair
 
-        # default comp He.md_t per layer, H=[] if bottom or deprecated layer, node_: mediated comparands
+        # comp md_t per layer, H=[] if bottom or deprecated layer, node_: mediated comparands
         DLay = CH( node_=_He.node_+He.node_ ).add_H( _He.comp_md_t(He, dir))
 
         for _lay, lay in zip(_He.H, He.H):  # loop extHs or [mdlat,mdLay,mdext] rng tuples, flat
@@ -361,7 +361,7 @@ def rng_link_(iL_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
                         if _L not in iL_: set_attrs([_L],_L_[0].root_[-1])
                         L.visited_ += [_L]; _L.visited_ += [L]
                         Link = CL(nodet=[_L,L], S=2, A=np.subtract(_L.yx,L.yx), box=extend_box(_L.box, L.box))
-                        comp_N(Link, Et, rng, dir = 1 if (rev^_rev) else -1)  # d = -d if one L is reversed
+                        comp_N(Link, Et, rng, dir = 1 if (rev^_rev) else -1)  # d = -d if one L is reversed,
                         # L.rim_t += Link
                         if Link.derH.Et[0] > ave * Link.derH.Et[2] * (rng+1):
                             # L += rng+ -mediating nodes, link orders: nodet < L < rimt_, mN.rim || L
@@ -386,10 +386,11 @@ def rng_link_(iL_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
 
 def comp_N(Link, iEt, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
 
-    fd = dir is not None  # compared links have binary relative direction?
+    fd = dir is not None  # compared links have binary relative direction
+    dir = 1 if dir is None else dir  # convert from None into numeric
     _N, N = Link.nodet
     _L,L = (2,2) if fd else (len(_N.node_),len(N.node_)); _S,S = _N.S,N.S; _A,A = _N.A,N.A
-    if dir: A = [-d for d in A]  # reverse angle direction if N is left link
+    A = [d * dir for d in A]  # reverse angle direction if N is left link
     rn = _N.n / N.n
     mdext = comp_ext(_L,L, _S,S/rn, _A,A)
     md_t = [mdext]; Et = mdext.Et.copy(); n = mdext.n
@@ -431,31 +432,33 @@ def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
 
     return CH(H=[mL,dL, mS,dS, mA,dA], Et=np.array([M,D,M>D,D<=M]), n=0.5)
 
-
 def cluster_from_G(G, _nrim, _lrim, rng=0):
 
-    node_, link_, Et = {G}, set(), np.array([0.0,0.0,0.0,0.0])  # m,r only?
+    node_, link_, Et = {G}, set(), np.array([.0,.0,.0,.0])  # m,r only?
     while _lrim:
         nrim, lrim = set(), set()
         for _G,_L in zip(_nrim, _lrim):
             if _G.merged or len(_G.lrim_) < rng+1:
                 continue
             for g in node_:  # compare external _G to all internal nodes, include if any of them match
+                if len(g.lrim_) < rng + 1: continue
                 L = next(iter(g.lrim_[rng] & _G.lrim_[rng]), None)  # intersect = [+link] | None
                 if L:
                     if ((g.extH.Et[0]-ave*g.extH.Et[2]) + (_G.extH.Et[0]-ave*_G.extH.Et[2])) * (L.derH.Et[0]/ave) > ave * ccoef:
-                        if isinstance(_G.root_, list):
-                            Gt = _G.root_[-1]  # rng+: merge roots
-                            node_.update(Gt[0])
-                            link_.update(Gt[1],[_L])  # L was external
-                            Et += _L.derH.Et + Gt[2]
-                            Gt[3] = 1
+                        # rng+: merge roots:
+                        if isinstance(_G.root_,list):
+                            _node_,_link_,_Et,_merged = _G.root_[-1]
+                            if _merged: continue
+                            node_.update(_node_)
+                            link_.update(_link_| {_L})  # L was external
+                            Et += _L.derH.Et + _Et
+                            for n in _node_: n.merged = 1
+                            _G.root_[-1][3] = 1
                         else:  # rng=1: add Ns
                             node_.add(_G); link_.add(_L); Et += _L.derH.Et
                         nrim.update(set(_G.nrim_[rng]) - node_)
                         lrim.update(set(_G.lrim_[rng]) - link_)
                         _G.merged = 1
-                        # match found
                         break
         _nrim,_lrim = nrim, lrim
     return node_, link_, Et
@@ -464,7 +467,7 @@ def cluster_N__(root, iN__, fd):  # cluster G__|L__ by value density of +ve link
 
     # rng=1: cluster connected Gs into Gts
     for G in iN__[0]: G.merged = 0
-    N_, _re_N_ = [], []
+    N_, _re_N_ = [],[]
     for G in iN__[0]:
         if G.merged: continue  # is in prior Gt node_
         if not G.nrim_:
@@ -480,9 +483,9 @@ def cluster_N__(root, iN__, fd):  # cluster G__|L__ by value density of +ve link
     # rng+: merge Gts connected via G.lrim_[rng] in their node_s into higher Gts
     while True:
         re_N_ = []
-        for G in iN__[0]: G.merged = 0  # reset all just in case
-        for _node_,_link_,_Et, mrg in _re_N_:
-            if mrg: continue
+        for G in set.union(*iN__[:rng+1]): G.merged = 0  # reset all lower Gs
+        for _node_,_link_,_Et,_merged in _re_N_:  # Gt
+            if _merged: continue
             Node_, Link_, ET = set(),set(), np.array([.0,.0,.0,.0])  # m,r only?
             for G in _node_:
                 if not G.merged and len(G.nrim_) > rng:
@@ -510,6 +513,7 @@ def cluster_N__(root, iN__, fd):  # cluster G__|L__ by value density of +ve link
             if isinstance(N, list):
                 N_[ii] = sum2graph(root, [list(N[0]), list(N[1]), N[2]], fd, rng=i)
     iN__[:] = N__
+
 
 def set_attrs(Q, root):
 
