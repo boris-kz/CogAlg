@@ -49,7 +49,7 @@ ccoef  = 10  # scaling match ave to clustering ave
 class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | derH, their layers and sublayers
 
     name = "H"
-    def __init__(He, node_=None, md_t=None, n=0, Et=None, Rt=None, H=None, root=None, i=None, it=None):
+    def __init__(He, node_=None, md_t=None, n=0, Et=None, Rt=None, H=None, root=None, i=None, i_t=None):
         super().__init__()
         He.node_ = [] if node_ is None else node_  # concat bottom nesting order, may be redundant to G.node_
         He.md_t = [] if md_t is None else md_t  # derivation layer in H: [mdlat,mdLay,mdext]
@@ -57,11 +57,12 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         He.n = n  # total number of params compared to form derH, to normalize comparands
         He.Et = np.array([.0,.0,.0,.0]) if Et is None else Et  # evaluation tuple: valt, rdnt
         He.root = None if root is None else root  # N or higher-composition He
-        He.i = 0 if i is None else i   # lay index in root.H, to revise rdn
-        He.it = [0,0] if it is None else it  # max fd lay in He.H: init add,comp if deleted higher layers H,md_t
+        He.i = 0 if i is None else i  # lay index in root.H, to revise rdn
+        He.i_t = [[],[]] if i_t is None else i_t  # priority indices to compare node H by m | link H by d
         # He.ni = 0  # exemplar in node_, trace in both directions?
         # He.depth = 0  # nesting in H[0], -=i in H[Hi], in agg++? same as:
         # He.nest = nest  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH?
+
     def __bool__(H): return H.n != 0
 
     def add_md_C(HE, He, irdnt=[]):  # sum dextt | dlatt | dlayt
@@ -72,58 +73,56 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         if any(irdnt): HE.Et[2:] = [E + e for E, e in zip(HE.Et[2:], irdnt)]
         return HE
 
-    def add_md_t(HE, He, irdnt=[]):  # sum derLays
+    def accum_lay(HE, He, irdnt):
 
-        for MD_C, md_C in zip(HE.md_t, He.md_t):  # dextt, dlatt, dlayt
-            MD_C.add_md_C(md_C)
-        HE.n += He.n
+        if HE.md_t:
+            for MD_C, md_C in zip(HE.md_t, He.md_t):  # dext_C, dlat_C, dlay_C
+                MD_C.add_md_C(md_C)
+            HE.n += He.n
+            HE.Et += He.Et
+            if any(irdnt):
+                HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
+        else:
+            HE.md_t = [CH().copy(md_) for md_ in He.md_t]
+        HE.n += He.n  # combined param accumulation span
         HE.Et += He.Et
-        if any(irdnt): HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
+        if any(irdnt):
+            HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
 
     def add_H(HE, He, irdnt=[]):  # unpack derHs down to numericals and sum them
 
         if HE:
-            for Lay,lay in zip_longest(HE.H, He.H, fillvalue=None):  # cross comp layer
+            for i, (Lay,lay) in enumerate(zip_longest(HE.H, He.H, fillvalue=None)):  # cross comp layer
                 if lay:
                     if Lay: Lay.add_H(lay, irdnt)
                     else:
                         if Lay is None:
                             HE.append_(CH().copy(lay))  # pack a copy of new lay in HE.H
                         else:
-                            HE.H[HE.H.index(Lay)] = CH(root=HE).copy(lay)  # Lay was []
-            HE.add_md_t(He) # [ext_md_C, lat_md_C, lay_md_C]
-            HE.n += He.n  # combined param accumulation span
-            HE.Et += He.Et
+                            HE.H[i] = CH(root=HE).copy(lay)  # Lay was []
+            HE.accum_lay(He, irdnt)
             HE.node_ += [node for node in He.node_ if node not in HE.node_]  # node_ is empty in CL derH?
-            if any(irdnt): HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
         else:
             HE.copy(He)  # init
-        # feedback, ideally buffered from all elements before summing in root, ultimately G|L:
-        root = HE.root
-        while root is not None:
-            if isinstance(root, CH):
-                root.n += He.n
-                root.Et += He.Et
-                root.node_ += [node for node in He.node_ if node not in HE.node_]
-                root = root.root
-            else: break  # root is G|L
-        return HE
+
+        return HE.update_root(He)  # feedback, ideally buffered from all elements before summing in root, ultimately G|L
 
     def append_(HE,He, irdnt=None, flat=0):
 
         if irdnt is None: irdnt = []
-        I = len(HE.H)  # min index
         if flat:
             for i, lay in enumerate(He.H):  # different refs for L.derH and root.derH.H:
-                lay = CH().copy(lay); lay.i = I+i; lay.root = HE; HE.H += [lay]
+                lay = CH().copy(lay)
+                lay.i = len(HE.H)+i; lay.root = HE; HE.H += [lay]
         else:
-            He = CH().copy(He); He.i = I; He.root = HE; HE.H += [He]
-        if HE.md_t: HE.add_md_t(He)  # accumulate [lat_md_C,lay_md_C,ext_md_C]
-        else:       HE.md_t = [CH().copy(md_) for md_ in He.md_t]
-        HE.n += He.n
-        HE.Et += He.Et
-        if irdnt: HE.Et[2:4] = [E+e for E,e in zip(HE.Et[2:4], irdnt)]
-        root = HE
+            He = CH().copy(He); He.i = len(HE.H); He.root = HE; HE.H += [He]
+
+        HE.accum_lay(He, irdnt)
+        return HE.update_root(He)
+
+    def update_root(HE, He):
+
+        root = HE.root
         while root is not None:
             if isinstance(root, CH):
                 root.Et += He.Et
@@ -132,7 +131,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
                 root = root.root
             else:
                break  # root is G|L
-        return HE  # for feedback in agg+
+        return HE
 
     def comp_md_C(_He, He, rn=1, dir=1):
 
@@ -150,27 +149,35 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
 
         return CH(H=derLay, Et=np.array([vm,vd,rm,rd]), n=1)
 
-    def comp_md_t(_He, He, dir=1):  # comp derLays
+    def comp_H(_He, He, rn=1, dir=1):  # unpack each layer of CH down to numericals and compare each pair
+
         der_md_t = []; Et = np.array([.0,.0,.0,.0])
 
-        for _md_C, md_C in zip(_He.md_t, He.md_t):
+        for _md_C, md_C in zip(_He.md_t, He.md_t):  # default per layer
+            # lay: [mdlat, mdLay, mdext]
             der_md_C = _md_C.comp_md_C(md_C, rn=1, dir=dir)
             der_md_t += [der_md_C]
             Et += der_md_C.Et
+        DLay = CH( node_=_He.node_+He.node_, md_t = der_md_t, Et=Et, n=2.5)
 
-        return CH(md_t=der_md_t, Et=Et, n=2.5)
-
-    def comp_H(_He, He, rn=1, dir=1):  # unpack each layer of CH down to numericals and compare each pair
-
-        # comp md_t per layer, H=[] if bottom or deprecated layer, node_: mediated comparands
-        DLay = CH( node_=_He.node_+He.node_ ).add_H( _He.comp_md_t(He, dir))
-
-        for _lay, lay in zip(_He.H, He.H):  # loop extHs or [mdlat,mdLay,mdext] rng tuples, flat
+        # H=[] if bottom or deprecated layer, comp node_?:
+        for _lay, lay in zip(_He.H, He.H):  # sublay CH per rng | der, flat
             if _lay and lay:
                 dLay = _lay.comp_H(lay, rn, dir)  # comp He.md_t, comp,unpack lay.H
                 DLay.append_(dLay, flat=0)  # DLay.H += subLay
                 # nested subHH ( subH?
         return DLay
+
+    # not implemented:
+    def sort_H(He, fd):  # re-assign rdn and form priority indices for comp_H, if selective and aligned
+
+        i_ = []  # priority indices
+        for i, lay in enumerate(sorted(He.H, key=lambda lay: lay.Et[fd], reverse=True)):
+            di = lay.i - i  # lay index in H
+            lay.Et[2+fd] += di  # derR- valR
+            i_ += [lay.i]
+
+        He.i_t[fd] = i_  # comp_H priority indices: node/m | link/d
 
     def copy(_He, He):
         for attr, value in He.__dict__.items():
@@ -292,17 +299,17 @@ def agg_recursion(root, Q, fd):  # breadth-first rng++ cross-comp -> eval cluste
         # rng_link_:
         if fvd and len(L_) > ave_L:  # comp L, sub-cluster by dL: mL is redundant to mN?
             set_attrs(L_,root)
-            agg_recursion(root, L_,fd=1)  # appends last aggLay, L_=lG_ if segment
+            agg_recursion(root, L_, fd=1)  # appends last aggLay, L_=lG_ if segment
         # rng_node_:
         if fvm and len(N__[0]) > ave_L:  # cluster ave_L != xcomp ave_L?
             cluster_N__(root, N__, fd)  # cluster rngLays in root.node_?
             for N_ in N__:  # replace root.node_ with nested H of graphs
                 if len(N_) > ave_L:
-                    agg_recursion(root, N_,fd=0)  # adds higher aggLay / recursive call
+                    agg_recursion(root, N_, fd=0)  # adds higher aggLay / recursive call
 '''
-    if flat derH:
-    root.derH.append_(CH().copy(L_[0].derH))  # init
-    for L in L_[1:]: root.derH.H[-1].add_H(L.derH)  # accum
+     if flat derH:
+        root.derH.append_(CH().copy(L_[0].derH))  # init
+        for L in L_[1:]: root.derH.H[-1].add_H(L.derH)  # accum
 '''
 
 def rng_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__,Et, ~ graph CNN without backprop
@@ -322,17 +329,17 @@ def rng_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__,
         Nt_,N_,L_, Et = [],set(),[], np.array([.0,.0,.0,.0])
         for Nt in _Nt_:
             _G,G, dy,dx, radii, dist = Nt
-            if _G.nrim_ and G.nrim_ and (_G.nrim_[-1] & G.nrim_[-1]):  # skip indirectly connected Gs, no direct match priority?
+            if _G.nrim_ and G.nrim_ and any([_nrim & nrim for _nrim,nrim in zip(_G.nrim_,G.nrim_)]):  # skip indirectly connected Gs, no direct match priority?
                 continue
             M = (_G.mdLay.Et[0]+G.mdLay.Et[0]) *icoef**2 + (_G.derH.Et[0]+G.derH.Et[0])*icoef + (_G.extH.Et[0]+G.extH.Et[0])
             # comp if < max distance of likely matches *= prior G match * radius:
             if dist < max_dist * (radii*icoef**3) * M:
                 Link = CL(nodet=[_G,G], S=2, A=[dy,dx], box=extend_box(G.box,_G.box))
-                comp_N(Link, Et, rng)
-                L_ += [Link]  # include -ve links
-                if Link.derH.Et[0] > ave: # rdn eval / cluster only
-                    Et += Link.derH.Et
-                    N_.update({_G,G})
+                comp_N(Link, rng)
+                et = Link.derH.Et
+                Et += et; L_ += [Link]  # include -ve links
+                if et[0] > ave * et[2] * (rng+1):  # eval to extend search
+                    N_.update({_G,G})  # to extend search
             else: Nt_ += [Nt]
         if Et[0] > ave * Et[2]:  # current loop vM
             N__ += [N_]; L__ += [L_]; ET += Et
@@ -346,10 +353,10 @@ def rng_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__,
 def rng_link_(iL_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
 
     _N_t_ = [[[L.nodet[0]],[L.nodet[1]]] for L in iL_]  # Ns are rim-mediating nodes, starting with L.nodet
-    L__,LL__, ET = [],[], np.array([0.0,0.0,0.0,0.0])  # all links between Ls in potentially extended L__
+    L__,LL__, ET = [],[], np.array([.0,.0,.0,.0])  # all links between Ls in potentially extended L__
     rng = 1; _L_ = iL_[:]
     while True:
-        L_,LL_,Et = [],[],np.array([0.0,0.0,0.0,0.0])
+        L_,LL_,Et = [],[],np.array([.0,.0,.0,.0])
         N_t_ = [[[],[]] for _ in _L_]  # new rng lay of mediating nodes, traced from all prior layers?
         for L, _N_t, N_t in zip(_L_, _N_t_, N_t_):
             for rev, _N_, N_ in zip((0,1), _N_t, N_t):
@@ -361,15 +368,16 @@ def rng_link_(iL_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
                         if _L not in iL_: set_attrs([_L],_L_[0].root_[-1])
                         L.visited_ += [_L]; _L.visited_ += [L]
                         Link = CL(nodet=[_L,L], S=2, A=np.subtract(_L.yx,L.yx), box=extend_box(_L.box, L.box))
-                        comp_N(Link, Et, rng, dir = 1 if (rev^_rev) else -1)  # d = -d if one L is reversed,
-                        # L.rim_t += Link
-                        if Link.derH.Et[0] > ave * Link.derH.Et[2] * (rng+1):
-                            # L += rng+ -mediating nodes, link orders: nodet < L < rimt_, mN.rim || L
+                        comp_N(Link, rng, dir = 1 if (rev^_rev) else -1)  # d = -d if one L is reversed
+                        # L.rim_t += Link, order: nodet < L < rimt_, mN.rim || L
+                        et = Link.derH.Et
+                        Et += et; LL_ += [Link]  # include -ve links
+                        if et[0] > ave * et[2] * (rng+1):  # eval to extend search
                             N_ += _L.nodet  # get _Ls in N_ rims
                             if _L not in _L_:
                                 _L_ += [_L]; N_t_ += [[[],[]]]  # not in root
-                            N_t_[_L_.index(_L)][1-rev] += L.nodet
-                            L_ += [_L]; LL_ += [Link]
+                            L_ += [_L]
+                            N_t_[_L_.index(_L)][1-rev] += L.nodet  # rng+ -mediating nodes
         if L_:
             L__ += [L_]; LL__ += [LL_]; ET += Et
             V = 0; L_,_N_t_ = [],[]
@@ -384,7 +392,7 @@ def rng_link_(iL_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: direct
             break
     return L__, LL__, ET, rng
 
-def comp_N(Link, iEt, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
+def comp_N(Link, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
 
     fd = dir is not None  # compared links have binary relative direction
     dir = 1 if dir is None else dir  # convert from None into numeric
@@ -404,8 +412,7 @@ def comp_N(Link, iEt, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+
     if _N.derH and N.derH:
         dderH = _N.derH.comp_H(N.derH, rn, dir=dir)  # comp shared layers
         elay.append_(dderH, flat=1)
-    # >ave comp node_,link_ by rng_node_?
-    iEt += elay.Et
+    # spec: comp node_,link_ by rng_node_?
     Link.derH = elay; elay.root = Link; Link.n = min(_N.n,N.n); Link.nodet = [_N,N]; Link.yx = np.add(_N.yx,N.yx) /2
     # prior S,A
     for rev, node in zip((0,1),(N,_N)):  # reverse Link direction for N
@@ -513,7 +520,6 @@ def cluster_N__(root, iN__, fd):  # cluster G__|L__ by value density of +ve link
             if isinstance(N, list):
                 N_[ii] = sum2graph(root, [list(N[0]), list(N[1]), N[2]], fd, rng=i)
     iN__[:] = N__
-
 
 def set_attrs(Q, root):
 
