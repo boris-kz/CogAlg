@@ -120,7 +120,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         HE.accum_lay(He, irdnt)
         return HE.update_root(He)
 
-    def update_root(HE, He):
+    def update_root(HE, He):  # should be batched or done in calling function, not recursive
 
         root = HE.root
         while root is not None:
@@ -284,30 +284,28 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
                 if len(G_) > 10:
                     agg_recursion(edge, G_, fd=0)  # discontinuous PP_ xcomp, cluster
 
-
 def agg_recursion(root, Q, fd):  # breadth-first rng++ cross-comp -> eval cluster, fd recursion
 
-    for e in Q:
+    for e in Q:  # reset | init only?
         if fd: e.rimt_ = []  # e = CL
-        e.root_, e.visited_, e.aRad, e.merged = [],[], 0,0
+        e.root_, e.visited_, e.aRad, e.merged, e.extH = [],[], 0,0, CH()
 
-    N__,L__,Et,rng = rng_link_(Q) if fd else rng_node_(Q)  # init cross-comp edge|frame PP_) node_
+    N__,L__, Et,rng = rng_link_(Q) if fd else rng_node_(Q)  # init cross-comp edge|frame PP_) node_
     m,d,mr,dr = Et
-    fvd = d > ave_d * dr*(rng+1); fvm = m > ave * mr*(rng+1)  # op eval\ V-rdn, result eval\ V
+    fvd = d > ave_d * dr*(rng+1); fvm = m > ave * mr*(rng+1)
     if fvd or fvm:
         L_ = [L for L_ in L__ for L in L_]  # root += L.derH:
         if fd: root.derH.append_(CH().append_(CH().copy(L_[0].derH)))  # new rngLay, aggLay
         else:  root.derH.H[-1].append_(L_[0].derH)  # append last aggLay
         for L in L_[1:]:
             root.derH.H[-1].H[-1].add_H(L.derH)  # accum Lay
-        # rng_link_:
+        # rng_link_
         if fvd and len(L_) > ave_L:  # comp L, sub-cluster by dL: mL is redundant to mN?
             agg_recursion(root, L_, fd=1)  # appends last aggLay, L_=lG_ if segment
-        # rng_node_:
-        if fvm and len(N__[0]) > ave_L:  # cluster ave_L != xcomp ave_L?
-            cluster_N__(root, N__, fd)  # cluster rngLays in root.node_?
+        if fvm:
+            cluster_N__(root, N__, fd)  # cluster rngLays in root.node_,
             for N_ in N__:  # replace root.node_ with nested H of graphs
-                if len(N_) > ave_L:
+                if len(N_) > ave_L:  # rng_node_
                     agg_recursion(root, N_, fd=0)  # adds higher aggLay / recursive call
 '''
      if flat derH:
@@ -355,42 +353,45 @@ def rng_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__,
 
 def rng_link_(iL_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
 
-    _N_t_ = [[[L.nodet[0]],[L.nodet[1]]] for L in iL_]  # Ns are rim-mediating nodes, starting with L.nodet
-    L__,LL__, ET = [],[], np.array([.0,.0,.0,.0])  # all links between Ls in potentially extended L__
-    rng = 1; _L_ = iL_[:]
+    L__,LL__,ET = [],[], np.array([.0,.0,.0,.0])  # all links between Ls in potentially extended L__
+    fd = isinstance(iL_[0].nodet[0], CL)
+    _mL_t_ = [[n.rimt_[0][0] + n.rimt_[0][1] if fd else n.rim_[0] for n in iL.nodet] for iL in iL_]
+    # for iL in iL_: _mL_t_ += [n.rimt_[0][0]+n.rimt_[0][1] if fd else n.rim_[0] for n in iL.nodet]
+    _L_ = L__[0]
+    rng = 1
     while True:
         L_,LL_,Et = set(),[],np.array([.0,.0,.0,.0])
-        N_t_ = [[[],[]] for _ in _L_]  # new rng lay of mediating nodes, traced from all prior layers?
-        for L, _N_t, N_t in zip(_L_, _N_t_, N_t_):
-            for rev, _N_, N_ in zip((0,1), _N_t, N_t):
-                # comp L,_L mediated by nodets, flatten rim_, not only 1st layer in rimt_?
-                rim_ = [rim for n in _N_ for rim in (n.rim_ if isinstance(n, CG) else [n.rimt_[0][0] + n.rimt_[0][1]])]
-                for rim in rim_:
-                    for _L,_rev in rim:  # _L is reversed relative to its 2nd node
-                        if _L is L or _L in L.visited_: continue
-                        if _L not in iL_:
-                            L.rimt_, L.root_, L.visited_, L.aRad, L.merged = [],[],[], 0,0  # set_attrs(_L)
-                        L.visited_ += [_L]; _L.visited_ += [L]
-                        Link = CL(nodet=[_L,L], S=2, A=np.subtract(_L.yx,L.yx), box=extend_box(_L.box, L.box))
-                        comp_N(Link, rng, dir = 1 if (rev^_rev) else -1)  # d = -d if one L is reversed
-                        # L.rim_t += Link, order: nodet < L < rimt_, mN.rim || L
-                        et = Link.derH.Et
-                        Et += et; LL_ += [Link]  # include -ve links
-                        if et[0] > ave * et[2] * (rng+1):  # eval to extend search
-                            N_ += _L.nodet  # get _Ls in N_ rims
-                            if _L not in _L_:
-                                _L_ += [_L]; N_t_ += [[[],[]]]  # not in root
-                            L_.add(_L)
-                            N_t_[_L_.index(_L)][1-rev] += L.nodet  # rng+ -mediating nodes
+        mL_t_ = []  # rng lay of mediated links
+        for L, _mL_t in zip(_L_,_mL_t_):
+            mL_t = [set(),set()]
+            for rev, rim in zip((0,1), _mL_t):
+                # comp L,_L mediated by nodet rim_[rng], in iL_
+                for _L,_rev in rim:  # _L is reversed relative to its 2nd node
+                    if _L is L or _L in L.visited__L: continue
+                    L.visited_ += [_L]; _L.visited_ += [L]
+                    Link = CL(nodet=[_L,L], S=2, A=np.subtract(_L.yx,L.yx), box=extend_box(_L.box, L.box))
+                    comp_N(Link, rng, dir = 1 if (rev^_rev) else -1)  # d = -d if one L is reversed
+                    # L.rim_t += Link, order: nodet < L < rimt_, mN.rim || L
+                    et = Link.derH.Et
+                    Et += et; LL_ += [Link]  # include -ve links
+                    if et[0] > ave * et[2] * (rng+1):  # eval to extend search
+                        for i, n in enumerate(_L.nodet):
+                            rim_ = n.rimt_ if fd else n.rim_
+                            if len(rim_) > rng:
+                                rim = rim_[rng][0]+rim_[rng][0] if fd else rim_[rng]
+                                mL_t[i].update(rim)  # next rng med_L_, if rng+ rim
+                        L_.add(_L)
+            if any(mL_t): mL_t_ += [mL_t]
         if L_:
             L__ += [L_]; LL__ += [LL_]; ET += Et
-            V = 0; L_,_N_t_ = [],[]
-            for L, N_t in zip(_L_,N_t_):
-                if any(N_t):
-                    L_ += [L]; _N_t_ += [N_t]
-                    V += L.derH.Et[0] - ave * L.derH.Et[2] * rng
-            if V > 0:  # rng+ if vM of extended N_t_
-                _L_ = L_; rng += 1
+            _L_, _mL_t_ = [],[]
+            V = 0
+            for L, mL_t in zip(_L_,mL_t_):
+                if any(mL_t):
+                    _L_ += [L]; _mL_t_ += [mL_t]
+                    for mL_ in mL_t:
+                        for mL in mL_: V += mL.derH.Et[0] - ave * mL.derH.Et[2] * rng
+            if V > 0: rng += 1  # rng+ rim vM
             else: break
         else:
             break
@@ -444,7 +445,7 @@ def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
 
     return CH(H=[mL,dL, mS,dS, mA,dA], Et=np.array([M,D,M>D,D<=M]), n=0.5)
 
-def cluster_from_G(G, _nrim, _lrim):
+def cluster_from_G(G, _nrim, _lrim, rng):
 
     node_, link_, Et = {G}, set(), np.array([.0,.0,.0,.0])  # m,r only?
     while _lrim:
@@ -452,77 +453,67 @@ def cluster_from_G(G, _nrim, _lrim):
         for _G,_L in zip(_nrim, _lrim):
             if _G.merged: continue
             for g in node_:  # compare external _G to all internal nodes, include if any of them match
-                L = next(iter(g.lrim_[-1] & _G.lrim_[-1]), None)  # intersect = [+link] | None
+                L = next(iter(g.lrim_[rng] & _G.lrim_[rng]), None)  # intersect = [+link] | None
                 if L:
                     if ((g.extH.Et[0]-ave*g.extH.Et[2]) + (_G.extH.Et[0]-ave*_G.extH.Et[2])) * (L.derH.Et[0]/ave) > ave * ccoef:
-                        # rng+: merge roots:
-                        if isinstance(_G.root_,list):
-                            _node_,_link_,_Et,_merged = _G.root_[-1]
-                            if _merged: continue
-                            node_.update(_node_)
-                            link_.update(_link_| {_L})  # add external L
-                            Et += _L.derH.Et + _Et
-                            for n in _node_: n.merged = 1
-                            _G.root_[-1][3] = 1
-                        else:  # rng=1: add Ns
-                            node_.add(_G); link_.add(_L); Et += _L.derH.Et
-                        nrim.update(set(_G.nrim_[-1]) - node_)
-                        lrim.update(set(_G.lrim_[-1]) - link_)
+                        # merge roots:
+                        _node_,_link_,_Et,_merged = _G.root_[-1]
+                        if _merged: continue
+                        node_.update(_node_)
+                        link_.update(_link_| {_L})  # add external L
+                        Et += _L.derH.Et + _Et
+                        for n in _node_: n.merged = 1
+                        _G.root_[-1][3] = 1
+                        # if no root: node_.add(_G); link_.add(_L); Et += _L.derH.Et
+                        nrim.update(set(_G.nrim_[rng]) - node_)
+                        lrim.update(set(_G.lrim_[rng]) - link_)
                         _G.merged = 1
                         break
         _nrim,_lrim = nrim, lrim
     return node_, link_, Et
 
-def cluster_N__(root, iN__, fd):  # cluster G__|L__ by value density of +ve links per node
+# draft
+def cluster_N__(root, N__, fd):  # cluster G__|L__ by value density of +ve links per node
 
-    # rng=1: init cluster connected Gs into Gts
-    for G in iN__[0]: G.merged = 0
-    N_,_re_N_ = [],[]
-    for G in iN__[0]:
-        if G.merged: continue  # is in prior Gt node_
-        if not G.nrim_:
-            N_.append(G); continue
-        node_, link_, Et = cluster_from_G(G, G.nrim_[0], G.lrim_[0])
-        if Et[0] > Et[2] * ave:
-            Gt = [node_, link_, Et, 0]
-            _re_N_.append(Gt)
-            N_.append(Gt)
-            for n in node_: n.root_ = [Gt]
-    N__ = [N_]
-    rng = 1
-    # rng+: merge Gts connected via G.lrim_[rng] in their node_s into higher Gts
-    while True:
-        re_N_ = []
-        for G in set.union(*iN__[:rng+1]): G.merged = 0  # reset all lower Gs
-        for _node_,_link_,_Et,_merged in _re_N_:  # Gt
-            if _merged: continue
-            Node_, Link_, ET = set(),set(), np.array([.0,.0,.0,.0])  # m,r only?
+    Gt__ = []  # init Gt for each N, may be unpacked and present multiple layers:
+    for rng, N_ in enumerate(N__):
+        Gt_ = []
+        for N in N_:
+            if N.root_: continue  # Gt was initialized in lower N__[i]
+            Gt = [{N},set(), [0,0,0,0], 0]
+            N.root_ = [rng, Gt]  # 1st element is rng of the lowest root?
+            Gt_ += [Gt]
+        Gt__ += [Gt_]
+
+    for rng, Gt_ in enumerate(Gt__):
+        for G in set.union(*N__[:rng+1]):  # in all lower Gs
+            G.merged = 0
+        for  _node_,_link_,_Et, mrg in Gt_:
+            if mrg: continue
+            Node_, Link_, Et = set(),set(), np.array([.0,.0,.0,.0])  # m,r only?
             for G in _node_:
                 if not G.merged and len(G.nrim_) > rng:
                     node_ = G.nrim_[rng]- Node_
                     if not node_: continue  # no new rim nodes
-                    node_,link_,Et = cluster_from_G(G, node_, G.lrim_[rng]-Link_)
+                    node_,link_,et = cluster_from_G(G, node_, G.lrim_[rng]-Link_, rng)
                     Node_.update(node_)
                     Link_.update(link_)
-                    ET += Et
-            if ET[0] > ET[2] * ave:  # additive current-layer V: form higher Gt
+                    Et += et
+            if Et[0] > Et[2] * ave:  # additive current-layer V: form higher Gt
                 Node_.update(_node_); Link_.update(_link_)
-                Gt = [Node_, Link_, ET+_Et, 0]
+                Gt = [Node_, Link_, Et+_Et, 0]
                 for n in Node_:
-                    if isinstance(n.root_,list): n.root_.append(Gt)
-                    else: n.root_ = [Gt]
-                re_N_.append(Gt)
-        if re_N_:
-            N__.append(re_N_)
-            _re_N_ = re_N_
-            rng += 1
-        else:
-            break
-    for i, N_ in enumerate(N__):  # convert Gts to CGs
-        for ii, N in enumerate(N_):
-            if isinstance(N, list):
-                N_[ii] = sum2graph(root, [list(N[0]), list(N[1]), N[2]], fd, rng=i)
-    iN__[:] = N__
+                    n.root_.append(Gt)
+    n__ = []
+    for i, Gt_ in enumerate(Gt__):  # selective convert Gts to CGs
+        n_ = []
+        for Gt in Gt_:
+            if Gt[2][0] > Gt[2][2] * ave:  # additive Et
+                n_ += [sum2graph(root, [list(Gt[0]), list(Gt[1]), Gt[2]], fd, rng=i)]
+            else:
+                n_ += Gt[0][:]  # unpack weak Gt
+        n__ += [n_]
+    N__[:] = n__
 
 def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, aggH in agg+ or player in sub+
 

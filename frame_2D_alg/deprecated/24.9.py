@@ -507,7 +507,6 @@ def negate(He):  # negate is no longer useful?
         He.H[1::2] = [-d for d in He.H[1::2]]
     return He
 
-
 def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
 
     for P in iP_: P.merged = 0
@@ -555,15 +554,27 @@ def reset_merged(Gt_,rng):
 
 def cluster_N__(root, iN__, fd):  # cluster G__|L__ by value density of +ve links per node
 
-    # merged rng
-    N__ = []
-    rng = 0
-    _re_N_ = [ [[N],[],[0,0,0,0],0] for N in iN__[0]]
+    # rng=1: init cluster connected Gs into Gts
+    for G in iN__[0]: G.merged = 0
+    N_,_re_N_ = [],[]
+    for G in iN__[0]:  # not all Ns? cluster ave_L != xcomp ave_L?
+        if G.merged: continue  # is in prior Gt node_
+        if not G.nrim_:
+            N_.append(G); continue
+        node_, link_, Et = cluster_from_G(G, G.nrim_[0], G.lrim_[0], rng=0)
+        if Et[0] > Et[2] * ave:
+            Gt = [node_, link_, Et, 0]
+            _re_N_.append(Gt)
+            N_.append(Gt)
+            for n in node_: n.root_ = [Gt]
+    N__ = [N_]
+    rng = 1
+    # rng+: merge Gts connected via G.lrim_[rng] in their node_s into higher Gts
     while True:
         re_N_ = []
-        for G in set.union(*iN__): G.merged = 0  # Reset all merged flags
-        for  _node_,_link_,_Et, mrg in (_re_N_):
-            if mrg: continue  # Skip if merged
+        for G in set.union(*iN__[:rng+1]): G.merged = 0  # reset all lower Gs?
+        for _node_,_link_,_Et,_merged in _re_N_:  # Gt
+            if _merged: continue
             Node_, Link_, ET = set(),set(), np.array([.0,.0,.0,.0])  # m,r only?
             for G in _node_:
                 if not G.merged and len(G.nrim_) > rng:
@@ -591,3 +602,46 @@ def cluster_N__(root, iN__, fd):  # cluster G__|L__ by value density of +ve link
             if isinstance(N, list):
                 N_[ii] = sum2graph(root, [list(N[0]), list(N[1]), N[2]], fd, rng=i)
     iN__[:] = N__
+
+def rng_link_(iL_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
+
+    _N_t_ = [[[L.nodet[0]],[L.nodet[1]]] for L in iL_]  # Ns are rim-mediating nodes, starting with L.nodet
+    L__,LL__, ET = [],[], np.array([.0,.0,.0,.0])  # all links between Ls in potentially extended L__
+    rng = 1; _L_ = iL_[:]
+    while True:
+        L_,LL_,Et = set(),[],np.array([.0,.0,.0,.0])
+        N_t_ = [[[],[]] for _ in _L_]  # new rng lay of mediating nodes, traced from all prior layers?
+        for L, _N_t, N_t in zip(_L_, _N_t_, N_t_):
+            for rev, _N_, N_ in zip((0,1), _N_t, N_t):
+                # comp L,_L mediated by nodets, flatten rim_, not only 1st layer in rimt_?
+                rim_ = [rim for n in _N_ for rim in (n.rim_ if isinstance(n, CG) else [n.rimt_[0][0] + n.rimt_[0][1]])]
+                for rim in rim_:
+                    for _L,_rev in rim:  # _L is reversed relative to its 2nd node
+                        if _L is L or _L in L.visited__L or _L not in iL_:  # search in root.link_,
+                            # or _L.rimt_,_L.root_,_L.visited_,_L.aRad,_L.merged,_L.extH = [],[],[], 0,0, CH()  # set_attrs(_L)
+                            continue  # or
+                        L.visited_ += [_L]; _L.visited_ += [L]
+                        Link = CL(nodet=[_L,L], S=2, A=np.subtract(_L.yx,L.yx), box=extend_box(_L.box, L.box))
+                        comp_N(Link, rng, dir = 1 if (rev^_rev) else -1)  # d = -d if one L is reversed
+                        # L.rim_t += Link, order: nodet < L < rimt_, mN.rim || L
+                        et = Link.derH.Et
+                        Et += et; LL_ += [Link]  # include -ve links
+                        if et[0] > ave * et[2] * (rng+1):  # eval to extend search
+                            N_ += _L.nodet  # get _Ls in N_ rims
+                            if _L not in _L_:
+                                _L_ += [_L]; N_t_ += [[[],[]]]  # not in root
+                            L_.add(_L)
+                            N_t_[_L_.index(_L)][1-rev] += L.nodet  # rng+ -mediating nodes
+        if L_:
+            L__ += [L_]; LL__ += [LL_]; ET += Et
+            V = 0; L_,_N_t_ = [],[]
+            for L, N_t in zip(_L_,N_t_):
+                if any(N_t):
+                    L_ += [L]; _N_t_ += [N_t]
+                    V += L.derH.Et[0] - ave * L.derH.Et[2] * rng
+            if V > 0:  # rng+ if vM of extended N_t_
+                _L_ = L_; rng += 1
+            else: break
+        else:
+            break
+    return L__, LL__, ET, rng
