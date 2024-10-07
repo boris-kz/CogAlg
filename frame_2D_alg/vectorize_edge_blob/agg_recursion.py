@@ -255,8 +255,6 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         l.H_ = [] if H_ is None else H_  # if agg++| sub++?
         l.Vt = [0,0]  # for rim-overlap modulated segmentation, init derH.Et[:2]
         l.n = 1  # min(node_.n)
-        l.lrim_ = []
-        l.nrim_ = []
         # add rimt_, elay | extH if der+
     def __bool__(l): return bool(l.derH.H)
 
@@ -320,7 +318,7 @@ def agg_recursion(root, iQ, fd):  # breadth-first rng++ cross-comp -> eval clust
 
 def rng_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__,Et, ~ graph CNN without backprop
 
-    N__,L__, pL__, ET = [],[],[], np.array([.0,.0,.0,.0])  # rng H
+    N__,L__,pL__,ET = [],[],[], np.array([.0,.0,.0,.0])  # rng H
     _Gp_ = []  # [G pair+ co-positionals]
     for _G, G in combinations(_N_, r=2):
         rn = _G.n / G.n
@@ -351,33 +349,34 @@ def rng_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__,
                 Gp_ += [Gp]  # re-evaluate not-compared pairs with one incremented N.M:
         if Et[0] > ave * Et[2]:  # current-rng vM
             rng += 1
-            N__+= [N_]; L__+= [L_]; pL__+=[pL_]; ET += Et  # sub-cluster N_ or pL_
+            N__+= [N_]; L__+= [L_]; pL__+=[pL_]; ET += Et  # sub-cluster pL_,N_
             _Gp_ = [Gp for Gp in Gp_ if (Gp[0] in N_ or Gp[1] in N_)]  # one incremented N.M
         else:  # low projected rng+ vM
             break
     return N__,L__, pL__, ET,rng  # pL__: positive L__, is tentative
 
 
-def rng_link_(iL_):  # comp CLs via directional node-mediated link tracing: der+'rng+ in root.link_ rim_t node rims:
+def rng_link_(iL_):  # comp CLs via directional node-mediated link tracing: der+'rng+ in root.link_ rim_t node rims
 
-    L__, LL__, pLL__, ET = [],[],[], np.array([.0,.0,.0,.0])  # all links between Ls in potentially extended L__
     fd = isinstance(iL_[0].nodet[0], CL)
-    _mL_t_ = [] # init _mL_t_: [[n.rimt_[0][0]+n.rimt_[0][1] if fd else n.rim_[0] for n in iL.nodet] for iL in iL_]
-    for L in iL_:
-        mL_t = []
-        for n in L.nodet:
-            L_ = []
-            for (_L,rev) in (n.rimt_[0][0] + n.rimt_[0][1] if fd else n.rim_[0]):  # all rims are inside root node_
-                if _L is not L:
-                    L_ += [[L,rev]]; L.visited_ += [L]
-            mL_t += [L_]
-        _mL_t_ += [mL_t]
-    _L_ = iL_; med = 1  # rng = n intermediate nodes
+    for L,_ in iL_:
+        L.visited_ = [L]; L.mL_t = [[],[]]
+        if fd:
+            L.rimt_, L.root_, L.aRad, L.merged, L.extH = [], [], 0, 0, CH()
+        # init mL_t:
+        for rev, n, mL_ in zip((0,1), L.nodet, L.mL_t):
+            rim_ = n.rimt_ if fd else n.rim_
+            for _L in rim_[0][0] + rim_[0][1] if fd else rim_[0]:
+                if _L.Et[0] > ave * _L.Et[2]:
+                    mL_ += [(_L,rev)]
+    _L_, L__, LL__, pLL__, ET = iL_, [],[],[], np.array([.0,.0,.0,.0])
+    med = 0
     while True:
+        # comp _L_:
         L_,LL_,pLL_,Et = set(),[],[], np.array([.0,.0,.0,.0])
-        for L, mL_t in zip(_L_,_mL_t_):  # packed comparands
-            for rev, rim in zip((0,1), mL_t):
-                for _L,_rev in rim:  # reverse _L med by nodet[1]
+        for L, rev in _L_:
+            for _rev, mL_ in zip((0,1), L.mL_t):
+                for _L,_ in mL_:  # reverse _L med by nodet[1]
                     rn = _L.n / L.n
                     if rn > ave_rn: continue  # scope disparity
                     Link = CL(nodet=[_L,L], S=2, A=np.subtract(_L.yx,L.yx), box=extend_box(_L.box, L.box))
@@ -385,38 +384,40 @@ def rng_link_(iL_):  # comp CLs via directional node-mediated link tracing: der+
                     et = comp_N(Link, rn, rng=med, dir = 1 if (rev^_rev) else -1)  # d = -d if one L is reversed
                     LL_ += [Link]  # include -ves, L.rim_t += Link, order: nodet < L < rimt_, mN.rim || L
                     if et is not None:
-                        Et += et; pLL_ += [Link]; L_.update({_L,L})
+                        L_.update({(_L,_rev),(L,rev)})
+                        pLL_+=[Link]; Et += et
+        L__+=[L_]; LL__+=[LL_]; pLL__+=[pLL_]; ET += Et
         # rng+ eval:
         Med = med + 1
-        if Et[0] > ave * Et[2] * Med:
-            L_, mL_t_, rEt = set(),[], np.array([.0,.0,.0,.0])
-            for L, _mL_t in zip(_L_,_mL_t_):  # mediators
+        if Et[0] < ave * Et[2] * Med:  # project prior-loop value - new cost
+            nxt_L_, nxt_Et = set(), np.array([.0,.0,.0,.0])
+            for L,rev in L_:
                 mL_t, lEt = [set(),set()], np.array([.0,.0,.0,.0])  # __Ls per L
-                for rev, rim in zip((0,1),_mL_t):
-                    for _L,_rev in rim:
+                for mL_ in L.mL_t:
+                    for _L,_rev in mL_:
                         for i, n in enumerate(_L.nodet):
                             rim_ = n.rimt_ if fd else n.rim_
-                            if len(rim_) == med:  # appended in comp loop
-                                rim = rim_[-1][0]+rim_[-1][1] if fd else rim_[-1]
-                                for __L, rev in rim:
-                                    if __L is L or __L in L.visited_ or __L not in iL_: continue
+                            if len(rim_) == med:  # append in comp loop
+                                for __L in rim_[-1][0] + rim_[-1][1] if fd else rim_[-1]:
+                                    if __L in L.visited_ or __L not in iL_:
+                                        continue
                                     L.visited_ += [__L]; __L.visited_ += [L]
                                     et = __L.derH.Et
                                     if et[0] > ave * et[2] * Med:  # /__L
                                         mL_t[i].add((__L, 1-i))  # incrementally mediated direction L_
                                         lEt += et
                 if lEt[0] > ave * lEt[2] * Med:
-                    L_.add(L); mL_t_ += [mL_t]; rEt += lEt  # rng+/ L is different from comp/ L above
+                    L.mL_t = mL_t  # rng+/ L is different from comp/ L above
+                    nxt_L_.add((L,rev)); nxt_Et += lEt
             # refine eval:
-            if rEt[0] > ave * rEt[2] * Med:
-                L__ += [L_]; LL__ += [LL_]; pLL__+= pLL_; ET += rEt
-                _L_ = L_; _mL_t_ = mL_t_
-                med = Med
+            if nxt_Et[0] > ave * nxt_Et[2] * Med:
+                _L_ = nxt_L_; med = Med
             else:
                 break
         else:
             break
-    return L__, LL__, pLL__, ET, med # =rng
+    return L__, LL__, pLL__, ET, med  # =rng
+
 
 def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
 
@@ -443,7 +444,7 @@ def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=
     Et = elay.Et
     fv = Et[0] > ave * Et[2] * (rng+1)
     for rev, node in zip((0,1),(N,_N)):  # reverse Link direction for N
-        # L_ includes -ves:
+        # L_ includes negative Ls
         if (len(node.rimt_) if fd else len(node.rim_)) < rng:
             if fd: node.rimt_ = [[[(Link,rev)],[]]] if dir else [[[],[(Link,rev)]]]  # add rng layer
             else:  node.rim_ += [[(Link, rev)]]
@@ -483,7 +484,7 @@ def cluster_N__(root, N__,L__, fd):  # cluster G__|L__ by value density of +ve l
         if len(L_) < ave_L: continue
         for N in N_:
             if not N.root_:  # init root graph
-                Gt = [{N}, set(), np.array([.0,.0,.0,.0]), 0]; N.root_ = [Gt]  # add rng?
+                Gt = [{N}, set(), np.array([.0,.0,.0,.0]), 0]; N.root_ = [Gt]
         # cluster from L_:
         for L in L_:
             for G in L.nodet:
@@ -492,8 +493,9 @@ def cluster_N__(root, N__,L__, fd):  # cluster G__|L__ by value density of +ve l
                 Node_, Link_, Et = node_.copy(), link_.copy(), et.copy()  # init current-rng Gt
                 # extend Node_:
                 for g in node_:
-                    if len(g.rim_) <= rng: continue  # always CG
-                    _lrim = set([Lt[0] for Lt in g.rim_[rng] if Lt[0].derH.Et[0] > ave * Lt[0].derH.Et[2] * rng]) - Link_
+                    rim_ = g.rimt_ if fd else g.rim_
+                    if len(rim_) <= rng: continue
+                    _lrim = set([Lt[0] for Lt in (rim_[rng][0]+rim_[rng][1] if fd else rim_[rng]) if Lt[0].derH.Et[0] > ave * Lt[0].derH.Et[2] * rng]) - Link_
                     while _lrim:
                         lrim = set()
                         for _L in _lrim:
@@ -505,6 +507,7 @@ def cluster_N__(root, N__,L__, fd):  # cluster G__|L__ by value density of +ve l
                             cV = 0  # intersect V
                             xlrim = set()  # add to lrim
                             for _g in _node_:  # no node_ overlap
+                                if len(_g.rim_) <= rng: continue
                                 __lrim = set([Lt[0] for Lt in _g.rim_[rng] if Lt[0].derH.Et[0] >  ave * Lt[0].derH.Et[2] * rng])
                                 clrim = _lrim & __lrim  # intersect
                                 xlrim.update(__lrim - clrim)
@@ -524,8 +527,7 @@ def cluster_N__(root, N__,L__, fd):  # cluster G__|L__ by value density of +ve l
                     for n in Node_: n.root_+= [Gt]
                     L.root_ = Gt  # rng-specific
                     Gt_ += [Gt]
-        for G in set.union( *N__[:rng+1]):
-            G.merged = 0  # in all lower Gs
+        for G in set.union( *N__[:rng+1]): G.merged = 0  # in all lower Gs
         Gt__ += [Gt_]
     n__ = []
     for rng, Gt_ in enumerate(Gt__, start=1):  # selective convert Gts to CGs

@@ -126,5 +126,67 @@ def cluster_N__(root, N__,L__, fd):  # cluster G__|L__ by value density of +ve l
         n__ += [n_]
     N__[:] = n__
 
+def rng_link_(iL_):  # comp CLs via directional node-mediated link tracing: der+'rng+ in root.link_ rim_t node rims:
+
+    L__, LL__, pLL__, ET = [],[],[], np.array([.0,.0,.0,.0])  # all links between Ls in potentially extended L__
+    fd = isinstance(iL_[0].nodet[0], CL)
+    _mL_t_ = [] # init _mL_t_: [[n.rimt_[0][0]+n.rimt_[0][1] if fd else n.rim_[0] for n in iL.nodet] for iL in iL_]
+    for L in iL_:
+        mL_t = []
+        for n in L.nodet:
+            L_ = []
+            for (_L,rev) in (n.rimt_[0][0]+n.rimt_[0][1] if fd else n.rim_[0]):  # all rims are inside root node_
+                if _L is not L and _L.Et[0] > ave * _L.Et[2]:
+                    if fd:
+                        _L.rimt_,_L.root_,_L.visited_,_L.aRad,_L.merged,_L.extH = [],[],[], 0,0, CH()
+                    L_ += [[_L,rev]]; L.visited_ += [L,_L]; _L.visited_ += [_L,L]
+            mL_t += [L_]
+        _mL_t_ += [mL_t]
+    _L_ = iL_; med = 1  # rng = n intermediate nodes
+    # comp _L_:
+    while True:
+        L_,LL_,pLL_,Et = set(),[],[], np.array([.0,.0,.0,.0])
+        for L, mL_t in zip(_L_,_mL_t_):  # packed comparands
+            for rev, rim in zip((0,1), mL_t):
+                for _L,_rev in rim:  # reverse _L med by nodet[1]
+                    rn = _L.n / L.n
+                    if rn > ave_rn: continue  # scope disparity
+                    Link = CL(nodet=[_L,L], S=2, A=np.subtract(_L.yx,L.yx), box=extend_box(_L.box, L.box))
+                    # comp L,_L:
+                    et = comp_N(Link, rn, rng=med, dir = 1 if (rev^_rev) else -1)  # d = -d if one L is reversed
+                    LL_ += [Link]  # include -ves, L.rim_t += Link, order: nodet < L < rimt_, mN.rim || L
+                    if et is not None:
+                        L_.update({_L,L}); pLL_+=[Link]; Et += et
+        L__+=[L_]; LL__+=[LL_]; pLL__+=[pLL_]; ET += Et
+        # rng+ eval:
+        Med = med + 1
+        if Et[0] > ave * Et[2] * Med:  # project prior-loop value - new cost
+            nxt_L_, mL_t_, nxt_Et = set(),[], np.array([.0,.0,.0,.0])
+            for L, _mL_t in zip(_L_,_mL_t_):  # mediators
+                mL_t, lEt = [set(),set()], np.array([.0,.0,.0,.0])  # __Ls per L
+                for rev, rim in zip((0,1),_mL_t):
+                    for _L,_rev in rim:
+                        for i, n in enumerate(_L.nodet):
+                            rim_ = n.rimt_ if fd else n.rim_
+                            if len(rim_) == med:  # append in comp loop
+                                rim = rim_[-1][0]+rim_[-1][1] if fd else rim_[-1]
+                                for __L, rev in rim:
+                                    if __L in L.visited_ or __L not in iL_: continue
+                                    L.visited_ += [__L]; __L.visited_ += [L]
+                                    et = __L.derH.Et
+                                    if et[0] > ave * et[2] * Med:  # /__L
+                                        mL_t[i].add((__L, 1-i))  # incrementally mediated direction L_
+                                        lEt += et
+                if lEt[0] > ave * lEt[2] * Med:
+                    nxt_L_.add(L); mL_t_ += [mL_t]; nxt_Et += lEt  # rng+/ L is different from comp/ L above
+            # refine eval:
+            if nxt_Et[0] > ave * nxt_Et[2] * Med:
+                _L_=nxt_L_; _mL_t_=mL_t_; med=Med
+            else:
+                break
+        else:
+            break
+    return L__, LL__, pLL__, ET, med # =rng
+
 
 
