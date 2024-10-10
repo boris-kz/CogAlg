@@ -73,44 +73,53 @@ def cluster_from_G(G, _nrim, _lrim, rng):
         _nrim,_lrim = nrim, lrim
     return node_, link_, Et
 
-def cluster_N__(root, N__,L__, fd):  # cluster G__|L__ by value density of +ve links per node
+def cluster_N__1(root, N__,L__, fd):  # cluster G__|L__ by value density of +ve links per node
 
-    for rng, N_ in enumerate(N__):  # init Gt for each N, may be unpacked and present multiple layers
-        for N in N_:
-            if N.root_: continue  # Gt was initialized in lower N__[i]
-            Gt = [{N}, set(), np.array([.0,.0,.0,.0]), 0]
-            N.root_ = [Gt]  # 1st element is rng of the lowest root?
-    # cluster from L_:
     Gt__ = []
-    for rng, L_ in enumerate(L__, start=1):  # all Ls and current-rng Gts are unique
+    for rng, (N_,L_) in enumerate(zip(N__,L__), start=1):  # all Ls and current-rng Gts are unique
         Gt_ = []
-        if len(L_) < ave_L:
-            continue
+        if len(L_) < ave_L: continue
+        for N in N_:
+            N.merged = 0
+            if not N.root_:  # always init root graph for generic merging process
+                Gt = [{N}, set(), np.array([.0,.0,.0,.0])]; N.root_ = [Gt]
+        # cluster from L_:
         for L in L_:
-            for N in L.nodet:
-                _node_, _link_, _Et, mrg = N.root_[-1]  # <= rng in all L-connected Gs
-                if mrg: continue  # 1 in current-rng overlap, 0 in only one G of nodet
-                Node_, Link_, Et = _node_[:], _link_[:], _Et[:]  # current-rng Gt init
-                for G in _node_:
-                    if not G.merged and len(G.nrim_) > rng:
-                        node_ = G.nrim_[rng] - Node_
-                        if not node_: continue  # no new rim nodes
-                        node_, link_, et = cluster_from_G(G, node_, G.lrim_[rng] - Link_, rng)
-                        Node_.update(node_)
-                        Link_.update(link_)
-                        Et += et
+            for G in L.nodet:
+                if G.merged: continue
+                node_, link_, et = G.root_[-1]  # lower-rng graph, mrg = 0
+                Node_, Link_, Et = node_.copy(), link_.copy(), et.copy()  # init current-rng Gt
+                # extend Node_:
+                for g in node_:
+                    _lrim = get_rim(g, Link_, fd, rng)
+                    while _lrim:
+                        lrim = set()
+                        for _L in _lrim:
+                            _G = _L.nodet[1] if _L.nodet[0] is g else _L.nodet[0]
+                            if _G.merged or _G not in N_ or _G is G: continue
+                            _node_,_link_,_Et = _G.root_[-1]  # lower-rng _graph
+                            cV = 0  # intersect V
+                            xlrim = set()  # add to lrim
+                            for _g in _node_:  # no node_ overlap
+                                __lrim = get_rim(_g, [], fd, rng)
+                                clrim = _lrim & __lrim  # rim intersect
+                                xlrim.update(__lrim - clrim)  # new rim
+                                for __L in clrim:  # eval common rng Ls
+                                    v = ((g.extH.Et[0]-ave*g.extH.Et[2]) + (_g.extH.Et[0]-ave*_G.extH.Et[2])) * (__L.derH.Et[0]/ave)
+                                    if v > 0: cV += v
+                            if cV > ave * ccoef:  # additional eval to merge roots:
+                                lrim.update(xlrim)  # add new rim links
+                                Node_.update(_node_)
+                                Link_.update(_link_|{_L})  # add external L
+                                Et += _L.derH.Et + _Et
+                                for n in _node_: n.merged = 1
+                        _lrim = lrim
                 if Et[0] > Et[2] * ave:  # additive current-layer V: form higher Gt
-                    Node_.update(_node_)
-                    Link_.update(_link_)
-                    Gt = [Node_, Link_, Et + _Et, 0]
-                    for n in Node_:
-                        n.root_.append(Gt)
-                    N.root_ += [Gt]
-                    L.root = [rng, Gt]  # rng-specific
+                    Gt = [Node_, Link_, Et + _Et]
+                    for n in Node_: n.root_+= [Gt]
+                    L.root_ = Gt  # rng-specific
                     Gt_ += [Gt]
-        # not sure now:
-        for G in set.union(*N__[:rng+1]):  # in all lower Gs
-            G.merged = 0
+        for G in set.union( *N__[:rng]): G.merged = 0  # in all lower Gs
         Gt__ += [Gt_]
     n__ = []
     for rng, Gt_ in enumerate(Gt__, start=1):  # selective convert Gts to CGs
@@ -119,12 +128,10 @@ def cluster_N__(root, N__,L__, fd):  # cluster G__|L__ by value density of +ve l
             if Gt[2][0] > Gt[2][2] * ave:  # eval additive Et
                 n_ += [sum2graph(root, [list(Gt[0]), list(Gt[1]), Gt[2]], fd, rng)]
             else:
-                for n in Gt[0]:  # eval weak Gt node_
-                    if n.ET[0] > n.Et[2] * ave * rng:  # eval with added rng
-                        n.lrim_, n.nrim_ = [],[]
-                        n_ += [n]
+                for n in Gt[0]:  # unpack weak Gt
+                    if n.ET[0] > n.Et[2] * ave * rng: n_ += [n]  # eval / added rng
         n__ += [n_]
-    N__[:] = n__
+    N__[:] = n__  # replace some Ns with Gts
 
 def rng_link_(iL_):  # comp CLs via directional node-mediated link tracing: der+'rng+ in root.link_ rim_t node rims:
 
