@@ -1,16 +1,11 @@
 import numpy as np
-from collections import deque, defaultdict
 from copy import deepcopy, copy
 from itertools import zip_longest
 import sys
 sys.path.append("..")
 from frame_blobs import CBase, imread
-if __name__ == "__main__": from slice_edge import CP, comp_angle, CsliceEdge
-else: from .slice_edge import CP, comp_angle, CsliceEdge
 
 '''
-Vectorize is a terminal fork of intra_blob.
-
 comp_slice traces edge axis by cross-comparing vertically adjacent Ps: horizontal slices across an edge blob.
 These are low-M high-Ma blobs, vectorized into outlines of adjacent flat (high internal match) blobs.
 (high match or match of angle: M | Ma, roughly corresponds to low gradient: G | Ga)
@@ -40,12 +35,14 @@ ave = 5  # ave direct m, change to Ave_min from the root intra_blob?
 aves = ave_mI, ave_mG, ave_mM, ave_mMa, ave_mA, ave_mL = ave, 10, 2, .1, .2, 2
 PP_aves = ave_PPm, ave_PPd = 50, 50
 P_aves = ave_Pm, ave_Pd = 10, 10
-ave_L = 5
 ave_Gm = 50
+ave_L = 5
+if __name__ == "__main__": from slice_edge import CP, comp_angle, CsliceEdge
+else: from .slice_edge import CP, comp_angle, CsliceEdge
 
 class CcompSliceFrame(CsliceEdge):
-    class CEdge(CsliceEdge.CEdge): # replaces CBlob
-
+    # replace CBlob:
+    class CEdge(CsliceEdge.CEdge):
         def vectorize(edge):  # overrides in CsliceEdge.CEdge.vectorize
             edge.slice_edge()
             if edge.latuple[-1] * (len(edge.P_)-1) > ave_PPm:  # eval PP, rdn=1
@@ -217,7 +214,6 @@ def form_PP_(root, iP_):  # form PPs of dP.valt[fd] + connected Ps val
         PPt_ += [PPt]
 
     return PPt_
-
 
 def sum2PP(root, P_, dP_):  # sum links in Ps and Ps in PP
 

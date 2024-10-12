@@ -1,3 +1,6 @@
+import weakref
+import numpy as np
+from matplotlib import pyplot as plt
 '''
     2D version of first-level core algorithm includes frame_blobs, intra_blob (recursive search within blobs), and blob2_P_blob.
     -
@@ -27,11 +30,7 @@
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/blob_params.drawio
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs.png
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs_intra_blob.drawio
-'''
-import weakref
-import numpy as np
-from matplotlib import pyplot as plt
-'''
+
     Conventions:
     postfix 't' denotes tuple, multiple ts is a nested tuple
     postfix '_' denotes array name, vs. same-name elements
