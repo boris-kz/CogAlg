@@ -8,25 +8,21 @@ from .comp_slice import comp_slice, comp_latuple, add_lat, aves
 '''
 This code is ostensibly for clustering segments within edge: high-gradient blob, but it's far too complex for the case.
 That's because this is a prototype for open-ended compositional recursion: clustering blobs, graphs of blobs, etc.
-Edge-specific processing will likely be a small subset of this file, it's not really a priority right now.
+We will later prune complete code for intra-edge version.
 -
-Primary incremental-range (rng+) cross-comp leads to clustering edge segments, initially PPs, that match over < max distance. 
-Secondary incr-derivation (der+) cross-comp links formed in the primary one, if >ave (abs_diff * primary_xcomp_match): 
-diff patterns borrow value from proximate match patterns, because their projection cancels co-projected match.
+Primary incremental-range (rng+) fork cross-comp leads to clustering edge segments, initially PPs, that match over < max distance. 
+Secondary incr-derivation (der+) fork cross-compares links from primary cross-comp, if >ave ~(abs_diff * primary_xcomp_match): 
+variance patterns borrow value from co-projected match patterns, because their projections cancel-out.
 - 
 Thus graphs should be assigned adjacent alt-fork (der+ to rng+) graphs, to which they lend predictive value.
 But alt match patterns borrow already borrowed value, which are too tenuous to track, we use average borrowed value.
-So clustering criterion is M|D, summed across >ave vars if selective comp  (<ave vars are not compared, don't add costs).
+Clustering criterion within each fork is summed match of >ave vars (<ave vars are not compared and don't add comp costs).
 -
-Clustering is exclusive per fork,ave, with fork selected per var| derLay| aggLay 
-Fuzzy clustering is centroid-based only, connectivity-based clusters will merge.
-Param clustering if MM, along derivation sequence, or centroid-based if global?
+Clustering is exclusive per fork,ave, with fork selected per variable | derLay | aggLay 
+Fuzzy clustering can only be centroid-based, because overlapping connectivity-based clusters will merge.
+Param clustering if MM, compared along derivation sequence, or combinatorial?
 -
-There are concepts that include same matching vars: size, density, color, stability, etc, but in different combinations.
-Weak value vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
-Clustering by variance: lend|borrow, contribution or counteraction to similarity | stability, such as metabolism? 
--
-Graph is nested in dual tree of down-forking elements and up-forking clusters.
+Combined representation of a graph is nested in a dual tree of down-forking elements: node_, and up-forking clusters: root_.
 That resembles a neuron, which has dendritic tree as input and axonal tree as output. 
 But we have recursively nested param sets packed in each level of the trees, which don't exist in neurons.
 -
@@ -476,22 +472,28 @@ def cluster_N__(root, N__, fd):  # cluster G__|L__ by value density of +ve links
 
     Gt__ = []
     for rng, N_ in enumerate(N__, start=1):  # all Ls and current-rng Gts are unique
-        # add new root for generic merging:
-        for N in N_:
+        if len(N_) < ave_L:
+            Gt__ += [N_]; continue
+        Gt_ = []
+        for N in N_:  N.merged = 0
+        for N in N_:  # add new root for generic merging:
+            if N.merged: continue
             if not N.root_:
-                N.root_ = [[{N}, set(), np.array([.0,.0,.0,.0]), get_rim(N,fd,rng), 0]]
+                Gt = [[[N], set(), np.array([.0,.0,.0,.0]), get_rim(N,fd,rng), 0]]
+                N.root_ = [Gt]
             else:
                 node_, link_, et, rim, mrg = N.root_[-1]
                 Link_ = list(link_); rng_rim = []
                 for n in node_:
+                    n.merged = 1
                     for L in get_rim(n, fd, rng):
-                        if all([n in node_ for n in L.nodet]):
-                            Link_ += [L]
+                        if all([n in node_ for n in L.nodet]): Link_ += [L]
                         else: rng_rim += [L]  # one external node
-                N.root_ += [[node_.copy(), set(Link_), np.array([.0,.0,.0,.0]), set(rng_rim), 0]]
-        Gt_ = []
-        for N in N_:  # merge Gts
-            Gt = N.root_[-1]
+                Gt = [[node_[:], set(Link_), np.array([.0,.0,.0,.0]), set(rng_rim), 0]]
+                for n in node_: n.root_ += [Gt]  # includes N
+            Gt_ += [Gt]
+        GT_ = []
+        for Gt in Gt_:  # merge Gts
             node_, link_, et, rim, mrg = Gt
             if mrg: continue
             while any(rim):  # extend node_,link_, replace rim
@@ -499,24 +501,32 @@ def cluster_N__(root, N__, fd):  # cluster G__|L__ by value density of +ve links
                 for _L in rim:
                     G,_G = _L.nodet if _L.nodet[0] in node_ else list(reversed(_L.nodet)) # one is outside node_
                     _node_,_link_,_et,_rim,_mrg = _G.root_[-1]
-                    if _mrg: continue
+                    if _mrg or _G.root_[-1] is Gt: # _G may be merged in prior loop
+                        continue
                     crim = (rim | ext_rim) & _rim  # intersect with old+new rim
                     xrim = _rim - crim   # exclusive _rim
                     cV = 0  # common val
                     for __L in crim:  # common Ls
-                        v = ((G.extH.Et[0]-ave*G.extH.Et[2]) + (_G.extH.Et[0]-ave*_G.extH.Et[2])) * (__L.derH.Et[0]/ave)
+                        '''
+                        Et = np.sum([lay.Et for lay in G.extH.H[:rng]]); _Et = np.sum([lay.Et for lay in _G.extH.H[:rng]])  # lower-rng surround density / node
+                        v = (((Et[0]-ave*Et[2]) + (_Et[0]-ave*_Et[2])) * (__L.derH.Et[0]/ave))  # multiply by link strength? or just eval links:
+                        '''
+                        v = __L.derH.Et[0] - ave * __L.derH.Et[2]
                         if v > 0: cV += v
                     if cV > ave * ccoef:  # cost of merging Gts
                         _G.root_[-1][-1] = 1  # set mrg
                         ext_rim.update(xrim)  # add new links
-                        node_.update(_node_)
+                        for _node in _node_:
+                            if _node not in node_:
+                                _node.root_[-1] = [Gt]; node_.add(_node)
                         link_.update(_link_|{_L}) # external L
                         et += _L.derH.Et + _et
                 rim = ext_rim
-            Gt_ += [Gt]
-        Gt__ += [Gt_]
+            GT_ += [Gt]
+        Gt__ += [GT_]
     n__ = []
     for rng, Gt_ in enumerate(Gt__, start=1):  # selective convert Gts to CGs
+        if not isinstance(Gt_[0], list): continue  # not clustered
         n_ = []
         for node_,link_,et,_,_ in Gt_:
             if et[0] > et[2] * ave * rng:  # additive rng Et
@@ -524,7 +534,7 @@ def cluster_N__(root, N__, fd):  # cluster G__|L__ by value density of +ve links
             else:  # weak Gt
                 n_ += [[node_,link_,et]]  # skip in current-agg xcomp, unpack if extended lower-agg xcomp
         n__ += [n_]
-    N__[:] = n__  # replace some Ns with Gts
+    N__[:] = n__  # replace Ns with Gts, if any
 
 def get_rim(N, fd, rng):
 
