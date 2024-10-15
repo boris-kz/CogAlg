@@ -262,3 +262,10 @@ def cluster_N__2(root, N__, fd):  # cluster G__|L__ by value density of +ve link
         n__ += [n_]
     N__[:] = n__  # replace Ns with Gts, if any
 
+def get_rim(N, fd, rng):
+
+    rim_ = N.rimt_ if fd else N.rim_
+    if len(rim_) < rng: return set()  # empty lrim
+    else:
+        return set([Lt[0] for Lt in (rim_[rng-1][0]+rim_[rng-1][1] if fd else rim_[rng-1])
+                    if Lt[0].derH.Et[0] > ave * Lt[0].derH.Et[2] * rng])
