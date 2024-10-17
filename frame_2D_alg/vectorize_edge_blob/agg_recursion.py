@@ -309,9 +309,9 @@ def agg_recursion(root, iQ, fd):  # breadth-first rng+ cross-comp -> eval cluste
         for L in L_[1:]: root.derH.H[-1].add_H(L.derH)  # accum
 '''
 
-def comp_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__,Et, ~ graph CNN without backprop
+def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et, ~ graph CNN without backprop
 
-    N__,L__,ET = [],[], np.array([.0,.0,.0,.0])  # rng H
+    pL_,L_, ET = [],[], np.array([.0,.0,.0,.0])  # rng H
     _Gp_ = []  # [G pair + co-positionals]
     for _G, G in combinations(_N_, r=2):
         rn = _G.n / G.n
@@ -319,38 +319,50 @@ def comp_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__
         radii = G.aRad + _G.aRad
         dy,dx = np.subtract(_G.yx,G.yx)
         dist = np.hypot(dy,dx)
+        _G.add, G.add = 0, 0
         _Gp_ += [(_G,G, rn, dy,dx, radii, dist)]
     icoef = .5  # internal M proj_val / external M proj_val
     rng = 1  # len N__
     while True:  # prior rng vM
-        Gp_,N_,L_, Et = [],set(),[], np.array([.0,.0,.0,.0])
+        Gp_,Et = [], np.array([.0,.0,.0,.0])
         for Gp in _Gp_:
             _G,G, rn, dy,dx, radii, dist = Gp
             _nrim = set([(Lt[0].nodet[1] if Lt[0].nodet[0] is _G else Lt[0].nodet[0]) for rim in _G.rim_ for Lt in rim])
             nrim = set([(Lt[0].nodet[1] if Lt[0].nodet[0] is G else Lt[0].nodet[0]) for rim in G.rim_ for Lt in rim])
-            if _nrim & nrim:  # not sure: skip indirectly connected Gs, no direct match priority?
-                continue
+            if _nrim & nrim:  # indirectly connected Gs,
+                continue     # no direct match priority?
             M = (_G.mdLay.Et[0]+G.mdLay.Et[0]) *icoef**2 + (_G.derH.Et[0]+G.derH.Et[0])*icoef + (_G.extH.Et[0]+G.extH.Et[0])
             # comp if < max distance of likely matches *= prior G match * radius:
-            if dist < max_dist * (radii*icoef**3) * M:
-                drng = len(_G.rim_) - len(G.rim_)
-                if drng > 0:    G.rim_ += [[None] * drng]
-                elif drng < 0: _G.rim_ += [[None] * drng]
+            if dist < max_dist * (radii * icoef**3) * M:
                 Link = CL(nodet=[_G,G], S=2, A=[dy,dx], box=extend_box(G.box,_G.box))
                 et = comp_N(Link, rn, rng)
                 L_ += [Link]  # include -ve links
                 if et is not None:
-                    N_.update({_G, G}); Et += et  # for clustering
+                    _G.add, G.add = 1, 1
+                    pL_ += [Link]; Et += et  # for clustering
             else:
                 Gp_ += [Gp]  # re-evaluate not-compared pairs with one incremented N.M:
         if Et[0] > ave * Et[2]:  # current-rng vM
-            rng += 1
-            N__+= [N_]; L__+= [L_]; ET += Et  # sub-cluster pL_,N_
-            _Gp_ = [Gp for Gp in Gp_ if (Gp[0] in N_ or Gp[1] in N_)]  # one incremented N.M
+            rng += 1; ET += Et  # sub-cluster pL_,N_
+            _Gp_ = [Gp for Gp in Gp_ if Gp[0].add or Gp[1].add]  # one incremented N.M
         else:  # low projected rng+ vM
             break
-    return N__,L__,ET,rng
 
+    return sort_by_dist(pL_,0), sort_by_dist(L_,1), ET,rng
+
+def sort_by_dist(_L_, fd):  # sort Ls -> rngH, if cluster within rng, same for N.rim?
+
+    _L_ = sorted(_L_, key=lambda x: x.S)  # short links first
+    N__, L_ = [], []; Max_dist = max_dist
+    for L in _L_:
+        if L.S < Max_dist: L_ += [L]  # Ls within Max_dist
+        else:
+            if fd: N__ += [L_]  # actually L__, may be empty
+            else:  N__.extend(list(set([node for L in L_ for node in L.nodet])))  # dist span for N clustering, may be empty
+            L_ = []  # init rng Lay
+            Max_dist += max_dist
+
+    return  N__  # L__ if fd
 
 def comp_link_(iL_):  # comp CLs via directional node-mediated link tracing: der+'rng+ in root.link_ rim_t node rims
 
@@ -361,9 +373,9 @@ def comp_link_(iL_):  # comp CLs via directional node-mediated link tracing: der
         for rev, n, mL_ in zip((0,1), L.nodet, L.mL_t):
             rim_ = n.rimt_ if fd else n.rim_
             for _L,_rev in rim_[0][0] + rim_[0][1] if fd else rim_[0]:
-                if _L.derH.Et[0] > ave * _L.derH.Et[2]:
+                if _L is not L and _L.derH.Et[0] > ave * _L.derH.Et[2]:
                     mL_ += [(_L, rev^_rev)]  # direction of L relative to _L
-    _L_, L__, LL__,ET = iL_,[],[], np.array([.0,.0,.0,.0])
+    _L_, L__, LL__, ET = iL_,[],[], np.array([.0,.0,.0,.0])
     med = 1
     while True:
         # xcomp _L_:
@@ -379,6 +391,7 @@ def comp_link_(iL_):  # comp CLs via directional node-mediated link tracing: der
                     LL_ += [Link]  # include -ves, L.rim_t += Link, order: nodet < L < rimt_, mN.rim || L
                     if et is not None:
                         L_.update({_L,L}); Et += et
+        if not L_: break
         L__+=[L_]; LL__+=[LL_]; ET += Et
         # rng+ eval:
         Med = med + 1
@@ -475,7 +488,7 @@ def cluster_N__(root, N__, fd):  # form rng graphs by merging lower-rng graphs i
         if len(Gt_) < ave_L:
             Gt__ += [N_]
             break
-        # eval to merge connected Gts
+        # eval to merge connected Gts:
         Gt__ += [merge_Gt_(Gt_)]
     n__ = []
     # eval to convert Gts to CGs:

@@ -269,3 +269,59 @@ def get_rim(N, fd, rng):
     else:
         return set([Lt[0] for Lt in (rim_[rng-1][0]+rim_[rng-1][1] if fd else rim_[rng-1])
                     if Lt[0].derH.Et[0] > ave * Lt[0].derH.Et[2] * rng])
+
+def comp_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__,Et, ~ graph CNN without backprop
+
+    N__,L__,ET = [],[], np.array([.0,.0,.0,.0])  # rng H
+    _Gp_ = []  # [G pair + co-positionals]
+    for _G, G in combinations(_N_, r=2):
+        rn = _G.n / G.n
+        if rn > ave_rn: continue  # scope disparity
+        radii = G.aRad + _G.aRad
+        dy,dx = np.subtract(_G.yx,G.yx)
+        dist = np.hypot(dy,dx)
+        _Gp_ += [(_G,G, rn, dy,dx, radii, dist)]
+    icoef = .5  # internal M proj_val / external M proj_val
+    rng = 1  # len N__
+    while True:  # prior rng vM
+        Gp_,N_,L_, Et = [],set(),[], np.array([.0,.0,.0,.0])
+        for Gp in _Gp_:
+            _G,G, rn, dy,dx, radii, dist = Gp
+            _nrim = set([(Lt[0].nodet[1] if Lt[0].nodet[0] is _G else Lt[0].nodet[0]) for rim in _G.rim_ for Lt in rim])
+            nrim = set([(Lt[0].nodet[1] if Lt[0].nodet[0] is G else Lt[0].nodet[0]) for rim in G.rim_ for Lt in rim])
+            if _nrim & nrim:  # not sure: skip indirectly connected Gs, no direct match priority?
+                continue
+            M = (_G.mdLay.Et[0]+G.mdLay.Et[0]) *icoef**2 + (_G.derH.Et[0]+G.derH.Et[0])*icoef + (_G.extH.Et[0]+G.extH.Et[0])
+            # comp if < max distance of likely matches *= prior G match * radius:
+            if dist < max_dist * (radii*icoef**3) * M:
+                # rim/rng, but dists should be clustered in cluster_N_, before Ns?
+                while len(_G.rim_) < rng-1: _G.rim_ += [[]]  # add empty rim for missing-rng comps
+                while len(G.rim_) < rng-1: G.rim_ += [[]]  # rng-1: new rim may be added in comp_N
+                Link = CL(nodet=[_G,G], S=2, A=[dy,dx], box=extend_box(G.box,_G.box))
+                et = comp_N(Link, rn, rng)
+                L_ += [Link]  # include -ve links
+                if et is not None:
+                    N_.update({_G, G}); Et += et  # for clustering
+            else:
+                Gp_ += [Gp]  # re-evaluate not-compared pairs with one incremented N.M:
+        if Et[0] > ave * Et[2]:  # current-rng vM
+            rng += 1
+            N__+= [N_]; L__+= [L_]; ET += Et  # sub-cluster pL_,N_
+            _Gp_ = [Gp for Gp in Gp_ if (Gp[0] in N_ or Gp[1] in N_)]  # one incremented N.M
+        else:  # low projected rng+ vM
+            break
+    return N__,L__,ET,rng
+'''
+# pre-cluster pLs by difference in their distances:
+L__ = sorted(pL_, key=lambda x: x.S)  # short links first
+N__ = []
+_L = L__[0]; pL_ = [_L]
+for L in L__[1:]:
+    ddist = L.S - _L.S  # always positive
+    if ddist < ave_L:
+        pL_ += [_L]  # cluster Ls with slowly increasing distances, or directly segment by distance? 
+    else:
+        N__ += list(set( [L.nodet[:] for L in pL_] ))  # ~= dist span for N clustering
+        pL_ = [L]  # init ~= dist span
+    _L = L
+'''
