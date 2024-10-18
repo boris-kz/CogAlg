@@ -198,10 +198,11 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    def __init__(G, root_= None, node_=None, link_=None, latuple=None, mdLay=None, derH=None, extH=None,
-                 rng=1, fd=0, n=0, box=None, yx=None, S=0, A=(0,0), area=0):
+    def __init__(G, root_= None, node_=None, link_=None, latuple=None, mdLay=None, derH=None, extH=None, rng=1, fd=0, n=0, box=None, yx=None):
         super().__init__()
+        G.n = n  # last layer?
         G.fd = 0 if fd else fd  # 1 if cluster of Ls | lGs?
+        G.rng = rng
         G.root_ = [] if root_ is None else root_ # same nodes in higher rng layers
         G.node_ = [] if node_ is None else node_ # convert to GG_ in agg++
         G.link_ = [] if link_ is None else link_ # internal links per comp layer in rng+, convert to LG_ in agg++
@@ -211,11 +212,6 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.derH = CH(root=G) if derH is None else derH  # sum from nodes, then append from feedback
         G.extH = CH(root=G) if extH is None else extH  # sum from rim_ elays, H maybe deleted
         G.rim_ = []  # direct external links, nested per rng
-        G.rng = rng
-        G.n = n   # external n (last layer n)
-        G.S = S  # sparsity: distance between node centers
-        G.A = A  # angle: summed dy,dx in links
-        G.area = area
         G.aRad = 0  # average distance between graph center and node center
         G.box = [np.inf, np.inf, -np.inf, -np.inf] if box is None else box  # y0,x0,yn,xn
         G.yx = [0,0] if yx is None else yx  # init PP.yx = [(y0+yn)/2,(x0,xn)/2], then ave node yx
@@ -235,15 +231,14 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 class CL(CBase):  # link or edge, a product of comparison between two nodes or links
     name = "link"
 
-    def __init__(l, nodet=None,derH=None, S=0, A=None, box=None, md_t=None, H_=None, root_=None):
+    def __init__(l, nodet=None, dist=None, derH=None, angle=None, box=None, H_=None):
         super().__init__()
         # CL = binary tree of Gs, depth+/der+: CL nodet is 2 Gs, CL + CLs in nodet is 4 Gs, etc.,
         # unpack sequentially
         l.nodet = [] if nodet is None else nodet  # e_ in kernels, else replaces _node,node: not used in kernels
-        l.A = [0,0] if A is None else A  # dy,dx between nodet centers
-        l.S = 0 if S is None else S  # span: distance between nodet centers, summed into sparsity in CGs
-        l.area = 0  # sum nodet
-        l.box = [] if box is None else box  # sum nodet
+        l.angle = [0,0] if angle is None else angle  # dy,dx between nodet centers
+        l.dist = 0 if dist is None else dist  # distance between nodet centers
+        l.box = [] if box is None else box  # sum nodet, not needed?
         l.derH = CH(root=l) if derH is None else derH
         l.H_ = [] if H_ is None else H_  # if agg++| sub++?
         l.Vt = [0,0]  # for rim-overlap modulated segmentation, init derH.Et[:2]
@@ -270,8 +265,8 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
                             root, P_,link_,(H,Et,n),lat,A,S,area,box,[y,x],n = N  # PPt
                         else:  # single CP
                             root=edge; P_=[N]; link_=[]; (H,Et,n)=N.mdLay; lat=N.latuple; [y,x]=N.yx; n=N.n
-                            box = [y,x-len(N.dert_), y,x]; area = 1; A,S = None,None
-                        PP = CG(fd=0, root_=root, node_=P_,link_=link_,mdLay=CH(H=H,Et=Et,n=n),latuple=lat, A=A,S=S,area=area,box=box,yx=[y,x],n=n)
+                            box = [y,x-len(N.dert_), y,x]
+                        PP = CG(fd=0, root_=root, node_=P_,link_=link_,mdLay=CH(H=H,Et=Et,n=n),latuple=lat, box=box,yx=[y,x],n=n)
                         y0,x0,yn,xn = box
                         PP.aRad = np.hypot(*np.subtract(PP.yx,(yn,xn)))
                         G_ += [PP]
@@ -300,6 +295,7 @@ def agg_recursion(root, iQ, fd):  # breadth-first rng+ cross-comp -> eval cluste
             agg_recursion(root, L_, fd=1)  # appends last aggLay, L_ = lG_
         if fvm:
             cluster_N__(root, N__, fd)  # cluster rngLays in root.node_,
+            # in comp_node_: merge N_s if weak?
             for N_ in N__:  # replace root.node_ with nested H of graphs
                 if len(N_) > ave_L:  # comp_node_
                     agg_recursion(root, N_, fd=0)  # forms higher-composition graphs
@@ -311,7 +307,6 @@ def agg_recursion(root, iQ, fd):  # breadth-first rng+ cross-comp -> eval cluste
 
 def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et, ~ graph CNN without backprop
 
-    pL_,L_, ET = [],[], np.array([.0,.0,.0,.0])  # rng H
     _Gp_ = []  # [G pair + co-positionals]
     for _G, G in combinations(_N_, r=2):
         rn = _G.n / G.n
@@ -323,8 +318,9 @@ def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et
         _Gp_ += [(_G,G, rn, dy,dx, radii, dist)]
     icoef = .5  # internal M proj_val / external M proj_val
     rng = 1  # len N__
-    while True:  # prior rng vM
-        Gp_,Et = [], np.array([.0,.0,.0,.0])
+    N__,L__, ET = [],[], np.array([.0,.0,.0,.0])  # rng H
+    while True:  # prior vM
+        Gp_,N_,L_,Et = [],set(),[], np.array([.0,.0,.0,.0])
         for Gp in _Gp_:
             _G,G, rn, dy,dx, radii, dist = Gp
             _nrim = set([(Lt[0].nodet[1] if Lt[0].nodet[0] is _G else Lt[0].nodet[0]) for rim in _G.rim_ for Lt in rim])
@@ -334,35 +330,26 @@ def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et
             M = (_G.mdLay.Et[0]+G.mdLay.Et[0]) *icoef**2 + (_G.derH.Et[0]+G.derH.Et[0])*icoef + (_G.extH.Et[0]+G.extH.Et[0])
             # comp if < max distance of likely matches *= prior G match * radius:
             if dist < max_dist * (radii * icoef**3) * M:
-                Link = CL(nodet=[_G,G], S=2, A=[dy,dx], box=extend_box(G.box,_G.box))
+                while len(_G.rim_) < rng-1: _G.rim_ += [[]]  # add empty rim/rng to align in cluster_N__
+                while len(G.rim_) < rng-1: G.rim_ += [[]]
+                # rng-1: new rim added in comp_N:
+                Link = CL(nodet=[_G,G], angle=[dy,dx], dist=dist, box=extend_box(G.box,_G.box))
                 et = comp_N(Link, rn, rng)
                 L_ += [Link]  # include -ve links
                 if et is not None:
-                    _G.add, G.add = 1, 1
-                    pL_ += [Link]; Et += et  # for clustering
+                    N_.update({_G,G}); Et += et; _G.add,G.add = 1,1  # for clustering
             else:
                 Gp_ += [Gp]  # re-evaluate not-compared pairs with one incremented N.M:
         if Et[0] > ave * Et[2]:  # current-rng vM
-            rng += 1; ET += Et  # sub-cluster pL_,N_
+            rng += 1
+            # merge N_s with Et[0] < ave * ccoef?
+            N__ += [N_]; L__ += [L_]; ET += Et  # sub-cluster N_,L_
             _Gp_ = [Gp for Gp in Gp_ if Gp[0].add or Gp[1].add]  # one incremented N.M
         else:  # low projected rng+ vM
             break
 
-    return sort_by_dist(pL_,0), sort_by_dist(L_,1), ET,rng
+    return N__, L__, ET,rng
 
-def sort_by_dist(_L_, fd):  # sort Ls -> rngH, if cluster within rng, same for N.rim?
-
-    _L_ = sorted(_L_, key=lambda x: x.S)  # short links first
-    N__, L_ = [], []; Max_dist = max_dist
-    for L in _L_:
-        if L.S < Max_dist: L_ += [L]  # Ls within Max_dist
-        else:
-            if fd: N__ += [L_]  # actually L__, may be empty
-            else:  N__.extend(list(set([node for L in L_ for node in L.nodet])))  # dist span for N clustering, may be empty
-            L_ = []  # init rng Lay
-            Max_dist += max_dist
-
-    return  N__  # L__ if fd
 
 def comp_link_(iL_):  # comp CLs via directional node-mediated link tracing: der+'rng+ in root.link_ rim_t node rims
 
@@ -385,7 +372,8 @@ def comp_link_(iL_):  # comp CLs via directional node-mediated link tracing: der
                 for _L, rev in mL_:  # rev is relative to L
                     rn = _L.n / L.n
                     if rn > ave_rn: continue  # scope disparity
-                    Link = CL(nodet=[_L,L], S=2, A=np.subtract(_L.yx,L.yx), box=extend_box(_L.box, L.box))
+                    dy,dx = np.subtract(_L.yx, L.yx)
+                    Link = CL(nodet=[_L,L], angle=[dy,dx], dist=np.hypot(dy,dx), box=extend_box(_L.box, L.box))
                     # comp L,_L:
                     et = comp_N(Link, rn, rng=med, dir = -1 if rev else 1)  # d = -d if L is reversed relative to _L
                     LL_ += [Link]  # include -ves, L.rim_t += Link, order: nodet < L < rimt_, mN.rim || L
@@ -422,21 +410,31 @@ def comp_link_(iL_):  # comp CLs via directional node-mediated link tracing: der
             break
     return L__, LL__, ET, med  # =rng
 
-def extend_box(box, _box):  # add 2 boxes
+def extend_box(_box, box):  # add 2 boxes
     y0, x0, yn, xn = box; _y0, _x0, _yn, _xn = _box
     return min(y0, _y0), min(x0, _x0), max(yn, _yn), max(xn, _xn)
+
+def comp_box(_box, box):
+    _y0,_x0,_yn,_xn =_box; _A = (_yn - _y0) * (_xn - _x0)
+    y0, x0, yn, xn = box;   A = (yn - y0) * (xn - x0)
+    return _A - A, min(_A, A) - ave_L  # mA, dA
 
 
 def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
 
     fd = dir is not None  # compared links have binary relative direction
-    dir = 1 if dir is None else dir  # convert from None into numeric
-    _N, N = Link.nodet
-    _L,L = (2,2) if fd else (len(_N.node_),len(N.node_)); _S,S = _N.S,N.S; _A,A = _N.A,N.A
-    # reverse angle direction if N is left link:
-    A = [d * dir for d in A]
-    mdext = comp_ext(_L,L, _S,S/rn, _A,A)
-    md_t = [mdext]; Et = mdext.Et.copy(); n = mdext.n
+    dir = 1 if dir is None else dir  # convert to numeric
+    _N,N = Link.nodet
+    # comp externals:
+    if fd:
+        _L, L = _N.dist - N.dist; dL = _L-L; mL = min(_L,L) - ave_L
+        _A, A = _N.angle,N.angle; A = [d*dir for d in A]; mA,dA = comp_angle(_A,A)
+    else:
+        _L, L = (len(_N.node_),len(N.node_)); dL = _L-L; mL = min(_L,L) - ave_L  # direct match
+        mA, dA = comp_box(_N.box, N.box)  # compare area in CG, angle in CL
+    n = .3
+    M = mL + mA; D = abs(dL)+ abs(dA); Et = np.array([M, D, M>D, D<=M ])
+    md_t = [CH(H=[mL,dL, mA,dA], Et=copy(Et), n=n)]  # [mdext]
     if not fd:  # CG
         H, lEt, ln = comp_latuple(_N.latuple,N.latuple,rn,fagg=1)
         mdlat = CH(H=H, Et=lEt, n=ln)
@@ -449,7 +447,7 @@ def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=
         dderH = _N.derH.comp_H(N.derH, rn, dir=dir)  # comp shared layers
         elay.append_(dderH, flat=1)
     # spec: comp_node_(node_|link_), of different agg orders, combinatorial?
-    Link.derH = elay; elay.root = Link; Link.n = min(_N.n,N.n); Link.nodet = [_N,N]; Link.yx = np.add(_N.yx,N.yx) /2  # prior S,A
+    Link.derH = elay; elay.root = Link; Link.n = min(_N.n,N.n); Link.nodet = [_N,N]; Link.yx = np.add(_N.yx,N.yx) /2  # prior angle, dist
     Et = elay.Et
     fv = Et[0] > ave * Et[2] * (rng+1)
     for rev, node in zip((0,1),(N,_N)):  # reverse Link direction for N
@@ -467,17 +465,6 @@ def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=
                 node.extH.H[-1].add_H(elay)  # node.lrim_[-1].add(Link); node.nrim_[-1].add((_N,N)[rev])
     if fv:
         return Et
-
-def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
-
-    dL = _L - L; mL = min(_L,L) - ave_L  # direct match
-    dS = _S/_L - S/L; mS = min(_S,S) - ave_L  # sparsity is accumulated over L
-    mA, dA = comp_angle(_A,A)  # angle is not normalized
-    M = mL + mS + mA
-    D = abs(dL) + abs(dS) + abs(dA)  # normalize relative to M, signed dA?
-
-    return CH(H=[mL,dL, mS,dS, mA,dA], Et=np.array([M,D,M>D,D<=M]), n=0.5)
-
 
 def cluster_N__(root, N__, fd):  # form rng graphs by merging lower-rng graphs if >ave rim: cross-graph rng links
 
@@ -572,14 +559,12 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
     yx = [0,0]
     lay0 = CH(node_= N_)  # comparands, vs. L_: summands?
     for link in L_:  # unique current-layer mediators: Ns if fd else Ls
-        graph.S += link.S
-        graph.A = np.add(graph.A,link.A)  # np.add(graph.A, [-link.angle[0],-link.angle[1]] if rev else link.angle)
         lay0.add_H(link.derH) if lay0 else lay0.append_(link.derH)
     graph.derH.append_(lay0)  # empty for single-node graph
     derH = CH()
     for N in N_:
         graph.n += N.n  # +derH.n
-        graph.area += N.area
+        graph.area += N.area  # redundant to box:?
         graph.box = extend_box(graph.box, N.box)
         yx = np.add(yx, N.yx)
         if N.derH: derH.add_H(N.derH)  # derH.Et=Et?

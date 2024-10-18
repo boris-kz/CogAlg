@@ -325,3 +325,37 @@ for L in L__[1:]:
         pL_ = [L]  # init ~= dist span
     _L = L
 '''
+def sort_by_dist(_L_, fd):  # sort Ls -> rngH, if cluster within rng, same for N.rim?
+
+    _L_ = sorted(_L_, key=lambda x: x.dist)  # short links first
+    Max_dist = max_dist
+    N__,L_ = [],[]
+    for L in _L_:
+        if L.dist < Max_dist: L_ += [L]  # Ls within Max_dist
+        else:
+            if fd: N__ += [L_]  # L__ here, L_ may be empty
+            else:  N__ += [list(set([node for L in L_ for node in L.nodet]))]  # dist span for N clustering, may be empty
+            L_ = []  # init rng Lay
+            Max_dist += max_dist
+    if L_:  # last
+        if fd: N__ += [L_]
+        else:  N__ += [list(set([node for L in L_ for node in L.nodet]))]
+
+    return  N__  # L__ if fd
+
+def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
+
+    dL = _L - L; mL = min(_L,L) - ave_L  # direct match
+    dS = _S/_L - S/L; mS = min(_S,S) - ave_L  # sparsity is accumulated over L
+    mA, dA = comp_angle(_A,A)  # angle is not normalized
+    M = mL + mS + mA
+    D = abs(dL) + abs(dS) + abs(dA)  # normalize relative to M, signed dA?
+
+    return CH(H=[mL,dL, mS,dS, mA,dA], Et=np.array([M,D,M>D,D<=M]), n=0.5)
+'''
+in sum2graph:
+        graph.S += link.S
+        graph.A = np.add(graph.A,link.angle)  # np.add(graph.A, [-link.angle[0],-link.angle[1]] if rev else link.angle)
+'''
+
+
