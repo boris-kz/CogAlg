@@ -358,4 +358,33 @@ in sum2graph:
         graph.A = np.add(graph.A,link.angle)  # np.add(graph.A, [-link.angle[0],-link.angle[1]] if rev else link.angle)
 '''
 
+def add_md_C(HE, He, irdnt=[]):  # sum dextt | dlatt | dlayt
+
+    HE.H[:] = [V + v for V, v in zip_longest(HE.H, He.H, fillvalue=0)]
+    HE.n += He.n  # combined param accumulation span
+    HE.Et += He.Et
+    if any(irdnt): HE.Et[2:] = [E + e for E, e in zip(HE.Et[2:], irdnt)]
+    return HE
+
+def accum_lay(HE, He, irdnt):
+    if HE.md_t:
+        for MD_C, md_C in zip(HE.md_t, He.md_t):  # dext_C, dlat_C, dlay_C
+            MD_C.add_md_C(md_C)
+
+def comp_md_C(_He, He, rn=1, dir=1):
+
+    vm, vd, rm, rd = 0,0,0,0
+    derLay = []
+    for i, (_d, d) in enumerate(zip(_He.H[1::2], He.H[1::2])):  # compare ds in md_ or ext
+        d *= rn  # normalize by compared accum span
+        diff = (_d - d) * dir  # in comp link: -1 if reversed nodet else 1
+        match = min(abs(_d), abs(d))
+        if (_d < 0) != (d < 0): match = -match  # negate if only one compared is negative
+        vm += match - aves[i]  # fixed param set?
+        vd += diff
+        rm += vd > vm; rd += vm >= vd
+        derLay += [match, diff]  # flat
+
+    return CH(H=derLay, Et=np.array([vm,vd,rm,rd],dtype='float'), n=1)
+
 
