@@ -265,9 +265,8 @@ def agg_recursion(root, iQ, fd):  # breadth-first rng+ cross-comp -> eval cluste
         if fvd and len(L_) > ave_L:  # comp L if DL, sub-cluster LLs by mL:
             agg_recursion(root, L_, fd=1)  # appends last aggLay, L_ = lG_
         if fvm:
-            cluster_N__(root, N__, fd)  # cluster rngLays in root.node_,
-            # in comp_node_: merge N_s if weak?
-            for N_ in N__:  # replace root.node_ with nested H of graphs
+            cluster_N__(root, N__, fd)  # merge and cluster rngLays in N__,
+            for N_ in N__:  # replace root.node_ with nested graph, if any
                 if len(N_) > ave_L:  # comp_node_
                     agg_recursion(root, N_, fd=0)  # forms higher-composition graphs
 '''
@@ -301,7 +300,7 @@ def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et
             M = (_G.mdLay[1][0]+G.mdLay[1][0]) *icoef**2 + (_G.derH.Et[0]+G.derH.Et[0])*icoef + (_G.extH.Et[0]+G.extH.Et[0])
             # comp if < max distance of likely matches *= prior G match * radius:
             if dist < max_dist * (radii * icoef**3) * M:
-                while len(_G.rim_) < rng-1: _G.rim_ += [[]]  # add empty rim/rng to align in cluster_N__
+                while len(_G.rim_) < rng-1: _G.rim_ += [[]]  # add empty rng rim to align in cluster_N__
                 while len(G.rim_) < rng-1: G.rim_ += [[]]
                 # rng-1: new rim added in comp_N:
                 Link = CL(nodet=[_G,G], angle=[dy,dx], dist=dist, box=extend_box(G.box,_G.box))
@@ -332,7 +331,7 @@ def comp_link_(iL_):  # comp CLs via directional node-mediated link tracing: der
             rim_ = n.rimt_ if fd else n.rim_
             for _L,_rev in rim_[0][0] + rim_[0][1] if fd else rim_[0]:
                 if _L is not L and _L.derH.Et[0] > ave * _L.derH.Et[2]:
-                    mL_ += [(_L, rev^_rev)]  # direction of L relative to _L
+                    mL_ += [(_L, rev ^_rev)]  # direction of L relative to _L
     _L_, L__, LL__, ET = iL_,[],[], np.array([.0,.0,.0,.0])
     med = 1
     while True:
@@ -351,7 +350,7 @@ def comp_link_(iL_):  # comp CLs via directional node-mediated link tracing: der
                     if et is not None:
                         L_.update({_L,L}); Et += et
         if not L_: break
-        L__+=[L_]; LL__+=[LL_]; ET += Et
+        L__+=[[list(L_), Et]]; LL__+=[LL_]; ET += Et
         # rng+ eval:
         Med = med + 1
         if Et[0] > ave * Et[2] * Med:  # project prior-loop value - new cost
@@ -385,7 +384,7 @@ def extend_box(_box, box):  # add 2 boxes
     y0, x0, yn, xn = box; _y0, _x0, _yn, _xn = _box
     return min(y0, _y0), min(x0, _x0), max(yn, _yn), max(xn, _xn)
 
-def comp_box(_box, box):
+def comp_area(_box, box):
     _y0,_x0,_yn,_xn =_box; _A = (_yn - _y0) * (_xn - _x0)
     y0, x0, yn, xn = box;   A = (yn - y0) * (xn - x0)
     return _A - A, min(_A, A) - ave_L  # mA, dA
@@ -400,10 +399,10 @@ def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=
         _L, L = _N.dist, N.dist;  dL = _L-L; mL = min(_L,L) - ave_L  # direct match
         mA,dA = comp_angle(_N.angle, [d*dir for d in N.angle])  # may invert 2nd comparand in link
     else:
-        _L, L = (len(_N.node_),len(N.node_)); dL = _L-L; mL = min(_L,L) - ave_L
-        mA,dA = comp_box(_N.box, N.box)  # compare area in CG, angle in CL
+        _L, L = len(_N.node_),len(N.node_); dL = _L-L; mL = min(_L,L) - ave_L
+        mA,dA = comp_area(_N.box, N.box)  # compare area in CG vs angle in CL
     n = .3
-    M = mL + mA; D = abs(dL)+ abs(dA); Et = np.array([M, D, M>D, D<=M], dtype='float')
+    M = mL+mA; D = abs(dL)+abs(dA); Et = np.array([M,D, M>D,D<=M], dtype='float')
     md_t = [[[mL,dL, mA,dA], Et,n]]  # [mdext]
     if not fd:  # CG
         mdlat = comp_latuple(_N.latuple,N.latuple,rn,fagg=1)
@@ -422,7 +421,7 @@ def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=
     for rev, node in zip((0,1),(N,_N)):  # reverse Link direction for N
         # L_ includes negative Ls
         if (len(node.rimt_) if fd else len(node.rim_)) < rng:
-            if fd: node.rimt_ = [[[(Link,rev)],[]]] if dir else [[[],[(Link,rev)]]]  # add rng layer
+            if fd: node.rimt_ += [[[(Link,rev)],[]]] if dir else [[[],[(Link,rev)]]]  # add rng layer
             else:  node.rim_ += [[(Link, rev)]]
         else:
             if fd: node.rimt_[-1][1-rev] += [(Link,rev)]  # add in last rng layer, opposite to _N,N dir
@@ -438,15 +437,25 @@ def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=
 def cluster_N__(root, iN__, fd):  # form rng graphs by merging lower-rng graphs if >ave rim: cross-graph rng links
 
     N__ = []
-    _N_,_et = iN__[0]
-    for N_,et in iN__[1:]:
-        if _et[0] < ave and et[0] < ave:
-            _N_ = [_N_ + [n] for n in N_ if n not in _N_]
-            _et += et  # merge weak rngs
+    N_,et = iN__.pop()
+    rng = len(iN__)
+    while iN__:
+        _N_,_et = iN__.pop()  # top-down
+        if _et[0] < ave and et[0] < ave:  # merge weak rngs, higher into lower
+            for n in N_:
+                if n not in _N_: _N_ += [n]  # lower rng
+                if isinstance(n, CL):
+                    n.rimt_[rng-1][0] += n.rimt_[rng][0]; n.rimt_[rng-1][1] += n.rimt_[rng][1]; n.rimt_.pop(rng)  # merged rimt
+                else:
+                    n.rim_[rng-1] += n.rim_[rng]; n.rim_.pop(rng)  # merged rim
+                n.extH.H[rng-1].add_H(n.extH.H[rng]); n.extH.H.pop(rng)  # merged extH
+            _et += et
         else:
-            N__ += [[_N_,_et]]; _N_ = N_; _et = et
+            N__ += [[_N_,_et]]; N_ = _N_; _et = et
+        rng -= 1
+    N__ += [[_N_,_et] if _N_ in locals else [N_,et]]  # 1st N_, [N_,et] if no while: single N_ in iN__
     Gt__ = []
-    for rng, (N_,et) in enumerate(N__):
+    for rng, (N_,et) in enumerate(reversed(N__)):  # bottom-up
         if et[0] > ave:  # init Gt_ from N.root_[-1]
             Gt_ = init_Gt_(N_, fd, rng)
             if len(Gt_) < ave_L:
@@ -455,7 +464,7 @@ def cluster_N__(root, iN__, fd):  # form rng graphs by merging lower-rng graphs 
             Gt__ += [N_]; break
         Gt__ += [merge_Gt_(Gt_)]  # eval to merge connected Gts
     n__ = []
-    # convert Gts-> CGs:
+    # Gts -> CGs:
     for rng, Gt_ in enumerate(Gt__, start=1):
         if isinstance(Gt_, set): continue  # recycled N_
         n_ = []
@@ -466,7 +475,8 @@ def cluster_N__(root, iN__, fd):  # form rng graphs by merging lower-rng graphs 
             else:  # weak Gt
                 n_ += [[node_,link_,et]]  # skip in current-agg xcomp, unpack if extended lower-agg xcomp
         n__ += [n_]
-    N__[:] = n__  # replace Ns with Gts, if any
+    iN__[:] = n__  # replace Ns with Gts
+
 
 def init_Gt_(N_, fd, rng):  # init higher root Gt_ from N.root_[-1]
 
@@ -482,7 +492,7 @@ def init_Gt_(N_, fd, rng):  # init higher root Gt_ from N.root_[-1]
     Gt_ = []
     for _Gt in _Gt_:
         node_, link_, et, rim, mrg = _Gt
-        if mrg:  # initialized above
+        if mrg:   # initialized above
             _Gt[-1] = 0; Gt_ += [_Gt]
         else:  # init with lower root
             Rim = set()
@@ -498,7 +508,6 @@ def init_Gt_(N_, fd, rng):  # init higher root Gt_ from N.root_[-1]
 
 def merge_Gt_(Gt_):  # eval connected Gts for merging in higher-rng Gts
     GT_ = []
-
     for Gt in Gt_:
         node_,link_,et, rim,mrg = Gt
         if mrg: continue
@@ -525,7 +534,6 @@ def merge_Gt_(Gt_):  # eval connected Gts for merging in higher-rng Gts
                     et += _L.derH.Et + _et
             rim = ext_rim
         GT_ += [Gt]
-
     return GT_
 
 def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, aggH in agg+ or player in sub+
@@ -540,8 +548,8 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
     graph.derH.append_(lay0)  # empty for single-node graph
     derH = CH()
     for N in N_:
-        graph.n += N.n  # +derH.n
-        graph.box = extend_box(graph.box, N.box)  # graph.area += N.area  # pre-compute from box?
+        graph.n += N.n  # +derH.n, total nested comparable vars
+        graph.box = extend_box(graph.box, N.box)  # pre-compute graph.area += N.area?
         yx = np.add(yx, N.yx)
         if N.derH: derH.add_H(N.derH)  # derH.Et=Et?
         if isinstance(N,CG):
