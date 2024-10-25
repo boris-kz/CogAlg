@@ -570,4 +570,17 @@ def cluster_N__3(root, N__, fd):  # form rng graphs by merging lower-rng graphs 
         n__ += [n_]
     N__[:] = n__  # replace Ns with Gts
 
+    def nest_rim(nodet):
+        # not revised
+        for rev, N in zip((0,1), nodet):  # reverse Link direction for 2nd N
+            while rng - len(N.rimt_ if fd else N.rim_):
+                if fd: N.rimt_ += [[[], []]]  # empty rngLay
+                else:  N.rim_ += [[]]
+            N.extH.append_(CH(), flat=0)
+            if fd: N.rimt_[rng-1][1-rev] += [(L,rev)]  # append rngLay
+            else:  N.rim_[rng-1] += [(_L,rev)]
+            N.extH.H[rng-1].add_H(_L.derH)
+
+
+
 
