@@ -1,13 +1,14 @@
 import sys
 sys.path.append("..")
-from frame_blobs import CBase, imread
-from slice_edge import comp_angle, CsliceEdge
-from comp_slice import CcompSlice, comp_slice, comp_latuple, add_lat, aves, comp_md_, add_md_
+from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
+from slice_edge import slice_edge, comp_angle, aveG
+from comp_slice import comp_slice, comp_latuple, add_lat, aves, comp_md_, add_md_
 from itertools import combinations, zip_longest
 from copy import deepcopy, copy
 import numpy as np
+
 '''
-This code is ostensibly for clustering segments within edge: high-gradient blob, but it's far too complex for the case.
+This code is initially for clustering segments within edge: high-gradient blob, but it's far too complex for that.
 That's because this is a prototype for open-ended compositional recursion: clustering blobs, graphs of blobs, etc.
 We will later prune it down to lighter edge-specific version.
 -
@@ -218,32 +219,33 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         # add rimt, elay | extH in der+
     def __bool__(l): return bool(l.derH.H)
 
-def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cluster:
+def vectorize_root(frame):
 
-    frame = CsliceEdge(image).segment()
-    for edge in frame.blob_:
-        if (hasattr(edge, 'P_') and
-            edge.latuple[-1] * (len(edge.P_)-1) > ave):
-            comp_slice(edge)
-            # init for agg+:
-            edge.mdLay = CH(H=edge.mdLay[0], Et=edge.mdLay[1], n=edge.mdLay[2])
-            edge.derH = CH(H=[CH()]); edge.derH.H[0].root = edge.derH; edge.fback_ = []
-            if edge.mdLay.Et[0] * (len(edge.node_)-1)*(edge.rng+1) > ave * edge.mdLay.Et[2]:
-                G_ = []
-                for N in edge.node_:  # no comp node_, link_ | PPd_ for now
-                    H,Et,n = N[3] if isinstance(N,list) else N.mdLay  # N is CP
-                    if H and Et[0] > ave * Et[2]:  # convert PP|P to G:
-                        if isinstance(N,list):
-                            root, P_,link_,(H,Et,n),lat,A,S,area,box,[y,x],n = N  # PPt
-                        else:  # single CP
-                            root=edge; P_=[N]; link_=[]; (H,Et,n)=N.mdLay; lat=N.latuple; [y,x]=N.yx; n=N.n
-                            box = [y,x-len(N.dert_), y,x]
-                        PP = CG(fd=0, root_=root, node_=P_,link_=link_,mdLay=[H, Et, n],latuple=lat, box=box,yx=[y,x],n=n)
-                        y0,x0,yn,xn = box
-                        PP.aRad = np.hypot(*np.subtract(PP.yx,(yn,xn)))
-                        G_ += [PP]
-                if len(G_) > 10:
-                    agg_recursion(edge, G_, fd=0)  # discontinuous PP_ xcomp, cluster
+    blob_ = unpack_blob_(frame)
+    for blob in blob_:
+        if not blob.sign and blob.G > aveG * blob.root.rdn:
+            edge = slice_edge(blob)
+            if edge.G * (len(edge.P_) - 1) > ave:  # eval PP, rdn=1
+                comp_slice(edge)
+                # init for agg+:
+                edge.mdLay = CH(H=edge.mdLay[0], Et=edge.mdLay[1], n=edge.mdLay[2])
+                edge.derH = CH(H=[CH()]); edge.derH.H[0].root = edge.derH; edge.fback_ = []
+                if edge.mdLay.Et[0] * (len(edge.node_)-1)*(edge.rng+1) > ave * edge.mdLay.Et[2]:
+                    G_ = []
+                    for N in edge.node_:  # no comp node_, link_ | PPd_ for now
+                        H,Et,n = N[3] if isinstance(N,list) else N.mdLay  # N is CP
+                        if H and Et[0] > ave * Et[2]:  # convert PP|P to G:
+                            if isinstance(N,list):
+                                root, P_,link_,(H,Et,n),lat,A,S,area,box,[y,x],n = N  # PPt
+                            else:  # single CP
+                                root=edge; P_=[N]; link_=[]; (H,Et,n)=N.mdLay; lat=N.latuple; [y,x]=N.yx; n=N.n
+                                box = [y, x-len(N.dert_), y,x]
+                            PP = CG(fd=0, root_=root, node_=P_,link_=link_,mdLay=[H, Et, n],latuple=lat, box=box,yx=[y,x],n=n)
+                            y0,x0,yn,xn = box
+                            PP.aRad = np.hypot(*np.subtract(PP.yx,(yn,xn)))
+                            G_ += [PP]
+                    if len(G_) > 1:
+                        agg_recursion(edge, G_, fd=0)  # discontinuous PP_ xcomp, cluster
 
 def agg_recursion(root, iQ, fd):  # breadth-first rng+ cross-comp -> eval clustering, recursion per fd fork: rng+ | der+
 
@@ -258,16 +260,20 @@ def agg_recursion(root, iQ, fd):  # breadth-first rng+ cross-comp -> eval cluste
     fvd = d > ave_d * dr*(rng+1)
     fvm = m > ave * mr*(rng+1)
     if fvd or fvm:
-        L = L_[0]   # root += L.derH, before clustering:
-        if fd: root.derH.append_(CH().append_(CH().copy(L.derH)))  # always new rngLay, aggLay
-        else: root.derH.H[-1].append_(L.derH)  # append last aggLay
-        for L in L_[1:]:
-            root.derH.H[-1].H[-1].add_H(L.derH)  # accum Lay
+        L = L_[0]  # init root.derH, before clustering:
+        # not revised:
+        if fd: root.derH.append_(CH().append_(CH().copy(L.derH)))  # always new Lay
+        else: root.derH.H[-1].append_(L.derH)  # append last Lay
+        for L in L_[1:]:  # accum Lay
+            root.derH.H[-1].H[-1].add_H(L.derH)
         # comp_link_
         if fvd and len(L_) > ave_L:  # comp L if DL, sub-cluster LLs by mL:
             agg_recursion(root, L_, fd=1)  # appends last aggLay, L_ = lG_
         if fvm:
-            G_ = cluster_N_(root, N_, fd)  # connectivity divisive clustering
+            for N in N_:  # nest rims
+                rim = N.rimt if fd else N.rim; rim[:] = [rim[:]]
+            # divisive connectivity clustering:
+            G_ = cluster_N_(root, N_,fd)
             if len(G_) > ave_L:  # root.node_[:] = nested G_, if any:
                 agg_recursion(root, G_, fd=0)  # comp_G_-> GG_
 '''
@@ -289,13 +295,13 @@ def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et
         _Gp_ += [(_G,G, rn, dy,dx, radii, dist)]
     icoef = .5  # internal M proj_val / external M proj_val
     rng = 1  # len N__
-    N_, L_, ET = [],[], np.array([.0,.0,.0,.0])
+    N_, L_, ET = set(),[], np.array([.0,.0,.0,.0])
     while True:  # prior vM
         Gp_,Et = [], np.array([.0,.0,.0,.0])
         for Gp in _Gp_:
             _G,G, rn, dy,dx, radii, dist = Gp
-            _nrim = set([(Lt[0].nodet[1] if Lt[0].nodet[0] is _G else Lt[0].nodet[0]) for rim in _G.rim_ for Lt in rim])
-            nrim = set([(Lt[0].nodet[1] if Lt[0].nodet[0] is G else Lt[0].nodet[0]) for rim in G.rim_ for Lt in rim])
+            _nrim = set([(L.nodet[1] if L.nodet[0] is _G else L.nodet[0]) for L,_ in _G.rim])
+            nrim = set([(L.nodet[1] if L.nodet[0] is G else L.nodet[0]) for L,_ in G.rim])
             if _nrim & nrim:  # indirectly connected Gs,
                 continue     # no direct match priority?
             M = (_G.mdLay[1][0]+G.mdLay[1][0]) *icoef**2 + (_G.derH.Et[0]+G.derH.Et[0])*icoef + (_G.extH.Et[0]+G.extH.Et[0])
@@ -305,7 +311,7 @@ def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et
                 et = comp_N(Link, rn, rng)
                 L_ += [Link]  # include -ve links
                 if et is not None:
-                    N_ += [_G, G]
+                    N_.update({_G, G})
                     Et += et; _G.add,G.add = 1,1
             else:
                 Gp_ += [Gp]  # re-evaluate not-compared pairs with one incremented N.M
@@ -316,24 +322,23 @@ def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et
         else:  # low projected rng+ vM
             break
 
-    return  N_,L_, ET, rng  # flat N__ and L__
-
+    return  list(N_),L_, ET, rng  # flat N__ and L__
 
 def comp_link_(iL_):  # comp CLs via directional node-mediated link tracing: der+'rng+ in root.link_ rim_t node rims
 
     fd = isinstance(iL_[0].nodet[0], CL)
     for L in iL_:
         L.mL_t, L.rimt, L.aRad, L.visited_ = [[],[]], [], 0, [L]
-        # init mL_t (mediated Ls):
+        # init mL_t (mediated Ls) per L:
         for rev, n, mL_ in zip((0,1), L.nodet, L.mL_t):
             rim = n.rimt if fd else n.rim
             for _L,_rev in rim[0] + rim[1] if fd else rim:
                 if _L is not L and _L.derH.Et[0] > ave * _L.derH.Et[2]:
                     mL_ += [(_L, rev ^_rev)]  # direction of L relative to _L
-    _L_, L_, LL_, ET = iL_,[],[], np.array([.0,.0,.0,.0])
+    _L_, out_L_, LL_, ET = iL_,set(),[], np.array([.0,.0,.0,.0])
     med = 1
     while True:  # xcomp _L_
-        L_, LL_, Et = [],[], np.array([.0,.0,.0,.0])
+        L_, Et = set(), np.array([.0,.0,.0,.0])
         for L in _L_:
             for mL_ in L.mL_t:
                 for _L, rev in mL_:  # rev is relative to L
@@ -345,18 +350,18 @@ def comp_link_(iL_):  # comp CLs via directional node-mediated link tracing: der
                     et = comp_N(Link, rn, rng=med, dir = -1 if rev else 1)  # d = -d if L is reversed relative to _L
                     LL_ += [Link]  # include -ves, link order: nodet < L < rimt, mN.rim || L
                     if et is not None:
-                        L_ += [_L,L]; Et += et
+                        out_L_.update({_L,L}); L_.update({_L,L}); Et += et
         if not any(L_): break
-        ET += Et  # rng+ eval:
-        Med = med + 1
+        # extend mL_t per last med_L
+        ET += Et; Med = med + 1
         if Et[0] > ave * Et[2] * Med:  # project prior-loop value - new cost
-            nxt_L_, nxt_Et = set(), np.array([.0,.0,.0,.0])
+            _L_, _Et = set(), np.array([.0,.0,.0,.0])
             for L in L_:
                 mL_t, lEt = [set(),set()], np.array([.0,.0,.0,.0])  # __Ls per L
                 for mL_,_mL_ in zip(mL_t, L.mL_t):
                     for _L, rev in _mL_:
                         for _rev, n in zip((0,1), _L.nodet):
-                            rim_ = n.rimt_ if fd else n.rim_
+                            rim_ = n.rimt if fd else n.rim
                             if len(rim_) == med:  # append in comp loop
                                 for __L,__rev in rim_[-1][0]+rim_[-1][1] if fd else rim_[-1]:
                                     if __L in L.visited_ or __L not in iL_: continue
@@ -366,15 +371,15 @@ def comp_link_(iL_):  # comp CLs via directional node-mediated link tracing: der
                                         mL_.add((__L, rev ^_rev ^__rev))  # combine reversals: 2 * 2 mNs, 1st 2 are pre-combined
                                         lEt += et
                 if lEt[0] > ave * lEt[2] * Med:  # rng+/ L is different from comp/ L above
-                    L.mL_t = mL_t; nxt_L_.add(L); nxt_Et += lEt
+                    L.mL_t = mL_t; _L_.add(L); _Et += lEt
             # refine eval:
-            if nxt_Et[0] > ave * nxt_Et[2] * Med:
-                _L_ = nxt_L_; med = Med
+            if _Et[0] > ave * _Et[2] * Med:
+                med = Med
             else:
                 break
         else:
             break
-    return L_, LL_, ET, med  # =rng
+    return out_L_, LL_, ET, med  # =rng
 
 def extend_box(_box, box):  # add 2 boxes
     y0, x0, yn, xn = box; _y0, _x0, _yn, _xn = _box
@@ -410,7 +415,7 @@ def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=
     if _N.derH and N.derH:
         dderH = _N.derH.comp_H(N.derH, rn, dir=dir)  # comp shared layers
         elay.append_(dderH, flat=1)
-    # spec: comp_node_(node_|link_), mult agg Lays, combinatorial?
+    # spec: comp_node_(node_|link_), with multiple agg|sub lays, combinatorial?
     Link.derH = elay; elay.root = Link; Link.n = min(_N.n,N.n); Link.nodet = [_N,N]; Link.yx = np.add(_N.yx,N.yx) /2
     # preset angle, dist
     Et = elay.Et
@@ -424,54 +429,55 @@ def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=
 
 def cluster_N_(root, N_, fd, nest=1, max_dist=np.inf):
 
-    def nest_rim(L):
-        # not quite right, this append is redundant to 1st layer in rim and extH.H:
-        for rev, N in zip((0,1), L.nodet):  # reverse Link direction for 2nd N
-            if fd: N.rimt[-1][1-rev] += [(L,rev)]  # append rngLay
-            else:  N.rim[-1] += [(L,rev)]
-            N.extH.H[-1].add_H(L.derH)
-
-    # form top clusters:
-    Gt_ = []
-    for N in N_:
-        N.merged = 0
-        N.extH = CH().append_(N.extH)
-        rim = N.rimt if fd else N.rim; rim[:] = [rim]  # convert to rim_
+    Gt_ = []  # form top clusters
+    for N in N_: N.merged = 0
     for N in N_:
         if N.merged: continue
         node_, link_, et = {N}, set(), np.array([.0,.0,.0,.0])  # init Gt
-        L_ = [L for L,rev in (N.rimt[0]+N.rimt[1] if fd else N.rim) if L.dist < max_dist]
-        _eN_ = {n for L in L_ for n in L.nodet if n not in node_ and not n.merged}  # init ext_N_
+        L_, _eN_ = [], set()
+        for L,_rev in (N.rimt[-1][0]+N.rimt[-1][1] if fd else N.rim[-1]):
+            if L.dist < max_dist:
+                ext_N_ = []
+                for n, rev in zip((0,1), L.nodet):  # reverse Link direction for 2nd N
+                    if n not in node_ and not n.merged:
+                        # this append is redundant to prior layers in rim and extH.H?
+                        rim = N.rimt if fd else N.rim
+                        while len(rim) < nest:
+                            rim += [[[],[]]] if fd else [[]]; N.extH.append_(CH())  # add rim layer
+                        if fd: N.rimt[-1][1-rev] += [(L,rev)]  # append last layer
+                        else:  N.rim[-1] += [(L,rev)]
+                        N.extH.H[-1].add_H(L.derH)
+                        ext_N_ += n
+                L_ += [L]; _eN_.update({ext_N_})  # init ext_N_
         while _eN_:
             eN_ = set()
             for eN in _eN_:  # known +ve link
                 node_.add(eN)
-                for L,rev in (eN.rimt[0]+eN.rimt[1] if fd else eN.rim):
+                for L,rev in (eN.rimt[-1][0]+eN.rimt[-1][1] if fd else eN.rim[-1]):
                     if L not in link_:
                         link_.add(L); et += L.derH.Et
                         for G in L.nodet:
-                            if G not in node_ and not G.merged: eN_.add(G)
+                            if G not in node_ and not G.merged:
+                                eN_.add(G)
             _eN_ = eN_
-        Gt = [node_, link_, et]
+        Gt = [node_, link_, et, []]
         for n in node_:
             n.root_ = [Gt]; n.merged = 1
         Gt_ += [Gt]
     # top-down recursive form, cluster rng segments:
     for i, Gt in enumerate(Gt_):  # top Gt
         node_, link_, Et = Gt
-        if len(link_) > ave_L:
+        if len(link_) > ave_L:  # segment by L.dist
             link_ = sorted(link_, key=lambda x: x.dist, reverse=True)
             _L = link_[0]
-            et = _L.derH.Et  # rng segment
+            et = _L.derH.Et
             for ii, L in enumerate(link_[1:], start=1):  # long links first
                 ddist = _L.dist - L.dist  # positive
                 if ddist < ave_L or et[0] < ave:  # ~= dist Ns or weak
-                    nest_rim(L.nodet)
                     et += L.derH.Et
                 elif et[0] > ave  * et[2] * nest+1:  # inverted rng
                     sub_N_ = {N for L in link_[ii:] for N in L.nodet}  # shorter links are not yet clustered
-                    sub_Gt_ = cluster_N_(Gt, sub_N_, fd, nest+1, L.dist)
-                    Gt_[i] += [sub_Gt_]
+                    Gt_[i][3] = cluster_N_(Gt, sub_N_, fd, nest+1, L.dist)  # add sub_Gt_
                     break
     G_ = []
     for Gt in Gt_:
@@ -482,10 +488,10 @@ def cluster_N_(root, N_, fd, nest=1, max_dist=np.inf):
 
 def sum2graph(root, grapht, fd, nest):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
-    node_, link_, Et, Gt_ = grapht
+    node_, link_, Et, sub_G_ = grapht
     node_ = list(node_)  # convert from set
-    graph = CG(fd=fd, root_=[root], node_=node_, link_=link_, rng=nest)
-    graph.sub_G_ = [ sum2graph(graph, Gt, fd, nest+1) for Gt in Gt_]  # depth-first
+    graph = CG(fd=fd, root_=[root], node_=node_,link_=link_, rng=nest)
+    graph.sub_G_ = [sum2graph(graph, Gt, fd, nest+1) for Gt in sub_G_]  # depth-first
     yx = [0,0]
     lay0 = CH(node_=node_)  # comparands, vs. L_: summands?
     for link in link_:  # unique current-layer mediators: Ns if fd else Ls
@@ -515,3 +521,11 @@ def sum2graph(root, grapht, fd, nest):  # sum node and link params into graph, a
                     if G not in alt_G.alt_graph_:
                         G.alt_graph_ += [alt_G]
     return graph
+
+if __name__ == "__main__":
+    image_file = '../images/raccoon_eye.jpeg'
+    image = imread(image_file)
+
+    frame = frame_blobs_root(image)
+    intra_blob_root(frame)
+    vectorize_root(frame)
