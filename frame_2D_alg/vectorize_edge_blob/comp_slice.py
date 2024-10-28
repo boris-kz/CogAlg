@@ -189,7 +189,8 @@ def comp_link_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
 def form_PP_(root, iP_):  # form PPs of dP.valt[fd] + connected Ps val
 
-    PPt_ = []; for P in iP_: P.merged = 0
+    PPt_ = []
+    for P in iP_: P.merged = 0
 
     for P in iP_:  # for dP in link_ if fd
         if P.merged: continue
@@ -271,6 +272,12 @@ def accum_box(box, y, x):
     y0, x0, yn, xn = box
     return min(y0, y), min(x0, x), max(yn, y), max(xn, x)
 
+def min_dist(a, b, pad=0.5):
+    if np.abs(a - b) < 1e-5:
+        a -= 0.5
+        b += 0.5
+    return a, b
+
 if __name__ == "__main__":
     image_file = '../images/raccoon_eye.jpeg'
     image = imread(image_file)
@@ -341,12 +348,16 @@ if __name__ == "__main__":
         for PPm in PPm_:
             _, _, _, _, _, _, _, _, (y0, x0, yn, xn), _, _ = PPm
             (y0, x0), (yn, xn) = ((y0, x0), (yn, xn)) - yx0
+            y0, yn = min_dist(y0, yn)
+            x0, xn = min_dist(x0, xn)
             plt.plot([x0, x0, xn, xn, x0], [y0, yn, yn, y0, y0], '-k', alpha=0.4)
 
         print("Drawing PPd boxes...")
         for PPd in PPd_:
             _, _, _, _, _, _, _, _, (y0, x0, yn, xn), _, _ = PPd
             (y0, x0), (yn, xn) = ((y0, x0), (yn, xn)) - yx0
+            y0, yn = min_dist(y0, yn)
+            x0, xn = min_dist(x0, xn)
             plt.plot([x0, x0, xn, xn, x0], [y0, yn, yn, y0, y0], '-r', alpha=0.4)
 
         plt.show()

@@ -164,7 +164,7 @@ def flood_fill(frame, dert__):
     while fill_yx_:  # fill_yx_ is popped per filled pixel, in form_blob
         if not perimeter_:  # init blob
             blob = CBlob(frame); perimeter_ += [fill_yx_[0]]
-        blob.form(fill_yx_, perimeter_, root__, dert__)  # https://en.wikipedia.org/wiki/Flood_fill
+        blob.fill_blob(fill_yx_, perimeter_, root__, dert__)  # https://en.wikipedia.org/wiki/Flood_fill
         if not perimeter_: blob.term()
 
 '''
@@ -219,41 +219,6 @@ def comp_r(rnode_):   # rng+ comp
         s = ave*(rnode_.rdn + 1) - g > 0
         dert__[y, x] = p, dy, dx, g, s
     return dert__
-
-# class CrNode_(CFrame):
-#     def __init__(rnode_, blob):
-#         super().__init__(blob.root.i__)  # init params, extra params init below:
-#         rnode_.CBlob = blob.__class__
-#         rnode_.root = blob
-#         rnode_.rdn = blob.root.rdn + 1.5
-#         rnode_.rng = blob.root.rng + 1
-
-#     def run(rnode_):  # recursive evaluation of cross-comp rng+ per blob
-#         rnode_.rdn += 1.5; rnode_.rng += 1  # update rdn, rng
-#         dert__ = rnode_.comp_r()  # return None if blob is too small
-#         if not dert__: return   # terminate if blob is too small
-#         rnode_.flood_fill(dert__)  # recursive call is per blob in blob.term in flood_fill
-#         return rnode_
-
-#     def comp_r(rnode_):   # rng+ comp
-#         # compute kernel
-#         ky__, kx__ = compute_kernel(rnode_.rng)
-#         # loop through root_blob's pixels
-#         dert__ = {}     # mapping from y, x to dert
-#         for (y, x), (p, dy, dx, g) in rnode_.root.dert_.items():
-#             try:
-#                 # comparison. i,j: relative coord within kernel 0 -> rng*2+1
-#                 for i, j in zip(*ky__.nonzero()):
-#                     dy += ky__[i, j] * rnode_.i__[y+i-rnode_.rng, x+j-rnode_.rng]    # -rng to get i__ coord
-#                 for i, j in zip(*kx__.nonzero()):
-#                     dx += kx__[i, j] * rnode_.i__[y+i-rnode_.rng, x+j-rnode_.rng]
-#             except IndexError: continue     # out of bound
-#             g = np.hypot(dy, dx)
-#             s = ave*(rnode_.rdn + 1) - g > 0
-#             dert__[y, x] = p, dy, dx, g, s
-#         return dert__
-
-#     def __repr__(rnode_): return f"rnode_(id={rnode_.id}, root={rnode_.root})"
 
 def compute_kernel(rng):
     # kernel_coefficient = projection_coefficient / distance

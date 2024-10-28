@@ -187,7 +187,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         # maps to node_H / agg+|sub+:
         G.derH = CH(root=G) if derH is None else derH  # sum from nodes, then append from feedback
         G.extH = CH(root=G) if extH is None else extH  # sum from rim_ elays, H maybe deleted
-        G.rim = []  # flat links of any rng, only nested in clustering
+        G.rim = []  # flat links of any rng, may be nested in clustering
         G.aRad = 0  # average distance between graph center and node center
         G.box = [np.inf, np.inf, -np.inf, -np.inf] if box is None else box  # y0,x0,yn,xn
         G.yx = [0,0] if yx is None else yx  # init PP.yx = [(y0+yn)/2,(x0,xn)/2], then ave node yx
@@ -271,13 +271,10 @@ def agg_recursion(root, iQ, fd):  # breadth-first rng+ cross-comp -> eval cluste
         if fvd and len(L_) > ave_L:  # comp L if DL, sub-cluster LLs by mL:
             agg_recursion(root, L_, fd=1)  # appends last aggLay, L_ = lG_
         if fvm:
-            for N in N_:  # nest exceptional rims, flat by default
-                rim = N.rimt if fd else N.rim; rim[:] = [rim[:]]
-                elay = CH(); for L,_ in rim: elay.add_H(L.derH)
-                N.extH.append_(elay)
-            G_ = cluster_N_(root, L_, fd)  # divisive connectivity clustering
-            if len(G_) > ave_L:  # root.node_[:] = nested G_, if any:
-                agg_recursion(root, G_, fd=0)  # comp_G_-> GG_
+            pL_ = {[l for n in N_ for l,_ in get_rim(n,fd)]}
+            G_ = cluster_N_(root, pL_, fd)  # divisive connectivity clustering
+            if len(G_) > ave_L:  # root.node_[:] = nested G_ if any
+                agg_recursion(root, G_, fd=0)  # comp_G_
 '''
      if flat derH:
         root.derH.append_(CH().copy(L_[0].derH))  # init
@@ -425,68 +422,71 @@ def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=
             # reverse Link direction for _N
             if fd: node.rimt[1-rev] += [(Link,rev)]  # opposite to _N,N dir
             else:  node.rim += [(Link, rev)]
-
+            node.extH.add_H(L.derH)
+            # flat
         return Et
 
-def cluster_N_(root, L_, fd, nest=2):  # nest=1 is global, top-down segment iL_ by L distance and cluster iL.nodets
+def get_rim(N, fd):
+    return  N.rimt[0] + N.rimt[1] if fd else N.rim
+
+def cluster_N_(root, L_, fd, nest=1):  # top-down segment iL_ by L distance and cluster iL.nodets
 
     L_ = sorted(L_, key=lambda x: x.dist, reverse=True)
-    # init dist segment:
+    min_dist = 0  # if single dist segment
     _L = L_[0]
     N_, et = {*_L.nodet}, _L.derH.Et
-    for i, L in enumerate(L_[1:],start=1):  # long links first
+    # init dist segment:
+    for i, L in enumerate(L_[1:], start=1):  # long links first
         ddist = _L.dist - L.dist  # positive
         if ddist < ave_L or et[0] < ave or len(L_[i:]) < ave_L:  # ~=dist Ns or either side of L is weak
             et += L.derH.Et
-            for n, rev in zip((0,1), L.nodet):  # reverse Link direction for 2nd N
+            for n in L.nodet:
                 if n not in N_:
-                    # accum dist segment, redundant to prior layers in rim,extH.H?
-                    rim = n.rimt if fd else n.rim
-                    while len(rim) < nest:
-                        rim += [[[],[]]] if fd else [[]]; n.extH.append_(CH())  # add rim layer
-                    if fd: n.rimt[-1][1-rev] += [(L,rev)]  # append last layer
-                    else:  n.rim[-1] += [(L,rev)]
-                    n.extH.H[-1].add_H(L.derH)
                     N_.add(n); n.merged = 0
         else:
             min_dist = L.dist; break
+        _L = L
     Gt_ = []
-    for N in N_:  # cluster Ns with rim in terminated dist segment:
+    for N in N_:  # cluster Ns with rim within terminated dist segment
         if N.merged: continue
-        node_, link_, et = {N},set(),np.array([.0,.0,.0,.0])  # Gt
-        _eN_ = set()
-        while True:  # cluster rim-connected ext Ns
+        N.merged = 1
+        node_, link_, et = {N}, set(), np.array([.0,.0,.0,.0])  # Gt
+        _eN_ = set()  # init ext Ns
+        for l,_ in get_rim(N, fd):
+            _eN_.add(l.nodet[1] if l.nodet[0] is N else l.nodet[0])
+        while any(_eN_):
             eN_ = set()
-            for eN in _eN_:  # known +ve link
-                node_.add(eN)
-                for L,rev in (eN.rimt[-1][0] + eN.rimt[-1][1] if fd else eN.rim[-1]):
+            for eN in _eN_:  # cluster rim-connected ext Ns
+                if eN.merged: continue
+                node_.add(eN); eN.merged = 1
+                for L,_ in get_rim(eN, fd):
                     if L.dist > min_dist and L not in link_:
-                        link_.add(L); et += L.derH.Et
+                        link_.add(L)
+                        et += L.derH.Et
                         for G in L.nodet:
-                            if G not in node_ and not G.merged:
-                                eN_.add(G)
+                            if not G.merged:
+                                eN_.add(G); G.merged=1
             if any(eN_): _eN_ = eN_
             else: break
         Gt = [node_, link_, et]
+        # form subG_ via shorter Ls, depth-first:
+        sub_link_ = set()
         for n in node_:
-            n.root_ = [Gt]; n.merged = 1
-        # add shorter-linked sub_G_, depth-first:
-        sub_link_ = [l for l in link_ if l.dist <= min_dist]
-        Gt += [cluster_N_(Gt, sub_link_, fd, nest+1)] if len(sub_link_) > ave_L else [[]]
-        # add sub_G_, recursively nested
+            [sub_link_.add(l) for l,_ in get_rim(n,fd) if l.dist <= min_dist]
+            n.root_ = [Gt]
+        Gt += [cluster_N_(Gt, sub_link_, fd, nest+1)] if len(sub_link_) > ave_L else [[]]  # add subG_, recursively nested
         Gt_ += [Gt]
     G_ = []
     for Gt in Gt_:
-        M, R = Gt[2][0::2]  # Gt: node_, link_, et, sub_Gt_
+        M, R = Gt[2][0::2]  # Gt: node_, link_, et, subG_
         if M > R * ave * nest:  # rdn incr / lower rng
             G_ += [sum2graph(root, Gt, fd, nest)]
     return G_
 
 def sum2graph(root, grapht, fd, nest):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
-    node_, link_, Et, sub_G_ = grapht
-    node_ = list(node_)  # convert from set
-    graph = CG(fd=fd, root_=[root], node_=node_,link_=link_, subG_=sub_G_, rng=nest)
+    node_, link_, Et, subG_ = grapht; node_ = list(node_)
+    graph = CG(fd=fd, root_=[root], node_=node_,link_=link_, subG_=subG_, rng=nest)
     yx = [0,0]
     lay0 = CH(node_=node_)  # comparands, vs. L_: summands?
     for link in link_:  # unique current-layer mediators: Ns if fd else Ls

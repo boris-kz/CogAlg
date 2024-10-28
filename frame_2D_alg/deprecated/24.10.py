@@ -581,6 +581,76 @@ def cluster_N__3(root, N__, fd):  # form rng graphs by merging lower-rng graphs 
             else:  N.rim_[rng-1] += [(_L,rev)]
             N.extH.H[rng-1].add_H(_L.derH)
 
+def cluster_N_(root, L_, fd, nest=1):  # nest=0 is global, top-down segment iL_ by L distance and cluster iL.nodets
+
+    def get_rim(N):
+        if nest==1: return N.rimt[0] + N.rimt[1] if fd else N.rim
+        else:    return N.rimt[0][0] + N.rimt[0][1] if fd else N.rim[0]  # 1st layer contains full rim, each layer also contains all shorter Ls?
+
+    L_ = sorted(L_, key=lambda x: x.dist, reverse=True)
+    _L = L_[0]; min_dist = 0  # if single dist segment
+    N_, et = {*_L.nodet}, _L.derH.Et
+    # init dist segment:
+    L_buff = []  # buffer in case rng is segmented
+    for i, L in enumerate(L_[1:],start=1):  # long links first
+        ddist = _L.dist - L.dist  # positive
+        if ddist < ave_L or et[0] < ave or len(L_[i:]) < ave_L:  # ~=dist Ns or either side of L is weak
+            et += L.derH.Et
+            for rev, n in zip((0,1), L.nodet):  # reverse Link direction for 2nd N  (n and rev is reversed)
+                if n not in N_:
+                    n.merged = 0; N_.add(n)
+                    L_buff += [[L,rev]]  # no append rim until rng is segmented, else keep flat?
+                    if nest > 1:  # else keep initial flat rim, local incase future segment?
+                        rim = n.rimt if fd else n.rim
+                        while len(rim) < nest:
+                            rim += [[[],[]]] if fd else [[]]; n.extH.append_(CH())  # add rim layer
+                        if fd: rim[-1][1-rev] += [(L,rev)]  # append last layer
+                        else:  rim[-1] += [(L,rev)]
+                        n.extH.H[-1].add_H(L.derH)
+        else:
+            if nest==2:  # initialize rim nesting after 1st segment termination
+                for n in root[0]:  # node_
+                    rim = n.rimt if fd else n.rim; elay = CH()
+                    [elay.add_H(L.derH) for L,_ in rim]; rim[:] = [rim[:]]
+            min_dist = L.dist
+            break
+        _L = L
+    # cluster Ns with rim within terminated dist segment:
+    Gt_ = []
+    for N in N_:
+        if N.merged: continue
+        N.merged = 1
+        node_, link_, et = {N}, set(), np.array([.0,.0,.0,.0])  # Gt
+        _eN_ = set()  # init ext Ns
+        for l,_ in get_rim(N): _eN_.add(l.nodet[1] if l.nodet[0] is N else l.nodet[0])
+        while any(_eN_):
+            eN_ = set()
+            for eN in _eN_:  # cluster rim-connected ext Ns
+                if eN.merged: continue
+                node_.add(eN); eN.merged = 1
+                for L,rev in get_rim(eN):
+                    if L.dist > min_dist and L not in link_:
+                        link_.add(L); et += L.derH.Et
+                        for G in L.nodet:
+                            if not G.merged:
+                                eN_.add(G); G.merged=1
+            if any(eN_): _eN_ = eN_
+            else: break
+        Gt = [node_, link_, et]
+        # form subG_ via shorter Ls, depth-first:
+        sub_link_ = set()
+        for n in node_:
+            n.root_ = [Gt]
+            for l,_ in get_rim(n):
+                if l.dist <= min_dist: sub_link_.add(l)
+        Gt += [cluster_N_(Gt, sub_link_, fd, nest+1)] if len(sub_link_) > ave_L else [[]]  # add subG_, recursively nested
+        Gt_ += [Gt]
+    G_ = []
+    for Gt in Gt_:
+        M, R = Gt[2][0::2]  # Gt: node_, link_, et, subG_
+        if M > R * ave * nest:  # rdn incr / lower rng
+            G_ += [sum2graph(root, Gt, fd, nest)]
+    return G_
 
 
 
