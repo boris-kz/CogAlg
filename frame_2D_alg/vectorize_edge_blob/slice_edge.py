@@ -52,6 +52,7 @@ class CP(CBase):
                 if (round(y),round(x)) not in edge.dert_: break
                 try: i,gy,gx,g = interpolate2dert(edge, y, x)
                 except TypeError: break  # out of bound (TypeError: cannot unpack None)
+                if edge.rootd.get((ky,kx)) is not None: break  # skip overlapping P
                 mangle, dangle = comp_angle((_gy,_gx), (gy, gx))
                 if mangle < ave_dangle: break  # terminate P if angle miss
                 # update P:

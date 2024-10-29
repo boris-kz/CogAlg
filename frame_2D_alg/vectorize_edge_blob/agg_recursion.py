@@ -261,24 +261,24 @@ def agg_recursion(root, iQ, fd):  # breadth-first rng+ cross-comp -> eval cluste
     fvd = d > ave_d * dr*(rng+1)
     fvm = m > ave * mr*(rng+1)
     if fvd or fvm:
-        L = L_[0]  # init root.derH, before clustering:
-        # not revised:
-        if fd: root.derH.append_(CH().append_(CH().copy(L.derH)))  # always new Lay
-        else: root.derH.H[-1].append_(L.derH)  # append last Lay
-        for L in L_[1:]:  # accum Lay
-            root.derH.H[-1].H[-1].add_H(L.derH)
+        L = L_[0]  # double-nested root derH(aggH, init der|agg Lay with 1st L:
+        if fd: root.derH.append_(CH().append_(CH().copy(L.derH)))  # new derLay
+        else: root.derH.H[-1].append_(L.derH)  # append last derLay with aggLay
+        for L in L_[1:]:
+            root.derH.H[-1].H[-1].add_H(L.derH)  # always accum last aggLay
         # comp_link_
         if fvd and len(L_) > ave_L:  # comp L if DL, sub-cluster LLs by mL:
-            agg_recursion(root, L_, fd=1)  # appends last aggLay, L_ = lG_
+            agg_recursion(root, L_,fd=1)  # der+, adds nested derLay above
         if fvm:
-            pL_ = {[l for n in N_ for l,_ in get_rim(n,fd)]}
+            pL_ = {l for n in N_ for l,_ in get_rim(n,fd)}
             G_ = cluster_N_(root, pL_, fd)  # divisive connectivity clustering
             if len(G_) > ave_L:  # root.node_[:] = nested G_ if any
-                agg_recursion(root, G_, fd=0)  # comp_G_
+                agg_recursion(root, G_,fd=0)  # rng+, adds nested aggLay above
 '''
-     if flat derH:
-        root.derH.append_(CH().copy(L_[0].derH))  # init
-        for L in L_[1:]: root.derH.H[-1].add_H(L.derH)  # accum
+    derH has variable nesting, but it always alternates between derH and aggH?
+    if flat derH:
+       root.derH.append_(CH().copy(L_[0].derH))  # init
+       for L in L_[1:]: root.derH.H[-1].add_H(L.derH)  # accum
 '''
 
 def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et, ~ graph CNN without backprop
@@ -426,13 +426,12 @@ def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=
             # flat
         return Et
 
-def get_rim(N, fd):
-    return  N.rimt[0] + N.rimt[1] if fd else N.rim
+def get_rim(N,fd): return N.rimt[0] + N.rimt[1] if fd else N.rim
 
-def cluster_N_(root, L_, fd, nest=1):  # top-down segment iL_ by L distance and cluster iL.nodets
+def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave diff in L.dist, then cluster L.nodets within segment
 
     L_ = sorted(L_, key=lambda x: x.dist, reverse=True)
-    min_dist = 0  # if single dist segment
+    min_dist = root[3] if isinstance(root,list) else 0  # 0 if init or single dist segment
     _L = L_[0]
     N_, et = {*_L.nodet}, _L.derH.Et
     # init dist segment:
@@ -444,10 +443,11 @@ def cluster_N_(root, L_, fd, nest=1):  # top-down segment iL_ by L distance and 
                 if n not in N_:
                     N_.add(n); n.merged = 0
         else:
-            min_dist = L.dist; break
+            min_dist = L.dist
+            break  # terminate contiguous-dist segment
         _L = L
     Gt_ = []
-    for N in N_:  # cluster Ns with rim within terminated dist segment
+    for N in N_:  # cluster Ns that have rim within terminated dist segment
         if N.merged: continue
         N.merged = 1
         node_, link_, et = {N}, set(), np.array([.0,.0,.0,.0])  # Gt
@@ -468,11 +468,11 @@ def cluster_N_(root, L_, fd, nest=1):  # top-down segment iL_ by L distance and 
                                 eN_.add(G); G.merged=1
             if any(eN_): _eN_ = eN_
             else: break
-        Gt = [node_, link_, et]
+        Gt = [node_, link_, et, min_dist]  # nest can be local?
         # form subG_ via shorter Ls, depth-first:
         sub_link_ = set()
         for n in node_:
-            [sub_link_.add(l) for l,_ in get_rim(n,fd) if l.dist <= min_dist]
+            sub_link_.update({l for l,_ in get_rim(n,fd) if l.dist <= min_dist})
             n.root_ = [Gt]
         Gt += [cluster_N_(Gt, sub_link_, fd, nest+1)] if len(sub_link_) > ave_L else [[]]  # add subG_, recursively nested
         Gt_ += [Gt]
@@ -485,8 +485,8 @@ def cluster_N_(root, L_, fd, nest=1):  # top-down segment iL_ by L distance and 
 
 def sum2graph(root, grapht, fd, nest):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
-    node_, link_, Et, subG_ = grapht; node_ = list(node_)
-    graph = CG(fd=fd, root_=[root], node_=node_,link_=link_, subG_=subG_, rng=nest)
+    node_, link_, Et, minL, subG_ = grapht; node_ = list(node_)
+    graph = CG(fd=fd, root_=[root], node_=node_,link_=link_, subG_=subG_, minL=minL, rng=nest)
     yx = [0,0]
     lay0 = CH(node_=node_)  # comparands, vs. L_: summands?
     for link in link_:  # unique current-layer mediators: Ns if fd else Ls
