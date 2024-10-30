@@ -118,6 +118,7 @@ def comp_slice(edge):  # root function
 def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
     rng = 1; _Pt_ = edge.pre__.items() # includes prelink
+    nodet_ = set()
 
     while True:  # extend mediated comp rng by adding prelinks
         Pt_ = []  # with new prelinks
@@ -130,6 +131,8 @@ def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and conti
                 if abs(dy)+abs(dx) <= rng*2:  # <max Manhattan distance
                     if len(_P.rim_) < rng-1:  # cost of links *= rng
                         continue
+                    if (_P,P) in nodet_: continue
+                    nodet_.add((_P,P))
                     link = comp_P(_P,P, angle=[dy,dx], distance=np.hypot(dy,dx),fder=0)
                     if link:  # mlink
                         V += link.mdLay[1][0]  # Et[0]
@@ -279,7 +282,9 @@ def min_dist(a, b, pad=0.5):
     return a, b
 
 if __name__ == "__main__":
-    image_file = '../images/raccoon_eye.jpeg'
+
+    # image_file = '../images//raccoon_eye.jpeg'
+    image_file = '../images//toucan_small.jpg'
     image = imread(image_file)
 
     frame = frame_blobs_root(image)
