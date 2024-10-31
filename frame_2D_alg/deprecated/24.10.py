@@ -652,5 +652,23 @@ def cluster_N_(root, L_, fd, nest=1):  # nest=0 is global, top-down segment iL_ 
             G_ += [sum2graph(root, Gt, fd, nest)]
     return G_
 
+def add_H(HE, He, irdnt=[]):  # unpack derHs down to numericals and sum them
+
+        if HE:
+            for i, (Lay,lay) in enumerate(zip_longest(HE.H, He.H, fillvalue=None)):  # cross comp layer
+                if lay:
+                    if Lay: Lay.add_H(lay, irdnt)
+                    else:
+                        if Lay is None:
+                            HE.append_(CH().copy(lay))  # pack a copy of new lay in HE.H
+                        else:
+                            HE.H[i] = CH(root=HE).copy(lay)  # Lay was []
+            HE.accum_lay(He, irdnt)
+            HE.node_ += [node for node in He.node_ if node not in HE.node_]  # node_ is empty in CL derH?
+        else:
+            HE.copy(He)  # init
+
+        return HE.update_root(He)  # feedback, ideally buffered from all elements before summing in root, ultimately G|L
+
 
 
