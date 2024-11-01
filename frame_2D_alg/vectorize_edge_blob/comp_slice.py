@@ -100,7 +100,7 @@ def comp_slice(edge):  # root function
         P.mdLay = [[],np.array([.0,.0,.0,.0]),0]  # for accumulation in sum2PP later (in lower P)
         P.rim_ = []; P.lrim = []; P.prim = []
 
-    rng_recursion(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
+    comp_P_(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
     edge.node_ = form_PP_(edge, edge.P_)
 
     for PPm in edge.node_:  # eval sub-clustering, not recursive
@@ -115,40 +115,16 @@ def comp_slice(edge):  # root function
             mdLay = PPm.mdLay  # PPm is actually CP
         add_md_(edge.mdLay, mdLay)
 
-def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
+def comp_P_(edge):  # form links from prelinks
 
-    rng = 1; _Pt_ = edge.pre__.items() # includes prelink
-    nodet_ = set()
-
-    while True:  # extend mediated comp rng by adding prelinks
-        Pt_ = []  # with new prelinks
-        V = 0
-        for P,_pre_ in _Pt_:
-            if len(P.rim_) < rng-1: continue  # no _rng_link_ or top row
-            rng_link_ = []; pre_ = []  # per rng+
-            for _P in _pre_:  # prelinks
-                dy,dx = np.subtract(P.yx,_P.yx) # dy,dx between node centers
-                if abs(dy)+abs(dx) <= rng*2:  # <max Manhattan distance
-                    if len(_P.rim_) < rng-1:  # cost of links *= rng
-                        continue
-                    if (_P,P) in nodet_: continue
-                    nodet_.add((_P,P))
-                    link = comp_P(_P,P, angle=[dy,dx], distance=np.hypot(dy,dx),fder=0)
-                    if link:  # mlink
-                        V += link.mdLay[1][0]  # Et[0]
-                        rng_link_ += [link]
-                        if _P.rim_: pre_ += [dP.nodet[0] for dP in _P.rim_[-1]]  # connected __Ps
-                        else:       pre_ += edge.pre__[_P]  # rng == 1
-            # next P_ has prelinks:
-            if pre_: Pt_ += [(P,pre_)]
-            if rng_link_: P.rim_ += [rng_link_]
-
-        if not Pt_ or V <= ave * rng * len(Pt_) * 6:  # implied __P_s val, 6: len mtuple
-            break
-        else:
-            _Pt_ = Pt_
-            rng += 1
-    edge.rng=rng  # represents rrdn
+    edge.rng = 1
+    for P, _pre_ in edge.pre__.items():
+        for _P in _pre_:  # prelinks
+            dy,dx = np.subtract(P.yx,_P.yx) # dy,dx between node centers
+            if abs(dy)+abs(dx) <= edge.rng * 2:  # <max Manhattan distance
+                link = comp_P(_P,P, angle=[dy,dx], distance=np.hypot(dy,dx),fder=0)
+                if link:
+                    P.rim += [link]
     del edge.pre__
 
 def comp_P(_P,P, angle=None, distance=None, fder=0):  # comp dPs if fd else Ps

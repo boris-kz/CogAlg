@@ -110,8 +110,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
                 lay = CH().copy(lay)
                 lay.i = len(HE.H)+i; lay.root = HE; HE.H += [lay]
         else:
-            He = CH().copy(He); He.i = len(HE.H); He.root = HE; HE.H += [He]
-
+            He.i = len(HE.H); He.root = HE; HE.H += [He]
         HE.accum_lay(He, irdnt)
         return HE.update_root(He)
 
@@ -255,10 +254,6 @@ def vectorize_root(frame):
 
 def agg_recursion(root, iLay, iQ, fd):  # parse the deepest Lay of root derH, breadth-first cross-comp, clustering, recursion
 
-    def nest(iLay, Lay):
-        Lay.deep+=1; root.derH.nest+=1; nest = iLay.nest  # bottom-up deep = top-down nest: += Lay.nest, if any
-        iLay[:] = CH(nest=nest+1, deep=nest).append( iLay.append_(Lay))
-        # first append converts iLay to derH, the 2nd adds Lay to derH
     Q = []
     for e in iQ:
         if isinstance(e, list): continue  # skip Gts: weak
@@ -270,11 +265,15 @@ def agg_recursion(root, iLay, iQ, fd):  # parse the deepest Lay of root derH, br
     fvd = d > ave_d * dr*(rng+1)
     fvm = m > ave * mr * (rng+1)
     if fvd or fvm:
-        # form derLay, nest in rngH in cluster_N_, derH in der+:
-        Lay = CH(deep=nest).add_H([L.derH for L in L_])
+        # form derLay, nest-> rngH in cluster_N_, derH in der+:
+        Lay = CH(deep=iLay.nest).add_H([L.derH for L in L_])
         # extend root derH:
-        if fd: iLay.append_(Lay)  # extend derH from prior comp_link_
-        else: nest(iLay, Lay)  # iLay+Lay -> derH if prior comp_node_
+        if not fd:  # prior comp_node_ adds iLay, nest it to derH:
+            for he in Lay.H: he.deep += 1
+            iLay.H = [CH(deep=iLay.deep+1, root=iLay).copy(iLay)]
+            iLay.nest += 1
+            root.derH.nest += 1  # also add in agg_recursion?
+        iLay.append_(Lay)  # extend derH, formed prior comp_link_
         # recursion:
         if fvd and len(L_) > ave_L:
             agg_recursion(root, iLay, L_,fd=1)  # der+ comp_link_
