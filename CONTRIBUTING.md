@@ -81,7 +81,7 @@ Khanh Nguyen, $8100, team developer, April-December
 
 2024:  
 
-Kok Wei Chee, team developer, $19400 January-September 
+Kok Wei Chee, team developer, $21600 January-October 
 
-Khanh Nguyen, team developer, $5200 January-September
+Khanh Nguyen, team developer, $6000 January-October
 

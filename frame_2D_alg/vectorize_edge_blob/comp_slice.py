@@ -98,7 +98,7 @@ def comp_slice(edge):  # root function
     edge.mdLay = [[], np.array([.0,.0,.0,.0]),0]  # H, Et, n
     for P in edge.P_:  # add higher links
         P.mdLay = [[],np.array([.0,.0,.0,.0]),0]  # for accumulation in sum2PP later (in lower P)
-        P.rim_ = []; P.lrim = []; P.prim = []
+        P.rim = []; P.lrim = []; P.prim = []
 
     comp_P_(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
     edge.node_ = form_PP_(edge, edge.P_)
@@ -160,11 +160,10 @@ def comp_link_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
     link_ = PP[2]
     for dP in link_:
         if dP.mdLay[1][1] > aves[1]:
-            for _rim_ in dP.nodet[0].rim_:  # link.nodet is CP # for nmed, _rim_ in enumerate(dP.nodet[0].rim_):
-                for _dP in _rim_:
-                    if _dP not in link_: continue  # skip removed node links
-                    comp_P(_dP,dP, fder=1)
-                    # if dlink: dlink.nmed = nmed  # link mediation order, not used?
+            for _dP in dP.nodet[0].rim:  # link.nodet is CP # for nmed, _rim_ in enumerate(dP.nodet[0].rim_):
+                if _dP not in link_: continue  # skip removed node links
+                comp_P(_dP,dP, fder=1)
+                # if dlink: dlink.nmed = nmed  # link mediation order, not used?
 
 def form_PP_(root, iP_):  # form PPs of dP.valt[fd] + connected Ps val
 
