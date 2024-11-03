@@ -49,7 +49,7 @@ ccoef  = 10  # scaling match ave to clustering ave
 class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | derH, their layers and sub-layers
 
     name = "H"
-    def __init__(He, node_=None, md_t=None, n=0, Et=None, H=None, root=None, i=None, i_=None, deep=None, nest=None):
+    def __init__(He, node_=None, md_t=None, n=0, Et=None, H=None, root=None, i=None, i_=None):
         super().__init__()
         He.node_ = [] if node_ is None else node_  # concat bottom nesting order if CG, may be redundant to G.node_
         He.md_t = [] if md_t is None else md_t  # derivation layer in H: [mdlat,mdLay,mdext]
@@ -57,12 +57,11 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         He.n = n  # total number of params compared to form derH, to normalize comparands
         He.Et = np.array([.0,.0,.0,.0]) if Et is None else Et  # evaluation tuple: valt, rdnt
         He.root = None if root is None else root  # N or higher-composition He
-        # He.deep = 0 if deep is None else deep  # nesting in root H
-        # He.nest = 0 if nest is None else nest  # nesting in H
         He.i = 0 if i is None else i  # lay index in root.H, to revise rdn
         He.i_ = [] if i_ is None else i_  # priority indices to compare node H by m | link H by d
         # He.ni = 0  # exemplar in node_, trace in both directions?
-
+        # He.deep = 0 if deep is None else deep  # nesting in root H
+        # He.nest = 0 if nest is None else nest  # nesting in H
     def __bool__(H): return H.n != 0
 
     def accum_lay(HE, He, irdnt):
@@ -81,7 +80,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         if any(irdnt):
             HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
 
-    def add_H(HE, He_, irdnt=[]):  # unpack derHs down to numericals and sum them
+    def add_H(HE, He_, irdnt=[], depth=1):  # unpack derHs down to numericals and sum them
 
         if not isinstance(He_,list): He_ = [He_]
         for He in He_:
@@ -98,7 +97,11 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
                 HE.node_ += [node for node in He.node_ if node not in HE.node_]  # node_ is empty in CL derH?
             else:
                 HE.copy(He)  # init
-            HE.update_root(He)  # feedback, ideally buffered from all elements before summing in root, ultimately G|L
+            root = HE.root  # feedback, should batch all same-layer nodes?
+            if not isinstance(root,CH): root = root.derH  # root is G|L, add Et?
+            if root:
+                while depth > len(root.H): root.H += [CH(root=HE).copy()]
+                root.H[-depth].add_H(He, depth+1)  # merge in root lay, both forks
 
         return HE
 
@@ -112,19 +115,12 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         else:
             He.i = len(HE.H); He.root = HE; HE.H += [He]
         HE.accum_lay(He, irdnt)
-        return HE.update_root(He)
-
-    def update_root(HE, He):  # should be batched or done in the calling function, this recursive version is a placeholder
-
+        # feedback, should batch all same-layer nodes?
         root = HE.root
-        while root is not None:
-            if isinstance(root, CH):
-                root.Et += He.Et
-                root.node_ += [node for node in He.node_ if node not in HE.node_]
-                root.n += He.n
-                root = root.root
-            else:
-               break  # root is G|L
+        if not isinstance(root,CH): root = root.derH  # root is G|L, add Et?
+        if root:
+            root.H[-1].add_H(He, depth=1)  # merge in root lay, both forks
+
         return HE
 
     def comp_H(_He, He, rn=1, dir=1):  # unpack each layer of CH down to numericals and compare each pair
@@ -231,10 +227,8 @@ def vectorize_root(frame):
             edge = slice_edge(blob)
             if edge.G * (len(edge.P_) - 1) > ave:  # eval PP, rdn=1
                 comp_slice(edge)
-                # init for agg+:
-                edge.derH = CH(); edge.fback_ = []
                 if edge.mdLay[1][0] * (len(edge.node_)-1)*(edge.rng+1) > ave * edge.mdLay[1][2]:
-                    G_ = []
+                    G_ = []  # init for agg+:
                     for N in edge.node_:  # no comp node_, link_ | PPd_ for now
                         H,Et,n = N[3] if isinstance(N,list) else N.mdLay  # N is CP
                         if H and Et[0] > ave * Et[2]:  # convert PP|P to G:
@@ -248,10 +242,9 @@ def vectorize_root(frame):
                             PP.aRad = np.hypot(*np.subtract(PP.yx,(yn,xn)))
                             G_ += [PP]
                     if len(G_) > ave_L:
-                        agg_recursion(edge, edge.derH, G_, fd=0)
-                        # discontinuous PP_ cross-comp, cluster
+                        agg_recursion(edge, G_, fd=0)  # discontinuous PP_ cross-comp, cluster
 
-def agg_recursion(root, iLay, iQ, fd):  # parse the deepest Lay of root derH, breadth-first cross-comp, clustering, recursion
+def agg_recursion(root, iQ, fd):  # parse the deepest Lay of root derH, breadth-first cross-comp, clustering, recursion
 
     Q = []
     for e in iQ:
@@ -264,19 +257,20 @@ def agg_recursion(root, iLay, iQ, fd):  # parse the deepest Lay of root derH, br
     fvd = d > ave_d * dr*(rng+1)
     fvm = m > ave * mr * (rng+1)
     if fvd or fvm:
-        # extend root derH:
-        if fd:
-            iLay.H = [CH(root=iLay).copy(iLay)]  # init derH with iLay, formed in prior comp_node_
         Lay = CH().add_H([L.derH for L in L_])  # top Lay, nest-> rngH/cluster_N_, derH/der+
-        iLay.append_(Lay)  # extend derH, formed above or in prior comp_link_
-        # recursion:
-        if fvd and len(L_) > ave_L:
-            agg_recursion(root, iLay, L_,fd=1)  # der+ comp_link_
+        if fd:
+            derH = root.derH  # comp_link_, nest single-lay derH formed in prior comp_node_:
+            derH.H = [CH(root=derH).copy(derH)]
+            derH.append_(Lay)
+        else: root.derH = Lay
+        # neither fork is directly recursive, only after clustering?:
+        if not fd and fvd and len(L_) > ave_L:
+            agg_recursion(root, L_,fd=1)  # der+ comp_link_
         if fvm:
             pL_ = {l for n in N_ for l,_ in get_rim(n,fd)}
             G_ = cluster_N_(root, pL_, fd)  # optionally divisive clustering
             if len(G_) > ave_L:
-                agg_recursion(root, Lay, G_,fd=0)  # rng+ comp clustered node_, no passing iLay?
+                agg_recursion(root, G_,fd=0)  # rng+ comp clustered node_
 
 
 def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et, ~ graph CNN without backprop
@@ -290,7 +284,7 @@ def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et
         dist = np.hypot(dy,dx)
         _G.add, G.add = 0, 0
         _Gp_ += [(_G,G, rn, dy,dx, radii, dist)]
-    icoef = .5  # internal M proj_val / external M proj_val
+    icoef = .3  # internal M proj_val / external M proj_val
     rng = 1  # len N__
     N_,L_,ET = set(),[], np.array([.0,.0,.0,.0])
     while True:  # prior vM
@@ -427,6 +421,7 @@ def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=
 def get_rim(N,fd): return N.rimt[0] + N.rimt[1] if fd else N.rim
 
 def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave diff in L.dist, then cluster L.nodets within segment
+    # use min-cut algorithm?
 
     L_ = sorted(L_, key=lambda x: x.dist, reverse=True)
     min_dist = root[3] if isinstance(root,list) else 0  # 0 if init or single dist segment
