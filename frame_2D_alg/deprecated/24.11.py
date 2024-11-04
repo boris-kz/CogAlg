@@ -94,4 +94,31 @@ def update_root(HE, He):
             root = root.root
         return HE
 
+def agg_recursion(root, iQ, fd):  # parse the deepest Lay of root derH, breadth-first cross-comp, clustering, recursion
+
+    Q = []
+    for e in iQ:
+        if isinstance(e, list): continue  # skip Gts: weak
+        e.root_, e.extH, e.merged = [], CH(), 0
+        Q += [e]
+    # cross-comp link_ or node_:
+    N_, L_, Et, rng = comp_link_(Q) if fd else comp_node_(Q)
+    m, d, mr, dr = Et
+    fvd = d > ave_d * dr*(rng+1)
+    fvm = m > ave * mr * (rng+1)
+    if fvd or fvm:
+        Lay = CH().add_H([L.derH for L in L_])  # top Lay, nest-> rngH/cluster_N_, derH/der+
+        if fd:
+            derH = root.derH  # comp_link_, nest single-lay derH formed in prior comp_node_:
+            derH.H = [CH(root=derH).copy(derH)]
+            derH.append_(Lay)
+        else: root.derH = Lay
+        # comp_node_ and comp_link_ per node_, deeper comps are mediated by clustering, which forms new node_
+        if not fd and fvd and len(L_) > ave_L:
+            agg_recursion(root, L_,fd=1)  # der+ comp_link_
+        if fvm:
+            pL_ = {l for n in N_ for l,_ in get_rim(n,fd)}
+            G_ = cluster_N_(root, pL_, fd)  # optionally divisive clustering
+            if len(G_) > ave_L:
+                agg_recursion(root, G_,fd=0)  # rng+ comp clustered node_
 
