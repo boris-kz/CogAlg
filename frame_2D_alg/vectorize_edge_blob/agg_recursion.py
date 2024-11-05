@@ -49,8 +49,9 @@ ccoef  = 10  # scaling match ave to clustering ave
 class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | derH, their layers and sub-layers
 
     name = "H"
-    def __init__(He, node_=None, md_t=None, n=0, Et=None, H=None, root=None, i=None, i_=None):
+    def __init__(He, node_=None, md_t=None, n=0, Et=None, H=None, root=None, i=None, i_=None, fd=None):
         super().__init__()
+        He.fd = 0 if fd is None else fd  # 0: sum CGs, 1: sum CLs
         He.node_ = [] if node_ is None else node_  # concat bottom nesting order if CG, may be redundant to G.node_
         He.md_t = [] if md_t is None else md_t  # derivation layer in H: [mdlat,mdLay,mdext]
         He.H = [] if H is None else H  # nested derLays | md_ in md_C, empty in bottom layer
@@ -80,7 +81,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         if any(irdnt):
             HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
 
-    def add_H(HE, He_, irdnt=[], depth=1):  # unpack derHs down to numericals and sum them
+    def add_H(HE, He_, irdnt=[]):  # unpack derHs down to numericals and sum them
 
         if not isinstance(He_,list): He_ = [He_]
         for He in He_:
@@ -97,12 +98,6 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
                 HE.node_ += [node for node in He.node_ if node not in HE.node_]  # node_ is empty in CL derH?
             else:
                 HE.copy(He)  # init
-            # feedback, batch all same-layer nodes per root?
-            root = HE.root
-            if root is not None:  # not edge
-                if not isinstance(root, CH): root = root.derH  # root is G|L?
-                while depth > len(root.H): root.H += [CH(root=HE)]
-                root.H[-depth].add_H(He, depth+1)  # merge in root lay, both forks
 
         return HE
 
@@ -116,11 +111,6 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         else:
             He.i = len(HE.H); He.root = HE; HE.H += [He]
         HE.accum_lay(He, irdnt)
-        # feedback, should batch all same-layer nodes?
-        root = HE.root
-        if root is not None:  # not edge
-            if not isinstance(root, CH): root = root.derH  # root is G|L?
-            root.H[-1].add_H(He, depth=1)  # merge in root lay, both forks
 
         return HE
 
@@ -177,8 +167,8 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.n = n  # last layer?
         G.fd = 0 if fd else fd  # 1 if cluster of Ls | lGs?
         G.rng = rng
-        G.root = [None] if root is None else root # same nodes in higher rng layers
-        G.node_ = [] if node_ is None else node_ # convert to GG_ in agg++
+        G.root = None if root is None else root  # convert to root_ in cluster_N_: same nodes in higher rng layers
+        G.node_ = [] if node_ is None else node_ # convert to GG_ or node_H in agg++
         G.link_ = [] if link_ is None else link_ # internal links per comp layer in rng+, convert to LG_ in agg++
         G.subG_ = [] if subG_ is None else subG_ # lower-rng Gs
         G.minL = 0 if minL is None else minL  # min link.dist in subG
@@ -238,49 +228,48 @@ def vectorize_root(frame):
                             else:  # single CP
                                 root=edge; P_=[N]; link_=[]; (H,Et,n)=N.mdLay; lat=N.latuple; [y,x]=N.yx; n=N.n
                                 box = [y, x-len(N.dert_), y,x]
-                            PP = CG(fd=0, root_=root, node_=P_,link_=link_,mdLay=[H, Et, n],latuple=lat, box=box,yx=[y,x],n=n)
+                            PP = CG(fd=0, root=root, node_=P_,link_=link_,mdLay=[H, Et, n],latuple=lat, box=box,yx=[y,x],n=n)
                             y0,x0,yn,xn = box
                             PP.aRad = np.hypot(*np.subtract(PP.yx,(yn,xn)))
                             G_ += [PP]
                     if len(G_) > ave_L:
-                        agg_recursion(edge, G_, fd=0)  # discontinuous PP_ cross-comp, cluster
+                        edge.node_ = G_
+                        agg_recursion(edge)  # discontinuous PP_ cross-comp, cluster
 
-# draft
-def agg_recursion(root, iQ, fd):  # breadth-first rng+ and der+ cross-comp, clustering, recursion
+def agg_recursion(root):  # breadth-first node_,link_ cross-comp, clustering, recursion
 
-    N_, L_, fvm, fvd, rng = comp_Q(iQ, fd=0)
+    def comp_Q(iQ, fd):  # cross-comp node_ or L_
+        Q = []
+        for e in iQ:
+            e.root, e.extH, e.merged = [],CH(),0; Q += [e]
+
+        N_,L_,Et, rng = comp_node_(Q)
+        Lay = CH(fd=fd).add_H([L.derH for L in L_])
+        m,d,mr,dr = Et
+        fvm = m > ave * mr*(rng+1); fvd = d > ave_d * dr*(rng+1)
+        return N_,L_, Lay, fvm,fvd
+
+    def cluster_eval(root, N_, fd):
+
+        pL_ = {l for n in N_ for l,_ in get_rim(n, fd)}
+        if len(pL_) > ave_L:
+            G_ = cluster_N_(root, pL_, fd)  # optionally divisive clustering
+            if len(G_) > ave_L:
+                agg_recursion(root)  # cross-comp clustered nodes
+
+    def add_lay(root,lay):  # (_fd=0 & fd=1) or (_fd=fd) starts new layt
+
+        if root.derH: root.derH.H.append_(lay)  # derH.H: lower-composition lays
+        else: root.derH = CH(H=[lay]).copy(lay)
+
+    N_,L_,lay, fvm,fvd = comp_Q(root.node_, fd=0)
     if fvm:
-        cluster_eval(N_, root, fd=fd)
+        add_lay(root,lay)
+        cluster_eval(root, N_, fd=0)
     if fvd:
-        dN_, dL_, dfvm, dfvd, drng = comp_Q(L_, fd=1)
-        cluster_eval(dN_, root, fd=1)
-
-def comp_Q(N_, root, fd):  # cross-comp node_ or link_
-    Q = []
-    for e in N_:
-        if isinstance(e, list): continue  # skip Gts: weak
-        e.root_, e.extH, e.merged = [], CH(), 0; Q += [e]
-
-    N_, L_, Et, rng = comp_node_(Q)
-    m, d, mr, dr = Et
-    fvm = m > ave * mr * (rng + 1); fvd = d > ave_d * dr * (rng + 1)
-
-    Lay = CH().add_H([L.derH for L in L_])  # derLay, nest-> rngH/cluster_N_, derH/der+
-    if fd:
-        derH = root.derH  # comp_link_, nest single-lay derH formed in prior comp_node_:
-        derH.H = [CH(root=derH).copy(derH)]
-        derH.append_(Lay)
-    else: root.derH = Lay  # initialization
-
-    return N_, L_, fvm, fvd, rng
-
-def cluster_eval(N_, root, fd):
-
-    pL_ = {l for n in N_ for l, _ in get_rim(n, fd)}
-    if len(pL_) > ave_L:
-        G_ = cluster_N_(root, pL_, fd)  # optionally divisive clustering
-    if len(G_) > ave_L:
-        agg_recursion(root, G_, fd=0)  # rng+ comp clustered node_
+        dN_,dL_,dlay, _,_ = comp_Q(L_, fd=1)  # root.link_ was compared in root-forming for alt clustering
+        add_lay(root,dlay)
+        cluster_eval(root, dN_, fd=1)
 
 
 def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et, ~ graph CNN without backprop
@@ -294,7 +283,7 @@ def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et
         dist = np.hypot(dy,dx)
         _G.add, G.add = 0, 0
         _Gp_ += [(_G,G, rn, dy,dx, radii, dist)]
-    icoef = .3  # internal M proj_val / external M proj_val
+    icoef = .1  # internal M proj_val / external M proj_val
     rng = 1  # len N__
     N_,L_,ET = set(),[], np.array([.0,.0,.0,.0])
     while True:  # prior vM
@@ -428,7 +417,7 @@ def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=
             # flat
         return Et
 
-def get_rim(N,fd): return N.rimt[0] + N.rimt[1] if fd else N.rim
+def get_rim(N,fd): return N.rimt[0] + N.rimt[1] if fd else N.rim  # add nesting in cluster_N_?
 
 def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave diff in L.dist, then cluster L.nodets within segment
     # use min-cut algorithm?
@@ -473,7 +462,8 @@ def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave diff in L.d
         sub_link_ = set()
         for N in Gt[0]:
             sub_link_.update({l for l,_ in get_rim(N,fd) if l.dist <= min_dist})
-            N.root_ = [Gt]  # add subG_:
+            N.root += [Gt]  # nest N.root if not list?
+        # add subG_:
         Gt += [cluster_N_(Gt, sub_link_, fd, nest+1)] if len(sub_link_) > ave_L else [[]]
     G_ = []
     for Gt in Gt_:
@@ -485,7 +475,7 @@ def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave diff in L.d
 def sum2graph(root, grapht, fd, nest):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
     node_, link_, Et, minL, subG_ = grapht; node_ = list(node_)
-    graph = CG(fd=fd, root_=[root], node_=node_,link_=link_, subG_=subG_, minL=minL, rng=nest)
+    graph = CG(fd=fd, root=[root], node_=node_,link_=link_, subG_=subG_, minL=minL, rng=nest)
     yx = [0,0]
     lay0 = CH(node_=node_)  # comparands, vs. L_: summands?
     lay0.add_H([link.derH for link in link_])  # unique current-layer mediators: Ns if fd else Ls
@@ -499,7 +489,7 @@ def sum2graph(root, grapht, fd, nest):  # sum node and link params into graph, a
         if isinstance(N,CG):
             add_md_(graph.mdLay, N.mdLay)
             add_lat(graph.latuple, N.latuple)
-        N.root_[-1] = graph
+        N.root = graph
     graph.derH.append_(derH, flat=1)  # comp(derH) forms new layer, higher layers are added by feedback
     L = len(node_)
     yx = np.divide(yx,L); graph.yx = yx
@@ -508,7 +498,7 @@ def sum2graph(root, grapht, fd, nest):  # sum node and link params into graph, a
     if fd:
         # assign alt graphs from d graph, after both linked m and d graphs are formed
         for node in node_:  # CG or CL
-            mgraph = node.root_[-1]
+            mgraph = node.root
             if mgraph:
                 for fd, (G, alt_G) in enumerate(((mgraph,graph), (graph,mgraph))):  # bilateral assign:
                     if G not in alt_G.alt_graph_:

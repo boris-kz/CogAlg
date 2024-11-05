@@ -64,6 +64,12 @@ def add_H(HE, He_, irdnt=[]):  # unpack derHs down to numericals and sum them
                 He = HE;
                 depth += 1
                 HE = root
+            # | feedback, batch all same-layer nodes per root? not relevant in agg++?
+            root = HE.root
+            if root is not None:  # not frame
+                if not isinstance(root, CH): root = root.derH  # root is G|L
+                while depth > len(root.H): root.H += [CH(root=HE)]
+                root.H[-depth].add_H(He, depth+1)  # merge both forks in same root lay
 
         return HE
 
