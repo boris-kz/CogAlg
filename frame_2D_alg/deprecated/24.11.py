@@ -127,4 +127,16 @@ def agg_recursion(root, iQ, fd):  # parse the deepest Lay of root derH, breadth-
             G_ = cluster_N_(root, pL_, fd)  # optionally divisive clustering
             if len(G_) > ave_L:
                 agg_recursion(root, G_,fd=0)  # rng+ comp clustered node_
+    # or:
+    N_,L_,lay, fvm,fvd = comp_Q(root.node_, fd=0)
+    He = root.derH; l = len(He.H); layt = []  # nesting incr/ derivation: composition of compared Gs,longer derH from comp_link_?
+    if fvm:
+        layt += [lay]; He.accum_lay(lay); lay.i=l; lay.root=He
+        cluster_eval(root, N_, fd=0)
+    if fvd:
+        dN_,dL_,dlay,_,_ = comp_Q(L_,fd=1)  # comp new L_, root.link_ was compared in root-forming for alt clustering
+        layt += [dlay]; He.accum_lay(dlay); dlay.i=l; dlay.root=He
+        cluster_eval(root, dN_, fd=1)
+    if layt:
+        root.derH.H += [layt]
 
