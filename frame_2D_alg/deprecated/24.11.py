@@ -140,3 +140,20 @@ def agg_recursion(root, iQ, fd):  # parse the deepest Lay of root derH, breadth-
     if layt:
         root.derH.H += [layt]
 
+    def copy(_He, He):
+        for attr, value in He.__dict__.items():
+            if attr != '_id' and attr != 'root' and attr in _He.__dict__.keys():  # copy attributes, skip id, root
+                if attr == 'H':
+                    if He.H:
+                        _He.H = []
+                        if isinstance(He.H[0], CH):
+                            for lay in He.H:
+                                if isinstance(lay, list): _He.H += [[]]              # empty list layer
+                                else:                     _He.H += [CH().copy(lay)]  # can't deepcopy CH.root
+                        else: _He.H = deepcopy(He.H)  # md_
+                elif attr == "node_":
+                    _He.node_ = copy(He.node_)
+                else:
+                    setattr(_He, attr, deepcopy(value))
+        return _He
+

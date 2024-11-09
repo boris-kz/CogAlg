@@ -49,9 +49,8 @@ ccoef  = 10  # scaling match ave to clustering ave
 class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | derH, their layers and sub-layers
 
     name = "H"
-    def __init__(He, node_=None, md_t=None, n=0, Et=None, H=None, root=None, i=None, i_=None, fd=None):
+    def __init__(He, node_=None, md_t=None, n=0, Et=None, H=None, root=None, i=None, i_=None):
         super().__init__()
-        He.fd = 0 if fd is None else fd  # 0: sum CGs, 1: sum CLs
         He.node_ = [] if node_ is None else node_  # concat bottom nesting order if CG, may be redundant to G.node_
         He.md_t = [] if md_t is None else md_t  # derivation layer in H: [mdlat,mdLay,mdext]
         He.H = [] if H is None else H  # nested derLays | md_ in md_C, empty in bottom layer
@@ -60,6 +59,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         He.root = None if root is None else root  # N or higher-composition He
         He.i = 0 if i is None else i  # lay index in root.H, to revise rdn
         He.i_ = [] if i_ is None else i_  # priority indices to compare node H by m | link H by d
+        # He.fd = 0 if fd is None else fd  # 0: sum CGs, 1: sum CLs
         # He.ni = 0  # exemplar in node_, trace in both directions?
         # He.deep = 0 if deep is None else deep  # nesting in root H
         # He.nest = 0 if nest is None else nest  # nesting in H
@@ -115,6 +115,15 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
 
         return HE
 
+    def copy(_He, root, dir=1):  # comp direction =-1 if reversed
+        He = CH(root=root, node_=copy(_He.node_), Et=copy(_He.Et), n=_He.n, i=_He.i, i_=copy(_He.i_))
+
+        for H,Et,n in _He.md_t:  # mdLat, mdLay, mdExt
+            He.md_t += [[[[m,d*dir] for m,d in H], copy(Et), n]]  # may negate ds
+        for he in _He.H:
+            He.H += [he.copy(dir=dir)] if he else [[]]
+        return He
+
     def comp_H(_He, He, rn=1, dir=1):  # unpack each layer of CH down to numericals and compare each pair
 
         der_md_t = []; Et = np.array([.0,.0,.0,.0])
@@ -125,20 +134,19 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
             Et += der_md_[1]
 
         DLay = CH(md_t = der_md_t, Et=Et, n=2.3)  # .3 added from comp ext, empty node_: no comp node_
-
-        # comp, unpack H, empty in bottom or deprecated layer:
-        for rev, _lay, lay in zip((0,1), _He.H, He.H):  # sublay CH per rng | der, flat
+        # empty H in bottom | deprecated layer:
+        for rev, _lay, lay in zip((0,1), _He.H, He.H):  #  fork & layer CH / rng+|der+, flat
             if _lay and lay:
                 dLay = _lay.comp_H(lay, rn, dir)  # comp He.md_t, comp,unpack lay.H
                 DLay.append_(dLay)  # DLay.H += subLay
             else:
-                l = _lay if _lay else lay
-                if l: DLay.append_(negate(l) if rev else l)  # single lay = difference between lays
-                else: DLay.H += [[]]  # keep empty lay to trace forks
+                l = _lay if _lay else lay  # only one not empty lay = difference between lays:
+                if l: DLay.append_(l.copy(root=DLay, dir = -1 if rev else 1))
+                else: DLay.H += [[]]  # to trace fork types
             # nested subHH ( subH?
         return DLay
 
-    # not implemented:
+    # not implemented yet:
     def sort_H(He, fd):  # re-assign rdn and form priority indices for comp_H, if selective and aligned
 
         i_ = []  # priority indices
@@ -149,23 +157,6 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         He.i_ = i_  # comp_H priority indices: node/m | link/d
         if not fd:
             He.root.node_ = He.H[i_[0]].node_  # no He.node_ in CL?
-
-    def copy(_He, He):
-        for attr, value in He.__dict__.items():
-            if attr != '_id' and attr != 'root' and attr in _He.__dict__.keys():  # copy attributes, skip id, root
-                if attr == 'H':
-                    if He.H:
-                        _He.H = []
-                        if isinstance(He.H[0], CH):
-                            for lay in He.H:
-                                if isinstance(lay, list): _He.H += [[]]              # empty list layer
-                                else:                     _He.H += [CH().copy(lay)]  # can't deepcopy CH.root
-                        else: _He.H = deepcopy(He.H)  # md_
-                elif attr == "node_":
-                    _He.node_ = copy(He.node_)
-                else:
-                    setattr(_He, attr, deepcopy(value))
-        return _He
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
@@ -254,7 +245,8 @@ def agg_recursion(root):  # breadth-first node_-> L_ cross-comp, clustering, rec
 
         N_,L_,Et, rng = comp_link_(Q) if fd else comp_node_(Q)
         m,d,mr,dr = Et
-        fvm = m > ave * mr*(rng+1); fvd = d > ave_d * dr*(rng+1)
+        fvm = m > ave * mr*(rng+1)
+        fvd = d > ave_d * dr*(rng+1) if fvm else 0  # vd is borrowed from vm, not independent?
         return N_,L_, fvm,fvd
 
     def cluster_eval(root, N_, fd):
@@ -263,19 +255,21 @@ def agg_recursion(root):  # breadth-first node_-> L_ cross-comp, clustering, rec
         if len(pL_) > ave_L:
             G_ = cluster_N_(root, pL_, fd)  # optionally divisive clustering
             if len(G_) > ave_L:
-                if isinstance(root.node_[0],CG): root.node_ = [root.node_, G_]  # init nesting
+                if isinstance(root.node_[0],CG): root.node_ = [root.node_, G_]  # init node_ nesting
                 else: root.node_ += [G_]
                 agg_recursion(root)  # cross-comp clustered nodes
 
     N_,L_,fvm,fvd = comp_Q(root.node_ if isinstance(root.node_[0],CG) else root.node_[-1], fd=0)
-    if fvm or fvd:
-        if fvm: root.derH.append_(CH().add_H([L.derH for L in L_]))  # lay0
-        else:   root.derH.H += [[]]
+    # predict_val = proj m - proj d: vd is borrowed from falsely projected vm, if any:
+    if fvm:
+        root.derH.append_(CH().add_H([L.derH for L in L_]))  # lay0, only empty if whole layer is
         if fvd:
             lN_,lL_,_,_ = comp_Q(L_,fd=1)  # comp new L_, root.link_ was compared in root-forming for alt clustering
             root.derH.append_(CH().add_H([L.derH for L in lL_]))  # lay1
+            # recursive der+ eval cost > ave match, may be added by feedback, not yet implemented
         else:
-            root.derH.H += [[]]
+            root.derH.H += [[]]  # empty to decode rng+|der+, n forks per layer = 2^depth
+        # cluster after feedback because it adds deeper derH layers, unless fork-specific?
         if fvm: cluster_eval(root, N_, fd=0)
         if fvd: cluster_eval(root, lN_, fd=1)
 
@@ -412,9 +406,10 @@ def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=
     if _N.derH and N.derH:
         dderH = _N.derH.comp_H(N.derH, rn, dir=dir)  # comp shared layers
         elay.append_(dderH, flat=1)
-    elif _N.derH or N.derH:  # i think pack empty layer only when 1 of them is empty, while another is not?
-        elay.H += [[]]  # empty layer
-    # spec: comp_node_(node_|link_), with multiple agg|sub lays, combinatorial?
+    elif _N.derH: elay.H += [_N.derH.copy(dir=1)]  # one empty derH
+    elif N.derH: elay.H += [N.derH.copy(dir=-1)]
+    # spec: comp_node_(node_|link_), combinatorial, node_ maybe nested with rng-) agg+
+    # new lay in root G.derH:
     Link.derH = elay; elay.root = Link; Link.n = min(_N.n,N.n); Link.nodet = [_N,N]; Link.yx = np.add(_N.yx,N.yx) /2
     # preset angle, dist
     Et = elay.Et
