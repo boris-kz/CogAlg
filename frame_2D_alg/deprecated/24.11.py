@@ -157,3 +157,54 @@ def agg_recursion(root, iQ, fd):  # parse the deepest Lay of root derH, breadth-
                     setattr(_He, attr, deepcopy(value))
         return _He
 
+def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave diff in L.dist, then cluster L.nodets within segment
+
+    L_ = sorted(L_, key=lambda x: x.dist, reverse=True)
+    min_dist = root[3] if isinstance(root,list) else 0  # 0 if init or single dist segment
+    _L = L_[0]
+    N_, et = {*_L.nodet}, _L.derH.Et
+    # init dist segment:
+    for i, L in enumerate(L_[1:], start=1):  # long links first
+        ddist = _L.dist - L.dist  # positive
+        if ddist < ave_L or et[0] < ave or len(L_[i:]) < ave_L:  # ~=dist Ns or either side of L is weak
+            et += L.derH.Et
+            for n in L.nodet:
+                if n not in N_:
+                    N_.add(n); n.merged = 0
+        else:
+            min_dist = L.dist; break  # terminate contiguous-dist segment
+        _L = L
+    Gt_ = []
+    for N in N_:  # cluster Ns that have rim in terminated dist segment
+        if N.merged: continue
+        N.merged = 1
+        node_, link_, et = {N}, set(), np.array([.0,.0,.0,.0])  # Gt
+        _eN_ = set()  # init ext Ns
+        for l,_ in get_rim(N, fd):
+            _eN_.add(l.nodet[1] if l.nodet[0] is N else l.nodet[0])
+        while _eN_:
+            eN_ = set()
+            for eN in _eN_:  # cluster rim-connected ext Ns
+                if eN.merged: continue
+                node_.add(eN); eN.merged = 1
+                for L,_ in get_rim(eN, fd):
+                    if L.dist > min_dist and L not in link_:
+                        link_.add(L)
+                        et += L.derH.Et
+                        [eN_.add(G) for G in L.nodet if not G.merged]
+            _eN_ = eN_
+        Gt_ += [[node_, link_, et, min_dist]]  # nest can be local?
+    # form subG_ via shorter Ls:
+    for Gt in Gt_:
+        sub_link_ = set()
+        for N in Gt[0]:
+            sub_link_.update({l for l,_ in get_rim(N,fd) if l.dist <= min_dist})
+            if isinstance(N.root,list): N.root += [Gt]  # N.root is rng-nested
+            else: N.root = [N.root,Gt]  # nest if >1 root
+        Gt += [cluster_N_(Gt, sub_link_, fd, nest+1)] if len(sub_link_) > ave_L else [[]]  # add subG_
+    G_ = []
+    for Gt in Gt_:
+        M, R = Gt[2][0::2]  # Gt: node_, link_, et, subG_
+        if M > R * ave * nest:  # rdn incr / lower rng
+            G_ += [sum2graph(root, Gt, fd, nest)]
+    return G_
