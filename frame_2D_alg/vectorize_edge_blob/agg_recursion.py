@@ -79,9 +79,8 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         if any(irdnt):
             HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
 
-    def add_H(root, He_, irdnt=[], ri=None):  # unpack derHs down to numericals and sum them
+    def add_H(HE, He_, irdnt=[], root=None, ri=None):  # unpack derHs down to numericals and sum them
 
-        HE = root.derH if ri is None else root.H[ri]
         if not isinstance(He_,list): He_ = [He_]
         for He in He_:
             if HE:
@@ -93,7 +92,8 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
                             else:           HE.H[i] = lay.copy_(root=HE)  # Lay was []
                 HE.accum_lay(He, irdnt)
                 HE.node_ += [node for node in He.node_ if node not in HE.node_]  # node_ is empty in CL derH?
-            else:
+            # not sure:
+            elif root:
                 if ri is None: root.derH = He.copy_(root=root)
                 else:          root.H[ri]= He.copy_(root=root)
         return HE
@@ -158,7 +158,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    def __init__(G, root= None, node_=None, link_=None, subG_=None, latuple=None, mdLay=None, derH=None, extH=None, rng=1, fd=0, n=0, box=None, yx=None, minL=None):
+    def __init__(G, root= None, node_=None, link_=None, subG_=None, latuple=None, mdLay=None, derH=None, extH=None, rng=1, fd=0, n=0, box=None, yx=None, maxL=None):
         super().__init__()
         G.n = n  # last layer?
         G.fd = 0 if fd else fd  # 1 if cluster of Ls | lGs?
@@ -167,7 +167,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.node_ = [] if node_ is None else node_ # convert to GG_ or node_H in agg++
         G.link_ = [] if link_ is None else link_ # internal links per comp layer in rng+, convert to LG_ in agg++
         G.subG_ = [] if subG_ is None else subG_ # lower-rng Gs
-        G.minL = 0 if minL is None else minL  # min link.dist in subG
+        G.maxL = 0 if maxL is None else maxL  # max link.dist in subG
         G.latuple = [0,0,0,0,0,[0,0]] if latuple is None else latuple  # lateral I,G,M,Ma,L,[Dy,Dx]
         G.mdLay = [[.0,.0,.0,.0,.0,.0,.0,.0,.0,.0,.0,.0], [.0,.0,.0,.0], 0] if mdLay is None else mdLay  # H here is md_latuple
         # maps to node_H / agg+|sub+:
@@ -251,6 +251,7 @@ def agg_recursion(root):  # breadth-first node_-> L_ cross-comp, clustering, rec
 
         pL_ = {l for n in N_ for l,_ in get_rim(n, fd)}
         if len(pL_) > ave_L:
+            for n in N_: n.merged = 0
             G_ = cluster_N_(root, N_, pL_, fd)  # optionally divisive clustering
             if len(G_) > ave_L:
                 if isinstance(root.node_[0],CG): root.node_ = [root.node_, G_]  # init node_ nesting
@@ -406,7 +407,7 @@ def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=
         elay.append_(dderH, flat=1)
     elif _N.derH: elay.H += [_N.derH.copy_(root=elay)]  # one empty derH
     elif N.derH: elay.H += [N.derH.copy_(root=elay, rev=1)]
-    # spec: comp_node_(node_|link_), combinatorial, node_ may be nested with rng-)agg+
+    # spec: comp_node_(node_|link_), combinatorial, node_ may be nested with rng-)agg+, use graph similarity search?
     # new lay in root G.derH:
     Link.derH = elay; elay.root = Link; Link.n = min(_N.n,N.n); Link.nodet = [_N,N]; Link.yx = np.add(_N.yx,N.yx) /2
     # preset angle, dist
@@ -416,21 +417,20 @@ def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=
             # reverse Link direction for _N
             if fd: node.rimt[1-rev] += [(Link,rev)]  # opposite to _N,N dir
             else:  node.rim += [(Link, rev)]
-            node.extH.add_H(Link.derH)
+            node.extH.add_H(Link.derH, root=node.extH)
             # flat
         return Et
 
 def get_rim(N,fd): return N.rimt[0] + N.rimt[1] if fd else N.rim  # add nesting in cluster_N_?
 
-# draft
-def cluster_N_(root, _N_, _L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.dists
+def cluster_N_(root, _L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.dists
     ave_rL = 1.2  # define segment and sub-cluster
 
     _L_ = sorted(_L_, key=lambda x: x.dist, reverse=True)  # lower-dist links
     max_dist = root[3] if isinstance(root,list) else np.inf  # init or single dist segment
     _L = _L_[0]
     L_, N_, et = [_L], {*_L.nodet}, _L.derH.Et
-    # init dist segment:
+    # current dist segment:
     for i, L in enumerate(_L_[1:], start=1):  # long links first
         rel_dist = _L.dist / L.dist  # >1
         if rel_dist < ave_rL or et[0] < ave or len(_L_[i:]) < ave_L:  # ~=dist Ns or either side of L is weak
@@ -438,17 +438,16 @@ def cluster_N_(root, _N_, _L_, fd, nest=1):  # top-down segment L_ by >ave ratio
             L_ += [L]; et += L.derH.Et
             for n in L.nodet:
                 if n not in N_:
-                    N_.add(n); n.merged = 0
+                    n.merged = 0; N_.add(n)
         else:
-            L_ =_L_[i:]; max_dist = _L.dist; break  # terminate contiguous-dist segment
+            L_ =_L_[i:]; max_dist = _L.dist
+            break  # terminate contiguous-dist segment
     Gt_ = []
-    for L in L_:  # cluster through Ls within dist segment, not Ns
-        # for N in L.nodet:
-        # not revised:
+    for N in N_:  # cluster current dist segment
         if N.merged: continue
         N.merged = 1
         node_, link_, et = {N}, set(), np.array([.0,.0,.0,.0])  # init Gt
-        _eN_ = {l.nodet[1] if l.nodet[0] is N else l.nodet[0] for l,_ in get_rim(N, fd)}  # init ext Ns
+        _eN_ = {l.nodet[1] if l.nodet[0] is N else l.nodet[0] for l,_ in get_rim(N, fd) if l in L_}  # init ext Ns
         while _eN_:
             eN_ = set()
             for eN in _eN_:  # cluster rim-connected ext Ns
@@ -460,26 +459,30 @@ def cluster_N_(root, _N_, _L_, fd, nest=1):  # top-down segment L_ by >ave ratio
                         et += L.derH.Et
                         [eN_.add(G) for G in L.nodet if not G.merged]
             _eN_ = eN_
+        Gt_ += [[node_, link_, et, max_dist]]
     # form subG_ via shorter Ls:
     for Gt in Gt_:
-        sub_link_ = set()
-        for N in Gt[0]:
+        sub_link_ = set(); node_ = Gt[0]; root[0].update(node_)  # include all lower nodes
+        for N in node_:
             sub_link_.update({l for l,_ in get_rim(N,fd) if l.dist > max_dist})
             if isinstance(N.root,list): N.root += [Gt]  # N.root is rng-nested
-            else: N.root = [N.root,Gt]  # nest if >1 root
-        Gt += [cluster_N_(Gt, sub_link_, fd, nest+1)] if len(sub_link_) > ave_L*nest else [[]]  # add subG_
+            else: N.root = [N.root,Gt]
+            # nest if >1 root
+        subG_ = cluster_N_(Gt, sub_link_, fd, nest+1) if len(sub_link_) > ave_L*nest else []
+        Gt += [subG_]
     G_ = []
     for Gt in Gt_:
         M, R = Gt[2][0::2]  # Gt: node_, link_, et, subG_
         if M > R * ave * nest:  # rdn incr / lower rng
             G_ += [sum2graph(root, Gt, fd, nest)]
+
     return G_
 
 def sum2graph(root, grapht, fd, nest):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
-    node_, link_, Et, minL, subG_ = grapht; node_ = list(node_)
-    graph = CG(fd=fd, root=[root], node_=node_,link_=link_, subG_=subG_, minL=minL, rng=nest)
-    # or node_ += subG_?
+    node_, link_, Et, maxL, subG_ = grapht
+    graph = CG(fd=fd, root=[root], node_= [list(node_),[subG_]], link_=link_, maxL=maxL, rng=nest)
+    # add deeper node_ nesting, not just 2 layers as above?
     yx = [0,0]
     graph.derH.append_(CH(node_=node_).add_H([link.derH for link in link_]))  # new der layer
     derH = CH()

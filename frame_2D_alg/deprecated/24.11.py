@@ -157,54 +157,47 @@ def agg_recursion(root, iQ, fd):  # parse the deepest Lay of root derH, breadth-
                     setattr(_He, attr, deepcopy(value))
         return _He
 
-def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave diff in L.dist, then cluster L.nodets within segment
+def cluster_N_(root, _L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.dists
+    ave_rL = 1.2  # define segment and sub-cluster
 
-    L_ = sorted(L_, key=lambda x: x.dist, reverse=True)
-    min_dist = root[3] if isinstance(root,list) else 0  # 0 if init or single dist segment
-    _L = L_[0]
-    N_, et = {*_L.nodet}, _L.derH.Et
-    # init dist segment:
-    for i, L in enumerate(L_[1:], start=1):  # long links first
-        ddist = _L.dist - L.dist  # positive
-        if ddist < ave_L or et[0] < ave or len(L_[i:]) < ave_L:  # ~=dist Ns or either side of L is weak
-            et += L.derH.Et
-            for n in L.nodet:
-                if n not in N_:
-                    N_.add(n); n.merged = 0
-        else:
-            min_dist = L.dist; break  # terminate contiguous-dist segment
+    _L_ = sorted(_L_, key=lambda x: x.dist, reverse=True)
+    _L = _L_[0]; L_ = [_L], et = _L.derH.Et
+    L__ = []
+    # segment _L_ by contiguous dist, long links first:
+    for i, L in enumerate(_L_[1:]):
+        rel_dist = _L.dist / L.dist  # >1
+        if rel_dist < ave_rL or et[0] < ave or len(_L_[i:]) < ave_L:  # ~=dist Ns or either side of L is weak
+            L_ += [L]; et += L.derH.Et
+        else:  # terminate dist segment
+            L__ += [L_]; L_=[L]; et = L.derH.Et
         _L = L
-    Gt_ = []
-    for N in N_:  # cluster Ns that have rim in terminated dist segment
-        if N.merged: continue
-        N.merged = 1
-        node_, link_, et = {N}, set(), np.array([.0,.0,.0,.0])  # Gt
-        _eN_ = set()  # init ext Ns
-        for l,_ in get_rim(N, fd):
-            _eN_.add(l.nodet[1] if l.nodet[0] is N else l.nodet[0])
-        while _eN_:
-            eN_ = set()
-            for eN in _eN_:  # cluster rim-connected ext Ns
-                if eN.merged: continue
-                node_.add(eN); eN.merged = 1
-                for L,_ in get_rim(eN, fd):
-                    if L.dist > min_dist and L not in link_:
-                        link_.add(L)
-                        et += L.derH.Et
-                        [eN_.add(G) for G in L.nodet if not G.merged]
-            _eN_ = eN_
-        Gt_ += [[node_, link_, et, min_dist]]  # nest can be local?
-    # form subG_ via shorter Ls:
-    for Gt in Gt_:
-        sub_link_ = set()
-        for N in Gt[0]:
-            sub_link_.update({l for l,_ in get_rim(N,fd) if l.dist <= min_dist})
-            if isinstance(N.root,list): N.root += [Gt]  # N.root is rng-nested
-            else: N.root = [N.root,Gt]  # nest if >1 root
-        Gt += [cluster_N_(Gt, sub_link_, fd, nest+1)] if len(sub_link_) > ave_L else [[]]  # add subG_
-    G_ = []
-    for Gt in Gt_:
-        M, R = Gt[2][0::2]  # Gt: node_, link_, et, subG_
-        if M > R * ave * nest:  # rdn incr / lower rng
-            G_ += [sum2graph(root, Gt, fd, nest)]
-    return G_
+    L__ += [L_]  # last segment
+    G__ = []
+    for L_ in L__:  # cluster Ns via Ls in dist segment
+        Gt_ = []
+        for L in L_:
+            node_, link_, et = [n for n in L.nodet if not n.merged], {L}, copy(L.derH.Et)  # init Gt
+            _eL_ = {eL for N in L.nodet for eL,_ in get_rim(N,fd) if eL in L_}  # init current-dist ext Ls
+            while _eL_:
+                eL_ = set()  # extended rim Ls
+                for _eL in _eL_:  # cluster node-connected ext Ls
+                    et += _eL.derH.Et
+                    node_ += [n for n in _eL.nodet if not n.merged and n not in node_]
+                    link_.add(_eL)
+                    for eL in {eL for N in _eL.nodet for eL,_ in get_rim(N, fd)}:
+                        if eL not in link_ and eL in L_: eL_.add(eL)
+                _eL_ = eL_
+            Gt = [node_, link_, et]  # maxL is per segment, not G
+            for n in node_: n.merged = 1
+            Gt_ += [Gt]
+        G_ = []
+        for Gt in Gt_:
+            for n in Gt[0]: n.merged = 0  # reset per segment
+            M, R = Gt[2][0::2]  # Gt: node_,link_,et,max_dist
+            if M > R * ave * nest:  # rdn+1 in lower segments
+                G_ += [sum2graph(root, Gt, fd, nest)]
+                # add root_G node_ += G, G.root += root_G?
+        nest += 1
+        G__ += G_
+
+    return G__[0]  # top Gs only, lower Gs should be nested in their node_
