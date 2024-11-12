@@ -214,7 +214,7 @@ def sum2PP(root, P_, dP_):  # sum links in Ps and Ps in PP
         mdLay[1][2:4] = [R+r for R,r in zip(mdLay[1][2:4], iRt)]  # mdLay[1] = Et
     y0,x0,yn,xn = box
     # derH = [mdLay]
-    PPt = [root, P_, link_, mdLay, latuple, A, S, area, box, [(y0+yn)/2,(y0+yn)/2], n]
+    PPt = [root, P_, link_, mdLay, latuple, A, S, area, box, [(y0+yn)/2,(x0+xn)/2], n]
     for P in P_: P.root = PPt
     return PPt
 
