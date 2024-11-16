@@ -2,40 +2,45 @@ import sys
 sys.path.append("..")
 import numpy as np
 from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
-from vectorize_edge import comp_node_, comp_link_, sum2graph, get_rim, CH, CG, ave, ave_d, ave_L, vectorize_root
+from vectorize_edge import comp_node_, comp_link_, sum2graph, get_rim, CH, ave, ave_d, ave_L, vectorize_root
 '''
 Cross-compare and cluster edge blobs within a frame,
 potentially unpacking their node_s first,
 with recursive agglomeration  
 '''
-def agg_recursion(root):  # breadth-first node_-> L_ cross-comp, clustering, recursion
 
-    def cluster_eval(root, N_, fd):
+def agg_recursion(frame):  # breadth-first (node_,L_) cross-comp, clustering, recursion
+
+    def cluster_eval(frame, N_, fd):
 
         pL_ = {l for n in N_ for l,_ in get_rim(n, fd)}
         if len(pL_) > ave_L:
-            G_ = cluster_N_(root, pL_, fd)  # optionally divisive clustering
+            G_ = cluster_N_(frame, pL_, fd)  # optionally divisive clustering
+            frame.subG_ = G_
             if len(G_) > ave_L:
-                agg_recursion(root)  # cross-comp clustered node_
+                agg_recursion(frame)  # cross-comp higher subGs
 
-    # eval to unpack each N before comp?
-    N_,L_, (m,d,mr,dr) = comp_node_(root.subG_)
+    # cross-comp converted edges, then GGs, etc.:
+    iN_ = []
+    for N in frame.subG_:  # eval to unpack highest N.subG_:
+        iN_ += [N] if (not N.derH or N.derH.Et[0] < ave * N.derH.Et[2]) else N.subG_
+
+    N_,L_,(m,d,mr,dr) = comp_node_(iN_)
     if m > ave * mr:
-        root.derH.append_(CH().add_H([L.derH for L in L_]))  # mfork, else no new layer
-        vd = 0
-        if d * (m/ave) > ave_d * dr:  # prediction = proj_m - proj_d: vd is borrowed from falsely projected m
-            vd = 1
+        frame.derH.append_(CH().add_H([L.derH for L in L_]))  # mfork, else no new layer
+        vd = d * (m/ave) > ave_d * dr  # borrow from mis-projected m: proj_m -= proj_d, reduce vm in agg+?
+        if vd > 0:
             for L in L_:
-                L.root_ = [root]; L.extH = CH()
-            lN_,lL_,_ = comp_link_(L_)  # comp new L_, root.link_ was compared in root-forming for alt clustering
-            # no need to return et?
-            root.derH.append_(CH().add_H([L.derH for L in lL_]))  # dfork
+                L.root_ = [frame]; L.extH = CH(); L.rimt = [[],[]]
+            lN_,lL_,(md,_,_,_) = comp_link_(L_)  # comp new L_, root.link_ was compared in root-forming for alt clustering
+            vd *= md / ave  # no full et?
+            frame.derH.append_(CH().add_H([L.derH for L in lL_]))  # dfork
             # recursive der+ eval_: cost > ave_match, add by feedback if < _match?
         else:
-            root.derH.H += [[]]  # empty to decode rng+|der+, n forks per layer = 2^depth
-        # clustering adds whole derLays, or fork-specific?
-        cluster_eval(root, N_, fd=0)
-        if vd: cluster_eval(root, lN_, fd=1)
+            frame.derH.H += [[]]  # empty to decode rng+|der+, n forks per layer = 2^depth
+        # + aggLays and derLays:
+        cluster_eval(frame, N_, fd=0)
+        if vd > 0: cluster_eval(frame, lN_, fd=1)
 
 
 def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.dists
@@ -78,7 +83,7 @@ def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.
         Gt += [subG_]; Gt_ += [Gt]
     G_ = []
     for Gt in Gt_:
-        node_, link_, et, minL, subG_ = Gt; Gt[0] = list(node_)  # convert from set to list
+        node_, link_, et, minL, subG_ = Gt; Gt[0] = list(node_)
         if et[0] > et[2] *ave *nest:  # rdn incr/ dist decr
             G_ += [sum2graph(root, Gt, fd, nest)]
         else:
@@ -91,4 +96,5 @@ if __name__ == "__main__":
     frame = frame_blobs_root(image)
     intra_blob_root(frame)
     vectorize_root(frame)
-    agg_recursion(frame)
+    if frame.subG_:  # converted edges
+        agg_recursion(frame)

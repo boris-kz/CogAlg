@@ -61,14 +61,14 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
 def add_md_(HE, He,  irdnt=[]):  # p may be derP, sum derLays
 
     if HE:
-        HE[0] = [V + v for V, v in zip_longest(HE[0], He[0], fillvalue=0)]  # H
+        HE[0] = [V + v for V, v in zip_longest(HE[0], He[0], fillvalue=0)]  # H, np.array?
         HE[1] += He[1]  # Et
         HE[2] += He[2]  # n: combined param accumulation span
         if any(irdnt): HE[1][2:] = [E + e for E, e in zip(HE[1][2:], irdnt)]
     else:
         HE[:] = deepcopy(He)
 
-def comp_md_(_H, H, rn=1, dir=1):
+def comp_md_(_H, H, rn=1, dir=1):  # replace dir with rev?
 
     vm, vd, rm, rd = 0,0,0,0
     derLay = []
@@ -192,7 +192,8 @@ def form_PP_(root, iP_):  # form PPs of dP.valt[fd] + connected Ps val
 
 def sum2PP(root, P_, dP_):  # sum links in Ps and Ps in PP
 
-    mdLay, latuple, link_, A, S, area, n, box = [[], np.array([.0,.0,.0,.0]),0], [0,0,0,0,0,[0,0]], [],[0,0],0,0,0, [np.inf,np.inf,0,0]
+    mdLay = [np.array, np.array([.0,.0,.0,.0]), 0]
+    latuple, link_, A, S, area, n, box = [0,0,0,0,0,[0,0]], [],[0,0],0,0,0, [np.inf,np.inf,0,0]
     iRt = root[3][1] if isinstance(root,list) else root.mdLay[1][2:4]   # add to rdnt in root.mdLay.Et or root Et
     # add uplinks:
     for dP in dP_:
