@@ -2,7 +2,7 @@ import sys
 sys.path.append("..")
 from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
 from slice_edge import slice_edge, comp_angle, aveG
-from comp_slice import comp_slice, comp_latuple, add_lat, aves, comp_md_, add_md_
+from comp_slice import comp_slice, comp_latuple, aves, comp_md_
 from itertools import combinations, zip_longest
 from copy import deepcopy, copy
 import numpy as np
@@ -69,7 +69,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
 
         if HE.md_t:
             for MD_, md_ in zip(HE.md_t, He.md_t):  # mdLat, mdLay, mdExt
-                add_md_(MD_,md_)
+                MD_ += md_
             HE.Et += He.Et; HE.n += He.n  # combined param accum span
             if any(irdnt):
                 HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
@@ -116,10 +116,10 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
     def copy_(_He, root, rev=0):  # comp direction may be reversed
         He = CH(root=root, node_=copy(_He.node_), Et=copy(_He.Et), n=_He.n, i=_He.i, i_=copy(_He.i_))
 
-        for H,Et,n in _He.md_t:  # mdLat, mdLay, mdExt
-            H = copy(H)
-            if rev: H[1::2]  = [-v for v in H[1::2]]   # negate ds
-            He.md_t += [[H, copy(Et), n]]
+        for md_,Et,n in _He.md_t:  # mdLat, mdLay, mdExt
+            md_ = copy(md_)
+            if rev: md_[1::2] *= -1   # negate ds
+            He.md_t += [[md_, copy(Et), n]]
         for he in _He.H:
             He.H += [he.copy_(root=He, rev=rev)] if he else [[]]
         return He
@@ -172,8 +172,8 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.subG_ = [] if subG_ is None else subG_  # selectively clustered node_
         G.subL_ = [] if subL_ is None else subL_  # selectively clustered link_
         G.minL = 0 if minL is None else minL  # min link.dist in subG
-        G.latuple = [0,0,0,0,0,[0,0]] if latuple is None else latuple  # lateral I,G,M,Ma,L,[Dy,Dx]
-        G.mdLay = [[.0,.0,.0,.0,.0,.0,.0,.0,.0,.0,.0,.0], np.array([.0,.0,.0,.0]), 0] if mdLay is None else mdLay  # mdLat, et, n
+        G.latuple = np.array([0,0,0,0,0, np.array([0,0])],dtype=object) if latuple is None else latuple  # lateral I,G,M,Ma,L,[Dy,Dx]
+        G.mdLay = np.array([np.zeros(12), np.zeros(4), 0],dtype=object) if mdLay is None else mdLay  # mdLat, et, n
         # maps to node_H / agg+|sub+:
         G.derH = CH(root=G) if derH is None else derH  # sum from nodes, then append from feedback
         G.extH = CH(root=G) if extH is None else extH  # sum from rim_ elays, H maybe deleted
@@ -217,6 +217,7 @@ def vectorize_root(frame):
         if not blob.sign and blob.G > aveG * blob.root.rdn:
             edge = slice_edge(blob)
             if edge.G * (len(edge.P_) - 1) > ave:  # eval PP, rdn=1
+                edge = CG(root_=[frame], node_=edge.P_,latuple=edge.latuple, box=edge.box, yx=edge.yx,n=edge.n)
                 comp_slice(edge)
                 if not hasattr(frame, 'derH'):
                     frame.derH = CH(); frame.root = None; frame.subG_ = []
@@ -225,7 +226,7 @@ def vectorize_root(frame):
                     G_ = []  # init for agg+:
                     for N in edge.node_:  # no comp node_, link_ | PPd_ for now
                         H,Et,n = N[3] if isinstance(N,list) else N.mdLay  # N is CP
-                        if H and Et[0] > ave * Et[2]:  # convert PP|P to G:
+                        if any(H) and Et[0] > ave * Et[2]:  # convert PP|P to G:
                             if isinstance(N,list):
                                 root_,P_,link_,(H,Et,n), lat, A, S, area, box, [y,x], n = N  # PPt
                             else:  # single CP
@@ -400,7 +401,7 @@ def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=
     if fd:
         _L, L = _N.dist, N.dist;  dL = _L-L; mL = min(_L,L) - ave_L  # direct match
         mA,dA = comp_angle(_N.angle, [d*dir for d in N.angle])  # rev 2nd link in llink
-        # add comp med for LLs: higher-link order version of comp dist?
+        # comp med if LL: higher-order version of comp dist?
     else:
         _L, L = len(_N.node_),len(N.node_); dL = _L-L; mL = min(_L,L) - ave_L
         mA,dA = comp_area(_N.box, N.box)  # compare area in CG vs angle in CL
@@ -451,7 +452,7 @@ def sum2graph(root, grapht, fd, nest):  # sum node and link params into graph, a
         if N.derH: derH.add_H(N.derH)  # derH.Et=Et?
         if isinstance(N,CG):
             add_md_(graph.mdLay, N.mdLay)
-            add_lat(graph.latuple, N.latuple)
+            graph.latuple += N.latuple
         N.root_[-1] = graph  # replace Gt
     graph.derH.append_(derH, flat=1)  # comp(derH) forms new layer, higher layers are added by feedback
     L = len(node_)

@@ -201,3 +201,11 @@ def cluster_N_(root, _L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L
         G__ += G_
 
     return G__[0]  # top Gs only, lower Gs should be nested in their node_
+
+def add_md_(HE, He,  irdnt=[0,0]):  # p may be derP, sum derLays
+
+    if HE:
+        HE += He; HE[1][2:4] += irdnt  # sum md_, et, n: combined param accumulation span
+    else:
+        HE[:] = deepcopy(He)
+
