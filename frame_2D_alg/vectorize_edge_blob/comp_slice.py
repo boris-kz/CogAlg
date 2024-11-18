@@ -45,8 +45,8 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
         super().__init__()
 
         l.nodet = [] if nodet is None else nodet  # e_ in kernels, else replaces _node,node: not used in kernels?
-        l.latuple = [] if latuple is None else latuple  # sum node_
-        l.mdLay = np.array([np.zeros(12), np.zeros(4), 0],dtype=object) if mdLay is None else mdLay
+        l.latuple = np.array([.0,.0,.0,.0,.0,np.zeros(2)], dtype=object) if latuple is None else latuple  # sum node_
+        l.mdLay = np.array([np.zeros(12),np.zeros(4),0],dtype=object) if mdLay is None else mdLay
         l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
         l.span = span  # distance between node centers
         l.yx = [0,0] if yx is None else yx  # sum node_
@@ -74,7 +74,7 @@ def comp_md_(_md_, md_, rn=1, dir=1):  # replace dir with rev?
         rm += vd > vm; rd += vm >= vd
         derLay += [match, diff]  # flat
 
-    return [np.array(derLay, dtype='float'), np.array([vm,vd,rm,rd], dtype='float'), 1]  # [md_, Et, n]
+    return np.array([np.array(derLay, dtype=float), np.array([vm,vd,rm,rd], dtype=float), 1],dtype=object)  # [md_, Et, n]
 
 def vectorize_root(frame):
 
@@ -82,18 +82,18 @@ def vectorize_root(frame):
     for blob in blob_:
         if not blob.sign and blob.G > aveG * blob.root.rdn:
             edge = slice_edge(blob)
-            if edge.G*(len(edge.P_) - 1) > ave_PPm:  # eval PP, rdn=1
+            if edge.G*(len(edge.node_) - 1) > ave_PPm:  # eval PP, rdn=1
                 comp_slice(edge)
 
 def comp_slice(edge):  # root function
 
-    edge.mdLay = [np.zeros(12), np.zeros(4),0]  # H, Et, n
-    for P in edge.P_:  # add higher links
-        P.mdLay = [np.zeros(12), np.zeros(4),0]  # for accumulation in sum2PP later (in lower P)
+    edge.mdLay = np.array([np.zeros(12), np.zeros(4),0],dtype=object)  # md_, Et, n
+    for P in edge.node_:  # add higher links
+        P.mdLay = np.array([np.zeros(12),np.zeros(4),0],dtype=object)  # to accumulate in sum2PP
         P.rim = []; P.lrim = []; P.prim = []
 
     comp_P_(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
-    edge.node_ = form_PP_(edge, edge.P_)
+    edge.node_ = form_PP_(edge, edge.node_)
 
     for PPm in edge.node_:  # eval sub-clustering, not recursive
         if isinstance(PPm, list):  # PPt, not CP
@@ -101,7 +101,7 @@ def comp_slice(edge):  # root function
             Et = mdLay[1]
             if len(link_) > ave_L and Et[0] >PP_aves[0] * Et[2]:
                 comp_link_(PPm)
-                PPm[2] = form_PP_(PPm, link_)  # add PPds within PPm link_
+                PPm[2] = (form_PP_(PPm, link_))  # add PPds within PPm link_
             mdLay = PPm[3]
         else:
             mdLay = PPm.mdLay  # PPm is actually CP
@@ -185,7 +185,8 @@ def form_PP_(root, iP_):  # form PPs of dP.valt[fd] + connected Ps val
 def sum2PP(root, P_, dP_):  # sum links in Ps and Ps in PP
 
     mdLay = np.array([np.zeros(12),np.zeros(4),0], dtype=object)
-    latuple, link_, A, S, area, n, box = np.array([0,0,0,0,0, np.zeros(2)], dtype=object), [],[0,0],0,0,0, [np.inf,np.inf,0,0]
+    latuple = np.array([.0,.0,.0,.0,.0,np.zeros(2)], dtype=object)
+    link_, A, S, area, n, box = [],[0,0], 0,0,0, [np.inf,np.inf,0,0]
     iRt = root[3][1][2:4] if isinstance(root,list) else root.mdLay[1][2:4]  # rdnt in mdLay Et
     # add uplinks:
     for dP in dP_:
@@ -197,19 +198,20 @@ def sum2PP(root, P_, dP_):  # sum links in Ps and Ps in PP
         S += np.hypot(*dP.angle)  # links are contiguous but slanted
     # add Ps:
     for P in P_:
-        L = P.latuple[-2]
+        L = P.latuple[0][-1]
         area += L; n += L  # no + P.mdLay.n: current links only?
         latuple += P.latuple
-        if P.mdLay:  # CdP or lower P has mdLay
+        if any(P.mdLay[0]):  # CdP or lower P has mdLay
             mdLay += P.mdLay
         for y,x in P.yx_ if isinstance(P, CP) else [P.nodet[0].yx, P.nodet[1].yx]:  # CdP
             box = accum_box(box,y,x)
-    if mdLay:
+    if any(mdLay[0]):
         mdLay[1][2:4] += iRt # mdLay[1] = Et
     y0,x0,yn,xn = box
     # derH = [mdLay]
     PPt = [root, P_, link_, mdLay, latuple, A, S, area, box, [(y0+yn)/2,(x0+xn)/2], n]
     for P in P_: P.root = PPt
+
     return PPt
 
 def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
@@ -228,17 +230,16 @@ def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
     if fagg:  # add norm m,d, ret=[ret,Ret]:
         mval, dval = sum(ret[::2]),sum(ret[1::2])
         mrdn, drdn = dval>mval, mval>dval
-        ret = [ret, np.array([mval,dval,mrdn,drdn]), 1]  # if fagg only
+        ret = np.array([ret, np.array([mval,dval,mrdn,drdn]), 1], dtype=object)  # if fagg only
     return ret
 
 def get_match(_par, par):
     match = min(abs(_par),abs(par))
     return -match if (_par<0) != (par<0) else match    # match = neg min if opposite-sign comparands
 
-def accum_box(box, y, x):
-    """Box coordinate accumulation."""
+def accum_box(box, y, x):  # extend box with kernel
     y0, x0, yn, xn = box
-    return min(y0, y), min(x0, x), max(yn, y), max(xn, x)
+    return min(y0,y), min(x0,x), max(yn,y), max(xn,x)
 
 def min_dist(a, b, pad=0.5):
     if np.abs(a - b) < 1e-5:

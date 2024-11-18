@@ -65,7 +65,7 @@ class CP(CBase):
                 _y,_x,_gy,_gx = y,x,gy,gx
 
         P.yx = tuple(np.mean([P.yx_[0], P.yx_[-1]], axis=0))
-        P.latuple = np.array([I, G, M, Ma, L, np.array([Dy, Dx])],dtype=object)
+        P.latuple = np.array([np.array([I, G, M, Ma, L]), np.array([Dy, Dx])],dtype=object)
 
 def vectorize_root(frame):
 
