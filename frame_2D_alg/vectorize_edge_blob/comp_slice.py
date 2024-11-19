@@ -88,12 +88,12 @@ def vectorize_root(frame):
 def comp_slice(edge):  # root function
 
     edge.mdLay = np.array([np.zeros(12), np.zeros(4),0],dtype=object)  # md_, Et, n
-    for P in edge.node_:  # add higher links
+    for P in edge.P_:  # add higher links
         P.mdLay = np.array([np.zeros(12),np.zeros(4),0],dtype=object)  # to accumulate in sum2PP
         P.rim = []; P.lrim = []; P.prim = []
 
     comp_P_(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
-    edge.node_ = form_PP_(edge, edge.node_)
+    edge.node_ = form_PP_(edge, edge.P_)
 
     for PPm in edge.node_:  # eval sub-clustering, not recursive
         if isinstance(PPm, list):  # PPt, not CP
@@ -198,7 +198,7 @@ def sum2PP(root, P_, dP_):  # sum links in Ps and Ps in PP
         S += np.hypot(*dP.angle)  # links are contiguous but slanted
     # add Ps:
     for P in P_:
-        L = P.latuple[0][-1]
+        L = P.latuple[4]
         area += L; n += L  # no + P.mdLay.n: current links only?
         latuple += P.latuple
         if any(P.mdLay[0]):  # CdP or lower P has mdLay

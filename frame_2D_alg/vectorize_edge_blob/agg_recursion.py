@@ -46,8 +46,6 @@ def agg_recursion(frame):  # breadth-first (node_,L_) cross-comp, clustering, re
 def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.dists
 
     ave_rL = 1.2  # defines segment and cluster
-    # graph tracing, sum directionally decomposed links to project md?
-    # for extended comp, bidir for clustering?
 
     L_ = sorted(L_, key=lambda x: x.dist, reverse=True)  # lower-dist links
     _L = L_[0]
@@ -73,6 +71,7 @@ def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.
                 eN.root_ += [Gt]
                 for L,_ in get_rim(eN, fd):
                     if L not in link_:
+                        # if L.derH.Et[0]/ave * n.extH m/ave: density?
                         eN_.update([n for n in L.nodet if len(n.root_) <= nest])
                         if L.dist >= min_dist:
                             link_.add(L); et += L.derH.Et
