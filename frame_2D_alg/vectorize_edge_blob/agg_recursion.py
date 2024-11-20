@@ -1,6 +1,7 @@
 import sys
 sys.path.append("..")
 import numpy as np
+from copy import copy, deepcopy
 from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
 from vectorize_edge import comp_node_, comp_link_, sum2graph, get_rim, CH, ave, ave_d, ave_L, vectorize_root
 '''
@@ -26,13 +27,14 @@ def agg_recursion(frame):  # breadth-first (node_,L_) cross-comp, clustering, re
 
     N_,L_,(m,d,mr,dr) = comp_node_(iN_)
     if m > ave * mr:
-        frame.derH.append_(CH().add_H([L.derH for L in L_]))  # mfork, else no new layer
+        mlay = CH().add_H([L.derH for L in L_])  # mfork, else no new layer
+        frame.derH = CH(H=[mlay], md_t = deepcopy(mlay.md_t), Et=copy(mlay.Et), n=mlay.n, root=frame); mlay.root=frame.derH  # init
         vd = d * (m/ave) - ave_d * dr  # proportional borrow from mis-projected m:
-        # proj_m = m - vd/2: bidir, +ve, no symmetric rdn: d is secondary?
+        # proj_m = m - vd/2: bi-dir,+ve, no symmetric rdn: d is secondary?
         if vd > 0:
             for L in L_:
                 L.root_ = [frame]; L.extH = CH(); L.rimt = [[],[]]
-            lN_,lL_,(md,_,_,_) = comp_link_(L_)  # comp new L_, root.link_ was compared in root-forming for alt clustering
+            lN_,lL_,md = comp_link_(L_)  # comp new L_, root.link_ was compared in root-forming for alt clustering
             vd *= md / ave  # no full et?
             frame.derH.append_(CH().add_H([L.derH for L in lL_]))  # dfork
             # recursive der+ eval_: cost > ave_match, add by feedback if < _match?
