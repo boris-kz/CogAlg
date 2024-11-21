@@ -138,6 +138,13 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
             # nested subHH ( subH?
         return DLay
 
+    def norm_(He, n):
+
+        for md_ in He.md_t: md_ /= n
+        for lay in He.H: lay.norm_(n)
+        He.n /= n
+        He.Et /= n
+
     # not implemented yet:
     def sort_H(He, fd):  # re-assign rdn and form priority indices for comp_H, if selective and aligned
 
@@ -189,10 +196,10 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         l.n = 1  # min(node_.n)
         l.derH = CH(root=l) if derH is None else derH
         l.nodet = [] if nodet is None else nodet  # e_ in kernels, else replaces _node,node: not used in kernels
-        l.angle = [0,0] if angle is None else angle  # dy,dx between nodet centers
+        l.angle = np.zeros(2) if angle is None else angle  # dy,dx between nodet centers
         l.dist = 0 if dist is None else dist  # distance between nodet centers
         l.box = [] if box is None else box  # sum nodet, not needed?
-        l.Vt = [0,0]  # for rim-overlap modulated segmentation, init derH.Et[:2]
+        l.Vt = np.zeros(2)  # for rim-overlap modulated segmentation, init derH.Et[:2]
         l.H_ = [] if H_ is None else H_  # if agg++| sub++?
         # add med, rimt, elay | extH in der+
     def __bool__(l): return bool(l.derH.H)
@@ -281,7 +288,7 @@ def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et
         dist = np.hypot(dy,dx)
         _G.add, G.add = 0, 0
         _Gp_ += [(_G,G, rn, dy,dx, radii, dist)]
-    icoef = .1  # internal M proj_val / external M proj_val
+    icoef = .15  # internal M proj_val / external M proj_val
     rng = 1  # len N__
     N_,L_,ET = set(),[], np.zeros(4)
     _Gp_ = sorted(_Gp_, key=lambda x: x[-1])  # sort by dist, shortest pairs first
