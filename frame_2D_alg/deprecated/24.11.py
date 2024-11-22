@@ -202,10 +202,56 @@ def cluster_N_(root, _L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L
 
     return G__[0]  # top Gs only, lower Gs should be nested in their node_
 
-def add_md_(HE, He,  irdnt=[0,0]):  # p may be derP, sum derLays
+def cluster_(N_):  # initial flood fill via N.crim
+    clust_ = []
+    while N_:
+        node_, peri_, M = set(), set(), 0
+        N = N_.pop();
+        _ref_ = [(N, 0)]
+        while _ref_:
+            ref_ = set()
+            for _ref in _ref_:
+                _eN = _ref[0]
+                node_.add(_eN)  # to compute medoid in refine_
+                peri_.update(_eN.perim)  # for comp to medoid in refine_
+                for ref in _eN.crim:
+                    eN, eM = ref
+                    if eN in N_:  # not merged
+                        N_.remove(eN)
+                        ref_.add(ref)  # to merge
+                        M += eM
+            _ref_ = ref_
+        clust_ += [[node_, peri_, M]]
 
-    if HE:
-        HE += He; HE[1][2:4] += irdnt  # sum md_, et, n: combined param accumulation span
-    else:
-        HE[:] = deepcopy(He)
+    return clust_
+
+def refine_(clust):
+    _node_, _peri_, _M = clust
+
+    dM = ave + 1
+    while dM > ave:
+        node_, peri_, M = set(), set(), 0
+        _N = medoid(_node_)
+        for N in _peri_:
+            M = comp_cN(_N, N)
+            if M > ave:
+                peri_.add(N)
+                if M > ave*2: node_.add(N)
+        dM = M - _M
+        _node_,_peri_,_M = node_,peri_,M
+
+    clust[:] = [list(node_),list(peri_),M]  # final cluster
+
+
+    N_ = frame.subG_  # should be complemented graphs: m-type core + d-type contour
+    for N in N_:
+        N.perim = set(); N.crim = set(); N.root_ += [frame]
+    xcomp_(N_)
+    clust_ = cluster_(N_)  # global connectivity clusters
+    for clust in clust_:
+        refine_(clust)  # re-cluster by node_ medoid
+    frame.clust_ = clust_  # new param for now
+    if len(frame.clust_) > ave_L:
+        agg_recursion(frame)  # alternating connectivity clustering
+
 
