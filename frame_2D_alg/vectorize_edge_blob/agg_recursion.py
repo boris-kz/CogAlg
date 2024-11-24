@@ -21,25 +21,24 @@ def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, rec
             G_ = cluster_N_(frame, pL_, fd)  # optionally divisive clustering
             frame.subG_ = G_
             if len(G_) > ave_L:
-                get_exemplar_(frame)  # may call medoid clustering
+                get_exemplar_(frame)  # may call centroid clustering
     '''
-    cross-comp converted edges, then GGs, GGGs., interlaced connectivity clustering and exemplar selection
-    '''
+    cross-comp converted edges, then GGs, GGGs, etc, interlaced with exemplar selection: '''
     iN_ = []
-    for N in frame.subG_:  # eval to unpack top N:
-        iN_ += [N] if N.derH.Et[0] < ave * N.derH.Et[2] else N.subG_
-        # use exemplar_ instead of full subG_, extend new graphs with exemplar.crim?
+    for N in frame.subG_:
+        iN_ += [N] if N.derH.Et[0] < ave * N.derH.Et[2] else N.subG_  # eval to unpack top N
 
-    N_,L_,(m,d,mr,dr) = comp_node_(iN_)
+    N_,L_,(m,d,mr,dr) = comp_node_(iN_)  # cross-comp exemplars, extrapolate to exemplar.Rim?
     if m > ave * mr:
         mlay = CH().add_H([L.derH for L in L_])  # mfork, else no new layer
         frame.derH = CH(H=[mlay], md_t=deepcopy(mlay.md_t), Et=copy(mlay.Et), n=mlay.n, root=frame); mlay.root=frame.derH  # init
-        vd = d * (m/ave) - ave_d * dr  # proportional borrow from co-projected m: proj_m = m - vd/2: bidir, no rdn: d is secondary?
+        vd = d * (m/ave) - ave_d * dr  # vd = proportional borrow from co-projected m
+        # proj_m = m-vd, no generic rdn~ave_d?
         if vd > 0:
             for L in L_:
                 L.root_ = [frame]; L.extH = CH(); L.rimt = [[],[]]
-            lN_,lL_,md = comp_link_(L_)  # comp new L_, root.link_ was compared in root-forming for alt clustering
-            vd *= md / ave  # no full et?
+            lN_,lL_,md = comp_link_(L_)  # no et, comp new L_, root.link_ was compared in root-forming for alt clustering
+            vd *= md / ave
             frame.derH.append_(CH().add_H([L.derH for L in lL_]))  # dfork
             # recursive der+ eval_: cost > ave_match, add by feedback if < _match?
         else:
@@ -100,44 +99,31 @@ def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.
 
 '''
  Connectivity clustering terminates at effective contours: alt_Gs, beyond which cross-similarity is not likely to continue. 
- Next cross-comp is discontinuous and global, thus medoid-based, for well-defined (stable and likely recurrent) clusters.
+ Next cross-comp is discontinuous and should be selective for well-defined clusters: stable and likely recurrent.
  
- So connectivity clustering by transitive similarity is a generative phase, forming new graphs with derivatives in derH, 
- while medoid clustering purely by similarity is a compressive phase: no new params and composition levels are formed.
+ Such exemplar selection is by global similarity in centroid clustering, vs. transitive similarity in connectivity clustering.
+ It's a compressive learning phase, while connectivity clustering is generative, forming new derivatives and composition levels.
  
- Med_cluster may be extended, but only its exemplar node (with max m to medoid) will be a sample for next cross-comp.
- Other nodes interactions can be predicted from the exemplar, they are supposed to be the same type of objects. 
+ Centroid clusters may be extended, but only their exemplars will be cross-compared on the next connectivity clustering level.
+ Other nodes in the cluster can be predicted from the exemplar, they are the same type of objects. 
 '''
 def get_exemplar_(frame):
 
-    def comp_cN(_N, N):  # compute match without new derivatives: relation to the medoid is not directional
+    def comp_cN(_N, N):  # compute match without new derivatives: global cross-comp is not directional
 
         rn = _N.n / N.n
         mL = min(len(_N.node_),len(N.node_)) - ave_L
         mA = comp_area(_N.box, N.box)[0]
-        mLat = comp_latuple(_N.latuple,N.latuple,rn,fagg=1)[1][0]
+        mLat = comp_latuple(_N.latuple, N.latuple, rn,fagg=1)[1][0]
         mLay = comp_md_(_N.mdLay[0], N.mdLay[0], rn)[1][0]
-        mH = _N.derH.comp_H(N.derH, rn).Et[0] if _N.derH and N.derH else 0
-
-        return mL + mA + mLat + mLay + mH
-
-    def medoid(N_):  # sum and average nodes
-
-        N = CG()
-        for n, m in N_:
-            N.n += n.n; N.rng = n.rng; N.aRad += n.aRad
-            N.box = extend_box(N.box, n.box)
-            N.latuple += n.latuple; N.mdLay += n.mdLay
-            N.derH.add_H(n.derH); N.extH.add_H(n.extH)
-        # get averages:
-        k = len(N_)
-        N.n /= k; N.latuple /= k; N.mdLay /= k; N.aRad /= k; N.derH.norm_(k)  # derH/= k
-        return N
+        mderH = _N.derH.comp_H(N.derH, rn).Et[0] if _N.derH and N.derH else 0
+        # comp node_?
+        # comp alt_graph_, from converted adjacent flat blobs?
+        return mL + mA + mLat + mLay + mderH
 
     def xcomp_(N_):  # initial global cross-comp
+        for g in N_: g.M = 0  # setattr
 
-        for g in N_:  # setattr
-            g.M = 0
         for _G, G in combinations(N_, r=2):
             rn = _G.n/G.n
             if rn > ave_rn: continue  # scope disparity
@@ -147,57 +133,71 @@ def get_exemplar_(frame):
                 if vM > 0:
                     g.perim.add((_g,M))  # loose match
                     if vM > ave:
-                        g.crim.add((_g,M))  # strict match
+                        g.Rim.add((_g,M))  # strict match
                         g.M += M
+
+    def centroid(node_):  # sum and average Rim nodes
+
+        C = CG()
+        for n,_ in node_:
+            C.n += n.n; C.rng = n.rng; C.aRad += n.aRad; C.box = extend_box(N.box, n.box)
+            C.latuple += n.latuple; C.mdLay += n.mdLay; C.derH.add_H(n.derH); C.extH.add_H(n.extH)
+        # get averages:
+        k = len(node_); C.n /= k; C.latuple /= k; C.mdLay /= k; C.aRad /= k; C.derH.norm_(k)  # derH/= k
+        return C
 
     def prune_overlap(N_):  # select Ns with M > ave * Mr
 
         exemplar_ = []
         for N in N_:
-            for _N,m in N.crim:
+            for ref in N.Rim:
+                _N,_m = ref
                 if N.M < _N.M:
-                    N.M -= m  # exclusive representation, vs. N.Mr+=1?
+                    N.M -= _m  # Rim is exclusive, vs N.Mr+=1?
+                    for _ref in copy(_N.Rim):
+                        if _ref[0] is N:  # reciprocal to ref
+                            _N.Rim.remove(ref); N.M-=_m; break
             if N.M > ave:
+                if N.M > ave*10:
+                    centroid_cluster(N)  # refine N.Rim
                 exemplar_ += [N]
 
         return exemplar_
 
-    def refine_(exemplar):
-        _node_, _peri_, _M = exemplar.crim, exemplar.perim, exemplar.M
-        dM = ave + 1
-        while dM > ave:
-            node_, peri_, M = set(), set(), 0
-            mN = medoid(_node_)
-            for ref in _peri_:
-                _N,_m = ref
-                m = comp_cN(mN,_N)
-                M += m
-                if m > ave:
-                    peri_.add((_N,_m))
-                    if m > ave * 20:
-                        node_.add((_N,_m))
-                        for _ref in _N.crim:  # crims are exclusive
-                            if _ref is ref:
-                                _N.crim.remove(ref); _N.M -= _m; break
-            dM = M - _M
-            _node_,_peri_,_M = node_,peri_,M
+    def centroid_cluster(N):
+        _Rim,_perim,_M = N.Rim, N.perim, N.M
 
-        exemplar.crim, exemplar.perim, exemplar.M = list(node_), list(peri_), M  # final cluster
+        dM = ave + 1  # refine Rim to convergence:
+        while dM > ave:
+            Rim, perim, M = set(), set(), 0
+            C = centroid(_Rim)
+            for ref in _perim:
+                _N,m = ref
+                mm = comp_cN(C,_N)
+                if mm > ave:
+                    perim.add((_N,m))
+                    if mm > ave * 20:  # copy ref from perim to Rim, if not in stronger _N.Rim
+                        fRim = 1
+                        for _ref in copy(_N.Rim):
+                            if _ref[0] is N:  # reciprocal to ref
+                                fRim = 0
+                                if N.M > _N.M:  # move ref from _N.Rim to N.Rim
+                                    _N.Rim.remove(_ref); _N.M -= m
+                                    fRim = 1; break
+                        if fRim:  # not in exclusive stronger _N.Rim
+                            Rim.add(ref); M += m
+            dM = M - _M
+            _node_,_peri_,_M = Rim, perim, M
+
+        N.Rim, N.perim, N.M = list(Rim),list(perim), M  # final cluster
 
     N_ = frame.subG_  # should be complemented graphs: m-type core + d-type contour
     for N in N_:
-        N.perim = set(); N.crim = set(); N.root_ += [frame]; N.M = 0
+        N.perim = set(); N.Rim = set(); N.root_ += [frame]; N.M = 0
     xcomp_(N_)
-    exemplar_ = prune_overlap(N_)  # select strong Ns
-    subG_ = set()
-    for N in exemplar_:
-        if N.M > ave * 10:  # else keep N.crim
-            refine_(N)  # N.crim = N.perim exclusively clustered by N.crim medoid
-        if N.M:  # has crim, pruned in refine_
-            subG_.add(N)
-    frame.subG_ = list(subG_)
+    frame.subG_ = prune_overlap(N_)  # select strong Ns as exemplars of their Rim
     if len(frame.subG_) > ave_L:
-        agg_cluster_(frame)  # alternating connectivity clustering per exemplar, more selective
+        agg_cluster_(frame)  # selective connectivity clustering between exemplars
 
 
 if __name__ == "__main__":

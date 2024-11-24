@@ -163,6 +163,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
                  subG_=None, subL_=None, minL=None):
         super().__init__()
         G.n = n  # last layer?
+        G.M = 0  # Rim val for centroid Gs
         G.fd = 0 if fd else fd  # 1 if cluster of Ls | lGs?
         G.rng = rng
         G.root_ = [] if root_ is None else root_  # in cluster_N_, same nodes may be in multiple dist layers
@@ -285,8 +286,8 @@ def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et
         _G.add, G.add = 0, 0
         _Gp_ += [(_G,G, rn, dy,dx, radii, dist)]
     icoef = .15  # internal M proj_val / external M proj_val
-    rng = 1  # len N__
-    N_,L_,ET = set(),[], np.zeros(4)
+    rng = 1
+    N_,L_,ET = set(),[],np.zeros(4)
     _Gp_ = sorted(_Gp_, key=lambda x: x[-1])  # sort by dist, shortest pairs first
     while True:  # prior vM
         Gp_,Et = [], np.zeros(4)
@@ -297,6 +298,7 @@ def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et
             if _nrim & nrim:  # indirectly connected Gs,
                 continue     # no direct match priority?
             M = (_G.mdLay[1][0]+G.mdLay[1][0]) *icoef**2 + (_G.derH.Et[0]+G.derH.Et[0])*icoef + (_G.extH.Et[0]+G.extH.Et[0])
+            M += (_G.M + G.M) * icoef  # for centroid Gs
             # comp if < max distance of likely matches *= prior G match * radius:
             if dist < max_dist * (radii * icoef**3) * M:
                 Link = CL(nodet=[_G,G], angle=[dy,dx], dist=dist, box=extend_box(G.box,_G.box))
@@ -408,7 +410,8 @@ def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=
         elay.append_(dderH, flat=1)
     elif _N.derH: elay.H += [_N.derH.copy_(root=elay)]  # one empty derH
     elif N.derH: elay.H += [N.derH.copy_(root=elay,rev=1)]
-    # spec: comp_node_(node_|link_), combinatorial, node_ may be nested with rng-)agg+, use graph similarity search?
+    # spec: comp_node_(node_|link_), combinatorial, node_ may be nested with rng-)agg+, graph similarity search?
+    # comp alt_graph_: initially alternating PPds | dPs?
     # new lay in root G.derH:
     Link.derH = elay; elay.root = Link; Link.n = min(_N.n,N.n); Link.nodet = [_N,N]; Link.yx = np.add(_N.yx,N.yx) /2
     # preset angle, dist
