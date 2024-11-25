@@ -5,7 +5,7 @@ from copy import copy, deepcopy
 from itertools import combinations
 from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
 from comp_slice import comp_latuple, comp_md_
-from trace_edge import comp_node_, comp_link_, sum2graph, get_rim, CH, CG, ave, ave_d, ave_L, vectorize_root, comp_area, extend_box, ave_rn
+from trace_edge import comp_N, comp_node_, comp_link_, sum2graph, get_rim, CH, CG, ave, ave_d, ave_L, vectorize_root, comp_area, extend_box, ave_rn
 '''
 Cross-compare and cluster edge blobs within a frame,
 potentially unpacking their node_s first,
@@ -23,27 +23,24 @@ def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, rec
             if len(G_) > ave_L:
                 get_exemplar_(frame)  # may call centroid clustering
     '''
-    cross-comp converted edges, then GGs, GGGs, etc, interlaced with exemplar selection: '''
-    iN_ = []
-    for N in frame.subG_:
-        iN_ += [N] if N.derH.Et[0] < ave * N.derH.Et[2] else N.subG_  # eval to unpack top N
-
-    N_,L_,(m,d,mr,dr) = comp_node_(iN_)  # cross-comp exemplars, extrapolate to exemplar.Rim?
+    cross-comp converted edges, then GGs, GGGs, etc, interlaced with exemplar selection: 
+    '''
+    N_,L_,(m,d,mr,dr) = comp_node_(frame.subG_)  # exemplars, extrapolate to their Rims?
     if m > ave * mr:
         mlay = CH().add_H([L.derH for L in L_])  # mfork, else no new layer
         frame.derH = CH(H=[mlay], md_t=deepcopy(mlay.md_t), Et=copy(mlay.Et), n=mlay.n, root=frame); mlay.root=frame.derH  # init
         vd = d * (m/ave) - ave_d * dr  # vd = proportional borrow from co-projected m
-        # proj_m = m-vd, no generic rdn~ave_d?
+        # proj_m = m - vd, no generic rdn~ave_d?
         if vd > 0:
             for L in L_:
                 L.root_ = [frame]; L.extH = CH(); L.rimt = [[],[]]
-            lN_,lL_,md = comp_link_(L_)  # no et, comp new L_, root.link_ was compared in root-forming for alt clustering
+            lN_,lL_,md = comp_link_(L_)  # comp new L_, root.link_ was compared in root-forming for alt clustering
             vd *= md / ave
             frame.derH.append_(CH().add_H([L.derH for L in lL_]))  # dfork
             # recursive der+ eval_: cost > ave_match, add by feedback if < _match?
         else:
             frame.derH.H += [[]]  # empty to decode rng+|der+, n forks per layer = 2^depth
-        # + aggLays and derLays, each calls exemplar selection:
+        # + aggLays and derLays, each has exemplar selection:
         cluster_eval(frame, N_, fd=0)
         if vd > 0: cluster_eval(frame, lN_, fd=1)
 
@@ -131,9 +128,9 @@ def get_exemplar_(frame):
             vM = M - ave
             for _g,g in (_G,G),(G,_G):
                 if vM > 0:
-                    g.perim.add((_g,M))  # loose match
+                    g.perim.add((_g,M))  # loose match ref: unilateral link
                     if vM > ave:
-                        g.Rim.add((_g,M))  # strict match
+                        g.Rim.add((_g,M))  # strict match ref
                         g.M += M
 
     def centroid(node_):  # sum and average Rim nodes
@@ -146,17 +143,28 @@ def get_exemplar_(frame):
         k = len(node_); C.n /= k; C.latuple /= k; C.mdLay /= k; C.aRad /= k; C.derH.norm_(k)  # derH/= k
         return C
 
-    def prune_overlap(N_):  # select Ns with M > ave * Mr
+    def eval_overlap(N):
 
+        for ref in N.Rim:
+            _N, _m = ref
+            for _ref in copy(_N.Rim):
+                if _ref[0] is N:  # reciprocal to ref
+                    dy, dx = np.subtract(_N.yx, N.yx); dist = np.hypot(dy, dx)
+                    Link = CL(nodet=[_N,N], angle=[dy,dx], dist=dist, box=extend_box(N.box,_N.box))
+                    m,d,mr,dr = comp_N(Link, _N.n/N.n)
+                    if d < ave_d * dr:  # probably wrong eval
+                        # exemplars are similar, remove min
+                        minN,r,v = (_N,_ref,_m) if N.M > _N.M else (N,ref,m)
+                        minN.Rim.remove(r); minN.M -= v
+                    else:  # exemplars are different, keep both
+                        _N.extH.add_H(Link), N.extH.add_H(Link)
+                    break
+
+    def prune_overlap(N_):  # select Ns with M > ave * Mr
         exemplar_ = []
+
         for N in N_:
-            for ref in N.Rim:
-                _N,_m = ref
-                if N.M < _N.M:
-                    N.M -= _m  # Rim is exclusive, vs N.Mr+=1?
-                    for _ref in copy(_N.Rim):
-                        if _ref[0] is N:  # reciprocal to ref
-                            _N.Rim.remove(ref); N.M-=_m; break
+            eval_overlap(N)
             if N.M > ave:
                 if N.M > ave*10:
                     centroid_cluster(N)  # refine N.Rim
@@ -164,6 +172,7 @@ def get_exemplar_(frame):
 
         return exemplar_
 
+    # not updated with eval overlap:
     def centroid_cluster(N):
         _Rim,_perim,_M = N.Rim, N.perim, N.M
 
@@ -184,7 +193,7 @@ def get_exemplar_(frame):
                                 if N.M > _N.M:  # move ref from _N.Rim to N.Rim
                                     _N.Rim.remove(_ref); _N.M -= m
                                     fRim = 1; break
-                        if fRim:  # not in exclusive stronger _N.Rim
+                        if fRim:  # not in stronger _N.Rim: strict link is represented in only one of its Ns
                             Rim.add(ref); M += m
             dM = M - _M
             _node_,_peri_,_M = Rim, perim, M

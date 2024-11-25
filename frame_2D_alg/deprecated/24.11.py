@@ -254,4 +254,9 @@ def refine_(clust):
     if len(frame.clust_) > ave_L:
         agg_recursion(frame)  # alternating connectivity clustering
 
+    iN_ = []
+    for N in frame.subG_:
+        iN_ += [N] if N.derH.Et[0] < ave * N.derH.Et[2] else N.subG_  # eval to unpack top N
+
+    iN_ = [N if N.derH.Et[0] < ave * N.derH.Et[2] else N.subG_ for N in frame.subG_]  # eval to unpack top N
 

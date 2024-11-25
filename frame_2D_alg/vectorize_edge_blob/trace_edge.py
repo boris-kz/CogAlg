@@ -302,7 +302,7 @@ def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et
             # comp if < max distance of likely matches *= prior G match * radius:
             if dist < max_dist * (radii * icoef**3) * M:
                 Link = CL(nodet=[_G,G], angle=[dy,dx], dist=dist, box=extend_box(G.box,_G.box))
-                et = comp_N(Link, rn, rng)
+                et = comp_N(Link, rn)
                 L_ += [Link]  # include -ve links
                 if et is not None:
                     N_.update({_G, G})
@@ -340,7 +340,7 @@ def comp_link_(iL_):  # comp CLs via directional node-mediated link tracing: der
                     dy,dx = np.subtract(_L.yx, L.yx)
                     Link = CL(nodet=[_L,L], angle=[dy,dx], dist=np.hypot(dy,dx), box=extend_box(_L.box, L.box)); Link.med=med
                     # comp L,_L:
-                    et = comp_N(Link, rn, rng=med, dir = -1 if rev else 1)  # d = -d if L is reversed relative to _L
+                    et = comp_N(Link, rn, dir = -1 if rev else 1)  # d = -d if L is reversed relative to _L
                     LL_ += [Link]  # include -ves, link order: nodet < L < rimt, mN.rim || L
                     if et is not None:
                         out_L_.update({_L,L}); L_.update({_L,L}); Et += et
@@ -383,7 +383,7 @@ def comp_area(_box, box):
     y0, x0, yn, xn = box;   A = (yn - y0) * (xn - x0)
     return _A-A, min(_A,A) - ave_L**2  # mA, dA
 
-def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
+def comp_N(Link, rn, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
 
     fd = dir is not None  # compared links have binary relative direction
     dir = 1 if dir is None else dir  # convert to numeric
@@ -416,7 +416,7 @@ def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=
     Link.derH = elay; elay.root = Link; Link.n = min(_N.n,N.n); Link.nodet = [_N,N]; Link.yx = np.add(_N.yx,N.yx) /2
     # preset angle, dist
     Et = elay.Et
-    if Et[0] > ave * Et[2] * (rng+1):
+    if Et[0] > ave * Et[2]:
         for rev, node in zip((0,1), (N,_N)):  # reverse Link direction for _N
             if fd: node.rimt[1-rev] += [(Link,rev)]  # opposite to _N,N dir
             else:  node.rim += [(Link, rev)]
