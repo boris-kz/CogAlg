@@ -51,6 +51,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
     name = "H"
     def __init__(He, node_=None, md_t=None, n=0, Et=None, H=None, root=None, i=None, i_=None):
         super().__init__()
+        He.altH = CH()  # summed altLays
         He.node_ = [] if node_ is None else node_  # concat bottom nesting order if CG, may be redundant to G.node_
         He.md_t = [] if md_t is None else md_t  # derivation layer in H
         He.H = [] if H is None else H  # nested derLays | md_ in md_C, empty in bottom layer
@@ -200,6 +201,7 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         l.angle = np.zeros(2) if angle is None else angle  # dy,dx between nodet centers
         l.dist = 0 if dist is None else dist  # distance between nodet centers
         l.box = [] if box is None else box  # sum nodet, not needed?
+        l.yx = [0,0]
         l.Vt = np.zeros(2)  # for rim-overlap modulated segmentation, init derH.Et[:2]
         l.H_ = [] if H_ is None else H_  # if agg++| sub++?
         # add med, rimt, elay | extH in der+
@@ -298,15 +300,12 @@ def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et
             if _nrim & nrim:  # indirectly connected Gs,
                 continue     # no direct match priority?
             M = (_G.mdLay[1][0]+G.mdLay[1][0]) *icoef**2 + (_G.derH.Et[0]+G.derH.Et[0])*icoef + (_G.extH.Et[0]+G.extH.Et[0])
-            M += (_G.M + G.M) * icoef  # for centroid Gs
-            # comp if < max distance of likely matches *= prior G match * radius:
+            M += (_G.M + G.M) * icoef  # if centroids
             if dist < max_dist * (radii * icoef**3) * M:
-                Link = CL(nodet=[_G,G], angle=[dy,dx], dist=dist, box=extend_box(G.box,_G.box))
-                et = comp_N(Link, rn)
-                L_ += [Link]  # include -ve links
-                if et is not None:
-                    N_.update({_G, G})
-                    Et += et; _G.add,G.add = 1,1
+                Link = comp_N(_G,G, rn,angle=[dy,dx],dist=dist)
+                L_ += [Link]; m,mr,d,dr = Link.et  # include -ve links
+                if m > ave * mr:
+                    N_.update({_G,G}); Et += Link.et; _G.add,G.add = 1,1
             else:
                 Gp_ += [Gp]  # re-evaluate not-compared pairs with one incremented N.M
         ET += Et
@@ -337,13 +336,12 @@ def comp_link_(iL_):  # comp CLs via directional node-mediated link tracing: der
                 for _L, rev in mL_:  # rev is relative to L
                     rn = _L.n / L.n
                     if rn > ave_rn: continue  # scope disparity
-                    dy,dx = np.subtract(_L.yx, L.yx)
-                    Link = CL(nodet=[_L,L], angle=[dy,dx], dist=np.hypot(dy,dx), box=extend_box(_L.box, L.box)); Link.med=med
-                    # comp L,_L:
-                    et = comp_N(Link, rn, dir = -1 if rev else 1)  # d = -d if L is reversed relative to _L
-                    LL_ += [Link]  # include -ves, link order: nodet < L < rimt, mN.rim || L
-                    if et is not None:
-                        out_L_.update({_L,L}); L_.update({_L,L}); Et += et
+                    dy,dx = np.subtract(_L.yx,L.yx)
+                    Link = comp_N(_L,L, rn,angle=[dy,dx],dist=np.hypot(dy,dx), dir = -1 if rev else 1)  # d = -d if L is reversed relative to _L
+                    Link.med = med
+                    LL_ += [Link]; m,mr,d,dr = Link.et  # include -ves, link order: nodet < L < rimt, mN.rim || L
+                    if m > ave * mr:
+                        out_L_.update({_L,L}); L_.update({_L,L}); Et += Link.et
         if not any(L_): break
         # extend mL_t per last med_L
         ET += Et; Med = med + 1  # med increases process costs
@@ -383,11 +381,11 @@ def comp_area(_box, box):
     y0, x0, yn, xn = box;   A = (yn - y0) * (xn - x0)
     return _A-A, min(_A,A) - ave_L**2  # mA, dA
 
-def comp_N(Link, rn, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
+def comp_N(_N,N, rn, angle=None, dist=None, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
 
     fd = dir is not None  # compared links have binary relative direction
     dir = 1 if dir is None else dir  # convert to numeric
-    _N,N = Link.nodet  # comp externals:
+    # comp externals:
     if fd:
         _L, L = _N.dist, N.dist;  dL = _L-L; mL = min(_L,L) - ave_L  # direct match
         mA,dA = comp_angle(_N.angle, [d*dir for d in N.angle])  # rev 2nd link in llink
@@ -411,18 +409,20 @@ def comp_N(Link, rn, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
     elif _N.derH: elay.H += [_N.derH.copy_(root=elay)]  # one empty derH
     elif N.derH: elay.H += [N.derH.copy_(root=elay,rev=1)]
     # spec: comp_node_(node_|link_), combinatorial, node_ may be nested with rng-)agg+, graph similarity search?
-    # comp alt_graph_: initially alternating PPds | dPs?
-    # new lay in root G.derH:
-    Link.derH = elay; elay.root = Link; Link.n = min(_N.n,N.n); Link.nodet = [_N,N]; Link.yx = np.add(_N.yx,N.yx) /2
-    # preset angle, dist
     Et = elay.Et
+    if _N.altG and N.altG:  # eval M?
+        altLink = comp_N(_N.altG, N.altG, _N.altG.n/N.altG.n)  # no angle,dist, init alternating PPds | dPs?
+        elay.altH = altLink.derH  # add sum_G([g for g in _N.alt_graph_]) to sum2graph?
+        Et += elay.altH.Et
+    Link = CL(nodet=[_N,N],derH=elay, n=min(_N.n,N.n),yx=np.add(_N.yx,N.yx)/2, angle=angle,dist=dist,box=extend_box(N.box,_N.box))
     if Et[0] > ave * Et[2]:
+        elay.root = Link
         for rev, node in zip((0,1), (N,_N)):  # reverse Link direction for _N
             if fd: node.rimt[1-rev] += [(Link,rev)]  # opposite to _N,N dir
             else:  node.rim += [(Link, rev)]
             node.extH.add_H(Link.derH, root=node.extH)
             # flat
-        return Et
+    return Link
 
 def get_rim(N,fd): return N.rimt[0] + N.rimt[1] if fd else N.rim  # add nesting in cluster_N_?
 
@@ -455,6 +455,7 @@ def sum2graph(root, grapht, fd, nest):  # sum node and link params into graph, a
     graph.aRad = sum([np.hypot( *np.subtract(yx, N.yx)) for N in node_]) / L
     if fd:
         # assign alt graphs from d graph, after both linked m and d graphs are formed
+        # add sum_G for G.alt_graph_, change to G.altG, init altG_
         for node in node_:  # CG or CL
             mgraph = node.root_[-1]
             if mgraph:

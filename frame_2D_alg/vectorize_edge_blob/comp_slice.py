@@ -59,7 +59,6 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
     def __bool__(l):
         return any(l.mdLay[0])  # l.mdLay.H
 
-# reframe for np.array?
 def comp_md_(_md_, md_, rn=1, dir=1):  # replace dir with rev?
 
     vm, vd, rm, rd = 0,0,0,0
@@ -82,7 +81,7 @@ def vectorize_root(frame):
     for blob in blob_:
         if not blob.sign and blob.G > aveG * blob.root.rdn:
             edge = slice_edge(blob)
-            if edge.G*(len(edge.node_) - 1) > ave_PPm:  # eval PP, rdn=1
+            if edge.G*(len(edge.P_) - 1) > ave_PPm:  # eval PP, rdn=1
                 comp_slice(edge)
 
 def comp_slice(edge):  # root function
@@ -101,7 +100,7 @@ def comp_slice(edge):  # root function
             Et = mdLay[1]
             if len(link_) > ave_L and Et[0] >PP_aves[0] * Et[2]:
                 comp_link_(PPm)
-                PPm[2] = (form_PP_(PPm, link_))  # add PPds within PPm link_
+                PPm[2] = form_PP_(PPm, link_)  # add PPds within PPm link_
             mdLay = PPm[3]
         else:
             mdLay = PPm.mdLay  # PPm is actually CP
@@ -114,38 +113,10 @@ def comp_P_(edge):  # form links from prelinks
         for _P in _pre_:  # prelinks
             dy,dx = np.subtract(P.yx,_P.yx) # dy,dx between node centers
             if abs(dy)+abs(dx) <= edge.rng * 2:  # <max Manhattan distance
-                link = comp_P(_P,P, angle=[dy,dx], distance=np.hypot(dy,dx),fder=0)
+                link = comp_P(_P,P, angle=[dy,dx], distance=np.hypot(dy,dx))
                 if link:
                     P.rim += [link]
     del edge.pre__
-
-def comp_P(_P,P, angle=None, distance=None, fder=0):  # comp dPs if fd else Ps
-
-    fd = isinstance(P,CdP)
-    _y,_x = _P.yx; y,x = P.yx
-    if fd:
-        # der+: comp dPs
-        rn = _P.mdLay[2] / P.mdLay[2]  # mdLay.n
-        derLay = comp_md_(_P.mdLay[0], P.mdLay[0], rn=rn)  # comp md_latuple: H
-        angle = np.subtract([y,x],[_y,_x])  # dy,dx of node centers
-        distance = np.hypot(*angle)  # between node centers
-    else:
-        # rng+: comp Ps
-        rn = len(_P.dert_) / len(P.dert_)
-        md_ = comp_latuple(_P.latuple, P.latuple, rn)
-        vm = sum(md_[::2]); vd = sum(np.abs(md_[1::2]))
-        rm = 1 + vd > vm; rd = 1 + vm >= vd
-        n = (len(_P.dert_)+len(P.dert_)) / 2  # der value = ave compared n?
-        derLay = np.array([md_, np.array([vm,vd,rm,rd]), n], dtype=object)
-    # get aves:
-    latuple = (_P.latuple + P.latuple) /2
-    link = CdP(nodet=[_P,P], mdLay=derLay, angle=angle, span=distance, yx=[(_y+y)/2,(_x+x)/2], latuple=latuple)
-    # if v > ave * r:
-    Et = link.mdLay[1]
-    if Et[fder] > aves[fder] * Et[fder+2]:
-        P.lrim += [link]; _P.lrim += [link]
-        P.prim +=[_P]; _P.prim +=[P]
-        return link
 
 def comp_link_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
@@ -154,15 +125,46 @@ def comp_link_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
         if dP.mdLay[1][1] > aves[1]:
             for _dP in dP.nodet[0].rim:  # link.nodet is CP # for nmed, _rim_ in enumerate(dP.nodet[0].rim_):
                 if _dP not in link_: continue  # skip removed node links
-                comp_P(_dP,dP, fder=1)
+                comp_dP(_dP,dP)
                 # if dlink: dlink.nmed = nmed  # link mediation order, not used?
+
+def comp_P(_P,P, angle, distance):
+
+    rn = len(_P.dert_) / len(P.dert_)
+    md_ = comp_latuple(_P.latuple, P.latuple, rn)
+    vm = sum(md_[::2]); vd = sum(np.abs(md_[1::2]))
+    rm = 1 + vd > vm; rd = 1 + vm >= vd
+    n = (len(_P.dert_)+len(P.dert_)) / 2  # der value = ave compared n?
+    derLay = np.array([md_, np.array([vm,vd,rm,rd]), n], dtype=object)
+
+    return form_dP(_P, P, derLay, angle, distance, fd=0)
+
+def comp_dP(_dP, dP):
+
+    rn = _dP.mdLay[2] / dP.mdLay[2]  # mdLay.n
+    derLay = comp_md_(_dP.mdLay[0], dP.mdLay[0], rn=rn)  # comp md_latuple: H
+    angle = np.subtract(dP.yx,_dP.yx)  # dy,dx of node centers
+    distance = np.hypot(*angle)  # between node centers
+
+    return form_dP(_dP, dP, derLay, angle, distance, fd=1)
+
+def form_dP(_node, node, derLay, angle, distance, fd):
+    # get aves:
+    latuple = (_node.latuple + node.latuple) /2
+    link = CdP(nodet=[_node,node], mdLay=derLay, angle=angle, span=distance,
+               yx=np.add(_node.yx, node.yx)/2, latuple=latuple)
+    # if v > ave * r:
+    Et = link.mdLay[1]
+    if Et[fd] > aves[fd] * Et[fd+2]:
+        node.lrim += [link]; _node.lrim += [link]
+        node.prim +=[_node]; _node.prim +=[node]
+        return link
 
 def form_PP_(root, iP_):  # form PPs of dP.valt[fd] + connected Ps val
 
     PPt_ = []
     for P in iP_: P.merged = 0
-
-    for P in iP_:  # for dP in link_ if fd
+    for P in iP_:  # dP in link_ if fd
         if P.merged: continue
         if not P.lrim:
             PPt_ += [P]; continue
@@ -310,7 +312,7 @@ if __name__ == "__main__":
                     ])
                 )
             nodet_set.add((_node.id, node.id))
-            assert _node.yx < node.yx  # verify that link is up-link
+            assert (*_node.yx,) < (*node.yx,)  # verify that link is up-link
             (_y, _x), (y, x) = _node.yx - yx0, node.yx - yx0
             style = "o-r" if isinstance(_node, CdP) else "-k"
             plt.plot([_x, x], [_y, y], style)

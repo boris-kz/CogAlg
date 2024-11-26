@@ -260,3 +260,68 @@ def refine_(clust):
 
     iN_ = [N if N.derH.Et[0] < ave * N.derH.Et[2] else N.subG_ for N in frame.subG_]  # eval to unpack top N
 
+
+def comp_P(_P,P, angle=None, distance=None, fder=0):  # comp dPs if fd else Ps
+
+    fd = isinstance(P,CdP)
+    _y,_x = _P.yx; y,x = P.yx
+    if fd:
+        # der+: comp dPs
+        rn = _P.mdLay[2] / P.mdLay[2]  # mdLay.n
+        derLay = comp_md_(_P.mdLay[0], P.mdLay[0], rn=rn)  # comp md_latuple: H
+        angle = np.subtract([y,x],[_y,_x])  # dy,dx of node centers
+        distance = np.hypot(*angle)  # between node centers
+    else:
+        # rng+: comp Ps
+        rn = len(_P.dert_) / len(P.dert_)
+        md_ = comp_latuple(_P.latuple, P.latuple, rn)
+        vm = sum(md_[::2]); vd = sum(np.abs(md_[1::2]))
+        rm = 1 + vd > vm; rd = 1 + vm >= vd
+        n = (len(_P.dert_)+len(P.dert_)) / 2  # der value = ave compared n?
+        derLay = np.array([md_, np.array([vm,vd,rm,rd]), n], dtype=object)
+    # get aves:
+    latuple = (_P.latuple + P.latuple) /2
+    link = CdP(nodet=[_P,P], mdLay=derLay, angle=angle, span=distance, yx=[(_y+y)/2,(_x+x)/2], latuple=latuple)
+    # if v > ave * r:
+    Et = link.mdLay[1]
+    if Et[fder] > aves[fder] * Et[fder+2]:
+        P.lrim += [link]; _P.lrim += [link]
+        P.prim +=[_P]; _P.prim +=[P]
+        return link
+
+def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, recursion
+
+    def cluster_eval(frame, N_, fd):
+
+        pL_ = {l for n in N_ for l,_ in get_rim(n, fd)}
+        if len(pL_) > ave_L:
+            G_ = cluster_N_(frame, pL_, fd)  # optionally divisive clustering
+            frame.subG_ = G_
+            if len(G_) > ave_L:
+                get_exemplar_(frame)  # may call centroid clustering
+    '''
+    cross-comp converted edges, then GGs, GGGs, etc, interlaced with exemplar selection: 
+    D is borrowed from co-projected M, not independent.
+    So Et should be [proj_m, proj_d, rdn], where
+    proj_d = abs d * (m/ave): must be <m,
+    proj_m = m - proj_d,
+    rdn is external, common for both m and d
+    '''
+    N_,L_,(m,d,mr,dr) = comp_node_(frame.subG_)  # exemplars, extrapolate to their Rims?
+    if m > ave * mr:
+        mlay = CH().add_H([L.derH for L in L_])  # mfork, else no new layer
+        frame.derH = CH(H=[mlay], md_t=deepcopy(mlay.md_t), Et=copy(mlay.Et), n=mlay.n, root=frame); mlay.root=frame.derH  # init
+        vd = d * (m/ave) - ave_d * dr  # vd = proportional borrow from co-projected m
+        # proj_m = m - d * (m/ave): must be <m, no generic rdn?
+        if vd > 0:
+            for L in L_:
+                L.root_ = [frame]; L.extH = CH(); L.rimt = [[],[]]
+            lN_,lL_,md = comp_link_(L_)  # comp new L_, root.link_ was compared in root-forming for alt clustering
+            vd *= md / ave
+            frame.derH.append_(CH().add_H([L.derH for L in lL_]))  # dfork
+            # recursive der+ eval_: cost > ave_match, add by feedback if < _match?
+        else:
+            frame.derH.H += [[]]  # empty to decode rng+|der+, n forks per layer = 2^depth
+        # + aggLays and derLays, each has exemplar selection:
+        cluster_eval(frame, N_, fd=0)
+        if vd > 0: cluster_eval(frame, lN_, fd=1)
