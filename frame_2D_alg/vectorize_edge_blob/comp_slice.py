@@ -32,7 +32,7 @@ len prior root_ sorted by G is root.rdn, to eval for inclusion in PP or start ne
 '''
 
 ave_dI = ave_inv = 20  # ave inverse m, change to Ave from the root intra_blob?
-ave = 5  # ave direct m, change to Ave_min from the root intra_blob?
+ave, aved_d = 5, 5  # ave direct m, change to Ave_min from the root intra_blob?
 aves = ave_mI, ave_mG, ave_mM, ave_mMa, ave_mA, ave_mL = ave, 10, 2, .1, .2, 2
 PP_aves = ave_PPm, ave_PPd = 50, 50
 P_aves = ave_Pm, ave_Pd = 10, 10
@@ -41,17 +41,18 @@ ave_L = 5
 
 class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
     name = "dP"
-    def __init__(l, nodet=None, mdLay=None, Et=None, root=None, span=None, angle=None, yx=None, latuple=None):
+
+    def __init__(l, nodet, span, angle, yx, mdLay=None, latuple=None, Et=None, root=None):
         super().__init__()
 
-        l.nodet = [] if nodet is None else nodet  # e_ in kernels, else replaces _node,node: not used in kernels?
+        l.nodet = nodet  # e_ in kernels, else replaces _node,node: not used in kernels?
         l.latuple = np.array([.0,.0,.0,.0,.0,np.zeros(2)], dtype=object) if latuple is None else latuple  # sum node_
-        l.mdLay = np.array([np.zeros(12),np.zeros(4),0],dtype=object) if mdLay is None else mdLay
-        l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
+        l.mdLay = np.array([np.zeros(12),np.zeros(2),0],dtype=object) if mdLay is None else mdLay
+        l.angle = angle  # dy,dx between node centers
         l.span = span  # distance between node centers
-        l.yx = [0,0] if yx is None else yx  # sum node_
-        l.Et = np.zeros(4) if Et is None else Et
-        l.root = None if root is None else root  # PPds containing dP
+        l.yx = yx  # sum node_
+        l.Et = np.zeros(2) if Et is None else Et
+        l.root = root  # PPds containing dP
         l.nmed = 0  # comp rng: n of mediating Ps between node_ Ps
         l.lrim = []
         l.prim = []
@@ -70,10 +71,10 @@ def comp_md_(_md_, md_, rn=1, dir=1):  # replace dir with rev?
         if (_d < 0) != (d < 0): match = -match  # negate if only one compared is negative
         vm += match - aves[i]  # fixed param set?
         vd += diff
-        rm += vd > vm; rd += vm >= vd
         derLay += [match, diff]  # flat
-
-    return np.array([np.array(derLay, dtype=float), np.array([vm,vd,rm,rd], dtype=float), 1],dtype=object)  # [md_, Et, n]
+    prj_d = abs(vd) * (vm/ave)
+    prj_m = vm - (prj_d / 2)
+    return np.array([np.array(derLay, dtype=float), np.array([prj_m,prj_d], dtype=float), 1],dtype=object)  # [md_, Et, n]
 
 def vectorize_root(frame):
 
@@ -86,9 +87,9 @@ def vectorize_root(frame):
 
 def comp_slice(edge):  # root function
 
-    edge.mdLay = np.array([np.zeros(12), np.zeros(4),0],dtype=object)  # md_, Et, n
+    edge.mdLay = np.array([np.zeros(12), np.zeros(2),0],dtype=object)  # md_, Et, n
     for P in edge.P_:  # add higher links
-        P.mdLay = np.array([np.zeros(12),np.zeros(4),0],dtype=object)  # to accumulate in sum2PP
+        P.mdLay = np.array([np.zeros(12), np.zeros(2),0],dtype=object)  # to accumulate in sum2PP
         P.rim = []; P.lrim = []; P.prim = []
 
     comp_P_(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
@@ -98,7 +99,7 @@ def comp_slice(edge):  # root function
         if isinstance(PPm, list):  # PPt, not CP
             P_, link_, mdLay = PPm[1:4]
             Et = mdLay[1]
-            if len(link_) > ave_L and Et[0] >PP_aves[0] * Et[2]:
+            if len(link_) > ave_L and Et[0] > ave_PPm:
                 comp_link_(PPm)
                 PPm[2] = form_PP_(PPm, link_)  # add PPds within PPm link_
             mdLay = PPm[3]
@@ -133,9 +134,10 @@ def comp_P(_P,P, angle, distance):
     rn = len(_P.dert_) / len(P.dert_)
     md_ = comp_latuple(_P.latuple, P.latuple, rn)
     vm = sum(md_[::2]); vd = sum(np.abs(md_[1::2]))
-    rm = 1 + vd > vm; rd = 1 + vm >= vd
     n = (len(_P.dert_)+len(P.dert_)) / 2  # der value = ave compared n?
-    derLay = np.array([md_, np.array([vm,vd,rm,rd]), n], dtype=object)
+    prj_d = abs(vd) * (vm/ave)
+    prj_m = vm - prj_d / 2
+    derLay = np.array([md_, np.array([prj_m,prj_d]), n], dtype=object)
 
     return form_dP(_P, P, derLay, angle, distance, fd=0)
 
@@ -151,11 +153,10 @@ def comp_dP(_dP, dP):
 def form_dP(_node, node, derLay, angle, distance, fd):
     # get aves:
     latuple = (_node.latuple + node.latuple) /2
-    link = CdP(nodet=[_node,node], mdLay=derLay, angle=angle, span=distance,
-               yx=np.add(_node.yx, node.yx)/2, latuple=latuple)
+    link = CdP(nodet=[_node,node], mdLay=derLay, angle=angle, span=distance, yx=np.add(_node.yx, node.yx)/2, latuple=latuple)
     # if v > ave * r:
     Et = link.mdLay[1]
-    if Et[fd] > aves[fd] * Et[fd+2]:
+    if Et[fd] > aves[fd]:
         node.lrim += [link]; _node.lrim += [link]
         node.prim +=[_node]; _node.prim +=[node]
         return link
@@ -169,12 +170,12 @@ def form_PP_(root, iP_):  # form PPs of dP.valt[fd] + connected Ps val
         if not P.lrim:
             PPt_ += [P]; continue
         _prim_ = P.prim; _lrim_ = P.lrim
-        _P_ = {P}; link_ = set(); Et = np.zeros(4)
+        _P_ = {P}; link_ = set(); Et = np.zeros(2)
         while _prim_:
             prim_,lrim_ = set(),set()
             for _P,_L in zip(_prim_,_lrim_):
                 if _P.merged: continue  # was merged
-                _P_.add(_P); link_.add(_L); Et += _L.mdLay[1]  # _L.mdLay.Et
+                _P_.add(_P); link_.add(_L); Et += _L.mdLay[1]
                 prim_.update(set(_P.prim) - _P_)
                 lrim_.update(set(_P.lrim) - link_)
                 _P.merged = 1
@@ -186,15 +187,13 @@ def form_PP_(root, iP_):  # form PPs of dP.valt[fd] + connected Ps val
 
 def sum2PP(root, P_, dP_):  # sum links in Ps and Ps in PP
 
-    mdLay = np.array([np.zeros(12),np.zeros(4),0], dtype=object)
+    mdLay = np.array([np.zeros(12),np.zeros(2),0], dtype=object)
     latuple = np.array([.0,.0,.0,.0,.0,np.zeros(2)], dtype=object)
     link_, A, S, area, n, box = [],[0,0], 0,0,0, [np.inf,np.inf,0,0]
-    iRt = root[3][1][2:4] if isinstance(root,list) else root.mdLay[1][2:4]  # rdnt in mdLay Et
     # add uplinks:
     for dP in dP_:
         if dP.nodet[0] not in P_ or dP.nodet[1] not in P_: continue
         dP.nodet[1].mdLay += dP.mdLay
-        dP.nodet[1].mdLay[1][2:4] += iRt  # add to lower P
         link_ += [dP]  # link_
         A = np.add(A,dP.angle)
         S += np.hypot(*dP.angle)  # links are contiguous but slanted
@@ -207,8 +206,6 @@ def sum2PP(root, P_, dP_):  # sum links in Ps and Ps in PP
             mdLay += P.mdLay
         for y,x in P.yx_ if isinstance(P, CP) else [P.nodet[0].yx, P.nodet[1].yx]:  # CdP
             box = accum_box(box,y,x)
-    if any(mdLay[0]):
-        mdLay[1][2:4] += iRt # mdLay[1] = Et
     y0,x0,yn,xn = box
     # derH = [mdLay]
     PPt = [root, P_, link_, mdLay, latuple, A, S, area, box, [(y0+yn)/2,(x0+xn)/2], n]
@@ -222,17 +219,19 @@ def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
     I, G, M, Ma, L, (Dy, Dx) = latuple
 
     dI = _I - I*rn;  mI = ave_dI - dI
-    dG = _G - G*rn;  mG = min(_G, G*rn) - aves[1]
-    dL = _L - L*rn;  mL = min(_L, L*rn) - aves[2]
-    dM = _M - M*rn;  mM = get_match(_M, M*rn) - aves[3]  # M, Ma may be negative
-    dMa= _Ma- Ma*rn; mMa = get_match(_Ma, Ma*rn) - aves[4]
+    dG = _G - G*rn;  mG = min(_G, G*rn) - ave_mG
+    dM = _M - M*rn;  mM = get_match(_M, M*rn) - ave_mM  # M, Ma may be negative
+    dMa= _Ma- Ma*rn; mMa = get_match(_Ma, Ma*rn) - ave_mMa
+    dL = _L - L*rn;  mL = min(_L, L*rn) - ave_mL
     mAngle, dAngle = comp_angle((_Dy,_Dx), (Dy,Dx))
+    mAngle -= ave_mA
 
     ret = np.array([mL,dL,mI,dI,mG,dG,mM,dM,mMa,dMa,mAngle-aves[5],dAngle])
     if fagg:  # add norm m,d, ret=[ret,Ret]:
         mval, dval = sum(ret[::2]),sum(ret[1::2])
-        mrdn, drdn = dval>mval, mval>dval
-        ret = np.array([ret, np.array([mval,dval,mrdn,drdn]), 1], dtype=object)  # if fagg only
+        prj_d = abs(dval) * (mval/ave)
+        prj_m = mval - prj_d
+        ret = np.array([ret, np.array([prj_m,prj_d]), 1], dtype=object)  # if fagg only
     return ret
 
 def get_match(_par, par):

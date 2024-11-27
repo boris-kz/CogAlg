@@ -65,17 +65,6 @@ class CFrame(CBase):
         super().__init__()
         frame.i__, frame.latuple, frame.blob_ = i__, [0, 0, 0, 0], []
 
-    def flood_fill(frame, dert__):
-        # Flood-fill 1 pixel at a time
-        fill_yx_ = list(dert__.keys())  # set of pixel coordinates to be filled (fill_yx_)
-        root__ = {}  # map pixel to blob
-        perimeter_ = []  # perimeter pixels
-        while fill_yx_:  # fill_yx_ is popped per filled pixel, in form_blob
-            if not perimeter_:  # init blob
-                blob = frame.CBlob(frame); perimeter_ += [fill_yx_[0]]
-            blob.fill_blob(fill_yx_, perimeter_, root__, dert__)  # https://en.wikipedia.org/wiki/Flood_fill
-            if not perimeter_: blob.term()
-
     def __repr__(frame): return f"frame(id={frame.id})"
 
 class CBlob(CBase):
@@ -93,9 +82,10 @@ class CBlob(CBase):
         y, x = perimeter_.pop()  # pixel coord
         if (y, x) not in dert__: return  # out of bound
         i,dy,dx,g,s = dert__[y,x]
-        if (y, x) not in fill_yx_:  # else this is a pixel of adjacent blob
-            _blob = root__[y, x]
-            if _blob not in blob.adj_: blob.adj_ += [_blob]
+        if (y, x) not in fill_yx_:
+            if blob.sign != s:  # adjacent blobs have opposite sign
+                _blob = root__[y, x]
+                if _blob not in blob.adj_: blob.adj_ += [_blob]
             return
         if blob.sign is None: blob.sign = s  # assign sign to new blob
         if blob.sign != s: return  # different blob.sign, stop
@@ -117,6 +107,10 @@ class CBlob(CBase):
         I += i; Dy += dy; Dx += dx; G += g
         frame.latuple[-4:] = I, Dy, Dx, G
         frame.blob_ += [blob]
+        if blob.sign:   # transfer adj_ from +blob to -blobs and remove
+            for _blob in blob.adj_:
+                _blob.adj_ += [blob]
+            del blob.adj_
 
     @property
     def G(blob): return blob.latuple[-1]
@@ -256,9 +250,10 @@ def unpack_blob_(frame):
 
 if __name__ == "__main__":
 
-    image_file = './images//raccoon_eye.jpeg'
+    # image_file = './images//raccoon_eye.jpeg'
+    image_file = './images//toucan_small.jpg'
     image = imread(image_file)
-    frame = frame_blobs_root(image) # with intra_blob
+    frame = frame_blobs_root(image) # without intra_blob
     intra_blob_root(frame)
 
     # verification (intra):
@@ -281,9 +276,10 @@ if __name__ == "__main__":
         for (y, x), (i, dy, dx, g) in blob.dert_.items():
             i__[y, x] = i; dy__[y, x] = dy; dx__[y, x] = dx; g__[y, x] = g; s__[y, x] = blob.sign
         y, x = blob.yx  # blob center of gravity
-        for _blob in blob.adj_:  # show adjacents
-            _y, _x = _blob.yx  # _blob center of gravity
-            line_ += [((_x, x), (_y, y))]
+        if not blob.sign:
+            for _blob in blob.adj_:  # show adjacents
+                _y, _x = _blob.yx  # _blob center of gravity
+                line_ += [((_x, x), (_y, y))]
 
     plt.imshow(i__, cmap='gray'); plt.show()  # show reconstructed i__
     plt.imshow(dy__,cmap='gray'); plt.show()  # show reconstructed dy__
