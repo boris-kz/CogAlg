@@ -62,7 +62,7 @@ def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.
     Gt_ = []
     for N in N_:  # cluster current distance segment
         if len(N.root_) > nest: continue  # merged, root_[0] = edge
-        node_,link_, et = set(),set(), np.zeros(3)
+        node_,link_, et = set(),set(), np.array([.0,.0, 1.0])
         Gt = [node_,link_,et, min_dist]; N.root_ += [Gt]
         _eN_ = {N}
         while _eN_:
@@ -112,24 +112,24 @@ def get_exemplar_(frame):
         mA = comp_area(_N.box, N.box)[0]
         mLat = comp_latuple(_N.latuple, N.latuple, rn,fagg=1)[1][0]
         mLay = comp_md_(_N.mdLay[0], N.mdLay[0], rn)[1][0]
-        mderH = _N.derH.comp_H(N.derH, rn).Et[0] if _N.derH and N.derH else 0
-        # comp node_?
-        # comp alt_graph_, from converted adjacent flat blobs?
-        return mL + mA + mLat + mLay + mderH
+        HEt = _N.derH.comp_H(N.derH, rn).Et if _N.derH and N.derH else np.zeros(3)
+        # comp node_, comp altG from converted adjacent flat blobs?
+
+        return mL+mA+mLat+mLay+HEt[0], HEt[2]
 
     def xcomp_(N_):  # initial global cross-comp
-        for g in N_: # setattr
-            g.M = 0; g.Mr = 1
+        for g in N_: g.M, g.Mr = 0,0  # setattr
 
         for _G, G in combinations(N_, r=2):
             rn = _G.n/G.n
             if rn > ave_rn: continue  # scope disparity
-            M = comp_cN(_G, G)
-            vM = M - ave
+            # use regular comp_N and compute Links, we don't need to compare again in eval_overlap?
+            M,R = comp_cN(_G, G)
+            vM = M - ave * R
             for _g,g in (_G,G),(G,_G):
                 if vM > 0:
                     g.perim.add((_g,M))  # loose match ref (unilateral link)
-                    if vM > ave:
+                    if vM > ave * R:
                         g.Rim.add((_g,M))  # strict match ref
                         g.M += M
 
@@ -137,13 +137,33 @@ def get_exemplar_(frame):
 
         C = CG()
         for n,_ in node_:
-            C.n += n.n; C.rng = n.rng; C.aRad += n.aRad; C.box = extend_box(C.box, n.box)  # typo?
+            C.n += n.n; C.Et += n.Et; C.rng = n.rng; C.aRad += n.aRad; C.box = extend_box(C.box,n.box)
             C.latuple += n.latuple; C.mdLay += n.mdLay; C.derH.add_H(n.derH); C.extH.add_H(n.extH)
         # get averages:
-        k = len(node_); C.n /= k; C.latuple /= k; C.mdLay /= k; C.aRad /= k; C.derH.norm_(k)  # derH/= k
+        k = len(node_); C.n/=k; C.Et/=k; C.latuple/=k; C.mdLay/=k; C.aRad/=k; C.derH.norm_(k) # derH/=k
         return C
 
-    def eval_overlap(N):
+    def centroid_cluster(N):  # refine Rim to convergence
+        _Rim,_perim,_M = N.Rim, N.perim, N.M  # no need for Mr here?
+
+        dM = ave + 1
+        while dM > ave:
+            Rim, perim, M = set(), set(), 0
+            C = centroid(_Rim)
+            for ref in _perim:
+                _N,m = ref
+                mm,rr = comp_cN(C,_N)
+                if mm > ave * rr:
+                    perim.add((_N,m))
+                    if mm > ave * rr * 10:  # copy ref from perim to Rim
+                        Rim.add(ref); M += m
+            dM = M - _M
+            _node_,_peri_,_M = Rim, perim, M
+
+        N.Rim, N.perim, N.M = list(Rim),list(perim), M
+
+    def eval_overlap(N):  # check for reciprocal refs in _Ns, compare to diffs, remove the weaker ref if <ave diff
+
         fadd = 1
         for ref in copy(N.Rim):
             _N, _m = ref
@@ -152,9 +172,11 @@ def get_exemplar_(frame):
             for _ref in copy(_N.Rim):
                 if _ref[0] is N:  # reciprocal to ref
                     dy,dx = np.subtract(_N.yx,N.yx)  # no dist eval
+                    # replace Rim refs with links in xcomp_, instead of comp_N here?
                     Link = comp_N(_N,N, _N.n/N.n, angle=[dy,dx], dist=np.hypot(dy,dx))
                     minN, r = (_N,_ref) if N.M > _N.M else (N,ref)
-                    if Link.derH.pd < ave_d:  # exemplars are similar, remove min
+                    if Link.derH.Et[1] < ave_d:
+                        # exemplars are similar, remove min
                         minN.Rim.remove(r); minN.M -= Link.derH.pm
                         if N is minN: fadd = 0
                     else:  # exemplars are different, keep both
@@ -163,25 +185,6 @@ def get_exemplar_(frame):
                     break
         return fadd
 
-    def centroid_cluster(N):
-        _Rim,_perim,_M = N.Rim, N.perim, N.M
-
-        dM = ave + 1  # refine Rim to convergence:
-        while dM > ave:
-            Rim, perim, M = set(), set(), 0
-            C = centroid(_Rim)
-            for ref in _perim:
-                _N,m = ref
-                mm = comp_cN(C,_N)
-                if mm > ave:
-                    perim.add((_N,m))
-                    if mm > ave * 10:  # copy ref from perim to Rim
-                        Rim.add(ref); M += m
-            dM = M - _M
-            _node_,_peri_,_M = Rim, perim, M
-
-        N.Rim, N.perim, N.M = list(Rim),list(perim), M
-
     def prune_overlap(N_):  # select Ns with M > ave * Mr
 
         for N in N_:  # connectivity cluster N.Rim may be represented by multiple sufficiently different exemplars
@@ -189,17 +192,17 @@ def get_exemplar_(frame):
                 centroid_cluster(N)  # refine N.Rim
         exemplar_ = []
         for N in N_:
-            if eval_overlap(N) and N.M > ave * 10:
+            if eval_overlap(N) and N.M + N.Et[0] > ave * (N.Et[2] + N.Mr/len(N.Rim)):  # normalize Mr
                 exemplar_ += [N]
         return exemplar_
 
     N_ = frame.subG_  # complemented Gs: m-type core + d-type contour
     for N in N_:
-        N.perim = set(); N.Rim = set(); N.root_ += [frame]; N.M = 0; N.compared_ = []  # init compared_
+        N.perim = set(); N.Rim = set(); N.root_ += [frame]; N.M = 0; N.Mr = 0; N.compared_ = []
     xcomp_(N_)
     frame.subG_ = prune_overlap(N_)  # select strong Ns as exemplars of their Rim
     if len(frame.subG_) > ave_L:
-        agg_cluster_(frame)  # selective connectivity clustering between exemplars
+        agg_cluster_(frame)  # selective connectivity clustering between exemplars, extrapolated to Rim?
 
 
 if __name__ == "__main__":
