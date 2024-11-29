@@ -325,3 +325,42 @@ def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, rec
         # + aggLays and derLays, each has exemplar selection:
         cluster_eval(frame, N_, fd=0)
         if vd > 0: cluster_eval(frame, lN_, fd=1)
+
+    def xcomp_(N_):  # initial global cross-comp
+        for g in N_: g.M, g.Mr = 0,0  # setattr
+
+        for _G, G in combinations(N_, r=2):
+            rn = _G.n/G.n
+            if rn > ave_rn: continue  # scope disparity
+            # use regular comp_N and compute Links, we don't need to compare again in eval_overlap?
+            M,R = comp_cN(_G, G)
+            vM = M - ave * R
+            for _g,g in (_G,G),(G,_G):
+                if vM > 0:
+                    g.perim.add((_g,M))  # loose match ref (unilateral link)
+                    if vM > ave * R:
+                        g.Rim.add((_g,M))  # strict match ref
+                        g.M += M
+
+    def eval_overlap(N):  # check for reciprocal refs in _Ns, compare to diffs, remove the weaker ref if <ave diff
+
+        fadd = 1
+        for ref in copy(N.Rim):
+            _N, _m = ref
+            if _N in N.compared_: continue  # also skip in next agg+
+            N.compared_ += [_N]; _N.compared_ += [N]
+            for _ref in copy(_N.Rim):
+                if _ref[0] is N:  # reciprocal to ref
+                    dy,dx = np.subtract(_N.yx,N.yx)  # no dist eval
+                    # replace Rim refs with links in xcomp_, instead of comp_N here?
+                    Link = comp_N(_N,N, _N.n/N.n, angle=[dy,dx], dist=np.hypot(dy,dx))
+                    minN, r = (_N,_ref) if N.M > _N.M else (N,ref)
+                    if Link.derH.Et[1] < ave_d:
+                        # exemplars are similar, remove min
+                        minN.Rim.remove(r); minN.M -= Link.derH.pm
+                        if N is minN: fadd = 0
+                    else:  # exemplars are different, keep both
+                        if N is minN: N.Mr += 1
+                        _N.extH.add_H(Link.derH), N.extH.add_H(Link.derH)
+                    break
+        return fadd
