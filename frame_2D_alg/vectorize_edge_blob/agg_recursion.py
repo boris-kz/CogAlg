@@ -2,6 +2,7 @@ import sys
 sys.path.append("..")
 import numpy as np
 from copy import copy, deepcopy
+from functools import reduce
 from itertools import combinations
 from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
 from comp_slice import comp_latuple, comp_md_
@@ -62,7 +63,7 @@ def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.
     Gt_ = []
     for N in N_:  # cluster current distance segment
         if len(N.root_) > nest: continue  # merged, root_[0] = edge
-        node_,link_, et = set(),set(), np.array([.0,.0, 1.0])
+        node_,link_, et = set(),set(), np.array([.0,.0,1.])
         Gt = [node_,link_,et, min_dist]; N.root_ += [Gt]
         _eN_ = {N}
         while _eN_:
@@ -105,20 +106,8 @@ def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.
 '''
 def get_exemplar_(frame):
 
-    def comp_cN(_N, N):  # compute match without new derivatives: global cross-comp is not directional
-
-        rn = _N.n / N.n
-        mL = min(len(_N.node_),len(N.node_)) - ave_L
-        mA = comp_area(_N.box, N.box)[0]
-        mLat = comp_latuple(_N.latuple, N.latuple, rn,fagg=1)[1][0]
-        mLay = comp_md_(_N.mdLay[0], N.mdLay[0], rn)[1][0]
-        HEt = _N.derH.comp_H(N.derH, rn).Et if _N.derH and N.derH else np.zeros(3)
-        # comp node_, comp altG from converted adjacent flat blobs?
-
-        return mL+mA+mLat+mLay+HEt[0], HEt[2]
-
     def xcomp_(N_):  # initial global cross-comp
-        for g in N_: g.M, g.Mr, g.sign = 0,0,1  # setattr
+        for g in N_: g.M, g.Mr, g.sign = 0,0,1  # setattr Rim vals for exemplars, then converted to extH
 
         for _G, G in combinations(N_, r=2):
             rn = _G.n/G.n
@@ -130,7 +119,7 @@ def get_exemplar_(frame):
                 if vM > 0:
                     g.perim.add(link)  # loose match
                     if vM > ave * r:  # strict match
-                        g.Rim.add((link)); g.M+=m; g.Mr+=r
+                        g.Rim.add(link); g.M+=m; g.Mr+=r
 
     def centroid(node_, C=CG()):  # sum|subtract and average Rim nodes
 
@@ -138,25 +127,38 @@ def get_exemplar_(frame):
             s = n.sign
             C.n += n.n * s; C.Et += n.Et * s; C.rng = n.rng * s; C.aRad += n.aRad * s
             C.latuple += n.latuple * s; C.mdLay += n.mdLay * s
-            C.derH.add_H(n.derH); C.extH.add_H(n.extH); C.box = extend_box(C.box,n.box)
-            # need to add sign in add_H and extend_box to remove instead adding?
+            if n.derH: C.derH.add_H(n.derH, sign=s)
+            if n.extH: C.extH.add_H(n.extH, sign=s)
         # get averages:
-        k = len(node_); C.n/=k; C.Et/=k; C.latuple/=k; C.mdLay/=k; C.aRad/=k; C.derH.norm_(k) # derH/=k
+        k = len(node_); C.n/=k; C.Et/=k; C.latuple/=k; C.mdLay/=k; C.aRad/=k
+        if C.derH: C.derH.norm_(k)  # derH/=k
         return C
+
+    def comp_C(_N, N):  # compute match without new derivatives: global cross-comp is not directional
+
+        rn = _N.n / N.n
+        mL = min(len(_N.node_),len(N.node_)) - ave_L
+        mA = comp_area(_N.box, N.box)[0]
+        mLat = comp_latuple(_N.latuple, N.latuple, rn,fagg=1)[1][0]
+        mLay = comp_md_(_N.mdLay[0], N.mdLay[0], rn)[1][0]
+        mH = _N.derH.comp_H(N.derH, rn).Et[0] if _N.derH and N.derH else 0
+        # comp node_, comp altG from converted adjacent flat blobs?
+
+        return mL+mA+mLat+mLay+mH
 
     def refine_by_centroid(N):  # refine Rim to convergence
 
         _perim,_M = N.perim, N.M  # no use for Mr
-        node_ = {n for L in N.Rim for n in L.nodet } | {N}
-        C = centroid(node_)
+        node_ = {n for L in N.Rim for n in L.nodet} | {N}
+        C = centroid(node_); C.box = reduce(extend_box, (n.box for n in node_))
         while True:
             dnode_, Rim, perim, M = set(), set(), set(), 0
             for link in _perim:
                 _N, m = link.nodet[0] if link.nodet[1] is N else link.nodet[1], link.derH.Et[0]
-                mm,rr = comp_cN(C,_N)
-                if mm > ave * rr:
+                mm = comp_C(C,_N)
+                if mm > ave:
                     perim.add(link)
-                    if mm > ave * rr * 2:
+                    if mm > ave * 2:
                         Rim.add(link); M += m  # copy link from perim to Rim
                         if _N not in node_:
                             node_.add(_N); _N.sign=1; dnode_.add(_N)
@@ -165,7 +167,7 @@ def get_exemplar_(frame):
                         node_.remove(_N); _N.sign=-1; dnode_.add(_N)  # sign=-1 to remove in centroid()
             if M / _M < 1.2:
                 break  # convergence
-            C = centroid(dnode_, C)
+            C = centroid(dnode_,C); C.box = reduce(extend_box, (n.box for n in node_))
             _Rim,_perim,_M = Rim, perim, M
 
         N.Rim, N.perim, N.M = list(Rim),list(perim), M
@@ -195,7 +197,7 @@ def get_exemplar_(frame):
                 refine_by_centroid(N)  # refine N.Rim
         exemplar_ = []
         for N in N_:
-            if eval_overlap(N) and N.M + N.Et[0] > ave * (N.Et[2] + N.Mr/len(N.Rim)):  # normalize Mr
+            if eval_overlap(N) and N.M + N.Et[0] > ave * (N.Et[2] + N.Mr/(len(N.Rim)+1)):  # normalize Mr
                 exemplar_ += [N]
         return exemplar_
 
