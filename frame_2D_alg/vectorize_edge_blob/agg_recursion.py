@@ -107,13 +107,13 @@ def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.
 def get_exemplar_(frame):
 
     def xcomp_(N_):  # initial global cross-comp
-        for g in N_: g.M, g.Mr, g.sign = 0,0,1  # setattr Rim vals for exemplars, then converted to extH
+        for g in N_: g.M = 0  # setattr Rim vals for exemplars, then converted to extH
 
         for _G, G in combinations(N_, r=2):
             rn = _G.n/G.n
             if rn > ave_rn: continue  # scope disparity
             link = comp_N(_G, G, rn)
-            m,d,r = link.Et
+            m,d,r = link.derH.Et
             vM = m - ave * r
             for _g,g in (_G,G),(G,_G):
                 if vM > 0:
@@ -121,17 +121,19 @@ def get_exemplar_(frame):
                     if vM > ave * r:  # strict match
                         g.Rim.add(link); g.M+=m; g.Mr+=r
 
-    def centroid(node_, C=CG()):  # sum|subtract and average Rim nodes
+    def centroid(dnode_, node_, C=None):  # sum|subtract and average Rim nodes
 
-        for n in node_:
-            s = n.sign
+        if C is None: C = CG()
+        for n in dnode_:
+            s = n.sign; n.sign=1  # single-use sign
             C.n += n.n * s; C.Et += n.Et * s; C.rng = n.rng * s; C.aRad += n.aRad * s
             C.latuple += n.latuple * s; C.mdLay += n.mdLay * s
             if n.derH: C.derH.add_H(n.derH, sign=s)
             if n.extH: C.extH.add_H(n.extH, sign=s)
         # get averages:
-        k = len(node_); C.n/=k; C.Et/=k; C.latuple/=k; C.mdLay/=k; C.aRad/=k
+        k = len(dnode_); C.n/=k; C.Et/=k; C.latuple/=k; C.mdLay/=k; C.aRad/=k
         if C.derH: C.derH.norm_(k)  # derH/=k
+        C.box = reduce(extend_box, (n.box for n in node_))
         return C
 
     def comp_C(_N, N):  # compute match without new derivatives: global cross-comp is not directional
@@ -149,55 +151,41 @@ def get_exemplar_(frame):
     def refine_by_centroid(N):  # refine Rim to convergence
 
         _perim,_M = N.perim, N.M  # no use for Mr
-        node_ = {n for L in N.Rim for n in L.nodet} | {N}
-        C = centroid(node_); C.box = reduce(extend_box, (n.box for n in node_))
+        _node_ = {n for L in N.Rim for n in L.nodet} | {N}
+        C = centroid(_node_,_node_)
         while True:
-            dnode_, Rim, perim, M = set(), set(), set(), 0
+            node_,dnode_,Rim, perim, M = [],[],[],[], 0
             for link in _perim:
                 _N, m = link.nodet[0] if link.nodet[1] is N else link.nodet[1], link.derH.Et[0]
                 mm = comp_C(C,_N)
                 if mm > ave:
-                    perim.add(link)
+                    perim += [link]
                     if mm > ave * 2:
-                        Rim.add(link); M += m  # copy link from perim to Rim
-                        if _N not in node_:
-                            node_.add(_N); _N.sign=1; dnode_.add(_N)
+                        M += m; Rim += [link]  # copy perim link to Rim
+                        node_+=[_N]
+                        if _N not in _node_: dnode_+=[_N]  # sum into C
                     elif _N in node_:
-                        Rim.remove(link); M -= m
-                        node_.remove(_N); _N.sign=-1; dnode_.add(_N)  # sign=-1 to remove in centroid()
-            if M / _M < 1.2:
-                break  # convergence
-            C = centroid(dnode_,C); C.box = reduce(extend_box, (n.box for n in node_))
-            _Rim,_perim,_M = Rim, perim, M
-
-        N.Rim, N.perim, N.M = list(Rim),list(perim), M
-
-    def eval_overlap(N):  # check for shared links in _N.Rims, compare to diffs, remove link from the weaker N if <ave diff
-
-        fadd = 1
-        for link in copy(N.Rim):
-            _N, _m = link.nodet[0] if link.nodet[1] is N else link.nodet[1], link.derH.Et[0]
-            if link in _N.Rim:
-                minN,maxN = (_N,N) if (N.M - ave*N.Mr) > (_N.M - ave*_N.Mr) else (N,_N)
-                if link.derH.Et[1] < ave_d * link.derH.Et[2]:
-                    # exemplars are similar, remove min
-                    minN.Rim.remove(link); minN.M -= link.derH.Et[0]; minN.M -= link.derH.Et[0]
-                    if N is minN: fadd = 0
-                else:  # exemplars are different, keep both
-                    if N is minN: N.Mr += 1
-                    minN.extH.add_H(link.derH)
-                maxN.extH.add_H(link.derH)
+                        M -= m; node_.remove(_N); _N.sign=-1; dnode_+=[_N]  # subtract from C
+            if M / _M > 1.2:
+                C = centroid({dnode_},{node_},C)
+                _node_,_dnode_,_Rim,_perim,_M = node_,dnode_,Rim, perim, M
+            else:  # convergence
                 break
-        return fadd
+        N.Rim, N.perim, N.M = list({Rim}), list({perim}), M
 
-    def prune_overlap(N_):  # select Ns with M > ave * Mr
+    def select_exemplars(N_):
 
         for N in N_:  # connectivity cluster N.Rim may be represented by multiple sufficiently different exemplars
             if N.M > ave * 10:  # or if len(N.perim) / len(N.Rim) > ave_L?
                 refine_by_centroid(N)  # refine N.Rim
         exemplar_ = []
         for N in N_:
-            if eval_overlap(N) and N.M + N.Et[0] > ave * (N.Et[2] + N.Mr/(len(N.Rim)+1)):  # normalize Mr
+            fadd = 1
+            for link in N.Rim:
+                _N, _m = link.nodet[0] if link.nodet[1] is N else link.nodet[1], link.derH.Et[0]
+                if link in _N.Rim:
+                    if N.M < _N.M: fadd = 0
+            if fadd and N.M + N.Et[0] > ave * N.Et[2]:  # N is stronger than all _Ns
                 exemplar_ += [N]
         return exemplar_
 
@@ -205,7 +193,8 @@ def get_exemplar_(frame):
     for N in N_:
         N.perim = set(); N.Rim = set(); N.root_ += [frame]; N.M = 0; N.Mr = 0; N.compared_ = []
     xcomp_(N_)
-    frame.subG_ = prune_overlap(N_)  # select strong Ns as exemplars of their Rim
+    frame.subG_ = select_exemplars(N_)  # select strong Ns as exemplars of their Rim
+    # current exemplars are not representative of their Rim for separate cross-comp?
     if len(frame.subG_) > ave_L:
         agg_cluster_(frame)  # selective connectivity clustering between exemplars, extrapolated to Rim?
 

@@ -364,3 +364,22 @@ def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, rec
                         _N.extH.add_H(Link.derH), N.extH.add_H(Link.derH)
                     break
         return fadd
+
+    def eval_overlap1(N):  # check for shared links in _N.Rims, compare to diffs, remove link from the weaker N if <ave diff
+
+        fadd = 1
+        for link in copy(N.Rim):
+            _N, _m = link.nodet[0] if link.nodet[1] is N else link.nodet[1], link.derH.Et[0]
+            if link in _N.Rim:
+                minN,maxN = (_N,N) if (N.M - ave*N.Mr) > (_N.M - ave*_N.Mr) else (N,_N)
+                if link.derH.Et[1] < ave_d * link.derH.Et[2]:
+                    # exemplars are similar, remove min
+                    # if Rim is exclusive, min can be replaced in nodet by min.Rim?
+                    minN.Rim.remove(link); minN.M -= link.derH.Et[0]; minN.M -= link.derH.Et[0]
+                    if N is minN: fadd = 0
+                else:  # exemplars are different, keep both
+                    if N is minN: N.Mr += 1
+                    minN.extH.add_H(link.derH)
+                maxN.extH.add_H(link.derH)
+
+        return fadd
