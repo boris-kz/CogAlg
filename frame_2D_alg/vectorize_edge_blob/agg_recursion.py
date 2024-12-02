@@ -106,21 +106,6 @@ def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.
 '''
 def get_exemplar_(frame):
 
-    def xcomp_(N_):  # initial global cross-comp
-        for g in N_: g.M = 0  # setattr Rim vals for exemplars, then converted to extH
-
-        for _G, G in combinations(N_, r=2):
-            rn = _G.n/G.n
-            if rn > ave_rn: continue  # scope disparity
-            link = comp_N(_G, G, rn)
-            m,d,r = link.derH.Et
-            vM = m - ave * r
-            for _g,g in (_G,G),(G,_G):
-                if vM > 0:
-                    g.perim.add(link)  # loose match
-                    if vM > ave * r:  # strict match
-                        g.Rim.add(link); g.M+=m; g.Mr+=r
-
     def centroid(dnode_, node_, C=None):  # sum|subtract and average Rim nodes
 
         if C is None: C = CG()
@@ -148,53 +133,44 @@ def get_exemplar_(frame):
 
         return mL+mA+mLat+mLay+mH
 
-    def refine_by_centroid(N):  # refine Rim to convergence
+    def centroid_cluster(N, clustered_):  # extend cluster while M and ext_N_
 
-        _perim,_M = N.perim, N.M  # no use for Mr
-        _node_ = {n for L in N.Rim for n in L.nodet} | {N}
-        C = centroid(_node_,_node_)
+        _N_ = {n for L in N.Rim for n in L.nodet}
+        n_ = _N_|{N}
+        C = centroid(n_,n_)
+        _extN_ = _N_
         while True:
-            node_,dnode_,Rim, perim, M = [],[],[],[], 0
-            for link in _perim:
-                _N, m = link.nodet[0] if link.nodet[1] is N else link.nodet[1], link.derH.Et[0]
-                mm = comp_C(C,_N)
-                if mm > ave:
-                    perim += [link]
-                    if mm > ave * 2:
-                        M += m; Rim += [link]  # copy perim link to Rim
-                        node_+=[_N]
-                        if _N not in _node_: dnode_+=[_N]  # sum into C
-                    elif _N in node_:
-                        M -= m; node_.remove(_N); _N.sign=-1; dnode_+=[_N]  # subtract from C
-            if M / _M > 1.2:
-                C = centroid({dnode_},{node_},C)
-                _node_,_dnode_,_Rim,_perim,_M = node_,dnode_,Rim, perim, M
-            else:  # convergence
+            N_, negN_, extN_, M,dM = [],[],[], 0,0  # included, removed, extended nodes
+            for _N in _N_:
+                m = comp_C(C,_N)
+                if m > ave:
+                    extN_ += [link.nodet[0] if link.nodet[1] is _N else link.nodet[1] for link in _N.rim]  # next comp to C
+                    N_ += [_N]; M += m  # sum into C
+                    if _N not in _extN_: dM += m  # only new nodes
+                    clustered_ += [_N]
+                elif _N in _N_:
+                    _N.sign=-1; negN_+=[_N]  # subtract from C, M += abs m?
+
+            if dM > ave:  # new match, terminate extension if low
+                _extN = {eN for eN in extN_ if eN not in clustered_}
+                C = centroid(_extN | {negN_}, N_, C)
+                _N_ = {N_} | _extN_  # both old and new nodes will be compared to new C
+            else:
                 break
-        N.Rim, N.perim, N.M = list({Rim}), list({perim}), M
-
-    def select_exemplars(N_):
-
-        for N in N_:  # connectivity cluster N.Rim may be represented by multiple sufficiently different exemplars
-            if N.M > ave * 10:  # or if len(N.perim) / len(N.Rim) > ave_L?
-                refine_by_centroid(N)  # refine N.Rim
-        exemplar_ = []
-        for N in N_:
-            fadd = 1
-            for link in N.Rim:
-                _N, _m = link.nodet[0] if link.nodet[1] is N else link.nodet[1], link.derH.Et[0]
-                if link in _N.Rim:
-                    if N.M < _N.M: fadd = 0
-            if fadd and N.M + N.Et[0] > ave * N.Et[2]:  # N is stronger than all _Ns
-                exemplar_ += [N]
-        return exemplar_
+        return [C,M,N_]  # centroid cluster
 
     N_ = frame.subG_  # complemented Gs: m-type core + d-type contour
+    exemplar_, clustered_ = [], []
     for N in N_:
-        N.perim = set(); N.Rim = set(); N.root_ += [frame]; N.M = 0; N.Mr = 0; N.compared_ = []
-    xcomp_(N_)
-    frame.subG_ = select_exemplars(N_)  # select strong Ns as exemplars of their Rim
-    # current exemplars are not representative of their Rim for separate cross-comp?
+        N.root_ += [frame]; N.sign = 1
+        N_ = sorted(N_, key=lambda n: n.Et[0], reverse=True)
+        for N in N_:  # connectivity cluster may have multiple exemplar centroids
+            if N not in clustered_:
+                if N.Et[0] > ave * 10:
+                    exemplar_ += centroid_cluster(N, clustered_)  # extend from N.rim
+                else:  # the rest of N_ M is lower
+                    break
+    frame.subG_ = exemplar_  # select strong Ns as exemplars of their network
     if len(frame.subG_) > ave_L:
         agg_cluster_(frame)  # selective connectivity clustering between exemplars, extrapolated to Rim?
 

@@ -327,20 +327,19 @@ def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, rec
         if vd > 0: cluster_eval(frame, lN_, fd=1)
 
     def xcomp_(N_):  # initial global cross-comp
-        for g in N_: g.M, g.Mr = 0,0  # setattr
+        for g in N_: g.M = 0  # setattr Rim vals for exemplars, then converted to extH
 
         for _G, G in combinations(N_, r=2):
             rn = _G.n/G.n
             if rn > ave_rn: continue  # scope disparity
-            # use regular comp_N and compute Links, we don't need to compare again in eval_overlap?
-            M,R = comp_cN(_G, G)
-            vM = M - ave * R
+            link = comp_N(_G, G, rn)
+            m,d,r = link.derH.Et
+            vM = m - ave * r
             for _g,g in (_G,G),(G,_G):
                 if vM > 0:
-                    g.perim.add((_g,M))  # loose match ref (unilateral link)
-                    if vM > ave * R:
-                        g.Rim.add((_g,M))  # strict match ref
-                        g.M += M
+                    g.perim.add(link)  # loose match
+                    if vM > ave * r:  # strict match
+                        g.Rim.add(link); g.M+=m; g.Mr+=r
 
     def eval_overlap(N):  # check for reciprocal refs in _Ns, compare to diffs, remove the weaker ref if <ave diff
 
@@ -383,3 +382,38 @@ def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, rec
                 maxN.extH.add_H(link.derH)
 
         return fadd
+
+    def select_exemplars(N_):
+
+        N_ = sorted(N_, key=lambda n: n.M, reverse=True)
+        for N in N_:  # connectivity cluster may be represented by multiple exemplars: centroids
+            if N.M > ave * 10:  # or if len(N.perim) / len(N.Rim) > ave_L?
+                centroid_cluster(N)  # refine N.Rim
+        exemplar_ = []
+        for N in N_:
+            fadd = 1
+            for link in N.Rim:
+                _N, _m = link.nodet[0] if link.nodet[1] is N else link.nodet[1], link.derH.Et[0]
+                if link in _N.Rim:
+                    if N.M < _N.M: fadd = 0
+            if fadd and N.M + N.Et[0] > ave * N.Et[2]:  # N is stronger than all _Ns
+                exemplar_ += [N]
+        return exemplar_
+
+    def select_exemplars(N_):
+
+        N_ = sorted(N_, key=lambda n: n.M, reverse=True)
+        exemplar_ = []
+        for N in N_:  # connectivity cluster may be represented by multiple exemplars: centroids
+            if N.M > ave * 10:  # or if len(N.perim) / len(N.Rim) > ave_L?
+                exemplar_ += centroid_cluster(N)  # refine N.Rim
+
+        for N in N_:
+            fadd = 1
+            for link in N.Rim:
+                _N, _m = link.nodet[0] if link.nodet[1] is N else link.nodet[1], link.derH.Et[0]
+                if link in _N.Rim:
+                    if N.M < _N.M: fadd = 0
+            if fadd and N.M + N.Et[0] > ave * N.Et[2]:  # N is stronger than all _Ns
+                exemplar_ += [N]
+        return exemplar_
