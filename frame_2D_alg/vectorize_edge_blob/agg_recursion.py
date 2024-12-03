@@ -15,21 +15,26 @@ with recursive agglomeration
 
 def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, recursion
 
-    def cluster_eval(frame, N_, fd):
+    def cluster_eval(G, N_, fd):
 
         pL_ = {l for n in N_ for l,_ in get_rim(n, fd)}
         if len(pL_) > ave_L:
-            G_ = cluster_N_(frame, pL_, fd)  # optionally divisive clustering
-            frame.subG_ = G_
-            if len(G_) > ave_L:
-                get_exemplar_(frame)  # may call centroid clustering
+            sG_ = cluster_N_(G, pL_, fd)  # optionally divisive clustering
+            frame.subG_ = sG_
+            for sG in sG_:
+                if len(sG.node_) > ave_L:
+                    get_exemplar_(sG)  # centroid clustering in sG.node_
     '''
     cross-comp converted edges, then GGs, GGGs, etc, interlaced with exemplar selection 
     '''
+    for edge in frame.subG_: get_exemplar_(edge)
+    # also selectively unpack edges, cross-comp exemplars instead? re-comp within edge too?
+
     N_,L_,(m,d,r) = comp_node_(frame.subG_)  # exemplars, extrapolate to their Rims?
     if m > ave * r:
         mlay = CH().add_H([L.derH for L in L_])  # mfork, else no new layer
-        frame.derH = CH(H=[mlay], md_t=deepcopy(mlay.md_t), Et=copy(mlay.Et), n=mlay.n, root=frame); mlay.root=frame.derH  # init
+        frame.derH = CH(H=[mlay], md_t=deepcopy(mlay.md_t), n=mlay.n, root=frame); mlay.root=frame.derH
+        frame.derH.Et = copy(mlay.Et)  # or make it default param again?
         vd = d - ave_d * r
         if vd > 0:
             for L in L_:
@@ -40,7 +45,7 @@ def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, rec
             # recursive der+ eval_: cost > ave_match, add by feedback if < _match?
         else:
             frame.derH.H += [[]]  # empty to decode rng+|der+, n forks per layer = 2^depth
-        # + aggLays and derLays, each has exemplar selection:
+        # + aggLays and derLays, with exemplar selection:
         cluster_eval(frame, N_, fd=0)
         if vd > 0: cluster_eval(frame, lN_, fd=1)
 
@@ -104,7 +109,7 @@ def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.
  Centroid clusters may be extended, but only their exemplars will be cross-compared on the next connectivity clustering level.
  Other nodes in the cluster can be predicted from the exemplar, they are the same type of objects. 
 '''
-def get_exemplar_(frame):
+def get_exemplar_(graph):
 
     def centroid(dnode_, node_, C=None):  # sum|subtract and average Rim nodes
 
@@ -119,60 +124,71 @@ def get_exemplar_(frame):
         k = len(dnode_); C.n/=k; C.Et/=k; C.latuple/=k; C.mdLay/=k; C.aRad/=k
         if C.derH: C.derH.norm_(k)  # derH/=k
         C.box = reduce(extend_box, (n.box for n in node_))
+        C.M = 0  # summed match to nodes
+        C.L = 0  # ave len node_
         return C
 
-    def comp_C(_N, N):  # compute match without new derivatives: global cross-comp is not directional
+    def comp_C(C, N):  # compute match without new derivatives: global cross-comp is not directional
 
-        rn = _N.n / N.n
-        mL = min(len(_N.node_),len(N.node_)) - ave_L
-        mA = comp_area(_N.box, N.box)[0]
-        mLat = comp_latuple(_N.latuple, N.latuple, rn,fagg=1)[1][0]
-        mLay = comp_md_(_N.mdLay[0], N.mdLay[0], rn)[1][0]
-        mH = _N.derH.comp_H(N.derH, rn).Et[0] if _N.derH and N.derH else 0
+        rn = C.n / N.n
+        mL = min(C.L,len(N.node_)) - ave_L
+        mA = comp_area(C.box, N.box)[0]
+        mLat = comp_latuple(C.latuple, N.latuple, rn,fagg=1)[1][0]
+        mLay = comp_md_(C.mdLay[0], N.mdLay[0], rn)[1][0]
+        mH = C.derH.comp_H(N.derH, rn).Et[0] if C.derH and N.derH else 0
         # comp node_, comp altG from converted adjacent flat blobs?
+        m = mL+mA+mLat+mLay+mH
+        C.M += m
+        return m
 
-        return mL+mA+mLat+mLay+mH
-
-    def centroid_cluster(N, clustered_):  # extend cluster while M and ext_N_
+    def centroid_cluster(N, clustered_):  # refine and extend cluster with extN_
 
         _N_ = {n for L in N.Rim for n in L.nodet}
-        n_ = _N_|{N}
+        n_ = _N_| {N}  # include seed node
         C = centroid(n_,n_)
-        _extN_ = _N_
         while True:
-            N_, negN_, extN_, M,dM = [],[],[], 0,0  # included, removed, extended nodes
+            N_, negN_, extN_, M, dM = [],[],[],0,0  # included, removed, extended nodes
             for _N in _N_:
+                if _N in clustered_: continue
                 m = comp_C(C,_N)
-                if m > ave:
+                dm = m - ave
+                if dm > 0:
                     extN_ += [link.nodet[0] if link.nodet[1] is _N else link.nodet[1] for link in _N.rim]  # next comp to C
-                    N_ += [_N]; M += m  # sum into C
-                    if _N not in _extN_: dM += m  # only new nodes
-                    clustered_ += [_N]
-                elif _N in _N_:
-                    _N.sign=-1; negN_+=[_N]  # subtract from C, M += abs m?
-
-            if dM > ave:  # new match, terminate extension if low
-                _extN = {eN for eN in extN_ if eN not in clustered_}
-                C = centroid(_extN | {negN_}, N_, C)
-                _N_ = {N_} | _extN_  # both old and new nodes will be compared to new C
+                    N_ += [_N]; M += m; _N.M = m  # to sum in C
+                    if _N not in C.node_:
+                        dM += dm; clustered_ += [_N]  # only new nodes
+                elif _N in C.node_:
+                    _N.sign=-1; negN_+=[_N]; dM += -dm  # to subtract from C, dM += abs dm
+                    clustered_.remove(_N)  # if exclusive
+            if dM > ave:  # new match, terminate (refine,extend) if low
+                extN_ = set([eN for eN in extN_ if eN not in clustered_])
+                C = centroid( extN_|set(negN_), N_, C)
+                _N_ = set(N_)|extN_  # both old and new nodes will be compared to new C
+                C.M = M; C.node_ = N_
             else:
-                break
-        return [C,M,N_]  # centroid cluster
+                if C.M > ave * 10:
+                    for n in C.node_:
+                        n.root_ += [C]; delattr(n, "sign")
+                    return C  # centroid cluster
+                else:  # unpack C.node_
+                    for n in C.node_:
+                        clustered_.remove(n); n.M = 0
+                    return N  # keep seed node
 
-    N_ = frame.subG_  # complemented Gs: m-type core + d-type contour
-    exemplar_, clustered_ = [], []
-    for N in N_:
-        N.root_ += [frame]; N.sign = 1
-        N_ = sorted(N_, key=lambda n: n.Et[0], reverse=True)
-        for N in N_:  # connectivity cluster may have multiple exemplar centroids
-            if N not in clustered_:
-                if N.Et[0] > ave * 10:
-                    exemplar_ += centroid_cluster(N, clustered_)  # extend from N.rim
-                else:  # the rest of N_ M is lower
-                    break
-    frame.subG_ = exemplar_  # select strong Ns as exemplars of their network
-    if len(frame.subG_) > ave_L:
-        agg_cluster_(frame)  # selective connectivity clustering between exemplars, extrapolated to Rim?
+    N_ = graph.subG_  # complemented Gs: m-type core + d-type contour, initially edge
+    N_ = sorted(N_, key=lambda n: n.Et[0], reverse=True)
+    subG_, clustered_ = [], set()
+    for N in N_: N.sign = 1
+    for i, N in enumerate(N_):  # connectivity cluster may have exemplar centroids
+        if N not in clustered_:
+            if N.Et[0] > ave * 10:
+                subG_ += [centroid_cluster(N, clustered_)]  # extend from N.rim, return C if packed else N
+            else:  # the rest of N_ M is lower
+                subG_ += N_[i:]
+                break
+    graph.subG_ = subG_  # mix of Ns and Cs: exemplars of their network?
+    if len(graph.subG_) > ave_L:
+        agg_cluster_(graph)  # selective connectivity clustering between exemplars, extrapolated to their node_
 
 
 if __name__ == "__main__":

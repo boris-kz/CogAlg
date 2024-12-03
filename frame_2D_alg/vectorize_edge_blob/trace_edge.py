@@ -11,9 +11,9 @@ import numpy as np
 This code is initially for clustering segments within edge: high-gradient blob, but too complex for that.
 It's mostly a prototype for open-ended compositional recursion: clustering blobs, graphs of blobs, etc.
 -
-1st incremental-range (rng+) fork cross-comp leads to clustering edge segments, initially PPs, that match over < max distance. 
-2nd incremental-derivation (der+) fork cross-comps links from primary cross-comp, if >ave ~(abs_diff * primary_xcomp_match): 
-variance patterns borrow value from co-projected match patterns, because their projections cancel-out.
+rng+ fork: incremental-range cross-comp nodes, cluster edge segments, initially PPs, that match over < max distance. 
+der+ fork: incremental-derivation cross-comp links from node cross-comp, if abs_diff * rel_match > ave 
+(variance patterns borrow value from co-projected match patterns because their projections cancel-out)
 - 
 Thus graphs should be assigned adjacent alt-fork (der+ to rng+) graphs, to which they lend predictive value.
 But alt match patterns borrow already borrowed value, which is too tenuous to track, we use average borrowed value.
@@ -92,7 +92,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
             else:
                 HE = He.copy_(root=root)
 
-        return HE  # higher root would be updated by returned HE?
+        return HE  # root should be updated by returned HE, we don't need it here?
 
     def append_(HE,He, flat=0):
 
