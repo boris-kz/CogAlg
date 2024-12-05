@@ -8,9 +8,8 @@ from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack
 from comp_slice import comp_latuple, comp_md_
 from trace_edge import comp_node_, comp_link_, sum2graph, get_rim, CH, CG, ave, ave_d, ave_L, vectorize_root, comp_area, extend_box
 '''
-Cross-compare and cluster edge blobs within a frame,
-potentially unpacking their node_s first,
-with recursive agglomeration
+Cross-compare and cluster Gs within a frame, potentially unpacking their node_s first,
+alternating agglomeration and centroid clustering.
 '''
 
 def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, recursion
@@ -22,10 +21,10 @@ def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, rec
             sG_ = cluster_N_(G, pL_, fd)  # optionally divisive clustering
             frame.subG_ = sG_
             for sG in sG_:
-                if len(sG.node_) > ave_L:
+                if len(sG.subG_) > ave_L:
                     find_centroids(sG)  # centroid clustering in sG.node_ or subG_?
     '''
-    cross-comp converted edges, then GGs, GGGs, etc, interlaced with exemplar selection 
+    cross-comp G_) GG_) GGG_., interlaced with exemplar centroid selection 
     '''
     N_,L_, (m,d,r) = comp_node_(frame.subG_)  # cross-comp exemplars, extrapolate to their node_s?
     if m > ave * r:
@@ -90,10 +89,11 @@ def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.
         if et[0] > et[2] * ave * nest:  # rdn incr/ dist decr
             G_ += [sum2graph(root, Gt, fd, nest)]
         else:
+            # unpack Gt
             for n in node_: n.root_.pop()
     return G_
 
-''' Hierarchical clustering should alternate between two phases: generative by connectivity and compressive by centroid.
+''' Hierarchical clustering should alternate between two phases: generative via connectivity and compressive via centroid.
 
  Connectivity clustering terminates at effective contours: alt_Gs, beyond which cross-similarity is not likely to continue. 
  Next cross-comp is discontinuous and should be selective, for well-defined clusters: stable and likely recurrent.
@@ -102,13 +102,14 @@ def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.
  Only centroids (exemplars) need to be cross-compared on the next connectivity clustering level, representing their nodes.
  
  So connectivity clustering is a generative learning phase, forming new derivatives and structured composition levels, 
- while centroid clustering is a compressive phase, reducing multiple similar comparands to a single exemplar. 
-'''
+ while centroid clustering is a compressive phase, reducing multiple similar comparands to a single exemplar. '''
+
 def find_centroids(graph):
 
     def centroid(dnode_, node_, C=None):  # sum|subtract and average Rim nodes
 
-        if C is None: C = CG()
+        if C is None:
+            C = CG(); C.L = 0; C.M = 0  # setattr ave len node_ and summed match to nodes
         for n in dnode_:
             s = n.sign; n.sign=1  # single-use sign
             C.n += n.n * s; C.Et += n.Et * s; C.rng = n.rng * s; C.aRad += n.aRad * s
@@ -120,7 +121,6 @@ def find_centroids(graph):
         k = len(dnode_); C.n/=k; C.Et/=k; C.latuple/=k; C.mdLay/=k; C.aRad/=k
         if C.derH: C.derH.norm_(k)  # derH/=k
         C.box = reduce(extend_box, (n.box for n in node_))
-        C.M = 0  # summed match to nodes
         return C
 
     def comp_C(C, N):  # compute match without new derivatives: global cross-comp is not directional
@@ -134,27 +134,30 @@ def find_centroids(graph):
         # comp node_, comp altG from converted adjacent flat blobs?
         return mL + mA + mLat + mLay + mH
 
-    def centroid_cluster(N, clustered_):  # refine and extend cluster with extN_
+    def centroid_cluster(N):  # refine and extend cluster with extN_
 
-        _N_ = {n for L,_ in N.rim for n in L.nodet}
+        _N_ = {n for L,_ in N.rim for n in L.nodet if not n.fin}
         n_ = _N_| {N}  # include seed node
         C = centroid(n_,n_)
         while True:
-            N_, negN_, extN_, M, vM = [],[],[],0,0  # included, removed, extended nodes
+            N_,negN_,extN_, M, dM, extM = [],[],[], 0,0,0  # included, removed, extended nodes and values
             for _N in _N_:
-                if _N in clustered_: continue
                 m = comp_C(C,_N)
                 vm = m - ave  # deviation
                 if vm > 0:
-                    extN_ += [link.nodet[0] if link.nodet[1] is _N else link.nodet[1] for link,_ in _N.rim]  # next comp to C
-                    N_ += [_N]; M += m; _N.M = m  # to sum in C
-                    if _N not in C.node_:
-                        vM += vm; clustered_.add(_N)  # only new nodes
-                elif _N in C.node_:
-                    _N.sign=-1; negN_+=[_N]; vM += -vm  # to subtract from C, vM += abs m deviation
-                    clustered_.remove(_N)  # if exclusive
-            if vM > ave:  # new match, terminate (refine,extend) if low
-                extN_ = set(extN_) - clustered_  # exclude clustered Ns
+                    N_ += [_N]; M += m
+                    if _N.m: dM += m - _N.m  # was in C.node_
+                    else:    dM += vm  # new node
+                    _N.m = m  # to sum in C
+                    for link, _ in _N.rim:
+                        n = link.nodet[0] if link.nodet[1] is _N else link.nodet[1]
+                        if n.fin or n.m: continue  # in other C or in C.node_
+                        extN_ += [n]; extM += n.derH.Et[0]  # add external Ns for next loop
+                elif _N.m:  # was in C.node_
+                    _N.sign=-1; _N.m = 0; negN_+=[_N]; dM += -vm  # dM += abs m deviation
+                    # subtract from C
+            if dM > ave and M + extM > ave:  # update val and reform val, terminate reforming if low
+                extN_ = set(extN_)
                 dN_ = extN_ | set(negN_)
                 if dN_: # recompute if any changes in node_
                     C = centroid(dN_,N_,C)
@@ -163,23 +166,23 @@ def find_centroids(graph):
             else:
                 if C.M > ave * 10:
                     for n in C.node_:
-                        n.root_ += [C]; delattr(n, "sign")
+                        n.fin = 1; n.root_ += [C]; delattr(n,"sign")
                     return C  # centroid cluster
                 else:  # unpack C.node_
-                    for n in C.node_:
-                        clustered_.remove(n); n.M = 0
+                    for n in C.node_: n.m = 0
                     return N  # keep seed node
 
     # find representative centroids for complemented Gs: m-core + d-contour, initially within an edge
     N_ = sorted(graph.subG_, key=lambda n: n.Et[0], reverse=True)
     subG_, clustered_ = [], set()
-    for N in N_: N.sign = 1
-    for i, N in enumerate(N_):  # connectivity cluster may have exemplar centroids
-        if N not in clustered_:
+    for N in N_:
+        N.sign, N.m, N.fin = 1, 0, 0  # setattr: C update sign, inclusion val, prior C inclusion flag
+    for i, N in enumerate(N_):  # replace some of connectivity cluster by exemplar centroids
+        if not N.fin:  # not in prior C
             if N.Et[0] > ave * 10:
-                subG_ += [centroid_cluster(N, clustered_)]  # extend from N.rim, return C if packed else N
+                subG_ += [centroid_cluster(N)]  # extend from N.rim, return C if packed else N
             else:  # the rest of N_ M is lower
-                subG_ += [N for N in N_[i:] if N not in clustered_]
+                subG_ += [N for N in N_[i:] if not N.fin]
                 break
     graph.subG_ = subG_  # mix of Ns and Cs: exemplars of their network?
     if len(graph.subG_) > ave_L:
@@ -195,7 +198,8 @@ if __name__ == "__main__":
     if frame.subG_:  # converted edges
         subG_ = []
         for edge in frame.subG_:
-            find_centroids(edge)  # here because trace_edge doesn't have find_centroids
-            subG_ += edge.subG_
-        frame.subG_ = subG_  # edge is not a connectivity cluster, unpack by default
+            if edge.subG_:  # or / and edge Et?
+                find_centroids(edge)  # no find_centroids in trace_edge
+                subG_ += edge.subG_  # unpack edge, or keep if connectivity cluster, or in flat blob altG_?
+        frame.subG_ = subG_
         agg_cluster_(frame)  # connectivity clustering

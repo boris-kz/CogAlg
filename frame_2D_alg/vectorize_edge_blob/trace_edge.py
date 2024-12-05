@@ -52,7 +52,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         super().__init__()
         He.H = [] if H is None else H  # nested derLays | md_ in md_C, empty in bottom layer
         He.n = n  # total number of params compared to form derH, to normalize comparands
-        He.Et = np.zeros(3) if Et is None else Et  # summed from links
+        He.Et = [] if Et is None else Et  # summed from links
         He.node_ = [] if node_ is None else node_  # concat bottom nesting order if CG, may be redundant to G.node_
         He.md_t = [] if md_t is None else md_t  # derivation layer in H
         He.root = None if root is None else root  # N or higher-composition He
@@ -307,8 +307,8 @@ def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et
             if _nrim & nrim:  # indirectly connected Gs,
                 continue     # no direct match priority?
             M = ( (_G.mdLay[1][0] + G.mdLay[1][0]) * icoef**2  # internal vals are less predictive in external comp
-                 + (_G.derH.Et[0]  + G.derH.Et[0] ) * icoef
-                 + (_G.extH.Et[0]  + G.extH.Et[0] ) )
+                 + ((_G.derH.Et[0] if _G.derH.Et else 0) + (G.derH.Et[0] if G.derH.Et else 0) ) * icoef
+                 + ((_G.extH.Et[0] if _G.extH.Et else 0) + (G.extH.Et[0] if G.extH.Et else 0) ))
             if dist < max_dist * (radii * icoef**3) * M:
                 Link = comp_N(_G,G, rn,angle=[dy,dx],dist=dist)
                 L_ += [Link]  # include -ve links

@@ -32,8 +32,8 @@ len prior root_ sorted by G is root.rdn, to eval for inclusion in PP or start ne
 '''
 
 ave_dI = ave_inv = 20  # ave inverse m, change to Ave from the root intra_blob?
-ave, aved_d = 5, 5  # ave direct m, change to Ave_min from the root intra_blob?
-aves = ave_mI, ave_mG, ave_mM, ave_mMa, ave_mA, ave_mL = ave, 10, 2, .1, .2, 2
+ave, ave_d = 5, 5  # ave direct m, change to Ave_min from the root intra_blob?
+aves = ave, ave_mG, ave_mM, ave_mMa, ave_mA, ave_mL = 5, 10, 2, .1, .2, 2
 PP_aves = ave_PPm, ave_PPd = 50, 50
 P_aves = ave_Pm, ave_Pd = 10, 10
 ave_Gm = 50
@@ -46,35 +46,36 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
         super().__init__()
 
         l.nodet = nodet  # e_ in kernels, else replaces _node,node: not used in kernels?
-        l.latuple = np.array([.0,.0,.0,.0,.0,np.zeros(2)], dtype=object) if latuple is None else latuple  # sum node_
-        l.mdLay = np.array([np.zeros(12),np.zeros(2),0],dtype=object) if mdLay is None else mdLay
+        l.latuple = np.array([.0,.0,.0,.0,.0, np.zeros(2)], dtype=object) if latuple is None else latuple  # sum node_
+        l.mdLay = np.array([np.zeros(12), np.zeros(2), 0], dtype=object) if mdLay is None else mdLay
         l.angle = angle  # dy,dx between node centers
         l.span = span  # distance between node centers
         l.yx = yx  # sum node_
         l.Et = np.zeros(2) if Et is None else Et
         l.root = root  # PPds containing dP
-        l.nmed = 0  # comp rng: n of mediating Ps between node_ Ps
         l.lrim = []
         l.prim = []
+        # l.med = 0  # comp rng: n of mediating Ps between node_ Ps
         # n = 1?
     def __bool__(l):
-        return any(l.mdLay[0])  # l.mdLay.H
+        return any(l.mdLay[0])  # mdLay.H
 
 def comp_md_(_md_, md_, rn=1, dir=1):  # replace dir with rev?
 
-    vm, vd, rm, rd = 0,0,0,0
+    M, D = 0, 0
     derLay = []
     for i, (_d, d) in enumerate(zip(_md_[1::2], md_[1::2])):  # compare ds in md_ or ext
         d *= rn  # normalize by compared accum span
         diff = (_d - d) * dir
         match = min(abs(_d), abs(d))
         if (_d < 0) != (d < 0): match = -match  # negate if only one compared is negative
-        vm += match - aves[i]  # fixed param set?
-        vd += diff
+        M += match  # maybe negative
+        D += abs(diff)  # potential compression
         derLay += [match, diff]  # flat
-    prj_d = abs(vd) * (vm/ave)
-    prj_m = vm - (prj_d / 2)
-    return np.array([np.array(derLay, dtype=float), np.array([prj_m,prj_d], dtype=float), 1],dtype=object)  # [md_, Et, n]
+    vD = D * (M / ave)  # project by borrow from rel M
+    vM = M - vD / 2  # cancel by lend to D
+
+    return np.array([np.array(derLay, dtype=float), np.array([vM, vD], dtype=float), 1], dtype=object)  # [md_, Et, n]
 
 def vectorize_root(frame):
 
@@ -118,12 +119,12 @@ def comp_P_(edge):  # form links from prelinks
                 angle=[dy,dx]; distance=np.hypot(dy,dx)
                 rn = len(_P.dert_) / len(P.dert_)
                 md_ = comp_latuple(_P.latuple, P.latuple, rn)
-                vm = sum(md_[::2]); vd = sum(np.abs(md_[1::2]))
-                n = (len(_P.dert_)+len(P.dert_)) / 2  # der value = ave compared n?
-                prj_d = abs(vd) * (vm/ave)
-                prj_m = vm - prj_d / 2
-                derLay = np.array([md_, np.array([prj_m,prj_d]), n], dtype=object)
-                link = convert_to_dP(_P, P, derLay, angle, distance, fd=0)
+                M, D = md_[-2:]
+                vD = D * (M / sum(aves))  # borrow from projected M
+                vM = M - vD / 2 - sum(aves)  # cancel by lend to D
+                n = (len(_P.dert_) + len(P.dert_)) / 2  # norm by ave compared n?
+                derLay = np.array([md_, np.array([vM, vD]), n], dtype=object)
+                link = convert_to_dP(_P,P, derLay, angle, distance, fd=0)
                 if link:
                     P.rim += [link]
     del edge.pre__
@@ -213,20 +214,21 @@ def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
     _I, _G, _M, _Ma, _L, (_Dy, _Dx) = _latuple
     I, G, M, Ma, L, (Dy, Dx) = latuple
 
-    dI = _I - I*rn;  mI = ave_dI - dI
-    dG = _G - G*rn;  mG = min(_G, G*rn) - ave_mG
-    dM = _M - M*rn;  mM = get_match(_M, M*rn) - ave_mM  # M, Ma may be negative
-    dMa= _Ma- Ma*rn; mMa = get_match(_Ma, Ma*rn) - ave_mMa
-    dL = _L - L*rn;  mL = min(_L, L*rn) - ave_mL
-    mAngle, dAngle = comp_angle((_Dy,_Dx), (Dy,Dx))
-    mAngle -= ave_mA
+    dI = _I - I*rn;  mI = ave_dI - dI;             vI = mI - ave
+    dG = _G - G*rn;  mG = min(_G, G*rn);           vG = mG - ave_mG
+    dM = _M - M*rn;  mM = get_match(_M, M*rn);     vM = mM - ave_mM  # M, Ma may be negative
+    dMa= _Ma- Ma*rn; mMa = get_match(_Ma, Ma*rn);  vMa = mMa - ave_mMa
+    dL = _L - L*rn;  mL = min(_L, L*rn);           vL = mL - ave_mL
+    mAngle,dAngle = comp_angle((_Dy,_Dx),(Dy,Dx)); vA = mAngle - ave_mA
+    # abs totals
+    tM = mI + mG + mM + mMa + mL + mAngle
+    tD = abs(dI) + abs(dG) + abs(dM) + abs(dMa) + abs(dL) + abs(dAngle)
 
-    ret = np.array([mL,dL,mI,dI,mG,dG,mM,dM,mMa,dMa,mAngle-aves[5],dAngle])
+    ret = np.array([vL,dL, vI,dI, vG,dG, vM,dM, vMa,dMa, vA,dAngle, tM,tD])
     if fagg:  # add norm m,d, ret=[ret,Ret]:
-        mval, dval = sum(ret[::2]),sum(ret[1::2])
-        prj_d = abs(dval) * (mval/ave)
-        prj_m = mval - prj_d
-        ret = np.array([ret, np.array([prj_m,prj_d]), 1], dtype=object)  # if fagg only
+        prj_d = tD * (tM / sum(aves))
+        prj_m = tM - prj_d / 2 - sum(aves)
+        ret = np.array([ret, np.array([prj_m, prj_d]), 1], dtype=object)  # if fagg only
     return ret
 
 def get_match(_par, par):
