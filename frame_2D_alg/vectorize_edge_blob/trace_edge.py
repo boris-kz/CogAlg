@@ -175,7 +175,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.subG_ = subG_  # selectively clustered node_
         G.subL_ = subL_  # selectively clustered link_
         G.latuple = np.array([.0,.0,.0,.0,.0,np.zeros(2)],dtype=object) if latuple is None else latuple  # lateral I,G,M,Ma,L,[Dy,Dx]
-        G.mdLay = np.array([np.zeros(12), np.zeros(2), 0],dtype=object) if mdLay is None else mdLay  # mdLat, et, n
+        G.mdLay = np.array([np.zeros(6), np.zeros(6), np.zeros(2), 0],dtype=object) if mdLay is None else mdLay  # m_,d_,et,n
         # maps to node_H / agg+|sub+:
         G.derH = CH() if derH is None else derH  # sum from nodes, then append from feedback
         G.extH = CH() if extH is None else extH  # sum from rim_ elays, H maybe deleted
@@ -267,13 +267,14 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
     # comp PP_:
     N_,L_,(m,d,r) = comp_node_(edge.subG_)
     edge.subG_ = N_; edge.link_ = L_
+    # cancel by borrowing d?
     if m > ave * r:
         mlay = CH().add_H([L.derH for L in L_])  # mfork, else no new layer
         edge.derH = CH(H=[mlay], md_t = deepcopy(mlay.md_t), n=mlay.n, root=edge, Et=copy(mlay.Et))
         mlay.root=edge.derH  # init
         if len(N_) > ave_L:
             cluster_PP_(edge,fd=0)
-        if d * (m/ave) > ave_d * r:  # borrow from mis-projected m: proj_m -= proj_d
+        if d * (m/ave) > ave_d * r:  # borrow from mis-projected m: proj_m -= proj_d, no eval per link: comp instead
             for L in L_:
                 L.extH = CH(); L.root_= [edge]
             # comp dPP_:
@@ -310,14 +311,14 @@ def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et
                  + ((_G.derH.Et[0] if _G.derH.Et else 0) + (G.derH.Et[0] if G.derH.Et else 0) ) * icoef
                  + ((_G.extH.Et[0] if _G.extH.Et else 0) + (G.extH.Et[0] if G.extH.Et else 0) ))
             if dist < max_dist * (radii * icoef**3) * M:
-                Link = comp_N(_G,G, rn,angle=[dy,dx],dist=dist)
+                Link = comp_N(_G,G, rn, angle=[dy,dx],dist=dist)
                 L_ += [Link]  # include -ve links
                 if Link.derH.Et[0] > ave * Link.derH.Et[2]:
                     N_.update({_G,G}); Et += Link.derH.Et; _G.add,G.add = 1,1
             else:
                 Gp_ += [Gp]  # re-evaluate not-compared pairs with one incremented N.M
         ET += Et
-        if Et[0] > ave * Et[2] * rng:  # current-rng vM
+        if Et[0] > ave * Et[2] * rng:  # current-rng vM, cancel by borrowing d?
             rng += 1
             _Gp_ = [Gp for Gp in Gp_ if Gp[0].add or Gp[1].add]  # one incremented N.M
         else:  # low projected rng+ vM
@@ -348,7 +349,7 @@ def comp_link_(iL_):  # comp CLs via directional node-mediated link tracing: der
                     Link = comp_N(_L,L, rn,angle=[dy,dx],dist=np.hypot(dy,dx), dir = -1 if rev else 1)  # d = -d if L is reversed relative to _L
                     Link.med = med
                     LL_ += [Link]  # include -ves, link order: nodet < L < rimt, mN.rim || L
-                    if Link.derH.Et[0] > ave * Link.derH.Et[2]:
+                    if Link.derH.Et[0] > ave * Link.derH.Et[2]:  # cancel by borrowing d?
                         out_L_.update({_L,L}); L_.update({_L,L}); Et += Link.derH.Et
         if not any(L_): break
         # extend mL_t per last med_L
@@ -403,12 +404,12 @@ def comp_N(_N,N, rn, angle=None, dist=None, dir=None):  # dir if fd, Link.derH=d
         mA,dA = comp_area(_N.box, N.box)  # compare area in CG vs angle in CL
     n = .3
     M = mL + mA; D = (abs(dL)+abs(dA)) * (M/ave); M = M - D/2
-    Et = np.array([M,D], dtype=float)
-    md_t = [np.array([np.array([mL,dL,mA,dA], dtype=float), Et,n], dtype=object)]  # init as [mdExt]
+    Et = np.array([M,D])
+    md_t = [np.array([np.array([mL,mA]), np.array([dL,dA]), Et, n], dtype=object)]  # init as [mdExt]
     if not fd:  # CG
-        mdlat = comp_latuple(_N.latuple,N.latuple,rn,fagg=1)
-        mdLay = comp_md_(_N.mdLay[0], N.mdLay[0], rn, dir)
-        md_t += [mdlat,mdLay]; Et += mdlat[1] + mdLay[1]; n += mdlat[2] + mdLay[2]
+        mdLat = comp_latuple(_N.latuple,N.latuple, _N.n, N.n)  # not sure about ns
+        mdLay = comp_md_(_N.mdLay[1], N.mdLay[1], rn, dir)
+        md_t += [mdLat,mdLay]; Et += mdLat[2] + mdLay[2]; n += mdLat[3] + mdLay[3]
     # | n = (_n+n)/2?
     Et = np.append(Et, (_N.Et[2]+N.Et[2])/2 )  # Et[0] += ave_rn - rn?
     subLay = CH(n=n, md_t=md_t, Et=Et)

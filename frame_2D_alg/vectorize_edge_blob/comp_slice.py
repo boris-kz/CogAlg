@@ -47,7 +47,7 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
 
         l.nodet = nodet  # e_ in kernels, else replaces _node,node: not used in kernels?
         l.latuple = np.array([.0,.0,.0,.0,.0, np.zeros(2)], dtype=object) if latuple is None else latuple  # sum node_
-        l.mdLay = np.array([np.zeros(12), np.zeros(2), 0], dtype=object) if mdLay is None else mdLay
+        l.mdLay = np.array([np.zeros(6), np.zeros(6), np.zeros(2), 0],dtype=object) if mdLay is None else mdLay  # m_,d_,et,n
         l.angle = angle  # dy,dx between node centers
         l.span = span  # distance between node centers
         l.yx = yx  # sum node_
@@ -58,24 +58,22 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
         # l.med = 0  # comp rng: n of mediating Ps between node_ Ps
         # n = 1?
     def __bool__(l):
-        return any(l.mdLay[0])  # mdLay.H
+        return any(l.mdLay[0])
 
 def comp_md_(_md_, md_, rn=1, dir=1):  # replace dir with rev?
 
-    M, D = 0, 0
-    derLay = []
-    for i, (_d, d) in enumerate(zip(_md_[1::2], md_[1::2])):  # compare ds in md_ or ext
+    M, D = 0,0; m_, d_ = [],[]
+
+    for i, (_d, d) in enumerate(zip(_md_[1], md_[1])):  # compare ds in md_ or ext
         d *= rn  # normalize by compared accum span
         diff = (_d - d) * dir
         match = min(abs(_d), abs(d))
         if (_d < 0) != (d < 0): match = -match  # negate if only one compared is negative
-        M += match  # maybe negative
-        D += abs(diff)  # potential compression
-        derLay += [match, diff]  # flat
-    vD = D * (M / ave)  # project by borrow from rel M
-    vM = M - vD / 2  # cancel by lend to D
+        m_ += [match]; M += match  # maybe negative
+        d_ += [diff];  D += abs(diff)  # potential compression
 
-    return np.array([np.array(derLay, dtype=float), np.array([vM, vD], dtype=float), 1], dtype=object)  # [md_, Et, n]
+        # project link vals at eval from G, not here
+    return np.array([np.array(m_), np.array(d_), np.array([M,D]), (_md_[3]+md_[3])/2 ], dtype=object)  # [m_, d_, Et, n]
 
 def vectorize_root(frame):
 
@@ -88,9 +86,9 @@ def vectorize_root(frame):
 
 def comp_slice(edge):  # root function
 
-    edge.mdLay = np.array([np.zeros(12), np.zeros(2),0],dtype=object)  # md_, Et, n
+    edge.mdLay = np.array([np.zeros(6), np.zeros(6), np.zeros(2),0], dtype=object)  # m_,d_, Et, n
     for P in edge.P_:  # add higher links
-        P.mdLay = np.array([np.zeros(12), np.zeros(2),0],dtype=object)  # to accumulate in sum2PP
+        P.mdLay = np.array([np.zeros(6), np.zeros(6), np.zeros(2),0],dtype=object)  # to accumulate in sum2PP
         P.rim = []; P.lrim = []; P.prim = []
 
     comp_P_(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
@@ -99,7 +97,7 @@ def comp_slice(edge):  # root function
     for PPm in edge.node_:  # eval sub-clustering, not recursive
         if isinstance(PPm, list):  # PPt, not CP
             P_, link_, mdLay = PPm[1:4]
-            Et = mdLay[1]
+            Et = mdLay[2]
             if len(link_) > ave_L and Et[1] > ave_PPd:
                 comp_dP_(PPm)
                 PPm[2] = form_PP_(PPm, link_)  # add PPds within PPm link_
@@ -112,21 +110,14 @@ def comp_P_(edge):  # form links from prelinks
 
     edge.rng = 1
     for P, _pre_ in edge.pre__.items():
-        for _P in _pre_:  # prelinks
-            dy,dx = np.subtract(P.yx,_P.yx) # dy,dx between node centers
+        for _P in _pre_:
+            # prelinks
+            dy,dx = np.subtract(P.yx,_P.yx)  # between node centers
             if abs(dy)+abs(dx) <= edge.rng * 2:
                 # <max Manhattan distance
                 angle=[dy,dx]; distance=np.hypot(dy,dx)
-                rn = len(_P.dert_) / len(P.dert_)
-                md_ = comp_latuple(_P.latuple, P.latuple, rn)
-                M, D = md_[-2:]
-                vD = D * (M / sum(aves))  # borrow from projected M
-                vM = M - vD / 2 - sum(aves)  # cancel by lend to D
-                n = (len(_P.dert_) + len(P.dert_)) / 2  # norm by ave compared n?
-                derLay = np.array([md_, np.array([vM, vD]), n], dtype=object)
-                link = convert_to_dP(_P,P, derLay, angle, distance, fd=0)
-                if link:
-                    P.rim += [link]
+                derLay = comp_latuple(_P.latuple, P.latuple, len(_P.dert_), len(P.dert_))
+                P.rim += [convert_to_dP(_P,P, derLay, angle, distance, fd=0)]
     del edge.pre__
 
 def comp_dP_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
@@ -134,13 +125,13 @@ def comp_dP_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
     link_ = PP[2]
     llink_ = []  # links between links
     for dP in link_:
-        M,D = dP.mdLay[1]
+        M,D = dP.mdLay[2]
         if D * (M/ave) > aves[1]:
             for _dP in dP.nodet[0].rim:  # link.nodet is CP # for nmed, _rim_ in enumerate(dP.nodet[0].rim_):
                 if _dP not in link_:
                     continue  # skip removed node links
-                rn = _dP.mdLay[2] / dP.mdLay[2]  # mdLay.n
-                derLay = comp_md_(_dP.mdLay[0], dP.mdLay[0], rn=rn)  # comp md_latuple: H
+                rn = _dP.mdLay[3] / dP.mdLay[3]  # mdLay.n
+                derLay = comp_md_(_dP.mdLay[1], dP.mdLay[1], rn=rn)  # comp md_latuple: H
                 angle = np.subtract(dP.yx,_dP.yx)  # dy,dx of node centers
                 distance = np.hypot(*angle)  # between node centers
                 llink_ += [ convert_to_dP(_dP, dP, derLay, angle, distance, fd=1)]
@@ -151,7 +142,7 @@ def convert_to_dP(_node, node, derLay, angle, distance, fd):
     latuple = (_node.latuple + node.latuple) /2
     link = CdP(nodet=[_node,node], mdLay=derLay, angle=angle, span=distance, yx=np.add(_node.yx, node.yx)/2, latuple=latuple)
     # if v > ave * r:
-    Et = link.mdLay[1]
+    Et = link.mdLay[2]
     if Et[fd] > aves[fd]:
         node.lrim += [link]; _node.lrim += [link]
         node.prim +=[_node]; _node.prim +=[node]
@@ -183,7 +174,7 @@ def form_PP_(root, iP_):  # form PPs of dP.valt[fd] + connected Ps val
 
 def sum2PP(root, P_, dP_):  # sum links in Ps and Ps in PP
 
-    mdLay = np.array([np.zeros(12),np.zeros(2),0], dtype=object)
+    mdLay = np.array([np.zeros(6),np.zeros(6),np.zeros(2),0], dtype=object)
     latuple = np.array([.0,.0,.0,.0,.0,np.zeros(2)], dtype=object)
     link_, A, S, area, n, box = [],[0,0], 0,0,0, [np.inf,np.inf,0,0]
     # add uplinks:
@@ -209,27 +200,24 @@ def sum2PP(root, P_, dP_):  # sum links in Ps and Ps in PP
 
     return PPt
 
-def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
+def comp_latuple(_latuple, latuple, _n,n):  # 0der params
 
     _I, _G, _M, _Ma, _L, (_Dy, _Dx) = _latuple
     I, G, M, Ma, L, (Dy, Dx) = latuple
+    rn = _n / n
 
-    dI = _I - I*rn;  mI = ave_dI - dI;             vI = mI - ave
-    dG = _G - G*rn;  mG = min(_G, G*rn);           vG = mG - ave_mG
-    dM = _M - M*rn;  mM = get_match(_M, M*rn);     vM = mM - ave_mM  # M, Ma may be negative
-    dMa= _Ma- Ma*rn; mMa = get_match(_Ma, Ma*rn);  vMa = mMa - ave_mMa
-    dL = _L - L*rn;  mL = min(_L, L*rn);           vL = mL - ave_mL
-    mAngle,dAngle = comp_angle((_Dy,_Dx),(Dy,Dx)); vA = mAngle - ave_mA
-    # abs totals
-    tM = mI + mG + mM + mMa + mL + mAngle
-    tD = abs(dI) + abs(dG) + abs(dM) + abs(dMa) + abs(dL) + abs(dAngle)
+    dI = _I - I*rn;  mI = ave_dI - dI            # vI = mI - ave
+    dG = _G - G*rn;  mG = min(_G, G*rn)          # vG = mG - ave_mG
+    dM = _M - M*rn;  mM = get_match(_M, M*rn)    # vM = mM - ave_mM  # M, Ma may be negative
+    dMa= _Ma- Ma*rn; mMa = get_match(_Ma, Ma*rn) # vMa = mMa - ave_mMa
+    dL = _L - L*rn;  mL = min(_L, L*rn)          # vL = mL - ave_mL
+    mA, dA = comp_angle((_Dy,_Dx),(Dy,Dx))       # vA = mA - ave_mA
 
-    ret = np.array([vL,dL, vI,dI, vG,dG, vM,dM, vMa,dMa, vA,dAngle, tM,tD])
-    if fagg:  # add norm m,d, ret=[ret,Ret]:
-        prj_d = tD * (tM / sum(aves))
-        prj_m = tM - prj_d / 2 - sum(aves)
-        ret = np.array([ret, np.array([prj_m, prj_d]), 1], dtype=object)  # if fagg only
-    return ret
+    d_ = np.array([dL, dI, dG, dM, dMa, dA])
+    m_ = np.array([mL, mI, mG, mM, mMa, mA])
+    et = np.array([np.sum(m_), np.sum(np.abs(d_))])
+
+    return np.array([m_,d_, et, (_n+n)/1], dtype=object)
 
 def get_match(_par, par):
     match = min(abs(_par),abs(par))
