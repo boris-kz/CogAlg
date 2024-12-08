@@ -4,8 +4,8 @@ import numpy as np
 from copy import copy, deepcopy
 from functools import reduce
 from frame_blobs import frame_blobs_root, intra_blob_root, imread
-from comp_slice import comp_latuple, comp_md_
-from trace_edge import comp_node_, comp_link_, sum2graph, get_rim, CH, CG, ave, ave_d, ave_L, vectorize_root, comp_area, extend_box
+from comp_slice import comp_latuple
+from trace_edge import comp_node_, comp_link_, comp_lay, sum2graph, get_rim, CH, CG, ave, ave_d, ave_L, vectorize_root, comp_area, extend_box
 '''
 Cross-compare and cluster Gs within a frame, potentially unpacking their node_s first,
 alternating agglomeration and centroid clustering.
@@ -119,11 +119,11 @@ def find_centroids(graph):
             C.n += n.n * s; C.Et += n.Et * s; C.rng = n.rng * s; C.aRad += n.aRad * s
             C.L += len(n.node_) * s
             C.latuple += n.latuple * s; C.mdLay += n.mdLay * s
-            if n.derH: C.derH = C.derH.add_H(n.derH, sign=s)
-            if n.extH: C.extH = C.extH.add_H(n.extH, sign=s)
+            if n.derH: C.derH.add_H(n.derH, sign=s)
+            if n.extH: C.extH.add_H(n.extH, sign=s)
         # get averages:
         k = len(dnode_); C.n/=k; C.Et/=k; C.latuple/=k; C.mdLay/=k; C.aRad/=k
-        if C.derH: C.derH.norm_(k)  # derH/=k
+        if C.derH: C.derH.norm_(1/k)  # derH/=k
         C.box = reduce(extend_box, (n.box for n in node_))
         return C
 
@@ -133,7 +133,7 @@ def find_centroids(graph):
         mL = min(C.L,len(N.node_)) - ave_L
         mA = comp_area(C.box, N.box)[0]
         mLat = comp_latuple(C.latuple, N.latuple, C.n, N.n)[2][0]
-        mLay = comp_md_(C.mdLay, N.mdLay)[2][0]
+        mLay = comp_lay(C.mdLay, N.mdLay)[2][0]
         mH = C.derH.comp_H(N.derH).Et[0] if C.derH and N.derH else 0
         # comp node_, comp altG from converted adjacent flat blobs?
         return mL + mA + mLat + mLay + mH

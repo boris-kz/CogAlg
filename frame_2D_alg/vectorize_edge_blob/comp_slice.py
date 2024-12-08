@@ -61,7 +61,7 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
 def comp_md_(_lay,lay, dir=1):  # replace dir with rev?
 
     M, D = 0,0; md_, dd_ = [],[]
-    (_d_,_,_n), (d_,_,n) = _lay,lay
+    (_,_d_,_,_n), (_,d_,_,n) = _lay,lay  # [m_,d_,et,n]
     rn = _n / n
     for i, (_d, d) in enumerate(zip(_d_, d_)):  # compare ds in md_ or ext
         d *= rn  # normalize by compared accum span
@@ -70,8 +70,7 @@ def comp_md_(_lay,lay, dir=1):  # replace dir with rev?
         if (_d < 0) != (d < 0): match = -match  # negate if only one compared is negative
         md_ += [match]; M += match  # maybe negative
         dd_ += [diff];  D += abs(diff)  # potential compression
-
-        # project link vals at eval from G, not here
+        # proj / eval
     return np.array([np.array(md_), np.array(dd_), np.array([M,D]), (_n+n)/2 ], dtype=object)  # [m_, d_, Et, n]
 
 def vectorize_root(frame):

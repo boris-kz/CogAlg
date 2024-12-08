@@ -2,7 +2,7 @@ import sys
 sys.path.append("..")
 from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
 from slice_edge import slice_edge, comp_angle, aveG
-from comp_slice import comp_slice, comp_latuple, comp_md_
+from comp_slice import comp_slice, comp_latuple
 from itertools import combinations, zip_longest
 from copy import deepcopy, copy
 import numpy as np
@@ -50,8 +50,8 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
     name = "H"
     def __init__(He, n=0, H=None, Et=None, node_=None, md_t=None, root=None, i=None, i_=None, altH=None):
         super().__init__()
-        He.H = [] if H is None else H  # nested derLays | md_ in md_C, empty in bottom layer
-        He.n = n  # total number of params compared to form derH, to normalize comparands
+        He.H = [] if H is None else H  # nested derLays | md_ in md_t, empty in bottom layer
+        He.n = n  # total number of params compared to form derH, to normalize in next comp
         He.Et = np.zeros(3) if Et is None else Et  # summed from links
         He.node_ = [] if node_ is None else node_  # concat bottom nesting order if CG, may be redundant to G.node_
         He.md_t = [] if md_t is None else md_t  # derivation layer in H
@@ -103,27 +103,26 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
 
         return HE
 
-    def copy_(_He, root, rev=0):
-        # comp direction may be reversed
-        He = CH(root=root, node_=copy(_He.node_), n=_He.n, i=_He.i, i_=copy(_He.i_))
+    def copy_(_He, He, rev=0, ini=1):  # comp direction may be reversed
+
+        if ini: He = CH(node_=copy(_He.node_), n=_He.n, i=_He.i, i_=copy(_He.i_))
+        else:   He.node_,He.n,He.i,He.i_ = copy(_He.node_),_He.n,_He.i,_He.i_
         He.Et = copy(_He.Et)
         He.md_t = deepcopy(_He.md_t)
         if rev:
             for _,d_,_,_ in He.md_t:  # mdExt, possibly mdLat, mdLay
                d_ *= -1   # negate ds
         for he in _He.H:
-            He.H += [he.copy_(root=He, rev=rev)] if he else [[]]
+            if he: he = he.copy_(rev=rev,ini=ini)
+            else:  he = []
+            He.H += [he]
         return He
 
     def comp_H(_He, He, dir=1):  # unpack each layer of CH down to numericals and compare each pair
 
-        der_md_t = []; Et = np.zeros(2)
-        for _md_, md_ in zip(_He.md_t, He.md_t):  # [mdExt, possibly mdLat, mdLay], default per layer
-            der_md_ = comp_md_(_md_,md_, dir=dir)  # norm by _He.n, He.n instead?
-            der_md_t += [der_md_]
-            Et += der_md_[2]
-
-        DLay = CH(md_t=der_md_t, Et=np.append(Et,(_He.Et[2]+He.Et[2])/2), n=.3 if len(der_md_t)==1 else 2.3)  # .3 in default comp ext
+        der_md_t, et = comp_lay(_He.md_t, He.md_t, _He.n / He.n, dir=1)
+        # ini:
+        DLay = CH(md_t=der_md_t, Et=np.append(et,(_He.Et[2]+He.Et[2])/2), n=.3 if len(der_md_t)==1 else 2.3)  # .3 in default comp ext
         # empty H in bottom | deprecated layer:
         for rev, _lay, lay in zip((0,1), _He.H, He.H):  #  fork & layer CH / rng+|der+, flat
             if _lay and lay:
@@ -138,10 +137,10 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
 
     def norm_(He, n):
 
-        for md_ in He.md_t: md_ /= n
+        for md_ in He.md_t: md_ *= n
         for lay in He.H: lay.norm_(n)
-        He.n /= n
-        He.Et /= n
+        He.n *= n
+        He.Et *= n
 
     # not implemented yet:
     def sort_H(He, fd):  # re-assign rdn and form priority indices for comp_H, if selective and aligned
@@ -188,10 +187,9 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 class CL(CBase):  # link or edge, a product of comparison between two nodes or links
     name = "link"
 
-    def __init__(l, nodet=None, dist=None, derH=None, angle=None, box=None, H_=None, n=None, yx=None):
+    def __init__(l, nodet=None, dist=None, derH=None, angle=None, box=None, H_=None, yx=None):
         super().__init__()
         # CL = binary tree of Gs, depth+/der+: CL nodet is 2 Gs, CL + CLs in nodet is 4 Gs, etc., unpack sequentially
-        l.n = 1 if n is None else n  # min(node_.n)
         l.derH = CH(root=l) if derH is None else derH
         l.nodet = [] if nodet is None else nodet  # e_ in kernels, else replaces _node,node: not used in kernels
         l.angle = np.zeros(2) if angle is None else angle  # dy,dx between nodet centers
@@ -230,7 +228,7 @@ def vectorize_root(frame):
                             G_ += [PP]
                     if len(G_) > ave_L:
                         edge.subG_ = G_
-                        cluster_edge(edge); frame.subG_ += [edge]; frame.derH=frame.derH.add_H(edge.derH)
+                        cluster_edge(edge); frame.subG_ += [edge]; frame.derH.add_H(edge.derH)
                         # add altG: summed converted adj_blobs of converted edge blob
                         # if len(edge.subG_) > ave_L: agg_recursion(edge)  # unlikely
 
@@ -385,51 +383,75 @@ def comp_area(_box, box):
     y0, x0, yn, xn = box;   A = (yn - y0) * (xn - x0)
     return _A-A, min(_A,A) - ave_L**2  # mA, dA
 
+def comp_lay(_md_t, md_t, rn, dir=1):  # replace dir with rev?
+
+    der_md_t = []
+    tM, tD = 0, 0
+    for _md_, md_ in zip(_md_t, md_t):  # [mdExt, possibly mdLat, mdLay], default per layer
+        M,D = 0,0; M_,D_ = [],[]
+        # same as comp_md_:
+        for i, (_d, d) in enumerate(zip(_md_[0], md_[0])):  # compare ds in md_ or ext
+            d *= rn  # normalize by compared accum span
+            diff = (_d - d) * dir
+            match = min(abs(_d), abs(d))
+            if (_d < 0) != (d < 0): match = -match  # negate if only one compared is negative
+            M_ += [match]; M += match  # maybe negative
+            D_ += [diff];  D += abs(diff)  # potential compression
+            # proj / eval
+        der_md_t += [[D_, M_]]
+        tM += M; tD += D
+
+    return np.array(*der_md_t), np.array([tM, tD])
+
+
 def comp_N(_N,N, rn, angle=None, dist=None, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
-    # n only in mdLays now?
 
     fd = dir is not None  # compared links have binary relative direction
     dir = 1 if dir is None else dir  # convert to numeric
     # comp externals:
     if fd:
-        _L, L = _N.dist, N.dist;  dL = _L-L; mL = min(_L,L) - ave_L  # direct match
-        mA,dA = comp_angle(_N.angle, [d*dir for d in N.angle])  # rev 2nd link in llink
+        _L, L = _N.dist, N.dist;  dL = _L- L*rn; mL = min(_L, L*rn) - ave_L  # direct match
+        mA,dA = comp_angle(_N.angle, [d*dir *rn for d in N.angle])  # rev 2nd link in llink
         # comp med if LL: isinstance(>nodet[0],CL), higher-order version of comp dist?
     else:
-        _L, L = len(_N.node_),len(N.node_); dL = _L-L; mL = min(_L,L) - ave_L
+        _L, L = len(_N.node_),len(N.node_); dL = _L- L*rn; mL = min(_L, L*rn) - ave_L
         mA,dA = comp_area(_N.box, N.box)  # compare area in CG vs angle in CL
-    n = .3
-    M = mL + mA; D = (abs(dL)+abs(dA)) * (M/ave); M = M - D/2
-    Et = np.array([M,D])
-    md_t = [np.array([ np.array([mL,mA]), np.array([dL,dA]), Et, n], dtype=object)]  # init as [mdExt]
+    # md_t = [mdExt]:
+    Et = np.array([mL+mA, abs(dL)+abs(dA)])
+    n=.3  # compared vars / 6
+    md_t = [np.array([ np.array([mL,mA]), np.array([dL,dA]), Et], dtype=object)]
     if not fd:  # CG
-        mdLat = comp_latuple(_N.latuple,N.latuple, _N.n, N.n)  # not sure about ns
-        mdLay = comp_md_(_N.mdLay, N.mdLay, dir)
-        md_t += [mdLat,mdLay]; Et += mdLat[2] + mdLay[2]; n += mdLat[3] + mdLay[3]
-    # | n = (_n+n)/2?
-    Et = np.append(Et, (_N.Et[2]+N.Et[2])/2 )  # Et[0] += ave_rn - rn?
-    subLay = CH(n=n, md_t=md_t, Et=Et)
-    eLay = CH(H=[subLay], n=n, md_t=deepcopy(md_t), Et=copy(Et))
-    if _N.derH and N.derH:
-        dderH = _N.derH.comp_H(N.derH, dir=dir)  # comp shared layers
-        eLay.append_(dderH, flat=1)
-    elif _N.derH: eLay.append_(_N.derH.copy_(root=eLay))  # one empty derH
-    elif  N.derH: eLay.append_(N.derH.copy_(root=eLay,rev=1))
+        mdLat = comp_latuple(_N.latuple, N.latuple*rn, _N.n, N.n)
+        mdLay = comp_lay(_N.mdLay, N.mdLay*rn, dir)
+        md_t += [mdLat, mdLay];  Et += mdLat[2] + mdLay[2]
+        n = 2.3
+        # not n += mdLat[3]+mdLay[3]: immediately compared vars only?
+    Et = np.append(Et, (_N.Et[2] + N.Et[2]) / 2)  # add rdn
+    Lay = CH(n=n, md_t=md_t, Et=Et)
+    derH = CH(H=[Lay], n=n, md_t=deepcopy(md_t), Et=copy(Et))
+    if N.derH:
+        if _N.derH:
+            dH = N.derH.norm(rn)
+            dderH = _N.derH.comp_H(dH, dir=dir)  # comp shared layers
+            derH.append_(dderH, flat=1)
+        else:
+            derH.append_(N.derH.copy_(root=derH,rev=1))
+    elif _N.derH: derH.append_(_N.derH.copy_(root=derH))  # one empty derH
     # spec: comp_node_(node_|link_), combinatorial, node_ may be nested with rng-)agg+, graph similarity search?
-    Et = copy(eLay.Et)
+    Et = copy(derH.Et)
     if not fd and _N.altG and N.altG:  # not for CL, eval M?
-        altLink = comp_N(_N.altG, N.altG, _N.altG.n/N.altG.n)  # no angle,dist, init alternating PPds | dPs?
-        eLay.altH = altLink.derH
-        Et += eLay.altH.Et
-    Link = CL(nodet=[_N,N],derH=eLay, n=min(_N.n,N.n),yx=np.add(_N.yx,N.yx)/2, angle=angle,dist=dist,box=extend_box(N.box,_N.box))
+        alt_Link = comp_N(_N.altG, N.altG, _N.altG.n/N.altG.n)  # no angle,dist, init alternating PPds | dPs?
+        derH.altH = alt_Link.derH
+        Et += derH.altH.Et
+    Link = CL(nodet=[_N,N],derH=derH, yx=np.add(_N.yx,N.yx)/2, angle=angle,dist=dist,box=extend_box(N.box,_N.box))
     if Et[0] > ave * Et[2]:
-        eLay.root = Link
+        derH.root = Link
         for rev, node in zip((0,1), (N,_N)):  # reverse Link direction for _N
             if fd: node.rimt[1-rev] += [(Link,rev)]  # opposite to _N,N dir
             else:  node.rim += [(Link, rev)]
-            node.extH = node.extH.add_H(Link.derH)
+            node.extH.add_H(Link.derH)
+            node.n += derH.n
             node.Et += Et
-            # flat
     return Link
 
 def get_rim(N,fd): return N.rimt[0] + N.rimt[1] if fd else N.rim  # add nesting in cluster_N_?
@@ -449,7 +471,7 @@ def sum2graph(root, grapht, fd, nest):  # sum node and link params into graph, a
         graph.n += N.n  # +derH.n, total nested comparable vars
         graph.box = extend_box(graph.box, N.box)  # pre-compute graph.area += N.area?
         yx = np.add(yx, N.yx)
-        if N.derH: derH = derH.add_H(N.derH)
+        if N.derH: derH.add_H(N.derH)
         if isinstance(N,CG):
             graph.mdLay += N.mdLay
             graph.latuple += N.latuple
@@ -458,7 +480,7 @@ def sum2graph(root, grapht, fd, nest):  # sum node and link params into graph, a
         graph.derH = derH  # lower layers
     derLay = CH().add_H([link.derH for link in link_]); derLay.root=graph.derH; derLay.node_=node_
     if derH: graph.derH.append_(derLay)  # new layer
-    else:    graph.derH = graph.derH.add_H(derLay)
+    else:    graph.derH.add_H(derLay)
     graph.derH.root = graph  # higher layers are added by feedback
     L = len(node_)
     yx = np.divide(yx,L); graph.yx = yx

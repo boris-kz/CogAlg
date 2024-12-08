@@ -77,3 +77,15 @@ def comp_N(_N,N, rn, angle=None, dist=None, dir=None):  # dir if fd, Link.derH=d
             node.extH.add_H(Link.derH, root=node.extH)
             # flat
     return Link
+
+def copy_(_He, root, rev=0):
+        # comp direction may be reversed
+        He = CH(root=root, node_=copy(_He.node_), n=_He.n, i=_He.i, i_=copy(_He.i_))
+        He.Et = copy(_He.Et)
+        He.md_t = deepcopy(_He.md_t)
+        if rev:
+            for _,d_,_,_ in He.md_t:  # mdExt, possibly mdLat, mdLay
+               d_ *= -1   # negate ds
+        for he in _He.H:
+            He.H += [he.copy_(root=He, rev=rev)] if he else [[]]
+        return He
