@@ -70,7 +70,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
 
         for Md_, md_ in zip(HE.md_t, He.md_t):  # [mdExt, possibly mdLat, mdLay]
             Md_ += md_ * sign
-        HE.Et+= He.Et * sign; HE.n += He.n * sign # combined n params
+        HE.Et += He.Et * sign; HE.n += He.n * sign # combined n params
 
     def add_H(HE, He_, sign=1):  # unpack derHs down to numericals and sum them
 
@@ -79,7 +79,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
             if HE:
                 for i, (Lay,lay) in enumerate(zip_longest(HE.H, He.H, fillvalue=None)):  # cross comp layer
                     if lay:
-                        if Lay: Lay.add_H(lay)
+                        if Lay: Lay.add_H(lay)  # depth-first, He in add_lay has summed all the nested lays
                         else:
                             if Lay is None: HE.append_(lay.copy_(root=HE))  # pack a copy of new lay in HE.H
                             else:           HE.H[i] = lay.copy_(root=HE)  # Lay was []
@@ -103,20 +103,15 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
 
         return HE
 
-    def copy_(_He, He, rev=0, ini=1):  # comp direction may be reversed
+    def copy_(He, root, rev=0):  # comp direction may be reversed
 
-        if ini: He = CH(node_=copy(_He.node_), n=_He.n, i=_He.i, i_=copy(_He.i_))
-        else:   He.node_,He.n,He.i,He.i_ = copy(_He.node_),_He.n,_He.i,_He.i_
-        He.Et = copy(_He.Et)
-        He.md_t = deepcopy(_He.md_t)
+        C = CH(root=root, node_=copy(He.node_), md_t=deepcopy(He.md_t), Et=copy(He.Et), n=He.n, i=He.i, i_=He.i_)
         if rev:
-            for _,d_,_,_ in He.md_t:  # mdExt, possibly mdLat, mdLay
-               d_ *= -1   # negate ds
-        for he in _He.H:
-            if he: he = he.copy_(rev=rev,ini=ini)
-            else:  he = []
-            He.H += [he]
-        return He
+            for d_,_,_ in C.md_t:  # mdExt, possibly mdLat, mdLay
+               d_ *= -1
+        for he in He.H:
+            C.H += [he.copy_(root=C,rev=rev) if he else []]
+        return C
 
     def comp_H(_He, He, dir=1):  # unpack each layer of CH down to numericals and compare each pair
 
@@ -135,10 +130,11 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
             # nested subHH ( subH?
         return DLay
 
-    def norm_(He, n):
+    def norm_C(He, n):
 
         for md_ in He.md_t: md_ *= n
-        for lay in He.H: lay.norm_(n)
+        for lay in He.H:   # not empty list
+            if lay: lay.norm_C(n)
         He.n *= n
         He.Et *= n
 
@@ -391,17 +387,17 @@ def comp_lay(_md_t, md_t, rn, dir=1):  # replace dir with rev?
         M,D = 0,0; M_,D_ = [],[]
         # same as comp_md_:
         for i, (_d, d) in enumerate(zip(_md_[0], md_[0])):  # compare ds in md_ or ext
-            d *= rn  # normalize by compared accum span
+            d *= rn  # normalize by comparand accum span
             diff = (_d - d) * dir
             match = min(abs(_d), abs(d))
             if (_d < 0) != (d < 0): match = -match  # negate if only one compared is negative
             M_ += [match]; M += match  # maybe negative
             D_ += [diff];  D += abs(diff)  # potential compression
             # proj / eval
-        der_md_t += [[D_, M_]]
+        der_md_t += [np.array([D_, M_])]
         tM += M; tD += D
 
-    return np.array(*der_md_t), np.array([tM, tD])
+    return der_md_t, np.array([tM, tD])
 
 
 def comp_N(_N,N, rn, angle=None, dist=None, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
@@ -421,8 +417,8 @@ def comp_N(_N,N, rn, angle=None, dist=None, dir=None):  # dir if fd, Link.derH=d
     n=.3  # compared vars / 6
     md_t = [np.array([ np.array([mL,mA]), np.array([dL,dA]), Et], dtype=object)]
     if not fd:  # CG
-        mdLat = comp_latuple(_N.latuple, N.latuple*rn, _N.n, N.n)
-        mdLay = comp_lay(_N.mdLay, N.mdLay*rn, dir)
+        mdLat = comp_latuple(_N.latuple, N.latuple, _N.n, N.n)
+        mdLay = comp_lay(_N.mdLay, N.mdLay, dir)  # rn / lay?
         md_t += [mdLat, mdLay];  Et += mdLat[2] + mdLay[2]
         n = 2.3
         # not n += mdLat[3]+mdLay[3]: immediately compared vars only?
@@ -431,12 +427,11 @@ def comp_N(_N,N, rn, angle=None, dist=None, dir=None):  # dir if fd, Link.derH=d
     derH = CH(H=[Lay], n=n, md_t=deepcopy(md_t), Et=copy(Et))
     if N.derH:
         if _N.derH:
-            dH = N.derH.norm(rn)
-            dderH = _N.derH.comp_H(dH, dir=dir)  # comp shared layers
+            dderH = _N.derH.comp_H(N.derH, dir=dir)  # comp shared layers
             derH.append_(dderH, flat=1)
         else:
-            derH.append_(N.derH.copy_(root=derH,rev=1))
-    elif _N.derH: derH.append_(_N.derH.copy_(root=derH))  # one empty derH
+            derH.append_(N.derH.copy_(root=derH,rev=1))  # not sure we need to copy?
+    elif _N.derH: derH.append_(_N.derH.copy_(root=derH))
     # spec: comp_node_(node_|link_), combinatorial, node_ may be nested with rng-)agg+, graph similarity search?
     Et = copy(derH.Et)
     if not fd and _N.altG and N.altG:  # not for CL, eval M?

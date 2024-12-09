@@ -123,7 +123,7 @@ def find_centroids(graph):
             if n.extH: C.extH.add_H(n.extH, sign=s)
         # get averages:
         k = len(dnode_); C.n/=k; C.Et/=k; C.latuple/=k; C.mdLay/=k; C.aRad/=k
-        if C.derH: C.derH.norm_(1/k)  # derH/=k
+        if C.derH: C.derH.norm_(k)  # derH/=k
         C.box = reduce(extend_box, (n.box for n in node_))
         return C
 
@@ -133,7 +133,7 @@ def find_centroids(graph):
         mL = min(C.L,len(N.node_)) - ave_L
         mA = comp_area(C.box, N.box)[0]
         mLat = comp_latuple(C.latuple, N.latuple, C.n, N.n)[2][0]
-        mLay = comp_lay(C.mdLay, N.mdLay)[2][0]
+        mLay = comp_lay(C.mdLay, N.mdLay,rn=1)[2][0]
         mH = C.derH.comp_H(N.derH).Et[0] if C.derH and N.derH else 0
         # comp node_, comp altG from converted adjacent flat blobs?
         return mL + mA + mLat + mLay + mH
