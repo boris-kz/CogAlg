@@ -89,3 +89,13 @@ def copy_(_He, root, rev=0):
         for he in _He.H:
             He.H += [he.copy_(root=He, rev=rev)] if he else [[]]
         return He
+
+def comp_lay(_md_t, md_t, rn, dir=1):  # replace dir with rev?
+
+    der_md_t = []
+    tM, tD = 0, 0
+    for i, (_md_, md_) in enumerate(zip(_md_t, md_t)):  # [mdExt, possibly mdLat, mdLay], default per layer
+        if i == 2:  # nested mdLay
+            sub_md_t, (m,d) = comp_lay(_md_[0], md_[0], rn, dir=dir)  # nested mdLay is [md_t, [tM, tD]], skip [tM and tD]
+            der_md_t += [[sub_md_t, (m,d)]]
+            tM += m; tD += d

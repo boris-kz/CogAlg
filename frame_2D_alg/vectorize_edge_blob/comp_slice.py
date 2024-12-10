@@ -71,7 +71,7 @@ def comp_md_(_lay,lay, dir=1):  # replace dir with rev?
         md_ += [match]; M += match  # maybe negative
         dd_ += [diff];  D += abs(diff)  # potential compression
         # proj / eval
-    return np.array([np.array(md_), np.array(dd_), np.array([M,D]), (_n+n)/2 ], dtype=object)  # [m_, d_, Et, n]
+    return np.array([np.array(md_), np.array(dd_), np.array([M,D]), (_n+n)/2], dtype=object)   # [m_,d_, Et, n]
 
 def vectorize_root(frame):
 
@@ -114,8 +114,8 @@ def comp_P_(edge):  # form links from prelinks
             if abs(dy)+abs(dx) <= edge.rng * 2:
                 # <max Manhattan distance
                 angle=[dy,dx]; distance=np.hypot(dy,dx)
-                derLay = comp_latuple(_P.latuple, P.latuple, len(_P.dert_), len(P.dert_))
-                P.rim += [convert_to_dP(_P,P, derLay, angle, distance, fd=0)]
+                derLay, et = comp_latuple(_P.latuple, P.latuple, len(_P.dert_), len(P.dert_))
+                P.rim += [convert_to_dP(_P,P, derLay, angle, distance, et)]
     del edge.pre__
 
 def comp_dP_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
@@ -131,16 +131,16 @@ def comp_dP_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
                 derLay = comp_md_(_dP.mdLay, dP.mdLay)
                 angle = np.subtract(dP.yx,_dP.yx)  # dy,dx of node centers
                 distance = np.hypot(*angle)  # between node centers
-                llink_ += [ convert_to_dP(_dP, dP, derLay, angle, distance, fd=1)]
+                llink_ += [ convert_to_dP(_dP, dP, derLay, angle, distance)]
     return llink_
 
-def convert_to_dP(_node, node, derLay, angle, distance, fd):
+def convert_to_dP(_node, node, derLay, angle, distance, et=0):
     # get aves:
     latuple = (_node.latuple + node.latuple) /2
     link = CdP(nodet=[_node,node], mdLay=derLay, angle=angle, span=distance, yx=np.add(_node.yx, node.yx)/2, latuple=latuple)
     # if v > ave * r:
-    Et = link.mdLay[2]
-    if Et[fd] > aves[fd]:
+    Et = et if et else link.mdLay[2]
+    if Et[not et] > aves[not et]:
         node.lrim += [link]; _node.lrim += [link]
         node.prim +=[_node]; _node.prim +=[node]
     return link
@@ -214,7 +214,7 @@ def comp_latuple(_latuple, latuple, _n,n):  # 0der params
     m_ = np.array([mL, mI, mG, mM, mMa, mA])
     et = np.array([np.sum(m_), np.sum(np.abs(d_))])
 
-    return np.array([m_,d_, et, (_n+n)/2], dtype=object)
+    return np.array([m_,d_]), et
 
 def get_match(_par, par):
     match = min(abs(_par),abs(par))
