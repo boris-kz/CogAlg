@@ -99,3 +99,59 @@ def comp_lay(_md_t, md_t, rn, dir=1):  # replace dir with rev?
             sub_md_t, (m,d) = comp_lay(_md_[0], md_[0], rn, dir=dir)  # nested mdLay is [md_t, [tM, tD]], skip [tM and tD]
             der_md_t += [[sub_md_t, (m,d)]]
             tM += m; tD += d
+
+    def comp_H(_He, He, dir=1):  # unpack each layer of CH down to numericals and compare each pair
+
+        der_md_t, et = comp_md_t(_He.md_t, He.md_t, _He.n / He.n, dir=1)
+        # ini:
+        DLay = CH(md_t=der_md_t, Et=np.append(et,(_He.Et[2]+He.Et[2])/2), n=.3 if len(der_md_t)==1 else 2.3)  # .3 in default comp ext
+        # empty H in bottom | deprecated layer:
+        for rev, _lay, lay in zip((0,1), _He.H, He.H):  #  fork & layer CH / rng+|der+, flat
+            if _lay and lay:
+                dLay = _lay.comp_H(lay, dir)  # comp He.md_t, comp,unpack lay.H
+                DLay.append_(dLay)  # DLay.H += subLay
+            else:
+                l = _lay if _lay else lay  # only one not empty lay = difference between lays:
+                if l: DLay.append_(l.copy_(root=DLay, rev=rev))
+                else: DLay.H += [CH()]  # to trace fork types
+            # nested subHH ( subH?
+        return DLay
+
+    def comp_He(_He, He, rn, root, dir=1):
+
+        derH = CH(root=root)
+        # lay.H maps to higher Hs it was derived from, len lay.H = 2 ^ lay_depth (unpacked root H[:i])
+        for _he, he in zip(_He.H, He.H):
+            if he:
+                if _he:  # maybe empty CH to trace fork types
+                    if isinstance(he.H[0], CH):
+                        Lay = _he.comp_He(he, rn, root=derH, dir=dir)  # deeper unpack -> comp_md_t
+                    else:
+                        Lay = _he.comp_md_t(he, rn=rn, root=derH, dir=dir)  # comp shared layers
+                    derH.append_(Lay, flat=1)
+                else:
+                    derH.append_(he.copy_(root=derH, dir=1))  # not sure we need to copy?
+        # old comp_H:
+        for dir, _he, he in zip((1,-1), _He.H, He.H):  #  fork & layer CH / rng+|der+, flat
+            if _he and he:
+                Lay = _he.comp_He(he, root=derH, dir=dir)  # unpack lay.H
+                derH.append_(Lay)
+            else:
+                l = _he if _he else he  # only one not empty lay = difference between lays:
+                if l: derH.append_(l.copy_(root=derH, dir=dir))
+                else: derH.H += [CH()]  # to trace fork types
+
+        return derH
+
+    def add_H(HE, He_, sign=1):  # unpack derHs down to numericals and sum them
+
+        if not isinstance(He_,list): He_ = [He_]
+        for He in He_:
+            for i, (Lay,lay) in enumerate(zip_longest(HE.H, He.H, fillvalue=None)):  # cross comp layer
+                if lay:
+                    if Lay is None: HE.append_(lay.copy_(root=HE))  # pack a copy of new lay in HE.H
+                    else:           Lay.add_H(lay)  # depth-first, He in add_lay has summed all the nested lays
+            HE.add_lay(He, sign)
+            HE.node_ += [node for node in He.node_ if node not in HE.node_]  # node_ is empty in CL derH?
+
+        return HE  # root should be updated by returned HE

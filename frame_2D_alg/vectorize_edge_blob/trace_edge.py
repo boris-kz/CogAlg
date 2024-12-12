@@ -44,19 +44,18 @@ ave_d = 4
 ave_L = 4
 max_dist = 2
 ave_rn = 1000  # max scope disparity
-ccoef  = 10  # scaling match ave to clustering ave
+ccoef = 10  # scaling match ave to clustering ave
 icoef = .15  # internal M proj_val / external M proj_val
 
 class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | derH, their layers and sub-layers
 
     name = "H"
-    def __init__(He, n=0, H=None, Et=None, node_=None, md_t=None, root=None, i=None, i_=None, altH=None):
+    def __init__(He, n=0, H=None, Et=None, node_=None, root=None, i=None, i_=None, altH=None):
         super().__init__()
         He.n = n  # total number of params compared to form derH, to normalize in next comp
-        He.H = [] if H is None else H  # nested subLays, empty in top layer
+        He.H = [] if H is None else H  # nested CH lays, or md_tC in top layer
         He.Et = np.zeros(3) if Et is None else Et  # += links
         He.node_ = [] if node_ is None else node_  # concat bottom nesting order if CG, may be redundant to G.node_
-        He.md_t = [] if md_t is None else md_t  # derivation layer in H
         He.root = None if root is None else root  # N or higher-composition He
         He.i = 0 if i is None else i  # lay index in root.H, to revise rdn
         He.i_ = [] if i_ is None else i_  # priority indices to compare node H by m | link H by d
@@ -68,22 +67,24 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
 
     def __bool__(H): return H.n != 0
 
-    def add_lay(HE, He, sign=1):
-
-        for Md_, md_ in zip(HE.md_t, He.md_t):  # [mdExt, possibly mdLat, mdLay]
-            Md_ += md_ * sign
-        HE.Et += He.Et * sign; HE.n += He.n * sign # combined n params
-
     def add_H(HE, He_, sign=1):  # unpack derHs down to numericals and sum them
-
         if not isinstance(He_,list): He_ = [He_]
+
         for He in He_:
-            for i, (Lay,lay) in enumerate(zip_longest(HE.H, He.H, fillvalue=None)):  # cross comp layer
+            for Lay, lay in zip_longest(HE.H, He.H, fillvalue=None):
                 if lay:
-                    if Lay is None: HE.append_(lay.copy_(root=HE))  # pack a copy of new lay in HE.H
-                    else:           Lay.add_H(lay)  # depth-first, He in add_lay has summed all the nested lays
-            HE.add_lay(He, sign)
-            HE.node_ += [node for node in He.node_ if node not in HE.node_]  # node_ is empty in CL derH?
+                    if not Lay:  # None or empty
+                        HE.append_(lay.copy_(root=HE))  # copy new lay to HE.H
+                    elif isinstance(lay.H[0], CH):  # same for Lay
+                        Lay.add_H(lay, sign)  # unpack
+                    else:  # Lay is md_C
+                        for Md_, md_ in zip(Lay.H, lay.H):  # [mdExt, ?mdLat,mdLay]
+                            Md_ += md_ * sign
+                    Lay.Et += lay.Et * sign; Lay.n += lay.n * sign  # combined n params
+
+            HE.node_ += [node for node in He.node_ if node not in HE.node_]  # empty in CL derH?
+            HE.Et += He.Et * sign
+            HE.n += He.n * sign
 
         return HE  # root should be updated by returned HE
 
@@ -96,69 +97,64 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
                 HE.H += [lay]  # lay may be empty to trace forks
         else:
             He.i = len(HE.H); He.root = HE; HE.H += [He]  # He can't be empty
-        HE.add_lay(He)
-
+            HE.H += [He]
+        HE.Et += He.Et
+        HE.n += He.n
         return HE
 
     def copy_(He, root, rev=0):  # comp direction may be reversed
 
-        C = CH(root=root, node_=copy(He.node_), md_t=deepcopy(He.md_t), Et=copy(He.Et), n=He.n, i=He.i, i_=He.i_)
-        if rev:
-            for d_,m_ in C.md_t:  # mdExt, possibly mdLat, mdLay
-               d_ *= -1
+        C = CH(root=root, node_=copy(He.node_), Et=copy(He.Et), n=He.n, i=He.i, i_=He.i_)
         for he in He.H:
-            C.H += [he.copy_(root=C,rev=rev)]
+            if isinstance(he.H[0], CH):
+                C.H += [he.copy_(root=C,rev=rev)]
+            else:  # top lay, md_C
+                md_t = [np.array([copy(m_), d_ * -1 if rev else 1]) for d_,m_ in he.H]
+                C.H += [CH(root=root, H = md_t, node_=copy(he.node_), Et=copy(he.Et), n=he.n, i=he.i, i_=he.i_)]
         return C
 
-    def comp_md_t(_md_t, md_t, rn, dir=dir):
+    def comp_md_t(_md_C, md_C, rn, root, rdn=1., dir=1):
 
         der_md_t = []
-        Et = np.array([0,0])
-        for _md_, md_ in zip(_md_t, md_t):  # [mdExt, possibly mdLat, mdLay], default per layer
+        Et = np.zeros(2)
+        for _md_, md_ in zip(_md_C.H, md_C.H):  # [mdExt, ?mdLat, hdLat]
+            # comp ds:
             der_md_, et = comp_md_(_md_[1], md_[1], rn, dir=dir)
             der_md_t += [der_md_]
             Et += et
-        return np.array(der_md_t), Et
 
-    def comp_lay(_lay, lay, rn, dir=1):  # replace dir with rev?
-        '''
-        Layer is CH with H mapping to all higher-layer Hs that it was derived from, so len layer H = 2 ^ layer_depth
-        '''
-        derLay = CH()  # same as with derH in comp_N:
-        for _sub, sub in zip(_lay.H, lay.H):  # unpack subLays, derived from and mapping to unpacked root H[:depth]
-            if sub:
-                if _sub:
-                    der_md_t, Et = comp_md_t(_sub.md_t, sub.md_t, rn=rn, dir=dir)  # comp shared layers
-                    derLay.append_(CH(md_t=der_md_t, Et=np.append(Et,1), root=derLay), flat=1)
+        return CH(root=root, H=np.array(der_md_t), Et=np.append(Et,rdn), n=.3 if len(der_md_t)==1 else 2.3)  # .3 in default comp ext)
+
+    def comp_H(_He, He, rn, root):
+
+        derH = CH(root=root)  # derH.H( flat lay.H, or nested with each higher lay.H?
+        # lay.H maps to higher Hs it was derived from, len lay.H = 2 ^ lay_depth (unpacked root H[:i])
+
+        for _lay, lay in zip_longest(_He.H, He.H, fillvalue=None):  # both may be empty CH to trace fork types
+            if _lay:
+                if lay:
+                    if isinstance(lay.H[0], CH):  # same depth in _lay
+                        dLay = _lay.comp_H(lay, rn, root=derH)  # deeper unpack -> comp_md_t
+                    else:
+                        dLay = _lay.comp_md_t(lay, rn=rn, root=derH, rdn=(_He.Et[2]+He.Et[2]) /2)  # comp shared layers
+                    derH.append_(dLay, flat=1)
                 else:
-                    derLay.append_(sub.copy_(root=derLay, rev=1))  # not sure we need to copy?
-        return derLay
-
-    # not revised, redundant to comp_lay?
-    def comp_H(_He, He, dir=1):  # unpack each layer of CH down to numericals and compare each pair
-
-        der_md_t, et = comp_md_t(_He.md_t, He.md_t, _He.n / He.n, dir=1)
-        # ini:
-        DLay = CH(md_t=der_md_t, Et=np.append(et,(_He.Et[2]+He.Et[2])/2), n=.3 if len(der_md_t)==1 else 2.3)  # .3 in default comp ext
-        # empty H in bottom | deprecated layer:
-        for rev, _lay, lay in zip((0,1), _He.H, He.H):  #  fork & layer CH / rng+|der+, flat
-            if _lay and lay:
-                dLay = _lay.comp_H(lay, dir)  # comp He.md_t, comp,unpack lay.H
-                DLay.append_(dLay)  # DLay.H += subLay
-            else:
-                l = _lay if _lay else lay  # only one not empty lay = difference between lays:
-                if l: DLay.append_(l.copy_(root=DLay, rev=rev))
-                else: DLay.H += [CH()]  # to trace fork types
-            # nested subHH ( subH?
-        return DLay
+                    derH.append_(_lay.copy_(root=derH, rev=0))  # diff = _he
+            elif lay:
+                derH.append_(lay.copy_(root=derH, rev=1))  # diff = -he
+            # no fill if both empty?
+        return derH
 
     def norm_(He, n):
 
-        for md_ in He.md_t: md_ *= n
         for lay in He.H:   # not empty list
-            if lay: lay.norm_C(n)
-        He.n *= n
-        He.Et *= n
+            if lay:
+                if isinstance(lay.H[0], CH):
+                    lay.norm_C(n)
+                else:
+                    for md_ in lay.H: md_ *= n
+                    lay.Et *= n; lay.n *= n
+        He.Et *= n; He.n *= n
 
     # not implemented yet:
     def sort_H(He, fd):  # re-assign rdn and form priority indices for comp_H, if selective and aligned
@@ -171,6 +167,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         He.i_ = i_  # comp_H priority indices: node/m | link/d
         if not fd:
             He.root.node_ = He.H[i_[0]].node_  # no He.node_ in CL?
+
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
@@ -318,7 +315,7 @@ def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et
             nrim = {L.nodet[1] if L.nodet[0] is G else L.nodet[0] for L,_ in G.rim}
             if _nrim & nrim:  # indirectly connected Gs,
                 continue     # no direct match priority?
-            if dist < max_dist * (radii * icoef**3) * (_G.Et[0] + G.Et[0]) * (_G.ext.Et[0] + G.ext.Et[0]):
+            if dist < max_dist * (radii * icoef**3) * (_G.Et[0] + G.Et[0]) * (_G.extH.Et[0] + G.extH.Et[0]):
                 Link = comp_N(_G,G, rn, angle=[dy,dx],dist=dist)
                 L_ += [Link]  # include -ve links
                 if Link.derH.Et[0] > ave * Link.derH.Et[2]:
@@ -421,16 +418,18 @@ def comp_N(_N,N, rn, angle=None, dist=None, dir=None):  # dir if fd, Link.derH=d
         hdLat, et2 = comp_md_(_N.mdLat[1], N.mdLat[1], dir)
         md_t = [mdExt, mdLat, hdLat]
         Et += et1 + et2; n = 2.3
-    Et = np.append(Et, (_N.Et[2] + N.Et[2]) / 2)  # add rdn
-    Lay = CH(n=n, md_t=md_t, Et=Et)  # 1st layer
-    derH = CH(H=[Lay], n=n, md_t=deepcopy(md_t), Et=copy(Et))
+    Et = np.append(Et, (_N.Et[2] + N.Et[2]) / 2)
+    # add rdn
+    md_C = CH(H=md_t, Et=Et, n=n)
+    derH = CH(H=[md_C], Et=copy(Et), n=n)
     if N.derH:
         if _N.derH:
             dderH = _N.derH.comp_H(N.derH, dir=dir)  # comp shared layers
             derH.append_(dderH, flat=1)
         else:
-            derH.append_(N.derH.copy_(root=derH,rev=1))  # not sure we need to copy?
-    elif _N.derH: derH.append_(_N.derH.copy_(root=derH))
+            derH.append_(N.derH.copy_(root=derH,rev=1))  # diff= -N.derH
+    elif _N.derH:
+        derH.append_(_N.derH.copy_(root=derH))  # diff= _N.derH
     # spec: comp_node_(node_|link_), combinatorial, node_ may be nested with rng-)agg+, graph similarity search?
     Et = copy(derH.Et)
     if not fd and _N.altG and N.altG:  # not for CL, eval M?
@@ -473,7 +472,7 @@ def sum2graph(root, grapht, fd, nest):  # sum node and link params into graph, a
             graph.latuple += N.latuple
         N.root_[-1] = graph  # replace Gt
     if fg:
-        graph.Et += np.array([M,D]) * icoef**2
+        graph.Et[:2] += np.array([M,D]) * icoef**2
     if derH:  # skip sum derH.Et, already in arg Et?
         graph.derH = derH  # lower layers
     derLay = CH().add_H([link.derH for link in link_]); derLay.root=graph.derH; derLay.node_=node_

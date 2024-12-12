@@ -77,12 +77,15 @@ def slice_edge(edge):
 
     axisd = select_max(edge)
     yx_ = sorted(axisd.keys(), key=lambda yx: edge.dert_[yx][-1])  # sort by g
-    edge.P_ = []; edge.rootd = {}
+    edge.P_ = []; M,D = 0,0; edge.rootd = {}
     # form P/ local max yx:
     while yx_:
         yx = yx_.pop(); axis = axisd[yx]  # get max of g maxes
-        edge.P_ += [CP(edge, yx, axis)]   # form P
+        P = CP(edge, yx, axis)
+        edge.P_ += [P]
+        M += sum(P.mdLat[0]); D += sum(P.mdLat[1])
         yx_ = [yx for yx in yx_ if yx not in edge.rootd]    # remove merged maxes if any
+    edge.Et = np.array([M,D])
     edge.P_.sort(key=lambda P: P.yx, reverse=True)
     trace(edge)
     if __name__ != "__main__": del edge.rootd   # keep for visual verification in slice_edge only
