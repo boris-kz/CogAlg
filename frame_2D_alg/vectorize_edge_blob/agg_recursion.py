@@ -119,8 +119,8 @@ def find_centroids(graph):
             C.n += n.n * s; C.Et += n.Et * s; C.rng = n.rng * s; C.aRad += n.aRad * s
             C.L += len(n.node_) * s
             C.latuple += n.latuple * s; C.mdLay += n.mdLay * s
-            if n.derH: C.derH.add_H(n.derH, sign=s)
-            if n.extH: C.extH.add_H(n.extH, sign=s)
+            if n.derH: C.derH.add_H(n.derH, s=s)
+            if n.extH: C.extH.add_H(n.extH, s=s)
         # get averages:
         k = len(dnode_); C.n/=k; C.Et/=k; C.latuple/=k; C.mdLay/=k; C.aRad/=k
         if C.derH: C.derH.norm_(k)  # derH/=k

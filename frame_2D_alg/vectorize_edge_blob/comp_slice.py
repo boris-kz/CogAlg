@@ -70,7 +70,7 @@ def vectorize_root(frame):
 
 def comp_slice(edge):  # root function
 
-    edge.mdLat = np.array([np.zeros(6), np.zeros(6)])  # m_,d_
+    edge.Et, edge.mdLat = np.zeros(2), np.array([np.zeros(6), np.zeros(6)])  # m_,d_
     for P in edge.P_:  # add higher links
         P.mdLat = np.array([np.zeros(6), np.zeros(6)])
         P.rim = []; P.lrim = []; P.prim = []
@@ -88,6 +88,7 @@ def comp_slice(edge):  # root function
         else:
             mdLat = PPm.mdLat  # PPm is actually CP
         edge.mdLat += mdLat
+        edge.Et[0] += sum(mdLat[0]); edge.Et[1] += sum(mdLat[1])
 
 def comp_P_(edge):  # form links from prelinks
 

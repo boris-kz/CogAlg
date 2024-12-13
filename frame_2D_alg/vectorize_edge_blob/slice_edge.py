@@ -83,9 +83,7 @@ def slice_edge(edge):
         yx = yx_.pop(); axis = axisd[yx]  # get max of g maxes
         P = CP(edge, yx, axis)
         edge.P_ += [P]
-        M += sum(P.mdLat[0]); D += sum(P.mdLat[1])
         yx_ = [yx for yx in yx_ if yx not in edge.rootd]    # remove merged maxes if any
-    edge.Et = np.array([M,D])
     edge.P_.sort(key=lambda P: P.yx, reverse=True)
     trace(edge)
     if __name__ != "__main__": del edge.rootd   # keep for visual verification in slice_edge only
