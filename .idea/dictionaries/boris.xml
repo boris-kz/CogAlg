@@ -105,6 +105,7 @@
       <w>marg</w>
       <w>mblob</w>
       <w>mblobs</w>
+      <w>mdext</w>
       <w>medoid</w>
       <w>mfork</w>
       <w>misprojected</w>
@@ -166,6 +167,7 @@
       <w>vectorize</w>
       <w>vectorizes</w>
       <w>verti</w>
+      <w>vertuple</w>
       <w>vterm</w>
       <w>xblob</w>
       <w>xblobs</w>

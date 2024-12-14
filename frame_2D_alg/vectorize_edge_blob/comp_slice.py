@@ -40,12 +40,12 @@ ave_L = 5
 class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
     name = "dP"
 
-    def __init__(l, nodet, span, angle, yx, mdLat=None, latuple=None, Et=None, root=None):
+    def __init__(l, nodet, span, angle, yx, vertuple=None, latuple=None, Et=None, root=None):
         super().__init__()
 
         l.nodet = nodet  # e_ in kernels, else replaces _node,node: not used in kernels?
         l.latuple = np.array([.0,.0,.0,.0,.0, np.zeros(2)], dtype=object) if latuple is None else latuple  # sum node_
-        l.mdLat = np.array([np.zeros(6), np.zeros(6)]) if mdLat is None else mdLat  # m_,d_
+        l.vertuple = np.array([np.zeros(6), np.zeros(6)]) if vertuple is None else vertuple  # m_,d_
         l.angle = angle  # dy,dx between node centers
         l.span = span  # distance between node centers
         l.yx = yx  # sum node_
@@ -56,7 +56,7 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
         # l.med = 0  # comp rng: n of mediating Ps between node_ Ps
         # n = 1?
     def __bool__(l):
-        return np.any(l.mdLat)
+        return np.any(l.vertuple)
 
 def vectorize_root(frame):
 
@@ -70,25 +70,25 @@ def vectorize_root(frame):
 
 def comp_slice(edge):  # root function
 
-    edge.Et, edge.mdLat = np.zeros(2), np.array([np.zeros(6), np.zeros(6)])  # m_,d_
+    edge.Et, edge.vertuple = np.zeros(2), np.array([np.zeros(6), np.zeros(6)])  # m_,d_
     for P in edge.P_:  # add higher links
-        P.mdLat = np.array([np.zeros(6), np.zeros(6)])
+        P.vertuple = np.array([np.zeros(6), np.zeros(6)])
         P.rim = []; P.lrim = []; P.prim = []
 
     comp_P_(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
-    edge.node_ = form_PP_(edge, edge.P_)
+    edge.node_ = form_PP_(edge, edge.P_, fd=0)
 
     for PPm in edge.node_:  # eval sub-clustering, not recursive
         if isinstance(PPm, list):  # PPt, not CP
-            P_, link_, mdLat = PPm[1:4]
-            if len(link_) > ave_L and sum(mdLat[1]) > ave_PPd:
+            P_, link_, vertuple = PPm[1:4]
+            if len(link_) > ave_L and sum(vertuple[1]) > ave_PPd:
                 comp_dP_(PPm)
-                PPm[2] = form_PP_(PPm, link_)  # add PPds within PPm link_
-            mdLat = PPm[3]
+                PPm[2] = form_PP_(PPm, link_, fd=1)  # add PPds within PPm link_
+            vertuple = PPm[3]
         else:
-            mdLat = PPm.mdLat  # PPm is actually CP
-        edge.mdLat += mdLat
-        edge.Et[0] += sum(mdLat[0]); edge.Et[1] += sum(mdLat[1])
+            vertuple = PPm.vertuple  # PPm is actually CP
+        edge.vertuple += vertuple
+        edge.Et[0] += sum(vertuple[0]); edge.Et[1] += sum(vertuple[1])
 
 def comp_P_(edge):  # form links from prelinks
 
@@ -101,51 +101,48 @@ def comp_P_(edge):  # form links from prelinks
                 # <max Manhattan distance
                 angle=[dy,dx]; distance=np.hypot(dy,dx)
                 derLay, et = comp_latuple(_P.latuple, P.latuple, len(_P.dert_), len(P.dert_))
-                P.rim += [convert_to_dP(_P,P, derLay, angle, distance, et, fd=0)]
+                P.rim += [convert_to_dP(_P,P, derLay, angle, distance, et)]
     del edge.pre__
 
 def comp_dP_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
     link_ = PP[2]
     llink_ = []  # links between links
-    for dP in link_:
-        M,D = dP.Et  # sum(dP.mdLat[0]), sum(dP.mdLat[1])  # need to use adjacent M instead
-        if D * (M / ave) > aves[1]:
-            _P, P = dP.nodet  # _P is prior / lower?
-            rn = len(P.dert_)/len(_P.dert_)
-            for _dP in P.rim:  # no med
-                if _dP not in link_:
-                    continue  # skip removed node links
-                derLat, et = comp_md_(_dP.mdLat[1], dP.mdLat[1], rn)
-                angle = np.subtract(dP.yx,_dP.yx)  # dy,dx of node centers
+    for _dP in link_:
+        M, n = PP[-2][0], PP[-1]
+        if _dP.Et[1] * (M / n / ave) > aves[1]:
+            for dP in P.rim:  # higher links
+                if dP not in link_: continue  # skip removed node links
+                _P, P = dP.nodet  # _P is lower
+                rn = len(P.dert_) / len(_P.dert_)
+                # do we need this:
+                _node, node = (_dP, dP) if (*_dP.yx,) < (*dP.yx,) else (dP, _dP)
+                mdVer, et = comp_md_(_node.vertuple[1], node.vertuple[1], rn)
+                angle = np.subtract(node.yx,_node.yx)  # dy,dx of node centers
                 distance = np.hypot(*angle)  # between node centers
-                llink_ += [convert_to_dP(_dP, dP, derLat, angle, distance, et, fd=1)]
+                llink_ += [convert_to_dP(_node, node, mdVer, angle, distance, et)]
     return llink_
 
 def comp_md_(_d_,d_, rn=.1, dir=1):  # dir may be -1
 
-    M, D = 0,0; md_, dd_ = [],[]
-    for i, (_d, d) in enumerate(zip(_d_, d_)):  # compare ds in md_ or ext
-        d *= rn  # normalize by compared accum span
-        diff = (_d - d) * dir
-        match = min(abs(_d), abs(d))
-        if (_d < 0) != (d < 0): match = -match  # negate if only one compared is negative
-        md_ += [match]; M += match  # maybe negative
-        dd_ += [diff];  D += abs(diff)  # potential compression
-        # proj / eval
-    return np.array([np.array(md_),np.array(dd_)]), np.array([M,D])  # [m_,d_], Et
+    d_ = d_*rn  # normalize by compared accum span
+    dd_ = (_d_ - d_ * dir)  # np.arrays
+    md_ = np.minimum(np.abs(_d_), np.abs(d_))
+    md_[(_d_ < 0) != (d_ < 0)] *= -1  # negate if only one compared is negative
 
-def convert_to_dP(_P,P, derLay, angle, distance, Et, fd):
+    return np.array([np.array(md_), np.array(dd_)]), np.array([md_.sum(), dd_.sum()])  # [m_,d_], Et
 
-    link = CdP(nodet=[_P,P], Et=Et, mdLat=derLay, angle=angle, span=distance, yx=np.add(_P.yx, P.yx)/2)
-    if Et[fd] > aves[fd]:
-        _P.mdLat += link.mdLat; P.mdLat += link.mdLat  # regardless of clustering?
-        _P.lrim += [link]; P.lrim += [link]
-        _P.prim +=[P]; P.prim +=[_P]  # all Ps are dPs if fd
+def convert_to_dP(_P,P, derLay, angle, distance, Et):
+
+    link = CdP(nodet=[_P,P], Et=Et, vertuple=derLay, angle=angle, span=distance, yx=np.add(_P.yx, P.yx)/2)
+    # regardless of clustering:
+    _P.vertuple += link.vertuple; P.vertuple += link.vertuple
+    _P.lrim += [link]; P.lrim += [link]
+    _P.prim += [P];    P.prim +=[_P]  # all Ps are dPs if fd
 
     return link
 
-def form_PP_(root, iP_):  # form PPs of dP.valt[fd] + connected Ps val
+def form_PP_(root, iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
 
     PPt_ = []
     for P in iP_: P.merged = 0
@@ -154,31 +151,28 @@ def form_PP_(root, iP_):  # form PPs of dP.valt[fd] + connected Ps val
         if not P.lrim:
             PPt_ += [P]; continue
         _prim_ = P.prim; _lrim_ = P.lrim
-        _P_ = {P}; link_ = set(); Et = np.zeros(2)
+        _P_ = {P}; link_ = set(); Et = np.zeros(2); n = 0
         while _prim_:
             prim_,lrim_ = set(),set()
             for _P,_L in zip(_prim_,_lrim_):
-                if _P.merged: continue  # was merged
-                _P_.add(_P); link_.add(_L); Et += _L.Et
+                if _L.Et[fd] < aves[fd] or _P.merged:
+                    continue
+                _P_.add(_P); link_.add(_L); Et += _L.Et; n += P.latuple[4]  # L
                 prim_.update(set(_P.prim) - _P_)
                 lrim_.update(set(_P.lrim) - link_)
                 _P.merged = 1
             _prim_, _lrim_ = prim_, lrim_
-        PPt = sum2PP(root, list(_P_), list(link_))
+        PPt = sum2PP(root, list(_P_), list(link_), Et, n)
         PPt_ += [PPt]
 
     return PPt_
 
-def sum2PP(root, P_, dP_):  # sum links in Ps and Ps in PP
+def sum2PP(root, P_, dP_, Et, n):  # sum links in Ps and Ps in PP
 
     fd = isinstance(P_[0],CdP)
-    if fd:
-        latuple = np.sum([n.latuple for n in set([n for dP in P_ for n in  dP.nodet])], axis=0)
-        area = latuple[4]
-    else:
-        latuple = np.array([.0,.0,.0,.0,.0, np.zeros(2)], dtype=object)
-        area = 0
-    mdLat = np.array([np.zeros(6),np.zeros(6)])
+    if fd: latuple = np.sum([n.latuple for n in set([n for dP in P_ for n in  dP.nodet])], axis=0)
+    else:  latuple = np.array([.0,.0,.0,.0,.0, np.zeros(2)], dtype=object)
+    vertuple = np.array([np.zeros(6),np.zeros(6)])
     link_, A, S, box = [],[0,0],0, [np.inf,np.inf,0,0]
     # add uplinks:
     for dP in dP_:
@@ -189,16 +183,11 @@ def sum2PP(root, P_, dP_):  # sum links in Ps and Ps in PP
     # add Ps:
     for P in P_:
         if not fd:  # else summed from P_ nodets on top
-            L = P.latuple[4]
             latuple += P.latuple
-            area += L  # no + P.mdLat.n: current links only?
-        if np.any(P.mdLat):  # CdP or lower P has mdLat
-            mdLat += P.mdLat
         for y,x in P.yx_ if isinstance(P, CP) else [P.nodet[0].yx, P.nodet[1].yx]:  # CdP
             box = accum_box(box,y,x)
     y0,x0,yn,xn = box
-    # derH = [mdLat]
-    PPt = [root, P_, link_, mdLat, latuple, A, S, area, box, [(y0+yn)/2,(x0+xn)/2]]  # n is the same as area
+    PPt = [root, P_, link_, vertuple, latuple, A, S, box, [(y0+yn)/2,(x0+xn)/2], Et, n]  # n is the same as area
     for P in P_: P.root = PPt
 
     return PPt
@@ -306,7 +295,7 @@ if __name__ == "__main__":
 
         print("Drawing PPm boxes...")
         for PPm in PPm_:
-            _, _, _, _, _, _, _, _, (y0, x0, yn, xn), _, _ = PPm
+            _, _, _, _, _, _, _, _, (y0, x0, yn, xn), _ = PPm
             (y0, x0), (yn, xn) = ((y0, x0), (yn, xn)) - yx0
             y0, yn = min_dist(y0, yn)
             x0, xn = min_dist(x0, xn)
@@ -314,7 +303,7 @@ if __name__ == "__main__":
 
         print("Drawing PPd boxes...")
         for PPd in PPd_:
-            _, _, _, _, _, _, _, _, (y0, x0, yn, xn), _, _ = PPd
+            _, _, _, _, _, _, _, _, (y0, x0, yn, xn), _ = PPd
             (y0, x0), (yn, xn) = ((y0, x0), (yn, xn)) - yx0
             y0, yn = min_dist(y0, yn)
             x0, xn = min_dist(x0, xn)

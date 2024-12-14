@@ -4,8 +4,8 @@ import numpy as np
 from copy import copy, deepcopy
 from functools import reduce
 from frame_blobs import frame_blobs_root, intra_blob_root, imread
-from comp_slice import comp_latuple
-from trace_edge import comp_node_, comp_link_, comp_lay, sum2graph, get_rim, CH, CG, ave, ave_d, ave_L, vectorize_root, comp_area, extend_box
+from comp_slice import comp_latuple, comp_md_
+from trace_edge import comp_node_, comp_link_, sum2graph, get_rim, CH, CG, ave, ave_d, ave_L, vectorize_root, comp_area, extend_box
 '''
 Cross-compare and cluster Gs within a frame, potentially unpacking their node_s first,
 alternating agglomeration and centroid clustering.
@@ -33,7 +33,7 @@ def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, rec
     N_,L_, (m,d,r) = comp_node_(frame.subG_)  # cross-comp exemplars, extrapolate to their node_s?
     if m > ave * r:
         mlay = CH().add_H([L.derH for L in L_])  # mfork, else no new layer
-        frame.derH = CH(H=[mlay], md_t=deepcopy(mlay.md_t), n=mlay.n, root=frame, Et=copy(mlay.Et)); mlay.root=frame.derH
+        frame.derH = CH(H=[mlay],  n=mlay.n, root=frame, Et=copy(mlay.Et)); mlay.root=frame.derH
         vd = d - ave_d * r
         if vd > 0:  # no cross-projection
             for L in L_:
@@ -118,11 +118,12 @@ def find_centroids(graph):
             s = n.sign; n.sign=1  # single-use sign
             C.n += n.n * s; C.Et += n.Et * s; C.rng = n.rng * s; C.aRad += n.aRad * s
             C.L += len(n.node_) * s
-            C.latuple += n.latuple * s; C.mdLay += n.mdLay * s
-            if n.derH: C.derH.add_H(n.derH, s=s)
-            if n.extH: C.extH.add_H(n.extH, s=s)
+            C.latuple += n.latuple * s
+            C.vertuple += n.vertuple * s
+            if n.derH: C.derH.add_H(n.derH, dir=s, fc=1)
+            if n.extH: C.extH.add_H(n.extH, dir=s, fc=1)
         # get averages:
-        k = len(dnode_); C.n/=k; C.Et/=k; C.latuple/=k; C.mdLay/=k; C.aRad/=k
+        k = len(dnode_); C.n/=k; C.Et/=k; C.latuple/=k; C.vertuple/=k; C.aRad/=k
         if C.derH: C.derH.norm_(k)  # derH/=k
         C.box = reduce(extend_box, (n.box for n in node_))
         return C
@@ -132,11 +133,11 @@ def find_centroids(graph):
         # rn = C.n / N.n
         mL = min(C.L,len(N.node_)) - ave_L
         mA = comp_area(C.box, N.box)[0]
-        mLat = comp_latuple(C.latuple, N.latuple, C.n, N.n)[2][0]
-        mLay = comp_lay(C.mdLay, N.mdLay,rn=1)[2][0]
+        mLat = comp_latuple(C.latuple, N.latuple, C.n, N.n)[1][0]
+        mVer = comp_md_(C.vertuple[1], N.vertuple[1])[1][0]
         mH = C.derH.comp_H(N.derH).Et[0] if C.derH and N.derH else 0
         # comp node_, comp altG from converted adjacent flat blobs?
-        return mL + mA + mLat + mLay + mH
+        return mL + mA + mLat + mVer + mH
 
     def centroid_cluster(N):  # refine and extend cluster with extN_
 
