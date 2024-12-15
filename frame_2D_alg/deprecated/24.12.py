@@ -155,3 +155,43 @@ def comp_lay(_md_t, md_t, rn, dir=1):  # replace dir with rev?
             HE.node_ += [node for node in He.node_ if node not in HE.node_]  # node_ is empty in CL derH?
 
         return HE  # root should be updated by returned HE
+
+def trace(edge):  # fill and trace across slices
+
+    adjacent_ = [(P, y,x) for P in edge.P_ for y,x in edge.rootd if edge.rootd[y,x] is P]
+    bi__ = defaultdict(list)  # prelinks (bi-lateral)
+    while adjacent_:
+        _P, _y,_x = adjacent_.pop(0)  # also pop _P__
+        _pre_ = bi__[_P]
+        for y,x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:
+            try:  # if yx has _P, try to form link
+                P = edge.rootd[y,x]
+                pre_ = bi__[P]
+                if _P is not P and _P not in pre_ and P not in _pre_:
+                    pre_ += [_P]
+                    _pre_ += [P]
+            except KeyError:    # if yx empty, keep tracing
+                if (y,x) not in edge.dert_: continue   # stop if yx outside the edge
+                edge.rootd[y,x] = _P
+                adjacent_ += [(_P, y,x)]
+    # remove redundant links
+    for P in edge.P_:
+        yx = P.yx
+        for __P, _P in combinations(bi__[P], r=2):
+            if __P not in bi__[P] or _P not in bi__[P]: continue
+            __yx, _yx = __P.yx, _P.yx   # center coords
+            # start -> end:
+            __yx1 = np.subtract(__P.yx_[0], __P.axis)
+            __yx2 = np.add(__P.yx_[-1], __P.axis)
+            _yx1 = np.subtract(_P.yx_[0], _P.axis)
+            _yx2 = np.add(_P.yx_[-1], _P.axis)
+            # remove link(_P,P) crossing __P:
+            if xsegs(yx, _yx, __yx1, __yx2):
+                bi__[P].remove(_P)
+                bi__[_P].remove(P)
+            # remove link(__P,P) crossing _P):
+            elif xsegs(yx, __yx, _yx1, _yx2):
+                bi__[P].remove(__P)
+                bi__[__P].remove(P)
+
+    edge.pre__ = {_P:[P for P in bi__[_P] if _P.yx < P.yx] for _P in edge.P_}

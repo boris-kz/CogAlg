@@ -4,6 +4,7 @@ from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack
 from slice_edge import slice_edge, comp_angle, aveG
 from comp_slice import comp_slice, comp_latuple, comp_md_
 from itertools import combinations, zip_longest
+from functools import reduce
 from copy import deepcopy, copy
 import numpy as np
 
@@ -70,7 +71,8 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
 
         md_t = [np.array([m_ * dir if fc else copy(m_), d_ * dir]) for m_, d_ in he.H]
         # m_ * dir only if called from centroid()
-        Et = he.Et * dir if fc else copy(he.Et); n = he.n * dir if fc else he.n
+        Et = he.Et * dir if fc else copy(he.Et)
+        n = he.n * dir if fc else he.n
 
         return CH(root=root, H=md_t, node_=copy(he.node_), Et=Et, n=n, i=he.i, i_=he.i_)
 
@@ -78,7 +80,8 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
 
         C = CH(root=root, node_=copy(He.node_), Et=copy(He.Et), n=He.n, i=He.i, i_=He.i_)
         for he in He.H:
-            C.H += [he.copy_(root=C, dir=dir, fc=fc) if isinstance(he.H[0],CH) else he.copy_md_C(root=C, dir=dir, fc=fc)]
+            C.H += [he.copy_(root=C, dir=dir, fc=fc) if isinstance(he.H[0],CH) else
+                    he.copy_md_C(root=C, dir=dir, fc=fc)]
         return C
 
     def add_md_C(Lay, lay, dir=1, fc=0):
@@ -236,23 +239,22 @@ def vectorize_root(frame):
                     # init for agg+:
                     if not hasattr(frame, 'derH'):
                         frame.derH = CH(root=frame); frame.root = None; frame.subG_ = []
-                    Y,X,_,_,_,_ = blob.latuple; P_ = blob.P_; lat = np.sum([P.latuple for P in P_],axis=0)
-                    edge = CG(root_=[frame], node_=blob.node_, latuple=lat, box=[np.inf,np.inf,0,0], yx=[Y,X], n=0)
+                    Y,X,_,_,_,_ = blob.latuple
+                    lat = np.array([.0,.0,.0,.0,.0,np.zeros(2)],dtype=object)
+                    vert = np.array([np.zeros(6), np.zeros(6)])
+                    for PP in blob.node_:
+                        vert += PP[3]; lat += PP[4]
+                    edge = CG(root_=[frame], node_=blob.node_, latuple=lat, box=[Y,X,0,0], yx=[Y/2,X/2], Et=blob.Et, n=blob.n)
                     G_ = []
-                    for N in edge.node_:
-                        # no comp node_, link_ | PPd_ for now
-                        P_, link_, vert, lat, A, S, box, [y,x], Et, n = N[1:] if isinstance(N,list) else (  # PPt else P:
-                        N.dert_, [], N.vertuple, N.latuple, N.latuple[-1], N.latuple[-4], [], N.yx, 0, [np.sum(N.vertuple[0]),np.sum(N.vertuple[1])], N.latuple[-4])
-                        if Et[0] > ave:
-                            PP = CG(fd=0, Et=np.array([Et[:],1.]), root_=[edge], node_=P_, link_=link_, vert=vert,
-                                    latuple=lat, box=box, yx=[y,x], n=n)  # no altG until cross-comp
+                    for N in edge.node_:  # no comp node_, link_ | PPd_ for now
+                        P_, link_, vert, lat, A, S, box, [y,x], Et, n = N[1:]  # PPt
+                        if Et[0] > ave:   # no altG until cross-comp
+                            PP = CG(fd=0, Et=np.append(Et,1.),root_=[edge],node_=P_,link_=link_,vert=vert,latuple=lat,box=box,yx=[y,x],n=n)
                             y0,x0,yn,xn = box
                             PP.aRad = np.hypot(*np.subtract(PP.yx,(yn,xn)))
-                            edge.box = extend_box(edge.box, PP.box)
-                            edge.n += PP.n
                             G_ += [PP]
+                    edge.subG_ = G_
                     if len(G_) > ave_L:
-                        edge.subG_ = G_
                         cluster_edge(edge); frame.subG_ += [edge]; frame.derH.add_H(edge.derH)
                         # add altG: summed converted adj_blobs of converted edge blob
                         # if len(edge.subG_) > ave_L: agg_recursion(edge)  # unlikely
@@ -293,7 +295,7 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
         if len(N_) > ave_L:
             cluster_PP_(edge,fd=0)
         # borrow from misprojected m: proj_m -= proj_d, no eval per link: comp instead
-        if d * (m/ave) > ave_d * r:
+        if d * (m/ave) > ave_d * r:  # likely not from the same links
             for L in L_:
                 L.extH = CH(); L.root_= [edge]
             # comp dPP_:

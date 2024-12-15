@@ -64,7 +64,7 @@ class CP(CBase):
                 _y,_x,_gy,_gx = y,x,gy,gx
 
         P.yx = tuple(np.mean([P.yx_[0], P.yx_[-1]], axis=0))
-        P.latuple = np.array([I, G, M, Ma, L, np.array([Dy, Dx])],dtype=object)
+        P.latuple = new_latuple(I, G, M, Ma, L, [Dy, Dx])
 
 def vectorize_root(frame):
 
@@ -77,7 +77,7 @@ def slice_edge(edge):
 
     axisd = select_max(edge)
     yx_ = sorted(axisd.keys(), key=lambda yx: edge.dert_[yx][-1])  # sort by g
-    edge.P_ = []; M,D = 0,0; edge.rootd = {}
+    edge.P_ = []; edge.rootd = {}
     # form P/ local max yx:
     while yx_:
         yx = yx_.pop(); axis = axisd[yx]  # get max of g maxes
@@ -85,7 +85,7 @@ def slice_edge(edge):
         edge.P_ += [P]
         yx_ = [yx for yx in yx_ if yx not in edge.rootd]    # remove merged maxes if any
     edge.P_.sort(key=lambda P: P.yx, reverse=True)
-    trace(edge)
+    trace_P_adjacency(edge)
     if __name__ != "__main__": del edge.rootd   # keep for visual verification in slice_edge only
     return edge
 
@@ -104,50 +104,43 @@ def select_max(edge):
         if new_max: axisd[y, x] = sa, ca
     return axisd
 
-def trace(edge):  # fill and trace across slices
+def trace_P_adjacency(edge):  # fill and trace across slices
 
-    adjacent_ = [(P, y,x) for P in edge.P_ for y,x in edge.rootd if edge.rootd[y,x] is P]
-    bi__ = defaultdict(list)  # prelinks (bi-lateral)
-    while adjacent_:
-        _P, _y,_x = adjacent_.pop(0)  # also pop _P__
-        _pre_ = bi__[_P]
-        for y,x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:
-            try:  # if yx has _P, try to form link
+    P_map_ = [(P, y,x) for P in edge.P_ for y,x in edge.rootd if edge.rootd[y,x] is P]
+    prelink__ = defaultdict(list)  # uplinks
+    while P_map_:
+        _P, _y,_x = P_map_.pop(0)  # also pop _P__
+        _margin = prelink__[_P]  # empty list per _P
+        for y,x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:  # adjacent pixels
+            try:  # form link if yx has _P
                 P = edge.rootd[y,x]
-                pre_ = bi__[P]
-                if _P is not P and _P not in pre_ and P not in _pre_:
-                    pre_ += [_P]
-                    _pre_ += [P]
-            except KeyError:    # if yx empty, keep tracing
-                if (y,x) not in edge.dert_: continue   # stop if yx outside the edge
+                margin = prelink__[P]  # empty list per P
+                if _P is not P:
+                    if _P.yx < P.yx and _P not in margin:
+                        margin += [_P]  # _P is higher
+                    elif P not in _margin:
+                        _margin += [P]  # P is higher
+            except KeyError:  # if yx empty, keep tracing
+                if (y,x) not in edge.dert_: continue   # yx is outside the edge
                 edge.rootd[y,x] = _P
-                adjacent_ += [(_P, y,x)]
-    # remove redundant links
+                P_map_ += [(_P, y,x)]
+    # remove crossed links
     for P in edge.P_:
         yx = P.yx
-        for __P, _P in combinations(bi__[P], r=2):
-            if __P not in bi__[P] or _P not in bi__[P]: continue
-            __yx, _yx = __P.yx, _P.yx   # center coords
-            # start -> end:
-            __yx1 = np.subtract(__P.yx_[0], __P.axis)
-            __yx2 = np.add(__P.yx_[-1], __P.axis)
+        for _P, __P in combinations(prelink__[P], r=2):
+            _yx, __yx = _P.yx, __P.yx
+            # get aligned line segments:
             _yx1 = np.subtract(_P.yx_[0], _P.axis)
             _yx2 = np.add(_P.yx_[-1], _P.axis)
-            # remove link(_P,P) crossing __P:
+            __yx1 = np.subtract(__P.yx_[0], __P.axis)
+            __yx2 = np.add(__P.yx_[-1], __P.axis)
+            # remove crossed uplinks:
             if xsegs(yx, _yx, __yx1, __yx2):
-                bi__[P].remove(_P)
-                bi__[_P].remove(P)
-            # remove link(__P,P) crossing _P):
+                prelink__[P].remove(_P)
             elif xsegs(yx, __yx, _yx1, _yx2):
-                bi__[P].remove(__P)
-                bi__[__P].remove(P)
-    for P in edge.P_:
-        for _P in bi__[P]:
-            if P in bi__[_P]:
-                if _P.yx < P.yx: bi__[_P].remove(P)
-                else:            bi__[P].remove(_P)
-
-    edge.pre__ = bi__  # prelinks
+                prelink__[P].remove(__P)
+    # for comp_slice:
+    edge.pre__ = prelink__
 
 # --------------------------------------------------------------------------------------------------------------
 # utility functions
@@ -185,6 +178,9 @@ def comp_angle(_A, A):  # rn doesn't matter for angles
 
     return [mangle, dangle]
 
+def new_latuple(I=0.0, G=0.0, M=0.0, Ma=0.0, L=0.0, A=(0.0, 0.0)):
+    return np.array([I, G, M, Ma, L, np.array(A, float)],dtype=object)
+
 def unpack_edge_(frame):
     return [blob for blob in unpack_blob_(frame) if hasattr(blob, "P_")]
 
@@ -220,6 +216,7 @@ if __name__ == "__main__":
     edge_ = sorted(unpack_edge_(frame), key=lambda edge: len(edge.yx_), reverse=True)
     # show first largest n edges
     for edge in edge_[:num_to_show]:
+        assert len(edge.P_) == len({P.yx for P in edge.P_})     # verify that P.yx is unique
         yx_ = np.array(edge.yx_)
         yx0 = yx_.min(axis=0) - 1
         # show edge-blob
@@ -247,7 +244,7 @@ if __name__ == "__main__":
                 for _P in edge.pre__[P]:
                     assert _P.id not in pre_set     # verify pre-link uniqueness
                     pre_set.add(_P.id)
-                    assert _P.yx < P.yx     # verify up-link
+                    assert _P.yx > P.yx     # verify up-link
                     _yp, _xp = _P.yx - yx0
                     plt.plot([_xp, xp], [_yp, yp], "ko--", alpha=0.5)
                 yx_ = [yx for yx in edge.rootd if edge.rootd[yx] is P]
