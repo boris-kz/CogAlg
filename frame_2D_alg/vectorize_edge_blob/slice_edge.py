@@ -106,41 +106,40 @@ def select_max(edge):
 
 def trace_P_adjacency(edge):  # fill and trace across slices
 
-    P_map_ = [(P, y,x) for P in edge.P_ for y,x in edge.rootd if edge.rootd[y,x] is P]
-    prelink__ = defaultdict(list)  # uplinks
-    while P_map_:
-        _P, _y,_x = P_map_.pop(0)  # also pop _P__
+    margin_rim = [(P, y,x) for P in edge.P_ for y,x in edge.rootd if edge.rootd[y,x] is P]
+    prelink__ = defaultdict(list)  # bilateral
+    while margin_rim:   # breadth-first search for neighbors
+        _P, _y,_x = margin_rim.pop(0)  # also pop _P__
         _margin = prelink__[_P]  # empty list per _P
         for y,x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:  # adjacent pixels
-            try:  # form link if yx has _P
-                P = edge.rootd[y,x]
-                margin = prelink__[P]  # empty list per P
-                if _P is not P:
-                    if _P.yx < P.yx and _P not in margin:
-                        margin += [_P]  # _P is higher
-                    elif P not in _margin:
-                        _margin += [P]  # P is higher
-            except KeyError:  # if yx empty, keep tracing
-                if (y,x) not in edge.dert_: continue   # yx is outside the edge
-                edge.rootd[y,x] = _P
-                P_map_ += [(_P, y,x)]
+            if (y,x) not in edge.dert_: continue   # yx is outside the edge
+            if (y,x) not in edge.rootd:  # assign root, keep tracing
+                edge.rootd[y, x] = _P
+                margin_rim += [(_P, y, x)]
+                continue
+            # form link if yx has _P
+            P = edge.rootd[y,x]
+            margin = prelink__[P]  # empty list per P
+            if _P is not P and _P not in margin and P not in _margin:
+                margin += [_P]; _margin += [P]
     # remove crossed links
-    for P in edge.P_:
-        yx = P.yx
-        for _P, __P in combinations(prelink__[P], r=2):
-            _yx, __yx = _P.yx, __P.yx
+    for _P in edge.P_:
+        _yx = _P.yx
+        for P, __P in combinations(prelink__[_P], r=2):
+            if {__P,P}.intersection(prelink__[_P]) != {__P, P}: continue   # already removed
+            yx, __yx = P.yx, __P.yx
             # get aligned line segments:
-            _yx1 = np.subtract(_P.yx_[0], _P.axis)
-            _yx2 = np.add(_P.yx_[-1], _P.axis)
+            yx1 = np.subtract(P.yx_[0], P.axis)
+            yx2 = np.add(P.yx_[-1], P.axis)
             __yx1 = np.subtract(__P.yx_[0], __P.axis)
             __yx2 = np.add(__P.yx_[-1], __P.axis)
             # remove crossed uplinks:
             if xsegs(yx, _yx, __yx1, __yx2):
-                prelink__[P].remove(_P)
-            elif xsegs(yx, __yx, _yx1, _yx2):
-                prelink__[P].remove(__P)
+                prelink__[P].remove(_P); prelink__[_P].remove(P)
+            elif xsegs(_yx, __yx, yx1, yx2):
+                prelink__[_P].remove(__P); prelink__[__P].remove(_P)
     # for comp_slice:
-    edge.pre__ = prelink__
+    edge.pre__ = {_P:[P for P in prelink__[_P] if _P.yx > P.yx] for _P in prelink__}
 
 # --------------------------------------------------------------------------------------------------------------
 # utility functions
@@ -232,25 +231,23 @@ if __name__ == "__main__":
             v_, u_ = zip(*vu_)
             plt.quiver(x_, y_, u_, v_, scale=100)
         if show_slices:
-            for P in edge.P_:
-                y_, x_ = zip(*(P.yx_ - yx0))
-                if len(P.yx_) == 1:
-                    v, u = P.axis
-                    y_ = y_[0]-v/2, y_[0]+v/2
-                    x_ = x_[0]-u/2, x_[0]+u/2
-                plt.plot(x_, y_, "k-", linewidth=3)
-                yp, xp = P.yx - yx0
-                pre_set = set()
-                for _P in edge.pre__[P]:
-                    assert _P.id not in pre_set     # verify pre-link uniqueness
-                    pre_set.add(_P.id)
+            for _P in edge.P_:
+                _y_, _x_ = zip(*(_P.yx_ - yx0))
+                if len(_P.yx_) == 1:
+                    v, u = _P.axis
+                    _y_ = _y_[0]-v/2, _y_[0]+v/2
+                    _x_ = _x_[0]-u/2, _x_[0]+u/2
+                plt.plot(_x_, _y_, "k-", linewidth=3)
+                _yp, _xp = _P.yx - yx0
+                assert len(set(edge.pre__[_P])) == len(edge.pre__[_P])   # verify pre-link uniqueness
+                for P in edge.pre__[_P]:
                     assert _P.yx > P.yx     # verify up-link
-                    _yp, _xp = _P.yx - yx0
+                    yp, xp = P.yx - yx0
                     plt.plot([_xp, xp], [_yp, yp], "ko--", alpha=0.5)
-                yx_ = [yx for yx in edge.rootd if edge.rootd[yx] is P]
-                if yx_:
-                    y_, x_ = zip(*(yx_ - yx0))
-                    plt.plot(x_, y_, 'o', alpha=0.5)
+                _cyx_ = [_yx for _yx in edge.rootd if edge.rootd[_yx] is _P]
+                if _cyx_:
+                    _cy_, _cx_ = zip(*(_cyx_ - yx0))
+                    plt.plot(_cx_, _cy_, 'o', alpha=0.5)
 
         ax = plt.gca()
         ax.set_aspect('equal', adjustable='box')

@@ -5,7 +5,7 @@ from copy import copy, deepcopy
 from functools import reduce
 from frame_blobs import frame_blobs_root, intra_blob_root, imread
 from comp_slice import comp_latuple, comp_md_
-from trace_edge import comp_node_, comp_link_, sum2graph, get_rim, CH, CG, ave, ave_d, ave_L, vectorize_root, comp_area, extend_box
+from vect_edge import comp_node_, comp_link_, sum2graph, get_rim, CH, CG, ave, ave_d, ave_L, vectorize_root, comp_area, extend_box
 '''
 Cross-compare and cluster Gs within a frame, potentially unpacking their node_s first,
 alternating agglomeration and centroid clustering.
@@ -34,10 +34,10 @@ def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, rec
     if m > ave * r:
         mlay = CH().add_H([L.derH for L in L_])  # mfork, else no new layer
         frame.derH = CH(H=[mlay],  n=mlay.n, root=frame, Et=copy(mlay.Et)); mlay.root=frame.derH
-        vd = d - ave_d * r
-        if vd > 0:  # no cross-projection
+        vd = d * (m/ave) - ave_d * r
+        if vd > 0:
             for L in L_:
-                L.root_ = [frame]; L.extH = CH(); L.rimt = [[],[]]
+                L.extH, L.root, L.mL_t, L.rimt, L.aRad, L.visited_, L.Et, L.n = CH(), frame, [[],[]], [[],[]], 0, [L], copy(L.derH.Et), L.derH.n
             lN_,lL_, md = comp_link_(L_)  # comp new L_, root.link_ was compared in root-forming for alt clustering
             vd *= md / ave
             if lL_:  # recursive der+ eval_: cost > ave_match, add by feedback if < _match?

@@ -63,12 +63,12 @@ def vectorize_root(frame):
     for blob in blob_:
         if not blob.sign and blob.G > aveG * blob.root.rdn:
             edge = slice_edge(blob)
-            if edge.G*(len(edge.P_) - 1) > ave_PPm:  # eval PP, rdn=1
+            if edge.G * (len(edge.P_) - 1) > ave_PPm:  # eval PP, rdn=1
                 comp_slice(edge)
 
 def comp_slice(edge):  # root function
 
-    edge.Et, edge.vertuple = np.zeros(2), np.array([np.zeros(6), np.zeros(6)])  # m_,d_
+    edge.Et, edge.vertuple, edge.n = np.zeros(2), np.array([np.zeros(6), np.zeros(6)]), 0  # m_,d_,n
     for P in edge.P_:  # add higher links
         P.vertuple = np.array([np.zeros(6), np.zeros(6)])
         P.rim = []; P.lrim = []; P.prim = []
@@ -125,7 +125,7 @@ def comp_md_(_d_,d_, rn=.1, dir=1):  # dir may be -1
 def convert_to_dP(_P,P, derLay, angle, distance, Et):
 
     link = CdP(nodet=[_P,P], Et=Et, vertuple=derLay, angle=angle, span=distance, yx=np.add(_P.yx, P.yx)/2)
-    # bidirectional, regardless of clustering:
+    # bilateral, regardless of clustering:
     _P.vertuple += link.vertuple; P.vertuple += link.vertuple
     _P.lrim += [link]; P.lrim += [link]
     _P.prim += [P];    P.prim +=[_P]  # all Ps are dPs if fd
@@ -138,22 +138,21 @@ def form_PP_(root, iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
     for P in iP_: P.merged = 0
     for P in iP_:  # dP from link_ if fd
         if P.merged: continue
-        _prim_ = P.prim; _lrim_ = P.lrim
-        _P_ = {P}; link_ = set(); Et = np.zeros(2); n = 0
+        _prim_ = P.prim; _lrim_ = P.lrim; I, G, M, Ma, L, _ = P.latuple
+        _P_ = {P}; link_ = set(); Et = np.array([M,G]); n = L
         while _prim_:
             prim_,lrim_ = set(),set()
             for _P,_L in zip(_prim_,_lrim_):
                 if _L.Et[fd] < aves[fd] or _P.merged:
                     continue
-                _P_.add(_P); link_.add(_L); Et += _L.Et; n += P.latuple[4]  # L
+                _P_.add(_P); link_.add(_L); I, G, M, Ma, L, _ = _P.latuple
+                Et += _L.Et + np.array([M,G]); n += L  # L is a multiplier to 1 for _L.vertuple[1]
                 prim_.update(set(_P.prim) - _P_)
                 lrim_.update(set(_P.lrim) - link_)
                 _P.merged = 1
             _prim_, _lrim_ = prim_, lrim_
-        if not link_:
-            PPt_ += [P]; continue
         PPt = sum2PP(root, list(_P_), list(link_), Et, n)
-        PPt_ += [PPt]
+        PPt_ += [PPt]; root.Et += Et; root.n += n
 
     return PPt_
 
@@ -171,7 +170,7 @@ def sum2PP(root, P_, dP_, Et, n):  # sum links in Ps and Ps in PP
             link_ += [dP]
             a = dP.angle; A = np.add(A,a); S += np.hypot(*a)  # span, links are contiguous but slanted
     else:  # single P PP
-        S,A = P_[0].latuple[4:]  # latuple is I, G, M, Ma, L, (Dy, Dx)
+        S,A = P_[0].latuple[4:]  # [I, G, M, Ma, L, (Dy, Dx)]
     box = [np.inf,np.inf,0,0]
     for P in P_:
         if not fd:  # else summed from P_ nodets on top
