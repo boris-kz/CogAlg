@@ -19,7 +19,8 @@ and inverse gradient deviation of flat blobs. But the latter is implicit here: h
 A stable combination of a core flat blob with adjacent edge blobs is a potential object.
 '''
 # filters:
-aveG = 10  # for vectorize
+ave_I = 100
+ave_G = 100
 ave_g = 30  # change to Ave from the root intra_blob?
 ave_mL = 2
 ave_dist = 3
@@ -28,49 +29,18 @@ ave_dangle = .95  # vertical difference between angles: -1->1, abs dangle: 0->1,
 ave_olp = 5
 
 class CP(CBase):
-
-    def __init__(P, edge, yx, axis):
+    def __init__(P, yx, axis):
         super().__init__()
-        y, x = yx
+        P.yx = yx
         P.axis = ay, ax = axis
-        pivot = i,gy,gx,g = edge.dert_[y,x]  # dert is None if _y,_x not in edge.dert_: return` in `interpolate2dert`
-        ma = ave_dangle  # max if P direction = dert g direction
-        m = ave_g - g
-        pivot += ma,m
-        edge.rootd[y, x] = P
-        I,G,M,Ma,L,Dy,Dx = i,g,m,ma,1,gy,gx
-        P.yx_, P.dert_ = [yx], [pivot]
-
-        for dy,dx in [(-ay,-ax),(ay,ax)]:  # scan in 2 opposite directions to add derts to P
-            P.yx_.reverse(); P.dert_.reverse()
-            (_y,_x), (_,_gy,_gx,*_) = yx, pivot  # start from pivot
-            y,x = _y+dy, _x+dx  # 1st extension
-            while True:
-                # scan to blob boundary or angle miss:
-                ky, kx = round(y), round(x)
-                if (round(y),round(x)) not in edge.dert_: break
-                try: i,gy,gx,g = interpolate2dert(edge, y, x)
-                except TypeError: break  # out of bound (TypeError: cannot unpack None)
-                if edge.rootd.get((ky,kx)) is not None: break  # skip overlapping P
-                mangle, dangle = comp_angle((_gy,_gx), (gy, gx))
-                if mangle < ave_dangle: break  # terminate P if angle miss
-                # update P:
-                edge.rootd[ky, kx] = P
-                m = ave_g - g
-                I += i; Dy += dy; Dx += dx; G += g; Ma += ma; M += m; L += 1
-                P.yx_ += [(y,x)]; P.dert_ += [(i,gy,gx,g,ma,m)]
-                # for next loop:
-                y += dy; x += dx
-                _y,_x,_gy,_gx = y,x,gy,gx
-
-        P.yx = tuple(np.mean([P.yx_[0], P.yx_[-1]], axis=0))
-        P.latuple = new_latuple(I, G, M, Ma, L, [Dy, Dx])
+        P.yx_, P.dert_ = [],[]
+        P.latuple = None  # I,G, M,D, L, [Dy, Dx]
 
 def vectorize_root(frame):
 
     blob_ = unpack_blob_(frame)
     for blob in blob_:
-        if not blob.sign and blob.G > aveG * blob.root.rdn:
+        if not blob.sign and blob.G > ave_G * blob.root.rdn:
             slice_edge(blob)
 
 def slice_edge(edge):
@@ -81,7 +51,7 @@ def slice_edge(edge):
     # form P/ local max yx:
     while yx_:
         yx = yx_.pop(); axis = axisd[yx]  # get max of g maxes
-        P = CP(edge, yx, axis)
+        P = form_P(CP(yx, axis), edge)
         edge.P_ += [P]
         yx_ = [yx for yx in yx_ if yx not in edge.rootd]    # remove merged maxes if any
     edge.P_.sort(key=lambda P: P.yx, reverse=True)
@@ -104,10 +74,49 @@ def select_max(edge):
         if new_max: axisd[y, x] = sa, ca
     return axisd
 
+def form_P(P, edge):
+    y, x = P.yx
+    ay, ax = P.axis
+    center_dert = i,gy,gx,g = edge.dert_[y,x]  # dert is None if _y,_x not in edge.dert_: return` in `interpolate2dert`
+    edge.rootd[y,x] = P
+    I,Dy,Dx,G, M,D,L = i,gy,gx,g, 0,0,1
+    P.yx_ += [P.yx]
+    P.dert_ += [center_dert]
+
+    for dy,dx in [(-ay,-ax),(ay,ax)]:  # scan in 2 opposite directions to add derts to P
+        P.yx_.reverse(); P.dert_.reverse()
+        (_y,_x), (_i,_gy,_gx,_g) = P.yx, center_dert  # start from center_dert
+        y,x = _y+dy, _x+dx  # 1st extension
+        while True:
+            # scan to blob boundary or angle miss:
+            ky, kx = round(y), round(x)
+            if (round(y),round(x)) not in edge.dert_: break
+            try: i,gy,gx,g = interpolate2dert(edge, y, x)
+            except TypeError: break  # out of bound (TypeError: cannot unpack None)
+            if edge.rootd.get((ky,kx)) is not None:
+                break  # skip overlapping P
+            mangle, dangle = comp_angle((_gy,_gx),(gy,gx))
+            if mangle < ave_dangle: break  # terminate P if angle miss
+            m = min(_i,i) + min(_g,g) + mangle
+            d = abs(-i-i) + abs(_g-g) + dangle
+            if m < ave_I + ave_G + ave_dangle: break  # need separate weights?  terminate P if total miss, blob should be more permissive than P
+            # update P:
+            edge.rootd[ky, kx] = P
+            I+=i; Dy+=dy; Dx+=dx; G+=g; M+=m; D+=d; L+=1
+            P.yx_ += [(y,x)]; P.dert_ += [(i,gy,gx,g)]
+            # for next loop:
+            y += dy; x += dx
+            _y,_x,_gy,_gx,_i,_g = y,x,gy,gx,i,g
+
+    P.yx = tuple(np.mean([P.yx_[0], P.yx_[-1]], axis=0))    # new center
+    P.latuple = new_latuple(I,G, M,D, L, [Dy, Dx])
+    return P
+
 def trace_P_adjacency(edge):  # fill and trace across slices
 
     margin_rim = [(P, y,x) for P in edge.P_ for y,x in edge.rootd if edge.rootd[y,x] is P]
-    prelink__ = defaultdict(list)  # bilateral
+    prelink__ = defaultdict(list)
+    # bilateral
     while margin_rim:   # breadth-first search for neighbors
         _P, _y,_x = margin_rim.pop(0)  # also pop _P__
         _margin = prelink__[_P]  # empty list per _P

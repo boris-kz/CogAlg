@@ -30,15 +30,15 @@ def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, rec
     '''
     cross-comp G_) GG_) GGG_., interlaced with exemplar centroid selection 
     '''
-    N_,L_, (m,d,r) = comp_node_(frame.subG_)  # cross-comp exemplars, extrapolate to their node_s?
+    N_,L_, (m,d,r,n) = comp_node_(frame.subG_)  # cross-comp exemplars, extrapolate to their node_s?
     if m > ave * r:
         mlay = CH().add_H([L.derH for L in L_])  # mfork, else no new layer
-        frame.derH = CH(H=[mlay],  n=mlay.n, root=frame, Et=copy(mlay.Et)); mlay.root=frame.derH
+        frame.derH = CH(H=[mlay], root=frame, Et=copy(mlay.Et)); mlay.root=frame.derH
         vd = d * (m/ave) - ave_d * r
         if vd > 0:
             for L in L_:
-                L.extH, L.root, L.mL_t, L.rimt, L.aRad, L.visited_, L.Et, L.n = CH(), frame, [[],[]], [[],[]], 0, [L], copy(L.derH.Et), L.derH.n
-            lN_,lL_, md = comp_link_(L_)  # comp new L_, root.link_ was compared in root-forming for alt clustering
+                L.extH, L.root, L.mL_t, L.rimt, L.aRad, L.visited_, L.Et = CH(), frame, [[],[]], [[],[]], 0, [L], copy(L.derH.Et)
+            lN_,lL_, md = comp_link_(L_, [m,d,r,n])  # comp new L_, root.link_ was compared in root-forming for alt clustering
             vd *= md / ave
             if lL_:  # recursive der+ eval_: cost > ave_match, add by feedback if < _match?
                 frame.derH.append_(CH().add_H([L.derH for L in lL_]))  # dfork
@@ -65,8 +65,8 @@ def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.
     Gt_ = []
     for N in N_:  # cluster current distance segment
         if len(N.root_) > nest: continue  # merged, root_[0] = edge
-        node_,link_, et, n = set(),set(), np.zeros(3), 0
-        Gt = [node_,link_,et,n,min_dist]; N.root_ += [Gt]
+        node_,link_, et = set(),set(), np.zeros(4)
+        Gt = [node_,link_,et,min_dist]; N.root_ += [Gt]
         _eN_ = {N}
         while _eN_:
             eN_ = set()
@@ -78,7 +78,7 @@ def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.
                         # if L.derH.Et[0]/ave * n.extH m/ave or L.derH.Et[0] + n.extH m*.1: density?
                         eN_.update([n for n in L.nodet if len(n.root_) <= nest])
                         if L.dist >= min_dist:
-                            link_.add(L); et += L.derH.Et; n += L.derH.n
+                            link_.add(L); et += L.derH.Et
             _eN_ = eN_
         sub_L_ = set()  # form subG_ from shorter-L seg per Gt, depth-first:
         for N in node_:  # cluster in N_
@@ -89,7 +89,7 @@ def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.
         Gt += [subG_]; Gt_ += [Gt]
     G_ = []
     for Gt in Gt_:
-        node_, link_, et, n, minL, subG_ = Gt; Gt[0] = list(node_)
+        node_, link_, et, minL, subG_ = Gt; Gt[0] = list(node_)
         if et[0] > et[2] * ave * nest:  # rdn incr/ dist decr
             G_ += [sum2graph(root, Gt, fd, nest)]
         else:
@@ -116,24 +116,23 @@ def find_centroids(graph):
             C = CG(); C.L = 0; C.M = 0  # setattr summed len node_ and match to nodes
         for n in dnode_:
             s = n.sign; n.sign=1  # single-use sign
-            C.n += n.n * s; C.Et += n.Et * s; C.rng = n.rng * s; C.aRad += n.aRad * s
+            C.Et += n.Et * s; C.rng = n.rng * s; C.aRad += n.aRad * s
             C.L += len(n.node_) * s
             C.latuple += n.latuple * s
             C.vertuple += n.vertuple * s
             if n.derH: C.derH.add_H(n.derH, dir=s, fc=1)
             if n.extH: C.extH.add_H(n.extH, dir=s, fc=1)
         # get averages:
-        k = len(dnode_); C.n/=k; C.Et/=k; C.latuple/=k; C.vertuple/=k; C.aRad/=k
+        k = len(dnode_); C.Et/=k; C.latuple/=k; C.vertuple/=k; C.aRad/=k
         if C.derH: C.derH.norm_(k)  # derH/=k
         C.box = reduce(extend_box, (n.box for n in node_))
         return C
 
     def comp_C(C, N):  # compute match without new derivatives: global cross-comp is not directional
 
-        # rn = C.n / N.n
         mL = min(C.L,len(N.node_)) - ave_L
         mA = comp_area(C.box, N.box)[0]
-        mLat = comp_latuple(C.latuple, N.latuple, C.n, N.n)[1][0]
+        mLat = comp_latuple(C.latuple, N.latuple, C.Et[3], N.Et[3])[1][0]
         mVer = comp_md_(C.vertuple[1], N.vertuple[1])[1][0]
         mH = C.derH.comp_H(N.derH).Et[0] if C.derH and N.derH else 0
         # comp node_, comp altG from converted adjacent flat blobs?
