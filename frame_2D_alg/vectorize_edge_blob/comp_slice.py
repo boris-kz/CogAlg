@@ -115,11 +115,20 @@ def comp_dP_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
 def comp_md_(_d_,d_, rn=.1, dir=1):  # dir may be -1
 
-    d_ = d_*rn  # normalize by compared accum span
+    d_ = d_ * rn  # normalize by compared accum span
     dd_ = (_d_ - d_ * dir)  # np.arrays
     md_ = np.minimum(np.abs(_d_), np.abs(d_))
     md_[(_d_ < 0) != (d_ < 0)] *= -1  # negate if only one compared is negative
-
+    ''' 
+    sequential version:
+    md_, dd_ = [],[]
+    for _d, d in zip(_d_,d_):
+        d = d * rn
+        dd_ += [_d - d * dir]
+        md = min(abs(_d),abs(d))
+        md_ += [-md if _d<0 != d<0 else md]
+    md_, dd_ = np.array(md_), np.array(dd_)
+    '''
     return np.array([md_,dd_]), np.array([md_.sum(),dd_.sum()])  # [m_,d_], Et
 
 def convert_to_dP(_P,P, derLay, angle, distance, Et):
@@ -138,22 +147,25 @@ def form_PP_(root, iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
     for P in iP_: P.merged = 0
     for P in iP_:  # dP from link_ if fd
         if P.merged: continue
-        _prim_ = P.prim; _lrim_ = P.lrim; I,G, M,D, L,_ = P.latuple
+        _prim_ = P.prim; _lrim_ = P.lrim
+        I,G, M,D, L,_ = P.latuple
         _P_ = {P}; link_ = set(); Et = np.array([I+M, G+D])
         while _prim_:
             prim_,lrim_ = set(),set()
-            for _P,_L in zip(_prim_,_lrim_):
-                if _L.Et[fd] < aves[fd] or _P.merged:
+            for _P,_link in zip(_prim_,_lrim_):
+                if _link.Et[fd] < aves[fd] or _P.merged:
                     continue
-                _P_.add(_P); link_.add(_L); _I,_G,_M,_D,_L,_ = _P.latuple
+                _P_.add(_P); link_.add(_link)
+                _I,_G,_M,_D,_L,_ = _P.latuple
                 Et += _L.Et + np.array([_I+_M,_G+_D])  # intra-P similarity and variance
                 L += _L  # latuple summation span
                 prim_.update(set(_P.prim) - _P_)
                 lrim_.update(set(_P.lrim) - link_)
                 _P.merged = 1
             _prim_, _lrim_ = prim_, lrim_
-        PPt = sum2PP(root, list(_P_), list(link_), np.array([*Et,L,1]))  # Et + n,o
-        PPt_ += [PPt]; root.Et += Et
+        Et = np.array([*Et, L, 1])  # Et + n,o
+        PPt_ += [sum2PP(root, list(_P_), list(link_), Et)]
+        root.Et += Et
 
     return PPt_
 
@@ -162,7 +174,7 @@ def sum2PP(root, P_, dP_, Et):  # sum links in Ps and Ps in PP
     fd = isinstance(P_[0],CdP)
     if fd: latuple = np.sum([n.latuple for n in set([n for dP in P_ for n in  dP.nodet])], axis=0)
     else:  latuple = np.array([.0,.0,.0,.0,.0, np.zeros(2)], dtype=object)
-    vertuple = np.array([np.zeros(6),np.zeros(6)])
+    vert = np.array([np.zeros(6),np.zeros(6)])
     link_ = []
     if dP_:  # add uplinks:
         S,A = 0,[0,0]
@@ -171,7 +183,7 @@ def sum2PP(root, P_, dP_, Et):  # sum links in Ps and Ps in PP
             link_ += [dP]
             a = dP.angle; A = np.add(A,a); S += np.hypot(*a)  # span, links are contiguous but slanted
     else:  # single P PP
-        S,A = P_[0].latuple[4:]  # [I, G, M, Ma, L, (Dy, Dx)]
+        S,A = P_[0].latuple[4:]  # [I, G, M, D, L, (Dy, Dx)]
     box = [np.inf,np.inf,0,0]
     for P in P_:
         if not fd:  # else summed from P_ nodets on top
@@ -179,7 +191,7 @@ def sum2PP(root, P_, dP_, Et):  # sum links in Ps and Ps in PP
         for y,x in P.yx_ if isinstance(P, CP) else [P.nodet[0].yx, P.nodet[1].yx]:  # CdP
             box = accum_box(box,y,x)
     y0,x0,yn,xn = box
-    PPt = [root, P_, link_, vertuple, latuple, A, S, box, [(y0+yn)/2,(x0+xn)/2], Et]
+    PPt = [root, P_, link_, vert, latuple, A, S, box, [(y0+yn)/2,(x0+xn)/2], Et]
     for P in P_: P.root = PPt
 
     return PPt

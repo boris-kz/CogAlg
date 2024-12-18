@@ -171,19 +171,19 @@ class CrNode_(CFrame):
     def __init__(rnode_, blob):
         super().__init__(blob.root.i__)  # init params, extra params init below:
         rnode_.root = blob
-        rnode_.rdn = blob.root.rdn + 1.5
+        rnode_.olp= blob.root.olp + 1.5
         rnode_.rng = blob.root.rng + 1
 
 def intra_blob_root(frame):
-    frame.rdn = frame.rng = 1
+    frame.olp = frame.rng = 1
     for blob in frame.blob_:
         rblob(blob)
 
 def rblob(blob):
-    if not blob.sign or blob.G >= ave*blob.area + aveR*blob.root.rdn:
+    if not blob.sign or blob.G >= ave*blob.area + aveR*blob.root.olp:
         return
 
-    # sign and G < ave*L + aveR*rdn:
+    # sign and G < ave*L + aveR*olp:
     rnode_ = CrNode_(blob)
     dert__ = comp_r(rnode_)     # return None if blob is too small
     if dert__ is None: return   # terminate if blob is too small
@@ -210,7 +210,7 @@ def comp_r(rnode_):   # rng+ comp
                 dx += kx__[i, j] * rnode_.i__[y+i-rnode_.rng, x+j-rnode_.rng]
         except IndexError: continue     # out of bound
         g = np.hypot(dy, dx)
-        s = ave*(rnode_.rdn + 1) - g > 0
+        s = ave*(rnode_.olp + 1) - g > 0
         dert__[y, x] = p, dy, dx, g, s
     return dert__
 

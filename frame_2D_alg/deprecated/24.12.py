@@ -194,3 +194,98 @@ def trace_P_adjacency(edge):  # fill and trace across slices
     # for comp_slice:
     edge.pre__ = prelink__
 
+def match_signed(_par, par): # for signed pars
+
+    match = min(abs(_par),abs(par))
+    return -match if (_par<0) != (par<0) else match    # match = neg min if opposite-sign comparands
+
+class CP(CBase):
+
+    def __init__(P, edge, yx, axis):
+        super().__init__()
+        y, x = yx
+        P.axis = ay, ax = axis
+        pivot = i,gy,gx,g = edge.dert_[y,x]  # dert is None if _y,_x not in edge.dert_: return` in `interpolate2dert`
+        ma = ave_dangle  # max if P direction = dert g direction
+        m = ave_g - g
+        pivot += ma,m
+        edge.rootd[y, x] = P
+        I,G,M,Ma,L,Dy,Dx = i,g,m,ma,1,gy,gx
+        P.yx_, P.dert_ = [yx], [pivot]
+
+        for dy,dx in [(-ay,-ax),(ay,ax)]:  # scan in 2 opposite directions to add derts to P
+            P.yx_.reverse(); P.dert_.reverse()
+            (_y,_x), (_,_gy,_gx,*_) = yx, pivot  # start from pivot
+            y,x = _y+dy, _x+dx  # 1st extension
+            while True:
+                # scan to blob boundary or angle miss:
+                ky, kx = round(y), round(x)
+                if (round(y),round(x)) not in edge.dert_: break
+                try: i,gy,gx,g = interpolate2dert(edge, y, x)
+                except TypeError: break  # out of bound (TypeError: cannot unpack None)
+                if edge.rootd.get((ky,kx)) is not None: break  # skip overlapping P
+                mangle, dangle = comp_angle((_gy,_gx), (gy, gx))
+                if mangle < ave_dangle: break  # terminate P if angle miss
+                # update P:
+                edge.rootd[ky, kx] = P
+                m = ave_g - g
+                I += i; Dy += dy; Dx += dx; G += g; Ma += ma; M += m; L += 1
+                P.yx_ += [(y,x)]; P.dert_ += [(i,gy,gx,g,ma,m)]
+                # for next loop:
+                y += dy; x += dx
+                _y,_x,_gy,_gx = y,x,gy,gx
+
+        P.yx = tuple(np.mean([P.yx_[0], P.yx_[-1]], axis=0))
+        P.latuple = new_latuple(I, G, M, Ma, L, [Dy, Dx])
+
+def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, recursion
+
+    def cluster_eval(G, N_, fd):
+        pL_ = {l for n in N_ for l,_ in get_rim(n, fd)}
+        if len(pL_) > ave_L:
+            sG_ = cluster_N_(G, pL_, fd)  # optionally divisive clustering
+            frame.subG_ = sG_
+            for sG in sG_:
+                if len(sG.subG_) > ave_L:
+                    find_centroids(sG)  # centroid clustering in sG.node_ or subG_?
+    '''
+    cross-comp G_) GG_) GGG_., interlaced with exemplar centroid selection 
+    '''
+    N_,L_,Et = comp_node_(frame.subG_)  # cross-comp exemplars, extrapolate to their node_s?
+    if val_(Et,fo=1) > 0:
+        fd = 0
+        mlay = CH().add_H([L.derH for L in L_])  # mfork, else no new layer
+        frame.derH = CH(H=[mlay], root=frame, Et=copy(mlay.Et)); mlay.root=frame.derH
+        if val_(Et,mEt=Et) > 0:  # same root
+            for L in L_:
+                L.extH, L.root, L.mL_t, L.rimt, L.aRad, L.visited_, L.Et = CH(), frame, [[],[]], [[],[]], 0, [L], copy(L.derH.Et)
+            lN_,lL_,dEt = comp_link_(L_,Et)  # comp new L_, root.link_ was compared in root-forming for alt clustering
+            if val_(dEt, mEt=Et, fo=1) > 0:  # recursive der+ eval_: cost > ave_match, add by feedback if < _match?
+                fd = 1
+                frame.derH.append_(CH().add_H([L.derH for L in lL_]))  # dfork
+        else:
+            frame.derH.H += [[]]  # empty to decode rng+|der+, n forks per layer = 2^depth
+        # + aggLays, derLays, exemplars:
+        cluster_eval(frame, N_, fd=0)
+        if fd:
+            cluster_eval(frame, lN_, fd=1)
+
+    def comp_H(_He, He, rn, root):
+
+        derH = CH(root=root)  # derH.H ( flat lay.H, or nest per higher lay.H for selective access?
+        # lay.H maps to higher Hs it was derived from, len lay.H = 2 ^ lay_depth (unpacked root H[:i])
+
+        for _lay, lay in zip_longest(_He.H, He.H, fillvalue=None):  # both may be empty CH to trace fork types
+            if _lay:
+                if lay:
+                    if isinstance(lay.H[0], CH):  # same depth in _lay
+                        dLay = _lay.comp_H(lay, rn, root=derH)  # deeper unpack -> comp_md_t
+                    else:
+                        dLay = _lay.comp_md_C(lay, rn=rn, root=derH, olp=(_He.Et[3]+He.Et[3]) /2)  # comp shared layers, add n to olp?
+                    derH.append_(dLay)
+                else:
+                    derH.append_(_lay.copy_(root=derH, dir=1))  # diff = _he
+            elif lay:
+                derH.append_(lay.copy_(root=derH, dir=-1))  # diff = -he
+            # no fill if both empty?
+        return derH
