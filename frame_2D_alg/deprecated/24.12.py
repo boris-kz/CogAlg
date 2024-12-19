@@ -289,3 +289,36 @@ def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, rec
                 derH.append_(lay.copy_(root=derH, dir=-1))  # diff = -he
             # no fill if both empty?
         return derH
+
+    def add_H(HE, He_, dir=1, fc=0):  # unpack derHs down to numericals and sum them, may subtract from centroid
+        if not isinstance(He_,list): He_ = [He_]
+
+        for He in He_:
+            for Lay, lay in zip_longest(HE.H, He.H, fillvalue=None):
+                if lay:
+                    if Lay:  # unpack|add, same nesting in both lays
+                        Lay.add_H(lay,dir,fc) if isinstance(lay.H[0],CH) else Lay.add_md_C(lay,dir,fc)
+                    elif Lay is None:
+                        HE.append_( lay.copy_(root=HE, dir=dir, fc=fc) if isinstance(lay.H[0],CH) else lay.copy_md_C(root=HE, dir=dir, fc=fc))
+                elif lay is not None and Lay is None:
+                    HE.H += [CH()]
+
+            HE.node_ += [node for node in He.node_ if node not in HE.node_]  # empty in CL derH?
+            HE.Et += He.Et * dir
+
+        return HE  # root should be updated by returned HE
+
+    def append_(HE,He, flat=0):
+
+        if flat:
+            for i, lay in enumerate(He.H):
+                if lay:
+                    lay = lay.copy_(root=HE) if isinstance(lay.H[0],CH) else lay.copy_md_C(root=HE)
+                    lay.i = len(HE.H) + i
+                HE.H += [lay]  # lay may be empty to trace forks
+        else:
+            He.i = len(HE.H); He.root = HE; HE.H += [He]  # He can't be empty
+            HE.H += [He]
+        HE.Et += He.Et
+        return HE
+

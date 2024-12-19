@@ -157,7 +157,7 @@ def form_PP_(root, iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
                     continue
                 _P_.add(_P); link_.add(_link)
                 _I,_G,_M,_D,_L,_ = _P.latuple
-                Et += _L.Et + np.array([_I+_M,_G+_D])  # intra-P similarity and variance
+                Et += _link.Et + np.array([_I+_M,_G+_D])  # intra-P similarity and variance
                 L += _L  # latuple summation span
                 prim_.update(set(_P.prim) - _P_)
                 lrim_.update(set(_P.lrim) - link_)
