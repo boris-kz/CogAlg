@@ -32,15 +32,15 @@ class CP(CBase):
     def __init__(P, yx, axis):
         super().__init__()
         P.yx = yx
-        P.axis = ay, ax = axis
-        P.yx_, P.dert_ = [],[]
+        P.axis = axis
+        P.dert_ = []
         P.latuple = None  # I,G, M,D, L, [Dy, Dx]
 
 def vectorize_root(frame):
 
     blob_ = unpack_blob_(frame)
     for blob in blob_:
-        if not blob.sign and blob.G > ave_G * blob.root.rdn:
+        if not blob.sign and blob.G > ave_G:
             slice_edge(blob)
 
 def slice_edge(edge):
