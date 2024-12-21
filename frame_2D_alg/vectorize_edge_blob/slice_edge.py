@@ -80,7 +80,7 @@ def form_P(P, edge):
     center_dert = i,gy,gx,g = edge.dert_[y,x]  # dert is None if _y,_x not in edge.dert_: return` in `interpolate2dert`
     edge.rootd[y,x] = P
     I,Dy,Dx,G, M,D,L = i,gy,gx,g, 0,0,1
-    P.yx_ += [P.yx]
+    P.yx_ = [P.yx]
     P.dert_ += [center_dert]
 
     for dy,dx in [(-ay,-ax),(ay,ax)]:  # scan in 2 opposite directions to add derts to P

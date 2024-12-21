@@ -22,7 +22,7 @@ def cross_comp(root):  # breadth-first node_,link_ cross-comp, connect.clusterin
     N_,L_,Et = comp_node_(root.subG_)  # cross-comp exemplars, extrapolate to their node_s
     # mfork
     if val_(Et, fo=1) > 0:
-        append_fork(root, L_)  # root.derH.tft += mlay
+        append_new_fork(root, L_, fd=0)  # root.derH.tft += mlay
         pL_ = {l for n in N_ for l,_ in get_rim(n, fd=0)}
         if len(pL_) > ave_L:
             cluster_N_(root, pL_, fd=0)  # optional divisive clustering, calls centroid and higher connect.clustering
@@ -32,25 +32,25 @@ def cross_comp(root):  # breadth-first node_,link_ cross-comp, connect.clusterin
                 L.extH, L.root, L.mL_t, L.rimt, L.aRad, L.visited_, L.Et = CH(), root, [[],[]], [[],[]], 0, [L], copy(L.derH.Et)
             lN_,lL_,dEt = comp_link_(L_,Et)
             if val_(dEt, mEt=Et, fo=1) > 0:
-                append_fork(root, lL_)  # root.derH.tft += dlay
+                append_new_fork(root, lL_, fd=1)  # root.derH.tft += dlay
                 plL_ = {l for n in lN_ for l,_ in get_rim(n, fd=1)}
                 if len(plL_) > ave_L:
                     cluster_N_(root, plL_, fd=1)
-        # feed back derH fork tree recursively:
+        # recursive root derH feedback:
         feedback(root)
 
-def append_fork(root, link_):
+def append_new_fork(root, link_, fd):
 
-    fork = (CH().add_H([L.derH for L in link_]))
-    root.derH.tft += [fork]
+    fork = (CH().add_tree([L.derH for L in link_]))
+    root.derH.tft[fd] += [fork]
     root.derH.Et += fork.Et
 
 def feedback(node):
 
-    while node.root:  # propagate upward
+    while node.root:  # propagate feedback upward
         root = node.root
-        # root tree is one layer deeper than node tree,
-        root.derH.tft[node.fd].add_tree(node.derH)  # root fork maps to node fork tuple
+        # root tree is one layer deeper than node tree, so root fork maps to node fork tuple:
+        root.derH.tft[node.fd].add_tree(node.derH)
         node = root
 
 def cluster_N_(root, L_, fd, nest=0):  # top-down segment L_ by >ave ratio of L.dists
@@ -67,7 +67,7 @@ def cluster_N_(root, L_, fd, nest=0):  # top-down segment L_ by >ave ratio of L.
         else:
             break  # terminate contiguous-distance segment
     min_dist = _L.dist
-    Gt_ = []
+    G_ = []
     for N in N_:  # cluster current distance segment
         if len(N.root) > nest: continue  # merged, root[0] = edge
         node_,link_, et = set(), set(), np.zeros(4)
@@ -88,16 +88,14 @@ def cluster_N_(root, L_, fd, nest=0):  # top-down segment L_ by >ave ratio of L.
             _eN_ = eN_
         # cluster shorter links, depth-first:
         sub_L_ = {l for n in node_ for l,_ in get_rim(n,fd) if l.dist < min_dist}
-        Et = np.sum([sL.derH.Et for sL in sub_L_], axis=1)
-        Et[3] += nest  # overlap
-        if len(sub_L_) > ave_L and val_(Et, fo=1) > 0:
-            cluster_N_(Gt, sub_L_, fd, nest+1)
-            # sub-clusters are nested in Gt
-        Gt[0] = list(node_)
-        Gt_ += [Gt]
-    # per dist segment:
-    root.subG_ = [sum2graph(root, Gt, fd, nest) for Gt in Gt_]
-    cluster_C_(root)
+        G = sum2graph(root, Gt, fd, nest, fsub=1)
+        if len(sub_L_) > ave_L:
+            Et = np.sum([sL.derH.Et for sL in sub_L_], axis=1);  Et[3] += nest  # overlap
+            if val_(Et, fo=1) > 0:
+                cluster_N_(G, sub_L_, fd, nest+1)  # sub-clusters will be nested in G.subG_
+        G_ += [G]
+    root.subG_ = G_
+    cluster_C_(root)  # per dist segment
 
 ''' Hierarchical clustering should alternate between two phases: generative via connectivity and compressive via centroid.
 
@@ -123,8 +121,8 @@ def cluster_C_(graph):
             C.latuple += n.latuple * s
             C.vert += n.vert * s
             C.yx += n.yx
-            if n.derH: C.derH.add_H(n.derH, dir=s, fc=1)
-            if n.extH: C.extH.add_H(n.extH, dir=s, fc=1)
+            if n.derH: C.derH.add_tree(n.derH, dir=s, fc=1)
+            if n.extH: C.extH.add_tree(n.extH, dir=s, fc=1)
         # get averages:
         k = len(dnode_); C.Et/=k; C.latuple/=k; C.vert/=k; C.aRad/=k; C.yx /= k
         if C.derH: C.derH.norm_(k)  # derH/=k
@@ -137,7 +135,7 @@ def cluster_C_(graph):
         mA = comp_area(C.box, N.box)[0]
         mLat = comp_latuple(C.latuple, N.latuple, C.Et[2], N.Et[2])[1][0]
         mVert = comp_md_(C.vert[1], N.vert[1])[1][0]
-        mH = C.derH.comp_H(N.derH).Et[0] if C.derH and N.derH else 0
+        mH = C.derH.comp_tree(N.derH).Et[0] if C.derH and N.derH else 0
         # comp node_, comp altG from converted adjacent flat blobs?
         return mL + mA + mLat + mVert + mH
 
