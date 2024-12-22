@@ -51,117 +51,90 @@ med_cost = 10
 class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | derH, their layers and sub-layers
 
     name = "H"
-    def __init__(He, tft=None, der_=None, Et=None, node_=None, root=None, fd=None, altH=None):
+    def __init__(He, root, Et, tft, lft=None, node_=None, fd=None, altH=None):
         super().__init__()
         He.Et = np.zeros(4) if Et is None else Et  # += links (n is added to et now)
-        He.tft = [] if tft is None else tft  # nested CH forks, each mediates its own layt, or md_tC in top layer
-        He.der_ = [] if der_ is None else der_  # m_t | d_t, also summing feedback?
-        He.root = None if root is None else root  # N or higher-composition He
+        He.tft = tft  # top fork tuple: arrays m_t, d_t
+        He.lft = [] if lft is None else lft  # lower fork tuple: CHs, each mediates its own tft and lft
+        He.root = root  # N or higher-composition He
         He.node_ = [] if node_ is None else node_  # concat bottom nesting order if CG, may be redundant to G.node_
         He.altH = CH(altH=object) if altH is None else altH   # summed altLays, prevent cyclic
         He.depth = 0  # max depth of fork tree?
         He.fd = 0 if fd is None else fd  # 0: sum CGs, 1: sum CLs
         # if combined-fork H:
-        # He.i = 0 if i is None else i  # lay index in root.tft, to revise olp
+        # He.i = 0 if i is None else i  # lay index in root.lft, to revise olp
         # He.i_ = [] if i_ is None else i_  # priority indices to compare node H by m | link H by d
         # He.fd = 0 if fd is None else fd  # 0: sum CGs, 1: sum CLs
         # He.ni = 0  # exemplar in node_, trace in both directions?
         # He.deep = 0 if deep is None else deep  # nesting in root H
         # He.nest = 0 if nest is None else nest  # nesting in H
 
-    def __bool__(H): return bool(H.der_)  # never empty?
+    def __bool__(H):return bool(H.lft)  # empty only in empty CH
 
-    def copy_md_C(he, root, dir=1, fc=0):  # dir is sign if called from centroid, which doesn't use dir
 
-        md_t = [np.array([m_ * dir if fc else copy(m_), d_ * dir]) for m_, d_ in he.tft]
-        # m_ * dir only if called from centroid()
-        Et = he.Et * dir if fc else copy(he.Et)
+    def copy_(He, root, rev=0, fc=0):  # comp direction may be reversed to -1
 
-        return CH(root=root, H=md_t, node_=copy(he.node_), Et=Et, i=he.i, i_=he.i_)
+        C = CH(root=root, node_=copy(He.node_), Et=He.Et * -1 if (fc and rev) else copy(He.Et))
 
-    def copy_(He, root, dir=1, fc=0):  # comp direction may be reversed to -1
-
-        C = CH(root=root, node_=copy(He.node_), Et=copy(He.Et), i=He.i, i_=He.i_)
-        for he in He.tft:
-            C.tft += [he.copy_(root=C, dir=dir, fc=fc) if isinstance(he.tft[0],CH) else
-                    he.copy_md_C(root=C, dir=dir, fc=fc)]
+        for fd, tt in enumerate(He.tft):  # nested array tuples
+            C.tft += [tt * -1 if rev and (fd or fc) else deepcopy(tt)]
+        # empty in bottom layer:
+        for fork in He.lft:
+            C.lft += [fork.copy_(root=C, rev=rev, fc=fc)]
         return C
 
-    def add_md_C(Fork, fork, dir=1, fc=0):
-
-        # use der_?
-        for Md_, md_ in zip(Fork.tft, fork.tft):  # [mdext, ?vert, mdVer]
-            Md_ += np.array([md_[0]*dir if fc else md_[0].copy(), md_[1]*dir])
-
-        Fork.Et += fork.Et * dir if fc else copy(fork.Et)
-
-
-    def add_tree(HE, He_, dir=1, fc=0):  # unpack derH trees down to numericals and sum them, may subtract from centroid
+    def add_tree(HE, He_, rev=0, fc=0):  # rev = dir==-1, unpack derH trees down to numericals and sum/subtract them
         if not isinstance(He_,list): He_ = [He_]
 
         for He in He_:
-            for Fork, fork in zip_longest(HE.tft, He.tft, fillvalue=None):  # top fork tuple at each node of fork trees
-                if fork:
+            # top fork tuple per node of fork tree:
+            for fd, (TT,tt) in enumerate(zip_longest(HE.tft, He.tft, fillvalue=None)):
+                np.add(TT, tt * -1 if rev and (fd or fc) else tt)
+
+            for Fork, fork in zip_longest(HE.lft, He.lft, fillvalue=None):
+                if fork:  # empty in bottom layer
                     if Fork:  # unpack|add, same nesting in both forks
-                        Fork.add_tree(fork,dir,fc) if isinstance(fork.tft[0],CH) else Fork.add_md_C(fork,dir,fc)
+                        Fork.add_tree(fork, rev, fc)
                     else:
-                        HE.tft += [fork.copy_(root=HE, dir=dir, fc=fc) if isinstance(fork.tft[0],CH) else fork.copy_md_C(root=HE, dir=dir, fc=fc)]
-                        # for dfork only
+                        HE.lft += [fork.copy_(root=HE, rev=rev, fc=fc)]
+
             HE.node_ += [node for node in He.node_ if node not in HE.node_]  # empty in CL derH?
-            HE.Et += He.Et * dir
+            HE.Et += He.Et * -1 if rev and fc else He.Et
 
         return HE  # root should be updated by returned HE
 
-    def comp_md_C(_md_C, md_C, rn, root, olp=1., dir=1):
+    def comp_tree(_He, He, rn, root, dir=1):  # unpack derH trees down to numericals and compare them
 
-        m_t, d_t = [],[]
-        Et = np.zeros(2)
-        for _d_, d_ in zip(_md_C.tft[1], md_C.tft[1]):  # [dext, ?dlat, dvert]
-            m_, d_, et = comp_md_(_d_, d_, rn, dir=dir)
-            m_t += [m_]
-            d_t += [d_]
-            Et += et
-        mfork = CH(der_=np.array(m_t))  # mainly empty
-        dfork = CH(der_=np.array(d_t))
-        # der_ is summed from deeper forks?
-        return CH(root=root, tft=[mfork,dfork], der_=m_t+d_t, Et=np.append(Et,[olp, .3 if len(m_t)==1 else 2.3]))  # .3 in default comp ext)
+        (mver, dver), et = comp_md_(_He.tft[1], He.tft[1], rn, dir=dir)
+        # comp d_t only
+        derH = CH(root=root, tft = [mver,dver], Et = np.array([*et,_He.Et[3]+He.Et[3] /2]))
 
-    def comp_tree(_He, He, rn, root):
-        derH = CH(root=root)
-
-        for _fork, fork in zip(_He.tft[1], He.tft[1]):  # comp dforks only?
+        for _fork, fork in zip(_He.lft, He.lft):  # comp shared layers
             if _fork and fork:  # same depth
-                if fork.tft:  # empty in top lay
-                    dLay = _fork.comp_tree(fork, rn, root=derH) # deeper unpack -> comp_md_t
-                else:
-                    dLay = _fork.comp_md_C(fork, rn=rn, root=derH, olp=(_He.Et[3]+He.Et[3]) /2)
-                    # comp shared layers, add n to olp?
-                derH.append_(dLay); derH.Et += dLay.Et
+                subH = _fork.comp_tree(fork, rn, root=derH )  # deeper unpack -> comp_md_t
+                derH.lft += [subH]
+                derH.Et += subH.Et
         return derH
 
-    # not updated:
     def norm_(He, n):
-
-        for lay in He.tft:   # not empty list
-            if lay:
-                if isinstance(lay.tft[0], CH):
-                    lay.norm_C(n)
-                else:
-                    for md_ in lay.tft: md_ *= n
-                    lay.Et *= n
+        for f in He.tft:  # arrays
+            f *= n
+        for fork in He.lft:  # CHs
+            fork.norm_C(n)
+            fork.Et *= n
         He.Et *= n
 
-    # not updated:
+    # not used:
     def sort_tree(He, fd):  # re-assign olp and form priority indices for comp_tree, if selective and aligned
 
         i_ = []  # priority indices
-        for i, lay in enumerate(sorted(He.tft, key=lambda lay: lay.Et[fd], reverse=True)):
+        for i, lay in enumerate(sorted(He.lft, key=lambda lay: lay.Et[fd], reverse=True)):
             di = lay.i - i  # lay index in H
             lay.olp += di  # derR- valR
             i_ += [lay.i]
         He.i_ = i_  # comp_tree priority indices: node/m | link/d
         if not fd:
-            He.root.node_ = He.tft[i_[0]].node_  # no He.node_ in CL?
+            He.root.node_ = He.lft[i_[0]].node_  # no He.node_ in CL?
 
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
@@ -205,9 +178,9 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         l.dist = 0 if dist is None else dist  # distance between nodet centers
         l.box = [] if box is None else box  # sum nodet, not needed?
         l.yx = [0,0] if yx is None else yx
-        l.tft_ = [] if H_ is None else H_  # if agg++| sub++?
+        l.lft_ = [] if H_ is None else H_  # if agg++| sub++?
         # add med, rimt, elay | extH in der+
-    def __bool__(l): return bool(l.derH.tft)
+    def __bool__(l): return bool(l.derH.lft)
 
 # not updated:
 def vectorize_root(frame):
@@ -272,7 +245,7 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
     edge.link_ = L_
     if val_(Et, fo=1) > 0:  # cancel by borrowing d?
         mlay = CH().add_tree([L.derH for L in L_])
-        edge.derH = CH(tft=[mlay], root=edge, Et=copy(mlay.Et))
+        edge.derH = CH(lft=[mlay], root=edge, Et=copy(mlay.Et))
         mlay.root = edge.derH  # init
         if len(N_) > ave_L:
             cluster_PP_(edge, fd=0)
@@ -283,7 +256,7 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
             # comp dPP_:
             lN_,lL_,_ = comp_link_(L_, Et)
             dlay = CH().add_tree([L.derH for L in lL_])
-            edge.derH.append_(dlay)
+            edge.derH.lft += [dlay]; edge.derH.Et += dlay.Et
             if len(lN_) > ave_L:
                 cluster_PP_(edge, fd=1)
 
@@ -408,26 +381,25 @@ def comp_N(_N,N, rn, angle=None, dist=None, dir=1):  # dir if fd, Link.derH=dH, 
     else:
         _L, L = len(_N.node_),len(N.node_); dL = _L- L*rn; mL = min(_L, L*rn) - ave_L
         mA,dA = comp_area(_N.box, N.box)  # compare area in CG vs angle in CL
-    # der ext: default new layer
-    m_t = np.array( [np.array([mL,mA])] )
-    d_t = np.array( [np.array([dL,dA])] )
-    _o, o = _N.Et[3], N.Et[3]
-    olp = (_o + o) / 2  # inherit from comparands?
+    # der ext
+    m_t = np.array([mL,mA]); d_t = np.array([dL,dA])
+    _o,o = _N.Et[3],N.Et[3]; olp = (_o+o) / 2  # inherit from comparands?
     Et = np.array([mL+mA, abs(dL)+abs(dA), .3, olp])  # n = compared vars / 6
-    if not fd:  # CG
-        mdLat, et1 = comp_latuple(_N.latuple, N.latuple, _o,o)
-        mVert, dVert, et2 = comp_md_(_N.vert[1], N.vert[1], dir)
-        np.append(m_t, np.array([mdLat[0], mVert]))
-        np.append(d_t, np.array([mdLat[1], dVert]))
+    if fd:  # CH
+        m_t = np.array([m_t]); d_t = np.array([d_t])  # add nesting
+    else:   # CG
+        (mLat,dLat),et1 = comp_latuple(_N.latuple, N.latuple, _o,o)
+        (mVer,dVer),et2 = comp_md_(_N.vert[1], N.vert[1], dir)
+        m_t = np.array([m_t, mLat, mVer], dtype=object)
+        d_t = np.array([d_t, dLat, dVer], dtype=object)
         Et += np.array([et1[0]+et2[0], et1[1]+et2[1], 2, 0])
         # no added olp?
-    mfork = CH(der_ = m_t); dfork = CH(der_ = d_t)  # der_ is summed in deeper forks too?:
-    derH = CH(tft = [mfork, dfork], Et=Et, der_ = m_t + d_t)  # fork der_s and Ets are summed upward
+    derH = CH(tft=[m_t,d_t], Et=Et)
     if _N.derH and N.derH:
-        dderH = _N.derH.comp_tree(N.derH, rn, root=derH)  # comp shared tree layers
-    derH.tft[fd].add_tree(dderH)
-    # spec: comp_node_(node_|link_), combinatorial, node_ nested / rng-)agg+?
+        dderH = _N.derH.comp_tree(N.derH, rn, root=derH)  # comp shared layers
+        derH.lft += dderH; derH.Et += dderH.Et
     # not revised:
+    # spec: comp_node_(node_|link_), combinatorial, node_ nested / rng-)agg+?
     Et = copy(derH.Et)
     if not fd and _N.altG and N.altG:  # not for CL, eval M?
         alt_Link = comp_N(_N.altG, N.altG, _N.altG.Et[2]/N.altG.Et[2])  # no angle,dist, init alternating PPds | dPs?
@@ -469,12 +441,11 @@ def sum2graph(root, grapht, fd, nest, fsub=0):  # sum node and link params into 
         N.root[-1] = graph  # replace Gt, if single root, else N.root[-1][-1] = graph
     if fg:
         graph.Et[:2] += np.array([M,D]) * icoef**2
-    if derH:
-        graph.derH = derH  # lower layers
-    derLay = CH().add_tree([link.derH for link in link_])
-    for i, fork in enumerate(derLay.tft):
-        fork.root = graph; graph.derH.tft[i].add_tree += [fork]  # deeper tfts are added by feedback
-    graph.derH.Et += Et # arg Et
+    # sum link.derHs:
+    derLay =  CH().add_tree([link.derH for link in link_])
+    graph.derH = derH.lft + [derLay]
+    # derLay Et = arg Et:
+    graph.Et += Et; graph.derH.Et += Et
     L = len(node_)
     yx = np.divide(yx,L); graph.yx = yx
     # ave distance from graph center to node centers:

@@ -322,4 +322,49 @@ def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, rec
         HE.Et += He.Et
         return HE
 
+    def copy_(He, root, rev=0, fc=0):  # comp direction may be reversed to -1
+
+        C = CH(root=root, node_=copy(He.node_), Et=He.Et * -1 if (fc and rev) else copy(He.Et))
+
+        for fd, fork in enumerate(He.tft):
+            if isinstance(fork,CH):
+                C.tft += [fork.copy_(root=C, rev=rev, fc=fc)]
+            else:  # top layer tft is der_t
+                C.tft += [fork * -1 if rev and (fd or fc) else copy(fork)]
+        return C
+
+    def add_tree(HE, He_, rev=0, fc=0):  # rev = dir==-1, unpack derH trees down to numericals and sum/subtract them
+        if not isinstance(He_,list): He_ = [He_]
+
+        for He in He_:
+            for fd, (Fork, fork) in enumerate(zip_longest(HE.tft, He.tft, fillvalue=None)):
+                # top fork tuple at each node of fork trees, empty in init derH
+                if fork:
+                    if Fork:  # unpack|add, same nesting in both forks
+                        if isinstance(fork,CH):
+                            Fork.add_tree(fork, rev, fc)
+                        else: np.add(Fork, fork * -1 if rev and (fd or fc) else fork)
+                    else:
+                        HE.tft += [fork.copy_(root=HE, rev=rev, fc=fc) if isinstance(fork,CH) else copy(fork)]
+
+            HE.node_ += [node for node in He.node_ if node not in HE.node_]  # empty in CL derH?
+            HE.Et += He.Et * -1 if rev and fc else He.Et
+
+        return HE  # root should be updated by returned HE
+
+    def comp_tree(_He, He, rn, root, dir=1):  # unpack derH trees down to numericals and compare them
+        derH = CH(root=root)
+
+        for fd, (_fork, fork) in enumerate( zip(_He.tft, He.tft)):  # comp shared layers
+            if _fork and fork:  # same depth
+                if isinstance(fork, CH):
+                    dLay = _fork.comp_tree(fork, rn, root=derH)  # deeper unpack -> comp_md_t
+                elif fd:  # comp d_t only
+                    (mver,dver), et = comp_md_(_fork, fork, rn, dir=dir)
+                    et = np.array([*et,_He.Et[3]+He.Et[3] /2])
+                    dLay = CH(tft = [mver,dver], root=derH, Et = et)
+
+                derH.tft += [dLay]; derH.Et += dLay.Et
+        return derH
+
 
