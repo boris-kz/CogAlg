@@ -51,17 +51,18 @@ med_cost = 10
 class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | derH, their layers and sub-layers
 
     name = "H"
-    def __init__(He, root, Et, tft, lft=None, node_=None, fd=None, altH=None):
+    # set default params?
+    def __init__(He, root=None, Et=None, tft=None, lft=None, node_=None, fd_=None, altH=None):
         super().__init__()
         He.Et = np.zeros(4) if Et is None else Et  # += links (n is added to et now)
-        He.tft = tft  # top fork tuple: arrays m_t, d_t
-        He.lft = [] if lft is None else lft  # lower fork tuple: CHs, each mediates its own tft and lft
-        He.root = root  # N or higher-composition He
+        He.tft = [] if tft is None else tft  # top fork tuple: arrays m_t, d_t
+        He.lft = [] if lft is None else lft  # lower fork tuple: CH /comp N_,L_, each mediates its own tft and lft
+        He.fd_ = [] if fd_ is None else fd_  # 0: sum CGs, 1: sum CLs, + concat from comparands
+        He.root = None if root is None else root  # N or higher-composition He
         He.node_ = [] if node_ is None else node_  # concat bottom nesting order if CG, may be redundant to G.node_
         He.altH = CH(altH=object) if altH is None else altH   # summed altLays, prevent cyclic
         He.depth = 0  # max depth of fork tree?
-        He.fd = 0 if fd is None else fd  # 0: sum CGs, 1: sum CLs
-        # if combined-fork H:
+        # if combined-layer H:
         # He.i = 0 if i is None else i  # lay index in root.lft, to revise olp
         # He.i_ = [] if i_ is None else i_  # priority indices to compare node H by m | link H by d
         # He.fd = 0 if fd is None else fd  # 0: sum CGs, 1: sum CLs
@@ -69,7 +70,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         # He.deep = 0 if deep is None else deep  # nesting in root H
         # He.nest = 0 if nest is None else nest  # nesting in H
 
-    def __bool__(H):return bool(H.lft)  # empty only in empty CH
+    def __bool__(H):return bool(H.Et[0]>0)  # empty only in empty CH
 
 
     def copy_(He, root, rev=0, fc=0):  # comp direction may be reversed to -1
@@ -87,32 +88,49 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         if not isinstance(He_,list): He_ = [He_]
 
         for He in He_:
-            # top fork tuple per node of fork tree:
-            for fd, (TT,tt) in enumerate(zip_longest(HE.tft, He.tft, fillvalue=None)):
-                np.add(TT, tt * -1 if rev and (fd or fc) else tt)
+            # sum tft:
+            for fd, (F_t, f_t) in enumerate(zip(HE.tft, He.tft)):  # m_t and d_t
+                for F_,f_ in zip(F_t, f_t):
+                    F_ += f_ * -1 if rev and (fd or fc) else f_  # m_|d_ in [dext,dlat,dver]
 
-            for Fork, fork in zip_longest(HE.lft, He.lft, fillvalue=None):
-                if fork:  # empty in bottom layer
-                    if Fork:  # unpack|add, same nesting in both forks
-                        Fork.add_tree(fork, rev, fc)
-                    else:
-                        HE.lft += [fork.copy_(root=HE, rev=rev, fc=fc)]
+            for F, f in zip_longest(HE.lft, He.lft, fillvalue=None):  # CH forks
+                if f:  # empty in bottom layer
+                    if F: F.add_tree(f, rev, fc)  # unpack both forks
+                    else: HE.lft += [f.copy_(root=HE, rev=rev, fc=fc)]
 
             HE.node_ += [node for node in He.node_ if node not in HE.node_]  # empty in CL derH?
             HE.Et += He.Et * -1 if rev and fc else He.Et
 
         return HE  # root should be updated by returned HE
 
-    def comp_tree(_He, He, rn, root, dir=1):  # unpack derH trees down to numericals and compare them
+    def append_(HE, He):  # unpack HE lft tree down to He.fd_ and append He there
 
-        (mver, dver), et = comp_md_(_He.tft[1], He.tft[1], rn, dir=dir)
-        # comp d_t only
-        derH = CH(root=root, tft = [mver,dver], Et = np.array([*et,_He.Et[3]+He.Et[3] /2]))
+        fd_ = He.fd_; root = HE
+        while fd_:
+            fd = fd_.pop(0)
+            root = root.lft[fd]
+        root.lft += [He]
+        root.Et += He.Et
+        # also use in feedback?
+
+    def comp_tree(_He, He, rn, root, dir=1, fd=0):  # unpack derH trees down to numericals and compare them
+
+        _d_t, d_t = He.tft[1], He.tft[1]  # comp_tft:
+        d_t = d_t * rn  # norm by accum span
+        dd_t = (_d_t - d_t * dir)  # np.arrays
+        md_t = np.array([np.minimum(_d_,d_) for _d_,d_ in zip(_d_t, d_t)], dtype=object)
+        for i, (_d_,d_) in enumerate(zip(_d_t, d_t)):
+            md_t[i][(_d_<0) != (d_<0)] *= -1  # negate if only one of _d_ or d_ is negative
+        M = sum([sum(md_) for md_ in md_t])
+        D = sum([sum(dd_) for dd_ in dd_t])
+        n = .3 if len(d_t)==1 else 2.3  # n comp params / 6
+
+        derH = CH(fd_=_He.fd_+[fd], root=root, tft = [np.array(md_t),np.array(dd_t)], Et=np.array([M,D,n, (_He.Et[3]+He.Et[3])/2]))
 
         for _fork, fork in zip(_He.lft, He.lft):  # comp shared layers
             if _fork and fork:  # same depth
                 subH = _fork.comp_tree(fork, rn, root=derH )  # deeper unpack -> comp_md_t
-                derH.lft += [subH]
+                derH.lft += [subH]  # always fd=0 first
                 derH.Et += subH.Et
         return derH
 
@@ -125,7 +143,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         He.Et *= n
 
     # not used:
-    def sort_tree(He, fd):  # re-assign olp and form priority indices for comp_tree, if selective and aligned
+    def sort_H(He, fd):  # re-assign olp and form priority indices for comp_tree, if selective and aligned
 
         i_ = []  # priority indices
         for i, lay in enumerate(sorted(He.lft, key=lambda lay: lay.Et[fd], reverse=True)):
@@ -151,7 +169,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.subG_ = subG_  # selectively clustered node_
         G.subL_ = subL_  # selectively clustered link_
         G.latuple = np.array([.0,.0,.0,.0,.0,np.zeros(2)],dtype=object) if latuple is None else latuple  # lateral I,G,M,D,L,[Dy,Dx]
-        G.vert = np.array([np.zeros(6), np.zeros(6)]) if vert is None else vert  # vertical md_ of latuple
+        G.vert = np.array([np.zeros(6), np.zeros(6)]) if vert is None else vert  # vertical m_d_ of latuple
         # maps to node_tree / agg+|sub+:
         G.derH = CH() if derH is None else derH  # sum from nodes, then append from feedback
         G.extH = CH() if extH is None else extH  # sum from rim_ elays, H maybe deleted
@@ -164,7 +182,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         # id_tree: list = z([[]])  # indices in all layers(forks, if no fback merge
         # depth: int = 0  # n sub_G levels over base node_, max across forks
         # nval: int = 0  # of open links: base alt rep
-    def __bool__(G): return bool(G.Et[3] != 0)  # to test empty
+    def __bool__(G): return bool(G.node_)  # never empty
 
 class CL(CBase):  # link or edge, a product of comparison between two nodes or links
     name = "link"
@@ -180,7 +198,7 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         l.yx = [0,0] if yx is None else yx
         l.lft_ = [] if H_ is None else H_  # if agg++| sub++?
         # add med, rimt, elay | extH in der+
-    def __bool__(l): return bool(l.derH.lft)
+    def __bool__(l): return bool(l.nodet)
 
 # not updated:
 def vectorize_root(frame):
@@ -252,7 +270,7 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
         # borrow from misprojected m: proj_m -= proj_d, comp instead of link eval:
         if val_(Et, mEt=Et, fo=1) > 0:  # likely not from the same links
             for L in L_:
-                L.extH, L.root, L.mL_t, L.rimt, L.aRad, L.visited_, L.Et = CH(), [edge], [[], []], [[], []], 0, [L], copy(L.derH.Et)
+                L.extH, L.root, L.mL_t, L.rimt, L.aRad, L.visited_, L.Et = CH(), [edge], [[],[]], [[],[]], 0, [L], copy(L.derH.Et)
             # comp dPP_:
             lN_,lL_,_ = comp_link_(L_, Et)
             dlay = CH().add_tree([L.derH for L in lL_])
@@ -265,7 +283,7 @@ def val_(Et, mEt=[], fo=0):
     m, d, n, o = Et
     if any(mEt):
         mm,_,mn,_ = mEt  # cross-induction from root G, not affected by overlap
-        val = d * (mm / (ave * mn)) - ave_d * n * (o if fo else 0)
+        val = d * (mm / (ave * mn)) - ave_d * n * (o if fo else 1)
     else:
         val = m - ave * n * (o if fo else 1)  # * overlap in cluster eval, not comp eval
     return val
@@ -382,22 +400,23 @@ def comp_N(_N,N, rn, angle=None, dist=None, dir=1):  # dir if fd, Link.derH=dH, 
         _L, L = len(_N.node_),len(N.node_); dL = _L- L*rn; mL = min(_L, L*rn) - ave_L
         mA,dA = comp_area(_N.box, N.box)  # compare area in CG vs angle in CL
     # der ext
-    m_t = np.array([mL,mA]); d_t = np.array([dL,dA])
+    m_t = np.array([mL,mA],dtype=float); d_t = np.array([dL,dA],dtype=float)
     _o,o = _N.Et[3],N.Et[3]; olp = (_o+o) / 2  # inherit from comparands?
     Et = np.array([mL+mA, abs(dL)+abs(dA), .3, olp])  # n = compared vars / 6
     if fd:  # CH
         m_t = np.array([m_t]); d_t = np.array([d_t])  # add nesting
     else:   # CG
-        (mLat,dLat),et1 = comp_latuple(_N.latuple, N.latuple, _o,o)
-        (mVer,dVer),et2 = comp_md_(_N.vert[1], N.vert[1], dir)
+        (mLat, dLat), et1 = comp_latuple(_N.latuple, N.latuple, _o,o)
+        (mVer, dVer), et2 = comp_md_(_N.vert[1], N.vert[1], dir)
         m_t = np.array([m_t, mLat, mVer], dtype=object)
         d_t = np.array([d_t, dLat, dVer], dtype=object)
         Et += np.array([et1[0]+et2[0], et1[1]+et2[1], 2, 0])
-        # no added olp?
-    derH = CH(tft=[m_t,d_t], Et=Et)
+        # same olp?
+    derH = CH(fd_=[fd], tft=[m_t,d_t], Et=Et)
     if _N.derH and N.derH:
         dderH = _N.derH.comp_tree(N.derH, rn, root=derH)  # comp shared layers
-        derH.lft += dderH; derH.Et += dderH.Et
+        derH.lft += [dderH]  # always lft[0] before feedback?
+        derH.Et += dderH.Et; derH.fd_+= dderH.fd_  # flat
     # not revised:
     # spec: comp_node_(node_|link_), combinatorial, node_ nested / rng-)agg+?
     Et = copy(derH.Et)
@@ -428,24 +447,20 @@ def sum2graph(root, grapht, fd, nest, fsub=0):  # sum node and link params into 
         else:  graph.subG_ = subG_
         graph.minL = minL
     yx = np.array([0,0])
-    fg = isinstance(node_[0],CG)
-    if fg: M,D = 0,0
-    derH = CH(root=graph)
+    graph.derH = derH = CH(root=graph)
     for N in node_:
         graph.box = extend_box(graph.box, N.box)  # pre-compute graph.area += N.area?
         yx = np.add(yx, N.yx)
-        if N.derH: derH.add_tree(N.derH)
-        if fg:
-            vert = N.vert; M += np.sum(vert[0]); D += np.sum(vert[1]); graph.vert += vert
-            graph.latuple += N.latuple
+        if isinstance(node_[0],CG):
+            graph.latuple += N.latuple; graph.vert += N.vert
+        if N.derH:
+            derH.add_tree(N.derH)  # exclude Et, already in N.Et?:
+        graph.Et += N.Et * icoef ** 2  # deeper, lower weight
         N.root[-1] = graph  # replace Gt, if single root, else N.root[-1][-1] = graph
-    if fg:
-        graph.Et[:2] += np.array([M,D]) * icoef**2
-    # sum link.derHs:
-    derLay =  CH().add_tree([link.derH for link in link_])
-    graph.derH = derH.lft + [derLay]
-    # derLay Et = arg Et:
-    graph.Et += Et; graph.derH.Et += Et
+    # sum link.derHs
+    derH.append_(CH().add_tree([link.derH for link in link_]))  # derH lft @ derLay.fd_ += [derLay]
+    graph.derH = derH; graph.Et += derH.Et
+    # add feedback to higher roots?
     L = len(node_)
     yx = np.divide(yx,L); graph.yx = yx
     # ave distance from graph center to node centers:
@@ -459,6 +474,7 @@ def sum2graph(root, grapht, fd, nest, fsub=0):  # sum node and link params into 
             if mgraph:
                 mgraph.altG = sum_G_([mgraph.altG, graph])  # bilateral sum?
                 graph.altG = sum_G_([graph.altG, mgraph])
+
     return graph
 
 def sum_G_(node_):

@@ -368,3 +368,11 @@ def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, rec
         return derH
 
 
+    def sum_tft(HE, He, rev=0, fc=0):
+        if HE.tft:
+            for fd, (Fork_t, fork_t) in enumerate(zip(HE.tft, He.tft)):  # m_t and d_t
+                for Fork_, fork_ in zip(Fork_t, fork_t):  # m_|d_ in [dext,dlar,dvert]
+                    Fork_ += fork_ * -1 if rev and (fd or fc) else fork_
+        else:
+            HE.tft = deepcopy(He.tft)  # init empty
+
