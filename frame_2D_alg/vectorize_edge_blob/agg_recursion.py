@@ -5,7 +5,7 @@ from copy import copy, deepcopy
 from functools import reduce
 from frame_blobs import frame_blobs_root, intra_blob_root, imread
 from comp_slice import comp_latuple, comp_md_
-from vect_edge import comp_node_, comp_link_, sum2graph, get_rim, CH, CG, ave, ave_d, ave_L, vectorize_root, comp_area, extend_box, val_
+from vect_edge import feedback, comp_node_, comp_link_, sum2graph, get_rim, CH, CG, ave, ave_d, ave_L, vectorize_root, comp_area, extend_box, val_
 '''
 Cross-compare and cluster Gs within a frame, potentially unpacking their node_s first,
 alternating agglomeration and centroid clustering.
@@ -22,7 +22,8 @@ def cross_comp(root):  # breadth-first node_,link_ cross-comp, connect.clusterin
     N_,L_,Et = comp_node_(root.subG_)  # cross-comp exemplars, extrapolate to their node_s
     # mfork
     if val_(Et, fo=1) > 0:
-        append_new_fork(root, L_, fd=0)  # root.derH.tft += mlay
+        mlay = L_[0].copy_.add_tree([L.derH for L in L_[-1]])
+        mlay.fd_=[]; root.derH.append_(mlay)
         pL_ = {l for n in N_ for l,_ in get_rim(n, fd=0)}
         if len(pL_) > ave_L:
             cluster_N_(root, pL_, fd=0)  # optional divisive clustering, calls centroid and higher connect.clustering
@@ -32,26 +33,14 @@ def cross_comp(root):  # breadth-first node_,link_ cross-comp, connect.clusterin
                 L.extH, L.root, L.mL_t, L.rimt, L.aRad, L.visited_, L.Et = CH(), root, [[],[]], [[],[]], 0, [L], copy(L.derH.Et)
             lN_,lL_,dEt = comp_link_(L_,Et)
             if val_(dEt, mEt=Et, fo=1) > 0:
-                append_new_fork(root, lL_, fd=1)  # root.derH.tft += dlay
+                dlay = lL_[0].copy_.add_tree([L.derH for L in lL_[-1]])
+                dlay.fd_= []; root.derH.append_(dlay)
                 plL_ = {l for n in lN_ for l,_ in get_rim(n, fd=1)}
                 if len(plL_) > ave_L:
                     cluster_N_(root, plL_, fd=1)
-        # recursive root derH feedback:
+        # add in higher roots derH:
         feedback(root)
 
-def append_new_fork(root, link_, fd):
-
-    fork = (CH().add_tree([L.derH for L in link_]))
-    root.derH.tft[fd] += [fork]
-    root.derH.Et += fork.Et
-
-def feedback(node):
-
-    while node.root:  # propagate feedback upward
-        root = node.root
-        # root tree is one layer deeper than node tree, so root fork maps to node fork tuple:
-        root.derH.tft[node.fd].add_tree(node.derH)
-        node = root
 
 def cluster_N_(root, L_, fd, nest=0):  # top-down segment L_ by >ave ratio of L.dists
 
