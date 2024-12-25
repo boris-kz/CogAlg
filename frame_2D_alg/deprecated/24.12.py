@@ -376,3 +376,7 @@ def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, rec
         else:
             HE.tft = deepcopy(He.tft)  # init empty
 
+
+if nest:  # root_ in distance-layered cluster, or for Ns only, graph membership is still exclusive?
+    root = [root] + (node_[0].root if isinstance(node_[0].root, list) else [node_[0].root])
+else: root = root

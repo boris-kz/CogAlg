@@ -22,8 +22,7 @@ def cross_comp(root):  # breadth-first node_,link_ cross-comp, connect.clusterin
     N_,L_,Et = comp_node_(root.subG_)  # cross-comp exemplars, extrapolate to their node_s
     # mfork
     if val_(Et, fo=1) > 0:
-        mlay = L_[0].copy_.add_tree([L.derH for L in L_[-1]])
-        mlay.fd_=[]; root.derH.append_(mlay)
+        mlay = L_[0].copy_.add_tree([L.derH for L in L_[-1]]); mlay.fd_=[]; root.derH.append_(mlay)
         pL_ = {l for n in N_ for l,_ in get_rim(n, fd=0)}
         if len(pL_) > ave_L:
             cluster_N_(root, pL_, fd=0)  # optional divisive clustering, calls centroid and higher connect.clustering
@@ -33,8 +32,7 @@ def cross_comp(root):  # breadth-first node_,link_ cross-comp, connect.clusterin
                 L.extH, L.root, L.mL_t, L.rimt, L.aRad, L.visited_, L.Et = CH(), root, [[],[]], [[],[]], 0, [L], copy(L.derH.Et)
             lN_,lL_,dEt = comp_link_(L_,Et)
             if val_(dEt, mEt=Et, fo=1) > 0:
-                dlay = lL_[0].copy_.add_tree([L.derH for L in lL_[-1]])
-                dlay.fd_= []; root.derH.append_(dlay)
+                dlay = lL_[0].copy_.add_tree([L.derH for L in lL_[-1]]); dlay.fd_= []; root.derH.append_(dlay)
                 plL_ = {l for n in lN_ for l,_ in get_rim(n, fd=1)}
                 if len(plL_) > ave_L:
                     cluster_N_(root, plL_, fd=1)
@@ -77,7 +75,7 @@ def cluster_N_(root, L_, fd, nest=0):  # top-down segment L_ by >ave ratio of L.
             _eN_ = eN_
         # cluster shorter links, depth-first:
         sub_L_ = {l for n in node_ for l,_ in get_rim(n,fd) if l.dist < min_dist}
-        G = sum2graph(root, Gt, fd, nest, fsub=1)
+        G = sum2graph(root, Gt, fd, nest)
         if len(sub_L_) > ave_L:
             Et = np.sum([sL.derH.Et for sL in sub_L_], axis=1);  Et[3] += nest  # overlap
             if val_(Et, fo=1) > 0:
