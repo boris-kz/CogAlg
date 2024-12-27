@@ -72,11 +72,11 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
 
     def copy_(He, root=None, rev=0, fc=0, i=None):  # comp direction may be reversed to -1
 
-        if i:  # from other source
-            C = He; C.lft = []; C.tft=[]; C.fd_=copy(i.fd_); C.root=root; C.node_=copy(i.node_)
-        else:  # from self
-            C = CH(fd_=copy(He.fd_), root=root, node_=copy(He.node_))
-        C.Et = i.Et * -1 if (fc and rev) else copy(i.Et)
+        if i:  # reuse self
+            C = He; He = i; C.lft = []; C.tft=[]; C.root=root; C.node_=copy(i.node_)
+        else:  # init new C
+            C = CH(root=root, node_=copy(He.node_), fd_=copy(He.fd_))
+        C.Et = He.Et * -1 if (fc and rev) else copy(He.Et)
 
         for fd, tt in enumerate(He.tft):  # nested array tuples
             C.tft += [tt * -1 if rev and (fd or fc) else deepcopy(tt)]
@@ -98,31 +98,15 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
                 for F, f in zip_longest(HE.lft, He.lft, fillvalue=None):  # CH forks
                     if f:  # not bottom layer
                         if F: F.add_tree(f,rev,fc)  # unpack both forks
-                        else: HE.append_(f.copy_)
+                        else:
+                            f.root=HE; HE.lft += [f]; HE.Et += f.Et
+                            if not HE.tft: HE.tft = f.tft  # init with mfork?
 
                 HE.node_ += [node for node in He.node_ if node not in HE.node_]  # empty in CL derH?
                 HE.Et += He.Et * -1 if rev and fc else He.Et
             else:
                 HE.copy_(root,rev,fc, i=He)
         return HE
-
-    def append_(HE, He):  # unpack HE lft tree down to He.fd_ and append He, or sum if fork exists, if He.fd_
-
-        fork = root = HE
-        add = 1
-        for fd in He.fd_:  # unpack top-down, each fd was assigned by corresponding level of roots
-            if len(fork.lft) > fd:
-                root = fork
-                fork = fork.lft[fd]
-            else:
-                fork.lft += [He.copy_]; add = 0  # fork was empty, init with He
-                break
-        if add:
-            fork.add_tree(He, root)  # add in fork initialized by feedback
-        He.root = root
-        fork.Et += He.Et
-        if not fork.tft:
-            fork.tft = deepcopy(He.tft)  # if init from sum mlink_
 
     def comp_tree(_He, He, rn, root, dir=1):  # unpack derH trees down to numericals and compare them
 
@@ -283,7 +267,8 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
     edge.subG_ = N_
     edge.link_ = L_
     if val_(Et, fo=1) > 0:  # cancel by borrowing d?
-        mlay = CH().add_tree([L.derH for L in L_]); mlay.fd_=[]; edge.derH.append_(mlay)
+        mlay = CH().add_tree([L.derH for L in L_])
+        H = edge.derH; mlay.root=H; H.Et += mlay.Et; H.lft = [mlay]; H.tft = mlay.tft  # init with mfork
         if len(N_) > ave_L:
             cluster_PP_(edge, fd=0)
         if val_(Et, mEt=Et, fo=1) > 0:  # likely not from the same links
@@ -292,7 +277,8 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
             # comp dPP_:
             lN_,lL_,dEt = comp_link_(L_, Et)
             if val_(dEt, fo=1) > 0:
-                dlay = CH().add_tree([L.derH for L in lL_]); dlay.fd_= []; edge.derH.append_(dlay)
+                dlay = CH().add_tree([L.derH for L in lL_])
+                H = edge.derH; dlay.root=H; H.Et += dlay.Et; H.lft += [dlay]
                 if len(lN_) > ave_L:
                     cluster_PP_(edge, fd=1)
 
@@ -420,19 +406,19 @@ def comp_N(_N,N, rn, angle=None, dist=None, dir=1):  # dir if fd, Link.derH=dH, 
         d_t = np.array([d_t, dLat, dVer], dtype=object)
         Et += np.array([et1[0]+et2[0], et1[1]+et2[1], 2, 0])
         # same olp?
-    derH = CH(fd_=[fd], tft=[m_t,d_t], Et=Et)
+    lay = CH(fd_=[fd], tft=[m_t,d_t], Et=Et)
     if _N.derH and N.derH:
-        dderH = _N.derH.comp_tree(N.derH, rn, root=derH)  # comp shared layers
-        derH.append_(dderH)
+        derH = _N.derH.comp_tree(N.derH, rn, root=lay)  # comp shared layers
+        lay.Et += derH.Et; lay.lft = [derH]; lay.tft = derH.tft  # this is mfork?
     # spec: comp_node_(node_|link_), combinatorial, node_ nested / rng-)agg+?
-    Et = copy(derH.Et)
+    Et = copy(lay.Et)
     if not fd and _N.altG and N.altG:  # not for CL, eval M?
         alt_Link = comp_N(_N.altG, N.altG, _N.altG.Et[2]/N.altG.Et[2])  # no angle,dist, init alternating PPds | dPs?
-        derH.altH = alt_Link.derH
-        Et += derH.altH.Et
-    Link = CL(nodet=[_N,N],derH=derH, yx=np.add(_N.yx,N.yx)/2, angle=angle,dist=dist,box=extend_box(N.box,_N.box)); derH.root=Link
+        lay.altH = alt_Link.derH
+        Et += lay.altH.Et
+    Link = CL(nodet=[_N,N], derH=lay, yx=np.add(_N.yx,N.yx)/2, angle=angle,dist=dist,box=extend_box(N.box,_N.box))
+    lay.root = Link
     if val_(Et) > 0:
-        derH.root = Link
         for rev, node in zip((0,1), (N,_N)):  # reverse Link direction for _N
             if fd: node.rimt[1-rev] += [(Link,rev)]  # opposite to _N,N dir
             else:  node.rim += [(Link,dir)]
@@ -465,12 +451,12 @@ def sum2graph(root, grapht, fd, nest):  # sum node and link params into graph, a
         graph.Et += N.Et * icoef ** 2  # deeper, lower weight
         if nest:
             if nest==1: N.root = [N.root]  # initial conversion
-            N.root += [graph + root]  # root_ in distance-layered cluster_N_
+            N.root += root + [graph]  # root is root_ in distance-layered cluster_N_
         else: N.root = graph  # single root
     # sum link_ derH:
     derLay = CH().add_tree([link.derH for link in link_],root=graph)  # root added in copy_ within add_tree
     if derH:
-        derH.fd_=[]; derLay.append_(derH)
+        derLay.lft += [derH]; derLay.Et += derH.Et
     graph.derH = derLay
     L = len(node_)
     yx = np.divide(yx,L); graph.yx = yx
@@ -489,11 +475,21 @@ def sum2graph(root, grapht, fd, nest):  # sum node and link params into graph, a
     feedback(graph)  # recursive root.derH.add_fork(graph.derH)
     return graph
 
-def feedback(node):  # propagate derH to higher roots
+def feedback(node):  # propagate node.derH to higher roots
 
     while node.root:
         root = node.root[-1] if isinstance(node.root,list) else node.root  # root_ in distance-layered cluster
-        root.derH.append_(node.derH)  # root.derH.lft += node.derH
+        lowH = addH = root.derH
+        add = 1
+        for fd in addH.fd_:  # unpack top-down, each fd was assigned by corresponding level of roots
+            if len(addH.lft) > fd:
+                addH = lowH; lowH = lowH.lft[fd]  # keep unpacking
+            else:
+                lowH.lft += [addH.copy_()]; add = 0  # fork was empty, init with He
+                break
+        if add:  # add in fork initialized by prior feedback
+            lowH.add_tree(addH, root)
+
         node = root
 
 def sum_G_(node_):

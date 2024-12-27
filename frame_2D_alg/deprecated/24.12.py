@@ -376,7 +376,29 @@ def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, rec
         else:
             HE.tft = deepcopy(He.tft)  # init empty
 
-
+'''
 if nest:  # root_ in distance-layered cluster, or for Ns only, graph membership is still exclusive?
     root = [root] + (node_[0].root if isinstance(node_[0].root, list) else [node_[0].root])
 else: root = root
+'''
+def append_(HE, He):  # unpack HE lft tree down to He.fd_ and append He, or sum if fork exists, if He.fd_
+
+        fork = root = HE
+        add = 1
+        if He.fd_:
+            for fd in He.fd_:  # unpack top-down, each fd was assigned by corresponding level of roots
+                if len(fork.lft) > fd:
+                    root = fork; fork = fork.lft[fd]  # keep unpacking
+                else:
+                    He = He.copy_(); fork.lft += [He]; add = 0  # fork was empty, init with He
+                    break
+            if add:
+                fork.add_tree(He, root)  # add in fork initialized by feedback
+        else:
+            HE.lft += [He]  # if fd_ is empty, we just need to append it?
+
+        He.root = root
+        fork.Et += He.Et
+        if not fork.tft:
+            fork.tft = deepcopy(He.tft)  # if init from sum mlink_
+
