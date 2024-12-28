@@ -1,8 +1,8 @@
 import numpy as np
-from copy import copy, deepcopy
+from copy import deepcopy
 from itertools import zip_longest
 from collections import deque, defaultdict
-from frame_2D_alg.vectorize_edge_blob.slice_edge import comp_angle
+from frame_2D_alg.slice_edge import comp_angle
 from frame_2D_alg.vectorize_edge_blob.classes import CderP, CPP
 from frame_2D_alg.vectorize_edge_blob.filters import ave, aves, P_aves, PP_aves
 

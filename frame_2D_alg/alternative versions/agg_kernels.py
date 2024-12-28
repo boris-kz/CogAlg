@@ -1,9 +1,9 @@
 import numpy as np
 from copy import deepcopy, copy
-from itertools import combinations, zip_longest
-from .slice_edge import comp_angle, CsliceEdge, Clink, comp_ext, CP
-from .comp_slice import ider_recursion, comp_latuple, get_match
-from .filters import aves, ave_mL, ave_dangle, ave, G_aves, ave_Gm, ave_Gd, ave_dist, ave_mA, max_dist
+from itertools import combinations
+from frame_2D_alg.slice_edge import comp_angle, CsliceEdge, Clink, comp_ext
+from frame_2D_alg.comp_slice import ider_recursion, comp_latuple, get_match
+from .filters import ave, G_aves, ave_Gm, ave_dist, ave_mA
 from utils import box2center, extend_box
 import sys
 sys.path.append("..")

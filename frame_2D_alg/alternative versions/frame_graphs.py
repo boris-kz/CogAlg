@@ -4,7 +4,7 @@ Cross-compare blobs with incrementally mediated adjacency, forming blobs of blob
 
 from class_cluster import CBase, comp_param
 from frame_blobs import CBlob
-from frame_2D_alg.vectorize_edge_blob.comp_slice import ave, ave_daangle, ave_dx, ave_Ma, ave_inv # facing error when comp-slice_ import from comp_blob, hence shift it here.
+from frame_2D_alg.comp_slice import ave, ave_daangle, ave_dx, ave_Ma, ave_inv # facing error when comp-slice_ import from comp_blob, hence shift it here.
 from intra_blob import intra_blob_root
 import numpy as np
 import cv2

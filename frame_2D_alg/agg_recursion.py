@@ -1,5 +1,4 @@
-import sys
-sys.path.append("..")
+
 import numpy as np
 from copy import copy, deepcopy
 from functools import reduce
@@ -22,28 +21,22 @@ def cross_comp(root):  # breadth-first node_,link_ cross-comp, connect.clusterin
     N_,L_,Et = comp_node_(root.subG_)  # cross-comp exemplars, extrapolate to their node_s
     # mfork
     if val_(Et, fo=1) > 0:
-        H = root.derH  # for both forks
-        mlay = CH().add_tree([L.derH for L in L_]); mlay.root = H; H.Et += mlay.Et; H.lft = [mlay]; H.tft = mlay.tft
+        mlay = CH().add_tree([L.derH for L in L_]); H=root.derH; mlay.root=H; H.Et += mlay.Et; H.lft = [mlay]
         pL_ = {l for n in N_ for l,_ in get_rim(n, fd=0)}
         if len(pL_) > ave_L:
             cluster_N_([root], pL_, fd=0)  # optional divisive clustering, calls centroid and higher connect.clustering
         # dfork
         if val_(Et, mEt=Et,fo=1) > 0:  # same root for L_, root.link_ was compared in root-forming for alt clustering
-            convert_L_(L_,root)
+            for L in L_:
+                L.extH, L.root, L.Et, L.mL_t, L.rimt, L.aRad, L.visited_ = CH(),[root],copy(L.derH.Et),[[],[]], [[],[]], 0,[L]
             lN_,lL_,dEt = comp_link_(L_,Et)
             if val_(dEt, mEt=Et, fo=1) > 0:
-                dlay = CH().add_tree([L.derH for L in lL_]); dlay.root = H; H.Et += dlay.Et; H.lft += [dlay]
+                dlay = CH().add_tree([L.derH for L in lL_]); dlay.root=H; H.Et += dlay.Et; H.lft += [dlay]
                 plL_ = {l for n in lN_ for l,_ in get_rim(n, fd=1)}
                 if len(plL_) > ave_L:
                     cluster_N_([root], plL_, fd=1)
 
         feedback(root)  # add root derH to higher roots derH
-
-def convert_L_(L_, root):
-    for L in L_:
-        L.extH, L.mL_t, L.rimt, L.aRad, L.visited_ = CH(), [[],[]], [[],[]], 0, [L]
-        L.root = [L.root,root]; L.Et = copy(L.derH.Et)  # convert to root_
-
 
 def cluster_N_(root_, L_, fd, nest=0):  # top-down segment L_ by >ave ratio of L.dists
 
@@ -184,7 +177,7 @@ def cluster_C_(graph):
 
 
 if __name__ == "__main__":
-    image_file = '../images/raccoon_eye.jpeg'
+    image_file = './images/raccoon_eye.jpeg'
     image = imread(image_file)
     frame = frame_blobs_root(image)
     intra_blob_root(frame)

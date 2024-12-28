@@ -1,12 +1,9 @@
-import numpy as np
 from copy import deepcopy, copy
-from itertools import zip_longest, combinations
-from collections import deque, defaultdict
-from .classes import Cgraph, CderG, Cmd
-from .filters import ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd, ave_dI
-from .slice_edge import slice_edge, comp_angle
-from .comp_slice import comp_P_, comp_ptuple, comp_derH, sum_derH, sum_dertuple, get_match
-from .agg_recursion import unpack_rim, node_connect, segment_node_, comp_G, comp_aggHv, comp_derHv, sum_derHv, sum_ext, sum_subHv, sum_aggHv
+from .classes import Cgraph, CderG
+from .filters import ave, G_aves
+from frame_2D_alg.slice_edge import slice_edge
+from frame_2D_alg.comp_slice import comp_P_
+from frame_2D_alg.agg_recursion import node_connect, segment_node_
 
 '''
 Implement sparse param tree in aggH: new graphs represent only high m|d params + their root params.

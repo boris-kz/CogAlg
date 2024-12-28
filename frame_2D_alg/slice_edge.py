@@ -2,8 +2,6 @@ import numpy as np
 from collections import defaultdict
 from itertools import combinations
 from math import atan2, cos, floor, pi
-import sys
-sys.path.append("..")
 from frame_blobs import frame_blobs_root, intra_blob_root, CBase, imread, unpack_blob_
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
@@ -207,8 +205,8 @@ def xsegs(yx1, yx2, yx3, yx4):
 
 if __name__ == "__main__":
 
-    # image_file = '../images//raccoon_eye.jpeg'
-    image_file = '../images//toucan_small.jpg'
+    # image_file = './images//raccoon_eye.jpeg'
+    image_file = './images//toucan_small.jpg'
     image = imread(image_file)
 
     frame = frame_blobs_root(image)

@@ -1,8 +1,7 @@
 import numpy as np
-import sys
-sys.path.append("..")
 from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
-from slice_edge import CP, slice_edge, comp_angle, ave_G, ave_I
+from frame_2D_alg.slice_edge import CP, slice_edge, comp_angle, ave_G
+
 '''
 comp_slice traces edge axis by cross-comparing vertically adjacent Ps: horizontal slices across an edge blob.
 These are low-M high-Ma blobs, vectorized into outlines of adjacent flat (high internal match) blobs.
@@ -237,7 +236,7 @@ if __name__ == "__main__":
     # draw PPds as graphs of dPs and ddPs
     # dPs are shown in black, ddPs are shown in red
     import matplotlib.pyplot as plt
-    from slice_edge import unpack_edge_
+    from frame_2D_alg.slice_edge import unpack_edge_
     num_to_show = 5
     edge_ = sorted(
         filter(lambda edge: hasattr(edge, "node_") and edge.node_, unpack_edge_(frame)),
