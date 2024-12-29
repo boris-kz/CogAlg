@@ -24,60 +24,60 @@ def cross_comp(root):  # breadth-first node_,link_ cross-comp, connect.clusterin
         mlay = CH().add_tree([L.derH for L in L_]); H=root.derH; mlay.root=H; H.Et += mlay.Et; H.lft = [mlay]
         pL_ = {l for n in N_ for l,_ in get_rim(n, fd=0)}
         if len(pL_) > ave_L:
-            cluster_N_([root], pL_, fd=0)  # optional divisive clustering, calls centroid and higher connect.clustering
+            cluster_N_(root, pL_, fd=0)  # optional divisive clustering, calls centroid and higher connect.clustering
         # dfork
-        if val_(Et, mEt=Et,fo=1) > 0:  # same root for L_, root.link_ was compared in root-forming for alt clustering
+        if val_(Et, mEt=Et, fo=1) > 0:  # same root for L_, root.link_ was compared in root-forming for alt clustering
             for L in L_:
-                L.extH, L.root, L.Et, L.mL_t, L.rimt, L.aRad, L.visited_ = CH(),[root],copy(L.derH.Et),[[],[]], [[],[]], 0,[L]
+                L.extH, L.root, L.Et, L.mL_t, L.rimt, L.aRad, L.visited_ = CH(),root,copy(L.derH.Et),[[],[]], [[],[]], 0,[L]
             lN_,lL_,dEt = comp_link_(L_,Et)
             if val_(dEt, mEt=Et, fo=1) > 0:
                 dlay = CH().add_tree([L.derH for L in lL_]); dlay.root=H; H.Et += dlay.Et; H.lft += [dlay]
                 plL_ = {l for n in lN_ for l,_ in get_rim(n, fd=1)}
                 if len(plL_) > ave_L:
-                    cluster_N_([root], plL_, fd=1)
+                    cluster_N_(root, plL_, fd=1)
 
         feedback(root)  # add root derH to higher roots derH
 
-def cluster_N_(root_, L_, fd, nest=0):  # top-down segment L_ by >ave ratio of L.dists
+def cluster_N_(root, L_, fd, nest=0):  # top-down segment L_ by >ave ratio of L.dists
 
-    L_ = sorted(L_, key=lambda x: x.dist, reverse=True)  # current and shorter links
+    L_ = sorted(L_, key=lambda x: x.dist)  # shorter links first
     for n in [n for l in L_ for n in l.nodet]: n.fin = 0
     _L = L_[0]; N_, et = _L.nodet, _L.derH.Et
-    # current dist segment:
-    for i, L in enumerate(L_[1:], start=1):  # long links first
-        rel_dist = _L.dist / L.dist  # >1
-        if rel_dist < 1.2 or val_(et)>0 or len(L_[i:]) < ave_L:  # ~=dist Ns or either side of L is weak
-            _L = L; N_ += L.nodet; et += L.derH.Et
-        else:
-            break  # terminate contiguous-distance segment
-    G_ = []
-    min_dist = _L.dist; N_ = {*N_}
-    for N in N_:  # cluster current distance segment
-        if N.fin: continue
-        _eN_, node_,link_, et, = [N], [],[], np.zeros(4)
-        while _eN_:
-            eN_ = []
-            for eN in _eN_:  # cluster rim-connected ext Ns, all in root Gt
-                node_+=[eN]; eN.fin = 1  # all rim
-                for L,_ in get_rim(eN, fd):
-                    if L not in link_:  # if L.derH.Et[0]/ave * n.extH m/ave or L.derH.Et[0] + n.extH m*.1: density?
-                        eN_ += [n for n in L.nodet if not n.fin]
-                        if L.dist >= min_dist:
-                            link_+=[L]; et+=L.derH.Et
-            _eN_ = []
-            for n in {*eN_}:
-                n.fin = 0; _eN_ += [n]
-        G_ += [sum2graph(root_, [list({*node_}),list({*link_}), et, min_dist], fd, nest)]
-        # higher root_ assign to all sub_G nodes
-    for G in G_:  # breadth-first
-        sub_L_ = {l for n in G.node_ for l,_ in get_rim(n,fd) if l.dist < min_dist}
-        if len(sub_L_) > ave_L:
-            Et = np.sum([sL.derH.Et for sL in sub_L_],axis=0); Et[3]+=nest
-            if val_(Et, fo=1) > 0:
-                cluster_N_(root_+[G], sub_L_, fd, nest+1)  # sub-cluster shorter links, nest in G.subG_
-    # root_ += [root] / dist segment
-    root_[-1].subG_ = G_
-    cluster_C_(root_[-1])
+    L_ = L_[1:]
+    while L_:  # get longer links
+        for i, L in enumerate(L_):  # shorter links first
+            rel_dist = L.dist / _L.dist  # >= 1
+            if rel_dist < 1.2 or val_(et)>0 or len(L_[i:]) < ave_L:  # ~=dist Ns or either side of L is weak
+                _L = L; N_ += L.nodet; et += L.derH.Et
+            else:
+                break  # terminate contiguous-distance segment
+        G_ = []
+        max_dist = _L.dist; N_ = {*N_}
+        for N in N_:  # cluster current distance segment
+            if N.fin: continue  # no longer relevant?
+            _eN_, node_,link_, et, = [N], [],[], np.zeros(4)
+            while _eN_:
+                eN_ = []
+                for eN in _eN_:  # cluster rim-connected ext Ns, all in root Gt
+                    node_+=[eN]; eN.fin = 1  # all rim
+                    for L,_ in get_rim(eN, fd):
+                        if L not in link_:  # if L.derH.Et[0]/ave * n.extH m/ave or L.derH.Et[0] + n.extH m*.1: density?
+                            eN_ += [n for n in L.nodet if not n.fin]
+                            if L.dist < max_dist:
+                                link_+=[L]; et+=L.derH.Et
+                _eN_ = []
+                for n in {*eN_}:
+                    n.fin = 0; _eN_ += [n]
+            # cluster node roots if max_dist else nodes:
+            G_ += [sum2graph(root, [list({*node_}),list({*link_}), et], fd, max_dist)]
+
+        # replace root node_|link_ with incrementally longer-link connected clusters:
+        if fd: root.link_ = G_
+        else:  root.node_ = G_
+        nest += 1  # not sure we need it?
+        L_ = L_[i:]  # cluster shorter-connected clusters via longer links, if any
+
+    cluster_C_(root)
 
 ''' Hierarchical clustering should alternate between two phases: generative via connectivity and compressive via centroid.
 

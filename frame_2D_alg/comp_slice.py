@@ -1,6 +1,6 @@
 import numpy as np
 from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
-from frame_2D_alg.slice_edge import CP, slice_edge, comp_angle, ave_G
+from slice_edge import CP, slice_edge, comp_angle, ave_G
 
 '''
 comp_slice traces edge axis by cross-comparing vertically adjacent Ps: horizontal slices across an edge blob.

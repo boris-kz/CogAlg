@@ -402,3 +402,95 @@ def append_(HE, He):  # unpack HE lft tree down to He.fd_ and append He, or sum 
         if not fork.tft:
             fork.tft = deepcopy(He.tft)  # if init from sum mlink_
 
+def cluster_N_(root_, L_, fd, nest=0):  # top-down segment L_ by >ave ratio of L.dists
+
+    L_ = sorted(L_, key=lambda x: x.dist, reverse=True)  # current and shorter links
+    for n in [n for l in L_ for n in l.nodet]: n.fin = 0
+    _L = L_[0]; N_, et = _L.nodet, _L.derH.Et
+    # current dist segment:
+    for i, L in enumerate(L_[1:], start=1):  # long links first
+        rel_dist = _L.dist / L.dist  # >1
+        if rel_dist < 1.2 or val_(et)>0 or len(L_[i:]) < ave_L:  # ~=dist Ns or either side of L is weak
+            _L = L; N_ += L.nodet; et += L.derH.Et
+        else:
+            break  # terminate contiguous-distance segment
+    G_ = []
+    min_dist = _L.dist; N_ = {*N_}
+    for N in N_:  # cluster current distance segment
+        if N.fin: continue
+        _eN_, node_,link_, et, = [N], [],[], np.zeros(4)
+        while _eN_:
+            eN_ = []
+            for eN in _eN_:  # cluster rim-connected ext Ns, all in root Gt
+                node_+=[eN]; eN.fin = 1  # all rim
+                for L,_ in get_rim(eN, fd):
+                    if L not in link_:  # if L.derH.Et[0]/ave * n.extH m/ave or L.derH.Et[0] + n.extH m*.1: density?
+                        eN_ += [n for n in L.nodet if not n.fin]
+                        if L.dist >= min_dist:
+                            link_+=[L]; et+=L.derH.Et
+            _eN_ = []
+            for n in {*eN_}:
+                n.fin = 0; _eN_ += [n]
+        G_ += [sum2graph(root_, [list({*node_}),list({*link_}), et, min_dist], fd, nest)]
+        # higher root_ assign to all sub_G nodes
+
+    # this is moved here now since deeper subs are formed later
+    hroot = root_[-1] if isinstance(root_,list) else root_  # higher root
+    if fd: hroot.subL_ = G_
+    else:  hroot.subG_ = G_
+
+    for G in G_:  # breadth-first
+        sub_L_ = {l for n in G.node_ for l,_ in get_rim(n,fd) if l.dist < min_dist}
+        if len(sub_L_) > ave_L:
+            Et = np.sum([sL.derH.Et for sL in sub_L_],axis=0); Et[3]+=nest
+            if val_(Et, fo=1) > 0:
+                if not isinstance(root_,list): root_ = [root_]  # first conversion when nest == 1
+                cluster_N_(root_+[G], sub_L_, fd, nest+1)  # sub-cluster shorter links, nest in G.subG_
+    # root_ += [root] / dist segment
+    cluster_C_(hroot)
+
+def sum2graph(root, grapht, fd, nest):  # sum node and link params into graph, aggH in agg+ or player in sub+
+
+    node_, link_, Et = grapht[:3]
+    graph = CG(fd=fd, Et=Et*icoef, root=root[-1] if isinstance(root,list) else root, node_=node_, link_=link_, rng=nest)  # in cluster_N_, root is not a list when nest == 0
+    # arg Et is internalized; only direct root assign before clustering
+    if len(grapht)==4: graph.minL = grapht[3]  # called from cluster_N
+    yx = np.array([0,0])
+    derH = CH(root=graph)
+    for N in node_:
+        graph.box = extend_box(graph.box, N.box)  # pre-compute graph.area += N.area?
+        yx = np.add(yx, N.yx)
+        if isinstance(node_[0],CG):
+            graph.latuple += N.latuple; graph.vert += N.vert
+        if N.derH:
+            derH.add_tree(N.derH, graph)
+        graph.Et += N.Et * icoef ** 2  # deeper, lower weight
+        if nest:
+            if nest==1: N.root = [N.root]  # initial conversion
+            N.root = root + [graph]  # root is root_ in distance-layered cluster_N_
+        else: N.root = graph  # single root
+    # sum link_ derH:
+    derLay = CH().add_tree([link.derH for link in link_],root=graph)  # root added in copy_ within add_tree
+    if derH:
+        derLay.lft += [derH]; derLay.Et += derH.Et
+    graph.derH = derLay
+    L = len(node_)
+    yx = np.divide(yx,L); graph.yx = yx
+    # ave distance from graph center to node centers:
+    graph.aRad = sum([np.hypot( *np.subtract(yx, N.yx)) for N in node_]) / L
+    if fd:  # strong dgraph
+        mEt = np.sum([r.Et for r in root[1:]],axis=1) if isinstance(root, list) else (root.Et if isinstance(root, CG) else [.0,.0,.0,.0])
+        if val_(Et, mEt=mEt):
+            altG_ = []  # mGs overlapping dG
+            for L in node_:
+                for n in L.nodet:  # map root mG
+                    if isinstance(n.root,list):
+                        for G in n.root[1:]:  # skip the first root: frame or edge
+                            if L.dist >= G.minL:  # same dist segment root
+                                mG = G; break
+                    else: mG = n.root
+                    if mG not in altG_:
+                        mG.altG = sum_G_([mG.altG, graph])
+                        altG_ += [mG]
+    feedback(graph)  # recursive root.derH.add_fork(graph.derH)
+    return graph
