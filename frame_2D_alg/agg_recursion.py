@@ -13,8 +13,8 @@ prefix  f denotes flag
 postfix t denotes tuple, multiple ts is a nested tuple
 prefix  _ denotes prior of two same-name variables, multiple _s for relative precedence
 postfix _ denotes array of same-name elements, multiple _s is nested array
-capitalized vars are summed small-case vars '''
-
+capitalized vars are summed small-case vars 
+'''
 
 def cross_comp(root):  # breadth-first node_,link_ cross-comp, connect.clustering, recursion
 
@@ -24,11 +24,11 @@ def cross_comp(root):  # breadth-first node_,link_ cross-comp, connect.clusterin
         mlay = CH().add_tree([L.derH for L in L_]); H=root.derH; mlay.root=H; H.Et += mlay.Et; H.lft = [mlay]
         pL_ = {l for n in N_ for l,_ in get_rim(n, fd=0)}
         if len(pL_) > ave_L:
-            cluster_N_(root, pL_, fd=0)  # optional divisive clustering, calls centroid and higher connect.clustering
+            cluster_N_(root, pL_, fd=0)  # nested distance clustering, calls centroid and higher connect.clustering
         # dfork
         if val_(Et, mEt=Et, fo=1) > 0:  # same root for L_, root.link_ was compared in root-forming for alt clustering
             for L in L_:
-                L.extH, L.root, L.Et, L.mL_t, L.rimt, L.aRad, L.visited_ = CH(),root,copy(L.derH.Et),[[],[]], [[],[]], 0,[L]
+                L.extH, L.root, L.Et, L.mL_t, L.rimt, L.aRad, L.visited_ = CH(),root,copy(L.derH.Et), [[],[]], [[],[]], 0,[L]
             lN_,lL_,dEt = comp_link_(L_,Et)
             if val_(dEt, mEt=Et, fo=1) > 0:
                 dlay = CH().add_tree([L.derH for L in lL_]); dlay.root=H; H.Et += dlay.Et; H.lft += [dlay]
@@ -42,19 +42,19 @@ def cluster_N_(root, L_, fd, nest=0):  # top-down segment L_ by >ave ratio of L.
 
     L_ = sorted(L_, key=lambda x: x.dist)  # shorter links first
     for n in [n for l in L_ for n in l.nodet]: n.fin = 0
-    _L = L_[0]; N_, et = _L.nodet, _L.derH.Et
+    _L = L_[0]
+    N_, et = copy(_L.nodet), _L.derH.Et
     L_ = L_[1:]
-    while L_:  # get longer links
-        for i, L in enumerate(L_):  # shorter links first
+    while L_:  # longer links
+        for i, L in enumerate(L_):  # short first
             rel_dist = L.dist / _L.dist  # >= 1
             if rel_dist < 1.2 or val_(et)>0 or len(L_[i:]) < ave_L:  # ~=dist Ns or either side of L is weak
-                _L = L; N_ += L.nodet; et += L.derH.Et
+                _L = L; N_ += L.nodet; et += L.derH.Et  # last L
             else:
-                break  # terminate contiguous-distance segment
+                i -= 1; break  # terminate contiguous-distance segment
         G_ = []
-        max_dist = _L.dist; N_ = {*N_}
-        for N in N_:  # cluster current distance segment
-            if N.fin: continue  # no longer relevant?
+        max_dist = _L.dist
+        for N in {*N_}:  # cluster current distance segment
             _eN_, node_,link_, et, = [N], [],[], np.zeros(4)
             while _eN_:
                 eN_ = []
@@ -62,21 +62,17 @@ def cluster_N_(root, L_, fd, nest=0):  # top-down segment L_ by >ave ratio of L.
                     node_+=[eN]; eN.fin = 1  # all rim
                     for L,_ in get_rim(eN, fd):
                         if L not in link_:  # if L.derH.Et[0]/ave * n.extH m/ave or L.derH.Et[0] + n.extH m*.1: density?
-                            eN_ += [n for n in L.nodet if not n.fin]
+                            eN_ += [n for n in L.nodet if nest or not n.fin]  # filter in 1st dist seg only
                             if L.dist < max_dist:
                                 link_+=[L]; et+=L.derH.Et
-                _eN_ = []
-                for n in {*eN_}:
-                    n.fin = 0; _eN_ += [n]
-            # cluster node roots if max_dist else nodes:
-            G_ += [sum2graph(root, [list({*node_}),list({*link_}), et], fd, max_dist)]
-
-        # replace root node_|link_ with incrementally longer-link connected clusters:
-        if fd: root.link_ = G_
+                _eN_ = {*eN_}
+            G_ += [sum2graph(root, [list({*node_}),list({*link_}), et], fd, max_dist, nest)]
+            # cluster node roots if nest else nodes
+        nest += 1
+        if fd: root.link_ = G_  # replace with current-dist clusters
         else:  root.node_ = G_
-        nest += 1  # not sure we need it?
-        L_ = L_[i:]  # cluster shorter-connected clusters via longer links, if any
-
+        L_ = L_[i+1:]  # get longer links if any, may connect current-dist clusters
+        N_ = []
     cluster_C_(root)
 
 ''' Hierarchical clustering should alternate between two phases: generative via connectivity and compressive via centroid.
@@ -145,36 +141,50 @@ def cluster_C_(graph):
 
             if dM > ave and M + extM > ave:  # update for next loop, terminate if low reform val
                 if dN_: # recompute C if any changes in node_
-                    C = centroid(set(dN_),N_,C)
+                    C = centroid(set(dN_), N_, C)
                 _N_ = set(N_) | set(extN_)  # next loop compares both old and new nodes to new C
                 C.M = M; C.node_ = N_
             else:
                 if C.M > ave * 10:
+                    C.root = N.root  # C.nest = N.nest+1
                     for n in C.node_:
-                        try: n.root += [C]
-                        except TypeError: n.root = [n.root, C]
-                        n.fin = 1; delattr(n,"sign")
+                        n.root = C; n.fin = 1; delattr(n,"sign")
                     return C  # centroid cluster
                 else:  # unpack C.node_
                     for n in C.node_: n.m = 0
                     return N  # keep seed node
 
-    # find representative centroids for complemented Gs: m-core + d-contour, initially from unpacked edge
-    N_ = sorted([N for N in graph.subG_ if any(N.Et)], key=lambda n: n.Et[0], reverse=True)
-    subG_ = []
+    # get representative centroids of complemented Gs: mCore + dContour, initially in unpacked edges
+    N_ = sorted([N for N in graph.node_ if any(N.Et)], key=lambda n: n.Et[0], reverse=True)
+    G_ = []
     for N in N_:
         N.sign, N.m, N.fin = 1, 0, 0  # setattr: C update sign, inclusion val, prior C inclusion flag
     for i, N in enumerate(N_):  # replace some of connectivity cluster by exemplar centroids
         if not N.fin:  # not in prior C
             if N.Et[0] > ave * 10:
-                subG_ += [centroid_cluster(N)]  # extend from N.rim, return C if packed else N
+                G_ += [centroid_cluster(N)]  # extend from N.rim, return C if packed else N
             else:  # the rest of N_ M is lower
-                subG_ += [N for N in N_[i:] if not N.fin]
+                G_ += [N for N in N_[i:] if not N.fin]
                 break
-    graph.subG_ = subG_  # mix of Ns and Cs: exemplars of their network?
-    if len(graph.subG_) > ave_L:
+    # draft:
+    for G in G_:
+        #  cross-comp | sum altG_ -> combined altG before next agg+ cross-comp
+        if val_(np.sum([alt.Et for alt in G.altG_]), mEt=G.Et):
+            G.altG_ = cross_comp(G, G.altG_)
+        else:
+            G.altG_ = reduce(sum_G_, [alt for alt in G.altG_])
+
+    graph.node_ = G_  # mix of Ns and Cs: exemplars of their network?
+    if len(G_) > ave_L:
         cross_comp(graph)  # selective connectivity clustering between exemplars, extrapolated to their node_
 
+def sum_G_(node_):
+    G = CG()
+    for n in node_:
+        G.rng = n.rng; G.latuple += n.latuple; G.vert += n.vert; G.aRad += n.aRad; G.box = extend_box(G.box, n.box)
+        if n.derH: G.derH.add_tree(n.derH, root=G)
+        if n.extH: G.extH.add_tree(n.extH)
+    return G
 
 if __name__ == "__main__":
     image_file = './images/raccoon_eye.jpeg'
@@ -183,10 +193,9 @@ if __name__ == "__main__":
     intra_blob_root(frame)
     vectorize_root(frame)
     if frame.subG_:  # converted edges
-        subG_ = []
-        for edge in frame.subG_:
-            if edge.subG_:  # or / and edge Et?
-                cluster_C_(edge)  # no cluster_C_ in trace_edge
-                subG_ += edge.subG_  # unpack edge, or keep if connectivity cluster, or in flat blob altG_?
-        frame.subG_ = subG_
+        G_ = []
+        for edge in frame.node_:
+            cluster_C_(edge)  # no cluster_C_ in vect_edge
+            G_ += edge.node_  # unpack edge, or keep if connectivity cluster, or in flat blob altG_?
+        frame.node_ = G_
         cross_comp(frame)  # calls connectivity clustering
