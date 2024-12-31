@@ -494,3 +494,27 @@ def sum2graph(root, grapht, fd, nest):  # sum node and link params into graph, a
                         altG_ += [mG]
     feedback(graph)  # recursive root.derH.add_fork(graph.derH)
     return graph
+
+def centroid(dnode_, node_, C=None):  # sum|subtract and average Rim nodes
+
+        if C is None:
+            C = CG(); C.L = 0; C.M = 0  # setattr summed len node_ and match to nodes
+
+        sum_G_([C, *dnode_])
+        '''
+        for n in dnode_:
+            s = n.sign; n.sign=1  # single-use sign
+            C.Et += n.Et * s; C.aRad += n.aRad * s
+            C.L += len(n.node_) * s
+            C.latuple += n.latuple * s
+            C.vert += n.vert * s
+            C.yx += n.yx
+            if n.derH: C.derH.add_tree(n.derH, rev = s==-1, fc=1)
+            if n.extH: C.extH.add_tree(n.extH, rev = s==-1, fc=1)
+        '''
+        # get averages:
+        k = len(dnode_); C.Et/=k; C.latuple/=k; C.vert/=k; C.aRad/=k; C.yx /= k
+        if C.derH: C.derH.norm_(k)  # derH/=k
+        # same for altG?
+        C.box = reduce(extend_box, (n.box for n in node_))
+        return C
