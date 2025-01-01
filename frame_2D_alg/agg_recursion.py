@@ -42,7 +42,7 @@ def cluster_N_(root, L_, fd, nest=0):  # top-down segment L_ by >ave ratio of L.
 
     L_ = sorted(L_, key=lambda x: x.dist)  # shorter links first
     while L_:
-        # loop forms G_ of contiguous-distance link_ segment
+        # each loop forms G_ of contiguous-distance L_ segment
         _L = L_[0]; N_, et = copy(_L.nodet), _L.derH.Et
         for n in [n for l in L_ for n in l.nodet]:
             n.fin = 0
@@ -72,7 +72,7 @@ def cluster_N_(root, L_, fd, nest=0):  # top-down segment L_ by >ave ratio of L.
         if fd: root.link_ = G_  # replace with current-dist clusters
         else:  root.node_ = G_
         L_ = L_[i+1:]
-        # get longer links if any for next loop, may connect current-dist clusters
+        # get longer links if any for next loop, to connect current-dist clusters
 
 ''' Hierarchical clustering should alternate between two phases: generative via connectivity and compressive via centroid.
 
@@ -90,16 +90,16 @@ def cluster_C_(graph):
     def centroid(dnode_, node_, C=None):  # sum|subtract and average Rim nodes
 
         if C is None:
-            C = CG(); C.L = 0; C.M = 0; fC=0  # setattr summed len node_ and match to nodes
+            C,A, fC = CG(),CG(), 0
+            C.M,C.L, A.M,A.L = 0,0,0,0  # setattr
         else:
-            fC = 1
-        C = sum_G_([C, *dnode_], fc=1)  # exclude extend_box and sum extH?
-        A = sum_G_([C.altG_] + [n.altG_ for n in dnode_], fc=1)
+            A, fC = C.altG_, 1
+        sum_G_(C, dnode_, fc=1)  # exclude extend_box and sum extH
+        sum_G_(A, [n.altG_ for n in dnode_ if n.altG_], fc=1)
         k = len(dnode_) + fC
         for n in C, A:  # get averages
             n.Et/=k; n.latuple/=k; n.vert/=k; n.aRad/=k; n.yx /= k
-            if n.derH:
-                C.derH.norm_(k)
+            if n.derH: n.derH.norm_(k)
         C.box = reduce(extend_box, (n.box for n in node_))
         C.altG_ = A
         return C
@@ -169,31 +169,35 @@ def cluster_C_(graph):
                 break
     graph.node_ = G_  # mix of Ns and Cs: exemplars of their network?
     if len(G_) > ave_L:
-        cross_comp(graph)  # selective connectivity clustering between exemplars, extrapolated to their node_
+        cross_comp(graph)
+        # selective connectivity clustering between exemplars, extrapolated to their node_
 
-def sum_G_(node_, fc=0):
-    G = CG()
+def sum_G_(G, node_, fc=0):
     for n in node_:
-        s = n.sign; n.sign = 1  # single-use
+        if fc:
+            s = n.sign; n.sign = 1  # single-use
+        else: s = 1
         G.latuple += n.latuple * s; G.vert += n.vert * s
         G.Et += n.Et * s; G.aRad += n.aRad * s
         G.yx += n.yx * s
         if n.derH: G.derH.add_tree(n.derH, root=G, rev = s==-1, fc=fc)
-        if not fc:
+        if fc:
+            G.M += n.M; G.L += n.L
+        else:
             if n.extH: G.extH.add_tree(n.extH, root=G, rev = s==-1)
             G.box = extend_box( G.box, n.box)
-    return G
 
 def combine_altG__(root):  # combine contour G.altG_ into altG (node_ defined by root=G), for agg+ cross-comp
 
     for G in root.node_:  # eval altG * borrow from G:
-
-        if val_(np.sum([alt.Et for alt in G.altG_]), mEt=G.Et):
-            G.altG_ = CG(node_=G.altG_, root=G)
-            cross_comp(G.altG_)
-        else:
-            G.altG_ = reduce(sum_G_, [alt for alt in G.altG_])
-            # or keep altG.node_=altG_?
+        if G.altG_:
+            if val_(np.sum([alt.Et for alt in G.altG_],axis=0), mEt=G.Et):
+                G.altG_ = CG(node_=G.altG_, root=G); G.altG_.L = len(G.altG_.node_)
+                cross_comp(G.altG_)
+            else:
+                G.altG_ = CG()
+                sum_G_(G.altG_, [alt for alt in G.altG_])
+                # or keep altG_ in altG.node_?
 
 if __name__ == "__main__":
     image_file = './images/raccoon_eye.jpeg'

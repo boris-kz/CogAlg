@@ -191,18 +191,18 @@ def vectorize_root(frame):
     blob_ = unpack_blob_(frame)
     for blob in blob_:
         if not blob.sign and blob.G > ave_G * blob.root.olp:
-            blob = slice_edge(blob)
-            if blob.G * (len(blob.P_)-1) > ave:  # eval PP
-                comp_slice(blob)
-                if blob.Et[0] * (len(blob.node_)-1)*(blob.rng+1) > ave:
+            edge = slice_edge(blob)
+            if edge.G * (len(edge.P_)-1) > ave:  # eval PP
+                comp_slice(edge)
+                if edge.Et[0] * (len(edge.node_)-1)*(edge.rng+1) > ave:
                     # init for agg+:
                     if not hasattr(frame, 'derH'):
                         frame.derH = CH(root=frame, Et=np.zeros(4), tft=[]); frame.root = None; frame.node_ = []  # distinct from base blob_
                     lat = np.array([.0,.0,.0,.0,.0,np.zeros(2)],dtype=object); vert = np.array([np.zeros(6), np.zeros(6)])
                     for PP in blob.node_:
                         vert += PP[3]; lat += PP[4]
-                    y_,x_ = zip(*blob.dert_.keys()); box = [min(y_),min(x_),max(y_),max(x_)]
-                    edge = CG(root=frame, node_=blob.node_, vert=vert,latuple=lat, box=box, yx=np.divide([blob.latuple[:2]], blob.area), Et=blob.Et)
+                    y_,x_ = zip(*edge.dert_.keys()); box = [min(y_),min(x_),max(y_),max(x_)]
+                    blob2CG(edge, root=frame, vert=vert,latuple=lat, box=box, yx=np.divide([edge.latuple[:2]], edge.area))  # node_, Et stays the same
                     G_ = []
                     for N in edge.node_:  # no comp node_, link_ | PPd_ for now
                         P_, link_, vert, lat, A, S, box, [y,x], Et = N[1:]  # PPt
@@ -434,7 +434,7 @@ def sum2graph(root, grapht, fd, maxL=None, nest=0):  # sum node and link params 
     root_ = []
     for N in node_:
         if nest:  # G is dist-nested in cluster_N_, cluster roots instead of nodes
-            while N.root.nest < nest: N = N.root  # incr/elevation, term if ==nest
+            while N.root.nest+1 < nest: N = N.root  # incr/elevation in feedback, return root.nest+1 == nest
             if N in root_: continue  # roots overlap
             root_ += [N]
         graph.box = extend_box(graph.box, N.box)  # pre-compute graph.area += N.area?
@@ -454,7 +454,7 @@ def sum2graph(root, grapht, fd, maxL=None, nest=0):  # sum node and link params 
     graph.derH = derLay
     L = len(node_)
     yx = np.divide(yx,L)
-    dy,dx = np.divide( np.sum([yx-_yx for _yx in yx_], axis=0), L)
+    dy,dx = np.divide( np.sum([ np.abs(yx-_yx) for _yx in yx_], axis=0), L)
     graph.aRad = np.hypot(dy,dx)  # ave distance from graph center to node centers
     graph.yx = yx
     if fd:  # dgraph # and val_(Et, mEt=root.Et) > 0:
@@ -465,13 +465,14 @@ def sum2graph(root, grapht, fd, maxL=None, nest=0):  # sum node and link params 
                 if mG not in altG_:
                     mG.altG_ += [graph]  # cross-comp|sum complete altG_ before next agg+ cross-comp
                     altG_ += [mG]
-    feedback(graph)  # recursive root.derH.add_fork(graph.derH)
+    feedback(graph, nest)  # recursive root.derH.add_fork(graph.derH)
     return graph
 
-def feedback(node):  # propagate node.derH to higher roots
+def feedback(node, nest):  # propagate node.derH to higher roots
 
     while node.root:
         root = node.root
+        if nest: root.nest += 1
         lowH = addH = root.derH
         add = 1
         for fd in addH.fd_:  # unpack top-down, each fd was assigned by corresponding level of roots
@@ -483,6 +484,25 @@ def feedback(node):  # propagate node.derH to higher roots
         if add:  # add in fork initialized by prior feedback, else append above
             lowH.add_tree(addH, root)
         node = root
+
+
+def blob2CG(G, **kwargs):
+    # node_, Et stays the same:
+    G.fd = kwargs.get('fd', 0)  # 1 if cluster of Ls | lGs?
+    G.root = kwargs.get('root')  # may extend to list in cluster_N_, same nodes may be in multiple dist layers
+    G.link_ = kwargs.get('link_', [])  # internal links per comp layer in rng+, convert to LG_ in agg++
+    G.latuple = kwargs.get('latuple', np.array([.0,.0,.0,.0,.0,np.zeros(2)],dtype=object))  # lateral I,G,M,D,L,[Dy,Dx]
+    G.vert = kwargs.get('vert', np.array([np.zeros(6), np.zeros(6)]))  # vertical m_d_ of latuple
+    G.box = kwargs.get('box', np.array([np.inf,np.inf,-np.inf,-np.inf]))  # y0,x0,yn,xn
+    G.yx = kwargs.get('yx', np.zeros(2))  # init PP.yx = [(y0+yn)/2,(x0,xn)/2], then ave node yx
+    G.rim = []  # flat links of any rng, may be nested in clustering
+    G.nest = 0  # nesting in nodes
+    G.aRad = 0  # average distance between graph center and node center
+    # maps to node_tree / agg+|sub+:
+    G.derH = CH()  # sum from nodes, then append from feedback
+    G.extH = CH()  # sum from rims
+    G.altG_ = []  # or altG? adjacent (contour) gap+overlap alt-fork graphs, converted to CG
+    return G
 
 if __name__ == "__main__":
     image_file = './images/raccoon_eye.jpeg'
