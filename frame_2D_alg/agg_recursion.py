@@ -13,9 +13,12 @@ postfix t denotes tuple, multiple ts is a nested tuple
 prefix  _ denotes prior of two same-name variables, multiple _s for relative precedence
 postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized vars are summed small-case vars 
+
+Each agg+ cycle forms higher-composition complemented graphs G.altG_ in cluster_N_ and refines them in cluster_C_: 
+cross_comp -> cluster_N_ -> cluster_C -> cross_comp...
 '''
 
-def cross_comp(root):  # breadth-first node_,link_ cross-comp, connect.clustering, recursion
+def cross_comp(root, nest=0):  # breadth-first node_,link_ cross-comp, connect.clustering, recursion
 
     N_,L_,Et = comp_node_(root.node_)  # cross-comp exemplars, extrapolate to their node_s
     # mfork
@@ -23,7 +26,7 @@ def cross_comp(root):  # breadth-first node_,link_ cross-comp, connect.clusterin
         mlay = CH().add_tree([L.derH for L in L_]); H=root.derH; mlay.root=H; H.Et += mlay.Et; H.lft = [mlay]
         pL_ = {l for n in N_ for l,_ in get_rim(n, fd=0)}
         if len(pL_) > ave_L:
-            cluster_N_(root, pL_, fd=0)  # nested distance clustering, calls centroid and higher connect.clustering
+            cluster_N_(root, pL_, nest, fd=0)  # nested distance clustering, calls centroid and higher connect.clustering
         # dfork
         if val_(Et, mEt=Et, fo=1) > 0:  # same root for L_, root.link_ was compared in root-forming for alt clustering
             for L in L_:
@@ -33,12 +36,12 @@ def cross_comp(root):  # breadth-first node_,link_ cross-comp, connect.clusterin
                 dlay = CH().add_tree([L.derH for L in lL_]); dlay.root=H; H.Et += dlay.Et; H.lft += [dlay]
                 plL_ = {l for n in lN_ for l,_ in get_rim(n, fd=1)}
                 if len(plL_) > ave_L:
-                    cluster_N_(root, plL_, fd=1)
+                    cluster_N_(root, plL_, nest, fd=1)
 
-        combine_altG__(root)  # cross-comp | sum contour altG_ to altG
+        comb_altG_(root)  # combine node altG_(contour) by sum,cross-comp -> CG altG
         cluster_C_(root)  # get (G,altG) exemplars, altG_ may reinforce G by borrowing from extended surround?
 
-def cluster_N_(root, L_, fd, nest=0):  # top-down segment L_ by >ave ratio of L.dists
+def cluster_N_(root, L_, nest, fd):  # top-down segment L_ by >ave ratio of L.dists
 
     L_ = sorted(L_, key=lambda x: x.dist)  # shorter links first
     while L_:
@@ -91,7 +94,7 @@ def cluster_C_(graph):
 
         if C is None:
             C,A, fC = CG(),CG(), 0
-            C.M,C.L, A.M,A.L = 0,0,0,0  # setattr
+            C.M,C.L, A.M,A.L = 0,0,0,0  # centroid setattr
         else:
             A, fC = C.altG_, 1
         sum_G_(C, dnode_, fc=1)  # exclude extend_box and sum extH
@@ -176,28 +179,26 @@ def sum_G_(G, node_, fc=0):
     for n in node_:
         if fc:
             s = n.sign; n.sign = 1  # single-use
-        else: s = 1
         G.latuple += n.latuple * s; G.vert += n.vert * s
         G.Et += n.Et * s; G.aRad += n.aRad * s
         G.yx += n.yx * s
         if n.derH: G.derH.add_tree(n.derH, root=G, rev = s==-1, fc=fc)
         if fc:
-            G.M += n.M; G.L += n.L
+            G.M += n.m*s; G.L += s
         else:
-            if n.extH: G.extH.add_tree(n.extH, root=G, rev = s==-1)
-            G.box = extend_box( G.box, n.box)
+            if n.extH: G.extH.add_tree(n.extH, root=G, rev = s==-1)  # empty in centroid
+            G.box = extend_box( G.box, n.box)  # extended per separate node_ in centroid
 
-def combine_altG__(root):  # combine contour G.altG_ into altG (node_ defined by root=G), for agg+ cross-comp
+def comb_altG_(root):  # combine contour G.altG_ into altG (node_ defined by root=G), for agg+ cross-comp
 
-    for G in root.node_:  # eval altG * borrow from G:
-        if G.altG_:
-            if val_(np.sum([alt.Et for alt in G.altG_],axis=0), mEt=G.Et):
-                G.altG_ = CG(node_=G.altG_, root=G); G.altG_.L = len(G.altG_.node_)
+    for G in root.node_:
+        if G.nest+1 == root.nest and G.altG_:
+            alt_ = G.altG_
+            sum_G_(alt_[0], [alt for alt in alt_[1:]])
+            G.altG_ = CG(root=G, node_=alt_); G.altG_.sign = 1; G.altG_.m = 0
+            # alt D * G rM:
+            if val_(G.altG_.Et, mEt=G.Et):
                 cross_comp(G.altG_)
-            else:
-                G.altG_ = CG()
-                sum_G_(G.altG_, [alt for alt in G.altG_])
-                # or keep altG_ in altG.node_?
 
 if __name__ == "__main__":
     image_file = './images/raccoon_eye.jpeg'
@@ -208,7 +209,7 @@ if __name__ == "__main__":
     if frame.node_:  # converted edges
         G_ = []
         for edge in frame.node_:
-            combine_altG__(edge)
+            comb_altG_(edge)
             cluster_C_(edge)  # no cluster_C_ in vect_edge
             G_ += edge.node_  # unpack edge, or keep if connectivity cluster, or in flat blob altG_?
         frame.node_ = G_

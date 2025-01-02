@@ -161,7 +161,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.box = kwargs.get('box', np.array([np.inf,np.inf,-np.inf,-np.inf]))  # y0,x0,yn,xn
         G.yx = kwargs.get('yx', np.zeros(2))  # init PP.yx = [(y0+yn)/2,(x0,xn)/2], then ave node yx
         G.rim = []  # flat links of any rng, may be nested in clustering
-        G.nest = 0  # nesting in nodes
+        G.nest = kwargs.get('nest', 0)  # nesting in nodes
         G.aRad = 0  # average distance between graph center and node center
         # maps to node_tree / agg+|sub+:
         G.derH = CH()  # sum from nodes, then append from feedback
@@ -187,7 +187,7 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
     def __bool__(l): return bool(l.nodet)
 
 def vectorize_root(frame):
-
+    blob2CG(frame)
     blob_ = unpack_blob_(frame)
     for blob in blob_:
         if not blob.sign and blob.G > ave_G * blob.root.olp:
@@ -427,14 +427,14 @@ def sum_G_(node_):
 def sum2graph(root, grapht, fd, maxL=None, nest=0):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
     node_, link_, Et = grapht
-    graph = CG(fd=fd, Et=Et*icoef, root=root, link_=link_, maxL=maxL, nest=nest)  # internal nesting
+    graph = CG(fd=fd, Et=Et*icoef, root=root, link_=link_, maxL=maxL, nest=nest+1)  # internal nesting
     # arg Et is weaker if internal
     yx = np.array([0,0]); yx_ = []
     derH = CH(root=graph)
     root_ = []
     for N in node_:
-        if nest:  # G is dist-nested in cluster_N_, cluster roots instead of nodes
-            while N.root.nest+1 < nest: N = N.root  # incr/elevation in feedback, return root.nest+1 == nest
+        if nest:  # G is distance-nested in cluster_N_, cluster prior-dist graphs instead of nodes:
+            while N.nest != nest: N = N.root  # get prior top root: nest = arg nest
             if N in root_: continue  # roots overlap
             root_ += [N]
         graph.box = extend_box(graph.box, N.box)  # pre-compute graph.area += N.area?
@@ -457,7 +457,7 @@ def sum2graph(root, grapht, fd, maxL=None, nest=0):  # sum node and link params 
     dy,dx = np.divide( np.sum([ np.abs(yx-_yx) for _yx in yx_], axis=0), L)
     graph.aRad = np.hypot(dy,dx)  # ave distance from graph center to node centers
     graph.yx = yx
-    if fd:  # dgraph # and val_(Et, mEt=root.Et) > 0:
+    if fd:  # dgraph, no mGs / dG for now  # and val_(Et, mEt=root.Et) > 0:
         altG_ = []  # mGs overlapping dG
         for L in node_:
             for n in L.nodet:  # map root mG
@@ -465,14 +465,14 @@ def sum2graph(root, grapht, fd, maxL=None, nest=0):  # sum node and link params 
                 if mG not in altG_:
                     mG.altG_ += [graph]  # cross-comp|sum complete altG_ before next agg+ cross-comp
                     altG_ += [mG]
-    feedback(graph, nest)  # recursive root.derH.add_fork(graph.derH)
+    feedback(graph)  # recursive root.derH.add_fork(graph.derH)
     return graph
 
-def feedback(node, nest):  # propagate node.derH to higher roots
+def feedback(node):  # propagate node.derH to higher roots
 
     while node.root:
         root = node.root
-        if nest: root.nest += 1
+        root.nest = max(root.nest, node.nest+1)
         lowH = addH = root.derH
         add = 1
         for fd in addH.fd_:  # unpack top-down, each fd was assigned by corresponding level of roots
@@ -502,6 +502,8 @@ def blob2CG(G, **kwargs):
     G.derH = CH()  # sum from nodes, then append from feedback
     G.extH = CH()  # sum from rims
     G.altG_ = []  # or altG? adjacent (contour) gap+overlap alt-fork graphs, converted to CG
+    if not hasattr(G, 'node_'): G.node_ = []  # add node_ in frame
+
     return G
 
 if __name__ == "__main__":

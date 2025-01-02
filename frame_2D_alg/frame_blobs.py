@@ -77,6 +77,7 @@ class CBlob(CBase):
         blob.latuple = [0, 0, 0, 0, 0, 0]  # Y, X, I, Dy, Dx, G
         blob.dert_ = {}  # keys: (y, x). values: (i, dy, dx, g)
         blob.adj_ = []  # adjacent blobs
+        blob.yx = np.zeros(2)
 
     def fill_blob(blob, fill_yx_, perimeter_, root__, dert__):
         y, x = perimeter_.pop()  # pixel coord
@@ -116,15 +117,11 @@ class CBlob(CBase):
     def G(blob): return blob.latuple[-1]
     @property
     def yx_(blob): return list(blob.dert_.keys())
-    @property
-    def yx(blob): return map(np.mean, zip(*blob.yx_))
 
 def frame_blobs_root(image):
     dert__ = comp_pixel(image)
     frame = CFrame(image)
-
-    # Flood-fill 1 pixel at a time
-    flood_fill(frame, dert__)
+    flood_fill(frame, dert__)  # flood-fill 1 pixel at a time
 
     return frame
 
@@ -275,10 +272,10 @@ if __name__ == "__main__":
     for blob in frame.blob_:
         for (y, x), (i, dy, dx, g) in blob.dert_.items():
             i__[y, x] = i; dy__[y, x] = dy; dx__[y, x] = dx; g__[y, x] = g; s__[y, x] = blob.sign
-        y, x = blob.yx  # blob center of gravity
+        y,x = blob.yx = map(np.mean, zip(*blob.yx_))
         if not blob.sign:
             for _blob in blob.adj_:  # show adjacents
-                _y, _x = _blob.yx  # _blob center of gravity
+                _y, _x = _blob.yx = map(np.mean, zip(*_blob.yx_))  # _blob center of gravity
                 line_ += [((_x, x), (_y, y))]
 
     plt.imshow(i__, cmap='gray'); plt.show()  # show reconstructed i__
