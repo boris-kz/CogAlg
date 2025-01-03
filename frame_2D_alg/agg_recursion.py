@@ -38,13 +38,15 @@ def cross_comp(root, nest=0):  # breadth-first node_,link_ cross-comp, connect.c
                 if len(plL_) > ave_L:
                     cluster_N_(root, plL_, nest, fd=1)
 
-        comb_altG_(root)  # combine node altG_(contour) by sum,cross-comp -> CG altG
-        cluster_C_(root)  # get (G,altG) exemplars, altG_ may reinforce G by borrowing from extended surround?
+        if len(pL_) > ave_L:
+            comb_altG_(root)  # combine node altG_(contour) by sum,cross-comp -> CG altG
+            cluster_C_(root)  # get (G,altG) exemplars, altG_ may reinforce G by borrowing from extended surround?
 
 def cluster_N_(root, L_, nest, fd):  # top-down segment L_ by >ave ratio of L.dists
 
     L_ = sorted(L_, key=lambda x: x.dist)  # shorter links first
-    while L_:
+    min_dist = 0
+    while True:
         # each loop forms G_ of contiguous-distance L_ segment
         _L = L_[0]; N_, et = copy(_L.nodet), _L.derH.Et
         for n in [n for l in L_ for n in l.nodet]:
@@ -69,15 +71,17 @@ def cluster_N_(root, L_, nest, fd):  # top-down segment L_ by >ave ratio of L.di
                             if L.dist < max_dist:
                                 link_+=[L]; et+=L.derH.Et
                 _eN_ = {*eN_}
-            G_ += [sum2graph(root, [list({*node_}),list({*link_}), et], fd, max_dist, nest)]
+            G_ += [sum2graph(root, [list({*node_}),list({*link_}), et], fd, min_dist, max_dist, nest)]
             # cluster node roots if nest else nodes
-        nest += 1
         if fd: root.link_ = G_  # replace with current-dist clusters
         else:  root.node_ = G_
         L_ = L_[i+1:]
-        # get longer links if any for next loop, to connect current-dist clusters
-
-''' Hierarchical clustering should alternate between two phases: generative via connectivity and compressive via centroid.
+        if L_:
+            nest += 1; min_dist = max_dist  # get longer links if any for next loop, to connect current-dist clusters
+        else:
+            break
+''' 
+Hierarchical clustering should alternate between two phases: generative via connectivity and compressive via centroid.
 
  Connectivity clustering terminates at effective contours: alt_Gs, beyond which cross-similarity is not likely to continue. 
  Next cross-comp is discontinuous and should be selective, for well-defined clusters: stable and likely recurrent.
@@ -192,8 +196,8 @@ def sum_G_(G, node_, fc=0):
 def comb_altG_(root):  # combine contour G.altG_ into altG (node_ defined by root=G), for agg+ cross-comp
 
     for G in root.node_:
-        if G.nest+1 == root.nest and G.altG_:
-            alt_ = G.altG_
+        alt_ = G.altG_
+        if alt_ and isinstance(alt_, list):
             sum_G_(alt_[0], [alt for alt in alt_[1:]])
             G.altG_ = CG(root=G, node_=alt_); G.altG_.sign = 1; G.altG_.m = 0
             # alt D * G rM:
