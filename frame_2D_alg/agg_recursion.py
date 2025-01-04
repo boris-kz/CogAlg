@@ -38,7 +38,7 @@ def cross_comp(root, nest=0):  # breadth-first node_,link_ cross-comp, connect.c
                 if len(plL_) > ave_L:
                     cluster_N_(root, plL_, nest, fd=1)
 
-        if len(pL_) > ave_L:
+        if len(pL_) > ave_L:  # else no higher clusters
             comb_altG_(root)  # combine node altG_(contour) by sum,cross-comp -> CG altG
             cluster_C_(root)  # get (G,altG) exemplars, altG_ may reinforce G by borrowing from extended surround?
 
@@ -77,7 +77,7 @@ def cluster_N_(root, L_, nest, fd):  # top-down segment L_ by >ave ratio of L.di
         else:  root.node_ = G_
         L_ = L_[i+1:]
         if L_:
-            nest += 1; min_dist = max_dist  # get longer links if any for next loop, to connect current-dist clusters
+            nest += 1; min_dist = max_dist  # get longer links for next loop, to connect current-dist clusters
         else:
             break
 ''' 
@@ -183,12 +183,13 @@ def sum_G_(G, node_, fc=0):
     for n in node_:
         if fc:
             s = n.sign; n.sign = 1  # single-use
+        else: s = 1
         G.latuple += n.latuple * s; G.vert += n.vert * s
         G.Et += n.Et * s; G.aRad += n.aRad * s
         G.yx += n.yx * s
         if n.derH: G.derH.add_tree(n.derH, root=G, rev = s==-1, fc=fc)
         if fc:
-            G.M += n.m*s; G.L += s
+            G.M += n.m * s; G.L += s
         else:
             if n.extH: G.extH.add_tree(n.extH, root=G, rev = s==-1)  # empty in centroid
             G.box = extend_box( G.box, n.box)  # extended per separate node_ in centroid
