@@ -71,7 +71,11 @@ def cluster_N_(root, L_, nest, fd):  # top-down segment L_ by >ave ratio of L.di
                             if L.dist < max_dist:
                                 link_+=[L]; et+=L.derH.Et
                 _eN_ = {*eN_}
-            G_ += [sum2graph(root, [list({*node_}),list({*link_}), et], fd, min_dist, max_dist, nest)]
+            if val_(et) > 0:
+                G_ += [sum2graph(root, [list({*node_}),list({*link_}), et], fd, max_dist, nest)]
+            else:  # unpack
+                for n in {*node_}:
+                    n.nest += 1; G_ += [n]
             # cluster node roots if nest else nodes
         if fd: root.link_ = G_  # replace with current-dist clusters
         else:  root.node_ = G_
@@ -112,28 +116,32 @@ def cluster_C_(graph):
         return C
 
     def comp_C(C, N):  # compute match without new derivatives: global cross-comp is not directional
+        # Et = np.zeros(4)  # m, _, n, olp: lateral proximity-weighted overlap, for sparse centroids
 
-        mL = min(C.L,len(N.node_)) - ave_L
+        mL = min(C.L, len(N.node_)) - ave_L
         mA = comp_area(C.box, N.box)[0]
         mLat = comp_latuple(C.latuple, N.latuple, C.Et[2], N.Et[2])[1][0]
         mVert = comp_md_(C.vert[1], N.vert[1])[1][0]
         M = mL + mA + mLat + mVert
         if C.derH and N.derH:
             M += C.derH.comp_tree(N.derH).Et[0]
-        if C.altG_ and N.altG_:  # altG_ was converted to altG
+        if C.altG_ and N.altG_:  # converted to altG
             M += comp_N(C.altG_, N.altG_, C.altG_.Et[2] / N.altG_.Et[2]).Et[0]
+        # weigh by proximity for differential clustering:
+        # M /= np.hypot(*C.yx, *N.yx)
         # comp node_?
         return M
 
     def centroid_cluster(N):  # refine and extend cluster with extN_
 
+        # add proximity bias, for both match and overlap?
         _N_ = {n for L,_ in N.rim for n in L.nodet if not n.fin}
         N.fin = 1; n_ = _N_| {N}  # include seed node
-        C = centroid(n_,n_)
+        C = centroid(n_, n_)
         while True:
             N_,dN_,extN_, M, dM, extM = [],[],[], 0,0,0  # included, changed, queued nodes and values
             for _N in _N_:
-                m = comp_C(C,_N)
+                m = comp_C(C,_N)  # Et if proximity-weighted overlap?
                 vm = m - ave  # deviation
                 if vm > 0:
                     N_ += [_N]; M += m
@@ -148,25 +156,26 @@ def cluster_C_(graph):
                     _N.sign=-1; _N.m=0; dN_+=[_N]; dM += -vm  # dM += abs m deviation
 
             if dM > ave and M + extM > ave:  # update for next loop, terminate if low reform val
-                if dN_: # recompute C if any changes in node_
+                if dN_:  # recompute C if any changes in node_
                     C = centroid(set(dN_), N_, C)
                 _N_ = set(N_) | set(extN_)  # next loop compares both old and new nodes to new C
                 C.M = M; C.node_ = N_
             else:
-                if C.M > ave * 10:
+                if C.M > ave * 10:  # add proximity-weighted overlap
                     C.root = N.root  # C.nest = N.nest+1
                     for n in C.node_:
                         n.root = C; n.fin = 1; delattr(n,"sign")
                     return C  # centroid cluster
                 else:  # unpack C.node_
                     for n in C.node_: n.m = 0
+                    N.nest += 1
                     return N  # keep seed node
 
     # get representative centroids of complemented Gs: mCore + dContour, initially in unpacked edges
     N_ = sorted([N for N in graph.node_ if any(N.Et)], key=lambda n: n.Et[0], reverse=True)
     G_ = []
     for N in N_:
-        N.sign, N.m, N.fin = 1, 0, 0  # setattr: C update sign, inclusion val, prior C inclusion flag
+        N.sign, N.m, N.fin = 1, 0, 0  # setattr C update sign, inclusion val, C inclusion flag
     for i, N in enumerate(N_):  # replace some of connectivity cluster by exemplar centroids
         if not N.fin:  # not in prior C
             if val_(N.Et, coef=10):
