@@ -60,7 +60,8 @@ def cluster_N_(root, L_, nest, fd):  # top-down segment L_ by >ave ratio of L.di
         G_ = []
         max_dist = _L.dist
         for N in {*N_}:  # cluster current distance segment
-            _eN_, node_,link_, et, = [N], [],[], np.zeros(4)
+            if N.fin: continue  # clustered from prior eN_
+            _eN_, node_,link_, et, = [N],[],[],np.zeros(4)
             while _eN_:
                 eN_ = []
                 for eN in _eN_:  # cluster rim-connected ext Ns, all in root Gt
@@ -72,7 +73,7 @@ def cluster_N_(root, L_, nest, fd):  # top-down segment L_ by >ave ratio of L.di
                                 link_+=[L]; et+=L.derH.Et
                 _eN_ = {*eN_}
             if val_(et) > 0:
-                G_ += [sum2graph(root, [list({*node_}),list({*link_}), et], fd, max_dist, nest)]
+                G_ += [sum2graph(root, [list({*node_}),list({*link_}), et], fd, min_dist, max_dist, nest)]
             else:  # unpack
                 for n in {*node_}:
                     n.nest += 1; G_ += [n]
@@ -116,7 +117,6 @@ def cluster_C_(graph):
         return C
 
     def comp_C(C, N):  # compute match without new derivatives: global cross-comp is not directional
-        # Et = np.zeros(4)  # m, _, n, olp: lateral proximity-weighted overlap, for sparse centroids
 
         mL = min(C.L, len(N.node_)) - ave_L
         mA = comp_area(C.box, N.box)[0]
@@ -127,7 +127,8 @@ def cluster_C_(graph):
             M += C.derH.comp_tree(N.derH).Et[0]
         if C.altG_ and N.altG_:  # converted to altG
             M += comp_N(C.altG_, N.altG_, C.altG_.Et[2] / N.altG_.Et[2]).Et[0]
-        # weigh by proximity for differential clustering:
+        # if fuzzy C:
+        # Et = np.zeros(4)  # m,_,n,o: lateral proximity-weighted overlap, for sparse centroids
         # M /= np.hypot(*C.yx, *N.yx)
         # comp node_?
         return M

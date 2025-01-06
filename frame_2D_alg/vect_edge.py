@@ -48,24 +48,23 @@ med_cost = 10
 class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | derH, their layers and sub-layers
 
     name = "H"
-    def __init__(He, Et=None, tft=None, lft=None, H=None, fd_=None, root=None, node_=None, altH=None):
+    def __init__(He, **kwargs):
         super().__init__()
-        He.H = [] if H is None else H  # list of layers: Ets summed across fork tree
-        He.Et = np.zeros(4) if Et is None else Et
-        He.fd_ = [] if fd_ is None else fd_  # 0: sum CGs, 1: sum CLs, + concat from comparands
-        He.tft = [] if tft is None else tft  # top fork tuple: arrays m_t, d_t
-        He.lft = [] if lft is None else lft  # lower fork tuple: CH /comp N_,L_, each has tft and lft
-        He.root = None if root is None else root  # N or higher-composition He
-        He.node_ = [] if node_ is None else node_  # concat bottom nesting order if CG, may be redundant to G.node_
-        He.altH = CH(altH=object) if altH is None else altH   # summed altLays, prevent cyclic
-        # He.i = 0 if i is None else i  # lay index in root.lft, to revise olp
-        # He.i_ = [] if i_ is None else i_  # priority indices to compare node H by m | link H by d
-        # He.fd = 0 if fd is None else fd  # 0: sum CGs, 1: sum CLs
+        He.H = kwargs.get('H', [])    # list of layers: Ets summed across fork tree
+        He.Et = kwargs.get('Et', np.zeros(4))
+        He.fd_ = kwargs.get('fd_', [])    # 0: sum CGs, 1: sum CLs, + concat from comparands
+        He.tft = kwargs.get('tft', [])    # top fork tuple: arrays m_t, d_t
+        He.lft = kwargs.get('lft', [])    # lower fork tuple: CH /comp N_,L_, each has tft and lft
+        He.root = kwargs.get('root')    # N or higher-composition He
+        He.node_ = kwargs.get('node_', [])    # concat bottom nesting order if CG, may be redundant to G.node_
+        He.altH = kwargs.get('altH', CH(altH=object))    # summed altLays, prevent cyclic
+        # He.i = kwargs.get('i', 0)    # lay index in root.lft, to revise olp
+        # He.i_ = kwargs.get('i_', [])    # priority indices to compare node H by m | link H by d
+        # He.fd = kwargs.get('fd', 0)    # 0: sum CGs, 1: sum CLs
         # He.ni = 0  # exemplar in node_, trace in both directions?
-        # He.deep = 0 if deep is None else deep  # nesting in root H
-        # He.nest = 0 if nest is None else nest  # nesting in H
+        # He.deep = kwargs.get('deep', 0)    # nesting in root H
+        # He.nest = kwargs.get('nest', 0)    # nesting in H
     def __bool__(H): return bool(H.tft)  # empty CH
-
 
     def copy_(He, root=None, rev=0, fc=0, i=None):  # comp direction may be reversed to -1
     # add H:
@@ -210,7 +209,7 @@ def vectorize_root(frame):
                     for N in edge.node_:  # no comp node_, link_ | PPd_ for now
                         P_, link_, vert, lat, A, S, box, [y,x], Et = N[1:]  # PPt
                         if Et[0] > ave:   # no altG until cross-comp
-                            PP = CG(fd=0, Et=Et,root=edge, node_=P_,link_=link_, vert=vert, latuple=lat, box=box, yx=[y,x])
+                            PP = CG(fd=0, Et=Et,root=edge, node_=P_,link_=link_, vert=vert, latuple=lat, box=box, yx=np.array([y,x]))
                             y0,x0,yn,xn = box; PP.aRad = np.hypot((yn-y0)/2,(xn-x0)/2)  # approx
                             G_ += [PP]
                     edge.node_ = G_
@@ -219,12 +218,16 @@ def vectorize_root(frame):
                         # add altG: summed converted adj_blobs of converted edge blob
                         # if len(edge.node_) > ave_L: agg_recursion(edge)  # unlikely
 
-def val_(Et, mEt=[], fo=0, coef=1):
-    # ave *= coef: higher aves
+def val_(Et, _Et=[], fo=0, coef=1, fd=1):  # compute projected match in mfork or borrowed match in dfork
+    # ave *= coef: more specific rel aves
+
     m, d, n, o = Et
-    if any(mEt):
-        mm,_,mn,_ = mEt  # cross-induction from root mG, not affected by overlap
-        val = d * (mm / (ave * coef * mn)) - ave_d * coef * n * (o if fo else 1)
+    if any(_Et):  # get alt fork in root Et
+        _m,_d,_n,_o = _Et  # cross-fork induction, same overlap?
+        if fd:  # proj diff
+            val = d * (_m / (ave * coef * _n)) - ave_d * coef * n * (o if fo else 1)
+        else:  # proj match, currently not used
+            val = m * (_d / (ave_d * coef * _n)) - ave * coef * n * (o if fo else 1)
     else:
         val = m - ave * coef * n * (o if fo else 1)  # * overlap in cluster eval, not comp eval
     return val
@@ -429,9 +432,10 @@ def sum2graph(root, grapht, fd, minL=0, maxL=None, nest=0):  # sum node and link
     N_ = []
     for N in node_:
         if minL:  # >0, inclusive, = lower-layer exclusive maxL if G is distance-nested in cluster_N_
+            if N.root is graph: break  # assigned in prior loop
             while N.root.maxL and (minL != N.root.maxL):  # root maxL=0 in edge|frame
                 N = N.root  # cluster prior-dist graphs instead of nodes
-        if N not in N_: N_ += [N]
+        N_ += [N]  # roots if minL
         graph.box = extend_box(graph.box, N.box)  # pre-compute graph.area += N.area?
         yx = np.add(yx, N.yx)
         yx_ += [N.yx]
@@ -467,26 +471,28 @@ def feedback(node):  # propagate node.derH to higher roots
 
     while node.root:
         root = node.root
-        lowH = addH = root.derH
+        priH = addH = root.derH
         add = 1
-        for i, fd in enumerate(addH.fd_):  # unpack top-down, each fd was assigned by corresponding level of roots
-            # draft:
-            for _L,L in zip_longest(lowH.H, addH.H):
-                if _L and L: _L += L
-                elif L:      lowH.H += [copy(L)]
+        for fd in addH.fd_:  # unpack top-down, each fd was assigned by corresponding level of roots
             if len(addH.lft) > fd:
-                addH = lowH; lowH = lowH.lft[fd]  # keep unpacking
+                # add to higher-nested priH:
+                if len(addH.fd_) > len(priH.H):  # ddepth = 0|1, up fd_ maps to down H
+                    priH.H += [copy(addH.Et)]
+                else: priH.H[-1] += addH.Et
+                # keep unpacking:
+                addH = priH; priH = priH.lft[fd]
             else:
-                lowH.lft += [addH.copy_()]  # fork was empty, init with He
+                priH.lft += [addH.copy_()]  # fork was empty, init with He
                 add = 0; break
         if add:  # add in fork initialized by prior feedback, else append above
-            lowH.add_tree(addH, root)
+            priH.add_tree(addH, root)
         node = root
 
 def frame2CG(G, **kwargs):
     blob2CG(G, **kwargs)
     G.node_ = kwargs.get('node_', [])
-    G.derH = kwargs.get('node_', CH())
+    G.derH = kwargs.get('derH', CH())
+    G.Et = kwargs.get('Et', np.zeros(4))
 
 def blob2CG(G, **kwargs):
     # node_, Et stays the same:
@@ -508,7 +514,8 @@ def blob2CG(G, **kwargs):
     return G
 
 if __name__ == "__main__":
-    image_file = './images/raccoon_eye.jpeg'
+    # image_file = './images/raccoon_eye.jpeg'
+    image_file = './images/toucan_small.jpg'
     image = imread(image_file)
     frame = frame_blobs_root(image)
     intra_blob_root(frame)
