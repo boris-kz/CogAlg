@@ -28,11 +28,11 @@ def cross_comp(root, nest=0):  # breadth-first node_,link_ cross-comp, connect.c
         if len(pL_) > ave_L:
             cluster_N_(root, pL_, nest, fd=0)  # nested distance clustering, calls centroid and higher connect.clustering
         # dfork
-        if val_(Et, mEt=Et, fo=1) > 0:  # same root for L_, root.link_ was compared in root-forming for alt clustering
+        if val_(Et, _Et=Et, fo=1) > 0:  # same root for L_, root.link_ was compared in root-forming for alt clustering
             for L in L_:
                 L.extH, L.root, L.Et, L.mL_t, L.rimt, L.aRad, L.visited_ = CH(),root,copy(L.derH.Et), [[],[]], [[],[]], 0,[L]
             lN_,lL_,dEt = comp_link_(L_,Et)
-            if val_(dEt, mEt=Et, fo=1) > 0:
+            if val_(dEt, _Et=Et, fo=1) > 0:
                 dlay = CH().add_tree([L.derH for L in lL_]); dlay.root=H; H.Et += dlay.Et; H.lft += [dlay]
                 plL_ = {l for n in lN_ for l,_ in get_rim(n, fd=1)}
                 if len(plL_) > ave_L:
@@ -40,6 +40,7 @@ def cross_comp(root, nest=0):  # breadth-first node_,link_ cross-comp, connect.c
 
         if len(pL_) > ave_L:  # else no higher clusters
             comb_altG_(root)  # combine node altG_(contour) by sum,cross-comp -> CG altG
+            # move into cluster_N_:
             cluster_C_(root)  # get (G,altG) exemplars, altG_ may reinforce G by borrowing from extended surround?
 
 def cluster_N_(root, L_, nest, fd):  # top-down segment L_ by >ave ratio of L.dists
@@ -72,12 +73,11 @@ def cluster_N_(root, L_, nest, fd):  # top-down segment L_ by >ave ratio of L.di
                             if L.dist < max_dist:
                                 link_+=[L]; et+=L.derH.Et
                 _eN_ = {*eN_}
-            if val_(et) > 0:
+            if val_(et) > 0:  # cluster node roots:
                 G_ += [sum2graph(root, [list({*node_}),list({*link_}), et], fd, min_dist, max_dist, nest)]
             else:  # unpack
                 for n in {*node_}:
                     n.nest += 1; G_ += [n]
-            # cluster node roots if nest else nodes
         if fd: root.link_ = G_  # replace with current-dist clusters
         else:  root.node_ = G_
         L_ = L_[i+1:]
@@ -212,7 +212,7 @@ def comb_altG_(root):  # combine contour G.altG_ into altG (node_ defined by roo
             sum_G_(alt_[0], [alt for alt in alt_[1:]])
             G.altG_ = CG(root=G, node_=alt_); G.altG_.sign = 1; G.altG_.m = 0
             # alt D * G rM:
-            if val_(G.altG_.Et, mEt=G.Et):
+            if val_(G.altG_.Et, _Et=G.Et):
                 cross_comp(G.altG_)
 
 if __name__ == "__main__":
