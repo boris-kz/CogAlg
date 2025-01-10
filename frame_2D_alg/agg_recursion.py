@@ -23,17 +23,17 @@ def cross_comp(root, nest=0):  # breadth-first node_,link_ cross-comp, connect.c
     N_,L_,Et = comp_node_(root.node_)  # cross-comp exemplars, extrapolate to their node_s
     # mfork
     if val_(Et, fo=1) > 0:
-        root.derH += [sum_H(L_,root)]  # += derH_m
+        root.derH += sum_H(L_,root)  # += derH_m
         pL_ = {l for n in N_ for l,_ in get_rim(n, fd=0)}
         if len(pL_) > ave_L:
             cluster_N_(root, pL_, nest, fd=0)  # nested distance clustering, calls centroid and higher connect.clustering
         # dfork
         if val_(Et, _Et=Et, fo=1) > 0:  # same root for L_, root.link_ was compared in root-forming for alt clustering
             for L in L_:
-                L.extH, L.root, L.Et, L.mL_t, L.rimt, L.aRad, L.visited_ = CLay(),root,copy(L.derH.Et), [[],[]], [[],[]], 0,[L]
+                L.extH, L.root, L.Et, L.mL_t, L.rimt, L.aRad, L.visited_ = [],root,copy(L.derH.Et), [[],[]], [[],[]], 0,[L]
             lN_,lL_,dEt = comp_link_(L_,Et)
             if val_(dEt, _Et=Et, fo=1) > 0:
-                root.derH += [sum_H(lL_,root)]  # += derH_d
+                root.derH += sum_H(lL_,root)  # += derH_d
                 plL_ = {l for n in lN_ for l,_ in get_rim(n, fd=1)}
                 if len(plL_) > ave_L:
                     cluster_N_(root, plL_, nest, fd=1)
@@ -77,7 +77,7 @@ def cluster_N_(root, L_, nest, fd):  # top-down segment L_ by >ave ratio of L.di
         # sum/concat G neg links into initial altG, may cluster them later?
         comb_altG_(G_, root, fd)  # combine node altG_(contour) by sum,cross-comp -> CG altG
         # draft:
-        root.derH += [CLay(Et=et, m_d_t = np.sum([l.derH[-1].m_d_t for l in L_]), n_l_t = [G_,L_])]
+        root.derH += [CLay(Et=et, m_d_t = np.sum([l.derH[-1].m_d_t for l in L_]), N_L_ = [G_,L_])]
         # not updated:
         cluster_C_(G_, root, fd)  # get (G,altG) exemplars, altG surround borrow may reinforce G?
         # if both fd Gs are complemented?
