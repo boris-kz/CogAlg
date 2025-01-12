@@ -63,7 +63,7 @@ class CFrame(CBase):
 
     def __init__(frame, i__):
         super().__init__()
-        frame.i__, frame.latuple, frame.blob_ = i__, [0, 0, 0, 0], []
+        frame.i__, frame.latuple, frame.node_ = i__, [0, 0, 0, 0], []
 
     def __repr__(frame): return f"frame(id={frame.id})"
 
@@ -108,7 +108,7 @@ class CBlob(CBase):
         *_, i, dy, dx, g = blob.latuple
         I += i; Dy += dy; Dx += dx; G += g
         frame.latuple[-4:] = I, Dy, Dx, G
-        frame.blob_ += [blob]
+        frame.node_ += [blob]
         if blob.sign:   # transfer adj_ from +blob to -blobs and remove
             for _blob in blob.adj_:
                 _blob.adj_ += [blob]
@@ -174,7 +174,7 @@ class CrNode_(CFrame):
 
 def intra_blob_root(frame):
     frame.olp = frame.rng = 1
-    for blob in frame.blob_:
+    for blob in frame.node_:
         rblob(blob)
 
 def rblob(blob):
@@ -190,7 +190,7 @@ def rblob(blob):
     blob.rnode_ = rnode_
     flood_fill(rnode_, dert__)
 
-    for bl in rnode_.blob_: # recursive eval cross-comp per blob
+    for bl in rnode_.node_: # recursive eval cross-comp per blob
         rblob(bl)
 
 
@@ -238,12 +238,12 @@ def imread(filename, raise_if_not_read=True):  # Read an image in grayscale, ret
 
 def unpack_blob_(frame):
     blob_ = []
-    q_ = list(frame.blob_)
+    q_ = list(frame.node_)
     while q_:
         blob = q_.pop(0)
         blob_ += [blob]
-        if hasattr(blob, "rnode_") and blob.rnode_.blob_:  # if blob is extended with rnode_
-            q_ += blob.rnode_.blob_
+        if hasattr(blob, "rnode_") and blob.rnode_.node_:  # if blob is extended with rnode_
+            q_ += blob.rnode_.node_
     return blob_
 
 if __name__ == "__main__":
@@ -257,8 +257,8 @@ if __name__ == "__main__":
     # verification (intra):
     for blob in unpack_blob_(frame):
         print(f"{blob}'s parent is {blob.root}", end="")
-        if hasattr(blob, "rnode_") and blob.rnode_.blob_:  # if blob is extended with rnode_
-            cnt = len(blob.rnode_.blob_)
+        if hasattr(blob, "rnode_") and blob.rnode_.node_:  # if blob is extended with rnode_
+            cnt = len(blob.rnode_.node_)
             print(f", has {cnt} sub-blob{'' if cnt == 1 else 's'}")
         else: print()  # the blob is not extended, skip
 
@@ -270,7 +270,7 @@ if __name__ == "__main__":
     g__ = np.zeros_like(image, dtype=np.float32)
     s__ = np.zeros_like(image, dtype=np.float32)
     line_ = []
-    for blob in frame.blob_:
+    for blob in frame.node_:
         for (y, x), (i, dy, dx, g) in blob.dert_.items():
             i__[y, x] = i; dy__[y, x] = dy; dx__[y, x] = dx; g__[y, x] = g; s__[y, x] = blob.sign
         y,x = blob.yx

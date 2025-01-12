@@ -201,3 +201,10 @@ def cross_comp(root, nest=0):  # breadth-first node_,link_ cross-comp, connect.c
             # move into cluster_N_:
             cluster_C_(root)  # get (G,altG) exemplars, altG_ may reinforce G by borrowing from extended surround?
 
+def zlast(G):
+    if G.derH: return G.derH[-1]
+    else:
+        m_d_t = [np.array([G.vert[0]]), np.array([G.vert[1]])]  # add nesting for missing md_ext and md_vert?
+        # add empty md_ext for [md_ext, md_lat]?
+        return CLay(root=G, Et=np.array([G.vert[0].sum(),G.vert[1].sum(),1,1]), node_=G.node_,link_=G.link_, m_d_t=m_d_t)
+
