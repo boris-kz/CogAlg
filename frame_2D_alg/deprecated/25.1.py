@@ -207,4 +207,9 @@ def zlast(G):
         m_d_t = [np.array([G.vert[0]]), np.array([G.vert[1]])]  # add nesting for missing md_ext and md_vert?
         # add empty md_ext for [md_ext, md_lat]?
         return CLay(root=G, Et=np.array([G.vert[0].sum(),G.vert[1].sum(),1,1]), node_=G.node_,link_=G.link_, m_d_t=m_d_t)
-
+'''
+                            PP = CG(root=edge, fd_=[0], Et=Et, node_=P_, link_=[], vert=vert, latuple=lat, box=box, yx=np.array([y,x]))
+                            m_t = np.array([np.zeros(2), vert[0], np.zeros(6)],dtype=object)  # for mostly formal PP.derH:
+                            d_t = np.array([np.zeros(2), vert[1], np.zeros(6)],dtype=object)
+                            lay0 = CLay(root=PP, m_d_t = [m_t, d_t], Et=copy(Et), node_=P_, link_=[]); PP.derH = [lay0]
+'''

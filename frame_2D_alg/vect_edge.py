@@ -126,6 +126,9 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.fd_ = kwargs.get('fd_',[])  # list of forks forming G, 1 if cluster of Ls | lGs
         G.root = kwargs.get('root')  # may extend to list in cluster_N_, same nodes may be in multiple dist layers
         G.nest = 0  # n missing agg layers
+        G.derH = kwargs.get('derH',[])  # each layer is Clay(Et, node_, link_, m_d_t), summed|concat from links across fork tree
+        G.extH = kwargs.get('extH',[])  # sum from rims
+        G.vert = kwargs.get('vert', np.array([np.zeros(6), np.zeros(6)])) # vertical m_d_ of latuple
         G.latuple = kwargs.get('latuple', np.array([.0,.0,.0,.0,.0,np.zeros(2)],dtype=object))  # lateral I,G,M,D,L,[Dy,Dx]
         G.box = kwargs.get('box', np.array([np.inf,np.inf,-np.inf,-np.inf]))  # y0,x0,yn,xn
         G.yx = kwargs.get('yx', np.zeros(2))  # init PP.yx = [(y0+yn)/2,(x0,xn)/2], then ave node yx
@@ -134,12 +137,9 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.altG = []  # adjacent (contour) gap+overlap alt-fork graphs, converted to CG
         # G.fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge
         # G.fback_ = []  # fb buffer
-        G.derH = kwargs.get('derH',[])  # each layer is Clay(Et, node_, link_, m_d_t), summed|concat from links across fork tree
-        G.extH = kwargs.get('extH',[])  # sum from rims
-        G.rim  = kwargs.get('rim',[])  # external links, not rng-nested
-        G.vert = kwargs.get('vert', np.array([np.zeros(6), np.zeros(6)])) # vertical m_d_ of latuple
         G.node_ = []
-        G.link_ = []
+        G.link_ = []  # internal links
+        G.rim = kwargs.get('rim',[])  # external links
     def __bool__(G): return bool(G.node_)  # never empty
 
 class CL(CBase):  # link or edge, a product of comparison between two nodes or links
@@ -157,7 +157,7 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         l.dist = dist  # distance between nodet centers
         l.box = box  # sum nodet, not needed?
         l.yx = yx
-        # add med, rimt, elay | extH in der+
+        # add med, rimt, extH in der+
     def __bool__(l): return bool(l.nodet)
 
 def vectorize_root(frame):
@@ -182,10 +182,8 @@ def vectorize_root(frame):
                             PP = CG(root=edge, fd_=[0], Et=Et, node_=P_, link_=[], vert=vert, latuple=lat, box=box, yx=np.array([y,x]))
                             y0,x0,yn,xn = box; PP.aRad = np.hypot((yn-y0)/2,(xn-x0)/2)  # approx
                             G_ += [PP]
-                    edge.node_ = G_  # replace PP with CG?
                     if len(G_) > ave_L:
-                        cluster_edge(edge); frame.node_ += [edge]  # frame.node_, link_=[blob_,[]], derH[0] += edge.node_, link_ s
-                        # add altG: summed converted adj_blobs of converted edge blob
+                        cluster_edge(edge)  # add altG: summed converted adj_blobs of converted edge blob?
 
 def val_(Et, _Et=[], fo=0, coef=1, fd=1):  # compute projected match in mfork or borrowed match in dfork
 
@@ -225,7 +223,7 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
                 for n in node_:
                     n.nest +=1; G_ += [n]  # unpack weak Gts
     # comp PP_:
-    N_,L_,Et = comp_node_(edge.derH[-1].node_)  # last layer node_
+    N_,L_,Et = comp_node_(edge.node_)
     edge.link_ += L_
     if val_(Et, fo=1) > 0:  # cancel by borrowing d?
         edge.derH += [sum_H(L_,edge)]  # += mlay
@@ -289,7 +287,7 @@ def comp_link_(iL_, iEt):  # comp CLs via directional node-mediated link tracing
         # init mL_t: bilateral mediated Ls per L:
         for rev, N, mL_ in zip((0,1), L.nodet, L.mL_t):
             for _L,_rev in N.rimt[0]+N.rimt[1] if fd else N.rim:
-                if _L is not L:
+                if _L is not L and _L in iL_:  # nodet-mediated
                     if val_(_L.Et, _Et=iEt) > 0:  # proj val = compared d * rel root M
                         mL_ += [(_L, rev ^_rev)]  # direction of L relative to _L
     _L_, out_L_, LL_, ET = iL_,set(),[],np.zeros(4)  # out_L_: positive subset of iL_, Et = np.zeros(4)?
@@ -352,28 +350,28 @@ def comp_N(_N,N, rn, angle=None, dist=None, dir=1):  # dir if fd, Link.derH=dH, 
         mA,dA = comp_angle(_N.angle, [d*dir *rn for d in N.angle])  # rev 2nd link in llink
         # comp med if LL: isinstance(>nodet[0],CL), higher-order version of comp dist?
     else:
-        _L, L = len(_N.derH[-1].node_),len(N.derH[-1].node_); dL = _L- L*rn; mL = min(_L, L*rn) - ave_L
+        _L, L = len(_N.node_),len(N.node_); dL = _L- L*rn; mL = min(_L, L*rn) - ave_L
         mA,dA = comp_area(_N.box, N.box)  # compare area in CG vs angle in CL
     # der ext
-    m_t = np.array([mL,mA],dtype=float); d_t = np.array([dL,dA],dtype=float)
+    m_t = np.array([mL,mA], dtype=float); d_t = np.array([dL,dA], dtype=float)
     _o,o = _N.Et[3],N.Et[3]; olp = (_o+o) / 2  # inherit from comparands?
     Et = np.array([mL+mA, abs(dL)+abs(dA), .3, olp])  # n = compared vars / 6
-    if fd:  # CH
-        m_t = np.array([m_t]); d_t = np.array([d_t])  # add nesting
+    if fd:  # CL
+        m_t = np.array([m_t, np.zeros(6), np.zeros(6)],dtype=object)  # empty lat, ver
+        d_t = np.array([d_t, np.zeros(6), np.zeros(6)],dtype=object)
     else:   # CG
-        (mLat, dLat), et1 = comp_latuple(_N.latuple, N.latuple, _o,o)
-        (mVer, dVer), et2 = comp_md_(_N.vert[1], N.vert[1], dir)
-        m_t = np.array([m_t, mLat, mVer], dtype=object)
-        d_t = np.array([d_t, dLat, dVer], dtype=object)
-        Et += np.array([et1[0]+et2[0], et1[1]+et2[1], 2, 0])
+        (mLat, dLat), L_et = comp_latuple(_N.latuple, N.latuple, _o,o)
+        (mVer, dVer), V_et = comp_md_(_N.vert[1], N.vert[1], dir)
+        m_t = np.array([m_t, mLat, mVer],dtype=object)
+        d_t = np.array([d_t, dLat, dVer],dtype=object)
+        Et += np.array([L_et[0]+V_et[0], L_et[1]+V_et[1], 2, 0])
         # same olp?
-    Link = CL(fd=fd, Et=Et, nodet=[_N,N], derH=[], yx=np.add(_N.yx,N.yx)/2,angle=angle,dist=dist,box=extend_box(N.box,_N.box),nest=max(_N.nest,N.nest))
-    lay0 = CLay(root=Link, Et=Et, m_d_t=[m_t,d_t], node_=[_N,N], link_=[Link])
+    Link = CL(fd=fd, Et=Et, nodet=[_N,N], derH=[], yx=np.add(_N.yx,N.yx)/2,angle=angle,dist=dist, box=extend_box(N.box,_N.box),nest=max(_N.nest,N.nest))
+    lay0 = CLay(root=Link, Et=Et, m_d_t=[m_t,d_t], node_=_N.node_+N.node_, link_=_N.link_+N.link_)  # remove overlap later
     derH = [_lay.comp_lay(lay,rn,root=Link) for _lay,lay in zip(_N.derH, N.derH)]  # comp shared layers, if any
     Link.derH = [lay0, *derH]
     # spec: comp_node_(node_|link_), combinatorial, node_ nested / rng-)agg+?
-    if not fd and _N.altG and N.altG:  # if CG, alt M?
-        # altG_ was converted to altG
+    if not fd and _N.altG and N.altG:  # if alt M?
         Link.altL = comp_N(_N.altG, N.altG, _N.altG.Et[2] / N.altG.Et[2])
         Et += Link.altL.Et
     if val_(Et) > 0:
@@ -439,9 +437,9 @@ def feedback(node):  # propagate node.derH to higher roots
                     # merge both forks of node last lay into root lay fd fork: fixed Clay, prior lays should already be in:
                     for fork in node.derH[-1].m_d_t: lay.m_d_t[fd] += fork
                     for fork in node.node_,node.link_: [lay.node_,lay.link_][fd] += fork  # mix CG,CL
-                else:  # iH is deeper, bottom layer feedback
-                    m_d_t = [[], node.derH[-1].m_d_t] if fd else [node.derH[-1].m_d_t, []]  # fill current fork only
-                    root.derH += [CLay(Et=copy(node.Et), root=root, m_d_t=[m_d_t], node_=[] if fd else [node], link_=[node] if fd else [])]
+                else: # iH is deeper, comb link_ derH:
+                    fork = np.sum(node.derH[-1].m_d_t, axis=0); altf = np.array([np.zeros(2),np.zeros(6),np.zeros(6)], dtype=object)  # [fext,flat,fver]
+                    root.derH += [CLay(Et=copy(node.Et),root=root, m_d_t=[altf,fork] if fd else [fork,altf], node_=[] if fd else [node], link_=[node] if fd else [])]
             else:
                 break  # root may be deeper from prior feedback
         node = root

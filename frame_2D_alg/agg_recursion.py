@@ -3,7 +3,7 @@ from copy import copy, deepcopy
 from functools import reduce
 from frame_blobs import frame_blobs_root, intra_blob_root, imread
 from comp_slice import comp_latuple, comp_md_
-from vect_edge import icoef, norm_H, add_H, sum_H, comp_N, comp_node_, comp_link_, sum2graph, zrim, CLay, CG, ave, ave_L, vectorize_root, comp_area, extend_box, val_
+from vect_edge import icoef, norm_H, add_H, sum_H, comp_N, comp_node_, comp_link_, sum2graph, zrim, CG, ave, ave_L, vectorize_root, comp_area, extend_box, val_
 '''
 Cross-compare and cluster Gs within a frame, potentially unpacking their node_s first,
 alternating agglomeration and centroid clustering.
@@ -21,23 +21,27 @@ cross_comp -> cluster_N_ -> cluster_C -> cross_comp...
 def cross_comp(root, nest=0):  # breadth-first node_,link_ cross-comp, connect.clustering, recursion
 
     N_,L_,Et = comp_node_(root.derH[-1].node_)  # cross-comp exemplars, extrapolate to their node_s
+    # mixed-fork root.derH[-1].node_?
     # mfork
     if val_(Et, fo=1) > 0:
         root.derH += [sum_H(L_,root)]  # += [mlay]
-        pL_ = {l for n in N_ for l,_ in zrim(n, fd=0)}
-        if len(pL_) > ave_L:
-            cluster_N_(root, pL_, nest, fd=0)  # nested distance clustering, calls centroid and higher connect.clustering
-        # dfork,
-        # replace with dist-layered link_ cross-comp inside cluster_N_?
+        pL_ = {l for n in N_ for l, _ in zrim(n, fd=0)}; plL_ = []
+        # dfork/ all dist layers:
         if val_(Et, _Et=Et, fo=1) > 0:  # same root for L_, root.link_ was compared in root-forming for alt clustering
             for L in L_:
-                L.extH, L.root, L.Et, L.mL_t, L.rimt, L.aRad, L.visited_ = [],root,copy(L.derH.Et), [[],[]], [[],[]], 0,[L]
+                L.extH, L.root, L.mL_t, L.rimt, L.aRad, L.visited_ = [],root, [[],[]], [[],[]], 0,[L]
             lN_,lL_,dEt = comp_link_(L_,Et)
             if val_(dEt, _Et=Et, fo=1) > 0:
                 root.derH[-1].add_lay( sum_H(lL_,root))  # mlay += dlay
                 plL_ = {l for n in lN_ for l,_ in zrim(n, fd=1)}
-                if len(plL_) > ave_L:
-                    cluster_N_(root, plL_, nest, fd=1)
+        if len(pL_) > ave_L:
+            cluster_N_(root, pL_, nest, fd=0)  # cluster distance segments
+        if len(plL_) > ave_L:
+            cluster_N_(root, plL_,nest, fd=1)  # form altGs for cluster_C_, no new links between dist-seg Gs
+
+        comb_altG_(G_)  # combine node contour: altG_ or neg links, by sum, cross-comp -> CG altG
+        cluster_C_(root)  # -> (G,altG) exemplars, reinforced by altG surround borrow?
+        # mfork only, dfork is possible but secondary, no ddfork
 
 def cluster_N_(root, L_, nest, fd):  # top-down segment L_ by >ave ratio of L.dists
 
@@ -74,26 +78,10 @@ def cluster_N_(root, L_, nest, fd):  # top-down segment L_ by >ave ratio of L.di
             else:  # unpack
                 for n in {*node_}:
                     n.nest += 1; G_ += [n]
-        # draft:
-        # already in cross-comp, not dist-layered?:
-        # root.derH += [CLay(Et=et, root=root, m_d_t = np.sum([l.derH[-1].m_d_t for l in L_],axis=0), node_=G_, link_=L_)]
-        # dist-layered cross-comp link_[:i] here, not in root cross-comp?
-        if val_(et, _Et=et, fo=1) > 0:  # same root for L_, root.link_ was compared in root-forming for alt clustering
-            for L in L_:
-                L.extH, L.root, L.Et, L.mL_t, L.rimt, L.aRad, L.visited_ = [],root,copy(L.derH.Et), [[],[]], [[],[]], 0,[L]
-            lN_,lL_,dEt = comp_link_(L_,et)
-            if val_(dEt, _Et=et, fo=1) > 0:
-                root.derH[-1].add_lay( sum_H(lL_,root))  # mlay += dlay
-                plL_ = {l for n in lN_ for l,_ in zrim(n, fd=1)}
-                if len(plL_) > ave_L:
-                    cluster_N_(root, plL_, nest, fd=1)
-
-        comb_altG_(G_, root, fd)  # combine node contour: altG_ or neg links, by sum,cross-comp -> CG altG
-        cluster_C_(root)  # get (G,altG) exemplars, altG surround borrow may reinforce G?  (fd is not needed?)
-        # both fd Gs are complemented?
+        # longer links:
         L_ = L_[i+1:]
         if L_:
-            nest += 1; min_dist = max_dist  # get longer links for next loop, to connect current-dist clusters
+            nest += 1; min_dist = max_dist  # next loop connects current-dist clusters via longer links
         else:
             break
 ''' 
@@ -151,21 +139,23 @@ def cluster_C_(graph):
         C = centroid(n_, n_)
         while True:
             N_,dN_,extN_, M, dM, extM = [],[],[], 0,0,0  # included, changed, queued nodes and values
-            for _N in _N_:
-                m = comp_C(C,_N)  # Et if proximity-weighted overlap?
-                vm = m - ave  # deviation
-                if vm > 0:
-                    N_ += [_N]; M += m
-                    if _N.m: dM += m - _N.m  # was in C.node_, add adjustment
-                    else:  dN_ += [_N]; dM += vm  # new node
-                    _N.m = m  # to sum in C
-                    for link, _ in _N.rim:
-                        n = link.nodet[0] if link.nodet[1] is _N else link.nodet[1]
-                        if n.fin or n.m: continue  # in other C or in C.node_
-                        extN_ += [n]; extM += n.Et[0]  # external N for next loop
-                elif _N.m:  # was in C.node_, subtract from C
-                    _N.sign=-1; _N.m=0; dN_+=[_N]; dM += -vm  # dM += abs m deviation
-
+            med = 0  # extN_ is mediated by <=3 _Ns, loop all / refine cycle:
+            while med < 3:
+                for _N in _N_:
+                    m = comp_C(C,_N)  # Et if proximity-weighted overlap?
+                    vm = m - ave  # deviation
+                    if vm > 0:
+                        N_ += [_N]; M += m
+                        if _N.m: dM += m - _N.m  # was in C.node_, add adjustment
+                        else:  dN_ += [_N]; dM += vm  # new node
+                        _N.m = m  # to sum in C
+                        for link, _ in _N.rim:
+                            n = link.nodet[0] if link.nodet[1] is _N else link.nodet[1]
+                            if n.fin or n.m: continue  # in other C or in C.node_
+                            extN_ += [n]; extM += n.Et[0]  # external N for next loop
+                    elif _N.m:  # was in C.node_, subtract from C
+                        _N.sign=-1; _N.m=0; dN_+=[_N]; dM += -vm  # dM += abs m deviation
+                med += 1
             if dM > ave and M + extM > ave:  # update for next loop, terminate if low reform val
                 if dN_:  # recompute C if any changes in node_
                     C = centroid(set(dN_), N_, C)
@@ -181,9 +171,9 @@ def cluster_C_(graph):
                     for n in C.node_: n.m = 0
                     N.nest += 1
                     return N  # keep seed node
-
+                # break
     # get representative centroids of complemented Gs: mCore + dContour, initially in unpacked edges
-    N_ = sorted([N for N in graph.derH[-1].node_ if any(N.Et)], key=lambda n: n.Et[0], reverse=True)
+    N_ = sorted([N for N in graph.node_ if any(N.Et)], key=lambda n: n.Et[0], reverse=True)
     G_ = []
     for N in N_:
         N.sign, N.m, N.fin = 1, 0, 0  # setattr C update sign, inclusion val, C inclusion flag
@@ -215,32 +205,33 @@ def sum_G_(G, node_, fc=0):
             if n.extH: add_H(G.extH, n.extH, root=G, rev = s==-1)  # empty in centroid
             G.box = extend_box( G.box, n.box)  # extended per separate node_ in centroid
 
-def comb_altG_(G):  # combine contour G.altG_ into altG (node_ defined by root=G), for agg+ cross-comp
+def comb_altG_(G_):  # combine contour G.altG_ into altG (node_ defined by root=G), for agg+ cross-comp
 
-    if G.altG:
-        if isinstance(G.altG, list):
-            sum_G_(G.altG[0], [a for a in G.altG[1:]])
-            G.altG = CG(root=G, node_=G.altG); G.altG.sign = 1; G.altG.m = 0
-            # alt D * G rM:
-            if val_(G.altG.Et, _Et=G.Et):
-                cross_comp(G.altG)
-    else:
-        # sum neg links into CG
-        altG = CG(root=G, node_=[],link_=[]); altG.sign = 1; altG.m = 0
-        derH = []
-        for link in G.derH[-1].link_:
-            if val_(link.Et, _Et=G.Et) > 0:  # neg link
-                altG.link_ += [link]
-                for n in link.nodet:
-                    if n not in altG.node_:
-                        altG.node_ += [n]  # altG.box = extend_box(altG.box, n.box)  same as in G?
-                        altG.latuple += n.latuple; altG.vert += n.vert
-                        if n.derH:
-                            add_H(derH, n.derH, root=altG)
-                        altG.Et += n.Et * icoef ** 2
-        if altG.link_:
-            altG.derH += [sum_H(altG.link_,altG)]  # sum link derH
-            G.altG = altG
+    for G in G_:
+        if G.altG:
+            if isinstance(G.altG, list):
+                sum_G_(G.altG[0], [a for a in G.altG[1:]])
+                G.altG = CG(root=G, node_=G.altG); G.altG.sign = 1; G.altG.m = 0
+                # alt D * G rM:
+                if val_(G.altG.Et, _Et=G.Et):
+                    cross_comp(G.altG)
+        else:
+            # sum neg links into CG
+            altG = CG(root=G, node_=[],link_=[]); altG.sign = 1; altG.m = 0
+            derH = []
+            for link in G.derH[-1].link_:
+                if val_(link.Et, _Et=G.Et) > 0:  # neg link
+                    altG.link_ += [link]
+                    for n in link.nodet:
+                        if n not in altG.node_:
+                            altG.node_ += [n]  # altG.box = extend_box(altG.box, n.box)  same as in G?
+                            altG.latuple += n.latuple; altG.vert += n.vert
+                            if n.derH:
+                                add_H(derH, n.derH, root=altG)
+                            altG.Et += n.Et * icoef ** 2
+            if altG.link_:
+                altG.derH += [sum_H(altG.link_,altG)]  # sum link derH
+                G.altG = altG
 
 if __name__ == "__main__":
     image_file = './images/raccoon_eye.jpeg'
@@ -251,8 +242,8 @@ if __name__ == "__main__":
     if frame.node_:  # converted edges
         G_ = []
         for edge in frame.node_:
-            comb_altG_(edge)
+            comb_altG_(edge.node_)
             cluster_C_(edge)  # no cluster_C_ in vect_edge
-            G_ += edge.derH[-1].node_  # unpack edge, or keep if connectivity cluster, or in flat blob altG_?
+            G_ += edge.node_  # unpack edge, or keep if connectivity cluster, or in flat blob altG_?
         frame.node_ = G_
         cross_comp(frame)  # calls connectivity clustering
