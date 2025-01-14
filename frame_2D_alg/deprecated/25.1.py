@@ -213,3 +213,76 @@ def zlast(G):
                             d_t = np.array([np.zeros(2), vert[1], np.zeros(6)],dtype=object)
                             lay0 = CLay(root=PP, m_d_t = [m_t, d_t], Et=copy(Et), node_=P_, link_=[]); PP.derH = [lay0]
 '''
+def centroid_cluster(N):  # refine and extend cluster with extN_
+
+    # add proximity bias, for both match and overlap?
+    _N_ = {n for L, _ in N.rim for n in L.nodet if not n.fin}
+    N.fin = 1;
+    n_ = _N_ | {N}  # include seed node
+    C = centroid(n_, n_)
+    while True:
+        N_, dN_, extN_, M, dM, extM = [], [], [], 0, 0, 0  # included, changed, queued nodes and values
+        med = 0  # extN_ is mediated by <=3 _Ns, loop all / refine cycle:
+        while med < 3:
+            medN_ = []
+            for _N in _N_:
+                if _N in N_ or _N in extN_: continue  # skip meidated Ns
+                m = comp_C(C, _N)  # Et if proximity-weighted overlap?
+                vm = m - ave  # deviation
+                if vm > 0:
+                    N_ += [_N];
+                    M += m
+                    if _N.m:
+                        dM += m - _N.m  # was in C.node_, add adjustment
+                    else:
+                        dN_ += [_N]; dM += vm  # new node
+                    _N.m = m  # to sum in C
+                    for link, _ in _N.rim:
+                        n = link.nodet[0] if link.nodet[1] is _N else link.nodet[1]
+                        if n.fin or n.m: continue  # in other C or in C.node_
+                        extN_ += [n];
+                        extM += n.Et[0]  # external N for next loop
+                        medN_ += [n]  # for mediation loop
+                elif _N.m:  # was in C.node_, subtract from C
+                    _N.sign = -1;
+                    _N.m = 0;
+                    dN_ += [_N];
+                    dM += -vm  # dM += abs m deviation
+            med += 1;
+            _N_ = medN_
+        if dM > ave and M + extM > ave:  # update for next loop, terminate if low reform val
+            if dN_:  # recompute C if any changes in node_
+                C = centroid(set(dN_), N_, C)
+            _N_ = set(N_) | set(extN_)  # next loop compares both old and new nodes to new C
+            C.M = M;
+            C.node_ = N_
+        else:
+            if C.M > ave * 10:  # add proximity-weighted overlap
+                C.root = N.root  # C.nest = N.nest+1
+                for n in C.node_:
+                    n.root = C;
+                    n.fin = 1;
+                    delattr(n, "sign")
+                return C  # centroid cluster
+            else:  # unpack C.node_
+                for n in C.node_: n.m = 0
+                N.nest += 1
+                return N  # keep seed node
+            # break
+
+# get representative centroids of complemented Gs: mCore + dContour, initially in unpacked edges
+N_ = sorted([N for N in graph.node_ if any(N.Et)], key=lambda n: n.Et[0], reverse=True)
+G_ = []
+for N in N_:
+    N.sign, N.m, N.fin = 1, 0, 0  # setattr C update sign, inclusion val, C inclusion flag
+for i, N in enumerate(N_):  # replace some of connectivity cluster by exemplar centroids
+    if not N.fin:  # not in prior C
+        if val_(N.Et, coef=10) > 0:
+            G_ += [centroid_cluster(N)]  # extend from N.rim, return C if packed else N
+        else:  # the rest of N_ M is lower
+            G_ += [N for N in N_[i:] if not N.fin]
+            break
+graph.node_ = G_  # mix of Ns and Cs: exemplars of their network?
+if len(G_) > ave_L:
+    cross_comp(graph)
+    # selective connectivity clustering between exemplars, extrapolated to their node_
