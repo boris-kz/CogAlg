@@ -3,7 +3,7 @@ from copy import copy, deepcopy
 from functools import reduce
 from frame_blobs import frame_blobs_root, intra_blob_root, imread
 from comp_slice import comp_latuple, comp_md_
-from vect_edge import icoef, norm_H, add_H, sum_H, comp_N, comp_node_, comp_link_, sum2graph, zrim, CG, ave, ave_L, vectorize_root, comp_area, extend_box, val_
+from vect_edge import L2N, icoef, norm_H, add_H, sum_H, comp_N, comp_node_, comp_link_, sum2graph, zrim, CG, ave, ave_L, vectorize_root, comp_area, extend_box, val_
 '''
 Cross-compare and cluster Gs within a frame, potentially unpacking their node_s first,
 alternating agglomeration and centroid clustering.
@@ -18,28 +18,28 @@ Each agg+ cycle forms higher-composition complemented graphs G.altG_ in cluster_
 cross_comp -> cluster_N_ -> cluster_C -> cross_comp...
 '''
 
-def cross_comp(root):  # breadth-first node_,link_ cross-comp, connect.clustering, recursion
+def cross_comp(root, deep):  # breadth-first node_,link_ cross-comp, connect.clustering, recursion
 
-    N_,L_,Et = comp_node_(root.node_)  # cross-comp exemplars, extrapolate to their node_s
+    N_,L_,Et = comp_node_(root.node_[:-1] if deep else root.node_)  # cross-comp exemplars, extrapolate to their node_s
     # mfork
     if val_(Et, fo=1) > 0:
-        root.derH += [sum_H(L_,root)]  # += [mlay]
+        root.derH += [sum_H(L_, root)]  # += [mlay]
         pL_ = {l for n in N_ for l, _ in zrim(n, fd=0)}; plL_ = []
         # dfork/ all dist layers:
         if val_(Et, _Et=Et, fo=1) > 0:  # same root for L_, root.link_ was compared in root-forming for alt clustering
-            for L in L_:
-                L.extH, L.root, L.mL_t, L.rimt, L.aRad, L.visited_, L.node_, L.link_ = [],root, [[],[]], [[],[]], 0,[L],[],[]
+            L2N(L_, root)
             lN_,lL_,dEt = comp_link_(L_,Et)
             if val_(dEt, _Et=Et, fo=1) > 0:
-                root.derH[-1].add_lay( sum_H(lL_,root))  # mlay += dlay
+                root.derH[-1].add_lay( sum_H(L_, root))  # mlay += dlay
                 plL_ = {l for n in lN_ for l,_ in zrim(n, fd=1)}
         if len(pL_) > ave_L:
             cluster_N_(root, pL_, fd=0)  # cluster distance segments
+        # else feedback of mlay?
         if len(plL_) > ave_L:
             cluster_N_(root, plL_,fd=1)  # form altGs for cluster_C_, no new links between dist-seg Gs
 
         comb_altG_(G_)  # combine node contour: altG_ or neg links, by sum, cross-comp -> CG altG
-        cluster_C_(root)  # -> (G,altG) exemplars, reinforced by altG surround borrow?
+        cluster_C_(root,deep)  # -> (G,altG) exemplars, reinforced by altG surround borrow?
         # mfork only, dfork is possible but secondary, no ddfork
 
 def cluster_N_(root, L_, fd):  # top-down segment L_ by >ave ratio of L.dists
@@ -95,12 +95,12 @@ Hierarchical clustering should alternate between two phases: generative via conn
  So connectivity clustering is a generative learning phase, forming new derivatives and structured composition levels, 
  while centroid clustering is a compressive phase, reducing multiple similar comparands to a single exemplar. '''
 
-def cluster_C_(graph):
+def cluster_C_(graph, deep=0):  # length of top-nested part of G.node_
 
-    def sum_centroid(dnode_, C=None):  # sum|subtract and average Rim nodes
+    def sum_C(dnode_, C=None):  # sum|subtract and average Rim nodes
 
         if C is None:
-            C,A = CG(),CG(); sign=1  # add if new, else subtract
+            C,A = CG(node_=dnode_),CG(); sign=1  # add if new, else subtract
             C.M,C.L, A.M,A.L = 0,0,0,0  # centroid setattr
         else:
             A = C.altG, sign=0
@@ -114,7 +114,6 @@ def cluster_C_(graph):
             norm_H(n.derH, k)
         C.box = reduce(extend_box, (n.box for n in C.node_))
         C.altG = A
-        # add / remove from node_, reset fin?
         return C
 
     def comp_C(C, N):  # compute match without new derivatives: global cross-comp is not directional
@@ -129,11 +128,10 @@ def cluster_C_(graph):
             M += comp_N(C.altG, N.altG, C.altG.Et[2] / N.altG.Et[2]).Et[0]
         # if fuzzy C:
         # Et = np.zeros(4)  # m,_,n,o: lateral proximity-weighted overlap, for sparse centroids
-        # M /= np.hypot(*C.yx, *N.yx)
-        # comp node_?
+        # M /= np.hypot(*C.yx, *N.yx), comp node_?
         return M
 
-    def centroid_cluster(N):  # form and refine C cluster
+    def centroid_cluster(N, C_, root):  # form and refine C cluster
         # add proximity bias, for both match and overlap?
 
         N.fin = 1; _N_ = [N]; CN_ = [N]
@@ -143,53 +141,51 @@ def cluster_C_(graph):
             for _N in _N_:
                 for link, _ in _N.rim:
                     n = link.nodet[0] if link.nodet[1] is _N else link.nodet[1]
-                    if n.fin or n.m: continue  # in other C or in C.node_
+                    if n.fin: continue  # in other C or in C.node_
                     n.fin = 1; N_ += [n]; CN_ += [n]  # no eval
             _N_ = N_  # mediated __Ns
             med += 1
-        C = sum_centroid(list(set(CN_)))  # C.node_
+        C = sum_C(list(set(CN_)))  # C.node_
         while True:
-            dN_,M,dM = [], 0,0  # changed nodes and values
+            dN_, M, dM = [], 0, 0  # changed nodes and values
             for _N in C.node_:
                 m = comp_C(C,_N)  # Et if proximity-weighted overlap?
-                vm = m - ave  # deviation
+                vm = m - ave
                 if vm > 0:
-                    M += m; dM += m - _N.m  # kept _N.m adjustment
+                    M += m; dM += m - _N.m; N.m = m  # kept _N.m adjustment
                 else:  # remove _N from C
                     _N.fin=0; _N.m=0; dN_+=[_N]; dM += -vm  # dM += abs m deviation
             if dM > ave and M > ave:  # loop update, break if low reform val
                 if dN_:
-                    C = sum_centroid(list(set(dN_)), C)  # subtract dN_ from C
+                    C = sum_C(list(set(dN_)),C)  # subtract dN_ from C
                 C.M = M  # with changes in kept nodes
             else:  # break
                 if C.M > ave * 10:  # add proximity-weighted overlap?
-                    C.root = N.root
                     for n in C.node_: n.root = C
-                    return C  # centroid cluster
-                else:  # unpack C.node_
-                    for n in C.node_:
+                    C_ += [C]; C.root = root  # centroid cluster
+                else:
+                    for n in C.node_:  # reset C.node_, including N
                         n.m = 0; n.fin = 0
-                    N.depth += 1  # also for all unpacked nodes?
-                    return N  # keep seed node
-
+                break
     # get representative centroids of complemented Gs: mCore + dContour, initially in unpacked edges
-    N_ = sorted([N for N in graph.node_ if any(N.Et)], key=lambda n: n.Et[0], reverse=True)
+    N_ = sorted([N for N in graph.node_ if isinstance(N,CG)], key=lambda n: n.Et[0], reverse=True)
     G_ = []
     for N in N_:
-        N.sign, N.m, N.fin = 1, 0, 0  # setattr C update sign, inclusion val, C inclusion flag
+        N.sign, N.m, N.fin = 1,0,0  # setattr C update sign, inclusion val, C inclusion flag
     for i, N in enumerate(N_):  # replace some of connectivity cluster by exemplar centroids
         if not N.fin:  # not in prior C
             if val_(N.Et, coef=10) > 0:
-                G_ += [centroid_cluster(N)]  # extend from N.rim, return C if packed else N
-            else:  # the rest of N_ M is lower
-                G_ += [N for N in N_[i:] if not N.fin]
-                break
-    graph.node_ = G_  # mix of Ns and Cs: exemplars of their network?
+                centroid_cluster(N, G_, graph)  # extend from N.rim, G_ += C unless unpacked
+            else:
+                break  # the rest of N_ M is lower
+    deep = [n for n in N_ if not n.fin] + [deep]  # deep node_ if any
+    graph.node_ = G_ + [deep]  # G_[-1] may be unlcustered Ns, nested if multiple agg+ / node_
     if len(G_) > ave_L:
-        cross_comp(graph)
-        # selective connectivity clustering between exemplars, extrapolated to their node_
+        cross_comp(graph, deep)
+        # selective connectivity clustering in G_, exclude unpacked nodes in node_[-1] if deep
 
-def sum_G_(G, node_, s, fc=0):
+def sum_G_(G, node_, s=1, fc=0):
+
     for n in node_:
         G.latuple += n.latuple * s
         G.vert = G.vert + n.vert*s if np.any(G.vert) else deepcopy(n.vert) * s
@@ -212,8 +208,7 @@ def comb_altG_(G_):  # combine contour G.altG_ into altG (node_ defined by root=
                 # alt D * G rM:
                 if val_(G.altG.Et, _Et=G.Et):
                     cross_comp(G.altG)
-        else:
-            # sum neg links into CG
+        else:  # altG = sum neg links
             altG = CG(root=G, node_=[], link_=[]); altG.sign = 1; altG.m = 0
             derH = []
             for link in G.link_:

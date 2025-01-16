@@ -134,7 +134,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.maxL = kwargs.get('maxL', 0)  # if dist-nested in cluster_N_
         G.aRad = 0  # average distance between graph center and node center
         G.altG = []  # adjacent (contour) gap+overlap alt-fork graphs, converted to CG
-        G.depth = 0  # n missing higher agg layers
+        # G.depth = 0  # n missing higher agg layers
         # G.fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge
         # G.fback_ = []  # fb buffer
         G.node_ = kwargs.get('node_',[])
@@ -144,18 +144,16 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
 class CL(CBase):  # link or edge, a product of comparison between two nodes or links
     name = "link"
-
-    def __init__(l, Et, fd, nodet, derH, yx, angle, dist, box, nest=0):
+    def __init__(l,  **kwargs):
         super().__init__()
-        # binary tree of Gs, depth+/der+: CL nodet is 2 Gs, CL + CLs in nodet is 4 Gs, etc., unpack sequentially
-        l.Et = Et
-        l.fd = fd
-        l.derH = derH  # list of CLay s
-        l.nodet = nodet  # e_ in kernels, else replaces _node,node: not used in kernels
-        l.angle = angle  # dy,dx between nodet centers
-        l.dist = dist  # distance between nodet centers
-        l.box = box  # sum nodet, not needed?
-        l.yx = yx
+        l.Et = kwargs.get('Et', np.zeros(4))
+        l.fd = kwargs.get('fd',0)
+        l.derH = kwargs.get('derH',[])  # list of CLay s
+        l.nodet = kwargs.get('nodet',[])  # e_ in kernels, else replaces _node,node: not used in kernels
+        l.angle = kwargs.get('angle',[])  # dy,dx between nodet centers
+        l.dist = kwargs.get('dist',0)  # distance between nodet centers
+        l.box = kwargs.get('box',[])  # sum nodet, not needed?
+        l.yx = kwargs.get('yx',[])
         # add med, rimt, extH in der+
     def __bool__(l): return bool(l.nodet)
 
@@ -232,9 +230,7 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
         if len(N_) > ave_L:
             cluster_PP_(N_, fd=0)
         if val_(Et, _Et=Et, fo=1) > 0:  # likely not from the same links
-            for L in L_:
-                L.extH, L.root, L.mL_t, L.rimt, L.aRad, L.visited_, L.node_, L.link_ = [], edge, [[],[]], [[],[]], 0, [L], [],[]
-            # comp dPP_:
+            L2N(L_,edge)  # comp dPP_:
             lN_,lL_,dEt = comp_link_(L_,Et)
             if val_(dEt, fo=1) > 0:
                 edge.derH[-1].add_lay( sum_H(lL_,edge))  # mlay += dlay
@@ -244,9 +240,9 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
 def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et, ~ graph CNN without backprop
 
     _Gp_ = []  # [G pair + co-positionals]
-    for _G, G in combinations(_N_, r=2):
+    for _G, G in combinations(_N_, r=2):  # skip G if list?
         rn = _G.Et[2] / G.Et[2]
-        if _G.nest != G.nest or rn > ave_rn:  # scope disparity
+        if rn > ave_rn:  # scope disparity or _G.depth != G.depth
             continue
         radii = G.aRad + _G.aRad
         dy,dx = np.subtract(_G.yx,G.yx)
@@ -426,16 +422,14 @@ def sum2graph(root, grapht, fd, minL=0, maxL=None):  # sum node and link params 
                 if mG not in altG:
                     mG.altG += [graph]  # cross-comp|sum complete altG before next agg+ cross-comp
                     altG += [mG]
-    # direct fb, simpler?
+    # direct fb:
     Q, altQ = (root.link_, root.node_) if fd else (root.node_, root.link_)
     if len(root.derH)==2 or fd:  # derH was added by prior direct fb
-        Q += [graph]
-        root.derH[-1].add_lay(graph.derH[0])
+        Q += [graph]  # root.derH[-1].add_lay(graph.derH[0])
     else:
         Q[:] = [graph]; altQ[:] = []  # reset both forks
-        root.derH += [graph.derH[0].copy_(root=graph)]  # init lay0
-
-    feedback(graph)  # recursive root.root.derH.add_fork(graph.derH)
+        # root.derH += [graph.derH[0].copy_(root=graph)]
+    feedback(root)  # recursive root.root.derH.add_fork(graph.derH)
     return graph
 
 def feedback(G):  # propagate new G and G.lay0.m_d_t to incrementally higher roots
@@ -481,6 +475,10 @@ def norm_H(H, n):
     for lay in H:
        for fork in lay.m_d_t: fork *= n  # arrays
        lay.Et *= n  # same node_, link_
+
+def L2N(link_,root):
+    for L in link_:
+        L.root=root; L.fd_=copy(L.nodet[0].fd_); L.mL_t,L.rimt = [[],[]],[[],[]]; L.aRad,L.depth = 0,0; L.visited_,L.node_,L.link_,L.extH = [],[],[],[]
 
 def frame2CG(G, **kwargs):
     blob2CG(G, **kwargs)
