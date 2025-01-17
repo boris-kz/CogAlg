@@ -136,7 +136,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.altG = []  # adjacent (contour) gap+overlap alt-fork graphs, converted to CG
         # G.depth = 0  # n missing higher agg layers
         # G.fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge
-        # G.fback_ = []  # fb buffer
+        G.fback_ = []  # node fb buffer, n in fb[-1]?
         G.node_ = kwargs.get('node_',[])
         G.link_ = kwargs.get('link_',[])  # internal links
         G.rim = kwargs.get('rim',[])  # external links
@@ -218,8 +218,7 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
             if val_(et) > 0:
                 G_ += [sum2graph(edge, [node_,link_,et], fd)]
             else:
-                for n in node_:
-                    n.depth +=1; G_ += [n]  # unpack weak Gts
+                for n in node_: G_ += [n]  # unpack weak Gts
         if fd: edge.node_ = G_
         else:  edge.link_ = G_
     # comp PP_:
@@ -422,33 +421,29 @@ def sum2graph(root, grapht, fd, minL=0, maxL=None):  # sum node and link params 
                 if mG not in altG:
                     mG.altG += [graph]  # cross-comp|sum complete altG before next agg+ cross-comp
                     altG += [mG]
-    # direct fb:
-    Q, altQ = (root.link_, root.node_) if fd else (root.node_, root.link_)
-    if len(root.derH)==2 or fd:  # derH was added by prior direct fb
-        Q += [graph]  # root.derH[-1].add_lay(graph.derH[0])
-    else:
-        Q[:] = [graph]; altQ[:] = []  # reset both forks
-        # root.derH += [graph.derH[0].copy_(root=graph)]
-    feedback(root)  # recursive root.root.derH.add_fork(graph.derH)
+
+    root.fback_t[fd] += [graph]
+    if len(root.link_ if fd else root.node_) == sum([len(g.node_) for g in root.fback_t[fd]]):
+        feedback(root, fd)  # recursive root.root.derH.add_fork(graph.derH)
+
     return graph
 
-def feedback(G):  # propagate new G and G.lay0.m_d_t to incrementally higher roots
+def feedback(root, fd):  # propagate new G and G.lay0.m_d_t to incrementally higher roots
 
-    root = G.root; m_d_t = G.derH[0].m_d_t; fd_ = G.fd_
-    while root:
-        for i, (fd, Lay) in enumerate(zip_longest(fd_, root.derH, fillvalue=None)):  # top-down, G fds are assigned by corresponding root levels
-            if fd is not None:  # fd_ maps to derH
-                if Lay:
-                    # merge both forks of node last lay into root lay fd fork: fixed Clay, prior lays should already be in:
-                    for fork in m_d_t: Lay.m_d_t[fd] += fork
-                    for fork in G.node_,G.link_: [Lay.node_,Lay.link_][fd] += fork  # mix CG,CL
-                else: # iH is deeper, comb link_ derH:
-                    fork = np.sum(m_d_t, axis=0); alt = np.array([np.zeros(2),np.zeros(6),np.zeros(6)], dtype=object)  # [fext,flat,fver]
-                    root.derH += [CLay(Et=copy(G.Et),root=root, m_d_t=[alt,fork] if fd else [fork,alt], node_=[] if fd else [G], link_=[G] if fd else [])]
-            else:
-                break  # root may be deeper from prior feedback
-        root = root.root
+    Q = root.fback_t[fd]
+    root.nt[fd] += sum([g.n for g in Q])
+    derH = sum_H(Q, fd=fd, root=root, fmerge=0)  # add fd to sum link_ or node_ derHs?
+    if fd:
+        root.link_ = Q; add_H(root.derH[-len(derH)], derH, root)  # add aligned dlayers
+    else:
+        root.node_ = Q; root.derH += derH  # append flat mlayers
+    rroot = root.root
+    if rroot:
+        rroot.fback_t[fd] += [root]
+        if len(rroot.link_ if fd else rroot.node_) == sum([g.n for g in rroot.fback_t[fd]]):
+            feedback(rroot, fd)  # recursive root.root.derH.add_fork(graph.derH)
 
+# add fd to sum node_ derHs:
 def sum_H(link_, root, rev=0, fc=0, fmerge=1):
 
     DerH = [lay.copy_(root=root,rev=rev,fc=fc) for lay in link_[0].derH]
@@ -478,7 +473,7 @@ def norm_H(H, n):
 
 def L2N(link_,root):
     for L in link_:
-        L.root=root; L.fd_=copy(L.nodet[0].fd_); L.mL_t,L.rimt = [[],[]],[[],[]]; L.aRad,L.depth = 0,0; L.visited_,L.node_,L.link_,L.extH = [],[],[],[]
+        L.root=root; L.fd_=copy(L.nodet[0].fd_); L.mL_t,L.rimt = [[],[]],[[],[]]; L.aRad=0; L.visited_,L.node_,L.link_,L.extH = [],[],[],[]
 
 def frame2CG(G, **kwargs):
     blob2CG(G, **kwargs)

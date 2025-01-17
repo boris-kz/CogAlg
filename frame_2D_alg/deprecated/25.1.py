@@ -286,3 +286,30 @@ graph.node_ = G_  # mix of Ns and Cs: exemplars of their network?
 if len(G_) > ave_L:
     cross_comp(graph)
     # selective connectivity clustering between exemplars, extrapolated to their node_
+
+'''
+    # direct fb:
+    Q, altQ = (root.link_, root.node_) if fd else (root.node_, root.link_)
+    if len(root.derH)==2 or fd:  # derH was added by prior direct fb
+        Q += [graph]  # root.derH[-1].add_lay(graph.derH[0])
+    else:
+        Q[:] = [graph]; altQ[:] = []  # reset both forks
+        # root.derH += [graph.derH[0].copy_(root=graph)]
+'''
+def feedback1(G):  # propagate new G and G.lay0.m_d_t to incrementally higher roots
+
+    root = G.root; m_d_t = G.derH[0].m_d_t; fd_ = G.fd_
+    while root:
+        for i, (fd, Lay) in enumerate(zip_longest(fd_, root.derH, fillvalue=None)):  # top-down, G fds are assigned by corresponding root levels
+            if fd is not None:  # fd_ maps to derH
+                if Lay:
+                    # merge both forks of node last lay into root lay fd fork: fixed Clay, prior lays should already be in:
+                    for fork in m_d_t: Lay.m_d_t[fd] += fork
+                    for fork in G.node_,G.link_: [Lay.node_,Lay.link_][fd] += fork  # mix CG,CL
+                else: # iH is deeper, comb link_ derH:
+                    fork = np.sum(m_d_t, axis=0); alt = np.array([np.zeros(2),np.zeros(6),np.zeros(6)], dtype=object)  # [fext,flat,fver]
+                    root.derH += [CLay(Et=copy(G.Et),root=root, m_d_t=[alt,fork] if fd else [fork,alt], node_=[] if fd else [G], link_=[G] if fd else [])]
+            else:
+                break  # root may be deeper from prior feedback
+        root = root.root
+
