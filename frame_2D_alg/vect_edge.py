@@ -136,7 +136,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.altG = []  # adjacent (contour) gap+overlap alt-fork graphs, converted to CG
         # G.depth = 0  # n missing higher agg layers
         # G.fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge
-        G.fback_ = []  # node fb buffer, n in fb[-1]?
+        # G.fback_ = []  # node fb buffer, n in fb[-1]?
         G.node_ = kwargs.get('node_',[])
         G.link_ = kwargs.get('link_',[])  # internal links
         G.rim = kwargs.get('rim',[])  # external links
@@ -191,8 +191,8 @@ def val_(Et, _Et=[], fo=0, coef=1, fd=1):  # compute projected match in mfork or
         if fd:  # proj diff *= co-match lend
             val = d * (_m / (ave * coef * _n)) - ave_d * coef * n * (o if fo else 1)  # ave *= coef: more specific rel aves
         else:  # proj match -= co-diff borrow
-            # m is primary fork, diff borrow here is not m-specific, same as match lend in fd, so it can be positive for current m?
             val = m - (_d - (ave_d * coef * _n)) - ave * coef * n * (o if fo else 1)
+            # this diff borrow is not m-specific, same as match lend in fd, can be positive for current m?
     else:
         val = m - ave * coef * n * (o if fo else 1)  # * overlap in cluster eval, not comp eval
     return val
@@ -200,7 +200,7 @@ def val_(Et, _Et=[], fo=0, coef=1, fd=1):  # compute projected match in mfork or
 def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set of clusters in >ave G blob, unpack by default?
 
     def cluster_PP_(N_, fd):
-        G_ = []
+        G_,deep_ = [],[]
         while N_:  # flood fill
             node_,link_, et = [],[], np.zeros(4)
             N = N_.pop(); _eN_ = [N]
@@ -213,28 +213,29 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
                             for eN in L.nodet:  # eval by link.derH.Et + extH.Et * ccoef > ave?
                                 if eN in N_:
                                     eN_ += [eN]; N_.remove(eN)  # merged
-                            link_ += [L]; et += L.derH[0].Et
+                            link_ += [L]; et += L.derH[0].Et  # add density term: if L.derH.Et[0]/ave * n.extH m/ave or L.derH.Et[0] + n.extH m*.1?
                 _eN_ = {*eN_}
-            if val_(et) > 0:
-                G_ += [sum2graph(edge, [node_,link_,et], fd)]
+            if val_(et) > 0: G_ += [sum2graph(edge, [node_,link_,et], fd)]
             else:
-                for n in node_: G_ += [n]  # unpack weak Gts
-        if fd: edge.node_ = G_
-        else:  edge.link_ = G_
+                for n in node_: deep_ += [n]  # unpack weak Gts
+        if fd: edge.node_ = G_+ [deep_]
+        else:  edge.link_ = G_+ [deep_]
     # comp PP_:
-    N_,L_,Et = comp_node_(edge.node_)
+    N_,L_,Et = comp_node_(edge.node_ if isinstance(edge.node_[-1],CG) else edge.node_[:1])
     edge.link_ += L_
     if val_(Et, fo=1) > 0:  # cancel by borrowing d?
-        edge.derH += [sum_H(L_,edge)]  # += mlay
+        lay = sum_H(L_,edge)  # mlay
         if len(N_) > ave_L:
             cluster_PP_(N_, fd=0)
         if val_(Et, _Et=Et, fo=1) > 0:  # likely not from the same links
             L2N(L_,edge)  # comp dPP_:
             lN_,lL_,dEt = comp_link_(L_,Et)
             if val_(dEt, fo=1) > 0:
-                edge.derH[-1].add_lay( sum_H(lL_,edge))  # mlay += dlay
+                lay.add_lay(sum_H(lL_,edge))  # mlay += dlay
                 if len(lN_) > ave_L:
                     cluster_PP_(lN_, fd=1)
+        # one layer / cluster_edge:
+        edge.derH += [lay]
 
 def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et, ~ graph CNN without backprop
 
@@ -421,34 +422,14 @@ def sum2graph(root, grapht, fd, minL=0, maxL=None):  # sum node and link params 
                 if mG not in altG:
                     mG.altG += [graph]  # cross-comp|sum complete altG before next agg+ cross-comp
                     altG += [mG]
-
-    root.fback_t[fd] += [graph]
-    if len(root.link_ if fd else root.node_) == sum([len(g.node_) for g in root.fback_t[fd]]):
-        feedback(root, fd)  # recursive root.root.derH.add_fork(graph.derH)
-
     return graph
 
-def feedback(root, fd):  # propagate new G and G.lay0.m_d_t to incrementally higher roots
 
-    Q = root.fback_t[fd]
-    root.nt[fd] += sum([g.n for g in Q])
-    derH = sum_H(Q, fd=fd, root=root, fmerge=0)  # add fd to sum link_ or node_ derHs?
-    if fd:
-        root.link_ = Q; add_H(root.derH[-len(derH)], derH, root)  # add aligned dlayers
-    else:
-        root.node_ = Q; root.derH += derH  # append flat mlayers
-    rroot = root.root
-    if rroot:
-        rroot.fback_t[fd] += [root]
-        if len(rroot.link_ if fd else rroot.node_) == sum([g.n for g in rroot.fback_t[fd]]):
-            feedback(rroot, fd)  # recursive root.root.derH.add_fork(graph.derH)
+def sum_H(Q, root, rev=0, fc=0, fmerge=1):  # sum derH in link_|node_
 
-# add fd to sum node_ derHs:
-def sum_H(link_, root, rev=0, fc=0, fmerge=1):
-
-    DerH = [lay.copy_(root=root,rev=rev,fc=fc) for lay in link_[0].derH]
-    for link in link_[1:]:
-        for Lay, lay in zip_longest(DerH, link.derH, fillvalue=[]):
+    DerH = [lay.copy_(root=root,rev=rev,fc=fc) for lay in Q[0].derH]
+    for e in Q[1:]:
+        for Lay, lay in zip_longest(DerH, e.derH, fillvalue=[]):
             if lay:
                 if Lay: Lay.add_lay(lay,rev=rev,fc=fc)
                 else: DerH += [lay.copy_(root=root,rev=rev,fc=fc)]
