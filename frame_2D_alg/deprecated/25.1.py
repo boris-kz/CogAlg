@@ -286,7 +286,6 @@ graph.node_ = G_  # mix of Ns and Cs: exemplars of their network?
 if len(G_) > ave_L:
     cross_comp(graph)
     # selective connectivity clustering between exemplars, extrapolated to their node_
-
 '''
     # direct fb:
     Q, altQ = (root.link_, root.node_) if fd else (root.node_, root.link_)
@@ -350,5 +349,32 @@ def cross_comp1(root, deep=[]):  # breadth-first node_,link_ cross-comp, connect
         comb_altG_(root.node_)  # combine node contour: altG_ or neg links, by sum, cross-comp -> CG altG
         cluster_C_(root,deep)  # -> (G,altG) exemplars, reinforced by altG surround borrow?
         # mfork only, dfork is possible but secondary, no ddfork
+'''
+        else:
+            for n in node_: deep_ += [n]  # unpack weak Gts
+        if fd: edge.link_ = G_+ [deep_]
+        else:  edge.node_ = G_+ [deep_]
+'''
+def merge_deep(Deep, deep):
 
+    Ddeep = []
+    if Deep and isinstance(Deep[-1], list):
+        Ddeep = Deep[-1]; Deep[:] = Deep[:-1]
+
+    ddeep = []
+    if deep and isinstance(deep[-1], list):
+        ddeep = deep[-1]; deep[:] = deep[:-1]
+
+    Deep += deep
+    if Ddeep and ddeep:
+        merge_deep(Ddeep, ddeep)
+        Deep += [Ddeep]
+
+        for edge in frame.node_:
+            comb_altG_(edge.node_)
+            cluster_C_(edge)  # no cluster_C_ in vect_edge
+            if isinstance(edge.node_[-1], list):
+                G_ += edge.node_[:-1]; deep += edge.node_[-1]  # unpack edge
+            else: G_ += edge.node_
+        if deep: G_ += [deep]
 

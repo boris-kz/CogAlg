@@ -41,7 +41,7 @@ ave_d = 4
 ave_L = 4
 max_dist = 2
 ave_rn = 1000  # max scope disparity
-ccoef = 10  # scaling match ave to clustering ave
+ccoef = 10   # scaling match ave to clustering ave
 icoef = .15  # internal M proj_val / external M proj_val
 med_cost = 10
 
@@ -183,14 +183,14 @@ def vectorize_root(frame):
                         frame.node_ += [edge]; edge.node_ = G_
                         cluster_edge(edge)  # add altG: summed converted adj_blobs of converted edge blob?
 
-def val_(Et, _Et=[], fo=0, coef=1, fd=1):  # compute projected match in mfork or borrowed match in dfork
+def val_(Et, _Et=[], fo=0, coef=1, fd=1):
 
-    m, d, n, o = Et
-    if any(_Et):  # get alt fork in root Et
+    m, d, n, o = Et  # compute projected match in mfork or borrowed match in dfork:
+    if any(_Et):     # alt in root Et:
         _m,_d,_n,_o = _Et  # cross-fork induction, same overlap?
         if fd:  # proj diff *= co-match lend
-            val = d * (_m / (ave * coef * _n)) - ave_d * coef * n * (o if fo else 1)  # ave *= coef: more specific rel aves
-        else:  # proj match -= co-diff borrow
+            val = d * (_m / (ave * coef * _n)) - ave_d * coef * n * (o if fo else 1)  # ave *= coef: specific rel aves
+        else:  # proj match -= borrow: d*decay blocking?
             val = m - (_d - (ave_d * coef * _n)) - ave * coef * n * (o if fo else 1)
             # this diff borrow is not m-specific, same as match lend in fd, can be positive for current m?
     else:
@@ -200,7 +200,7 @@ def val_(Et, _Et=[], fo=0, coef=1, fd=1):  # compute projected match in mfork or
 def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set of clusters in >ave G blob, unpack by default?
 
     def cluster_PP_(N_, fd):
-        G_,deep_ = [],[]
+        G_ = []
         while N_:  # flood fill
             node_,link_, et = [],[], np.zeros(4)
             N = N_.pop(); _eN_ = [N]
@@ -208,20 +208,20 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
                 eN_ = []
                 for eN in _eN_:  # rim-connected ext Ns
                     node_ += [eN]
-                    for L,_ in zrim(eN, fd):
+                    for L,_ in zrim(eN, fd):  # all +ve, * density: if L.Et[0]/ave_d * sum([n.extH.m * ccoef / ave for n in L.nodet])?
                         if L not in link_:
-                            for eN in L.nodet:  # eval by link.derH.Et + extH.Et * ccoef > ave?
+                            for eN in L.nodet:
                                 if eN in N_:
                                     eN_ += [eN]; N_.remove(eN)  # merged
-                            link_ += [L]; et += L.derH[0].Et  # add density term: if L.derH.Et[0]/ave * n.extH m/ave or L.derH.Et[0] + n.extH m*.1?
+                            link_ += [L]; et += L.Et
                 _eN_ = {*eN_}
             if val_(et) > 0: G_ += [sum2graph(edge, [node_,link_,et], fd)]
             else:
-                for n in node_: deep_ += [n]  # unpack weak Gts
-        if fd: edge.node_ = G_+ [deep_]
-        else:  edge.link_ = G_+ [deep_]
+                for n in node_: G_ += [n]  # unpack weak Gts
+        if fd: edge.link_ = G_
+        else:  edge.node_ = G_
     # comp PP_:
-    N_,L_,Et = comp_node_(edge.node_ if isinstance(edge.node_[-1],CG) else edge.node_[:1])
+    N_,L_,Et = comp_node_(edge.node_)
     edge.link_ += L_
     if val_(Et, fo=1) > 0:  # cancel by borrowing d?
         lay = sum_H(L_,edge)  # mlay
@@ -237,10 +237,10 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
         # one layer / cluster_edge:
         edge.derH += [lay]
 
-def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et, ~ graph CNN without backprop
+def comp_node_(_N_, L=0):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et, ~ graph CNN without backprop
 
-    _Gp_ = []  # [G pair + co-positionals]
-    for _G, G in combinations(_N_, r=2):  # skip G if list?
+    _Gp_ = []  # [G pair + co-positionals], for top-nested Ns, unless cross-nesting comp:
+    for _G, G in combinations([n for n in _N_ if len(n.derH)==L] if L else _N_, r=2):  # if max len derH in agg+
         rn = _G.Et[2] / G.Et[2]
         if rn > ave_rn:  # scope disparity or _G.depth != G.depth
             continue
