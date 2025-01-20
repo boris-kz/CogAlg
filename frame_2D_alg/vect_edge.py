@@ -160,7 +160,7 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
 def vectorize_root(frame):
     # init for agg+:
     blob_ = unpack_blob_(frame)
-    frame2CG(frame, derH=[CLay(root=frame, Et=np.zeros(4), m_d_t=[], node_=[], link_=[])], node_=[], root=None)  # distinct from base blob_
+    frame2G(frame, derH=[CLay(root=frame, Et=np.zeros(4), m_d_t=[], node_=[], link_=[])], node_=[], root=None)  # distinct from base blob_
     for blob in blob_:
         if not blob.sign and blob.G > ave_G * blob.root.olp:
             edge = slice_edge(blob)
@@ -171,7 +171,7 @@ def vectorize_root(frame):
                     for PP in edge.node_:
                         vert += PP[3]; lat += PP[4]
                     y_,x_ = zip(*edge.dert_.keys()); box = [min(y_),min(x_),max(y_),max(x_)]
-                    blob2CG(edge, root=frame, vert=vert,latuple=lat, box=box, yx=np.divide([edge.latuple[:2]], edge.area))  # node_, Et stay the same
+                    blob2G(edge, root=frame, vert=vert,latuple=lat, box=box, yx=np.divide([edge.latuple[:2]], edge.area))  # node_, Et stay the same
                     G_ = []
                     for PP in edge.node_:  # no comp node_, link_ | PPd_ for now
                         P_,link_,vert,lat, A,S,box,[y,x],Et = PP[1:]  # PPt
@@ -181,18 +181,21 @@ def vectorize_root(frame):
                             G_ += [G]
                     if len(G_) > ave_L:
                         frame.node_ += [edge]; edge.node_ = G_
-                        cluster_edge(edge)  # add altG: summed converted adj_blobs of converted edge blob?
+                        cluster_edge(edge)
+                        # add altG: converted adj_blobs of converted edge blob?
+    frame.derH = [sum_H(frame.node_,frame, fmerge=0)]  # should be single layer
 
 def val_(Et, _Et=[], fo=0, coef=1, fd=1):
 
     m, d, n, o = Et  # compute projected match in mfork or borrowed match in dfork:
     if any(_Et):     # alt in root Et:
         _m,_d,_n,_o = _Et  # cross-fork induction, same overlap?
-        if fd:  # proj diff *= co-match lend
-            val = d * (_m / (ave * coef * _n)) - ave_d * coef * n * (o if fo else 1)  # ave *= coef: specific rel aves
-        else:  # proj match -= borrow: d*decay blocking?
-            val = m - (_d - (ave_d * coef * _n)) - ave * coef * n * (o if fo else 1)
-            # this diff borrow is not m-specific, same as match lend in fd, can be positive for current m?
+        d_co = d * (_m / (ave * coef * _n))  # proj diff *= co-match lend deviation
+        d_av = d - ave_d * coef * n * (o if fo else 1)  # ave borrow from surround
+        if fd:  # proj diff:
+            val = d_av + d_co
+        else:   # proj match: + surround dval - blocking dval, *=decay?
+            val = (m - d_co + d_av) - ave * coef * n * (o if fo else 1)
     else:
         val = m - ave * coef * n * (o if fo else 1)  # * overlap in cluster eval, not comp eval
     return val
@@ -456,13 +459,13 @@ def L2N(link_,root):
     for L in link_:
         L.root=root; L.fd_=copy(L.nodet[0].fd_); L.mL_t,L.rimt = [[],[]],[[],[]]; L.aRad=0; L.visited_,L.node_,L.link_,L.extH = [],[],[],[]
 
-def frame2CG(G, **kwargs):
-    blob2CG(G, **kwargs)
+def frame2G(G, **kwargs):
+    blob2G(G, **kwargs)
     G.derH = kwargs.get('derH', [CLay(root=G, Et=np.zeros(4), m_d_t=[], node_=[],link_ =[])])
     G.Et = kwargs.get('Et', np.zeros(4))
     G.node_ = kwargs.get('node_', [])
 
-def blob2CG(G, **kwargs):
+def blob2G(G, **kwargs):
     # node_, Et stays the same:
     G.fd_ = []  # fd=1 if cluster of Ls|lGs?
     G.root = kwargs.get('root')  # may extend to list in cluster_N_, same nodes may be in multiple dist layers
