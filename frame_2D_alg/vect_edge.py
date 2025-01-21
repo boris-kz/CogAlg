@@ -137,6 +137,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         # G.depth = 0  # n missing higher agg layers
         # G.fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge
         # G.fback_ = []  # node fb buffer, n in fb[-1]?
+        G.depth = kwargs.get('depth',1)  # len derH summed across node_H, += L.nodet[0].depth *2 per layer
         G.node_ = kwargs.get('node_',[])
         G.link_ = kwargs.get('link_',[])  # internal links
         G.rim = kwargs.get('rim',[])  # external links
@@ -146,10 +147,10 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
     name = "link"
     def __init__(l,  **kwargs):
         super().__init__()
+        l.nodet = kwargs.get('nodet',[])  # e_ in kernels, else replaces _node,node: not used in kernels
         l.Et = kwargs.get('Et', np.zeros(4))
         l.fd = kwargs.get('fd',0)
         l.derH = kwargs.get('derH',[])  # list of CLay s
-        l.nodet = kwargs.get('nodet',[])  # e_ in kernels, else replaces _node,node: not used in kernels
         l.angle = kwargs.get('angle',[])  # dy,dx between nodet centers
         l.dist = kwargs.get('dist',0)  # distance between nodet centers
         l.box = kwargs.get('box',[])  # sum nodet, not needed?
@@ -190,12 +191,12 @@ def val_(Et, _Et=[], fo=0, coef=1, fd=1):
     m, d, n, o = Et  # compute projected match in mfork or borrowed match in dfork:
     if any(_Et):     # alt in root Et:
         _m,_d,_n,_o = _Et  # cross-fork induction, same overlap?
-        d_co = d * (_m / (ave * coef * _n))  # proj diff *= co-match lend deviation
-        d_av = d - ave_d * coef * n * (o if fo else 1)  # ave borrow from surround
+        d_co = d * (_m / (ave * coef * _n))  # proj diff *= lend from rational deviation of co-match
+        d_av = d - ave_d * coef * n * (o if fo else 1)  # lend from average surround-match deviation, no overlap with d_co: rm is a deviation of ave_d?
         if fd:  # proj diff:
             val = d_av + d_co
         else:   # proj match: + surround dval - blocking dval, *=decay?
-            val = (m - d_co + d_av) - ave * coef * n * (o if fo else 1)
+            val = (m - d_co + d_av) - ave * coef * n * (o if fo else 1)  # d_av induction
     else:
         val = m - ave * coef * n * (o if fo else 1)  # * overlap in cluster eval, not comp eval
     return val
@@ -218,9 +219,8 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
                                     eN_ += [eN]; N_.remove(eN)  # merged
                             link_ += [L]; et += L.Et
                 _eN_ = {*eN_}
-            if val_(et) > 0: G_ += [sum2graph(edge, [node_,link_,et], fd)]
-            else:
-                for n in node_: G_ += [n]  # unpack weak Gts
+            if val_(et) > 0: G_ = [sum2graph(edge, [node_,link_,et], fd)]
+            else:            G_ += node_  # unpack weak Gts
         if fd: edge.link_ = G_
         else:  edge.node_ = G_
     # comp PP_:
@@ -412,6 +412,7 @@ def sum2graph(root, grapht, fd, minL=0, maxL=None):  # sum node and link params 
         N.root = graph
     graph.node_= N_  # nodes or roots, link_ is still current-dist links only?
     graph.derH = [sum_H(link_,graph)]  # sum, comb link derHs
+    graph.depth = link_[0].nodet[0].depth *2  # len unpacked derH: lay = ders of all lower lays
     L = len(node_)
     yx = np.divide(yx,L)
     dy,dx = np.divide( np.sum([ np.abs(yx-_yx) for _yx in yx_], axis=0), L)
@@ -426,7 +427,6 @@ def sum2graph(root, grapht, fd, minL=0, maxL=None):  # sum node and link params 
                     mG.altG += [graph]  # cross-comp|sum complete altG before next agg+ cross-comp
                     altG += [mG]
     return graph
-
 
 def sum_H(Q, root, rev=0, fc=0, fmerge=1):  # sum derH in link_|node_
 
