@@ -137,7 +137,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         # G.depth = 0  # n missing higher agg layers
         # G.fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge
         # G.fback_ = []  # node fb buffer, n in fb[-1]?
-        G.depth = kwargs.get('depth',1)  # len derH summed across node_H, += L.nodet[0].depth *2 per layer
+        G.depth = kwargs.get('depth',0)  # 1/agg+: max nesting in node_, derH per node layer, overlapping between layers?
         G.node_ = kwargs.get('node_',[])
         G.link_ = kwargs.get('link_',[])  # internal links
         G.rim = kwargs.get('rim',[])  # external links
@@ -238,7 +238,7 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
                 if len(lN_) > ave_L:
                     cluster_PP_(lN_, fd=1)
         # one layer / cluster_edge:
-        edge.derH += [lay]
+        edge.derH += [lay]; edge.depth = 1
 
 def comp_node_(_N_, L=0):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et, ~ graph CNN without backprop
 
@@ -390,7 +390,7 @@ def zrim(N,fd): return N.rimt[0] + N.rimt[1] if fd else N.rim  # add nesting in 
 def sum2graph(root, grapht, fd, minL=0, maxL=None):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
     node_, link_, Et = grapht
-    graph = CG(fd_=node_[0].fd_+[fd], Et=Et*icoef, root=root, node_=[], link_=link_, maxL=maxL)
+    graph = CG(fd_=node_[0].fd_+[fd], Et=Et*icoef, root=root, node_=[], link_=link_, maxL=maxL, depth=root.depth)  # before depth increment?
     # arg Et is weaker if internal, maxL,minL: max and min L.dist in graph.link_
     yx = np.array([0,0]); yx_ = []
     N_ = []
@@ -412,7 +412,6 @@ def sum2graph(root, grapht, fd, minL=0, maxL=None):  # sum node and link params 
         N.root = graph
     graph.node_= N_  # nodes or roots, link_ is still current-dist links only?
     graph.derH = [sum_H(link_,graph)]  # sum, comb link derHs
-    graph.depth = link_[0].nodet[0].depth *2  # len unpacked derH: lay = ders of all lower lays
     L = len(node_)
     yx = np.divide(yx,L)
     dy,dx = np.divide( np.sum([ np.abs(yx-_yx) for _yx in yx_], axis=0), L)
@@ -457,7 +456,7 @@ def norm_H(H, n):
 
 def L2N(link_,root):
     for L in link_:
-        L.root=root; L.fd_=copy(L.nodet[0].fd_); L.mL_t,L.rimt = [[],[]],[[],[]]; L.aRad=0; L.visited_,L.node_,L.link_,L.extH = [],[],[],[]
+        L.root,L.depth = root,root.depth; L.fd_=copy(L.nodet[0].fd_); L.mL_t,L.rimt = [[],[]],[[],[]]; L.aRad=0; L.visited_,L.node_,L.link_,L.extH = [],[],[],[]
 
 def frame2G(G, **kwargs):
     blob2G(G, **kwargs)
@@ -480,6 +479,7 @@ def blob2G(G, **kwargs):
     G.maxL = 0  # nesting in nodes
     G.aRad = 0  # average distance between graph center and node center
     G.altG = []  # or altG? adjacent (contour) gap+overlap alt-fork graphs, converted to CG
+    G.depth = 1
     return G
 
 if __name__ == "__main__":

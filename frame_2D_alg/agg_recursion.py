@@ -8,20 +8,21 @@ from vect_edge import L2N, norm_H, add_H, sum_H, comp_N, comp_node_, comp_link_,
 Cross-compare and cluster Gs within a frame, potentially unpacking their node_s first,
 alternating agglomeration and centroid clustering.
 notation:
-prefix  f denotes flag
-postfix t denotes tuple, multiple ts is a nested tuple
-prefix  _ denotes prior of two same-name variables, multiple _s for relative precedence
-postfix _ denotes array of same-name elements, multiple _s is nested array
+prefix f: flag
+prefix _: prior of two same-name variables, multiple _s for relative precedence
+postfix _: array of same-name elements, multiple _s is nested array
+postfix t: tuple, multiple ts is a nested tuple
 capitalized vars are summed small-case vars 
 
 Each agg+ cycle forms higher-composition complemented graphs in cluster_N_ and refines them in cluster_C_: 
 cross_comp -> cluster_N_ -> cluster_C -> cross_comp...
 
-Ultimately, we need a backprop of change in projected match to automatically optimize filters and operations. 
-That requires computing accurate projected match in forward pass, which depends on a lot of variables.
+After computing projected match in forward pass, the backprop of its gradient will optimize filters 
+and operations: cross-comp and clustering, because they add distant or aggregate lateral match.
+Base match can be lateral min, but it won't be predictive of more distant match?
 
-Clustering and diff borrow add to distant lateral match by compression and selection, 
-designed or produced combinatorially? 
+The value of deleting or modulating such operations is their contributions to the top level match
+Add by design or combinatorics, starting with lateral -|+? 
 '''
 
 def cross_comp(root):  # breadth-first node_,link_ cross-comp, connect clustering, recursion
@@ -32,7 +33,7 @@ def cross_comp(root):  # breadth-first node_,link_ cross-comp, connect clusterin
         lay = sum_H(L_,root)  # mlay
         pL_ = {l for n in N_ for l, _ in zrim(n, fd=0)}
         if len(pL_) > ave_L:
-            cluster_N_(root, pL_, fd=0)  # form mult. distance segments
+            cluster_N_(root, pL_, fd=0)  # form multiple distance segments, same depth
         # dfork, one for all dist segs
         if val_(Et,_Et=Et, fo=1) > 0:  # same root for L_, root.link_ was compared in root-forming for alt clustering
             L2N(L_,root)
@@ -44,9 +45,9 @@ def cross_comp(root):  # breadth-first node_,link_ cross-comp, connect clusterin
                     cluster_N_(root, plL_, fd=1)
                     # form altGs for cluster_C_, no new links between dist-seg Gs
         root.derH += [lay]
-        root.depth += L_[0].nodet[0].depth * 2  # lay = ders of all lower lays
-        comb_altG_(root.node_)  # combine node contour: altG_ or neg links, by sum, cross-comp -> CG altG
-        cluster_C_(root)  # -> mfork G,altG exemplars, + altG surround borrow, root.derH +=lay / agg+?
+        root.depth += 1  # converts to node.depth * 2: lay = ders of all lower lays: 1,2,4,8...
+        comb_altG_(root.node_)  # comb node contour: altG_ | neg links sum,cross-comp -> CG altG
+        cluster_C_(root)  # -> mfork G,altG exemplars, + altG surround borrow, root.derH +=lay/ agg+?
         # no dfork cluster_C_, no ddfork
 
 def cluster_N_(root, L_, fd):  # top-down segment L_ by >ave ratio of L.dists
@@ -80,13 +81,12 @@ def cluster_N_(root, L_, fd):  # top-down segment L_ by >ave ratio of L.dists
                                 link_+=[L]; et+=L.Et
                 _eN_ = {*eN_}
             if val_(et) > 0:  # cluster node roots:
-                G_ = [sum2graph(root, [list({*node_}),list({*link_}), et], fd, min_dist, max_dist)]
+                G_ += [sum2graph(root, [list({*node_}),list({*link_}), et], fd, min_dist, max_dist)]
             else:
                 G_ += node_  # unpack
         # longer links:
         L_ = L_[i+1:]
-        if L_:
-            min_dist = max_dist  # next loop connects current-dist clusters via longer links
+        if L_: min_dist = max_dist  # next loop connects current-dist clusters via longer links
         else:
             if fd: root.link_ = G_
             else:  root.node_ = G_
@@ -176,8 +176,8 @@ def cluster_C_(graph):
                         n.m = 0; n.fin = 0
                 break
     # get exemplar centroids of the deepest complemented Gs: mCore + dContour, initially unpacked edges
-    max_depth = graph.node_[0].depth  # len derH summed across node_ H
-    N_ = sorted([N for N in graph.node_ if N.depth==max_depth], key=lambda n: n.Et[0], reverse=True)
+    maxd = graph.depth-1  # nesting in node_H
+    N_ = sorted([N for N in graph.node_ if N.depth==maxd], key=lambda n: n.Et[0], reverse=True)
     C_ = []
     for N in N_:
         N.sign, N.m, N.fin = 1,0,0  # setattr C update sign, inclusion val, C inclusion flag
