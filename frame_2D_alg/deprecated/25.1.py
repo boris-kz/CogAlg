@@ -354,6 +354,8 @@ def cross_comp1(root, deep=[]):  # breadth-first node_,link_ cross-comp, connect
             for n in node_: deep_ += [n]  # unpack weak Gts
         if fd: edge.link_ = G_+ [deep_]
         else:  edge.node_ = G_+ [deep_]
+        
+G.depth = kwargs.get('depth',0)  # 1/agg+: max nesting in node_, derH per node layer, overlapping between layers?
 '''
 def merge_deep(Deep, deep):
 
