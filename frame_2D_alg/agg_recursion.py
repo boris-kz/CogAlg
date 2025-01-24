@@ -15,17 +15,18 @@ postfix t: tuple, multiple ts is a nested tuple
 capitalized vars are summed small-case vars 
 
 Each agg+ cycle forms higher-composition complemented graphs in cluster_N_ and refines them in cluster_C_: 
-cross_comp -> cluster_N_ -> cluster_C -> cross_comp...
+cross_comp -> cluster_N_ -> cluster_C -> cross_comp..
+Ultimate criterion is lateral match=min, with projecting sub-criteria that may increase it
 
 After computing projected match in forward pass, the backprop of its gradient will optimize filters 
 and operations: cross-comp and clustering, because they add distant or aggregate lateral match.
-(base match is lateral min, but it's not predictive of more distant match)
 
 Delete | iterate operations according to their contributions to the top level match,
 Add by design or combinatorics, starting with lateral -|+ forming derivatives or groups?
 
 Higher-order cross-comp, clustering, and feedback operates on represented code:
-transposing and projecting process derivatives may insert/replace distant operations? 
+transposing and projecting process derivatives may insert/replace distant operations?
+op / pixel, eval / cluster?
 '''
 
 def cross_comp(root, C_):  # breadth-first node_,link_ cross-comp, connect clustering, recursion
@@ -33,7 +34,7 @@ def cross_comp(root, C_):  # breadth-first node_,link_ cross-comp, connect clust
     N_,L_,Et = comp_node_(C_)  # cross-comp top-composition exemplars in root.node_
     # mfork
     if val_(Et, fo=1) > 0:
-        derH = sum_H(L_,root)  # mlay
+        derH = sum_H(L_,root, fd=0); addH = 1  # mfork
         pL_ = {l for n in N_ for l,_ in get_rim(n, fd=0)}
         if len(pL_) > ave_L:
             cluster_N_(root, pL_, fd=0)  # form multiple distance segments, same depth
@@ -42,14 +43,14 @@ def cross_comp(root, C_):  # breadth-first node_,link_ cross-comp, connect clust
             L2N(L_,root)
             lN_,lL_,dEt = comp_link_(L_,Et)
             if val_(dEt, _Et=Et, fo=1) > 0:
-                add_H(derH, sum_H(lL_,root),root)
+                add_H(derH, sum_H(lL_,root,fd=1), edge,fd=1); addH = 2  # mfork+dfork
                 plL_ = {l for n in lN_ for l,_ in get_rim(n, fd=1)}
                 if len(plL_) > ave_L:
                     cluster_N_(root, plL_, fd=1)  # form altGs for cluster_C_, no new links between dist-seg Gs
 
         root.derH = derH  # replace lower derH, same as node_,link_ replace in cluster_N_
-        comb_altG_(root.node_)  # comb node contour: altG_| neg links sum,cross-comp -> CG altG
-        cluster_C_(root)  # -> mfork G,altG exemplars, + altG surround borrow, root.derH +=lay/ agg+?
+        comb_altG_(root.node_)  # comb node contour: altG_ | neg links sum, cross-comp -> CG altG
+        cluster_C_(root, addH)  # -> mfork G,altG exemplars, + altG surround borrow, root.derH +=lay/ agg+?
         # no dfork cluster_C_, no ddfork
 
 def cluster_N_(root, L_, fd):  # top-down segment L_ by >ave ratio of L.dists
@@ -71,7 +72,7 @@ def cluster_N_(root, L_, fd):  # top-down segment L_ by >ave ratio of L.dists
         max_dist = _L.dist
         for N in {*N_}:  # cluster current distance segment
             if N.fin: continue  # clustered from prior _N_
-            _eN_, node_,link_, et, = [N],[],[],np.zeros(4)
+            _eN_,node_,link_,et, = [N],[],[], np.zeros(4)
             while _eN_:
                 eN_ = []
                 for eN in _eN_:  # cluster rim-connected ext Ns, all in root Gt
@@ -104,7 +105,7 @@ Hierarchical clustering should alternate between two phases: generative via conn
  So connectivity clustering is a generative learning phase, forming new derivatives and structured composition levels, 
  while centroid clustering is a compressive phase, reducing multiple similar comparands to a single exemplar. '''
 
-def cluster_C_(root):
+def cluster_C_(root, addH=1):
 
     def sum_C(dnode_, C=None):  # sum|subtract and average Rim nodes
 
@@ -177,9 +178,9 @@ def cluster_C_(root):
                         n.m = 0; n.fin = 0; n_ += [n]
                 break
 
-    C_, n_ = [], []; maxH = len(root.derH) - 1   # concat exemplar centroids across top Gs:
+    C_, n_ = [], []; maxH = len(root.derH) - addH  # concat exemplar centroids across top Gs:
     for G in root.node_:  # cluster_C_/ G.node_
-        if len(G.derH) < maxH: continue
+        if not G.derH or len(G.derH) < maxH: continue
         N_ = [N for N in sorted([N for N in G.node_], key=lambda n: n.Et[0], reverse=True)]
         for N in N_:
             N.sign, N.m, N.fin = 1,0,0  # C update sign, inclusion m, inclusion flag
@@ -216,7 +217,7 @@ def comb_altG_(G_):  # combine contour G.altG_ into altG (node_ defined by root=
                 sum_G_(G.altG[0], [a for a in G.altG[1:]])
                 G.altG = CG(root=G, node_= G.altG); G.altG.m=0  # was G.altG_
                 if val_(G.altG.Et, _Et=G.Et):  # alt D * G rM
-                    cross_comp(G.altG)
+                    cross_comp(G.altG, G.node_)
         else:  # sum neg links
             link_,node_,derH, Et = [],[],[], np.zeros(4)
             for link in G.link_:
