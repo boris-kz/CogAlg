@@ -14,19 +14,19 @@ postfix _: array of same-name elements, multiple _s is nested array
 postfix t: tuple, multiple ts is a nested tuple
 capitalized vars are summed small-case vars 
 
+Current code is doing base data processing:
+
 Each agg+ cycle forms higher-composition complemented graphs in cluster_N_ and refines them in cluster_C_: 
-cross_comp -> cluster_N_ -> cluster_C -> cross_comp..
-Ultimate criterion is lateral match=min, with projecting sub-criteria that may increase it
+cross_comp -> cluster_N_ -> cluster_C -> cross_comp...
+Ultimate criterion is lateral match=min, and projecting sub-criteria may add distant or aggregate lateral match.
 
-After computing projected match in forward pass, the backprop of its gradient will optimize filters 
-and operations: cross-comp and clustering, because they add distant or aggregate lateral match.
+After computing projected match in forward pass, its backprop will adjust filters to maximize next match. 
+That includes coordinate filters, which select new input within current frame of reference
 
-Delete | iterate operations according to their contributions to the top level match,
-Add by design or combinatorics, starting with lateral -|+ forming derivatives or groups?
+Then higher-order code will process base code in a similar fashion:
 
-Higher-order cross-comp, clustering, and feedback operates on represented code:
-transposing and projecting process derivatives may insert/replace distant operations?
-op / pixel, eval / cluster?
+Feedforward to cross-comp and cluster the code (op~pixel, eval~cluster), tracing interactions between processes.
+Feedback will insert / replace / delete / iterate ops according to their contributions to top level match
 '''
 
 def cross_comp(root, C_):  # breadth-first node_,link_ cross-comp, connect clustering, recursion
@@ -105,7 +105,7 @@ Hierarchical clustering should alternate between two phases: generative via conn
  So connectivity clustering is a generative learning phase, forming new derivatives and structured composition levels, 
  while centroid clustering is a compressive phase, reducing multiple similar comparands to a single exemplar. '''
 
-def cluster_C_(root, addH=1):
+def cluster_C_(root, addH=0):  # 0 from cluster_edge: same derH depth in root and top Gs
 
     def sum_C(dnode_, C=None):  # sum|subtract and average Rim nodes
 
@@ -178,8 +178,10 @@ def cluster_C_(root, addH=1):
                         n.m = 0; n.fin = 0; n_ += [n]
                 break
 
-    C_, n_ = [], []; maxH = len(root.derH) - addH  # concat exemplar centroids across top Gs:
+    C_, n_ = [], []  # concat exemplar centroids across top Gs
+    maxH = len(root.derH) - addH  # init 0
     for G in root.node_:  # cluster_C_/ G.node_
+        # this will skip top Gs without dfork, we need to prevent that?
         if not G.derH or len(G.derH) < maxH: continue
         N_ = [N for N in sorted([N for N in G.node_], key=lambda n: n.Et[0], reverse=True)]
         for N in N_:
@@ -209,6 +211,7 @@ def sum_G_(G, node_, s=1, fc=0):
             G.box = extend_box( G.box, n.box)  # extended per separate node_ in centroid
 
 def comb_altG_(G_):  # combine contour G.altG_ into altG (node_ defined by root=G), for agg+ cross-comp
+    # need to distinguish internal and external alts, they may weaken induction at different distances?
 
     for G in G_:
         if isinstance(G,list): continue
@@ -240,7 +243,7 @@ if __name__ == "__main__":
         G_ = []
         for edge in frame.node_:
             comb_altG_(edge.node_)
-            cluster_C_(edge)  # no cluster_C_ in vect_edge
+            cluster_C_(edge, addH=len(edge.derH))  # no cluster_C_ in vect_edge
             G_ += edge.node_  # unpack edges
         frame.node_ = G_
         cross_comp(frame, G_)  # append frame derH, cluster_N_
