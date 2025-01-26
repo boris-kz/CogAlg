@@ -3,7 +3,7 @@ from copy import copy, deepcopy
 from functools import reduce
 from frame_blobs import frame_blobs_root, intra_blob_root, imread
 from comp_slice import comp_latuple, comp_md_
-from vect_edge import L2N, norm_H, add_H, sum_H, comp_N, comp_node_, comp_link_, sum2graph, get_rim, CG, ave, ave_L, vectorize_root, comp_area, extend_box, val_
+from vect_edge import L2N, norm_H, comb_H, add_H, sum_H, comp_H, comp_N, comp_node_, comp_link_, sum2graph, get_rim, CG, ave, ave_L, vectorize_root, comp_area, extend_box, val_
 '''
 Cross-compare and cluster Gs within a frame, potentially unpacking their node_s first,
 alternating agglomeration and centroid clustering.
@@ -34,7 +34,8 @@ def cross_comp(root, C_):  # breadth-first node_,link_ cross-comp, connect clust
     N_,L_,Et = comp_node_(C_)  # cross-comp top-composition exemplars in root.node_
     # mfork
     if val_(Et, fo=1) > 0:
-        derH = sum_H(L_,root, fd=0); addH = 1  # mfork
+        derH = []  # 1|2 forks per layer:
+        comb_H(derH, sum_H(L_,root, fd=0))  # + mfork
         pL_ = {l for n in N_ for l,_ in get_rim(n, fd=0)}
         if len(pL_) > ave_L:
             cluster_N_(root, pL_, fd=0)  # form multiple distance segments, same depth
@@ -43,14 +44,14 @@ def cross_comp(root, C_):  # breadth-first node_,link_ cross-comp, connect clust
             L2N(L_,root)
             lN_,lL_,dEt = comp_link_(L_,Et)
             if val_(dEt, _Et=Et, fo=1) > 0:
-                add_H(derH, sum_H(lL_,root,fd=1), edge,fd=1); addH = 2  # mfork+dfork
+                comb_H(derH, sum_H(lL_,root,fd=1))  # + dfork
                 plL_ = {l for n in lN_ for l,_ in get_rim(n, fd=1)}
                 if len(plL_) > ave_L:
                     cluster_N_(root, plL_, fd=1)  # form altGs for cluster_C_, no new links between dist-seg Gs
 
         root.derH = derH  # replace lower derH, same as node_,link_ replace in cluster_N_
-        comb_altG_(root.node_)  # comb node contour: altG_ | neg links sum, cross-comp -> CG altG
-        cluster_C_(root, addH)  # -> mfork G,altG exemplars, + altG surround borrow, root.derH +=lay/ agg+?
+        comb_altG_(root.node_)  # comb node contour: altG_|neg links sum, cross-comp -> CG altG
+        cluster_C_(root)  # -> mfork G,altG exemplars, + altG surround borrow, root.derH +=lay/ agg+?
         # no dfork cluster_C_, no ddfork
 
 def cluster_N_(root, L_, fd):  # top-down segment L_ by >ave ratio of L.dists
@@ -133,7 +134,7 @@ def cluster_C_(root, addH=0):  # 0 from cluster_edge: same derH depth in root an
         mLat = comp_latuple(C.latuple, N.latuple, C.Et[2], N.Et[2])[1][0]
         mVert = comp_md_(C.vert[1], N.vert[1])[1][0]
         M = mL + mA + mLat + mVert
-        M += sum([_lay.comp_lay(lay, rn=1,root=None).Et[0] for _lay,lay in zip(C.derH, N.derH)])
+        M += sum([fork.Et[0] for lay in comp_H(C.derH, N.derH, rn=1, root=None, Et=np.zeros(4)) for fork in lay if fork])
         if C.altG and N.altG:  # converted to altG
             M += comp_N(C.altG, N.altG, C.altG.Et[2] / N.altG.Et[2]).Et[0]
         # if fuzzy C:
@@ -179,10 +180,9 @@ def cluster_C_(root, addH=0):  # 0 from cluster_edge: same derH depth in root an
                 break
 
     C_, n_ = [], []  # concat exemplar centroids across top Gs
-    maxH = len(root.derH) - addH  # init 0
-    for G in root.node_:  # cluster_C_/ G.node_
-        # this will skip top Gs without dfork, we need to prevent that?
-        if not G.derH or len(G.derH) < maxH: continue
+    for G in root.node_:
+        # cluster_C_/ G.node_: for linked nodes only?
+        if not G.derH or len(G.derH) < len(root.derH) -1: continue  # not new graph
         N_ = [N for N in sorted([N for N in G.node_], key=lambda n: n.Et[0], reverse=True)]
         for N in N_:
             N.sign, N.m, N.fin = 1,0,0  # C update sign, inclusion m, inclusion flag
@@ -243,7 +243,7 @@ if __name__ == "__main__":
         G_ = []
         for edge in frame.node_:
             comb_altG_(edge.node_)
-            cluster_C_(edge, addH=len(edge.derH))  # no cluster_C_ in vect_edge
+            cluster_C_(edge)  # no cluster_C_ in vect_edge
             G_ += edge.node_  # unpack edges
         frame.node_ = G_
         cross_comp(frame, G_)  # append frame derH, cluster_N_
