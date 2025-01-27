@@ -1,9 +1,10 @@
 import numpy as np
 from copy import copy, deepcopy
 from functools import reduce
+from itertools import zip_longest
 from frame_blobs import frame_blobs_root, intra_blob_root, imread
 from comp_slice import comp_latuple, comp_md_
-from vect_edge import L2N, norm_H, comb_H, add_H, sum_H, comp_H, comp_N, comp_node_, comp_link_, sum2graph, get_rim, CG, ave, ave_L, vectorize_root, comp_area, extend_box, val_
+from vect_edge import L2N, sum_H, add_H, comp_H, comp_N, comp_node_, comp_link_, sum2graph, get_rim, CG, ave, ave_L, vectorize_root, comp_area, extend_box, val_
 '''
 Cross-compare and cluster Gs within a frame, potentially unpacking their node_s first,
 alternating agglomeration and centroid clustering.
@@ -14,19 +15,24 @@ postfix _: array of same-name elements, multiple _s is nested array
 postfix t: tuple, multiple ts is a nested tuple
 capitalized vars are summed small-case vars 
 
-Current code is doing base data processing:
+Current code is processing primary data:
+ultimate criterion is lateral match=min, projecting sub-criteria may add distant | aggregate lateral match
 
 Each agg+ cycle forms higher-composition complemented graphs in cluster_N_ and refines them in cluster_C_: 
 cross_comp -> cluster_N_ -> cluster_C -> cross_comp...
-Ultimate criterion is lateral match=min, and projecting sub-criteria may add distant or aggregate lateral match.
 
 After computing projected match in forward pass, its backprop will adjust filters to maximize next match. 
 That includes coordinate filters, which select new input within current frame of reference
 
-Then higher-order code will process base code in a similar fashion:
+Future meta-code should process base code in similar fashion:
 
-Feedforward to cross-comp and cluster the code (op~pixel, eval~cluster), tracing interactions between processes.
-Feedback will insert / replace / delete / iterate ops according to their contributions to top level match
+Forward: cross-comp and cluster base code (op~pixel, eval~cluster), tracing interactions between processes.
+backprop to meta-code filters according to its contribution to code compression, 
+
+more basic backprop is to base code per added match, in addition to filters: 
+insert / replace / delete / iterate ops according to their contributions to top level match?
+
+match substitution by projection: instrumental criteria?
 '''
 
 def cross_comp(root, C_):  # breadth-first node_,link_ cross-comp, connect clustering, recursion
@@ -34,9 +40,8 @@ def cross_comp(root, C_):  # breadth-first node_,link_ cross-comp, connect clust
     N_,L_,Et = comp_node_(C_)  # cross-comp top-composition exemplars in root.node_
     # mfork
     if val_(Et, fo=1) > 0:
-        derH = []  # 1|2 forks per layer:
-        comb_H(derH, sum_H(L_,root, fd=0))  # + mfork
-        pL_ = {l for n in N_ for l,_ in get_rim(n, fd=0)}
+        derH = [[mlay] for mlay in sum_H(L_,root, fd=1)]  # nested mlay per layer
+        pL_ = {l for n in N_ for l,_ in get_rim(n,fd=0)}
         if len(pL_) > ave_L:
             cluster_N_(root, pL_, fd=0)  # form multiple distance segments, same depth
         # dfork, one for all dist segs
@@ -44,8 +49,9 @@ def cross_comp(root, C_):  # breadth-first node_,link_ cross-comp, connect clust
             L2N(L_,root)
             lN_,lL_,dEt = comp_link_(L_,Et)
             if val_(dEt, _Et=Et, fo=1) > 0:
-                comb_H(derH, sum_H(lL_,root,fd=1))  # + dfork
-                plL_ = {l for n in lN_ for l,_ in get_rim(n, fd=1)}
+                dderH = sum_H(lL_, root, fd=1)  # optional dlays
+                for lay, dlay in zip(derH, dderH): lay += [dlay]
+                plL_ = {l for n in lN_ for l,_ in get_rim(n,fd=1)}
                 if len(plL_) > ave_L:
                     cluster_N_(root, plL_, fd=1)  # form altGs for cluster_C_, no new links between dist-seg Gs
 
@@ -106,7 +112,7 @@ Hierarchical clustering should alternate between two phases: generative via conn
  So connectivity clustering is a generative learning phase, forming new derivatives and structured composition levels, 
  while centroid clustering is a compressive phase, reducing multiple similar comparands to a single exemplar. '''
 
-def cluster_C_(root, addH=0):  # 0 from cluster_edge: same derH depth in root and top Gs
+def cluster_C_(root):  # 0 from cluster_edge: same derH depth in root and top Gs
 
     def sum_C(dnode_, C=None):  # sum|subtract and average Rim nodes
 
@@ -179,22 +185,21 @@ def cluster_C_(root, addH=0):  # 0 from cluster_edge: same derH depth in root an
                         n.m = 0; n.fin = 0; n_ += [n]
                 break
 
-    C_, n_ = [], []  # concat exemplar centroids across top Gs
+    C_, n_ = [], []  # concat exemplar/centroid nodes across top Gs, for higher cross_comp
     for G in root.node_:
-        # cluster_C_/ G.node_: for linked nodes only?
         if not G.derH or len(G.derH) < len(root.derH) -1: continue  # not new graph
         N_ = [N for N in sorted([N for N in G.node_], key=lambda n: n.Et[0], reverse=True)]
         for N in N_:
             N.sign, N.m, N.fin = 1,0,0  # C update sign, inclusion m, inclusion flag
         for i, N in enumerate(N_):  # replace some nodes by their centroid clusters
             if not N.fin:  # not in prior C
-                if val_(N.Et, coef=10) > 0:
-                    centroid_cluster(N, C_, n_, root)  # extend from N.rim, C_ += C unless unpacked
+                if val_(sum([l.Et for l in N.extH]), coef=10) > 0:  # cross-similar in G
+                    centroid_cluster(N, C_, n_, root)  # search via N.rim, C_+=[C]| unpack
                 else:  # the rest of N_ M is lower
                     break
     root.node_ = C_ + n_  # or [n_]?
     if len(C_) > ave_L and not root.root:  # frame
-        cross_comp(root, C_)  # append derH, cluster_N_ if fin
+        cross_comp(root, C_)  # append derH, cluster_N_ if fin; replace root.node_ with clustered C_, + n_?
 
 def sum_G_(G, node_, s=1, fc=0):
 
@@ -203,11 +208,11 @@ def sum_G_(G, node_, s=1, fc=0):
         G.vert = G.vert + n.vert*s if np.any(G.vert) else deepcopy(n.vert) * s
         G.Et += n.Et * s; G.aRad += n.aRad * s
         G.yx += n.yx * s
-        if n.derH: add_H(G.derH, n.derH, root=G, rev = s==-1, fc=fc)
+        if n.derH: add_H(G.derH, n.derH, root=G, rev = s==-1, fc=fc, fd=0)
         if fc:
             G.M += n.m * s; G.L += s
         else:
-            if n.extH: add_H(G.extH, n.extH, root=G, rev = s==-1)  # empty in centroid
+            if n.extH: add_H(G.extH, n.extH, root=G, rev = s==-1, fd=1)  # empty in centroid
             G.box = extend_box( G.box, n.box)  # extended per separate node_ in centroid
 
 def comb_altG_(G_):  # combine contour G.altG_ into altG (node_ defined by root=G), for agg+ cross-comp
@@ -232,6 +237,17 @@ def comb_altG_(G_):  # combine contour G.altG_ into altG (node_ defined by root=
                 altG = CG(root=G, Et=Et, node_=node_, link_=link_); altG.m=0  # other attrs are not significant
                 altG.derH = sum_H(altG.link_, altG)   # sum link derHs
                 G.altG = altG
+
+def norm_H(H, n, fd=1):
+    for lay in H:
+        if fd:  # L.derH or extH
+            for fork in lay.m_d_t: fork *= n  # arrays
+            lay.Et *= n  # same node_, link_
+        else:
+            for fork in lay:
+                if fork:
+                   for m_d_ in fork.m_d_t: m_d_ *= n  # arrays
+                   fork.Et *= n  # same node_, link_
 
 if __name__ == "__main__":
     image_file = './images/raccoon_eye.jpeg'

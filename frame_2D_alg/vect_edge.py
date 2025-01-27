@@ -22,8 +22,8 @@ Fuzzy clustering can only be centroid-based, because overlapping connectivity-ba
 Param clustering if MM, compared along derivation sequence, or combinatorial?
 -
 Summed-graph representation is nested in a dual tree of down-forking elements: node_, and up-forking clusters: root_.
-That resembles a neuron, which has dendritic tree as input and axonal tree as output. 
-But we have recursively nested param sets packed in each level of the trees, which don't exist in neurons.
+That resembles neurons, with dendritic tree as input and axonal tree as output. 
+But these graphs have recursively nested param sets mapping to each level of the trees, which don't exist in neurons.
 -
 diagrams: 
 https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/generic%20graph.drawio.png
@@ -107,18 +107,6 @@ class CLay(CBase):  # flat layer if derivation hierarchy
 
         return CLay(Et=Et, root=root, node_=node_, link_=link_, m_d_t=m_d_t)  # no comp_derH yet
 
-    # not used:
-    def sort_H(He, fd):  # re-assign olp and form priority indices for comp_tree, if selective and aligned
-
-        i_ = []  # priority indices
-        for i, lay in enumerate(sorted(He.node_, key=lambda lay: lay.Et[fd], reverse=True)):
-            di = lay.i - i  # lay index in H
-            lay.olp += di  # derR - valR
-            i_ += [lay.i]
-        He.i_ = i_  # H priority indices: node/m | link/d
-        if not fd:
-            He.root.node_ = He.node_
-
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
     # graph / node
     def __init__(G,  **kwargs):
@@ -129,7 +117,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.derH = kwargs.get('derH',[])  # lay is [m,d]: Clay(Et,node_,link_,m_d_t), sum|concat links across fork tree
         G.extH = kwargs.get('extH',[])  # sum from rims, single-fork
         G.vert = kwargs.get('vert', np.array([np.zeros(6), np.zeros(6)])) # vertical m_d_ of latuple
-        G.latuple = kwargs.get('latuple', np.array([.0,.0,.0,.0,.0,np.zeros(2)],dtype=object))  # lateral I,G,M,D,L,[Dy,Dx]
+        G.latuple = kwargs.get('latuple', np.array([.0,.0,.0,.0,.0, np.zeros(2)], dtype=object))  # lateral I,G,M,D,L,[Dy,Dx]
         G.box = kwargs.get('box', np.array([np.inf,np.inf,-np.inf,-np.inf]))  # y0,x0,yn,xn
         G.yx = kwargs.get('yx', np.zeros(2))  # init PP.yx = [(y0+yn)/2,(x0,xn)/2], then ave node yx
         G.maxL = kwargs.get('maxL', 0)  # if dist-nested in cluster_N_
@@ -191,9 +179,9 @@ def val_(Et, _Et=[], fo=0, coef=1, fd=1):
     m, d, n, o = Et  # compute projected match in mfork or borrowed match in dfork:
     if any(_Et):
         _m,_d,_n,_o = _Et  # alt in root Et -> cross-fork induction, same overlap?
-        # co+ave diff proj, no overlap: co-rm is deviation of ave_d?
+        # co+av diff proj, no overlap: co-rm is deviation of ave_d?
         d_co = d * (_m / (ave * coef * _n))  # lend co-m rational deviation
-        d_av = d - ave_d * coef * n * (o if fo else 1)  # lend surround deviation
+        d_av = d - ave_d * coef * n * (o if fo else 1)  # lend surround m deviation
         if fd:  # proj diff:
             val = d_av + d_co
         else:   # proj match: + surround dval - blocking dval, *=decay?
@@ -227,16 +215,17 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
     # comp PP_:
     N_,L_,Et = comp_node_(edge.node_)
     edge.link_ += L_
-    if val_(Et, fo=1) > 0:  # cancel by borrowing d?
-        derH = []
-        comb_H(derH, sum_H(L_,edge,fd=0))  # + mfork
+    if val_(Et, fo=1) > 0:
+        # cancel by borrowing d?
+        derH = [[mlay] for mlay in sum_H(L_,edge,fd=1)]  # nested mlay per layer
         if len(N_) > ave_L:
             cluster_PP_(N_, fd=0)
         if val_(Et, _Et=Et, fo=1) > 0:  # likely not from the same links
             L2N(L_,edge)  # comp dPP_:
             lN_,lL_,dEt = comp_link_(L_,Et)
             if val_(dEt, fo=1) > 0:
-                comb_H(derH, sum_H(L_,edge,fd=0))  # + dfork
+                dderH = sum_H(lL_, edge, fd=1)  # optional dlays
+                for lay, dlay in zip(derH, dderH): lay += [dlay]
                 if len(lN_) > ave_L:
                     cluster_PP_(lN_, fd=1)
         edge.derH = derH
@@ -264,7 +253,7 @@ def comp_node_(_N_, L=0):  # rng+ forms layer of rim and extH per N, appends N_,
             nrim = {L.nodet[1] if L.nodet[0] is G else L.nodet[0] for L,_ in G.rim}
             if _nrim & nrim:  # indirectly connected Gs,
                 continue     # no direct match priority?
-            # dist vs. radii * induction, or extH only?:
+            # dist vs. radii * induction, mainly / extH?
             GV = val_(_G.Et) + val_(G.Et) + sum([val_(l.Et) for l in _G.extH]) + sum([val_(l.Et) for l in _G.extH])
             if dist < max_dist * ((radii * icoef**3) * GV):
                 Link = comp_N(_G,G, rn, angle=[dy,dx], dist=dist)
@@ -370,7 +359,7 @@ def comp_N(_N,N, rn, angle=None, dist=None, dir=1):  # dir if fd, Link.derH=dH, 
         # same olp?
     Link = CL(fd=fd, nodet=[_N,N], yx=np.add(_N.yx,N.yx)/2, angle=angle, dist=dist, box=extend_box(N.box,_N.box))
     lay0 = CLay(root=Link, Et=Et, m_d_t=[m_t,d_t], node_=[_N,N], link_=[Link])
-    derH = comp_H(_N.derH, N.derH, rn,Link, Et)  # comp shared layers, if any
+    derH = comp_H(_N.derH, N.derH, rn,Link, Et, fd)  # comp shared layers, if any
     Link.derH = [lay0, *derH]
     # spec: comp_node_(node_|link_), combinatorial, node_ nested / rng-)agg+?
     if not fd and _N.altG and N.altG:  # if alt M?
@@ -381,7 +370,7 @@ def comp_N(_N,N, rn, angle=None, dist=None, dir=1):  # dir if fd, Link.derH=dH, 
         for rev, node in zip((0,1), (N,_N)):  # reverse Link direction for _N
             if fd: node.rimt[1-rev] += [(Link,rev)]  # opposite to _N,N dir
             else:  node.rim += [(Link,dir)]
-            add_H(node.extH, Link.derH, root=node, rev=rev)
+            add_H(node.extH, Link.derH, root=node, rev=rev)  # should be add_H here?
             node.Et += Et
     return Link
 
@@ -424,66 +413,61 @@ def sum2graph(root, grapht, fd, minL=0, maxL=None):  # sum node and link params 
                     altG += [mG]
     return graph
 
-
 def sum_H(Q, root, rev=0, fc=0, fd=0):  # sum derH in link_|node_
     DerH = []
-    for e in Q:
-        add_LH(DerH, e.derH, root, rev, fc) if isinstance(e,CL) else add_H(DerH, e.derH, root, rev, fc, fd)
+    for e in Q: add_H(DerH, e.derH, root, rev, fc, fd)
     return DerH
 
-def add_LH(H, h, root, rev=0, fc=0):  # add single-fork L.derHs
+def add_H(H, h, root, rev=0, fc=0, fd=0):  # add fork L.derHs
 
     for Lay, lay in zip_longest(H, h, fillvalue=[]):  # different len if lay-selective comp
         if lay:
-            if Lay: Lay.add_lay(lay,rev=rev,fc=fc)
-            else: H += lay.copy_(root=root,rev=rev,fc=fc)
-            root.Et += lay.Et
+            if fd: # one-fork lays
+                if Lay: Lay.add_lay(lay,rev=rev,fc=fc)
+                else: H += [lay.copy_(root=root,rev=rev,fc=fc)]
+                root.Et += lay.Et
+            else:  # two-fork lays
+                if Lay:
+                    for Fork, fork in zip_longest(Lay, lay, fillvalue=[]):
+                        if Fork: Fork.add_lay(fork, rev=rev,fc=fc)
+                        else: Lay += [fork.copy_(root=root)]
+                else:
+                    Lay = []
+                    for fork in lay:
+                        if fork:
+                            Lay += [fork.copy_(root=root,rev=rev,fc=fc)]; root.Et += fork.Et
+                        else: Lay += [[]]
+                    H += [Lay]
 
-def add_H(H, h, root, rev=0, fc=0, fd=0):  # add two-fork G derHs
-
-    for Lay, lay in zip_longest(H, h, fillvalue=[]):  # different len if lay-selective comp
-        if lay:
-            if Lay:
-                for fork in lay: Lay[fork].add_lay(fork,rev=rev,fc=fc)  # combine input forks
-            else:
-                L = CLay(root=root)
-                for fork in lay:
-                    if fork:
-                        root.Et += fork.Et
-                        L.add_lay(fork.copy_(root=root,rev=rev,fc=fc))
-                H += [[[],L] if fd else [L,[]]]
-
-def comb_H(DerH, derH):  # append link.derH lays to root.derH.lays
-
-    for Lay, lay in zip_longest(DerH,derH, fillvalue=[]):  # two forks in G Lay, one in L lay
-        if Lay: Lay += [lay]
-        else: DerH += [[lay]]
-
-def comp_H(H, h, rn, root, Et):  # always two-fork derH
+def comp_H(H, h, rn, root, Et, fd):  # one-fork derH if fd, else two-fork derH
 
     derH = []
     for _lay, lay in zip_longest(H, h, fillvalue=[]):  # different len if lay-selective comp
         if _lay and lay:
-            dLay = []
-            for _fork, fork in zip_longest(_lay, lay, fillvalue=[]):
-                if _fork and fork:
-                    dlay = _fork.comp_lay(fork, rn,root=root)
-                    if dLay: dLay.add_lay(dlay, root=root)  # combine input forks
-                    else:    dLay = dlay
+            if fd:  # one-fork lays
+                dLay = _lay.comp_lay(lay, rn, root=root)
+            else:  # two-fork lays
+                dLay = []
+                for _fork, fork in zip_longest(_lay, lay, fillvalue=[]):
+                    if _fork and fork:
+                        dlay = _fork.comp_lay(fork, rn,root=root)
+                        if dLay: dLay.add_lay(dlay, root=root)  # sum ds between input forks
+                        else:    dLay = dlay
             Et += dLay.Et
             derH += [dLay]
     return derH
 
-def norm_H(H, n, fd=1):
-    for lay in H:
-        if fd:  # L.derH or extH
-            for fork in lay.m_d_t: fork *= n  # arrays
-            lay.Et *= n  # same node_, link_
-        else:
-            for fork in lay:
-                if fork:
-                   for m_d_ in fork.m_d_t: m_d_ *= n  # arrays
-                   fork.Et *= n  # same node_, link_
+# not used:
+def sort_H(H, fd):  # re-assign olp and form priority indices for comp_tree, if selective and aligned
+
+    i_ = []  # priority indices
+    for i, lay in enumerate(sorted(H.node_, key=lambda lay: lay.Et[fd], reverse=True)):
+        di = lay.i - i  # lay index in H
+        lay.olp += di  # derR - valR
+        i_ += [lay.i]
+    H.i_ = i_  # H priority indices: node/m | link/d
+    if not fd:
+        H.root.node_ = H.node_
 
 def L2N(link_,root):
     for L in link_:
