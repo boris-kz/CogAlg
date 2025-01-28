@@ -359,7 +359,7 @@ def comp_N(_N,N, rn, angle=None, dist=None, dir=1):  # dir if fd, Link.derH=dH, 
         # same olp?
     Link = CL(fd=fd, nodet=[_N,N], yx=np.add(_N.yx,N.yx)/2, angle=angle, dist=dist, box=extend_box(N.box,_N.box))
     lay0 = CLay(root=Link, Et=Et, m_d_t=[m_t,d_t], node_=[_N,N], link_=[Link])
-    derH = comp_H(_N.derH, N.derH, rn,Link, Et, fd)  # comp shared layers, if any
+    derH = comp_H(_N.derH, N.derH, rn,Link,Et,fd)  # comp shared layers, if any
     Link.derH = [lay0, *derH]
     # spec: comp_node_(node_|link_), combinatorial, node_ nested / rng-)agg+?
     if not fd and _N.altG and N.altG:  # if alt M?
@@ -370,7 +370,7 @@ def comp_N(_N,N, rn, angle=None, dist=None, dir=1):  # dir if fd, Link.derH=dH, 
         for rev, node in zip((0,1), (N,_N)):  # reverse Link direction for _N
             if fd: node.rimt[1-rev] += [(Link,rev)]  # opposite to _N,N dir
             else:  node.rim += [(Link,dir)]
-            add_H(node.extH, Link.derH, root=node, rev=rev)  # should be add_H here?
+            add_H(node.extH, Link.derH, root=node, rev=rev, fd=1)
             node.Et += Et
     return Link
 
@@ -420,7 +420,7 @@ def sum_H(Q, root, rev=0, fc=0, fd=0):  # sum derH in link_|node_
 
 def add_H(H, h, root, rev=0, fc=0, fd=0):  # add fork L.derHs
 
-    for Lay, lay in zip_longest(H, h, fillvalue=[]):  # different len if lay-selective comp
+    for Lay,lay in zip_longest(H,h):  # different len if lay-selective comp
         if lay:
             if fd: # one-fork lays
                 if Lay: Lay.add_lay(lay,rev=rev,fc=fc)
@@ -428,7 +428,7 @@ def add_H(H, h, root, rev=0, fc=0, fd=0):  # add fork L.derHs
                 root.Et += lay.Et
             else:  # two-fork lays
                 if Lay:
-                    for Fork, fork in zip_longest(Lay, lay, fillvalue=[]):
+                    for Fork,fork in zip_longest(Lay,lay):
                         if Fork: Fork.add_lay(fork, rev=rev,fc=fc)
                         else: Lay += [fork.copy_(root=root)]
                 else:
@@ -439,16 +439,16 @@ def add_H(H, h, root, rev=0, fc=0, fd=0):  # add fork L.derHs
                         else: Lay += [[]]
                     H += [Lay]
 
-def comp_H(H, h, rn, root, Et, fd):  # one-fork derH if fd, else two-fork derH
+def comp_H(H,h, rn, root, Et, fd):  # one-fork derH if fd, else two-fork derH
 
     derH = []
-    for _lay, lay in zip_longest(H, h, fillvalue=[]):  # different len if lay-selective comp
+    for _lay,lay in zip_longest(H,h):  # different len if lay-selective comp
         if _lay and lay:
             if fd:  # one-fork lays
                 dLay = _lay.comp_lay(lay, rn, root=root)
             else:  # two-fork lays
                 dLay = []
-                for _fork, fork in zip_longest(_lay, lay, fillvalue=[]):
+                for _fork,fork in zip_longest(_lay,lay):
                     if _fork and fork:
                         dlay = _fork.comp_lay(fork, rn,root=root)
                         if dLay: dLay.add_lay(dlay, root=root)  # sum ds between input forks
@@ -456,18 +456,6 @@ def comp_H(H, h, rn, root, Et, fd):  # one-fork derH if fd, else two-fork derH
             Et += dLay.Et
             derH += [dLay]
     return derH
-
-# not used:
-def sort_H(H, fd):  # re-assign olp and form priority indices for comp_tree, if selective and aligned
-
-    i_ = []  # priority indices
-    for i, lay in enumerate(sorted(H.node_, key=lambda lay: lay.Et[fd], reverse=True)):
-        di = lay.i - i  # lay index in H
-        lay.olp += di  # derR - valR
-        i_ += [lay.i]
-    H.i_ = i_  # H priority indices: node/m | link/d
-    if not fd:
-        H.root.node_ = H.node_
 
 def L2N(link_,root):
     for L in link_:

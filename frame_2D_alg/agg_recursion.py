@@ -4,7 +4,7 @@ from functools import reduce
 from itertools import zip_longest
 from frame_blobs import frame_blobs_root, intra_blob_root, imread
 from comp_slice import comp_latuple, comp_md_
-from vect_edge import L2N, sum_H, add_H, comp_H, comp_N, comp_node_, comp_link_, sum2graph, get_rim, CG, ave, ave_L, vectorize_root, comp_area, extend_box, val_
+from vect_edge import L2N, CLay, sum_H, add_H, comp_H, comp_N, comp_node_, comp_link_, sum2graph, get_rim, CG, ave, ave_L, vectorize_root, comp_area, extend_box, val_
 '''
 Cross-compare and cluster Gs within a frame, potentially unpacking their node_s first,
 alternating agglomeration and centroid clustering.
@@ -24,15 +24,18 @@ cross_comp -> cluster_N_ -> cluster_C -> cross_comp...
 After computing projected match in forward pass, its backprop will adjust filters to maximize next match. 
 That includes coordinate filters, which select new input within current frame of reference
 
-Future meta-code should process base code in similar fashion:
+In principle, code may start from basic arithmetic ops: inverse in cross-comp and direct in clustering,
+for element-wise and group-wise compression, but we add a lot of specific short-cuts manually. 
 
-Forward: cross-comp and cluster base code (op~pixel, eval~cluster), tracing interactions between processes.
-backprop to meta-code filters according to its contribution to code compression, 
+Then meta-code may refine/extend the process by cross-comp and clustering of the base code, controlled by 
+feedback of meta-filters to maximize higher-level cross-match/min: the ultimate objective function.
 
-more basic backprop is to base code per added match, in addition to filters: 
-insert / replace / delete / iterate ops according to their contributions to top level match?
+We have projected match, but projection by multiple orders of derivatives can't be defined in advance.
+So it should be instrumental to simple lateral min on the top level, similar to sub-goals in RL.
 
-match substitution by projection: instrumental criteria?
+Code cross-comp will trace function calls, with ops as pixels and evaluated code blocks as clusters. 
+In lower layers, min may be replaced with inverse similarity that better correlates with top-layer pairwise min. 
+In higher layers, elements are replaced with their clusters, of incremental distance and composition.  
 '''
 
 def cross_comp(root, C_):  # breadth-first node_,link_ cross-comp, connect clustering, recursion
@@ -40,7 +43,7 @@ def cross_comp(root, C_):  # breadth-first node_,link_ cross-comp, connect clust
     N_,L_,Et = comp_node_(C_)  # cross-comp top-composition exemplars in root.node_
     # mfork
     if val_(Et, fo=1) > 0:
-        derH = [[mlay] for mlay in sum_H(L_,root, fd=1)]  # nested mlay per layer
+        derH = [[mlay] for mlay in sum_H(L_,root, fd=1)]; addH = 1  # nested mlay per layer
         pL_ = {l for n in N_ for l,_ in get_rim(n,fd=0)}
         if len(pL_) > ave_L:
             cluster_N_(root, pL_, fd=0)  # form multiple distance segments, same depth
@@ -49,15 +52,16 @@ def cross_comp(root, C_):  # breadth-first node_,link_ cross-comp, connect clust
             L2N(L_,root)
             lN_,lL_,dEt = comp_link_(L_,Et)
             if val_(dEt, _Et=Et, fo=1) > 0:
-                dderH = sum_H(lL_, root, fd=1)  # optional dlays
+                dderH = sum_H(lL_, root, fd=1); addH = 2
                 for lay, dlay in zip(derH, dderH): lay += [dlay]
+                derH += [[CLay(), dderH[-1]]]  # dderH is longer
                 plL_ = {l for n in lN_ for l,_ in get_rim(n,fd=1)}
                 if len(plL_) > ave_L:
                     cluster_N_(root, plL_, fd=1)  # form altGs for cluster_C_, no new links between dist-seg Gs
 
         root.derH = derH  # replace lower derH, same as node_,link_ replace in cluster_N_
-        comb_altG_(root.node_)  # comb node contour: altG_|neg links sum, cross-comp -> CG altG
-        cluster_C_(root)  # -> mfork G,altG exemplars, + altG surround borrow, root.derH +=lay/ agg+?
+        comb_altG_(root.node_)  # comb node contour: altG_ | neg links sum, cross-comp -> CG altG
+        cluster_C_(root, addH)  # -> mfork G,altG exemplars, + altG surround borrow, root.derH + 1|2 addH
         # no dfork cluster_C_, no ddfork
 
 def cluster_N_(root, L_, fd):  # top-down segment L_ by >ave ratio of L.dists
@@ -112,7 +116,7 @@ Hierarchical clustering should alternate between two phases: generative via conn
  So connectivity clustering is a generative learning phase, forming new derivatives and structured composition levels, 
  while centroid clustering is a compressive phase, reducing multiple similar comparands to a single exemplar. '''
 
-def cluster_C_(root):  # 0 from cluster_edge: same derH depth in root and top Gs
+def cluster_C_(root, addH=0):  # 0 from cluster_edge: same derH depth in root and top Gs
 
     def sum_C(dnode_, C=None):  # sum|subtract and average Rim nodes
 
@@ -185,9 +189,9 @@ def cluster_C_(root):  # 0 from cluster_edge: same derH depth in root and top Gs
                         n.m = 0; n.fin = 0; n_ += [n]
                 break
 
-    C_, n_ = [], []  # concat exemplar/centroid nodes across top Gs, for higher cross_comp
+    C_, n_ = [], []; maxH = len(root.derH) - addH  # concat exemplar/centroid nodes across top Gs, for higher cross_comp
     for G in root.node_:
-        if not G.derH or len(G.derH) < len(root.derH) -1: continue  # not new graph
+        if not G.derH or len(G.derH) < maxH: continue  # not current graph
         N_ = [N for N in sorted([N for N in G.node_], key=lambda n: n.Et[0], reverse=True)]
         for N in N_:
             N.sign, N.m, N.fin = 1,0,0  # C update sign, inclusion m, inclusion flag
@@ -216,8 +220,8 @@ def sum_G_(G, node_, s=1, fc=0):
             G.box = extend_box( G.box, n.box)  # extended per separate node_ in centroid
 
 def comb_altG_(G_):  # combine contour G.altG_ into altG (node_ defined by root=G), for agg+ cross-comp
-    # need to distinguish internal and external alts, they may weaken induction at different distances?
-
+    # internal and external alts: different decay / distance?
+    # background vs. contour?
     for G in G_:
         if isinstance(G,list): continue
         if G.altG:
@@ -235,7 +239,7 @@ def comb_altG_(G_):  # combine contour G.altG_ into altG (node_ defined by root=
                     Et += link.Et
             if val_(Et, _Et=G.Et, coef=10) > 0:  # min sum neg links
                 altG = CG(root=G, Et=Et, node_=node_, link_=link_); altG.m=0  # other attrs are not significant
-                altG.derH = sum_H(altG.link_, altG)   # sum link derHs
+                altG.derH = sum_H(altG.link_, altG, fd=1)   # sum link derHs
                 G.altG = altG
 
 def norm_H(H, n, fd=1):
@@ -248,6 +252,17 @@ def norm_H(H, n, fd=1):
                 if fork:
                    for m_d_ in fork.m_d_t: m_d_ *= n  # arrays
                    fork.Et *= n  # same node_, link_
+# not used:
+def sort_H(H, fd):  # re-assign olp and form priority indices for comp_tree, if selective and aligned
+
+    i_ = []  # priority indices
+    for i, lay in enumerate(sorted(H.node_, key=lambda lay: lay.Et[fd], reverse=True)):
+        di = lay.i - i  # lay index in H
+        lay.olp += di  # derR - valR
+        i_ += [lay.i]
+    H.i_ = i_  # H priority indices: node/m | link/d
+    if not fd:
+        H.root.node_ = H.node_
 
 if __name__ == "__main__":
     image_file = './images/raccoon_eye.jpeg'
