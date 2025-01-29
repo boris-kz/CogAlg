@@ -6,8 +6,6 @@ from frame_blobs import frame_blobs_root, intra_blob_root, imread
 from comp_slice import comp_latuple, comp_md_
 from vect_edge import L2N, CLay, sum_H, add_H, comp_H, comp_N, comp_node_, comp_link_, sum2graph, get_rim, CG, ave, ave_L, vectorize_root, comp_area, extend_box, val_
 '''
-Cross-compare and cluster Gs within a frame, potentially unpacking their node_s first,
-alternating agglomeration and centroid clustering.
 notation:
 prefix f: flag
 prefix _: prior of two same-name variables, multiple _s for relative precedence
@@ -16,26 +14,22 @@ postfix t: tuple, multiple ts is a nested tuple
 capitalized vars are summed small-case vars 
 
 Current code is processing primary data:
-ultimate criterion is lateral match=min, projecting sub-criteria may add distant | aggregate lateral match
-
 Each agg+ cycle forms higher-composition complemented graphs in cluster_N_ and refines them in cluster_C_: 
 cross_comp -> cluster_N_ -> cluster_C -> cross_comp...
 
-After computing projected match in forward pass, its backprop will adjust filters to maximize next match. 
-That includes coordinate filters, which select new input within current frame of reference
+Ultimate criterion is lateral match=min, with projecting sub-criteria to add distant | aggregate lateral match
+After computing projected match in forward pass, the backprop will adjust filters to maximize next match. 
+That includes coordinate filters, which select new input in current frame of reference
 
-In principle, code may start from basic arithmetic ops: inverse in cross-comp and direct in clustering,
-for element-wise and group-wise compression, but we add a lot of specific short-cuts manually. 
+The process may start from arithmetic: inverse ops in cross-comp and direct ops in clustering, for pairwise and group compression. 
+But to get initial meaningful code, it seems a lot easier to design it manually. 
+Then meta-code can compress base code by cross-comp, tracing function calls, and clustering of evaluated code blocks.
 
-Then meta-code may refine/extend the process by cross-comp and clustering of the base code, controlled by 
-feedback of meta-filters to maximize higher-level cross-match/min: the ultimate objective function.
+Meta feedback must combine code compression and data compression: higher-level match is still the ultimate criterion.
+Informed match is min, but may be replaced with inverted miss if it better correlates with top-layer pairwise min. 
 
-We have projected match, but projection by multiple orders of derivatives can't be defined in advance.
-So it should be instrumental to simple lateral min on the top level, similar to sub-goals in RL.
-
-Code cross-comp will trace function calls, with ops as pixels and evaluated code blocks as clusters. 
-In lower layers, min may be replaced with inverse similarity that better correlates with top-layer pairwise min. 
-In higher layers, elements are replaced with their clusters, of incremental distance and composition.  
+Code-coordinate filters may extend base code by cross-projecting and combining patterns found in the original base code. 
+Similar to cross-projection by data-coordinate filters, described in "imagination, planning, action" section of part 3 in Readme.
 '''
 
 def cross_comp(root, C_):  # breadth-first node_,link_ cross-comp, connect clustering, recursion
@@ -54,7 +48,7 @@ def cross_comp(root, C_):  # breadth-first node_,link_ cross-comp, connect clust
             if val_(dEt, _Et=Et, fo=1) > 0:
                 dderH = sum_H(lL_, root, fd=1); addH = 2
                 for lay, dlay in zip(derH, dderH): lay += [dlay]
-                derH += [[CLay(), dderH[-1]]]  # dderH is longer
+                derH += [[CLay(root=root), dderH[-1]]]  # dderH is longer
                 plL_ = {l for n in lN_ for l,_ in get_rim(n,fd=1)}
                 if len(plL_) > ave_L:
                     cluster_N_(root, plL_, fd=1)  # form altGs for cluster_C_, no new links between dist-seg Gs
@@ -144,7 +138,7 @@ def cluster_C_(root, addH=0):  # 0 from cluster_edge: same derH depth in root an
         mLat = comp_latuple(C.latuple, N.latuple, C.Et[2], N.Et[2])[1][0]
         mVert = comp_md_(C.vert[1], N.vert[1])[1][0]
         M = mL + mA + mLat + mVert
-        M += sum([fork.Et[0] for lay in comp_H(C.derH, N.derH, rn=1, root=None, Et=np.zeros(4)) for fork in lay if fork])
+        M += sum([fork.Et[0] for lay in comp_H(C.derH, N.derH, rn=1, root=None, Et=np.zeros(4),fd=0) for fork in lay if fork])
         if C.altG and N.altG:  # converted to altG
             M += comp_N(C.altG, N.altG, C.altG.Et[2] / N.altG.Et[2]).Et[0]
         # if fuzzy C:
@@ -199,7 +193,7 @@ def cluster_C_(root, addH=0):  # 0 from cluster_edge: same derH depth in root an
             if not N.fin:  # not in prior C
                 if val_(sum([l.Et for l in N.extH]), coef=10) > 0:  # cross-similar in G
                     centroid_cluster(N, C_, n_, root)  # search via N.rim, C_+=[C]| unpack
-                else:  # the rest of N_ M is lower
+                else:  # M is lower in the rest of N_
                     break
     root.node_ = C_ + n_  # or [n_]?
     if len(C_) > ave_L and not root.root:  # frame
@@ -221,7 +215,7 @@ def sum_G_(G, node_, s=1, fc=0):
 
 def comb_altG_(G_):  # combine contour G.altG_ into altG (node_ defined by root=G), for agg+ cross-comp
     # internal and external alts: different decay / distance?
-    # background vs. contour?
+    # background vs contour?
     for G in G_:
         if isinstance(G,list): continue
         if G.altG:

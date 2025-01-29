@@ -2,6 +2,7 @@ from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack
 from slice_edge import slice_edge, comp_angle, ave_G
 from comp_slice import comp_slice, comp_latuple, comp_md_
 from itertools import combinations, zip_longest
+from functools import reduce
 from copy import deepcopy, copy
 import numpy as np
 
@@ -47,13 +48,13 @@ med_cost = 10
 
 class CLay(CBase):  # flat layer if derivation hierarchy
     name = "lay"
-    def __init__(l, root, Et, node_, link_, m_d_t):
+    def __init__(l, **kwargs):
         super().__init__()
-        l.Et = Et
-        l.root = root  # higher node or link
-        l.node_ = node_  # concat across fork tree
-        l.link_ = link_
-        l.m_d_t = m_d_t  # [[mext,mlat,mver],[dext,dlat,dver]], sum across fork tree
+        l.Et = kwargs.get('Et', np.zeros(4))
+        l.root = kwargs.get('root', None)  # higher node or link
+        l.node_ = kwargs.get('node_', [])  # concat across fork tree
+        l.link_ = kwargs.get('link_', [])
+        l.m_d_t = kwargs.get('m_d_t', [])  # [[mext,mlat,mver],[dext,dlat,dver]], sum across fork tree
         # altL = CLay from comp altG
         # i = kwargs.get('i', 0)  # lay index in root.node_, link_, to revise olp
         # i_ = kwargs.get('i_',[])  # priority indices to compare node H by m | link H by d
@@ -65,7 +66,7 @@ class CLay(CBase):  # flat layer if derivation hierarchy
         if i:  # reuse self
             C = lay; lay = i; C.node_=copy(i.node_); C.link_ = copy(i.link_); C.m_d_t=[]; C.root=root
         else:  # init new C
-            C = CLay(root=root, Et=np.zeros(4), node_=copy(lay.node_), link_=copy(lay.link_), m_d_t=[])
+            C = CLay(root=root, node_=copy(lay.node_), link_=copy(lay.link_))
         C.Et = lay.Et * -1 if (fc and rev) else copy(lay.Et)
 
         for fd, tt in enumerate(lay.m_d_t):  # nested array tuples
@@ -215,17 +216,17 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
     # comp PP_:
     N_,L_,Et = comp_node_(edge.node_)
     edge.link_ += L_
-    if val_(Et, fo=1) > 0:
-        # cancel by borrowing d?
-        derH = [[mlay] for mlay in sum_H(L_,edge,fd=1)]  # nested mlay per layer
+    if val_(Et, fo=1) > 0:  # cancel by borrowing d?
+        mlay = L_[0].derH[0]; for link in L_[1:]: mlay.add_lay(link.derH[0])
+        derH = [[mlay]]  # single nested mlay
         if len(N_) > ave_L:
             cluster_PP_(N_, fd=0)
         if val_(Et, _Et=Et, fo=1) > 0:  # likely not from the same links
             L2N(L_,edge)  # comp dPP_:
             lN_,lL_,dEt = comp_link_(L_,Et)
             if val_(dEt, fo=1) > 0:
-                dderH = sum_H(lL_, edge, fd=1)  # optional dlays
-                for lay, dlay in zip(derH, dderH): lay += [dlay]
+                lay_t = sum_H(lL_, edge, fd=1)  # two-layer dfork
+                derH = [[mlay,lay_t[0]], [CLay(root=edge),lay_t[1]]]  # two-layer derH
                 if len(lN_) > ave_L:
                     cluster_PP_(lN_, fd=1)
         edge.derH = derH
@@ -233,7 +234,8 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
 def comp_node_(_N_, L=0):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et, ~ graph CNN without backprop
 
     _Gp_ = []  # [G pair + co-positionals], for top-nested Ns, unless cross-nesting comp:
-    for _G, G in combinations([N for N in _N_ if len(N.derH)==L] if L else _N_, r=2):  # if max len derH in agg+
+    if L: _N_ = filter(lambda N: len(N.derH)==L, _N_)
+    for _G, G in combinations(_N_, r=2):  # if max len derH in agg+
         _n,n = _G.Et[2],G.Et[2]; rn = _n/n if _n>n else n/_n
         if rn > ave_rn:  # scope disparity or _G.depth != G.depth
             continue
@@ -254,7 +256,7 @@ def comp_node_(_N_, L=0):  # rng+ forms layer of rim and extH per N, appends N_,
             if _nrim & nrim:  # indirectly connected Gs,
                 continue     # no direct match priority?
             # dist vs. radii * induction, mainly / extH?
-            GV = val_(_G.Et) + val_(G.Et) + sum([val_(l.Et) for l in _G.extH]) + sum([val_(l.Et) for l in _G.extH])
+            GV = val_(_G.Et) + val_(G.Et) + sum([val_(l.Et) for l in _G.extH]) + sum([val_(l.Et) for l in G.extH])
             if dist < max_dist * ((radii * icoef**3) * GV):
                 Link = comp_N(_G,G, rn, angle=[dy,dx], dist=dist)
                 L_ += [Link]  # include -ve links
@@ -398,7 +400,7 @@ def sum2graph(root, grapht, fd, minL=0, maxL=None):  # sum node and link params 
         graph.Et += N.Et * icoef ** 2  # deeper, lower weight
         N.root = graph
     graph.node_= N_  # nodes or roots, link_ is still current-dist links only?
-    graph.derH = sum_H(link_, graph, fd=1)  # sum link derH
+    graph.derH = [[CLay(root=graph), lay] for lay in sum_H(link_, graph, fd=1)]  # sum and nest link derH
     yx = np.mean(yx_,axis=0)
     dy_,dx_ = (graph.yx - yx_).T; dist_ = np.hypot(dy_,dx_)
     graph.aRad = dist_.mean()  # ave distance from graph center to node centers
@@ -429,8 +431,9 @@ def add_H(H, h, root, rev=0, fc=0, fd=0):  # add fork L.derHs
             else:  # two-fork lays
                 if Lay:
                     for Fork,fork in zip_longest(Lay,lay):
-                        if Fork: Fork.add_lay(fork, rev=rev,fc=fc)
-                        else: Lay += [fork.copy_(root=root)]
+                        if fork:
+                            if Fork: Fork.add_lay(fork, rev=rev,fc=fc)
+                            else: Lay += [fork.copy_(root=root)]
                 else:
                     Lay = []
                     for fork in lay:
