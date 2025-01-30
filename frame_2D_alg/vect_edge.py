@@ -1,8 +1,7 @@
 from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
 from slice_edge import slice_edge, comp_angle, ave_G
 from comp_slice import comp_slice, comp_latuple, comp_md_
-from itertools import combinations, zip_longest
-from functools import reduce
+from itertools import combinations, zip_longest  # from functools import reduce
 from copy import deepcopy, copy
 import numpy as np
 
@@ -217,7 +216,8 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
     N_,L_,Et = comp_node_(edge.node_)
     edge.link_ += L_
     if val_(Et, fo=1) > 0:  # cancel by borrowing d?
-        mlay = L_[0].derH[0]; for link in L_[1:]: mlay.add_lay(link.derH[0])
+        mlay = L_[0].derH[0]
+        for link in L_[1:]: mlay.add_lay(link.derH[0])
         derH = [[mlay]]  # single nested mlay
         if len(N_) > ave_L:
             cluster_PP_(N_, fd=0)
@@ -226,9 +226,11 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
             lN_,lL_,dEt = comp_link_(L_,Et)
             if val_(dEt, fo=1) > 0:
                 lay_t = sum_H(lL_, edge, fd=1)  # two-layer dfork
-                derH = [[mlay,lay_t[0]], [CLay(root=edge),lay_t[1]]]  # two-layer derH
+                derH = [[mlay,lay_t[0]], [[],lay_t[1]]]  # two-layer derH
                 if len(lN_) > ave_L:
                     cluster_PP_(lN_, fd=1)
+            else:
+                derH[0] += [[]]  # empty dlay
         edge.derH = derH
 
 def comp_node_(_N_, L=0):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et, ~ graph CNN without backprop
@@ -430,10 +432,11 @@ def add_H(H, h, root, rev=0, fc=0, fd=0):  # add fork L.derHs
                 root.Et += lay.Et
             else:  # two-fork lays
                 if Lay:
-                    for Fork,fork in zip_longest(Lay,lay):
+                    for i, (Fork,fork) in enumerate(zip_longest(Lay,lay)):
                         if fork:
-                            if Fork: Fork.add_lay(fork, rev=rev,fc=fc)
-                            else: Lay += [fork.copy_(root=root)]
+                            if Fork:
+                                if fork: Fork.add_lay(fork, rev=rev,fc=fc)
+                            else: Lay[i] = fork.copy_(root=root)
                 else:
                     Lay = []
                     for fork in lay:

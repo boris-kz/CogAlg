@@ -1,10 +1,9 @@
 import numpy as np
 from copy import copy, deepcopy
-from functools import reduce
-from itertools import zip_longest
+from functools import reduce  # from itertools import zip_longest
 from frame_blobs import frame_blobs_root, intra_blob_root, imread
 from comp_slice import comp_latuple, comp_md_
-from vect_edge import L2N, CLay, sum_H, add_H, comp_H, comp_N, comp_node_, comp_link_, sum2graph, get_rim, CG, ave, ave_L, vectorize_root, comp_area, extend_box, val_
+from vect_edge import L2N, sum_H, add_H, comp_H, comp_N, comp_node_, comp_link_, sum2graph, get_rim, CG, ave, ave_L, vectorize_root, comp_area, extend_box, val_
 '''
 notation:
 prefix f: flag
@@ -13,23 +12,26 @@ postfix _: array of same-name elements, multiple _s is nested array
 postfix t: tuple, multiple ts is a nested tuple
 capitalized vars are summed small-case vars 
 
-Current code is processing primary data:
-Each agg+ cycle forms higher-composition complemented graphs in cluster_N_ and refines them in cluster_C_: 
-cross_comp -> cluster_N_ -> cluster_C -> cross_comp...
+Current code is processing primary data, starting with images
+Each agg+ cycle forms complemented graphs in cluster_N_ and refines them in cluster_C_: 
+cross_comp -> cluster_N_ -> cluster_C -> cross_comp.., with incremental graph composition per cycle
 
-Ultimate criterion is lateral match=min, with projecting sub-criteria to add distant | aggregate lateral match
+Ultimate criterion is lateral match, with projecting sub-criteria to add distant | aggregate lateral match
+If a property is found to be independently predictive its match is defined as min comparands: their shared quantity.
+Else match is an inverted deviation of miss: instability of that property. 
+
 After computing projected match in forward pass, the backprop will adjust filters to maximize next match. 
 That includes coordinate filters, which select new input in current frame of reference
 
 The process may start from arithmetic: inverse ops in cross-comp and direct ops in clustering, for pairwise and group compression. 
-But to get initial meaningful code, it seems a lot easier to design it manually. 
-Then meta-code can compress base code by cross-comp, tracing function calls, and clustering of evaluated code blocks.
+But there is a huge number of possible variations, so it seems a lot easier to design meaningful initial code manually.
 
-Meta feedback must combine code compression and data compression: higher-level match is still the ultimate criterion.
-Informed match is min, but may be replaced with inverted miss if it better correlates with top-layer pairwise min. 
+Then meta-code can compress base code by process cross-comp (tracing function calls), and clustering of evaluated code blocks.
+Meta feedback must combine code compression and data compression values: higher-level match is still the ultimate criterion.
 
-Code-coordinate filters may extend base code by cross-projecting and combining patterns found in the original base code. 
-Similar to cross-projection by data-coordinate filters, described in "imagination, planning, action" section of part 3 in Readme.
+Code-coordinate filters may extend base code by cross-projecting and combining patterns found in the original base code
+(which may include extending eval function with new match-projecting derivatives) 
+This is similar to cross-projection by data-coordinate filters, described in "imagination, planning, action" section of part 3 in Readme.
 '''
 
 def cross_comp(root, C_):  # breadth-first node_,link_ cross-comp, connect clustering, recursion
@@ -48,15 +50,19 @@ def cross_comp(root, C_):  # breadth-first node_,link_ cross-comp, connect clust
             if val_(dEt, _Et=Et, fo=1) > 0:
                 dderH = sum_H(lL_, root, fd=1); addH = 2
                 for lay, dlay in zip(derH, dderH): lay += [dlay]
-                derH += [[CLay(root=root), dderH[-1]]]  # dderH is longer
+                derH += [[[], dderH[-1]]]  # dderH is longer
                 plL_ = {l for n in lN_ for l,_ in get_rim(n,fd=1)}
                 if len(plL_) > ave_L:
                     cluster_N_(root, plL_, fd=1)  # form altGs for cluster_C_, no new links between dist-seg Gs
-
+            else:
+                for lay in derH:
+                    lay += [[]]  # empty dlay
         root.derH = derH  # replace lower derH, same as node_,link_ replace in cluster_N_
         comb_altG_(root.node_)  # comb node contour: altG_ | neg links sum, cross-comp -> CG altG
-        cluster_C_(root, addH)  # -> mfork G,altG exemplars, + altG surround borrow, root.derH + 1|2 addH
+        cluster_C_(root, addH)  # -> mfork G,altG exemplars, +altG surround borrow, root.derH + 1|2 lays
         # no dfork cluster_C_, no ddfork
+
+        return sum_G_(root.node_[0], root.node_[1:])  # lev_G
 
 def cluster_N_(root, L_, fd):  # top-down segment L_ by >ave ratio of L.dists
 
@@ -112,7 +118,7 @@ Hierarchical clustering should alternate between two phases: generative via conn
 
 def cluster_C_(root, addH=0):  # 0 from cluster_edge: same derH depth in root and top Gs
 
-    def sum_C(dnode_, C=None):  # sum|subtract and average Rim nodes
+    def sum_C(dnode_, C=None):  # sum|subtract and average C-connected nodes
 
         if C is None:
             C,A = CG(node_=dnode_),CG(); C.fin = 1; sign=1  # add if new, else subtract (init C.fin here)
@@ -258,10 +264,9 @@ def sort_H(H, fd):  # re-assign olp and form priority indices for comp_tree, if 
     if not fd:
         H.root.node_ = H.node_
 
-if __name__ == "__main__":
-    image_file = './images/raccoon_eye.jpeg'
-    image = imread(image_file)
-    frame = frame_blobs_root(image)
+def agg_H_pipe(focus):  # currently sequential but easily parallelizable level-updating pipeline
+
+    frame = frame_blobs_root(focus)
     intra_blob_root(frame)
     vectorize_root(frame)
     if frame.node_:  # converted edges
@@ -271,4 +276,28 @@ if __name__ == "__main__":
             cluster_C_(edge)  # no cluster_C_ in vect_edge
             G_ += edge.node_  # unpack edges
         frame.node_ = G_
-        cross_comp(frame, G_)  # append frame derH, cluster_N_
+        GH = []
+        while True:  # feedforward
+            lev_G = cross_comp(frame, G_)  # return combined top composition level, append frame.derH
+            GH += [lev_G]  # indefinite graph hierarchy
+            if val_(lev_G.Et, ave) < 0: break
+        frame.node_ = GH
+        agg_H = GH[:-1]  # no feedback to local top graph
+        m,d,n,o = lev_G.Et; k = n*o; m = m/k; d = d/k  # very tentative, need to add all other filters
+        # feedback
+        while agg_H and m + d > sum(lev_G.aves):  # add min and max coordinate filters
+            lev_G = agg_H.pop()
+            lev_G.aves = [m,d]  # update lower-level filters with current level aves
+            m,d,n,o = lev_G.Et; k = n*o
+            m = m/k; d = d/k
+
+if __name__ == "__main__":
+    # image_file = './images/raccoon_eye.jpeg'
+    image_file = './images/toucan.jpg'
+    image = imread(image_file)
+
+    # min and max coordinate filters, updated by feedback to shift the focus within a frame:
+    yn = xn = 64  # focal sub-frame size, = raccoon_eye, can be any number
+    y0 = x0 = 400  # focal sub-frame start
+    focus = image[y0:y0+yn, x0:x0+xn]
+    agg_H_pipe(focus)
