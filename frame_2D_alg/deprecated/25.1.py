@@ -413,8 +413,26 @@ def sum_H(Q, root, rev=0, fc=0, fmerge=0):  # sum derH in link_|node_
     L = len(root.derH); l = len(G.derH)
     if l < L - (1 if L%2 == l%2 else 2): continue  # 2 if only one len is odd?
 '''
+
 def comb_H(DerH, derH):  # append link.derH lays to root.derH.lays
 
     for Lay, lay in zip_longest(DerH,derH, fillvalue=[]):
         if Lay: Lay += [lay]
         else: DerH += [[lay]]  # two forks in G Lay
+
+def val_(Et, _Et=[], fo=0, coef=1, fd=1):
+
+    m, d, n, o = Et  # compute projected match in mfork or borrowed match in dfork:
+    if any(_Et):
+        _m,_d,_n,_o = _Et  # alt in root Et -> cross-fork induction, same overlap?
+        # co+av diff proj, no overlap: co-rm is deviation of ave_d?
+        d_co = d * (_m / (ave * coef * _n))  # lend co-m rational deviation
+        d_av = d - ave_d * coef * n * (o if fo else 1)  # lend surround m deviation
+        if fd:  # proj diff:
+            val = d_av + d_co
+        else:   # proj match: + surround dval - blocking dval, *=decay?
+            val = (m - d_co + d_av) - ave * coef * n * (o if fo else 1)  # d_av induction
+    else:
+        val = m - ave * coef * n * (o if fo else 1)  # * overlap in cluster eval, not comp eval
+    return val
+

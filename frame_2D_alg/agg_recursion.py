@@ -1,9 +1,10 @@
 import numpy as np
 from copy import copy, deepcopy
 from functools import reduce  # from itertools import zip_longest
+from multiprocessing import Pool
 from frame_blobs import frame_blobs_root, intra_blob_root, imread
 from comp_slice import comp_latuple, comp_md_
-from vect_edge import L2N, sum_H, add_H, comp_H, comp_N, comp_node_, comp_link_, sum2graph, get_rim, CG, ave, ave_L, vectorize_root, comp_area, extend_box, val_
+from vect_edge import L2N, sum_H, add_H, comp_H, comp_N, comp_node_, comp_link_, sum2graph, get_rim, CG, ave, ave_L, vectorize_root, comp_area, extend_box, Val_
 '''
 notation:
 prefix f: flag
@@ -26,48 +27,47 @@ That includes coordinate filters, which select new input in current frame of ref
 The process may start from arithmetic: inverse ops in cross-comp and direct ops in clustering, for pairwise and group compression. 
 But there is a huge number of possible variations, so it seems a lot easier to design meaningful initial code manually.
 
-Then meta-code can compress base code by process cross-comp (tracing function calls), and clustering of evaluated code blocks.
-Meta feedback must combine code compression and data compression values: higher-level match is still the ultimate criterion.
+Meta-code will generate/compress base code by process cross-comp (tracing function calls), and clustering by evaluated code blocks.
+Meta-feedback must combine code compression and data compression values: higher-level match is still the ultimate criterion.
 
 Code-coordinate filters may extend base code by cross-projecting and combining patterns found in the original base code
 (which may include extending eval function with new match-projecting derivatives) 
-This is similar to cross-projection by data-coordinate filters, described in "imagination, planning, action" section of part 3 in Readme.
+Similar to cross-projection by data-coordinate filters, described in "imagination, planning, action" section of part 3 in Readme.
 '''
 
-def cross_comp(root, C_):  # breadth-first node_,link_ cross-comp, connect clustering, recursion
+def cross_comp(root, C_):  # form agg_Level by breadth-first node_,link_ cross-comp, connect clustering, recursion
 
     N_,L_,Et = comp_node_(C_)  # cross-comp top-composition exemplars in root.node_
     # mfork
-    if val_(Et, fo=1) > 0:
+    if Val_(Et, _Et=Et, fd=0) > 0:  # cluster eval
         derH = [[mlay] for mlay in sum_H(L_,root, fd=1)]; addH = 1  # nested mlay per layer
         pL_ = {l for n in N_ for l,_ in get_rim(n,fd=0)}
         if len(pL_) > ave_L:
             cluster_N_(root, pL_, fd=0)  # form multiple distance segments, same depth
-        # dfork, one for all dist segs
-        if val_(Et,_Et=Et, fo=1) > 0:  # same root for L_, root.link_ was compared in root-forming for alt clustering
-            L2N(L_,root)
-            lN_,lL_,dEt = comp_link_(L_,Et)
-            if val_(dEt, _Et=Et, fo=1) > 0:
-                dderH = sum_H(lL_, root, fd=1); addH = 2
-                for lay, dlay in zip(derH, dderH): lay += [dlay]
-                derH += [[[], dderH[-1]]]  # dderH is longer
-                plL_ = {l for n in lN_ for l,_ in get_rim(n,fd=1)}
-                if len(plL_) > ave_L:
-                    cluster_N_(root, plL_, fd=1)  # form altGs for cluster_C_, no new links between dist-seg Gs
-            else:
-                for lay in derH:
-                    lay += [[]]  # empty dlay
+        # dfork, one for all dist segs:
+        L2N(L_,root)
+        lN_,lL_,dEt = comp_link_(L_,Et)  # same root for L_, root.link_ was compared in root-forming for alt clustering
+        if Val_(dEt, _Et=Et, fd=1) > 0:
+            dderH = sum_H(lL_, root, fd=1); addH = 2
+            for lay, dlay in zip(derH, dderH): lay += [dlay]
+            derH += [[[], dderH[-1]]]  # dderH is longer
+            plL_ = {l for n in lN_ for l,_ in get_rim(n,fd=1)}
+            if len(plL_) > ave_L:
+                cluster_N_(root, plL_, fd=1)  # form altGs for cluster_C_, no new links between dist-seg Gs
+        else:
+            for lay in derH:
+                lay += [[]]  # empty dlay
         root.derH = derH  # replace lower derH, same as node_,link_ replace in cluster_N_
         comb_altG_(root.node_)  # comb node contour: altG_ | neg links sum, cross-comp -> CG altG
         cluster_C_(root, addH)  # -> mfork G,altG exemplars, +altG surround borrow, root.derH + 1|2 lays
         # no dfork cluster_C_, no ddfork
-
-        return sum_G_(root.node_[0], root.node_[1:])  # lev_G
+        # if val_: lev_G -> agg_H_pipe
+        return sum_G_(root.node_[0], root.node_[1:])
 
 def cluster_N_(root, L_, fd):  # top-down segment L_ by >ave ratio of L.dists
 
     L_ = sorted(L_, key=lambda x: x.dist)  # shorter links first
-    min_dist = 0
+    min_dist = 0; Et=root.Et
     while True:
         # each loop forms G_ of contiguous-distance L_ segment
         _L = L_[0]; N_, et = copy(_L.nodet), _L.Et
@@ -75,7 +75,7 @@ def cluster_N_(root, L_, fd):  # top-down segment L_ by >ave ratio of L.dists
             n.fin = 0
         for i, L in enumerate(L_[1:], start=1):
             rel_dist = L.dist/_L.dist  # >= 1
-            if rel_dist < 1.2 or val_(et)>0 or len(L_[i:]) < ave_L:  # ~=dist Ns or either side of L is weak
+            if rel_dist < 1.2 or Val_(et, _Et=Et) > 0 or len(L_[i:]) < ave_L:  # ~=dist Ns or either side of L is weak
                 _L = L; N_ += L.nodet; et += L.Et
             else:
                 i -= 1; break  # terminate contiguous-distance segment
@@ -88,13 +88,13 @@ def cluster_N_(root, L_, fd):  # top-down segment L_ by >ave ratio of L.dists
                 eN_ = []
                 for eN in _eN_:  # cluster rim-connected ext Ns, all in root Gt
                     node_+=[eN]; eN.fin = 1  # all rim
-                    for L,_ in get_rim(eN, fd): # all +ve, * density: if L.Et[0]/ave_d * sum([n.extH.m * ccoef / ave for n in L.nodet])?
+                    for L,_ in get_rim(eN, fd):  # all +ve, * density: if L.Et[0]/ave_d * sum([n.extH.m * ccoef / ave for n in L.nodet])?
                         if L not in link_:
                             eN_ += [n for n in L.nodet if not n.fin]
                             if L.dist < max_dist:
                                 link_+=[L]; et+=L.Et
                 _eN_ = {*eN_}
-            if val_(et) > 0:  # cluster node roots:
+            if Val_(et, _Et=Et) > 0:  # cluster node roots:
                 G_ += [sum2graph(root, [list({*node_}),list({*link_}), et], fd, min_dist, max_dist)]
             else:
                 G_ += node_  # unpack
@@ -197,7 +197,7 @@ def cluster_C_(root, addH=0):  # 0 from cluster_edge: same derH depth in root an
             N.sign, N.m, N.fin = 1,0,0  # C update sign, inclusion m, inclusion flag
         for i, N in enumerate(N_):  # replace some nodes by their centroid clusters
             if not N.fin:  # not in prior C
-                if val_(sum([l.Et for l in N.extH]), coef=10) > 0:  # cross-similar in G
+                if Val_(sum([l.Et for l in N.extH]), _Et=root.Et, coef=10) > 0:  # cross-similar in G
                     centroid_cluster(N, C_, n_, root)  # search via N.rim, C_+=[C]| unpack
                 else:  # M is lower in the rest of N_
                     break
@@ -228,16 +228,16 @@ def comb_altG_(G_):  # combine contour G.altG_ into altG (node_ defined by root=
             if isinstance(G.altG, list):
                 sum_G_(G.altG[0], [a for a in G.altG[1:]])
                 G.altG = CG(root=G, node_= G.altG); G.altG.m=0  # was G.altG_
-                if val_(G.altG.Et, _Et=G.Et):  # alt D * G rM
+                if Val_(G.altG.Et, _Et=G.Et):  # alt D * G rM
                     cross_comp(G.altG, G.node_)
         else:  # sum neg links
             link_,node_,derH, Et = [],[],[], np.zeros(4)
             for link in G.link_:
-                if val_(link.Et, _Et=G.Et) > 0:  # neg link
+                if Val_(link.Et, _Et=G.Et) > 0:  # neg link
                     link_ += [link]  # alts are links | lGs
                     node_ += [n for n in link.nodet if n not in node_]
                     Et += link.Et
-            if val_(Et, _Et=G.Et, coef=10) > 0:  # min sum neg links
+            if Val_(Et, _Et=G.Et, coef=10) > 0:  # min sum neg links
                 altG = CG(root=G, Et=Et, node_=node_, link_=link_); altG.m=0  # other attrs are not significant
                 altG.derH = sum_H(altG.link_, altG, fd=1)   # sum link derHs
                 G.altG = altG
@@ -276,13 +276,13 @@ def agg_H_pipe(focus):  # currently sequential but easily parallelizable level-u
             cluster_C_(edge)  # no cluster_C_ in vect_edge
             G_ += edge.node_  # unpack edges
         frame.node_ = G_
-        GH = []
+        agg_H = []
         while True:  # feedforward
             lev_G = cross_comp(frame, G_)  # return combined top composition level, append frame.derH
-            GH += [lev_G]  # indefinite graph hierarchy
-            if val_(lev_G.Et, ave) < 0: break
-        frame.node_ = GH
-        agg_H = GH[:-1]  # no feedback to local top graph
+            agg_H += [lev_G]  # indefinite graph hierarchy
+            if Val_(lev_G.Et, lev_G.Et, ave) < 0: break
+        frame.agg_H = agg_H
+        agg_H = agg_H[:-1]  # no feedback to local top graph
         m,d,n,o = lev_G.Et; k = n*o; m = m/k; d = d/k  # very tentative, need to add all other filters
         # feedback
         while agg_H and m + d > sum(lev_G.aves):  # add min and max coordinate filters
@@ -290,14 +290,20 @@ def agg_H_pipe(focus):  # currently sequential but easily parallelizable level-u
             lev_G.aves = [m,d]  # update lower-level filters with current level aves
             m,d,n,o = lev_G.Et; k = n*o
             m = m/k; d = d/k
+    return frame
 
 if __name__ == "__main__":
     # image_file = './images/raccoon_eye.jpeg'
     image_file = './images/toucan.jpg'
     image = imread(image_file)
-
-    # min and max coordinate filters, updated by feedback to shift the focus within a frame:
+    # set min,max coordinate filters, updated by feedback to shift the focus within a frame:
     yn = xn = 64  # focal sub-frame size, = raccoon_eye, can be any number
     y0 = x0 = 400  # focal sub-frame start
     focus = image[y0:y0+yn, x0:x0+xn]
-    agg_H_pipe(focus)
+    frame = agg_H_pipe(focus)
+    # if level-parallel:
+    with Pool() as pool:
+        pool.map( agg_Lev(lambda: frame.agg_H))
+        # all levels in agg_H will be processed in parallel: process,output,feedback
+        # 1st level gets focus@image, initialized or set by feedback
+        # message-passing upward feedforward and downward feedback

@@ -174,20 +174,22 @@ def vectorize_root(frame):
                         # add altG: converted adj_blobs of converted edge blob?
     frame.derH = sum_H(frame.node_,frame)  # single layer
 
-def val_(Et, _Et=[], fo=0, coef=1, fd=1):
 
-    m, d, n, o = Et  # compute projected match in mfork or borrowed match in dfork:
-    if any(_Et):
-        _m,_d,_n,_o = _Et  # alt in root Et -> cross-fork induction, same overlap?
-        # co+av diff proj, no overlap: co-rm is deviation of ave_d?
-        d_co = d * (_m / (ave * coef * _n))  # lend co-m rational deviation
-        d_av = d - ave_d * coef * n * (o if fo else 1)  # lend surround m deviation
-        if fd:  # proj diff:
-            val = d_av + d_co
-        else:   # proj match: + surround dval - blocking dval, *=decay?
-            val = (m - d_co + d_av) - ave * coef * n * (o if fo else 1)  # d_av induction
-    else:
-        val = m - ave * coef * n * (o if fo else 1)  # * overlap in cluster eval, not comp eval
+def val_(Et, coef=1):  # comparison / inclusion eval by m only, no contextual projection
+
+    m, d, n, _ = Et  # skip overlap
+    return m - ave * coef * n  # coef per compared param type
+
+def Val_(Et, _Et, fd=0, coef=1):  # m|d cluster eval, + cross|root projection
+
+    m, d, n, o = Et; _m,_d,_n,_o = _Et  # cross-fork induction of root Et alt, same overlap?
+
+    d_co = d * (_m / (ave * coef * _n))  # diff * co-projected m deviation
+    d_av = d - ave_d * coef * n * o  # diff - (ave_diff * ave surround m deviation): linear?
+
+    if fd: val = d_av + d_co  # proj diff
+    else:  val = (m + d_av - d_co) - ave * coef * n * o  # match + surround d - blocking d, * decay?
+
     return val
 
 def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set of clusters in >ave G blob, unpack by default?
@@ -208,23 +210,25 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
                                     eN_ += [eN]; N_.remove(eN)  # merged
                             link_ += [L]; et += L.Et
                 _eN_ = {*eN_}
-            if val_(et) >0: G_ = [sum2graph(edge, [node_,link_,et], fd)]
-            else:           G_ += node_  # unpack weak Gts
+            if Val_(et, _Et=et, fd=fd) > 0:  # cluster eval
+                G_ = [sum2graph(edge, [node_,link_,et], fd)]
+            else:
+                G_ += node_  # unpack weak Gts
         if fd: edge.link_ = G_
         else:  edge.node_ = G_
     # comp PP_:
     N_,L_,Et = comp_node_(edge.node_)
     edge.link_ += L_
-    if val_(Et, fo=1) > 0:  # cancel by borrowing d?
+    if Val_(Et, _Et=Et, fd=0) > 0:  # cluster eval
         mlay = L_[0].derH[0]
         for link in L_[1:]: mlay.add_lay(link.derH[0])
         derH = [[mlay]]  # single nested mlay
         if len(N_) > ave_L:
             cluster_PP_(N_, fd=0)
-        if val_(Et, _Et=Et, fo=1) > 0:  # likely not from the same links
+        if Val_(Et, _Et=Et, fd=0) > 0:  # likely not from the same links
             L2N(L_,edge)  # comp dPP_:
             lN_,lL_,dEt = comp_link_(L_,Et)
-            if val_(dEt, fo=1) > 0:
+            if Val_(dEt, _Et=Et, fd=1) > 0:
                 lay_t = sum_H(lL_, edge, fd=1)  # two-layer dfork
                 derH = [[mlay,lay_t[0]], [[],lay_t[1]]]  # two-layer derH
                 if len(lN_) > ave_L:
@@ -267,7 +271,7 @@ def comp_node_(_N_, L=0):  # rng+ forms layer of rim and extH per N, appends N_,
             else:
                 Gp_ += [Gp]  # re-evaluate not-compared pairs with one incremented N.M
         ET += Et
-        if val_(Et) > 0:  # current-rng vM, -= borrowing d?
+        if val_(Et) > 0:  # current-rng vM
             _Gp_ = [Gp for Gp in Gp_ if Gp[0].add or Gp[1].add]  # one incremented N.M
             rng += 1
         else:  # low projected rng+ vM
@@ -283,7 +287,7 @@ def comp_link_(iL_, iEt):  # comp CLs via directional node-mediated link tracing
         for rev, N, mL_ in zip((0,1), L.nodet, L.mL_t):
             for _L,_rev in N.rimt[0]+N.rimt[1] if fd else N.rim:
                 if _L is not L and _L in iL_:  # nodet-mediated
-                    if val_(_L.Et, _Et=iEt) > 0:  # proj val = compared d * rel root M
+                    if val_(_L.Et) > 0:
                         mL_ += [(_L, rev ^_rev)]  # direction of L relative to _L
     _L_, out_L_, LL_, ET = iL_,set(),[],np.zeros(4)  # out_L_: positive subset of iL_, Et = np.zeros(4)?
     med = 1
@@ -315,13 +319,13 @@ def comp_link_(iL_, iEt):  # comp CLs via directional node-mediated link tracing
                                 for __L,__rev in rim[0]+rim[1] if fd else rim:
                                     if __L in L.visited_ or __L not in iL_: continue
                                     L.visited_ += [__L]; __L.visited_ += [L]
-                                    if val_(__L.Et, _Et=Et) > 0:  # compared __L.derH mag * loop induction
+                                    if val_(__L.Et) > 0:  # add coef for loop induction?
                                         mL_.add((__L, rev ^_rev ^__rev))  # combine reversals: 2 * 2 mLs, but 1st 2 are pre-combined
                                         lEt += __L.Et
                 if val_(lEt) > 0: # L'rng+, vs L'comp above
                     L.mL_t = mL_t; _L_.add(L); ext_Et += lEt
             # refine eval by extension D:
-            if val_(ext_Et, _Et=Et) - med * med_cost > 0:
+            if val_(ext_Et) - med * med_cost > 0:
                 med +=1
             else: break
         else: break
