@@ -123,9 +123,9 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.maxL = kwargs.get('maxL', 0)  # if dist-nested in cluster_N_
         G.aRad = 0  # average distance between graph center and node center
         G.altG = []  # adjacent (contour) gap+overlap alt-fork graphs, converted to CG
-        # G.depth = 0  # n missing higher agg layers
         # G.fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge
         # G.fback_ = []  # node fb buffer, n in fb[-1]
+        G.nestt = kwargs.get('nestt',[0,0])  # node_H | link_[H] if > 0: node_[-1] is top G_
         G.node_ = kwargs.get('node_',[])
         G.link_ = kwargs.get('link_',[])  # internal links
         G.rim = kwargs.get('rim',[])  # external links
@@ -180,12 +180,12 @@ def val_(Et, coef=1):  # comparison / inclusion eval by m only, no contextual pr
     m, d, n, _ = Et  # skip overlap
     return m - ave * coef * n  # coef per compared param type
 
-def Val_(Et, _Et, fd=0, coef=1):  # m|d cluster eval, + cross|root projection
+def Val_(Et, _Et, coef=1, fd=0):  # m|d cluster|batch eval, + cross|root projection
 
     m, d, n, o = Et; _m,_d,_n,_o = _Et  # cross-fork induction of root Et alt, same overlap?
 
     d_co = d * (_m / (ave * coef * _n))  # diff * co-projected m deviation
-    d_av = d - ave_d * coef * n * o  # diff - (ave_diff * ave surround m deviation): linear?
+    d_av = (d / ave_d) * ave - ave * coef * n * o  # scaled rational d deviation?
 
     if fd: val = d_av + d_co  # proj diff
     else:  val = (m + d_av - d_co) - ave * coef * n * o  # match + surround d - blocking d, * decay?
