@@ -125,7 +125,8 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.altG = []  # adjacent (contour) gap+overlap alt-fork graphs, converted to CG
         # G.fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge
         # G.fback_ = []  # node fb buffer, n in fb[-1]
-        G.nestt = kwargs.get('nestt',[0,0])  # node_H | link_[H] if > 0: node_[-1] is top G_
+        G.nnest = kwargs.get('nnest',0)  # node_H if > 0, node_[-1] is top G_
+        G.lnest = kwargs.get('lnest',0)  # link_H if > 0, link_[-1] is top L_
         G.node_ = kwargs.get('node_',[])
         G.link_ = kwargs.get('link_',[])  # internal links
         G.rim = kwargs.get('rim',[])  # external links
@@ -212,17 +213,16 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
                 _eN_ = {*eN_}
             if Val_(et, _Et=et, fd=fd) > 0:  # cluster eval
                 G_ = [sum2graph(edge, [node_,link_,et], fd)]
-            else:
-                G_ += node_  # unpack weak Gts
-        if fd: edge.link_ = G_
-        else:  edge.node_ = G_
+        if G_:
+            nest,Q = (edge.lnest,edge.link_) if fd else (edge.nnest,edge.node_)
+            if nest: Q += [G_]
+            else:  Q[:] = [Q,G_]  # init nesting in node_|link_
+            [edge.lnest,edge.nnest][fd] += 1
     # comp PP_:
     N_,L_,Et = comp_node_(edge.node_)
     edge.link_ += L_
     if Val_(Et, _Et=Et, fd=0) > 0:  # cluster eval
-        mlay = L_[0].derH[0]
-        for link in L_[1:]: mlay.add_lay(link.derH[0])
-        derH = [[mlay]]  # single nested mlay
+        mlay = sum_lay_(L_, edge); derH = [[mlay]]  # single nested mlay
         if len(N_) > ave_L:
             cluster_PP_(N_, fd=0)
         if Val_(Et, _Et=Et, fd=0) > 0:  # likely not from the same links
@@ -387,7 +387,7 @@ def get_rim(N,fd): return N.rimt[0] + N.rimt[1] if fd else N.rim  # add nesting 
 def sum2graph(root, grapht, fd, minL=0, maxL=None):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
     node_, link_, Et = grapht
-    graph = CG(fd_=node_[0].fd_+[fd], Et=Et*icoef, root=root, node_=[], link_=link_, maxL=maxL)
+    graph = CG(fd_=node_[0].fd_+[fd], Et=Et*icoef, root=root, node_=[],link_=link_, maxL=maxL, nnest=root.nnest, lnest=root.lnest)
     # arg Et is weaker if internal, maxL,minL: max and min L.dist in graph.link_
     N_, yx_ = [],[]
     for N in node_:
@@ -420,6 +420,11 @@ def sum2graph(root, grapht, fd, minL=0, maxL=None):  # sum node and link params 
                     mG.altG += [graph]  # cross-comp|sum complete altG before next agg+ cross-comp
                     altG += [mG]
     return graph
+
+def sum_lay_(lay_, root):
+    lay0 = CLay(root=root)
+    for lay in lay_: lay0.add_lay(lay)
+    return lay0
 
 def sum_H(Q, root, rev=0, fc=0, fd=0):  # sum derH in link_|node_
     DerH = []
@@ -481,7 +486,9 @@ def blob2G(G, **kwargs):
     # node_, Et stays the same:
     G.fd_ = []  # fd=1 if cluster of Ls|lGs?
     G.root = kwargs.get('root')  # may extend to list in cluster_N_, same nodes may be in multiple dist layers
-    G.link_ = []
+    G.link_ = kwargs.get('link_',[])
+    G.nnest = kwargs.get('nnest',0)  # node_H if > 0, node_[-1] is top G_
+    G.lnest = kwargs.get('lnest',0)  # link_H if > 0, link_[-1] is top L_
     G.derH = []  # sum from nodes, then append from feedback, maps to node_tree
     G.extH = []  # sum from rims
     G.latuple = kwargs.get('latuple', np.array([.0,.0,.0,.0,.0,np.zeros(2)],dtype=object))  # lateral I,G,M,D,L,[Dy,Dx]
