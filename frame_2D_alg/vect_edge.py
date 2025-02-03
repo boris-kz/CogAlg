@@ -150,7 +150,7 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
 def vectorize_root(frame):
     # init for agg+:
     blob_ = unpack_blob_(frame)
-    frame2G(frame, derH=[CLay(root=frame, Et=np.zeros(4), m_d_t=[], node_=[], link_=[])], node_=[], root=None)  # distinct from base blob_
+    frame2G(frame, derH=[CLay(root=frame, Et=np.zeros(4), m_d_t=[], node_=[],link_=[])], node_=[frame.blob_,[]], root=None)  # distinct from base blob_
     for blob in blob_:
         if not blob.sign and blob.G > ave_G * blob.root.olp:
             edge = slice_edge(blob)
@@ -170,9 +170,9 @@ def vectorize_root(frame):
                             y0,x0,yn,xn = box; G.aRad = np.hypot((yn-y0)/2,(xn-x0)/2)  # approx
                             G_ += [G]
                     if len(G_) > ave_L:
-                        frame.node_ += [edge]; edge.node_ = G_
+                        edge.node_ = G_; frame.node_[-1] += [edge]
                         cluster_edge(edge)
-                        # add altG: converted adj_blobs of converted edge blob?
+                        # alt: converted adj_blobs of edge blob?
     frame.derH = sum_H(frame.node_,frame)  # single layer
 
 
@@ -185,13 +185,13 @@ def Val_(Et, _Et, coef=1, fd=0):  # m|d cluster|batch eval, + cross|root project
 
     m, d, n, o = Et; _m,_d,_n,_o = _Et  # cross-fork induction of root Et alt, same overlap?
 
-    d_co = d * (_m / (ave * coef * _n))  # diff * co-projected m deviation
-    d_av = (d / ave_d) * ave - ave * coef * n * o  # scaled rational d deviation?
+    d_loc = d * (_m / (ave * coef * _n))  # diff * co-projected m deviation, no bilateral deviation?
+    d_ave = (d / ave_d) * ave  # scaled rational d deviation?
 
-    if fd: val = d_av + d_co  # proj diff
-    else:  val = (m + d_av - d_co) - ave * coef * n * o  # match + surround d - blocking d, * decay?
+    if fd: val = d_ave + d_loc  # proj diff
+    else:  val = m + d_ave - d_loc  # proj match: += surround val - blocking val, * decay?
 
-    return val
+    return val - ave * coef * n * o
 
 def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set of clusters in >ave G blob, unpack by default?
 
@@ -214,10 +214,8 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
             if Val_(et, _Et=et, fd=fd) > 0:  # cluster eval
                 G_ = [sum2graph(edge, [node_,link_,et], fd)]
         if G_:
-            nest,Q = (edge.lnest,edge.link_) if fd else (edge.nnest,edge.node_)
-            if nest: Q += [G_]
-            else:  Q[:] = [Q,G_]  # init nesting in node_|link_
-            [edge.lnest,edge.nnest][fd] += 1
+            edge.node_[:] = [edge.node_, G_]  # init nesting in node_|link_
+            edge.nnest += 1
     # comp PP_:
     N_,L_,Et = comp_node_(edge.node_)
     edge.link_ += L_
@@ -421,9 +419,9 @@ def sum2graph(root, grapht, fd, minL=0, maxL=None):  # sum node and link params 
                     altG += [mG]
     return graph
 
-def sum_lay_(lay_, root):
+def sum_lay_(link_, root):
     lay0 = CLay(root=root)
-    for lay in lay_: lay0.add_lay(lay)
+    for link in link_: lay0.add_lay(link.derH[0])
     return lay0
 
 def sum_H(Q, root, rev=0, fc=0, fd=0):  # sum derH in link_|node_

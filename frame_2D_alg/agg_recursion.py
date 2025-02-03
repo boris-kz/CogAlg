@@ -44,7 +44,7 @@ def cross_comp(root):  # form agg_Level by breadth-first node_,link_ cross-comp,
         pL_ = {l for n in N_ for l,_ in get_rim(n,fd=0)}
         if len(pL_) > ave_L:
             cluster_N_(root, pL_, fd=0)  # form multiple distance segments, same depth
-        # dfork, one for all dist segs:
+        # dfork, one for all distance segments, adds altGs, no higher Gs:
         L2N(L_,root)
         lN_,lL_,dEt = comp_link_(L_,Et)  # same root for L_, root.link_ was compared in root-forming for alt clustering
         if Val_(dEt, _Et=Et, fd=1) > 0:
@@ -102,8 +102,9 @@ def cluster_N_(root, L_, fd):  # top-down segment L_ by >ave ratio of L.dists
         else:
             nest,Q = (root.lnest, root.link_) if fd else (root.nnest, root.node_)
             if nest: Q += [G_]
-            else:  Q[:] = [Q,G_]  # init nesting in link_, node_ is already nested
-            [root.lnest,root.nnest][fd] += 1
+            else:  Q[:] = [Q[:],G_]  # init nesting if link_, node_ is already nested
+            if fd: root.lnest += 1
+            else:  root.nnest += 1
             break
 ''' 
 Hierarchical clustering should alternate between two phases: generative via connectivity and compressive via centroid.
@@ -153,7 +154,7 @@ def cluster_C_(root):  # 0 from cluster_edge: same derH depth in root and top Gs
         # M /= np.hypot(*C.yx, *N.yx), comp node_?
         return M
 
-    def centroid_cluster(N, C_, n_, root):  # form and refine C cluster, in last G but higher root?
+    def centroid_cluster(N, C_, root):  # form and refine C cluster, in last G but higher root?
         # add proximity bias, for both match and overlap?
 
         N.fin = 1; _N_ = [N]; CN_ = [N]
@@ -187,21 +188,19 @@ def cluster_C_(root):  # 0 from cluster_edge: same derH depth in root and top Gs
                     C_ += [C]; C.root = root  # centroid cluster
                 else:
                     for n in C.node_:  # unpack C.node_, including N
-                        n.m = 0; n.fin = 0; n_ += [n]
+                        n.m = 0; n.fin = 0
                 break
-
-    C_, n_ = [], []  # concat exemplar/centroid nodes across top Gs, for higher cross_comp
+    C_ = []  # concat exemplar/centroid nodes across top Gs, for higher cross_comp
     for G in root.node_[-1]:
-        if G.nnest == root.nnest-1:  # top-nested
-            N_ = [N for N in sorted([N for N in G.node_[-1]], key=lambda n: n.Et[0], reverse=True)]
-            for N in N_:
-                N.sign, N.m, N.fin = 1,0,0  # C update sign, inclusion m, inclusion flag
-            for i, N in enumerate(N_):  # replace some nodes by their centroid clusters
-                if not N.fin:  # not in prior C
-                    if Val_(sum([l.Et for l in N.extH]), _Et=root.Et, coef=10) > 0:  # cross-similar in G
-                        centroid_cluster(N, C_, n_, root)  # search via N.rim, C_+=[C]| unpack
-                    else:  # M is lower in the rest of N_
-                        break
+        N_ = [N for N in sorted([N for N in G.node_], key=lambda n: n.Et[0], reverse=True)]  # new G.node_ is never nested
+        for N in N_:
+            N.sign, N.m, N.fin = 1, 0, 0  # C update sign, inclusion m, inclusion flag
+        for i, N in enumerate(N_):  # replace some nodes by their centroid clusters
+            if not N.fin:  # not in prior C
+                if Val_(sum([l.Et for l in N.extH]), _Et=root.Et, coef=10) > 0:  # cross-similar in G
+                    centroid_cluster(N, C_, root)  # search via N.rim, C_ +=[C]
+                else:  # M is lower in the rest of N_
+                    break
     root.node_ += [C_]; root.nnest += 1
     if len(C_) > ave_L and not root.root:  # frame
         cross_comp(root)  # append derH, cluster_N_(root.node_[-1])
@@ -273,7 +272,7 @@ def agg_level(inputs):  # draft parallel
 
     frame, H, elevation = inputs
     lev_G = H[elevation]
-    Lev_G = cross_comp(frame, lev_G.node_)  # return combined top composition level, append frame.derH
+    Lev_G = cross_comp(frame)  # return combined top composition level, append frame.derH
     if lev_G:
         # feedforward
         if len(H) < elevation+1: H += [Lev_G]  # append graph hierarchy
@@ -307,36 +306,37 @@ def agg_H_par(focus):  # draft parallel level-updating pipeline
 
         frame.aggH = list(H)  # convert back to list
 
-
 def agg_H_seq(focus):  # sequential level-updating pipeline
 
     frame = frame_blobs_root(focus)
     intra_blob_root(frame)
     vectorize_root(frame)
-    if frame.node_:  # converted edges
-        G_ = []
+    if frame.node_[0]:  # converted edges, no frame.link_, edge.link_
+        G_, Nnest = [], 0
         for edge in frame.node_:
-            comb_altG_(edge.node_)
-            cluster_C_(edge)  # no cluster_C_ in vect_edge
-            G_ += edge.node_  # unpack edges
-        frame.node_ = G_
-        agg_H = []
-        while True:  # feedforward
-            lev_G = cross_comp(frame, G_)  # return combined top composition level, append frame.derH
-            if lev_G:
-                agg_H += [lev_G]  # indefinite graph hierarchy
-                if Val_(lev_G.Et, lev_G.Et, ave) < 0: break
-            else: break
-        if agg_H:   # feedback
-            agg_H = agg_H[:-1]  # no feedback to local top graph
-            while agg_H:
-                llev_G = agg_H.pop()  # higher-lev aves are lower-lev filters, pack in Et[-1]?
-                if np.sum(np.abs(lev_G.aves - llev_G.aves)) > ave:  # filter update value
-                    # update lower filters with current aves, add min,max coordinate filters?:
-                    llev_G.aves = lev_G.aves
-                    lev_G = llev_G
+            if edge.nnest:  # has higher graphs
+                comb_altG_(edge.node_)
+                cluster_C_(edge)  # recursive
+                G_ += edge.node_  # unpack edges
+                Nnest = max(Nnest, edge.nnest)
+            frame.node_ += [G_]; frame.nnest = Nnest
+            agg_H = []
+            while True:  # feedforward
+                lev_G = cross_comp(frame)  # return combined top composition level, append frame.derH
+                if lev_G:
+                    agg_H += [lev_G]  # indefinite graph hierarchy, sum main params?
+                    if Val_(lev_G.Et, lev_G.Et, ave) < 0: break
                 else: break
-        frame.node_ = agg_H
+            if agg_H:   # feedback
+                agg_H = agg_H[:-1]  # no feedback to local top graph
+                while agg_H:
+                    llev_G = agg_H.pop()  # lower-lev filters are higher-lev aves, if derived, projected?
+                    if np.sum(np.abs(lev_G.aves - llev_G.aves)) > ave:  # filter update value
+                        # update lower filters with current aves, add min,max coordinate filters?:
+                        llev_G.aves = lev_G.aves
+                        lev_G = llev_G
+                    else: break
+            frame.node_ = agg_H
     return frame
 
 if __name__ == "__main__":
