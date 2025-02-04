@@ -1,6 +1,7 @@
 import numpy as np
 from copy import copy, deepcopy
-from functools import reduce  # from itertools import zip_longest
+from functools import reduce
+from itertools import zip_longest
 from multiprocessing import Pool, Manager
 from frame_blobs import frame_blobs_root, intra_blob_root, imread
 from comp_slice import comp_latuple, comp_md_
@@ -311,32 +312,36 @@ def agg_H_seq(focus):  # sequential level-updating pipeline
     frame = frame_blobs_root(focus)
     intra_blob_root(frame)
     vectorize_root(frame)
-    if frame.node_[0]:  # converted edges, no frame.link_, edge.link_
+    if frame.node_[1]:  # any converted edges, no frame.link_, edge.link_
         G_, Nnest = [], 0
-        for edge in frame.node_:
+        for edge in frame.node_[-1]:
             if edge.nnest:  # has higher graphs
                 comb_altG_(edge.node_)
-                cluster_C_(edge)  # recursive
-                G_ += edge.node_  # unpack edges
+                cluster_C_(edge)  # recursive, within edge?
+                G_ = [Lev + lev for Lev, lev in zip_longest(G_, edge.node_, fillvalue = [])]  # concat levels
                 Nnest = max(Nnest, edge.nnest)
-            frame.node_ += [G_]; frame.nnest = Nnest
-            agg_H = []
-            while True:  # feedforward
-                lev_G = cross_comp(frame)  # return combined top composition level, append frame.derH
-                if lev_G:
-                    agg_H += [lev_G]  # indefinite graph hierarchy, sum main params?
-                    if Val_(lev_G.Et, lev_G.Et, ave) < 0: break
+        frame.nnest = Nnest
+        frame.node_ = [frame.node_[0], *G_]  # replace edge_ with new node levels
+        agg_H = []
+        # feedforward:
+        while len(frame.node_[-1]) > frame.ave.L:  # draft
+            lev_G = cross_comp(frame)  # return combined top composition level, append frame.derH
+            if lev_G:
+                agg_H += [lev_G]  # indefinite graph hierarchy, sum main params?
+                if Val_(lev_G.Et, lev_G.Et, ave) < 0: break
+            else: break
+        if agg_H: # feedback
+            G = lev_G; agg_H = agg_H[:-1]  # local top graph, gets no feedback
+            while agg_H:
+                lev_G = agg_H.pop(); _n,n = G.Et[2],lev_G[2]
+                L = comp_N(G, lev_G, rn = _n/n if _n>n else n/_n)
+                if Val_(L.Et, _Et=L.Et) > 0:  # filter update value
+                    # lower-lev aves = higher-lev attrs, add selection and projection:
+                    lev_G.aves = [*G.Et, G.box, len(G.node_[-1])]  # min,max coord filters = box, L=len node_
+                    # init ave/compared attr, then attr coefs: ave / ave_attr_m.
+                    G = lev_G
                 else: break
-            if agg_H:   # feedback
-                agg_H = agg_H[:-1]  # no feedback to local top graph
-                while agg_H:
-                    llev_G = agg_H.pop()  # lower-lev filters are higher-lev aves, if derived, projected?
-                    if np.sum(np.abs(lev_G.aves - llev_G.aves)) > ave:  # filter update value
-                        # update lower filters with current aves, add min,max coordinate filters?:
-                        llev_G.aves = lev_G.aves
-                        lev_G = llev_G
-                    else: break
-            frame.node_ = agg_H
+        frame.node_ = agg_H
     return frame
 
 if __name__ == "__main__":
