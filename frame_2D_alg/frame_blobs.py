@@ -40,10 +40,6 @@ from matplotlib import pyplot as plt
     capitalized variables are normally summed small-case variables,
     longer names are normally classes
 '''
-# hyper-parameters, set as a guess, latter adjusted by feedback:
-ave = 30  # base filter, directly used for comp_r fork
-aveR = 10  # for range+, fixed overhead per blob
-
 class CBase:
     refs = []
     def __init__(obj):
@@ -58,6 +54,55 @@ class CBase:
         if inst is not None and inst.id == _id:
             return inst
     def __repr__(obj): return f"{obj.__class__.__name__}(id={obj.id})"
+
+# hyper-parameters, set as a guess, latter adjusted by feedback:
+class Caves(CBase):
+    name = "Filters"
+    def __init__(ave, **kwargs):
+        super().__init__()
+        ave.m = 5
+        # vectorize_edge
+        ave.d = 10  # ave change to Ave_min from the root intra_blob?
+        ave.md = [ave.ma,ave.d]  # use instead of aves[fd]
+        ave.L = 4
+        ave.rn = 1000  # max scope disparity
+        ave.max_dist = 2
+        ave.coef = 10
+        ave.ccoef = 10   # scaling match ave to clustering ave
+        ave.icoef = .15  # internal M proj_val / external M proj_val
+        ave.med_cost = 10
+        # comp_slice
+        ave.cs = 5  # ave of comp_slice
+        ave.dI = 20  # ave inverse m, change to Ave from the root intra_blob?
+        ave.inv = 20
+        ave_cs_d = 5  # ave_d of comp_slice
+        ave.mG = 10
+        ave.mM = 2
+        ave.mMa = .1
+        ave.mA = .2
+        ave.mL = 2
+        ave.PPm = 50
+        ave.PPd = 50
+        ave.Pm = 10
+        ave.Pd = 10
+        ave.Gm = 50
+        ave.Lslice = 5
+        # slice_edge
+        ave.I = 100
+        ave.G = 100
+        ave.g = 30  # change to Ave from the root intra_blob?
+        ave.mL = 2
+        ave.dist = 3
+        ave.se_max_dist = 15  # max distance of slice_edge
+        ave.dangle = .95  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
+        ave.olp = 5
+        ave.B = 30
+        ave.R = 10
+    def sum_aves(ave):
+        return sum(value for value in vars(ave).values())
+
+ave = Caves.B  # base filter, directly used for comp_r fork
+aveR = Caves.R  # for range+, fixed overhead per blob
 
 class CFrame(CBase):
 

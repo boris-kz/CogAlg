@@ -3,9 +3,9 @@ from copy import copy, deepcopy
 from functools import reduce
 from itertools import zip_longest
 from multiprocessing import Pool, Manager
-from frame_blobs import frame_blobs_root, intra_blob_root, imread
+from frame_blobs import frame_blobs_root, intra_blob_root, imread, Caves
 from comp_slice import comp_latuple, comp_md_
-from vect_edge import L2N, sum_H, add_H, comp_H, comp_N, comp_node_, comp_link_, sum2graph, get_rim, CG, ave, ave_L, vectorize_root, comp_area, extend_box, Val_
+from vect_edge import L2N, sum_H, add_H, comp_H, comp_N, comp_node_, comp_link_, sum2graph, get_rim, CG, vectorize_root, comp_area, extend_box, Val_
 '''
 notation:
 prefix f: flag
@@ -35,6 +35,7 @@ Code-coordinate filters may extend base code by cross-projecting and combining p
 (which may include extending eval function with new match-projecting derivatives) 
 Similar to cross-projection by data-coordinate filters, described in "imagination, planning, action" section of part 3 in Readme.
 '''
+ave, ave_L = Caves.m, Caves.L
 
 def cross_comp(root):  # form agg_Level by breadth-first node_,link_ cross-comp, connect clustering, recursion
 
@@ -209,8 +210,9 @@ def cluster_C_(root):  # 0 from cluster_edge: same derH depth in root and top Gs
 def top_(G, fd=0):
     return (G.link_[-1] if G.lnest else G.link_) if fd else (G.node_[-1] if G.nnest else G.node_)
 
-def sum_G_(node_, s=1, fc=0, G=CG()):
-
+def sum_G_(node_, s=1, fc=0, G=None):
+    if G is None:  # we need to create new G here, else all new G referencing a same CG
+        G = CG(); G.ave = Caves()
     for n in node_:
         G.latuple += n.latuple * s
         G.vert = G.vert + n.vert*s if np.any(G.vert) else deepcopy(n.vert) * s

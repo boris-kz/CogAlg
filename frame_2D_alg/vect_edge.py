@@ -1,5 +1,5 @@
-from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
-from slice_edge import slice_edge, comp_angle, ave_G
+from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_, Caves
+from slice_edge import slice_edge, comp_angle
 from comp_slice import comp_slice, comp_latuple, comp_md_
 from itertools import combinations, zip_longest  # from functools import reduce
 from copy import deepcopy, copy
@@ -36,14 +36,8 @@ prefix  _ denotes prior of two same-name variables, multiple _s for relative pre
 postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized variables are usually summed small-case variables
 '''
-ave = 3
-ave_d = 4
-ave_L = 4
-max_dist = 2
-ave_rn = 1000  # max scope disparity
-ccoef = 10   # scaling match ave to clustering ave
-icoef = .15  # internal M proj_val / external M proj_val
-med_cost = 10
+ave, ave_d, ave_L, ave_G, max_dist, ave_rn, ccoef, icoef, med_cost = \
+Caves.m, Caves.d, Caves.L, Caves.G, Caves.max_dist, Caves.rn, Caves.ccoef, Caves.icoef, Caves.med_cost
 
 class CLay(CBase):  # flat layer if derivation hierarchy
     name = "lay"
@@ -153,7 +147,7 @@ def vectorize_root(frame):
     frame2G(frame, derH=[CLay(root=frame, Et=np.zeros(4), m_d_t=[], node_=[],link_=[])], node_=[frame.blob_,[]], root=None)  # distinct from base blob_
     for blob in blob_:
         if not blob.sign and blob.G > ave_G * blob.root.olp:
-            edge = slice_edge(blob)
+            edge = slice_edge(blob, frame.aves)
             if edge.G * (len(edge.P_)-1) > ave:  # eval PP
                 comp_slice(edge)
                 if edge.Et[0] * (len(edge.node_)-1)*(edge.rng+1) > ave:
