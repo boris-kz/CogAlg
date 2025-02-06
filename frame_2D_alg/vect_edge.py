@@ -1,4 +1,4 @@
-from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_, Caves
+from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_, aves, Caves
 from slice_edge import slice_edge, comp_angle
 from comp_slice import comp_slice, comp_latuple, comp_md_
 from itertools import combinations, zip_longest  # from functools import reduce
@@ -36,8 +36,8 @@ prefix  _ denotes prior of two same-name variables, multiple _s for relative pre
 postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized variables are usually summed small-case variables
 '''
-ave, ave_d, ave_L, ave_G, max_dist, ave_rn, ccoef, icoef, med_cost = \
-Caves.m, Caves.d, Caves.L, Caves.G, Caves.max_dist, Caves.rn, Caves.ccoef, Caves.icoef, Caves.med_cost
+ave, ave_d, ave_L, ave_G, max_dist, ave_rn, ccoef, icoef, med_cost, ave_dI = \
+aves.B, aves.d, aves.L, aves.G, aves.max_dist, aves.rn, aves.ccoef, aves.icoef, aves.med_cost, aves.dI
 
 class CLay(CBase):  # flat layer if derivation hierarchy
     name = "lay"
@@ -473,6 +473,7 @@ def frame2G(G, **kwargs):
     G.derH = kwargs.get('derH', [CLay(root=G, Et=np.zeros(4), m_d_t=[], node_=[],link_ =[])])
     G.Et = kwargs.get('Et', np.zeros(4))
     G.node_ = kwargs.get('node_', [])
+    G.aves = Caves()  # per frame's aves
 
 def blob2G(G, **kwargs):
     # node_, Et stays the same:
