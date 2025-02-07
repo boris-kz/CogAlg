@@ -60,7 +60,6 @@ class Caves(object):  # hyper-parameters, init a guess, adjusted by feedback
     def __init__(ave):
         ave.m = 5
         ave.d = 10  # ave change to Ave_min from the root intra_blob?
-        ave.md = [ave.ma, ave.d]  # for aves[fd]
         ave.L = 4
         ave.rn = 1000  # max scope disparity
         ave.max_dist = 2
@@ -74,6 +73,7 @@ class Caves(object):  # hyper-parameters, init a guess, adjusted by feedback
         ave.inv = 20
         ave.mG = 10
         ave.mM = 2
+        ave.mD = 2
         ave.mMa = .1
         ave.mA = .2
         ave.mL = 2
@@ -109,6 +109,7 @@ class Caves(object):  # hyper-parameters, init a guess, adjusted by feedback
                        "ave_cs_d": 1,
                        "mG": 1,
                        "mM": 1,
+                       "mD": 1,
                        "mMa": 1,
                        "mA": 1,
                        "mL": 1,
@@ -133,7 +134,9 @@ class Caves(object):  # hyper-parameters, init a guess, adjusted by feedback
 
     def __getattribute__(ave,name):
         coefs =   object.__getattribute__(ave, "coefs")
-        if name == "md":
+        if name == "coefs":
+            return object.__getattribute__(ave, name)
+        elif name == "md":
             return [ave.m * coefs["m"], ave.d *  coefs["d"]]  # get updated md
         else:
             return object.__getattribute__(ave, name)  * coefs[name]  # always return ave * coef

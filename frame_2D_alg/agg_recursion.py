@@ -322,6 +322,8 @@ def agg_H_seq(focus):  # sequential level-updating pipeline
                 cluster_C_(edge)  # recursive, within edge?
                 G_ = [Lev + lev for Lev, lev in zip_longest(G_, edge.node_, fillvalue=[])]  # concat levels
                 Nnest = max(Nnest, edge.nnest)
+        if Nnest==2:  # no added levs
+            return frame
         frame.nnest = Nnest
         frame.node_ = [frame.node_[0], *G_]  # replace edge_ with new node levels
         agg_H = []
@@ -337,15 +339,35 @@ def agg_H_seq(focus):  # sequential level-updating pipeline
             while agg_H:
                 lev_G = agg_H.pop(); _n,n = hG.Et[2], lev_G[2]
                 L = comp_N(hG,lev_G, rn = _n/n if _n>n else n/_n)
-                if Val_(L.Et, _Et=L.Et) > 0:  # dLev = filter update value?
+                if Val_(L.Et, _Et=L.Et) > 0:  # dLev = filter update value? or specific to Dm_attr?
+                    # pass attr matches instead of hG:
+                    lev_G.aves = weigh_m_(hG)
                     # centroid M += m/attr (mags are not commensurable), mC=min: +ve
                     # cost attrs mC is always -ve, no independent normalization?
                     # project/d: shift to higher or lower m?
-                    lev_G.aves = [*hG.Et, hG.box, len(hG.node_[-1])]  # min,max coord filters = box, L=len node_
+                    # min,max coord filters = box, L=len node_
                     hG = lev_G  # replace higher lev
                 else: break
             frame.node_ = agg_H
     return frame
+
+def weigh_m_(m_, _M, ave=1e-7):  # adjust weights on attr matches, also add cost attrs
+
+    L = len(m_)
+    while True:
+        w_ = []  # weight = inverted abs rational deviation from mean
+        for m in m_:
+            w_ += [m/_M if _M > m else _M/m]  # min m = 1e-7
+        rw = 1 / (sum(w_) / L)
+        w_ = [w * rw for w in w_]  # normalize to average weight = 1
+        # should be W: abs w update, M is stable anyway?
+        M = sum((m if m else 1e-7) * w for m, w in zip(m_, w_))  / L
+        if abs(M - _M) > ave:
+            _M = M
+        else:
+            break
+
+    return w_, M
 
 if __name__ == "__main__":
     # image_file = './images/raccoon_eye.jpeg'
