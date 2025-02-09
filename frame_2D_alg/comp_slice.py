@@ -98,28 +98,10 @@ def comp_dP_(PP,):  # node_- mediated: comp node.rim dPs, call from form_PP_
             rn = len(P.dert_) / len(_P.dert_)
             for dP in P.rim:  # higher links
                 if dP not in link_: continue  # skip removed node links
-                mdVer, et = comp_md_(_dP.vertuple[1], dP.vertuple[1], rn)
+                mdVer, et = comp_vert(_dP.vertuple[1], dP.vertuple[1], rn)
                 angle = np.subtract(dP.yx,_dP.yx)  # dy,dx of node centers
                 distance = np.hypot(*angle)  # between node centers
                 _dP.rim += [convert_to_dP(_dP, dP, mdVer, angle, distance, et)]  # up only
-
-def comp_md_(_d_,d_, rn=.1, dir=1):  # dir may be -1
-
-    d_ = d_ * rn  # normalize by compared accum span
-    dd_ = (_d_ - d_ * dir)  # np.arrays
-    md_ = np.minimum(np.abs(_d_), np.abs(d_))
-    md_[(_d_<0) != (d_<0)] *= -1  # negate if only one compared is negative
-    ''' 
-    sequential version:
-    md_, dd_ = [],[]
-    for _d, d in zip(_d_,d_):
-        d = d * rn
-        dd_ += [_d - d * dir]
-        md = min(abs(_d),abs(d))
-        md_ += [-md if _d<0 != d<0 else md]  # negate if only one compared is negative
-    md_, dd_ = np.array(md_), np.array(dd_)
-    '''
-    return np.array([md_,dd_]), np.array([md_.sum(),dd_.sum()])  # [m_,d_], Et
 
 def convert_to_dP(_P,P, derLay, angle, distance, Et):
 
@@ -187,24 +169,47 @@ def sum2PP(root, P_, dP_, Et):  # sum links in Ps and Ps in PP
 
     return PPt
 
-def comp_latuple(_latuple, latuple, _n,n):  # 0der params
+def comp_latuple(_latuple, latuple, _n,n):  # 0der params, add dir?
 
     _I, _G, _M, _D, _L, (_Dy, _Dx) = _latuple
     I, G, M, D, L, (Dy, Dx) = latuple
     rn = _n / n
 
-    dI = _I - I*rn;  mI = ave_dI - dI    # vI = mI - ave
-    dG = _G - G*rn;  mG = min(_G, G*rn)  # vG = mG - ave_mG
-    dM = _M - M*rn;  mM = min(_M, M*rn)  # vM = mM - ave_mM
-    dD = _D - D*rn;  mD = min(_D, D*rn)  # vD = mD - ave_mD
-    dL = _L - L*rn;  mL = min(_L, L*rn)  # vL = mL - ave_mL
+    I*=rn; dI = _I - I;  mI = ave_dI -dI; MI = max(_I,I)  # vI = mI - ave
+    G*=rn; dG = _G - G;  mG = min(_G, G); MG = max(_G,G)  # vG = mG - ave_mG
+    M*=rn; dM = _M - M;  mM = min(_M, M); MM = max(_M,M)  # vM = mM - ave_mM
+    D*=rn; dD = _D - D;  mD = min(_D, D); MD = max(_D,D)  # vD = mD - ave_mD
+    L*=rn; dL = _L - L;  mL = min(_L, L); ML = max(_L,L)  # vL = mL - ave_mL
     mA, dA = comp_angle((_Dy,_Dx),(Dy,Dx))  # vA = mA - ave_mA
 
     d_ = np.array([dI, dG, dM, dD, dL, dA])
-    m_ = np.array([mI, mG, mM, mD, mL, mA])
-    et = np.array([np.sum(m_), np.sum(np.abs(d_))])
+    m_ = np.array([mI/ MI, mG/ MG, mM/ MM, mD/ MD, mL/ ML, mA])  # angle is already normal
+    D = np.sqrt(sum([d**2 for d in d_]))
+    M = np.sqrt(sum([m**2 for m in m_]))
 
-    return np.array([m_,d_]), et
+    return np.array([m_,d_]), np.array([M,D])
+
+def comp_vert(_d_,d_, rn=.1, dir=1):  # dir may be -1
+
+    d_ = d_ * rn  # normalize by compared accum span
+    dd_ = (_d_ - d_ * dir)  # np.arrays
+    dd_[(_d_<0) != (d_<0)] *= -1  # negate if only one compared is negative
+    _d_,d_ = np.abs(_d_), np.abs(d_)
+    md_ = np.divide( np.minimum(_d_,d_), np.maximum(_d_,d_))  # rms
+    M = np.sqrt(sum([m**2 for m in md_]))  # m/M- weighted sum, 6 pars = 1
+    D = np.sqrt(sum([d**2 for d in dd_]))  # same weighting?
+
+    return np.array([md_,dd_]), np.array([M,D])  # [m_,d_], Et
+''' 
+    sequential version:
+    md_, dd_ = [],[]
+    for _d, d in zip(_d_,d_):
+        d = d * rn
+        dd_ += [_d - d * dir]
+        md = min(abs(_d),abs(d))
+        md_ += [-md if _d<0 != d<0 else md]  # negate if only one compared is negative
+    md_, dd_ = np.array(md_), np.array(dd_)
+'''
 
 def accum_box(box, y, x):  # extend box with kernel
     y0, x0, yn, xn = box

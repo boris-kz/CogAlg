@@ -4,7 +4,7 @@ from functools import reduce
 from itertools import zip_longest
 from multiprocessing import Pool, Manager
 from frame_blobs import frame_blobs_root, intra_blob_root, imread, aves, Caves
-from comp_slice import comp_latuple, comp_md_
+from comp_slice import comp_latuple, comp_vert
 from vect_edge import L2N, sum_H, add_H, comp_H, comp_N, comp_node_, comp_link_, sum2graph, get_rim, CG, vectorize_root, comp_area, extend_box, Val_
 '''
 notation:
@@ -143,10 +143,10 @@ def cluster_C_(root):  # 0 from cluster_edge: same derH depth in root and top Gs
 
     def comp_C(C, N):  # compute match without new derivatives: global cross-comp is not directional
 
-        mL = min(C.L, len(N.node_)) - ave_L
+        mL = min(C.L, len(N.node_))/ max(C.L, len(N.node_))- ave_L
         mA = comp_area(C.box, N.box)[0]
         mLat = comp_latuple(C.latuple, N.latuple, C.Et[2], N.Et[2])[1][0]
-        mVert = comp_md_(C.vert[1], N.vert[1])[1][0]
+        mVert = comp_vert(C.vert[1], N.vert[1])[1][0]
         M = mL + mA + mLat + mVert
         M += sum([fork.Et[0] for lay in comp_H(C.derH, N.derH, rn=1, root=None, Et=np.zeros(4),fd=0) for fork in lay if fork])
         if C.altG and N.altG:  # converted to altG
