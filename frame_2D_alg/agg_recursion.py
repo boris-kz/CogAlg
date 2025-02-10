@@ -63,7 +63,7 @@ def cross_comp(root):  # form agg_Level by breadth-first node_,link_ cross-comp,
         comb_altG_(top_(root))  # comb node contour: altG_ | neg links sum, cross-comp -> CG altG
         cluster_C_(root)  # -> mfork G,altG exemplars, +altG surround borrow, root.derH + 1|2 lays
         # no dfork cluster_C_, no ddfork
-        # if val_: lev_G -> agg_H_pipe
+        # if val_: lev_G -> agg_H_seq
         return sum_G_(top_(root))
 
 def cluster_N_(root, L_, fd):  # top-down segment L_ by >ave ratio of L.dists
@@ -324,7 +324,7 @@ def agg_H_seq(focus):  # sequential level-updating pipeline
                 Nnest = max(Nnest, edge.nnest)
         if Nnest==2:  # no added levs
             return frame
-        frame.nnest = Nnest
+        frame.nnest = Nnest  # n node_ levels
         frame.node_ = [frame.node_[0], *G_]  # replace edge_ with new node levels
         agg_H = []
         # feedforward:
@@ -338,12 +338,12 @@ def agg_H_seq(focus):  # sequential level-updating pipeline
             hG = lev_G; agg_H = agg_H[:-1]  # local top graph, gets no feedback
             while agg_H:
                 lev_G = agg_H.pop()
-                drm_ = hG.vert[0] - lev_G.vert[0]
-                if sum(drm_) > 0: # filter update value
-                    lev_G.drm_ = drm_ # proj agg+'rm = rm + drm?
-                    # Et[0] = np.sqrt(sum([m**2 for m in rm_]) / L)?
+                dm_ = hG.vert[0] - lev_G.vert[0]  # need to add other aves?
+                if sum(dm_) > 0:  # aves update value
+                    lev_G.dm_ = dm_  # aves, proj agg+'m = m + dm?
+                    # Et[0] = np.sqrt(sum([m**2 for m in m_]) /L)?
                     # d-projected box: min,max coord filters
-                    # add cost params: distance?
+                    # add cost params: distance, len?
                     hG = lev_G  # replace higher lev
                 else: break
             frame.node_ = agg_H

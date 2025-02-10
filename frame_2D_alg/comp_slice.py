@@ -118,7 +118,7 @@ def form_PP_(root, iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
     PPt_ = []
     for P in iP_: P.merged = 0
     for P in iP_:  # dP from link_ if fd
-        if P.merged: continue
+        if P.merged or len(P.dert_)==1: continue
         _prim_ = P.prim; _lrim_ = P.lrim
         I,G, M,D, L,_ = P.latuple
         _P_ = {P}; link_ = set(); Et = np.array([I+M, G+D])
@@ -193,9 +193,9 @@ def comp_vert(_d_,d_, rn=.1, dir=1):  # dir may be -1
 
     d_ = d_ * rn  # normalize by compared accum span
     dd_ = (_d_ - d_ * dir)  # np.arrays
-    dd_[(_d_<0) != (d_<0)] *= -1  # negate if only one compared is negative
     _d_,d_ = np.abs(_d_), np.abs(d_)
     md_ = np.divide( np.minimum(_d_,d_), np.maximum(_d_,d_))  # rms
+    md_[(_d_<0) != (d_<0)] *= -1  # m is negative if comparands have opposite sign
     M = np.sqrt(sum([m**2 for m in md_]))  # m/M- weighted sum, 6 pars = 1
     D = np.sqrt(sum([d**2 for d in dd_]))  # same weighting?
 
