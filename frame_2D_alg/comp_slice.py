@@ -1,7 +1,7 @@
 import numpy as np
 from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_, aves
 from slice_edge import CP, slice_edge, comp_angle
-
+from functools import reduce
 '''
 comp_slice traces edge axis by cross-comparing vertically adjacent Ps: horizontal slices across an edge blob.
 These are low-M high-Ma blobs, vectorized into outlines of adjacent flat (high internal match) blobs.
@@ -184,22 +184,22 @@ def comp_latuple(_latuple, latuple, _n,n):  # 0der params, add dir?
 
     d_ = np.array([dI, dG, dM, dD, dL, dA])
     m_ = np.array([mI/ MI, mG/ MG, mM/ MM, mD/ MD, mL/ ML, mA])  # angle is already normal
-    D = np.sqrt(sum([d**2 for d in d_]))
-    M = np.sqrt(sum([m**2 for m in m_]))
+    D = np.sqrt(sum([d**2 for d in d_]) /6)  # m/M - weighted sum of 6 pars
+    M = np.sqrt(sum([m**2 for m in m_]) /6)
 
     return np.array([m_,d_]), np.array([M,D])
 
-def comp_vert(_d_,d_, rn=.1, dir=1):  # dir may be -1
+def comp_vert(_i_,i_, rn=.1, dir=1):  # i_ is ds, dir may be -1
 
-    d_ = d_ * rn  # normalize by compared accum span
-    dd_ = (_d_ - d_ * dir)  # np.arrays
-    _d_,d_ = np.abs(_d_), np.abs(d_)
-    md_ = np.divide( np.minimum(_d_,d_), np.maximum(_d_,d_))  # rms
-    md_[(_d_<0) != (d_<0)] *= -1  # m is negative if comparands have opposite sign
-    M = np.sqrt(sum([m**2 for m in md_]))  # m/M- weighted sum, 6 pars = 1
-    D = np.sqrt(sum([d**2 for d in dd_]))  # same weighting?
+    i_ = i_ * rn  # normalize by compared accum span
+    d_ = (_i_ - i_ * dir)  # np.arrays
+    _a_,a_ = np.abs(_i_), np.abs(i_)
+    m_ = np.divide( np.minimum(_a_,a_), reduce(np.maximum, [_a_, a_, 1e-7]))  # rms
+    m_[(_i_<0) != (d_<0)] *= -1  # m is negative if comparands have opposite sign
+    M = np.sqrt(sum([m**2 for m in m_]) /6)  # m/M - weighted sum of 6 pars
+    D = np.sqrt(sum([d**2 for d in d_]) /6)  # same weighting?
 
-    return np.array([md_,dd_]), np.array([M,D])  # [m_,d_], Et
+    return np.array([m_,d_]), np.array([M,D])  # Et
 ''' 
     sequential version:
     md_, dd_ = [],[]

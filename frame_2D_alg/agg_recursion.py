@@ -341,9 +341,9 @@ def agg_H_seq(focus):  # sequential level-updating pipeline
                 dm_ = hG.vert[0] - lev_G.vert[0]  # need to add other aves?
                 if sum(dm_) > 0:  # aves update value
                     lev_G.dm_ = dm_  # aves, proj agg+'m = m + dm?
-                    # Et[0] = np.sqrt(sum([m**2 for m in m_]) /L)?
-                    # d-projected box: min,max coord filters
-                    # add cost params: distance, len?
+                    # project box by decomposed d-val per Et: np.sqrt(sum([m**2 for m in m_]) /L)?
+                    # get dy,dx: frame.vert A or frame.latuple [Dy,Dx]?
+                    # add cost params: distance, len? min,max coord filters
                     hG = lev_G  # replace higher lev
                 else: break
             frame.node_ = agg_H
