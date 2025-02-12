@@ -79,4 +79,7 @@ def comp_md_t(_d_t,d_t, rn=.1, dir=1):  # dir may be -1
         m_t_ += [md_]; M += np.sqrt(sum([m**2 for m in md_]) / len(d_))  # weighted sum
         d_t_ += [dd_]; D += dd_.sum()  # same weighting?
 
+        M = sum([ np.sqrt( sum([m**2 for m in m_]) /len(m_)) for m_ in m_t])  # weigh M,D by ind_m / tot_M
+        D = sum([ np.sqrt( sum([d**2 for d in d_]) /len(d_)) for d_ in d_t])
+
     return np.array([m_t_,d_t_],dtype=object), np.array([M,D])  # [m_,d_], Et

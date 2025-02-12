@@ -175,7 +175,7 @@ def comp_latuple(_latuple, latuple, _n,n):  # 0der params, add dir?
     I, G, M, D, L, (Dy, Dx) = latuple
     rn = _n / n
 
-    I*=rn; dI = _I - I;  mI = ave_dI -dI; MI = max(_I,I)  # vI = mI - ave
+    I*=rn; dI = _I - I;  mI = ave_dI -dI; MI = max(_I,I)  # vI = mI - ave)
     G*=rn; dG = _G - G;  mG = min(_G, G); MG = max(_G,G)  # vG = mG - ave_mG
     M*=rn; dM = _M - M;  mM = min(_M, M); MM = max(_M,M)  # vM = mM - ave_mM
     D*=rn; dD = _D - D;  mD = min(_D, D); MD = max(_D,D)  # vD = mD - ave_mD
@@ -184,10 +184,8 @@ def comp_latuple(_latuple, latuple, _n,n):  # 0der params, add dir?
 
     d_ = np.array([dI, dG, dM, dD, dL, dA])
     m_ = np.array([mI/ MI, mG/ MG, mM/ MM, mD/ MD, mL/ ML, mA])  # angle is already normal
-    D = np.sqrt(sum([d**2 for d in d_]) /6)  # m/M - weighted sum of 6 pars
-    M = np.sqrt(sum([m**2 for m in m_]) /6)
 
-    return np.array([m_,d_]), np.array([M,D])
+    return np.array([m_,d_]), np.array([sum(m_),sum(d_)])
 
 def comp_vert(_i_,i_, rn=.1, dir=1):  # i_ is ds, dir may be -1
 
@@ -196,10 +194,8 @@ def comp_vert(_i_,i_, rn=.1, dir=1):  # i_ is ds, dir may be -1
     _a_,a_ = np.abs(_i_), np.abs(i_)
     m_ = np.divide( np.minimum(_a_,a_), reduce(np.maximum, [_a_, a_, 1e-7]))  # rms
     m_[(_i_<0) != (d_<0)] *= -1  # m is negative if comparands have opposite sign
-    M = np.sqrt(sum([m**2 for m in m_]) /6)  # m/M - weighted sum of 6 pars
-    D = np.sqrt(sum([d**2 for d in d_]) /6)  # same weighting?
 
-    return np.array([m_,d_]), np.array([M,D])  # Et
+    return np.array([m_,d_]), np.array([sum(m_),sum(d_)])  # Et
 ''' 
     sequential version:
     md_, dd_ = [],[]

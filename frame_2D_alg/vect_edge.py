@@ -48,7 +48,7 @@ class CLay(CBase):  # flat layer if derivation hierarchy
         l.root = kwargs.get('root', None)  # higher node or link
         l.node_ = kwargs.get('node_', [])  # concat across fork tree
         l.link_ = kwargs.get('link_', [])
-        l.m_d_t = kwargs.get('m_d_t', [[np.zeros(2),np.zeros(2)],[np.zeros(6),np.zeros(6)]])  # [[mext,mver],[dext,dver]], sum across fork tree
+        l.m_d_t = kwargs.get('m_d_t', [[np.zeros(2),np.zeros(6)],[np.zeros(2),np.zeros(6)]])  # [[mext,mver],[dext,dver]], sum across fork tree
         # altL = CLay from comp altG
         # i = kwargs.get('i', 0)  # lay index in root.node_, link_, to revise olp
         # i_ = kwargs.get('i_',[])  # priority indices to compare node H by m | link H by d
@@ -89,16 +89,15 @@ class CLay(CBase):  # flat layer if derivation hierarchy
         i_t = [i_ * rn * dir for i_ in lay.m_d_t[1]]  # i_ is ds, scale- and direction- normalized
         d_t = [_i_ - i_ for _i_,i_ in zip(_i_t,i_t)]  # [dext,dver])
 
-        _a_t, a_t = [(np.abs(_i_), np.abs(i_)) for _i_,i_ in zip(_i_t,i_t)]
-        m_t = [np.minimum(_a_,a_)/ reduce(np.maximum,[_a_,a_,1e-7]) for _a_,a_ in zip(_a_t,a_t)]  # match = min/max comparands
-        for fv, (_i_,i_) in enumerate(zip(_i_t, i_t)):  # [dext,vert]
-            m_t[fv][(_i_<0) != (i_<0)] *= -1  # m is negative if comparands have opposite sign
+        _a_t = [np.abs(_i_) for _i_ in _i_t]; a_t = [np.abs(i_) for i_ in i_t]
+        m_t = [np.minimum(_a_,a_) / reduce(np.maximum,[_a_,a_,1e-7]) for _a_,a_ in zip(_a_t,a_t)]  # match = min/max comparands
+        for f, (_i_,i_) in enumerate(zip(_i_t, i_t)):  # [dext,vert]
+            m_t[f][(_i_<0) != (i_<0)] *= -1  # m is negative if comparands have opposite sign
         m_d_t = [m_t,d_t]  # [[mext,mvert],[dext,dvert]]
         node_ = list(set(_lay.node_+ lay.node_))  # concat
         link_ = _lay.link_ + lay.link_
-        M = sum([ np.sqrt( sum([m**2 for m in m_]) /len(m_)) for m_ in m_t])  # weigh M,D by ind_m / tot_M
-        D = sum([ np.sqrt( sum([d**2 for d in d_]) /len(d_)) for d_ in d_t])
-
+        M = sum(m_t[0]) + sum(m_t[1])
+        D = sum(d_t[0]) + sum(d_t[1])
         Et = np.array([M, D, 2 if len(i_t)==1 else 8, (_lay.Et[3]+lay.Et[3])/2])  # n comp params = 2 in dext, 6 in vert
         if root: root.Et += Et
 
@@ -220,19 +219,19 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
     N_,L_,Et = comp_node_(edge.node_)
     edge.link_ += L_
     if Val_(Et, _Et=Et, fd=0) > 0:  # cluster eval
-        mlay = sum_lay_(L_, edge); derH = [[mlay]]  # single nested mlay
+        derH = [[sum_lay_(L_,edge,)]]  # single nested mlay
         if len(N_) > ave_L:
             cluster_PP_(N_, fd=0)
         if Val_(Et, _Et=Et, fd=0) > 0:  # likely not from the same links
             L2N(L_,edge)  # comp dPP_:
             lN_,lL_,dEt = comp_link_(L_,Et)
             if Val_(dEt, _Et=Et, fd=1) > 0:
-                lay_t = sum_H(lL_, edge, fd=1)  # two-layer dfork
-                derH = [[mlay,lay_t[0]], [[],lay_t[1]]]  # two-layer derH
+                derH[0] += [comb_H_(lL_, edge,fd=1)]  # dlay, or sum_lay_?
                 if len(lN_) > ave_L:
                     cluster_PP_(lN_, fd=1)
             else:
                 derH[0] += [[]]  # empty dlay
+        else: derH[0] += [[]]
         edge.derH = derH
 
 def comp_node_(_N_, L=0):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et, ~ graph CNN without backprop
@@ -350,7 +349,7 @@ def comp_dext(_dext, dext, rn, dir=1):
 
 def comp_N(_N,N, rn, angle=None, dist=None, dir=1):  # dir if fd, Link.derH=dH, comparand rim+=Link
 
-    fd = isinstance(N,CL); derH=[]  # compare links, relative N direction = 1|-1
+    fd = isinstance(N,CL); dderH=[]  # compare links, relative N direction = 1|-1
     # comp externals:
     if fd:
         _L, L = _N.dist, N.dist; L*=rn; dL = _L - L; mL = min(_L,L) / max(_L,L) - ave_L  # rm
@@ -377,9 +376,9 @@ def comp_N(_N,N, rn, angle=None, dist=None, dir=1):  # dir if fd, Link.derH=dH, 
             Et += np.array([lEt[0], lEt[1], 2, 0])  # same olp?
             vert += dLat
     if M > ave and (len(N.derH) > 2 or isinstance(N,CL)):  # else derH is redundant to dext,vert
-        derH = comp_H(_N.derH, N.derH, rn, Link, Et, fd)  # comp shared layers, if any
+        dderH = comp_H(_N.derH, N.derH, rn, Link, Et, fd)  # comp shared layers, if any
         # comp_node_(node_|link_)
-    Link.derH = [CLay(root=Link,Et=Et,node_=[_N,N],link_=[Link], m_d_t=[[dext[0],vert[0]],[[dext[1],vert[1]]]]), *derH]
+    Link.derH = [CLay(root=Link,Et=Et,node_=[_N,N],link_=[Link], m_d_t=[[dext[0],vert[0]],[dext[1],vert[1]]]), *dderH]
     # spec:
     if not fd and _N.altG and N.altG:  # if alt M?
         Link.altL = comp_N(_N.altG, N.altG, _N.altG.Et[2] / N.altG.Et[2])
@@ -439,6 +438,13 @@ def sum_lay_(link_, root):
     lay0 = CLay(root=root)
     for link in link_: lay0.add_lay(link.derH[0])
     return lay0
+
+def comb_H_(L_, root, fd):
+
+    derH = sum_H(L_,root,fd=fd)
+    Lay = CLay(root=root)
+    for lay in derH: Lay.add_lay(lay)
+    return Lay
 
 def sum_H(Q, root, rev=0, fc=0, fd=0):  # sum derH in link_|node_
     DerH = []

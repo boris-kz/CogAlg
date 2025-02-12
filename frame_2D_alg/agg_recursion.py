@@ -5,7 +5,7 @@ from itertools import zip_longest
 from multiprocessing import Pool, Manager
 from frame_blobs import frame_blobs_root, intra_blob_root, imread, aves, Caves
 from comp_slice import comp_latuple, comp_vert
-from vect_edge import L2N, sum_H, add_H, comp_H, comp_N, comp_node_, comp_link_, sum2graph, get_rim, CG, vectorize_root, comp_area, extend_box, Val_
+from vect_edge import L2N, comb_H_, sum_H, add_H, comp_H, comp_N, comp_node_, comp_link_, sum2graph, get_rim, CG, vectorize_root, comp_area, extend_box, Val_
 '''
 notation:
 prefix f: flag
@@ -42,25 +42,25 @@ def cross_comp(root):  # form agg_Level by breadth-first node_,link_ cross-comp,
     N_,L_,Et = comp_node_(root.node_[-1])  # cross-comp top-composition exemplars in root.node_
     # mfork
     if Val_(Et, _Et=Et, fd=0) > 0:  # cluster eval
-        derH = [[mlay] for mlay in sum_H(L_,root, fd=1)]  # nested mlay per layer
-        pL_ = {l for n in N_ for l,_ in get_rim(n,fd=0)}
+        derH = [[comb_H_(L_, root, fd=1)]]  # nested mlay
+        pL_ = {l for n in N_ for l,_ in get_rim(n, fd=0)}
         if len(pL_) > ave_L:
-            cluster_N_(root, pL_, fd=0)  # form multiple distance segments, same depth
-        # dfork, one for all distance segments, adds altGs, no higher Gs:
-        L2N(L_,root)
-        lN_,lL_,dEt = comp_link_(L_,Et)  # same root for L_, root.link_ was compared in root-forming for alt clustering
-        if Val_(dEt, _Et=Et, fd=1) > 0:
-            dderH = sum_H(lL_, root, fd=1)
-            for lay, dlay in zip(derH, dderH): lay += [dlay]
-            derH += [[[], dderH[-1]]]  # dderH is longer
-            plL_ = {l for n in lN_ for l,_ in get_rim(n,fd=1)}
-            if len(plL_) > ave_L:
-                cluster_N_(root, plL_, fd=1)  # form altGs for cluster_C_, no new links between dist-seg Gs
-        else:
-            for lay in derH:
-                lay += [[]]  # empty dlay
+            cluster_N_(root, pL_,fd=0)  # form multiple distance segments, same depth
+        if Val_(Et, _Et=Et, fd=0) > 0:
+            # dfork, one for all distance segments, adds altGs, no higher Gs:
+            L2N(L_,root)
+            lN_,lL_,dEt = comp_link_(L_,Et)  # same root for L_, root.link_ was compared in root-forming for alt clustering
+            if Val_(dEt, _Et=Et, fd=1) > 0:
+                derH[0] += [comb_H_(lL_, root, fd=1)]  # += dlay
+                plL_ = {l for n in lN_ for l,_ in get_rim(n,fd=1)}
+                if len(plL_) > ave_L:
+                    cluster_N_(root, plL_, fd=1)  # form altGs for cluster_C_, no new links between dist-seg Gs
+            else:
+                derH[0] += [[]]  # empty dlay
+        else: derH[0] += [[]]  # empty dlay
         root.derH = derH  # replace lower derH, may not align to node_,link_H append in cluster_N_
         comb_altG_(top_(root))  # comb node contour: altG_ | neg links sum, cross-comp -> CG altG
+        # agg eval +=derH,node_H:
         cluster_C_(root)  # -> mfork G,altG exemplars, +altG surround borrow, root.derH + 1|2 lays
         # no dfork cluster_C_, no ddfork
         # if val_: lev_G -> agg_H_seq
@@ -271,6 +271,20 @@ def sort_H(H, fd):  # re-assign olp and form priority indices for comp_tree, if 
     if not fd:
         H.root.node_ = H.node_
 
+def weigh_m_(m_, M, ave):  # adjust weights on attr matches, also add cost attrs
+    _w_ = [1 for _ in m_]
+
+    while True:
+        w_ = [min(m/M, M/m) for m in m_]  # rational deviations from mean,
+        # or balanced: min(m/M, M/m) + (m+M)/2?
+        Dw = sum([abs(w-_w) for w,_w in zip(w_,_w_)])  # weight update
+        M = sum(m*w for m, w in zip(m_,w_)) / sum(w_)  # M update
+        if Dw > ave:
+            _w_ = w_
+        else:
+            break
+    return w_, M
+
 def agg_level(inputs):  # draft parallel
 
     frame, H, elevation = inputs
@@ -338,11 +352,12 @@ def agg_H_seq(focus):  # sequential level-updating pipeline
             hG = lev_G; agg_H = agg_H[:-1]  # local top graph, gets no feedback
             while agg_H:
                 lev_G = agg_H.pop()
-                dm_ = hG.vert[0] - lev_G.vert[0]  # need to add other aves?
-                if sum(dm_) > 0:  # aves update value
-                    lev_G.dm_ = dm_  # aves, proj agg+'m = m + dm?
-                    # project box by decomposed d-val per Et: np.sqrt(sum([m**2 for m in m_]) /L)?
-                    # get dy,dx: frame.vert A or frame.latuple [Dy,Dx]?
+                hm_ = hG.vert[0]  # need to add other aves?
+                hm_ = weigh_m_(hm_, sum(hm_), ave)
+                dm_ = hm_ - lev_G.aves
+                if sum(dm_) > 0:  # update
+                    lev_G.aves = hm_  # proj agg+'m = m + dm?
+                    # project box if val_* dy,dx: frame.vert A or frame.latuple [Dy,Dx]?
                     # add cost params: distance, len? min,max coord filters
                     hG = lev_G  # replace higher lev
                 else: break
