@@ -4,8 +4,7 @@ from functools import reduce
 from itertools import zip_longest
 from multiprocessing import Pool, Manager
 from frame_blobs import frame_blobs_root, intra_blob_root, imread, aves, Caves
-from comp_slice import comp_latuple, comp_vert
-from vect_edge import L2N, comb_H_, sum_H, add_H, comp_H, comp_N, comp_node_, comp_link_, sum2graph, get_rim, CG, vectorize_root, comp_area, extend_box, Val_
+from vect_edge import L2N, base_comp, comb_H_, sum_H, add_H, comp_node_, comp_link_, sum2graph, get_rim, CG, vectorize_root, extend_box, Val_
 '''
 notation:
 prefix f: flag
@@ -130,7 +129,7 @@ def cluster_C_(root):  # 0 from cluster_edge: same derH depth in root and top Gs
             A = C.altG; sign=0
             C.node_ = [n for n in C.node_ if n.fin]  # not in -ve dnode_, may add +ve later
 
-        sum_G_(dnode_, sign, fc=1, G=C)  # no extend_box, sum extH
+        sum_G_(dnode_, sign, fc=1, G=C)  # no extH, extend_box
         sum_G_([n.altG for n in dnode_ if n.altG], sign, fc=0, G=A)  # no m, M, L in altGs
         k = len(dnode_) + 1-sign
         for n in C, A:  # get averages
@@ -139,22 +138,6 @@ def cluster_C_(root):  # 0 from cluster_edge: same derH depth in root and top Gs
         C.box = reduce(extend_box, (n.box for n in C.node_))
         C.altG = A
         return C
-
-    def comp_C(C, N):  # compute match without new derivatives: global cross-comp is not directional
-
-        # comp_dext, comp_vert should be default, other comps are conditional
-        mL = min(C.L, len(N.node_))/ max(C.L, len(N.node_))- ave_L
-        mA = comp_area(C.box, N.box)[0]
-        mLat = comp_latuple(C.latuple, N.latuple, C.Et[2], N.Et[2])[1][0]
-        mVert = comp_vert(C.vert[1], N.vert[1])[1][0]
-        M = mL + mA + mLat + mVert
-        M += sum([lay.Et[0] if lay else 0 for lay in comp_H(C.derH, N.derH, rn=1, root=None, Et=np.zeros(4),fd=0)])
-        if C.altG and N.altG:  # converted to altG
-            M += comp_N(C.altG, N.altG, C.altG.Et[2] / N.altG.Et[2]).Et[0]
-        # if fuzzy C:
-        # Et = np.zeros(4)  # m,_,n,o: lateral proximity-weighted overlap, for sparse centroids
-        # M /= np.hypot(*C.yx, *N.yx), comp node_?
-        return M
 
     def centroid_cluster(N, C_, root):  # form and refine C cluster, in last G but higher root?
         # add proximity bias, for both match and overlap?
@@ -174,7 +157,8 @@ def cluster_C_(root):  # 0 from cluster_edge: same derH depth in root and top Gs
         while True:
             dN_, M, dM = [], 0, 0  # pruned nodes and values, or comp all nodes again?
             for _N in C.node_:
-                m = comp_C(C,_N)  # Et if proximity-weighted overlap?
+                m = sum( base_comp(C,_N)[0][0])
+                if C.altG and _N.altG: m += sum( base_comp(C.altG,_N.altG)[0][0])  # Et if proximity-weighted overlap?
                 vm = m - ave
                 if vm > 0:
                     M += m; dM += m - _N.m; _N.m = m  # adjust kept _N.m
@@ -211,14 +195,14 @@ def top_(G, fd=0):
     return (G.link_[-1] if G.lnest else G.link_) if fd else (G.node_[-1] if G.nnest else G.node_)
 
 def sum_G_(node_, s=1, fc=0, G=None):
-    if G is None:  # we need to create new G here, else all new G referencing a same CG
+    if G is None:
         G = CG(); G.ave = Caves()
     for n in node_:
-        G.latuple += n.latuple * s
-        G.vert = G.vert + n.vert*s if np.any(G.vert) else deepcopy(n.vert) * s
-        G.Et += n.Et * s; G.aRad += n.aRad * s
-        G.yx += n.yx * s
-        if n.derH: add_H(G.derH, n.derH, root=G, rev = s==-1, fc=fc, fd=0)
+        G.baseT += n.baseT * s
+        G.derTT += n.derTT * s
+        G.Et += n.Et * s; G.aRad += n.aRad * s; G.yx += n.yx * s
+        if n.derH:
+            add_H(G.derH, n.derH, root=G, rev = s==-1, fc=fc, fd=0)
         if fc:
             G.M += n.m * s; G.L += s
         else:
@@ -250,12 +234,10 @@ def comb_altG_(G_):  # combine contour G.altG_ into altG (node_ defined by root=
                 G.altG = altG
 
 def norm_H(H, n, fd=0):
-    if fd: H = [H]  # add nesting since L.derH is not nested
+    if fd: H = [H]  # L.derH is not nested
     for lay in H:
         for fork in lay:
-            for v_t in fork.m_d_t:  # [ [mext, mvert], [dext, dvert],..]
-                for v_ in v_t:      # [ext, vert]
-                    v_ *= n  # arrays
+            for v_ in fork.derTT: v_ *= n  # array
             fork.Et *= n  # same node_, link_
 # not used:
 def sort_H(H, fd):  # re-assign olp and form priority indices for comp_tree, if selective and aligned

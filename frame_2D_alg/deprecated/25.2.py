@@ -171,3 +171,18 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         l.yx = kwargs.get('yx',[])
         # add med, rimt, extH in der+
     def __bool__(l): return bool(l.nodet)
+
+def comp_area(_box, box, rn):
+    _y0,_x0,_yn,_xn =_box; _A = (_yn - _y0) * (_xn - _x0)
+    y0, x0, yn, xn = box;   A = (yn - y0) * (xn - x0)
+    return _A-A*rn, min(_A,A) - ave_L**2  # mA, dA
+
+def comp_dext(_dext, dext, rn, dir=1):
+    (_dL, _dA), (dL, dA) = _dext,dext
+
+    ddL = _dL - dL * rn * dir; mdL = min(_dL, dL*rn) / max(_dL, dL*rn) - ave_L  # m/mag
+    if _dL < 0 != dL < 0: mdL = -mdL  # m is negative for comparands of opposite sign
+    ddA = _dA - dA * rn * dir; mdA = min(_dA, dA*rn) / max(_dA, dA*rn) - 2
+    if _dA < 0 != dA < 0: mdA = -mdA
+
+    return np.array([np.array([mdL,mdA]),np.array([ddL,ddA])])
