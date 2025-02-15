@@ -36,9 +36,9 @@ Similar to cross-projection by data-coordinate filters, described in "imaginatio
 '''
 ave, ave_L = aves.m, aves.L
 
-def cross_comp(root):  # form agg_Level by breadth-first node_,link_ cross-comp, connect clustering, recursion
+def cross_comp(root, fn):  # form agg_Level by breadth-first node_,link_ cross-comp, connect clustering, recursion
 
-    N_,L_,Et = comp_node_(root.node_[-1])  # cross-comp top-composition exemplars in root.node_
+    N_,L_,Et = comp_node_(root.node_[-1] if fn else root.link_[-1])  # cross-comp top-composition exemplars
     # mfork
     if Val_(Et, _Et=Et, fd=0) > 0:  # cluster eval
         derH = [[comb_H_(L_, root, fd=1)]]  # nested mlay
@@ -133,7 +133,7 @@ def cluster_C_(root):  # 0 from cluster_edge: same derH depth in root and top Gs
         sum_G_([n.altG for n in dnode_ if n.altG], sign, fc=0, G=A)  # no m, M, L in altGs
         k = len(dnode_) + 1-sign
         for n in C, A:  # get averages
-            n.Et/=k; n.latuple/=k; n.vert/=k; n.aRad/=k; n.yx /= k
+            n.Et/=k; n.baseT/=k; n.derTT/=k; n.aRad/=k; n.yx /= k
             norm_H(n.derH, k)
         C.box = reduce(extend_box, (n.box for n in C.node_))
         C.altG = A
@@ -176,20 +176,26 @@ def cluster_C_(root):  # 0 from cluster_edge: same derH depth in root and top Gs
                     for n in C.node_:  # unpack C.node_, including N
                         n.m = 0; n.fin = 0
                 break
-    C_ = []  # concat exemplar/centroid nodes across top Gs, for higher cross_comp
+
+    C_t = [[],[]]  # root=frame, concat exemplar/centroid nodes across top Gs, global cross_comp
     for G in root.node_[-1]:
-        N_ = [N for N in sorted([N for N in G.node_], key=lambda n: n.Et[0], reverse=True)]  # new G.node_ is never nested
-        for N in N_:
-            N.sign, N.m, N.fin = 1, 0, 0  # C update sign, inclusion m, inclusion flag
-        for i, N in enumerate(N_):  # replace some nodes by their centroid clusters
-            if not N.fin:  # not in prior C
-                if Val_(sum([l.Et for l in N.extH]), _Et=root.Et, coef=10) > 0:  # cross-similar in G
-                    centroid_cluster(N, C_, root)  # search via N.rim, C_ +=[C]
-                else:  # M is lower in the rest of N_
-                    break
-    root.node_ += [C_]; root.nnest += 1
-    if len(C_) > ave_L and not root.root:  # frame
-        cross_comp(root)  # append derH, cluster_N_(root.node_[-1])
+        # C-cluster G node_|link_ if top-nested:
+        for fn, C_,nest, N_ in zip((0,1), C_t, [G.nnest,G.lnest], [G.node_,G.link_]):  # ?L CGs
+            if not nest: continue  # init centroid clustering in edge, may not be nested
+            N_ = [N for N in sorted([N for N in N_[-1]], key=lambda n: n.Et[fn], reverse=True)]
+            for N in N_:
+                N.sign, N.m, N.fin = 1, 0, 0  # C update sign, inclusion m, inclusion flag
+            for N in N_:
+                if not N.fin:  # not in prior C
+                    if Val_(sum([l.Et for l in N.extH]), _Et=root.Et, coef=10) > 0:  # cross-similar in G
+                        centroid_cluster(N, C_, root)  # search via N.rim, C_ +=[C]
+                    else: break  # the rest of N_ is lower-M
+            if fn:
+                root.node_ += [C_]; root.nnest += 1
+            else:
+                root.link_ += [C_]; root.lnest += 1
+            if len(C_) > ave_L and not root.root:  # frame
+                cross_comp(root, fn)  # append derH, cluster_N_([root.node_,root.link_][fn][-1])
 
 def top_(G, fd=0):
     return (G.link_[-1] if G.lnest else G.link_) if fd else (G.node_[-1] if G.nnest else G.node_)
@@ -255,7 +261,7 @@ def centroid_M_(m_, M, ave):  # adjust weights on attr matches, also add cost at
     _w_ = [1 for _ in m_]
     while True:
         w_ = [min(m/M, M/m) for m in m_]  # rational deviations from mean,
-        # or balanced on 1: w = min(m/M, M/m) + mean(min(m/M, M/m))
+        # in range 0:1, or 0:2: w = min(m/M, M/m) + mean(min(m/M, M/m))
         Dw = sum([abs(w-_w) for w,_w in zip(w_,_w_)])  # weight update
         M = sum(m*w for m, w in zip(m_,w_)) / sum(w_)  # M update
         if Dw > ave:
@@ -312,7 +318,7 @@ def agg_H_seq(focus):  # sequential level-updating pipeline
         for edge in frame.node_[-1]:
             if edge.nnest:  # has higher graphs
                 comb_altG_(edge.node_)
-                cluster_C_(edge)  # recursive, within edge?
+                cluster_C_(frame)  # recursive within edge, higher cross-comp in frame, also in link_?
                 G_ = [Lev + lev for Lev, lev in zip_longest(G_, edge.node_, fillvalue=[])]  # concat levels
                 Nnest = max(Nnest, edge.nnest)
         if Nnest < 2:  # no added levs
@@ -331,14 +337,14 @@ def agg_H_seq(focus):  # sequential level-updating pipeline
             hG = lev_G; agg_H = agg_H[:-1]  # local top graph, gets no feedback
             while agg_H:
                 lev_G = agg_H.pop()
-                hm_ = hG.vert[0]  # need to add other aves?
-                hm_ = centroid_M_(hm_, sum(hm_), ave)
+                hm_ = hG.derTT[0]  # add more ms?
+                hm_ = centroid_M_(hm_, sum(hm_)/8, ave)
                 dm_ = hm_ - lev_G.aves
                 if sum(dm_) > 0:  # update
                     lev_G.aves = hm_  # proj agg+'m = m + dm?
                     # project box if val_* dy,dx: frame.vert A or frame.latuple [Dy,Dx]?
                     # add cost params: distance, len? min,max coord filters
-                    hG = lev_G  # replace higher lev
+                    hG = lev_G  # replace higher lev, or node-specific hm_?
                 else: break
             frame.node_ = agg_H
     return frame
