@@ -118,7 +118,7 @@ Hierarchical clustering should alternate between two phases: generative via conn
  So connectivity clustering is a generative learning phase, forming new derivatives and structured composition levels, 
  while centroid clustering is a compressive phase, reducing multiple similar comparands to a single exemplar. '''
 
-def cluster_C_(root):  # 0 from cluster_edge: same derH depth in root and top Gs
+def cluster_C_(root):  # 0 nest gap from cluster_edge: same derH depth in root and top Gs
 
     def sum_C(dnode_, C=None):  # sum|subtract and average C-connected nodes
 
@@ -139,21 +139,21 @@ def cluster_C_(root):  # 0 from cluster_edge: same derH depth in root and top Gs
         C.altG = A
         return C
 
-    def centroid_cluster(N, C_, root):  # form and refine C cluster, in last G but higher root?
-        # add proximity bias, for both match and overlap?
+    def centroid_cluster(N, C_, root, fn):  # form and refine C cluster around N, in root node_|link_?
+        # proximity bias for both match and overlap?
 
-        N.fin = 1; _N_ = [N]; CN_ = [N]
-        med = 0
-        while med < 3 and _N_:  # fill init C.node_: _Ns connected to N by <=3 mediation degrees
-            N_ = []
-            for _N in _N_:
-                for link, _ in _N.rim:
-                    n = link.nodet[0] if link.nodet[1] is _N else link.nodet[1]
-                    if not hasattr(n,'fin') or n.fin: continue  # in other C or in C.node_, or not in root
-                    n.fin = 1; N_ += [n]; CN_ += [n]  # no eval
-            _N_ = N_  # mediated __Ns
-            med += 1
-        C = sum_C(list(set(CN_))) # C.node_
+        N.fin = 1; CN_ = [N]
+        for n in root.node_[-1] if fn else root.link_[-1]:
+            if not hasattr(n,'fin') or n.fin: continue  # in other C or in C.node_, or not in root
+            radii = N.aRad + n.aRad
+            dy, dx = np.subtract(N.yx, n.yx)
+            dist = np.hypot(dy, dx)
+            # probably too complex:
+            GV = val_(N.Et) + val_(n.Et) + sum([val_(l.Et) for l in N.extH]) + sum([val_(l.Et) for l in n.extH])
+            if dist > max_dist * ((radii * icoef**3) * GV): continue
+            n.fin = 1; CN_ += [n]
+        # same:
+        C = sum_C(CN_)  # C.node_
         while True:
             dN_, M, dM = [], 0, 0  # pruned nodes and values, or comp all nodes again?
             for _N in C.node_:
@@ -188,7 +188,7 @@ def cluster_C_(root):  # 0 from cluster_edge: same derH depth in root and top Gs
             for N in N_:
                 if not N.fin:  # not in prior C
                     if Val_(sum([l.Et for l in N.extH]), _Et=root.Et, coef=10) > 0:  # cross-similar in G
-                        centroid_cluster(N, C_, root)  # search via N.rim, C_ +=[C]
+                        centroid_cluster(N, C_, root, fn)  # form centroid around N, C_ +=[C]
                     else: break  # the rest of N_ is lower-M
             if fn:
                 root.node_ += [C_]; root.nnest += 1
@@ -310,43 +310,34 @@ def agg_H_par(focus):  # draft parallel level-updating pipeline
 
 def agg_H_seq(focus):  # sequential level-updating pipeline
 
-    frame = frame_blobs_root(focus)
-    intra_blob_root(frame)
-    vectorize_root(frame)
-    if frame.node_[1]:  # any converted edges, no frame.link_, edge.link_
-        G_, Nnest = [], 0
-        for edge in frame.node_[-1]:
-            if edge.nnest:  # has higher graphs
-                comb_altG_(edge.node_)
-                cluster_C_(frame)  # recursive within edge, higher cross-comp in frame, also in link_?
-                G_ = [Lev + lev for Lev, lev in zip_longest(G_, edge.node_, fillvalue=[])]  # concat levels
-                Nnest = max(Nnest, edge.nnest)
-        if Nnest < 2:  # no added levs
-            return frame
-        frame.nnest = Nnest  # n node_ levels
-        frame.node_ = [frame.node_[0], *G_]  # replace edge_ with new node levels, parallel nested link_?
-        agg_H = []
-        # feedforward:
-        while len(frame.node_[-1]) > ave_L:  # draft
-            lev_G = cross_comp(frame)  # return combined top composition level, append frame.derH
-            if lev_G:
-                agg_H += [lev_G]  # indefinite graph hierarchy, sum main params?
-                if Val_(lev_G.Et, lev_G.Et) < 0: break
-            else: break
-        if agg_H:  # feedback
-            hG = lev_G; agg_H = agg_H[:-1]  # local top graph, gets no feedback
-            while agg_H:
-                lev_G = agg_H.pop()
-                hm_ = hG.derTT[0]  # add more ms?
-                hm_ = centroid_M_(hm_, sum(hm_)/8, ave)
-                dm_ = hm_ - lev_G.aves
-                if sum(dm_) > 0:  # update
-                    lev_G.aves = hm_  # proj agg+'m = m + dm?
-                    # project box if val_* dy,dx: frame.vert A or frame.latuple [Dy,Dx]?
-                    # add cost params: distance, len? min,max coord filters
-                    hG = lev_G  # replace higher lev, or node-specific hm_?
-                else: break
-            frame.node_ = agg_H
+    cluster_C_(frame)  # feedforward: recursive agg+ in edge)frame, both forks replace levs with lev_Gs
+    dm_t = [[],[]]
+    bottom_t = []
+    for fn, Q, nest in zip((0,1), (frame.node_,frame.link_), (frame.nnest,frame.lnest)):
+        if fn:
+            if nest<2: continue  # no new nesting
+        elif nest==0: continue
+         # feedback, both Qs are lev_G_s:
+        hG = Q[-1]  # init
+        bottom = 1
+        for lev_G in reversed(Q[:-1]):  # top level gets no feedback
+            hm_ = hG.derTT[0]  # add other ms?
+            hm_ = centroid_M_(hm_, sum(hm_)/8, ave)
+            dm_ = hm_ - lev_G.aves
+            if sum(dm_) > ave:  # update
+                lev_G.aves = hm_  # proj agg+'m = m + dm?
+                # project focus by val_* dy,dx: mean value shift within focus
+                # frame derTT dgA / baseT gA:
+                # bottom focus only, internal search per G
+                hG = lev_G  # add cost params: distance, len, dcoord filters
+            else:
+                bottom = 0; break  # feedback did not reach the bottom level
+        dm_t += [dm_]
+        bottom_t += [bottom]
+    if any(bottom_t) and sum(dm_t[0]) +sum(dm_t[1]) > ave:
+        # bottom level is refocused, new aves, rerun agg+:
+        agg_H_seq(focus)
+
     return frame
 
 if __name__ == "__main__":
@@ -357,4 +348,8 @@ if __name__ == "__main__":
     yn = xn = 64  # focal sub-frame size, = raccoon_eye, can be any number
     y0 = x0 = 300  # focal sub-frame start @ image center
     focus = image[y0:y0+yn, x0:x0+xn]
-    frame = agg_H_seq(focus)
+    frame = frame_blobs_root(focus)
+    intra_blob_root(frame)
+    vectorize_root(frame)
+    if frame.node_[1]:  # any converted edges
+        frame = agg_H_seq(focus)  # focus will be shifted by feedback

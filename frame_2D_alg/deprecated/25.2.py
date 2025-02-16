@@ -186,3 +186,83 @@ def comp_dext(_dext, dext, rn, dir=1):
     if _dA < 0 != dA < 0: mdA = -mdA
 
     return np.array([np.array([mdL,mdA]),np.array([ddL,ddA])])
+
+def centroid_cluster(N, C_, root):  # form and refine C cluster, in last G but higher root?
+        # add proximity bias, for both match and overlap?
+
+        N.fin = 1; _N_ = [N]; CN_ = [N]
+        med = 0
+        while med < 3 and _N_:  # fill init C.node_: _Ns connected to N by <=3 mediation degrees
+            N_ = []
+            for _N in _N_:
+                for link, _ in _N.rim:
+                    n = link.nodet[0] if link.nodet[1] is _N else link.nodet[1]
+                    if not hasattr(n,'fin') or n.fin: continue  # in other C or in C.node_, or not in root
+                    n.fin = 1; N_ += [n]; CN_ += [n]  # no eval
+            _N_ = N_  # mediated __Ns
+            med += 1
+        C = sum_C(list(set(CN_))) # C.node_
+        while True:
+            dN_, M, dM = [], 0, 0  # pruned nodes and values, or comp all nodes again?
+            for _N in C.node_:
+                m = sum( base_comp(C,_N)[0][0])
+                if C.altG and _N.altG: m += sum( base_comp(C.altG,_N.altG)[0][0])  # Et if proximity-weighted overlap?
+                vm = m - ave
+                if vm > 0:
+                    M += m; dM += m - _N.m; _N.m = m  # adjust kept _N.m
+                else:  # remove _N from C
+                    _N.fin=0; _N.m=0; dN_+=[_N]; dM += -vm  # dM += abs m deviation
+            if dM > ave and M > ave:  # loop update, break if low C reforming value
+                if dN_:
+                    C = sum_C(list(set(dN_)),C)  # subtract dN_ from C
+                C.M = M  # with changes in kept nodes
+            else:  # break
+                if C.M > ave * 10:  # add proximity-weighted overlap?
+                    for n in C.node_: n.root = C
+                    C_ += [C]; C.root = root  # centroid cluster
+                else:
+                    for n in C.node_:  # unpack C.node_, including N
+                        n.m = 0; n.fin = 0
+                break
+
+def agg_H_seq(focus):  # sequential level-updating pipeline
+
+    frame = frame_blobs_root(focus)
+    intra_blob_root(frame)
+    vectorize_root(frame)
+    if frame.node_[1]:  # any converted edges, no frame.link_, edge.link_
+        G_, Nnest = [], 0
+        cluster_C_(frame)
+        for edge in frame.node_[-1]:
+            if edge.nnest:  # has higher graphs
+                comb_altG_(edge.node_)
+                cluster_C_(frame)  # recursive within edge, higher cross-comp in frame, also in link_?
+                G_ = [Lev + lev for Lev, lev in zip_longest(G_, edge.node_, fillvalue=[])]  # concat levels
+                Nnest = max(Nnest, edge.nnest)
+        if Nnest < 2:  # no added levs
+            return frame
+        frame.nnest = Nnest  # n node_ levels
+        frame.node_ = [frame.node_[0], *G_]  # replace edge_ with new node levels, parallel nested link_?
+        agg_H = []
+        # feedforward:
+        while len(frame.node_[-1]) > ave_L:  # draft
+            lev_G = cross_comp(frame)  # return combined top composition level, append frame.derH
+            if lev_G:
+                agg_H += [lev_G]  # indefinite graph hierarchy, sum main params?
+                if Val_(lev_G.Et, lev_G.Et) < 0: break
+            else: break
+        if agg_H:  # feedback
+            hG = lev_G; agg_H = agg_H[:-1]  # local top graph, gets no feedback
+            while agg_H:
+                lev_G = agg_H.pop()
+                hm_ = hG.derTT[0]  # add more ms?
+                hm_ = centroid_M_(hm_, sum(hm_)/8, ave)
+                dm_ = hm_ - lev_G.aves
+                if sum(dm_) > 0:  # update
+                    lev_G.aves = hm_  # proj agg+'m = m + dm?
+                    # project box if val_* dy,dx: frame.vert A or frame.latuple [Dy,Dx]?
+                    # add cost params: distance, len? min,max coord filters
+                    hG = lev_G  # replace higher lev, or node-specific hm_?
+                else: break
+            frame.node_ = agg_H
+    return frame

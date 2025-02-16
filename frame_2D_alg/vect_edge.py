@@ -93,7 +93,7 @@ class CLay(CBase):  # flat layer if derivation hierarchy
         derTT = np.array([m_,d_])
         node_ = list(set(_lay.node_+ lay.node_))  # concat
         link_ = _lay.link_ + lay.link_
-        Et = np.array([sum(m_), sum(d_), 8, (_lay.Et[3]+lay.Et[3])/2])  # n comp params = 11
+        Et = np.array([sum(m_),sum(d_), 8, (_lay.Et[3]+lay.Et[3])/2])  # n comp params = 8
         if root: root.Et += Et
 
         return CLay(Et=Et, root=root, node_=node_, link_=link_, derTT=derTT)
@@ -108,8 +108,8 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.Et = kwargs.get('Et', np.zeros(4))  # sum all params M,D,n,o
         G.yx = kwargs.get('yx', np.zeros(2))  # init PP.yx = [(y+Y)/2,(x,X)/2], then ave node yx
         G.box = kwargs.get('box', np.array([np.inf,-np.inf,np.inf,-np.inf]))  # y,Y,x,X, area: (Y-y)*(X-x),
-        G.baseT = kwargs.get('baseT', np.array([.0,.0, np.zeros(2)], dtype=object))  # I,G,[Dy,Dx]
-        G.derTT = kwargs.get('derTT', np.zeros((2,8)))  # m,d (baseT,Et,box), summed across derH lay forks
+        G.baseT = kwargs.get('baseT',[])  # I,G,Dy,Dx
+        G.derTT = kwargs.get('derTT',np.zeros((2,8)))  # m,d / baseT,Et,box, summed across derH lay forks
         G.derH = kwargs.get('derH',[])  # each lay is [m,d]: Clay(Et,node_,link_,derTT), sum|concat links across fork tree
         G.extH = kwargs.get('extH',[])  # sum from rims, single-fork
         G.maxL = kwargs.get('maxL', 0)  # if dist-nested in cluster_N_
@@ -137,7 +137,6 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         l.derTT = kwargs.get('derTT', np.zeros((2,8)))  # m,d (baseT,Et,box), summed across derH
         l.dist = kwargs.get('dist',0)  # distance between nodet centers, redundant to box
         l.angle = kwargs.get('angle',[])  # dy,dx between nodet centers, redundant to box
-        # l.baseT = kwargs.get('baseT', np.array([.0,.0, np.zeros(2)], dtype=object))  # I,G,[Dy,Dx], from nodet
         # add med, rimt, extH in der+
     def __bool__(l): return bool(l.nodet)
 
@@ -153,7 +152,7 @@ def vectorize_root(frame):
                 if edge.Et[0] * (len(edge.node_)-1)*(edge.rng+1) > ave:
                     y_,x_ = zip(*edge.dert_.keys())
                     edge.box = [min(y_),min(x_),max(y_),max(x_)]
-                    G_, baseT, derTT = [], np.array([.0,.0,np.zeros(2)]), np.zeros((2,8))
+                    G_, baseT, derTT = [], np.zeros(4), np.zeros((2,8))
                     for PP in edge.node_:  # no comp node_, link_ | PPd_ for now
                         if PP[-1][0] > ave:  # Et, no altG till cross-comp
                             G, baset, dertt = PP2G(PP)
@@ -204,8 +203,8 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
                 G_ = [sum2graph(edge, [node_,link_,et], fd)]
         if G_:
             Q = edge.link_ if fd else edge.node_
-            Q[:] = [Q[:],G_]  # init nesting
-            if fd: edge.lnest += 1  # separate cluster_C_(frame.link_) if nested?
+            Q[:] = [Q[:],G_]  # init nesting, then cluster_C_ / fork
+            if fd: edge.lnest += 1
             else:  edge.nnest += 1
     # comp PP_:
     N_,L_,Et = comp_node_(edge.node_)
@@ -333,17 +332,16 @@ def base_comp(_N, N, dir=1, fd=0):  # comp Et, Box, baseT, derTT
     nM = M*rn; dM = _M - nM; mM = min(_M,nM) / max(_M,nM)
     nD = D*rn; dD = _D - nD; mD = min(_D,nD) / max(_D,nD)
 
-    if fd: dI,mI, dG,mG, dgA,mgA = .0,.0,.0,.0,.0,.0
-    else:
-        _I, _G, (_Dy, _Dx) = _N.baseT; I, G, (Dy, Dx) = N.baseT   # I,G,Angle
-        # comp baseT:
+    if N.baseT:  # empty in CL
+        _I,_G,_Dy,_Dx = _N.baseT; I,G,Dy,Dx = N.baseT   # I,G,Angle
         I*=rn; dI = _I - I; mI = abs(dI) / ave_dI
         G*=rn; dG = _G - G; mG = min(_G,G) / max(_G,G)
         mgA, dgA = comp_angle((_Dy,_Dx),(Dy*rn,Dx*rn))
-
+    else:
+        mI,mG,mgA, dI,dG,dgA = .0,.0,.0,.0,.0,.0
+    # comp ext:
     _y,_x,_Y,_X = _N.box; y,x,Y,X = np.array(N.box) * rn
     _dy,_dx, dy, dx = _Y-_y, _X-_x, Y-y, X-x
-    # comp ext:
     mA, dA = comp_angle((_dy,_dx),(dy,dx))
     _L = _dy * _dx; L = dy * dx  # area
     dL = _L - L; mL = min(_L,L) / max(_L,L)
@@ -357,7 +355,7 @@ def base_comp(_N, N, dir=1, fd=0):  # comp Et, Box, baseT, derTT
     m_ = np.divide( np.minimum(_a_,a_), reduce(np.maximum, [_a_, a_, 1e-7]))  # rms
     m_[(_i_<0) != (i_<0)] *= -1  # m is negative if comparands have opposite sign
 
-    # each [M,D,n, I,G,gA, L,A]:  L is area
+    # each [M,D,n, I,G,gA, L,A]: L is area
     return [m_+_m_, d_+_d_], rn
 
 def comp_N(_N,N, angle=None, dist=None, dir=1):  # compare links, relative N direction = 1|-1, no need for angle, dist?
@@ -503,8 +501,8 @@ def blob2G(G, **kwargs):
     G.lnest = kwargs.get('lnest',0)  # link_H if > 0, link_[-1] is top L_
     G.derH = []  # sum from nodes, then append from feedback, maps to node_tree
     G.extH = []  # sum from rims
-    G.baseT = kwargs.get('baseT', np.array([.0,.0,np.zeros(2)],dtype=object))  # I,G,[Dy,Dx]
-    G.derTT = kwargs.get('derTT', np.array([np.zeros(8), np.zeros(8)]))  # m_,d_ base params
+    G.baseT = kwargs.get('baseT', np.zeros(4))  # I,G,Dy,Dx
+    G.derTT = kwargs.get('derTT', np.zeros((2,8)))  # m_,d_ base params
     G.box = kwargs.get('box', np.array([np.inf,np.inf,-np.inf,-np.inf]))  # y0,x0,yn,xn
     G.yx = kwargs.get('yx', np.zeros(2))  # init PP.yx = (y+Y)/2,(x+X)/2, then ave node yx
     G.rim = []  # flat links of any rng, may be nested in clustering
@@ -516,8 +514,8 @@ def blob2G(G, **kwargs):
 def PP2G(PP):
     root, P_, link_, vert, latuple, A, S, box, yx, Et = PP
 
-    baseT = np.array(latuple[:2] + [latuple[-1]])  # I, G, (Dy,Dx)
-    derTT = np.array(vert+np.zeros(2), vert+np.zeros(2))  # [I,G,A, M,D,L] -> [I,G,gA, M,D,n, empty L,A]
+    baseT = np.array([*latuple[:2], latuple[-1]], dtype=object)  # I, G, (Dy,Dx)
+    derTT = np.hstack((vert, np.zeros((2,2))))  # [I,G,A, M,D,L] -> [I,G,gA, M,D,n, empty L,A]
     y0,x0, yn,xn = box; dy,dx = yn-y0, xn-x0  # A = (dy,dx); L = np.hypot(dy,dx)
 
     G = CG(root=root, fd_=[0], Et=Et, node_=P_, link_=[], baseT=baseT, derTT=derTT, box=box, yx=yx, aRad=np.hypot(dy/2, dx/2),

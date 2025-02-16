@@ -118,7 +118,7 @@ def form_PP_(root, iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
     PPt_ = []
     for P in iP_: P.merged = 0
     for P in iP_:  # dP from link_ if fd
-        if P.merged or len(P.dert_)==1: continue
+        if P.merged or (not fd and len(P.dert_)==1): continue
         _prim_ = P.prim; _lrim_ = P.lrim
         I,G, M,D, L,_ = P.latuple
         _P_ = {P}; link_ = set(); Et = np.array([I+M, G+D])
