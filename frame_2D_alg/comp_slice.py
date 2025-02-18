@@ -26,8 +26,14 @@ These low-M high-Ma blobs are vectorized into outlines of adjacent flat (high in
 Connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possibly forking. 
 len prior root_ sorted by G is root.olp, to eval for inclusion in PP or start new P by ave*olp
 '''
-ave, ave_d, ave_G, ave_PPm, ave_PPd, ave_L, ave_dI \
-    = aves.B, aves.d, aves.G, aves.PPm, aves.PPd, aves.L, aves.dI
+ave     = aves[-2]
+ave_d   = aves[1]
+ave_G   = aves[4]
+ave_PPm = aves[22]
+ave_PPd = aves[23]
+ave_L   = aves[6]
+ave_dI  = aves[14]
+ave_md  = [ave,ave_d]
 
 class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
     name = "dP"
@@ -125,7 +131,7 @@ def form_PP_(root, iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
         while _prim_:
             prim_,lrim_ = set(),set()
             for _P,_link in zip(_prim_,_lrim_):
-                if _link.Et[fd] < aves.md[fd] or _P.merged:
+                if _link.Et[fd] < ave_md[fd] or _P.merged:
                     continue
                 _P_.add(_P); link_.add(_link)
                 _I,_G,_M,_D,_L,_ = _P.latuple

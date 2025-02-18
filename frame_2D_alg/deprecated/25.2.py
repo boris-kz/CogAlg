@@ -266,3 +266,80 @@ def agg_H_seq(focus):  # sequential level-updating pipeline
                 else: break
             frame.node_ = agg_H
     return frame
+
+class Caves(object):  # hyper-parameters, init a guess, adjusted by feedback
+    name = "Filters"
+    def __init__(ave):
+        ave.m = 5
+        ave.d = 10  # ave change to Ave_min from the root intra_blob?
+        ave.L = 4
+        ave.rn = 1000  # max scope disparity
+        ave.max_dist = 2
+        ave.coef = 10
+        ave.ccoef = 10   # scaling match ave to clustering ave
+        ave.icoef = .15  # internal M proj_val / external M proj_val
+        ave.med_cost = 10
+        # comp_slice
+        ave.cs = 5  # ave of comp_slice
+        ave.dI = 20  # ave inverse m, change to Ave from the root intra_blob?
+        ave.inv = 20
+        ave.mG = 10
+        ave.mM = 2
+        ave.mD = 2
+        ave.mMa = .1
+        ave.mA = .2
+        ave.mL = 2
+        ave.PPm = 50
+        ave.PPd = 50
+        ave.Pm = 10
+        ave.Pd = 10
+        ave.Gm = 50
+        ave.Lslice = 5
+        # slice_edge
+        ave.I = 100
+        ave.G = 100
+        ave.g = 30  # change to Ave from the root intra_blob?
+        ave.mL = 2
+        ave.dist = 3
+        ave.dangle = .95  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
+        ave.olp = 5
+        ave.B = 30
+        ave.R = 10
+        ave.coefs = {  "m": 1,
+                       # vectorize_edge
+                       "d": 1,
+                       "L": 1,
+                       "rn": 1,
+                       "max_dist": 1,
+                       "coef": 1,
+                       "ccoef": 1,
+                       "icoef": 1,
+                       "med_cost": 1,
+                       # comp_slice
+                       "dI": 1,
+                       "inv": 1,
+                       "ave_cs_d": 1,
+                       "mG": 1,
+                       "mM": 1,
+                       "mD": 1,
+                       "mMa": 1,
+                       "mA": 1,
+                       "mL": 1,
+                       "PPm": 1,
+                       "PPd": 1,
+                       "Pm": 1,
+                       "Pd": 1,
+                       "Gm": 1,
+                       "Lslice": 1,
+                       # slice_edge
+                       "I": 1,
+                       "G": 1,
+                       "g": 1,
+                       "dist": 1,
+                       "dangle": 1,
+                       "olp": 1,
+                       "B": 1,
+                       "R": 1
+        }
+    def sum_aves(ave):
+        return sum(value for value in vars(ave).values())
