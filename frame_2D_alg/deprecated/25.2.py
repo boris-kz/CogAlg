@@ -343,3 +343,32 @@ class Caves(object):  # hyper-parameters, init a guess, adjusted by feedback
         }
     def sum_aves(ave):
         return sum(value for value in vars(ave).values())
+'''
+        if len(root.derH[0])==2: root.derH[0][1].add_lay(mfork)  # current mfork is root dfork
+        else:  root.derH[0] += [mfork.copy_()]  # init
+        root.derTT += mfork.derTT
+'''
+def comp_H(H,h, rn, root, Et, fd):  # one-fork derH if fd, else two-fork derH
+    derH = []
+    for _lay,lay in zip_longest(H,h):  # different len if lay-selective comp
+        if _lay and lay:
+            if fd:  # one-fork lays
+                # draft:
+                if isinstance(lay,CLay): dLay = _lay.comp_lay(lay, rn, root=root)
+                else:                    dLay = comp_H(_lay,lay)  # nested layers
+            else:  # two-fork lays
+                dLay = []
+                for _fork,fork in zip_longest(_lay,lay):
+                    if _fork and fork:
+                        if isinstance(fork,CLay): dlay = _fork.comp_lay(fork, rn, root=root)
+                        else:                     dlay = comp_H(_fork, fork)  # nested forks
+                        if dLay:
+                            if isinstance(dLay,CLay): dLay.add_lay(dlay)  # sum ds between input forks
+                            else:                     add_H(dLay,dlay,root=root)
+                        else: dLay = dlay
+            # assuming prior base_comp, only deviations are summed in Et (of dderTT only?):
+            Et[:2] += lay.Et[:2] / lay.Et[2] - Et[:2] / lay.Et[2]
+            derH += [dLay]
+    return derH
+
+

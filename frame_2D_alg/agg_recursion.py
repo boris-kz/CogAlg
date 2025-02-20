@@ -75,9 +75,9 @@ def cluster_N_(root, L_, fd):  # top-down segment L_ by >ave ratio of L.dists
             n.fin = 0
         for i, L in enumerate(L_[1:], start=1):
             rel_dist = L.dist/_L.dist  # >= 1
-            if rel_dist < 1.2 or Val_(et, _Et=Et) > 0 or len(L_[i:]) < ave_L:  # ~=dist Ns or either side of L is weak
-                # * density: L.nodet (sum(_G.derTTe[0])- ave*(_G.Et[2]*_G.Et[3])) + (sum(G.derTTe[0])- ave*(G.Et[2]*G.Et[3]))) * ccoef / ave?
-                # or add G.Ete?
+            if rel_dist < 1.2 or Val_(et,_Et=Et) > 0 or len(L_[i:]) < ave_L:  # ~=dist Ns or either side of L is weak
+                # * density: (Ete[0]+_Ete[0]) * ccoef/ave:
+                # L.nodet (sum(_G.derTTe[0]) - ave*(_G.Et[2]*_G.Et[3])) + (sum(G.derTTe[0])- ave*(G.Et[2]*G.Et[3])))?
                 _L = L; N_ += L.nodet; et += L.Et
             else:
                 i -= 1; break  # terminate contiguous-distance segment
@@ -128,7 +128,7 @@ def cluster_C_(root):  # 0 nest gap from cluster_edge: same derH depth in root a
     def sum_C(dnode_, C=None):  # sum|subtract and average C-connected nodes
 
         if C is None:
-            C = copy_(dnode_.pop(0)); C.node_=dnode_; C.fin = 1
+            C = copy_(dnode_[0]); C.node_= copy(dnode_); dnode_.pop(0); C.fin = 1
             sign = 1  # add if new, else subtract
             C.M,C.L = 0,0  # centroid setattr
         else:
@@ -150,7 +150,7 @@ def cluster_C_(root):  # 0 nest gap from cluster_edge: same derH depth in root a
 
     def centroid_cluster(N, N_, C_, root):  # form and refine C cluster around N, in root node_|link_?
         # init:
-        N.fin = 1; CN_ = [N]
+        N.fin = 1; CN_ = [N]; fd = N.fd
         for n in N_:
             if not hasattr(n,'fin') or n.fin or n is N: continue  # in other C or in C.node_, or not in root
             radii = N.aRad + n.aRad
@@ -184,9 +184,9 @@ def cluster_C_(root):  # 0 nest gap from cluster_edge: same derH depth in root a
                 break
     # C-cluster top node_|link_:
     C_t = [[],[]]  # concat exemplar/centroid nodes across top Gs for global frame cross_comp
-    for fn, C_,nest,_N_ in zip((1,0), C_t, [root.nnest,root.lnest], [root.node_[-1],root.link_[-1]]):
+    for fn, C_,nest,_N_ in zip((1,0), C_t, [root.nnest,root.lnest], [root.node_.node_,root.link_]):
         if not nest: continue
-        N_ = [N for N in sorted([N for N in _N_], key=lambda n: n.Et[fn], reverse=True)]
+        N_ = [N for N in sorted([N for N in _N_[-1].node_], key=lambda n: n.Et[fn], reverse=True)]
         for N in N_:
             N.sign, N.m, N.fin = 1, 0, 0  # C update sign, inclusion m, inclusion flag
         for N in N_:
@@ -301,12 +301,12 @@ def agg_H_par(focus):  # draft parallel level-updating pipeline
 
 def agg_H_seq(focus, image, _nestt=(1,0)):  # recursive level-forming pipeline, called from cluster_C_
 
-    frame_blobs_root(focus)
+    frame = frame_blobs_root(focus)
     intra_blob_root(frame)
     vectorize_root(frame)
     if not frame.nnest:
         return frame
-    comb_altG_(frame.node_[-1])  # PP graphs in frame.node_[2]
+    comb_altG_(frame.node_[-1].node_)  # PP graphs in frame.node_[2]
     # feedforward agg+ in edge)frame, each lev fork is lev_G:
     cluster_C_(frame)
     dm_t = [[],[]]
@@ -321,7 +321,8 @@ def agg_H_seq(focus, image, _nestt=(1,0)):  # recursive level-forming pipeline, 
             hm_, M = centroid_M_(hm_, sum(hm_)/8, ave)
             # hG.Et[0] = M?
             dm_ = hm_ - lev_G.aves
-            if sum(dm_) > ave:  # update
+            # replace with cost coef/lev?
+            if sum(dm_) > ave:    # update:
                 lev_G.aves = hm_  # proj agg+'m = m + dm?
                 hG = lev_G
             else:
@@ -329,15 +330,15 @@ def agg_H_seq(focus, image, _nestt=(1,0)):  # recursive level-forming pipeline, 
         dm_t += [dm_]
         bottom_t += [bottom]
     if any(bottom_t) and sum(dm_t[0]) + sum(dm_t[1]) > ave:
-        # project focus by frame bottom-lev D_val:
+        # project focus by frame bottom-level D_val:
         if Val_(lev_G.Et, _Et=lev_G.Et, coef=20) > 0:  # mean value shift within focus, bottom only, internal search per G
             # include temporal Dm_+ Ddm_?
             dy,dx = lev_G.baseT[-2:]  # gA from summed Gs
             y,x,Y,X = lev_G.box  # if that's current focus?
-            proj_focus = image[max(0,y+dy), max(0, x+dx), min(image.shape[0], Y+dy), min(image.shape[1], X+dx)]
-            # or break if focus is outside the image?
-            # rerun agg+ with new bottom-lev focus and aves:
-            agg_H_seq(proj_focus, (frame.nnest,frame.lnest))
+            y = y+dy; x = x+dx; Y = Y+dy; X = X+dx
+            if y > 0 and x > 0 and Y < image.shape[0] and X < image.shape[1]:  # focus is inside the image
+                # rerun agg+ with new bottom-lev focus and aves:
+                agg_H_seq([y,x,Y,X], (frame.nnest,frame.lnest))
 
     return frame
 
