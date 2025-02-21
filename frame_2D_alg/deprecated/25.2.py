@@ -347,6 +347,9 @@ class Caves(object):  # hyper-parameters, init a guess, adjusted by feedback
         if len(root.derH[0])==2: root.derH[0][1].add_lay(mfork)  # current mfork is root dfork
         else:  root.derH[0] += [mfork.copy_()]  # init
         root.derTT += mfork.derTT
+        
+        mfork = reduce(lambda Lay, lay: Lay.add_lay(lay), L_.derH[0], CLay())
+        dfork = reduce(lambda Lay, lay: Lay.add_lay(lay), LL_.derH[0], CLay())
 '''
 def comp_H(H,h, rn, root, Et, fd):  # one-fork derH if fd, else two-fork derH
     derH = []
