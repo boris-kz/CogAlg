@@ -374,4 +374,7 @@ def comp_H(H,h, rn, root, Et, fd):  # one-fork derH if fd, else two-fork derH
             derH += [dLay]
     return derH
 
+def top_(G, fd=0):
+    return (G.link_[-1] if G.lnest else G.link_) if fd else (G.node_[-1] if G.nnest else G.node_)
+
 
