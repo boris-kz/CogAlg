@@ -245,8 +245,8 @@ def Val_(Et, _Et, ave, coef=1, fd=0):  # m|d cluster|batch eval, + cross|root pr
 
     m, d, n, o = Et; _m,_d,_n,_o = _Et  # cross-fork induction of root Et alt, same overlap?
 
-    d_loc = d * (_m * ave * coef * _n)  # diff * co-projected m deviation, no bilateral deviation?
-    d_ave = d * ave_d * ave  # coef aves, scale rational deviation of d?
+    d_loc = d * (_m - ave * coef * _n)  # diff * co-projected m deviation, no bilateral deviation?
+    d_ave = d - ave_d * ave  # d deviation, ave_d is always relative to ave m
 
     if fd: val = d_ave + d_loc  # diff borrow val, generic + specific
     else:  val = m + d_ave - d_loc  # proj match: += surround val - blocking val, * decay?
@@ -421,18 +421,21 @@ def sum2graph(root, grapht, fd, minL=0, maxL=None):  # sum node and link params 
     graph = CG(
         fd=fd, Et=Et, root=root, node_=[],link_=link_, maxL=maxL, nnest=root.nnest, lnest=root.lnest, baseT=copy(node_[0].baseT),
         derTT=Lay.derTT, derH = [Lay] if fd else [[Lay]])  # higher layers are added by feedback, dfork added from comp_link_:
-    if fd:
-        for lL in link_:  # fd mfork is link.nodet.root dfork
-            lay = reduce(lambda Lay, lay: Lay.add_lay(lay), lL.derH, CLay())
-            for LR in set([n.root for L in lL.nodet for n in L.nodet if n.root]):
-                if len(LR.derH[0])==2: LR.derH[0][1].add_lay(lay)
-                else:                  LR.derH[0] += [lay.copy_(root=LR)]
-                LR.derTT += lay.derTT
+    for L in link_:
+        L.root = graph  # reassign when L is node
+        if fd:  # fd mfork is link.nodet(CL).root dfork
+            LR_ = set([n.root for n in L.nodet if isinstance(n.root, CG)])  # skip frame, empty roots
+            if LR_:
+                lay = reduce(lambda Lay, lay: Lay.add_lay(lay), L.derH, CLay())  # combine lL.derH
+                for LR in LR_:  # lay0+= dfork
+                    if len(LR.derH[0])==2: LR.derH[0][1].add_lay(lay)  # direct root only
+                    else:                  LR.derH[0] += [lay.copy_(root=LR)]
+                    LR.derTT += lay.derTT
     N_, yx_ = [],[]
     for i, N in enumerate(node_):
         fc = 0
         if minL:  # max,min L.dist in graph.link_, inclusive, = lower-layer exclusive maxL, if G was dist-nested in cluster_N_
-            while N.root.maxL and N.root is not graph and (minL != N.root.maxL):  # maxL=0 in edge|frame
+            while N.root.maxL and N.root is not graph and (minL != N.root.maxL):  # maxL=0 in edge|frame, not fd
                 if N.root is graph:
                     fc=1; break  # graph was assigned as root via prior N
                 else: N = N.root  # cluster prior-dist graphs vs nodes
@@ -536,7 +539,7 @@ def sum_G_(node_, s=1, fc=0, G=None):
 
 def L2N(link_):
     for L in link_:
-         L.fd=1; L.mL_t,L.rimt=[[],[]],[[],[]]; L.aRad=0; L.visited_,L.extH=[],[]; L.baseT=[]; L.derTTe=np.zeros((2,8))
+         L.root=[], L.fd=1; L.mL_t,L.rimt=[[],[]],[[],[]]; L.aRad=0; L.visited_,L.extH=[],[]; L.baseT=[]; L.derTTe=np.zeros((2,8))
     return link_
 
 def frame2G(G, **kwargs):

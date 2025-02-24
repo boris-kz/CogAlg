@@ -37,7 +37,7 @@ Similar to cross-projection by data-coordinate filters, described in "imaginatio
 ave, ave_L, icoef, max_dist = aves[-2], aves[6], aves[12], aves[9]
 
 def cross_comp(root, fn, rc):  # form agg_Level by breadth-first node_,link_ cross-comp, connect clustering, recursion
-    # rc: recursion count coef in recursive functions
+    # rc: recursion count coef to ave
 
     N_,L_,Et = comp_node_(root.node_[-1].node_ if fn else root.link_[-1].node_, ave*rc)  # cross-comp top-composition exemplars
     # mval -> lay
@@ -54,8 +54,8 @@ def cross_comp(root, fn, rc):  # form agg_Level by breadth-first node_,link_ cro
                 plL_ = {l for n in lN_ for l,_ in get_rim(n,fd=1)}
                 if len(plL_) > ave_L:
                     cluster_N_(root, plL_, ave*(rc+4), fd=1)  # form altGs for cluster_C_, no new links between dist-seg Gs
-
-        root.derH += derH  # feedback
+        # feedback:
+        root.derH += derH
         comb_altG_(root.node_[-1].node_, ave*(rc+4))  # comb node contour: altG_ | neg links sum, cross-comp -> CG altG
         cluster_C_(root, rc+5)  # -> mfork G,altG exemplars, +altG surround borrow, root.derH + 1|2 lays, agg++
         # no dfork cluster_C_, no ddfork
@@ -99,7 +99,7 @@ def cluster_N_(root, L_, ave, fd):  # top-down segment L_ by >ave ratio of L.dis
             link_ = list({*link_});  Lay = CLay()
             [Lay.add_lay(lay) for lay in sum_H(link_, root, fd=1)]
             derTT = Lay.derTT
-            # weigh m_|d_ by similarity to mean m|d:
+            # weigh m_|d_ by similarity to mean m|d, replacing derTT:
             _,M = centroid_M_(derTT[0], np.sum(derTT[0]), ave)
             _,D = centroid_M_(derTT[1], np.sum(derTT[1]), ave)
             et[:2] = M,D
@@ -198,7 +198,7 @@ def cluster_C_(root, rc):  # 0 nest gap from cluster_edge: same derH depth in ro
             N.sign, N.m, N.fin = 1, 0, 0  # C update sign, inclusion m, inclusion flag
         for N in N_:
             if not N.fin:  # not in prior C
-                if Val_(N.Et, root.Et, rc, coef=10) > 0:  # cross-similar in G
+                if Val_(N.Et, root.Et, ave, coef=10) > 0:  # cross-similar in G
                     centroid_cluster(N,N_, C_, root)  # form centroid cluster around N, C_ +=[C]
                 else:
                     break  # the rest of N_ is lower-M
@@ -256,19 +256,21 @@ def sort_H(H, fd):  # re-assign olp and form priority indices for comp_tree, if 
     if not fd:
         H.root.node_ = H.node_
 
-def centroid_M_(m_, M, rc):  # adjust weights on attr matches, add cost attrs?
-    _w_ = [1 for _ in m_]
+def centroid_M_(m_, M, ave):  # adjust weights on attr matches, add cost attrs?
+
+    _w_ = np.ones(len(m_))
     while True:
-        M /= sum(_w_)  # mean
-        w_ = [min(m/M, M/m) for m in m_]  # rational deviations from mean,
-        # in range 0:1, or 0:2: w = min(m/M, M/m) + mean(min(m/M, M/m))
-        Dw = sum([abs(w-_w) for w,_w in zip(w_,_w_)])  # weight update
-        M = sum(m*w for m, w in zip(m_,w_))  # weighted M update
-        if Dw > ave * rc:
+        M /= np.sum(_w_)  # mean
+        w_ = m_ / min(M, 1/M)  # rational deviations from mean,
+        # in range 0:1, or 0:2: w = min(m/M, M/m) + mean(min(m/M, M/m))?
+        Dw = np.sum( np.abs(w_-_w_))  # weight update
+        m_[:] = m_ * w_  # replace in each cycle?
+        M = np.sum(m_)  # weighted M update
+        if Dw > ave:
             _w_ = w_
         else:
             break
-    return w_, M
+    return w_, M  # no need to return weights?
 
 def agg_level(inputs):  # draft parallel
 
@@ -316,39 +318,63 @@ def agg_H_seq(focus, image, _nestt=(1,0)):  # recursive level-forming pipeline, 
     if not frame.nnest:
         return frame
     comb_altG_(frame.node_[-1].node_, ave*2)  # PP graphs in frame.node_[2]
-    # feedforward agg+
-    cluster_C_(frame, rc=1)  # ave * rc
-    rM = 1  # summed fb coef for aves
-    # feedback, each fork is lev_G_:
+    # feedforward agg+:
+    cluster_C_(frame, rc=1)  # ave *= recursion count
+    # feedback to adjust aves:
+    rM = 1  # summed derTT ave coefs
+    rM_ = np.ones(8)  # add ave coefs
     for fd, nest,_nest,Q in zip((0,1), (frame.nnest,frame.lnest), _nestt, (frame.node_[2:],frame.link_[1:])):  # skip blob_,PP_,link_PP_
         if nest==_nest: continue  # no new nesting
-        hG = Q[-1]  # init top level, no feedback
+        hG = Q[-1]  # top level, no feedback
         for lev_G in reversed(Q[:-1]):
             _m,_,_n,_ = hG.Et; m,_,n,_ = lev_G.Et
             rM += (_m/_n) / (m/n)  # no d,o eval?
-            if rM > ave:
-                hG = lev_G
-    if rM > ave:  # reached the bottom level
+            rM_ += (hG.derTT/_n) / (lev_G.derTT/n)
+            hG = lev_G
+    if rM > ave:  # base-level
         base = frame.node_[2]; Et,box,baseT = base.Et, base.box, base.baseT
         # project focus by bottom D_val:
         if Val_(Et, Et, ave, coef=20) > 0:  # mean value shift within focus, bottom only, internal search per G
             # include temporal Dm_+ Ddm_?
             dy,dx = baseT[-2:]  # gA from summed Gs
             y,x,Y,X = box  # current focus?
-            y = y+dy; x = x+dx; Y = Y+dy; X = X+dx
+            y = y+dy; x = x+dx; Y = Y+dy; X = X+dx  # alter focus shape, also focus size: +/m-, res decay?
             if y > 0 and x > 0 and Y < image.shape[0] and X < image.shape[1]:  # focus is inside the image
-                frame.aves *= rM
-                # rerun agg+ with new bottom-level focus and aves:
+                frame.aves[:8] *= rM_  # adjust other aves too?
+                # rerun agg+ with new bottom-level focus, aves:
                 agg_H_seq([y,x,Y,X], (frame.nnest,frame.lnest))
 
     return frame
+
+def max_g_window(i__, wsize=64):
+    dy__ = (
+            (i__[2:, :-2] - i__[:-2, 2:]) * 0.25 +
+            (i__[2:, 1:-1] - i__[:-2, 1:-1]) * 0.50 +
+            (i__[2:, 2:] - i__[:-2, 2:]) * 0.25 )
+    dx__ = (
+            (i__[:-2, 2:] - i__[2:, :-2]) * 0.25 +
+            (i__[1:-1, 2:] - i__[1:-1, :-2]) * 0.50 +
+            (i__[2:, 2:] - i__[:-2, 2:]) * 0.25
+    )
+    g__ = np.hypot(dy__, dx__)
+    nY = (image.shape[0] + wsize-1) // wsize
+    nX = (image.shape[1] + wsize-1) // wsize  # n windows
+
+    max_window = g__[0:wsize, 0:wsize]; max_g = 0
+    for iy in range(nY):
+        for ix in range(nX):
+            y0 = iy * wsize; yn = y0 + wsize
+            x0 = ix * wsize; xn = x0 + wsize
+            g = np.sum(g__[y0:yn, x0:xn])
+            if g > max_g:
+                max_window = g__[y0:yn, x0:xn]
+                max_g = g
+    return max_window
 
 if __name__ == "__main__":
     # image_file = './images/raccoon_eye.jpeg'
     image_file = './images/toucan.jpg'
     image = imread(image_file)
+    focus = max_g_window(image)
     # set min,max coordinate filters, updated by feedback to shift the focus within a frame:
-    yn = xn = 64  # focal sub-frame size, = raccoon_eye, can be any number
-    y0 = x0 = 300  # focal sub-frame start @ image center
-    focus = image[y0:y0+yn, x0:x0+xn]
     frame = agg_H_seq(focus, image)  # recursion count, focus will be shifted by internal feedback
