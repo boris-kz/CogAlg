@@ -55,7 +55,8 @@ class CLay(CBase):  # flat layer if derivation hierarchy
         l.root = kwargs.get('root', None)  # higher node or link
         l.node_ = kwargs.get('node_', [])  # concat across fork tree
         l.link_ = kwargs.get('link_', [])
-        l.derTT = kwargs.get('derTT', np.zeros((2,8)))  # [[mBase,mEt,mExt],[dBase,dEt,dExt]], sum across fork tree
+        l.derTT = kwargs.get('derTT', np.zeros((2,8)))  # m_,d_ [M,D,n, I,G,gA, L,A], sum across fork tree,
+        # add weights for cross-similarity, along with vertical aves, for both m_ and d_?
         # altL = CLay from comp altG
         # i = kwargs.get('i', 0)  # lay index in root.node_, link_, to revise olp
         # i_ = kwargs.get('i_',[])  # priority indices to compare node H by m | link H by d
@@ -91,8 +92,7 @@ class CLay(CBase):  # flat layer if derivation hierarchy
 
     def comp_lay(_lay, lay, rn, root, dir=1):  # unpack derH trees down to numericals and compare them
 
-        i_ = lay.derTT[1] * rn * dir; _i_ = _lay.derTT[1]
-        # i_ is ds, scale and direction- normalized
+        i_ = lay.derTT[1] * rn * dir; _i_ = _lay.derTT[1]  # i_ is ds, scale and direction- normalized
         d_ = _i_ - i_
         a_ = np.abs(i_); _a_ = np.abs(_i_)
         m_ = np.minimum(_a_,a_) / reduce(np.maximum,[_a_,a_,1e-7])  # match = min/max comparands
@@ -116,7 +116,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.yx = kwargs.get('yx', np.zeros(2))  # init PP.yx = [(y+Y)/2,(x,X)/2], then ave node yx
         G.box = kwargs.get('box', np.array([np.inf,-np.inf,np.inf,-np.inf]))  # y,Y,x,X, area: (Y-y)*(X-x),
         G.baseT = kwargs.get('baseT',[])  # I,G,Dy,Dx
-        G.derTT = kwargs.get('derTT',np.zeros((2,8)))  # m,d / baseT,Et,box, summed across derH lay forks
+        G.derTT = kwargs.get('derTT',np.zeros((2,8)))  # m,d / Et,baseT,box: [M,D,n, I,G,gA, L,A], summed across derH lay forks
         G.derTTe = kwargs.get('derTTe',np.zeros((2,8)))  # sum across link.derHs
         G.derH = kwargs.get('derH',[])  # each lay is [m,d]: Clay(Et,node_,link_,derTT), sum|concat links across fork tree
         G.extH = kwargs.get('extH',[])  # sum from rims, single-fork
@@ -388,7 +388,8 @@ def comp_N(_N,N, ave, fd, angle=None, dist=None, dir=1):  # compare links, relat
     dderH = []
 
     [m_,d_], rn = base_comp(_N, N, dir, fd)
-    M = sum(m_); D = sum(np.abs(d_))
+    M = np.sum(m_); D = np.sum(np.abs(d_))
+    # or M = np.sum(derTT[0] * mweights); D = np.sum(derTT[1] * dweights)
     Et = np.array([M,D, 8, (_N.Et[3]+ N.Et[3]) /2])  # n comp vars, inherited olp
     derTT = np.array([m_,d_])
     Link = CL(fd=fd,nodet=[_N,N], derTT=derTT, yx=np.add(_N.yx,N.yx)/2, angle=angle, dist=dist, box=extend_box(N.box,_N.box))
@@ -539,7 +540,8 @@ def sum_G_(node_, s=1, fc=0, G=None):
 
 def L2N(link_):
     for L in link_:
-         L.root=[], L.fd=1; L.mL_t,L.rimt=[[],[]],[[],[]]; L.aRad=0; L.visited_,L.extH=[],[]; L.baseT=[]; L.derTTe=np.zeros((2,8))
+        L.fd=1; L.mL_t,L.rimt=[[],[]],[[],[]]; L.aRad=0; L.visited_,L.extH=[],[]; L.baseT=[]; L.derTTe=np.zeros((2,8))
+        if not hasattr(L,'root'): L.root=[]
     return link_
 
 def frame2G(G, **kwargs):
