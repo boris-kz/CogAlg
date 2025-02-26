@@ -29,11 +29,13 @@ len prior root_ sorted by G is root.olp, to eval for inclusion in PP or start ne
 ave     = aves[-2]
 ave_d   = aves[1]
 ave_G   = aves[4]
-ave_PPm = aves[22]
-ave_PPd = aves[23]
+ave_PPm = aves[30]
+ave_PPd = aves[31]
 ave_L   = aves[6]
-ave_dI  = aves[14]
+ave_dI  = aves[22]
 ave_md  = [ave,ave_d]
+mweights = [aves[3], aves[4], aves[7], aves[0], aves[1], aves[6]]
+dweights = [aves[11], aves[12], aves[15], aves[8], aves[9], aves[14]]
 
 class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
     name = "dP"
@@ -190,8 +192,8 @@ def comp_latuple(_latuple, latuple, _n,n):  # 0der params, add dir?
 
     d_ = np.array([dI, dG, dA, dM, dD, dL])  # derTT[:3], Et
     m_ = np.array([mI, mG, mA, mM, mD, mL])
-
-    return np.array([m_,d_]), np.array([sum(m_),sum(d_)])
+    M = sum(m_ * mweights); D = sum(d_ * dweights)  # we need to apply this the same for all Et computation?
+    return np.array([m_,d_]), np.array([M,D])
 
 def comp_vert(_i_,i_, rn=.1, dir=1):  # i_ is ds, dir may be -1
 
@@ -200,8 +202,9 @@ def comp_vert(_i_,i_, rn=.1, dir=1):  # i_ is ds, dir may be -1
     _a_,a_ = np.abs(_i_), np.abs(i_)
     m_ = np.divide( np.minimum(_a_,a_), reduce(np.maximum, [_a_, a_, 1e-7]))  # rms
     m_[(_i_<0) != (d_<0)] *= -1  # m is negative if comparands have opposite sign
+    M = sum(m_ * mweights); D = sum(d_ * dweights)
 
-    return np.array([m_,d_]), np.array([sum(m_),sum(d_)])  # Et
+    return np.array([m_,d_]), np.array([M, D])  # Et
 ''' 
     sequential version:
     md_, dd_ = [],[]
