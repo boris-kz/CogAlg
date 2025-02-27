@@ -64,58 +64,9 @@ class CBase:
         else:
             return object.__getattribute__(ave, name)  * coefs[name]  # always return ave * coef
     '''
- # hyper-parameters, init a guess, adjusted by feedback
-aves = np.array([
-        5,    # ave.m
-        10,   # ave.d = ave change to Ave_min from the root intra_blob?
-        2,    # ave.n
-        100,  # ave.I
-        100,  # ave.G
-        5,    # ave.Ga
-        1,    # ave.L
-        5,    # ave.LA
-
-        5,    # ave.dm
-        10,   # ave.dd
-        2,    # ave.dn
-        100,  # ave.dI
-        100,  # ave.dG
-        5,    # ave.dGa
-        1,    # ave.dL
-        5,    # ave.dLA
-
-        1000, # ave.rn = max scope disparity
-        2,    # ave.max_dist
-        10,   # ave.coef
-        10,   # ave.ccoef = scaling match ave to clustering ave
-        .15,  # ave.icoef = internal M proj_val / external M proj_val
-        10,   # ave.med_cost
-        # comp_slice
-        20,   # ave.dI = ave inverse m, change to Ave from the root intra_blob?
-        20,   # ave.inv
-        10,   # ave.mG
-        2,    # ave.mM
-        2,    # ave.mD
-        .1,   # ave.mMa
-        .2,   # ave.mA
-        2,    # ave.mL
-        50,   # ave.PPm
-        50,   # ave.PPd
-        10,   # ave.Pm
-        10,   # ave.Pd
-        50,   # ave.Gm
-        5,    # ave.Lslice
-        # slice_edge
-        30,   # ave.g = change to Ave from the root intra_blob?
-        2,    # ave.mL
-        3,    # ave.dist
-        .95,  # ave.dangle = vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
-        5,    # ave.olp
-        30,   # ave.B
-        10    # ave.R
-    ])
-ave  = aves[-2]  # base filter, directly used for comp_r fork
-aveR = aves[-1]  # for range+, fixed overhead per blob
+# hyper-parameters, init a guess, adjusted by feedback
+ave  = 30  # base filter, directly used for comp_r fork
+aveR = 10  # for range+, fixed overhead per blob
 
 class CFrame(CBase):
 
@@ -177,7 +128,11 @@ class CBlob(CBase):
     @property
     def yx_(blob): return list(blob.dert_.keys())
 
-def frame_blobs_root(image):
+def frame_blobs_root(image, _fb_={}):
+    if _fb_:  # update ave based on feedback coefficients
+        global ave
+        ave *= _fb_['frame_blobs']   # get feedback coefficient from intra_blob
+
     dert__ = comp_pixel(image)
     frame = CFrame(image)
     flood_fill(frame, dert__)  # flood-fill 1 pixel at a time
@@ -230,7 +185,13 @@ class CrNode_(CFrame):
         rnode_.olp= blob.root.olp + 1.5
         rnode_.rng = blob.root.rng + 1
 
-def intra_blob_root(frame):
+def intra_blob_root(frame, _fb_={}, fb_={}):
+
+    if _fb_:  # update ave based on feedback coefficients
+        global aveR
+        aveR *= _fb_['intra_blob']  # get feedback coefficient from slice_edge
+    fb_['frame_blobs'] = aveR  # feedback coefficient to the next frame_blobs
+
     frame.olp = frame.rng = 1
     for blob in frame.blob_:
         rblob(blob)

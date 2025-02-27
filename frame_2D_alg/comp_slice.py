@@ -1,5 +1,5 @@
 import numpy as np
-from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_, aves
+from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
 from slice_edge import CP, slice_edge, comp_angle
 from functools import reduce
 '''
@@ -26,16 +26,10 @@ These low-M high-Ma blobs are vectorized into outlines of adjacent flat (high in
 Connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possibly forking. 
 len prior root_ sorted by G is root.olp, to eval for inclusion in PP or start new P by ave*olp
 '''
-ave     = aves[-2]
-ave_d   = aves[1]
-ave_G   = aves[4]
-ave_PPm = aves[30]
-ave_PPd = aves[31]
-ave_L   = aves[6]
-ave_dI  = aves[22]
+
+# module-specific:
+ave, ave_d, ave_G, ave_PPm, ave_PPd, ave_L, ave_dI, mw_, dw_ =5, 10, 100, 50, 50, 4, 20, np.ones(6), np.ones(6)
 ave_md  = [ave,ave_d]
-mweights = [aves[3], aves[4], aves[7], aves[0], aves[1], aves[6]]
-dweights = [aves[11], aves[12], aves[15], aves[8], aves[9], aves[14]]
 
 class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
     name = "dP"
@@ -56,7 +50,20 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
         l.prim = []
     def __bool__(l): return l.nodet
 
-def vectorize_root(frame):
+def vectorize_root(frame, _fb_={}, fb_={}):
+
+    if _fb_:  # update ave based on feedback coefficients
+        global ave, ave_d, ave_G, ave_PPm, ave_PPd, ave_L, ave_dI, mw_, dw_, ave_md
+        ave *= _fb_['vect_edge']  # get feedback coefficient from comp_slice
+        ave_d *= _fb_['vect_edge']
+        ave_G *= _fb_['vect_edge']
+        ave_PPm *= _fb_['vect_edge']
+        ave_PPd *= _fb_['vect_edge']
+        ave_L *= _fb_['vect_edge']
+        ave_dI *= _fb_['vect_edge']
+        mw_ *= _fb_['vect_edge']
+        dw_ *= _fb_['vect_edge']
+    fb_['slice_edge'] = (ave+ave_d+ave_G+ave_PPm+ave_PPd+ave_L+ave_dI+sum(mw_)+sum(dw_))/23  # feedback coefficient to the next slice_edge
 
     blob_ = unpack_blob_(frame)
     for blob in blob_:
@@ -192,7 +199,7 @@ def comp_latuple(_latuple, latuple, _n,n):  # 0der params, add dir?
 
     d_ = np.array([dI, dG, dA, dM, dD, dL])  # derTT[:3], Et
     m_ = np.array([mI, mG, mA, mM, mD, mL])
-    M = sum(m_ * mweights); D = sum(d_ * dweights)  # we need to apply this the same for all Et computation?
+    M = sum(m_ * mw_); D = sum(d_ * dw_)  # we need to apply this the same for all Et computation?
     return np.array([m_,d_]), np.array([M,D])
 
 def comp_vert(_i_,i_, rn=.1, dir=1):  # i_ is ds, dir may be -1
@@ -202,7 +209,7 @@ def comp_vert(_i_,i_, rn=.1, dir=1):  # i_ is ds, dir may be -1
     _a_,a_ = np.abs(_i_), np.abs(i_)
     m_ = np.divide( np.minimum(_a_,a_), reduce(np.maximum, [_a_, a_, 1e-7]))  # rms
     m_[(_i_<0) != (d_<0)] *= -1  # m is negative if comparands have opposite sign
-    M = sum(m_ * mweights); D = sum(d_ * dweights)
+    M = sum(m_ * mw_); D = sum(d_ * dw_)
 
     return np.array([m_,d_]), np.array([M, D])  # Et
 ''' 

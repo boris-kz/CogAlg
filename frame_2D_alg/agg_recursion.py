@@ -3,7 +3,7 @@ from copy import copy, deepcopy
 from functools import reduce
 from itertools import zip_longest
 from multiprocessing import Pool, Manager
-from frame_blobs import frame_blobs_root, intra_blob_root, imread, aves
+from frame_blobs import frame_blobs_root, intra_blob_root, imread
 from vect_edge import L2N, base_comp, sum_G_, comb_H_, sum_H, copy_, comp_node_, comp_link_, sum2graph, get_rim, CG, CLay, vectorize_root, extend_box, Val_, val_
 '''
 notation:
@@ -34,7 +34,7 @@ Code-coordinate filters may extend base code by cross-projecting and combining p
 (which may include extending eval function with new match-projecting derivatives) 
 Similar to cross-projection by data-coordinate filters, described in "imagination, planning, action" section of part 3 in Readme.
 '''
-ave, ave_L, icoef, max_dist = aves[-2], aves[6], aves[20], aves[17]
+ave, ave_L, icoef, max_dist = 5, 1, 0.15, 2
 
 def cross_comp(root, fn, rc):  # form agg_Level by breadth-first node_,link_ cross-comp, connect clustering, recursion
     # rc: recursion count coef to ave
@@ -232,7 +232,7 @@ def comb_altG_(G_, ave):  # combine contour G.altG_ into altG (node_ defined by 
             if Val_(Et, G.Et, ave, coef=10) > 0:  # altG-specific coef for sum neg links
                 altG = CG(root=G, Et=Et, node_=node_, link_=link_, fd=1); altG.m=0  # other attrs are not significant
                 altG.derH = sum_H(altG.link_, altG, fd=1)   # sum link derHs
-                altG.derTT = np,sum([link.derTT for link in altG.link_])
+                altG.derTT = np.sum([link.derTT for link in altG.link_])
                 G.altG = altG
 
 def norm_H(H, n):
@@ -311,19 +311,24 @@ def agg_H_par(focus):  # draft parallel level-updating pipeline
 
         frame.aggH = list(H)  # convert back to list
 
-def agg_H_seq(focus, image, _nestt=(1,0)):  # recursive level-forming pipeline, called from cluster_C_
-
-    global aves
-
-    frame = frame_blobs_root(focus)
-    intra_blob_root(frame)
-    vectorize_root(frame)
+def agg_H_seq(focus, image, _nestt=(1,0), rave_=[]):  # recursive level-forming pipeline, called from cluster_C_
+    # draft:
+    global ave, ave_L, icoef, max_dist  # add derTT aves
+    if rave_:
+        ave_ = np.array([ave, ave_L, max_dist, icoef])  # mw_, dw_
+        ave, ave_L, max_dist, icoef = ave_ * rave_
+    else:
+        rave_ = np.append(np.ones(4), np.ones(4), np.ones(4))
+        # weight per ave?
+    frame = frame_blobs_root(focus, rave_2FB(rave_))
+    intra_blob_root(frame, rave_2IB(rave_))  # not sure
+    vectorize_root(frame, rave_2VR(rave_))
     if not frame.nnest:
         return frame
     comb_altG_(frame.node_[-1].node_, ave*2)  # PP graphs in frame.node_[2]
     # feedforward agg+
     cluster_C_(frame, rc=1)  # ave *= recursion count
-    rM,rD = 1,1  # sum derTT coefs: m_,d_ [M,D,n, I,G,gA, L,A] / Et,baseT,ext:
+    rM,rD = 1,1  # sum derTT coefs: m_,d_ [M,D,n,o I,G,A,L] / Et, baseT, dimension
     rV_t = np.ones((2,8))  # d value is borrowed from corresponding ms in proportion to d mag, both scaled by fb
     # feedback to scale m,d aves:
     for fd, nest,_nest,Q in zip((0,1), (frame.nnest,frame.lnest), _nestt, (frame.node_[2:],frame.link_[1:])):  # skip blob_,PP_,link_PP_
@@ -344,10 +349,8 @@ def agg_H_seq(focus, image, _nestt=(1,0)):  # recursive level-forming pipeline, 
             y,x,Y,X = box  # current focus?
             y = y+dy; x = x+dx; Y = Y+dy; X = X+dx  # alter focus shape, also focus size: +/m-, res decay?
             if y > 0 and x > 0 and Y < image.shape[0] and X < image.shape[1]:  # focus is inside the image
-                aves[:16] *= rV_t.flatten()
-                frame.aves = aves  # adjust other aves too?
                 # rerun agg+ with new bottom-level focus, aves:
-                agg_H_seq(image[y:Y,x:X], image, (frame.nnest,frame.lnest))
+                agg_H_seq(image[y:Y,x:X], image, (frame.nnest,frame.lnest), rave_=rV_t)
 
     return frame
 

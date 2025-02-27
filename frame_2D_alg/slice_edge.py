@@ -2,7 +2,7 @@ import numpy as np
 from collections import defaultdict
 from itertools import combinations
 from math import atan2, cos, floor, pi
-from frame_blobs import frame_blobs_root, intra_blob_root, CBase, imread, unpack_blob_, aves
+from frame_blobs import frame_blobs_root, intra_blob_root, CBase, imread, unpack_blob_
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
 Potential object is proximate low-gradient (flat) blobs, with rough / thick boundary of adjacent high-gradient (edge) blobs.
@@ -16,9 +16,7 @@ This process is very complex, so it must be selective. Selection should be by co
 and inverse gradient deviation of flat blobs. But the latter is implicit here: high-gradient areas are usually quite sparse.
 A stable combination of a core flat blob with adjacent edge blobs is a potential object.
 '''
-ave_I = aves[3]
-ave_G = aves[4]
-ave_dangle = aves[-4]
+ave_I, ave_G, ave_dangle  = 100, 100, 0.95
 
 class CP(CBase):
     def __init__(P, yx, axis):
@@ -35,7 +33,14 @@ def vectorize_root(frame):
         if not blob.sign and blob.G > frame.ave.G:
             slice_edge(blob, frame.ave)
 
-def slice_edge(edge):
+def slice_edge(edge, _fb_={}, fb_={}):
+
+    if _fb_:  # update ave based on feedback coefficients
+        global ave_I, ave_G, ave_dangle
+        ave_I *= _fb_['slice_edge']  # get feedback coefficient from comp_slice
+        ave_G *= _fb_['slice_edge']
+        ave_dangle *= _fb_['slice_edge']
+    fb_['intra_blob'] = (ave_I+ave_G+ave_dangle)/3  # feedback coefficient to the next intra_blob (sum them? or return an array? But we only need 1)
 
     axisd = select_max(edge)
     yx_ = sorted(axisd.keys(), key=lambda yx: edge.dert_[yx][-1])  # sort by g
