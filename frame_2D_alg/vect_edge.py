@@ -158,23 +158,23 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         # add med, rimt, extH in der+
     def __bool__(l): return bool(l.nodet)
 
-def vectorize_root(frame, rave_=[]):  # init for agg+:
+def vectorize_root(frame, _rM=0, _rV_t=[]):  # init for agg+:
     # draft:
     global ave, ave_d, ave_rn, ave_ro, ave_G, ave_L, max_dist, icoef, med_cost, ave_dI, mw_, dw_
-    if rave_:
-        ave_ = np.array([ave, ave_d, ave_rn, ave_ro, ave_G, ave_L, max_dist, icoef, med_cost, ave_dI, mw_, dw_])
-        ave, ave_d, ave_rn, ave_ro, ave_G, ave_L, max_dist, icoef, med_cost, ave_dI, mw_, dw_ = ave_ * rave_
-    else:
-        rave_ = np.append(np.ones(10), np.ones(10), np.ones(10))  # weight per ave?
+    if _rM:
+        ave, ave_d, ave_rn, ave_ro, ave_G, ave_L, max_dist, icoef, med_cost, ave_dI = (
+        np.array([ave, ave_d, ave_rn, ave_ro, ave_G, ave_L, max_dist, icoef, med_cost, ave_dI]) * mw_ * _rM)
+    # also derTT aves * _rV_t?
+    # else: rave_ = np.append(np.ones(10), np.ones(10), np.ones(10))  # weight per ave?
     blob_ = unpack_blob_(frame)
     frame2G(frame, derH=[CLay(root=frame)], node_=[blob_], root=None)
     edge_ = []  # cluster, unpack
     for blob in blob_:
         if not blob.sign and blob.G > ave_G * blob.root.olp:
-            # convert rave_ to slice_edge coefs:
-            edge = slice_edge(blob, rave_2SE(rave_))
+            # slice_edge globals * weights * _rM:
+            edge = slice_edge(blob, _rM)
             if edge.G * (len(edge.P_)-1) > ave:  # eval PP
-                comp_slice(edge, rave_2CS(rave_))
+                comp_slice(edge, _rM)
                 if edge.Et[0] * (len(edge.node_)-1)*(edge.rng+1) > ave:
                     G_ = [PP2G(PP)for PP in edge.node_ if PP[-1][0] > ave]  # Et, no altGs
                     if len(G_) > ave_L:  # no comp node_,link_,PPd_
@@ -576,8 +576,8 @@ def PP2G(PP):
 
     baseT = np.array((*latuple[:2], *latuple[-1]))  # I,G,Dy,Dx
     [mI,mG,mA,mM,mD,mL], [dI,dG,dA,dM,dD,dL] = vert
-    derTT = np.array([np.array([mM,mD,mL,1,mI,mG,*mA,mL]), np.array([dM,dD,dL,1,dI,dG,*dA,dL])])
-    y,x,Y,X = box; dy,dx = Y-y,X-x              # A = (dy,dx); L = np.hypot(dy,dx)
+    derTT = np.array([np.array([mM,mD,mL,0,mI,mG,mA,mL]), np.array([dM,dD,dL,0,dI,dG,dA,dL])])
+    y,x,Y,X = box; dy,dx = Y-y,X-x  # A = (dy,dx); L = np.hypot(dy,dx)
     G = CG(root=root, fd=0, Et=Et, node_=P_, link_=[], baseT=baseT, derTT=derTT, box=box, yx=yx, aRad=np.hypot(dy/2, dx/2),
            derH=[[CLay(node_=P_,link_=link_, derTT=deepcopy(derTT)), CLay()]])  # empty dfork
     return G

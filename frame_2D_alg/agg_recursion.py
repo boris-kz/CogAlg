@@ -311,22 +311,19 @@ def agg_H_par(focus):  # draft parallel level-updating pipeline
 
         frame.aggH = list(H)  # convert back to list
 
-def agg_H_seq(focus, image, _nestt=(1,0), rave_=[]):  # recursive level-forming pipeline, called from cluster_C_
-    # draft:
-    global ave, ave_L, icoef, max_dist  # add derTT aves
-    if rave_:
-        ave_ = np.array([ave, ave_L, max_dist, icoef])  # mw_, dw_
-        ave, ave_L, max_dist, icoef = ave_ * rave_
-    else:
-        rave_ = np.append(np.ones(4), np.ones(4), np.ones(4))
-        # weight per ave?
-    frame = frame_blobs_root(focus, rave_2FB(rave_))
-    intra_blob_root(frame, rave_2IB(rave_))  # not sure
-    vectorize_root(frame, rave_2VR(rave_))
+def agg_H_seq(focus, image, _nestt=(1,0), _rM=0, _rV_t=[]):  # recursive level-forming pipeline, called from cluster_C_
+
+    global ave, ave_L, icoef, max_dist, ave_w, ave_L_w, icoef_w, max_dist_w  # add weight per global
+    if _rM:
+        ave *= ave_w*_rM; ave_L *= ave_L_w*_rM; icoef *= icoef_w*_rM; max_dist *= max_dist_w*_rM
+    # fb _rM only
+    frame = frame_blobs_root(focus, _rM)
+    intra_blob_root(frame, _rM)  # not sure
+    vectorize_root(frame, _rM, _rV_t)
     if not frame.nnest:
         return frame
     comb_altG_(frame.node_[-1].node_, ave*2)  # PP graphs in frame.node_[2]
-    # feedforward agg+
+    # forward agg+:
     cluster_C_(frame, rc=1)  # ave *= recursion count
     rM,rD = 1,1  # sum derTT coefs: m_,d_ [M,D,n,o I,G,A,L] / Et, baseT, dimension
     rV_t = np.ones((2,8))  # d value is borrowed from corresponding ms in proportion to d mag, both scaled by fb
@@ -350,7 +347,7 @@ def agg_H_seq(focus, image, _nestt=(1,0), rave_=[]):  # recursive level-forming 
             y = y+dy; x = x+dx; Y = Y+dy; X = X+dx  # alter focus shape, also focus size: +/m-, res decay?
             if y > 0 and x > 0 and Y < image.shape[0] and X < image.shape[1]:  # focus is inside the image
                 # rerun agg+ with new bottom-level focus, aves:
-                agg_H_seq(image[y:Y,x:X], image, (frame.nnest,frame.lnest), rave_=rV_t)
+                agg_H_seq(image[y:Y,x:X], image, (frame.nnest,frame.lnest), rM, rV_t)
 
     return frame
 

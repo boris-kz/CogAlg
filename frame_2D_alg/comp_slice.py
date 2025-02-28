@@ -190,10 +190,10 @@ def comp_latuple(_latuple, latuple, _n,n):  # 0der params, add dir?
     I, G, M, D, L, (Dy, Dx) = latuple
     rn = _n / n
 
-    I*=rn; dI = _I - I;  mI = ave_dI -dI / max(_I,I)  # vI = mI - ave)
-    G*=rn; dG = _G - G;  mG = min(_G, G) / max(_G,G)  # vG = mG - ave_mG
-    M*=rn; dM = _M - M;  mM = min(_M, M) / max(_M,M)  # vM = mM - ave_mM
-    D*=rn; dD = _D - D;  mD = min(_D, D) / max(_D,D)  # vD = mD - ave_mD
+    I*=rn; dI = _I - I;  mI = ave_dI -dI / max(_I,I, 1e-7)  # vI = mI - ave
+    G*=rn; dG = _G - G;  mG = min(_G, G) / max(_G,G, 1e-7)  # vG = mG - ave_mG
+    M*=rn; dM = _M - M;  mM = min(_M, M) / max(_M,M, 1e-7)  # vM = mM - ave_mM
+    D*=rn; dD = _D - D;  mD = min(_D, D) / max(_D,D, 1e-7)  # vD = mD - ave_mD
     L*=rn; dL = _L - L;  mL = min(_L, L) / max(_L,L)  # vL = mL - ave_mL
     mA, dA = comp_angle((_Dy,_Dx),(Dy,Dx))  # vA = mA - ave_mA, normalized
 

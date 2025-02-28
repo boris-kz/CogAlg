@@ -49,7 +49,7 @@ def slice_edge(edge, _fb_={}, fb_={}):
     while yx_:
         yx = yx_.pop(); axis = axisd[yx]  # get max of g maxes
         P = form_P(CP(yx, axis), edge)
-        if P: edge.P_ += [P]
+        edge.P_ += [P]
         yx_ = [yx for yx in yx_ if yx not in edge.rootd]    # remove merged maxes if any
     edge.P_.sort(key=lambda P: P.yx, reverse=True)
     trace_P_adjacency(edge)
@@ -106,9 +106,8 @@ def form_P(P, edge):
 
     P.yx = tuple(np.mean([P.yx_[0], P.yx_[-1]], axis=0))    # new center
     P.latuple = new_latuple(I,G, M,D, L, [Dy, Dx])
-    if len(P.dert_)>1:  # skip single dert's P
-        edge.rootd[iy,ix] = P
-        return P
+    edge.rootd[iy,ix] = P
+    return P
 
 def trace_P_adjacency(edge):  # fill and trace across slices
 
