@@ -4,7 +4,7 @@ from functools import reduce
 from itertools import zip_longest
 from multiprocessing import Pool, Manager
 from frame_blobs import frame_blobs_root, intra_blob_root, imread
-from vect_edge import L2N, base_comp, sum_G_, comb_H_, sum_H, copy_, comp_node_, comp_link_, sum2graph, get_rim, CG, CLay, vectorize_root, extend_box, Val_, val_
+from vect_edge import L2N, base_comp, sum_G_, comb_H_, sum_H, copy_, comp_node_, comp_link_, sum2graph, get_rim, CG, CLay, vect_root, extend_box, Val_, val_
 '''
 notation:
 prefix f: flag
@@ -34,7 +34,8 @@ Code-coordinate filters may extend base code by cross-projecting and combining p
 (which may include extending eval function with new match-projecting derivatives) 
 Similar to cross-projection by data-coordinate filters, described in "imagination, planning, action" section of part 3 in Readme.
 '''
-ave, ave_L, icoef, max_dist = 5, 1, 0.15, 2
+w_ = np.ones(4)  # higher-scope weights
+ave, ave_L, max_dist, icoef = 5, 2, 5, .5
 
 def cross_comp(root, fn, rc):  # form agg_Level by breadth-first node_,link_ cross-comp, connect clustering, recursion
     # rc: recursion count coef to ave
@@ -53,8 +54,8 @@ def cross_comp(root, fn, rc):  # form agg_Level by breadth-first node_,link_ cro
                 derH[0] += [comb_H_(lL_, root, fd=1)]  # += dlay
                 plL_ = {l for n in lN_ for l,_ in get_rim(n,fd=1)}
                 if len(plL_) > ave_L:
-                    cluster_N_(root, plL_, ave*(rc+4), fd=1)  # form altGs for cluster_C_, no new links between dist-seg Gs
-
+                    cluster_N_(root, plL_, ave*(rc+4), fd=1)
+                    # form altGs for cluster_C_, no new links between dist-seg Gs
         root.derH += derH  # feedback
         comb_altG_(root.node_[-1].node_, ave*(rc+4))  # comb node contour: altG_ | neg links sum, cross-comp -> CG altG
         cluster_C_(root, rc+5)  # -> mfork G,altG exemplars, +altG surround borrow, root.derH + 1|2 lays, agg++
@@ -64,7 +65,7 @@ def cross_comp(root, fn, rc):  # form agg_Level by breadth-first node_,link_ cro
 
 def cluster_N_(root, L_, ave, fd):  # top-down segment L_ by >ave ratio of L.dists
 
-    L_ = sorted(L_, key=lambda x: x.dist)  # short links first
+    L_ = sorted(L_, key=lambda x: x.L)  # short links first
     min_dist = 0; Et = root.Et
     while True:
         # each loop forms G_ of contiguous-distance L_ segment
@@ -72,7 +73,7 @@ def cluster_N_(root, L_, ave, fd):  # top-down segment L_ by >ave ratio of L.dis
         for n in [n for l in L_ for n in l.nodet]:
             n.fin = 0
         for i, L in enumerate(L_[1:], start=1):
-            rel_dist = L.dist/_L.dist  # >= 1
+            rel_dist = L.L/_L.L  # >= 1
             if rel_dist < 1.2 or len(L_[i:]) < ave_L:  # ~= dist Ns or either side of L is weak: continue dist segment
                 LV = Val_(et, Et, ave)  # link val
                 _G,G = L.nodet  # * surround density: extH (_Ete[0]/ave + Ete[0]/ave) / 2, after cross_comp:
@@ -82,7 +83,7 @@ def cluster_N_(root, L_, ave, fd):  # top-down segment L_ by >ave ratio of L.dis
             else:
                 i -= 1; break  # terminate contiguous-distance segment
         G_ = []
-        max_dist = _L.dist
+        max_dist = _L.L
         for N in {*N_}:  # cluster current distance segment
             if N.fin: continue  # clustered from prior _N_
             _eN_,node_,link_,et, = [N],[],[], np.zeros(4)
@@ -93,7 +94,7 @@ def cluster_N_(root, L_, ave, fd):  # top-down segment L_ by >ave ratio of L.dis
                     for L,_ in get_rim(eN, fd):  # all +ve
                         if L not in link_:
                             eN_ += [n for n in L.nodet if not n.fin]
-                            if L.dist < max_dist:
+                            if L.L < max_dist:
                                 link_+=[L]; et+=L.Et
                 _eN_ = {*eN_}
             link_ = list({*link_});  Lay = CLay()
@@ -295,7 +296,7 @@ def agg_H_par(focus):  # draft parallel level-updating pipeline
 
     frame = frame_blobs_root(focus)
     intra_blob_root(frame)
-    vectorize_root(frame)
+    vect_root(frame)
     if frame.node_:  # converted edges
         G_ = []
         for edge in frame.node_:
@@ -311,22 +312,22 @@ def agg_H_par(focus):  # draft parallel level-updating pipeline
 
         frame.aggH = list(H)  # convert back to list
 
-def agg_H_seq(focus, image, _nestt=(1,0), _rM=0, _rV_t=[]):  # recursive level-forming pipeline, called from cluster_C_
 
-    global ave, ave_L, icoef, max_dist, ave_w, ave_L_w, icoef_w, max_dist_w  # add weight per global
-    if _rM:
-        ave *= ave_w*_rM; ave_L *= ave_L_w*_rM; icoef *= icoef_w*_rM; max_dist *= max_dist_w*_rM
-    # fb _rM only
-    frame = frame_blobs_root(focus, _rM)
+def agg_H_seq(focus, image, _nestt=(1,0), _rM=1, _rv_t=[]):  # recursive level-forming pipeline, called from cluster_C_
+
+    global ave, ave_L, icoef, max_dist  # adjust cost params
+    ave, ave_L, icoef, max_dist = np.array([ave, ave_L, icoef, max_dist]) * (w_ * _rM)
+
+    frame = frame_blobs_root(focus, _rM)  # no _rv_t
     intra_blob_root(frame, _rM)  # not sure
-    vectorize_root(frame, _rM, _rV_t)
+    vect_root(frame, _rM, _rv_t)
     if not frame.nnest:
         return frame
     comb_altG_(frame.node_[-1].node_, ave*2)  # PP graphs in frame.node_[2]
     # forward agg+:
     cluster_C_(frame, rc=1)  # ave *= recursion count
-    rM,rD = 1,1  # sum derTT coefs: m_,d_ [M,D,n,o I,G,A,L] / Et, baseT, dimension
-    rV_t = np.ones((2,8))  # d value is borrowed from corresponding ms in proportion to d mag, both scaled by fb
+    rM,rD = 1,1  # sum derTT coefs: m_,d_ [M,D,n,o, I,G,A,L] / Et, baseT, dimension
+    rv_t = np.ones((2,8))  # d value is borrowed from corresponding ms in proportion to d mag, both scaled by fb
     # feedback to scale m,d aves:
     for fd, nest,_nest,Q in zip((0,1), (frame.nnest,frame.lnest), _nestt, (frame.node_[2:],frame.link_[1:])):  # skip blob_,PP_,link_PP_
         if nest==_nest: continue  # no new nesting
@@ -335,7 +336,7 @@ def agg_H_seq(focus, image, _nestt=(1,0), _rM=0, _rV_t=[]):  # recursive level-f
             _m,_d,_n,_ = hG.Et; m,d,n,_ = lev_G.Et
             rM += (_m/_n) / (m/n)  # no o eval?
             rD += (_d/_n) / (d/n)
-            rV_t += np.abs((hG.derTT/_n) / (lev_G.derTT/n))
+            rv_t += np.abs((hG.derTT/_n) / (lev_G.derTT/n))
             hG = lev_G
     if rM > ave:  # base-level
         base = frame.node_[2]; Et,box,baseT = base.Et, base.box, base.baseT
@@ -346,8 +347,8 @@ def agg_H_seq(focus, image, _nestt=(1,0), _rM=0, _rV_t=[]):  # recursive level-f
             y,x,Y,X = box  # current focus?
             y = y+dy; x = x+dx; Y = Y+dy; X = X+dx  # alter focus shape, also focus size: +/m-, res decay?
             if y > 0 and x > 0 and Y < image.shape[0] and X < image.shape[1]:  # focus is inside the image
-                # rerun agg+ with new bottom-level focus, aves:
-                agg_H_seq(image[y:Y,x:X], image, (frame.nnest,frame.lnest), rM, rV_t)
+                # rerun agg+ with new focus and aves:
+                agg_H_seq(image[y:Y,x:X], image, (frame.nnest,frame.lnest), rM, rv_t)
 
     return frame
 

@@ -38,8 +38,6 @@ postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized variables are usually summed small-case variables
 '''
 
-ave, ave_d, ave_rn, ave_ro, ave_G, ave_L, max_dist, icoef, med_cost, ave_dI, mw_, dw_ = 5, 10, 2, 2, 100, 1, 2, 0.15, 10, 20, np.ones(8), np.ones(8)
-
 class CLay(CBase):  # flat layer if derivation hierarchy
     name = "lay"
     def __init__(l, **kwargs):
@@ -93,12 +91,11 @@ class CLay(CBase):  # flat layer if derivation hierarchy
         derTT = np.array([m_,d_])
         node_ = list(set(_lay.node_+ lay.node_))  # concat
         link_ = _lay.link_ + lay.link_
-        M = sum(m_ * mw_); D = sum(d_ * dw_)
+        M = sum(m_ * ww_t[0]); D = sum(d_ * ww_t[1])
         Et = np.array([M, D, 8, (_lay.Et[3]+lay.Et[3])/2])  # n compared params = 8
         if root: root.Et += Et
 
         return CLay(Et=Et, root=root, node_=node_, link_=link_, derTT=derTT)
-
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
     # graph / node
@@ -148,7 +145,7 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
     def __init__(l,  **kwargs):
         super().__init__()
         l.nodet = kwargs.get('nodet',[])  # e_ in kernels, else replaces _node,node: not used in kernels
-        l.L = 0  # distance between nodes
+        l.L = kwargs.get('L',0)  # distance between nodes
         l.Et = kwargs.get('Et', np.zeros(4))
         l.fd = kwargs.get('fd',0)
         l.yx = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet
@@ -158,23 +155,26 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         # add med, rimt, extH in der+
     def __bool__(l): return bool(l.nodet)
 
-def vectorize_root(frame, _rM=0, _rV_t=[]):  # init for agg+:
-    # draft:
-    global ave, ave_d, ave_rn, ave_ro, ave_G, ave_L, max_dist, icoef, med_cost, ave_dI, mw_, dw_
-    if _rM:
-        ave, ave_d, ave_rn, ave_ro, ave_G, ave_L, max_dist, icoef, med_cost, ave_dI = (
-        np.array([ave, ave_d, ave_rn, ave_ro, ave_G, ave_L, max_dist, icoef, med_cost, ave_dI]) * mw_ * _rM)
-    # also derTT aves * _rV_t?
-    # else: rave_ = np.append(np.ones(10), np.ones(10), np.ones(10))  # weight per ave?
+ave, avd, avn, avo, aI, aG, aA, aL, ave_L, max_dist, icoef, med_cost = 5, 10, 1.2, 1.2, 100, 100, 0.5, 2, 5, 10, 2, 2
+w_ = np.ones(4)  # higher-scope ave weights, dw_ = w_/ 2?
+ww_t = []
+
+def vect_root(frame, W=0, iww_t=[]):  # init for agg+:
+    if W:
+        global ave, avd, avn, avo, aI, aG, aA, aL, ave_L, max_dist, icoef, med_cost, ww_t
+        if iww_t: ww_t = iww_t
+        ave_L, max_dist, icoef, med_cost = np.array([ave_L, max_dist, icoef, med_cost]) * (w_ * W)  # cost params
+        ave, avd, avn, avo, aI, aG, aA, aL = np.array([ave, avd, avn, avo, aI, aG, aA, aL]) * ww_t[0][:8]
+        # derTT params
     blob_ = unpack_blob_(frame)
     frame2G(frame, derH=[CLay(root=frame)], node_=[blob_], root=None)
     edge_ = []  # cluster, unpack
     for blob in blob_:
-        if not blob.sign and blob.G > ave_G * blob.root.olp:
+        if not blob.sign and blob.G > aG * blob.root.olp:
             # slice_edge globals * weights * _rM:
-            edge = slice_edge(blob, _rM)
+            edge = slice_edge(blob, ww_t[0][4:7])
             if edge.G * (len(edge.P_)-1) > ave:  # eval PP
-                comp_slice(edge, _rM)
+                comp_slice(edge, W, ww_t)
                 if edge.Et[0] * (len(edge.node_)-1)*(edge.rng+1) > ave:
                     G_ = [PP2G(PP)for PP in edge.node_ if PP[-1][0] > ave]  # Et, no altGs
                     if len(G_) > ave_L:  # no comp node_,link_,PPd_
@@ -248,7 +248,7 @@ def Val_(Et, _Et, ave, coef=1, fd=0):  # m|d cluster|batch eval, + cross|root pr
     m, d, n, o = Et; _m,_d,_n,_o = _Et  # cross-fork induction of root Et alt, same overlap?
 
     d_loc = d * (_m - ave * coef * _n)  # diff * co-projected m deviation, no bilateral deviation?
-    d_ave = d - ave_d * ave  # d deviation, ave_d is always relative to ave m
+    d_ave = d - avd * ave  # d deviation, ave_d is always relative to ave m
 
     if fd: val = d_ave + d_loc  # diff borrow val, generic + specific
     else:  val = m + d_ave - d_loc  # proj match: += surround val - blocking val, * decay?
@@ -261,7 +261,7 @@ def comp_node_(_N_, ave, L=0):  # rng+ forms layer of rim and extH per N, append
     if L: _N_ = filter(lambda N: len(N.derH)==L, _N_)  # if dist-nested
     for _G, G in combinations(_N_, r=2):  # if max len derH in agg+
         _n, n = _G.Et[2], G.Et[2]; rn = _n/n if _n>n else n/_n
-        if rn > ave * ave_rn:  # scope disparity or _G.depth != G.depth, not needed?
+        if rn > ave * avn:  # scope disparity or _G.depth != G.depth, not needed?
             continue
         radii = G.aRad + _G.aRad
         dy,dx = np.subtract(_G.yx,G.yx)
@@ -314,7 +314,7 @@ def comp_link_(iL_, ave):  # comp CLs via directional node-mediated link tracing
             for mL_ in L.mL_t:
                 for _L, rev in mL_:  # rev is relative to L
                     rn = _L.Et[2] / L.Et[2]
-                    if rn > ave_rn: continue  # scope disparity, no diff nesting?
+                    if rn > avn: continue  # scope disparity, no diff nesting?
                     dy,dx = np.subtract(_L.yx,L.yx)
                     Link = comp_N(_L,L, ave, fd=1, angle=[dy,dx],dist=np.hypot(dy,dx), dir = -1 if rev else 1)  # d = -d if L is reversed relative to _L
                     Link.med = med
@@ -357,13 +357,13 @@ def base_comp(_N, N, dir=1):  # comp Et, Box, baseT, derTT
 
     _M,_D,_n,_o = _N.Et; M,D,n,o = N.Et
     # comp Et:
-    rn = _n/n; mn = (ave_rn-rn) / max(rn, ave_rn)  # ? * priority coef?
-    ro = _o/o; mo = (ave_ro-ro) / max(ro, ave_ro)  # combine with rn for normalization?
+    rn = _n/n; mn = (avn-rn) / max(rn, avn)  # ? * priority coef?
+    ro = _o/o; mo = (avo-ro) / max(ro, avo)  # combine with rn for normalization?
     nM = M*rn; dM = _M - nM; mM = min(_M,nM) / max(_M,nM)
     nD = D*rn; dD = _D - nD; mD = min(_D,nD) / max(_D,nD)
     # comp baseT:
     _I,_G,_Dy,_Dx = _N.baseT; I,G,Dy,Dx = N.baseT  # I, G|D, angle
-    I *= rn; dI = _I - I; mI = abs(dI) / ave_dI
+    I *= rn; dI = _I - I; mI = abs(dI) / aI
     G *= rn; dG = _G - G; mG = min(_G,G) / max(_G,G)
     mA, dA = comp_angle((_Dy,_Dx),(Dy*rn,Dx*rn))
     if N.fd:  # dimension is distance
@@ -374,7 +374,7 @@ def base_comp(_N, N, dir=1):  # comp Et, Box, baseT, derTT
         y0, x0, yn, xn = N.box;   A = (yn - y0) * (xn - x0)
         mL, dL = min(_A,A)/ max(_A,A), _A - A
         # mA, dA
-    _m_, _d_ = np.array([mM,mD,mn,mo, mI,mG,mA,mL]), np.array([dM,dD,rn,ro, dI,dG,dA,dL])
+    _m_,_d_ = np.array([mM,mD,mn,mo, mI,mG,mA,mL]), np.array([dM,dD,rn,ro, dI,dG,dA,dL])
     # comp derTT:
     _i_ = _N.derTT[1]; i_ = N.derTT[1] * rn  # 8 params, normalize by compared accum span
     d_ = (_i_ - i_ * dir)  # np.arrays
@@ -389,9 +389,9 @@ def comp_N(_N,N, ave, fd, angle=None, dist=None, dir=1):  # compare links, relat
     dderH = []
 
     [m_,d_], rn = base_comp(_N, N, dir)
-    baseT = np.array([(_N.baseT[0] +N.baseT[0]) /2, np.sum(d_* dw_), *angle])
+    baseT = np.array([(_N.baseT[0]+ N.baseT[0])/2, np.sum(d_* ww_t[1][3:7]), *angle])
     derTT = np.array([m_, d_])
-    M = np.sum(m_*mw_); D = np.sum(np.abs(d_*dw_))  # feedback-weighted sum
+    M = np.sum(m_* ww_t[0][:8]); D = np.sum(np.abs(d_* ww_t[1][:8]))  # feedback-weighted sum
     Et = np.array([M,D, 8, (_N.Et[3]+N.Et[3]) /2])  # n comp vars, inherited olp
 
     Link = CL(fd=fd, nodet=[_N,N], baseT=baseT, derTT=derTT, yx=np.add(_N.yx,N.yx)/2, L=dist)
@@ -588,4 +588,4 @@ if __name__ == "__main__":
     image = imread(image_file)
     frame = frame_blobs_root(image)
     intra_blob_root(frame)
-    vectorize_root(frame)
+    vect_root(frame)
