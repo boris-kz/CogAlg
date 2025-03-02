@@ -387,3 +387,15 @@ aves = np.array([
         2,    # ave.A
         2])   # ave.L
 
+ave,avd, aM,aD,aN,aO, aI,aG,aA,aL, ave_L, max_dist, icoef, med_cost = 10,10, 5,5,1.2,1.2, 100,100,.9,2, 5, 10, 2, 2
+w_ = np.ones(4)  # higher-scope ave weights, dw_ = w_/ 2?
+ww_t = []  # derTT weights adjusted in agg+
+
+def vect_root(frame, w_, rM=1, rD=1, iww_t=[]):  # init for agg+:
+    if any(iww_t):
+        global ave,avd, aM,aD,aN,aO, aI,aG,aA,aL, ave_L, max_dist, icoef, med_cost, ww_t
+        ww_t = iww_t
+        ave_L, max_dist, icoef, med_cost = np.array([ave_L, max_dist, icoef, med_cost]) * (w_ * rM)  # cost params
+        ave *= rM; avd *= rD
+        aM,aD,aN,aO, aI,aG,aA,aL = np.array([ave,avd, aM,aD,aN,aO, aI,aG,aA,aL]) * ww_t[0][:8]  # no separate ds weighting, eval?
+

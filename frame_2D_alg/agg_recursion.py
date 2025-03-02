@@ -313,14 +313,14 @@ def agg_H_par(focus):  # draft parallel level-updating pipeline
         frame.aggH = list(H)  # convert back to list
 
 
-def agg_H_seq(focus, image, _nestt=(1,0), _rM=1, _rv_t=[]):  # recursive level-forming pipeline, called from cluster_C_
+def agg_H_seq(focus, image, _nestt=(1,0), _rM=1, _rD=1, _rv_t=[]):  # recursive level-forming pipeline, called from cluster_C_
 
     global ave, ave_L, icoef, max_dist  # adjust cost params
     ave, ave_L, icoef, max_dist = np.array([ave, ave_L, icoef, max_dist]) * (w_ * _rM)
 
     frame = frame_blobs_root(focus, _rM)  # no _rv_t
     intra_blob_root(frame, _rM)  # not sure
-    vect_root(frame, _rM, _rv_t)
+    vect_root(frame, w_, _rM, _rD, _rv_t)
     if not frame.nnest:
         return frame
     comb_altG_(frame.node_[-1].node_, ave*2)  # PP graphs in frame.node_[2]
@@ -348,7 +348,7 @@ def agg_H_seq(focus, image, _nestt=(1,0), _rM=1, _rv_t=[]):  # recursive level-f
             y = y+dy; x = x+dx; Y = Y+dy; X = X+dx  # alter focus shape, also focus size: +/m-, res decay?
             if y > 0 and x > 0 and Y < image.shape[0] and X < image.shape[1]:  # focus is inside the image
                 # rerun agg+ with new focus and aves:
-                agg_H_seq(image[y:Y,x:X], image, (frame.nnest,frame.lnest), rM, rv_t)
+                agg_H_seq(image[y:Y,x:X], image, (frame.nnest,frame.lnest), rM, rD, rv_t)
 
     return frame
 

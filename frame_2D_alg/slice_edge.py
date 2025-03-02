@@ -26,14 +26,14 @@ class CP(CBase):
         P.dert_ = []
         P.latuple = None  # I,G, M,D, L, [Dy, Dx]
 
-def vectorize_root(frame, W=1, w_=[]):
+def slice_edge_root(frame, rM=1, w_=np.ones(3)):
 
     blob_ = unpack_blob_(frame)
     for blob in blob_:
-        if not blob.sign and blob.G > ave_G * blob.n * W:
+        if not blob.sign and blob.G > ave_G * blob.n * rM:
             slice_edge(blob, w_)
 
-def slice_edge(edge, w_=[]):
+def slice_edge(edge, w_=np.ones(3)):
 
     global ave_I, ave_G, ave_dangle  # +w / ave_L, etc?
     ave_I, ave_G, ave_dangle = np.array([ave_I, ave_G, ave_dangle]) * w_
@@ -206,7 +206,7 @@ if __name__ == "__main__":
 
     frame = frame_blobs_root(image)
     intra_blob_root(frame)
-    vectorize_root(frame)
+    slice_edge_root(frame)
     # verification:
     import matplotlib.pyplot as plt
     # settings

@@ -155,26 +155,28 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         # add med, rimt, extH in der+
     def __bool__(l): return bool(l.nodet)
 
-ave, avd, avn, avo, aI, aG, aA, aL, ave_L, max_dist, icoef, med_cost = 5, 10, 1.2, 1.2, 100, 100, 0.5, 2, 5, 10, 2, 2
-w_ = np.ones(4)  # higher-scope ave weights, dw_ = w_/ 2?
-ww_t = []
+ave, avd, arn, aro, aI, aveB = 10, 10, 1.2, 1.2, 100, 100
+ave_L, max_dist, icoef, med_cost = 5, 10, 2, 2
+w_ = np.ones(4)  # fb weights per above cost param
+wM, wD, wN, wO, wI, wG, wA, wL = 10, 10, 20, 20, 1, 1, 20, 20  # higher-scope weights = reversed relative estimated derTT aves?
+w_t = np.ones((2,8))  # fb weights per derTT, adjust in agg+
 
-def vect_root(frame, W=0, iww_t=[]):  # init for agg+:
-    if W:
-        global ave, avd, avn, avo, aI, aG, aA, aL, ave_L, max_dist, icoef, med_cost, ww_t
-        if iww_t: ww_t = iww_t
-        ave_L, max_dist, icoef, med_cost = np.array([ave_L, max_dist, icoef, med_cost]) * (w_ * W)  # cost params
-        ave, avd, avn, avo, aI, aG, aA, aL = np.array([ave, avd, avn, avo, aI, aG, aA, aL]) * ww_t[0][:8]
-        # derTT params
+def vect_root(frame, w_, rM=1, rD=1, ww_t=[]):  # init for agg+:
+    if any(ww_t):
+        global ave, avd, arn, aro, aveB, wM, wD, wN, wO, wI, wG, wA, wL, ave_L, max_dist, icoef, med_cost, w_t
+        ave *= rM; avd *= rD; arn *= rD; aro *= rD; aveB /= rM
+        ave_L, max_dist, icoef, med_cost = np.array([ave_L, max_dist, icoef, med_cost]) * (w_ / rM)  # cost params, decr / rM
+        w_t = np.array( [np.array([wM,wD,wN,wO,wI,wG,wA,wL]), np.array([wM,wD,wN,wO,wI,wG,wA,wL])]) * ww_t  # or dw_ ~= w_/ 2?
+        # derTT weights
     blob_ = unpack_blob_(frame)
     frame2G(frame, derH=[CLay(root=frame)], node_=[blob_], root=None)
     edge_ = []  # cluster, unpack
     for blob in blob_:
-        if not blob.sign and blob.G > aG * blob.root.olp:
+        if not blob.sign and blob.G > aveB * blob.root.olp:
             # slice_edge globals * weights * _rM:
-            edge = slice_edge(blob, ww_t[0][4:7])
+            edge = slice_edge(blob, np.array(ww_t[0][4:7]))  # wI,wG,wA?
             if edge.G * (len(edge.P_)-1) > ave:  # eval PP
-                comp_slice(edge, W, ww_t)
+                comp_slice(edge, w_, rM,rD, np.array([ ww_t[0][:2]+ ww_t[0][4:], ww_t[0][:2]+ ww_t[0][4:]+ ww_t[1][4:]]) )  # scale vert
                 if edge.Et[0] * (len(edge.node_)-1)*(edge.rng+1) > ave:
                     G_ = [PP2G(PP)for PP in edge.node_ if PP[-1][0] > ave]  # Et, no altGs
                     if len(G_) > ave_L:  # no comp node_,link_,PPd_
@@ -261,7 +263,7 @@ def comp_node_(_N_, ave, L=0):  # rng+ forms layer of rim and extH per N, append
     if L: _N_ = filter(lambda N: len(N.derH)==L, _N_)  # if dist-nested
     for _G, G in combinations(_N_, r=2):  # if max len derH in agg+
         _n, n = _G.Et[2], G.Et[2]; rn = _n/n if _n>n else n/_n
-        if rn > ave * avn:  # scope disparity or _G.depth != G.depth, not needed?
+        if rn > arn:  # scope disparity or _G.depth != G.depth, not needed?
             continue
         radii = G.aRad + _G.aRad
         dy,dx = np.subtract(_G.yx,G.yx)
@@ -314,7 +316,7 @@ def comp_link_(iL_, ave):  # comp CLs via directional node-mediated link tracing
             for mL_ in L.mL_t:
                 for _L, rev in mL_:  # rev is relative to L
                     rn = _L.Et[2] / L.Et[2]
-                    if rn > avn: continue  # scope disparity, no diff nesting?
+                    if rn > arn: continue  # scope disparity, no diff nesting?
                     dy,dx = np.subtract(_L.yx,L.yx)
                     Link = comp_N(_L,L, ave, fd=1, angle=[dy,dx],dist=np.hypot(dy,dx), dir = -1 if rev else 1)  # d = -d if L is reversed relative to _L
                     Link.med = med
@@ -357,8 +359,8 @@ def base_comp(_N, N, dir=1):  # comp Et, Box, baseT, derTT
 
     _M,_D,_n,_o = _N.Et; M,D,n,o = N.Et
     # comp Et:
-    rn = _n/n; mn = (avn-rn) / max(rn, avn)  # ? * priority coef?
-    ro = _o/o; mo = (avo-ro) / max(ro, avo)  # combine with rn for normalization?
+    rn = _n/n; mn = (arn-rn)/ max(rn,arn)  # ? * priority coef?
+    ro = _o/o; mo = (aro-ro)/ max(ro,aro)  # combine with rn for normalization?
     nM = M*rn; dM = _M - nM; mM = min(_M,nM) / max(_M,nM)
     nD = D*rn; dD = _D - nD; mD = min(_D,nD) / max(_D,nD)
     # comp baseT:
@@ -389,9 +391,9 @@ def comp_N(_N,N, ave, fd, angle=None, dist=None, dir=1):  # compare links, relat
     dderH = []
 
     [m_,d_], rn = base_comp(_N, N, dir)
-    baseT = np.array([(_N.baseT[0]+ N.baseT[0])/2, np.sum(d_* ww_t[1][3:7]), *angle])
+    baseT = np.array([(_N.baseT[0]+N.baseT[0])/2, (_N.baseT[1]+N.baseT[1])/2, *angle])  # link M,D,A
     derTT = np.array([m_, d_])
-    M = np.sum(m_* ww_t[0][:8]); D = np.sum(np.abs(d_* ww_t[1][:8]))  # feedback-weighted sum
+    M = np.sum(m_* w_t[0]); D = np.sum(np.abs(d_* w_t[1]))  # feedback-weighted sum
     Et = np.array([M,D, 8, (_N.Et[3]+N.Et[3]) /2])  # n comp vars, inherited olp
 
     Link = CL(fd=fd, nodet=[_N,N], baseT=baseT, derTT=derTT, yx=np.add(_N.yx,N.yx)/2, L=dist)
@@ -575,7 +577,7 @@ def PP2G(PP):
     root, P_, link_, vert, latuple, A, S, box, yx, Et = PP
 
     baseT = np.array((*latuple[:2], *latuple[-1]))  # I,G,Dy,Dx
-    [mI,mG,mA,mM,mD,mL], [dI,dG,dA,dM,dD,dL] = vert
+    [mM,mD,mI,mG,mA,mL], [dM,dD,dI,dG,dA,dL] = vert
     derTT = np.array([np.array([mM,mD,mL,0,mI,mG,mA,mL]), np.array([dM,dD,dL,0,dI,dG,dA,dL])])
     y,x,Y,X = box; dy,dx = Y-y,X-x  # A = (dy,dx); L = np.hypot(dy,dx)
     G = CG(root=root, fd=0, Et=Et, node_=P_, link_=[], baseT=baseT, derTT=derTT, box=box, yx=yx, aRad=np.hypot(dy/2, dx/2),
