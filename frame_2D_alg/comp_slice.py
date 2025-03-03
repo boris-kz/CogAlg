@@ -50,22 +50,21 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
         l.prim = []
     def __bool__(l): return l.nodet
 
-def comp_slice_root(frame, rM=1, rD=1, ww_t=[]):
+def comp_slice_root(frame, rV=1, ww_t=[]):
 
     blob_ = unpack_blob_(frame)
     for blob in blob_:
         if not blob.sign and blob.G > aveB * blob.root.olp:
             edge = slice_edge(blob, ww_t[0][2:-1])  # wI,wG,wA?
             if edge.G * (len(edge.P_) - 1) > ave_PPm:  # eval PP, olp=1
-                comp_slice(edge, np.ones(3), rM, rD, ww_t = ww_t)
+                comp_slice(edge, rV, ww_t = ww_t)
 
-def comp_slice(edge, w_=np.ones(3), rM=1,rD=1, ww_t=[]):  # root function
+def comp_slice(edge, rV=1, ww_t=[]):  # root function
 
     global ave, avd, wM, wD, wI, wG, wA, wL, ave_L, ave_PPm, ave_PPd, w_t
-    ave_L, ave_PPm, ave_PPd = np.array([ave_L, ave_PPm, ave_PPd]) * (w_ * rM)
+    ave, avd, ave_L, ave_PPm, ave_PPd = np.array([ave, avd, ave_L, ave_PPm, ave_PPd]) / rV  # projected value change
     if np.any(ww_t):
-        ave *= rM; avd *= rD
-        w_t = np.array( [np.array([wM,wD,wI,wG,wA,wL]), np.array([wM,wD,wI,wG,wA,wL])]) * ww_t
+        w_t = np.array([np.array([wM,wD,wI,wG,wA,wL]),np.array([wM,wD,wI,wG,wA,wL])]) * ww_t
         # der weights
     edge.Et, edge.vertuple = np.zeros(4), np.array([np.zeros(6), np.zeros(6)])  # (M, D, n, o), (m_,d_)
     for P in edge.P_:  # add higher links

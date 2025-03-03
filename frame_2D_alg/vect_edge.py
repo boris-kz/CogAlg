@@ -38,7 +38,7 @@ postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized variables are usually summed small-case variables
 '''
 
-class CLay(CBase):  # flat layer if derivation hierarchy
+class CLay(CBase):  # layer of derivation hierarchy
     name = "lay"
     def __init__(l, **kwargs):
         super().__init__()
@@ -91,7 +91,7 @@ class CLay(CBase):  # flat layer if derivation hierarchy
         derTT = np.array([m_,d_])
         node_ = list(set(_lay.node_+ lay.node_))  # concat
         link_ = _lay.link_ + lay.link_
-        M = sum(m_ * ww_t[0]); D = sum(d_ * ww_t[1])
+        M = sum(m_ * w_t[0]); D = sum(d_ * w_t[1])
         Et = np.array([M, D, 8, (_lay.Et[3]+lay.Et[3])/2])  # n compared params = 8
         if root: root.Et += Et
 
@@ -128,7 +128,8 @@ def copy_(N):
     C = CG(); fd = N.fd
     for name, value in N.__dict__.items():
         val = getattr(N, name)
-        if name == 'derH':
+        if name == '_id': continue  # skip id
+        elif name == 'derH':
             for lay in N.derH:
                 if fd: C.derH += [lay.copy_(root=C)]  # CLay
                 else:  C.derH += [[fork.copy_(root=C) for fork in lay]]
@@ -149,23 +150,21 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         l.Et = kwargs.get('Et', np.zeros(4))
         l.fd = kwargs.get('fd',0)
         l.yx = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet
+        G.box = kwargs.get('box', np.array([np.inf, -np.inf, np.inf, -np.inf]))
         l.baseT = kwargs.get('baseT', np.zeros(4))
         l.derTT = kwargs.get('derTT', np.zeros((2,8)))  # m_,d_ [M,D,n,o, I,G,A,L], sum across derH
         l.derH  = kwargs.get('derH', [])  # list of single-fork CLays
         # add med, rimt, extH in der+
     def __bool__(l): return bool(l.nodet)
 
-ave, avd, arn, aro, aI, aveB = 10, 10, 1.2, 1.2, 100, 100
-ave_L, max_dist, icoef, med_cost = 5, 10, 2, 2
-w_ = np.ones(4)  # fb weights per above cost param
-wM, wD, wN, wO, wI, wG, wA, wL = 10, 10, 20, 20, 1, 1, 20, 20  # higher-scope weights = reversed relative estimated derTT aves?
+ave, avd, arn, aI, aveB, ave_L, max_dist, icoef, med_cost = 10, 10, 1.2, 100, 100, 5, 10, 2, 2  # opportunity costs
+wM, wD, wN, wO, wI, wG, wA, wL = 10, 10, 20, 20, 1, 1, 20, 20  # der params higher-scope weights = reversed relative estimated ave?
 w_t = np.ones((2,8))  # fb weights per derTT, adjust in agg+
 
-def vect_root(frame, w_, rM=1, rD=1, ww_t=[]):  # init for agg+:
-    if any(ww_t):
-        global ave, avd, arn, aro, aveB, wM, wD, wN, wO, wI, wG, wA, wL, ave_L, max_dist, icoef, med_cost, w_t
-        ave *= rM; avd *= rD; arn *= rD; aro *= rD; aveB /= rM
-        ave_L, max_dist, icoef, med_cost = np.array([ave_L, max_dist, icoef, med_cost]) * (w_ / rM)  # cost params, decr / rM
+def vect_root(frame, rV=1, ww_t=[]):  # init for agg+:
+    if np.any(ww_t):
+        global ave, avd, arn, aveB, ave_L, max_dist, icoef, med_cost, wM, wD, wN, wO, wI, wG, wA, wL, w_t
+        ave, avd, arn, aveB, ave_L, max_dist, icoef, med_cost = np.array([ave,avd,arn,aveB,ave_L,max_dist,icoef,med_cost]) / rV  # projected value change
         w_t = np.array( [np.array([wM,wD,wN,wO,wI,wG,wA,wL]), np.array([wM,wD,wN,wO,wI,wG,wA,wL])]) * ww_t  # or dw_ ~= w_/ 2?
         # derTT weights
     blob_ = unpack_blob_(frame)
@@ -173,10 +172,9 @@ def vect_root(frame, w_, rM=1, rD=1, ww_t=[]):  # init for agg+:
     edge_ = []  # cluster, unpack
     for blob in blob_:
         if not blob.sign and blob.G > aveB * blob.root.olp:
-            # slice_edge globals * weights * _rM:
-            edge = slice_edge(blob, np.array(ww_t[0][4:7]))  # wI,wG,wA?
+            edge = slice_edge(blob, rV)
             if edge.G * (len(edge.P_)-1) > ave:  # eval PP
-                comp_slice(edge, w_, rM,rD, np.array([ ww_t[0][:2]+ ww_t[0][4:], ww_t[0][:2]+ ww_t[0][4:]+ ww_t[1][4:]]) )  # scale vert
+                comp_slice(edge, rV, np.array([(*ww_t[0][:2],*ww_t[0][4:]),(*ww_t[0][:2],*ww_t[1][4:])])) # to scale vert
                 if edge.Et[0] * (len(edge.node_)-1)*(edge.rng+1) > ave:
                     G_ = [PP2G(PP)for PP in edge.node_ if PP[-1][0] > ave]  # Et, no altGs
                     if len(G_) > ave_L:  # no comp node_,link_,PPd_
@@ -358,27 +356,27 @@ def extend_box(_box, box):  # extend box with another box
 def base_comp(_N, N, dir=1):  # comp Et, Box, baseT, derTT
 
     _M,_D,_n,_o = _N.Et; M,D,n,o = N.Et
-    # comp Et:
-    rn = _n/n; mn = (arn-rn)/ max(rn,arn)  # ? * priority coef?
-    ro = _o/o; mo = (aro-ro)/ max(ro,aro)  # combine with rn for normalization?
-    nM = M*rn; dM = _M - nM; mM = min(_M,nM) / max(_M,nM)
-    nD = D*rn; dD = _D - nD; mD = min(_D,nD) / max(_D,nD)
+    rn = _n/n  # comp Et:
+    n*=rn; dn = _n - n; mn = min(_n,n) / max(_n,n)  # or multiplicative: min * rn?
+    o*=rn; do = _o - o; mo = min(_o,o) / max(_o,o)
+    M*=rn; dM = _M - M; mM = min(_M,M) / max(_M,M)
+    D*=rn; dD = _D - D; mD = min(_D,D) / max(_D,D)
     # comp baseT:
     _I,_G,_Dy,_Dx = _N.baseT; I,G,Dy,Dx = N.baseT  # I, G|D, angle
-    I *= rn; dI = _I - I; mI = abs(dI) / aI
-    G *= rn; dG = _G - G; mG = min(_G,G) / max(_G,G)
+    I*=rn; dI = _I - I; mI = abs(dI) / aI
+    G*=rn; dG = _G - G; mG = min(_G,G) / max(_G,G)
     mA, dA = comp_angle((_Dy,_Dx),(Dy*rn,Dx*rn))
-    if N.fd:  # dimension is distance
-        _L,L = _N.L, N.L
+    if isinstance(N, CL):  # dimension is distance
+        _L,L = _N.L, N.L   # not cumulative
         mL,dL = min(_L,L)/ max(_L,L), _L - L
     else:  # dimension is box area
         _y0,_x0,_yn,_xn =_N.box; _A = (_yn-_y0) * (_xn-_x0)
         y0, x0, yn, xn = N.box;   A = (yn - y0) * (xn - x0)
         mL, dL = min(_A,A)/ max(_A,A), _A - A
         # mA, dA
-    _m_,_d_ = np.array([mM,mD,mn,mo, mI,mG,mA,mL]), np.array([dM,dD,rn,ro, dI,dG,dA,dL])
+    _m_,_d_ = np.array([mM,mD,mn,mo,mI,mG,mA,mL]), np.array([dM,dD,dn,do,dI,dG,dA,dL])
     # comp derTT:
-    _i_ = _N.derTT[1]; i_ = N.derTT[1] * rn  # 8 params, normalize by compared accum span
+    _i_ = _N.derTT[1]; i_ = N.derTT[1] * rn  # normalize by compared accum span
     d_ = (_i_ - i_ * dir)  # np.arrays
     _a_,a_ = np.abs(_i_),np.abs(i_)
     m_ = np.divide( np.minimum(_a_,a_), reduce(np.maximum, [_a_,a_,1e-7]))  # rms
@@ -395,8 +393,9 @@ def comp_N(_N,N, ave, fd, angle=None, dist=None, dir=1):  # compare links, relat
     derTT = np.array([m_, d_])
     M = np.sum(m_* w_t[0]); D = np.sum(np.abs(d_* w_t[1]))  # feedback-weighted sum
     Et = np.array([M,D, 8, (_N.Et[3]+N.Et[3]) /2])  # n comp vars, inherited olp
-
-    Link = CL(fd=fd, nodet=[_N,N], baseT=baseT, derTT=derTT, yx=np.add(_N.yx,N.yx)/2, L=dist)
+    # needed?
+    rad = np.hypot(N.baseT[-2],N.baseT[-1]) * N.L/2; box = np.array([*(N.yx-rad),*(N.yx+rad)])  # or extend box
+    Link = CL(fd=fd, nodet=[_N,N], baseT=baseT, derTT=derTT, yx=np.add(_N.yx,N.yx)/2, L=dist, box=box)
     # spec / lay:
     if M > ave and (len(N.derH) > 2 or isinstance(N,CL)):  # else derH is redundant to dext,vert
         dderH = comp_H(_N.derH, N.derH, rn, Link, Et, fd)  # comp shared layers, if any
@@ -448,9 +447,9 @@ def sum2graph(root, grapht, fd, minL=0, maxL=None):  # sum node and link params 
         else: N_ += [N]  # roots if minL
         N.root = graph
         yx_ += [N.yx]
-        graph.box = extend_box(graph.box, N.box)  # pre-compute graph.area += N.area? or from N.yx?
+        graph.box = extend_box(graph.box, N.box)
         graph.Et += N.Et * icoef  # deeper, lower weight
-        if i and not fd: graph.baseT += N.baseT
+        if i: graph.baseT += N.baseT
         # not in CL
     graph.node_= N_  # nodes or roots, link_ is still current-dist links only?
     yx = np.mean(yx_, axis=0)

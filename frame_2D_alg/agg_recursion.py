@@ -34,7 +34,6 @@ Code-coordinate filters may extend base code by cross-projecting and combining p
 (which may include extending eval function with new match-projecting derivatives) 
 Similar to cross-projection by data-coordinate filters, described in "imagination, planning, action" section of part 3 in Readme.
 '''
-w_ = np.ones(4)  # higher-scope weights
 ave, ave_L, max_dist, icoef = 5, 2, 5, .5
 
 def cross_comp(root, fn, rc):  # form agg_Level by breadth-first node_,link_ cross-comp, connect clustering, recursion
@@ -111,7 +110,7 @@ def cluster_N_(root, L_, ave, fd):  # top-down segment L_ by >ave ratio of L.dis
         if L_: min_dist = max_dist  # next loop connects current-distance clusters via longer links
         else:
             if G_:
-                [comb_altG_(G.altG, ave) for G in G_]
+                [comb_altG_(G.altG.node_, ave) for G in G_]
                 if fd:
                     if root.lnest: root.link_ += [sum_G_(G_)]
                     else: root.link_ = [sum_G_(root.link_), sum_G_(G_)]  # init nesting
@@ -124,10 +123,10 @@ def cluster_N_(root, L_, ave, fd):  # top-down segment L_ by >ave ratio of L.dis
 Hierarchical clustering should alternate between two phases: generative via connectivity and compressive via centroid.
 
  Connectivity clustering terminates at effective contours: alt_Gs, beyond which cross-similarity is not likely to continue. 
- Next cross-comp is discontinuous and should be selective, for well-defined clusters: stable and likely recurrent.
+ Next cross-comp is discontinuous and should be selective for well-defined (stable and recurring) similarity clusters.
  
- Such clusters should be compared and clustered globally: via centroid clustering, vs. local connectivity clustering.
- Only centroids (exemplars) need to be cross-compared on the next connectivity clustering level, representing their nodes.
+ These clusters should be global: formed by centroid clustering. Strong centroid clusters are cross-compared 
+ in the next-level connectivity clustering, cluster-wise or between exemplars representing cluster nodes?
  
  So connectivity clustering is a generative learning phase, forming new derivatives and structured composition levels, 
  while centroid clustering is a compressive phase, reducing multiple similar comparands to a single exemplar. '''
@@ -155,7 +154,7 @@ def cluster_C_(root, rc):  # 0 nest gap from cluster_edge: same derH depth in ro
 
         return C
 
-    def centroid_cluster(N, N_, C_, root):  # form and refine C cluster around N, in root node_|link_?
+    def centroid_cluster(N, N_, C_, root):  # form and refine fully fuzzy C cluster around N, in root node_|link_
         # init:
         N.fin = 1; CN_ = [N]
         for n in N_:
@@ -171,7 +170,7 @@ def cluster_C_(root, rc):  # 0 nest gap from cluster_edge: same derH depth in ro
             dN_, M, dM = [], 0, 0  # pruned nodes and values, or comp all nodes again?
             for _N in C.node_:
                 m = sum( base_comp(C,_N)[0][0])  # derTT[0][0]
-                if C.altG and _N.altG: m += sum( base_comp(C.altG,_N.altG)[0][0])  # Et if proximity-weighted overlap?
+                if C.altG and _N.altG: m += sum( base_comp(C.altG,_N.altG)[0][0])  # or Et if proximity-weighted overlap?
                 vm = m - ave
                 if vm > 0:
                     M += m; dM += m - _N.m; _N.m = m  # adjust kept _N.m
@@ -263,7 +262,7 @@ def centroid_M_(m_, M, ave):  # adjust weights on attr matches | diffs, recomput
     _w_ = np.ones(len(m_))  # add cost attrs?
     while True:
         M /= np.sum(_w_)  # mean
-        w_ = m_ / min(M, 1/M)  # rational deviations from mean,
+        w_ = m_ / min(M, 1/M)  # rational deviations from mean
         # in range 0:1, or 0:2: w = min(m/M, M/m) + mean(min(m/M, M/m))?
         Dw = np.sum( np.abs(w_-_w_))  # weight update
         m_[:] = m_ * w_  # replace in each cycle?
@@ -313,14 +312,14 @@ def agg_H_par(focus):  # draft parallel level-updating pipeline
         frame.aggH = list(H)  # convert back to list
 
 
-def agg_H_seq(focus, image, _nestt=(1,0), _rM=1, _rD=1, _rv_t=[]):  # recursive level-forming pipeline, called from cluster_C_
+def agg_H_seq(focus, image, _nestt=(1,0), rV=1, _rv_t=[]):  # recursive level-forming pipeline, called from cluster_C_
 
     global ave, ave_L, icoef, max_dist  # adjust cost params
-    ave, ave_L, icoef, max_dist = np.array([ave, ave_L, icoef, max_dist]) * (w_ * _rM)
+    ave, ave_L, icoef, max_dist = np.array([ave, ave_L, icoef, max_dist]) / rV
 
-    frame = frame_blobs_root(focus, _rM)  # no _rv_t
-    intra_blob_root(frame, _rM)  # not sure
-    vect_root(frame, w_, _rM, _rD, _rv_t)
+    frame = frame_blobs_root(focus, rV)  # no _rv_t
+    intra_blob_root(frame, rV)  # not sure
+    vect_root(frame, rV, _rv_t)
     if not frame.nnest:
         return frame
     comb_altG_(frame.node_[-1].node_, ave*2)  # PP graphs in frame.node_[2]
@@ -329,7 +328,7 @@ def agg_H_seq(focus, image, _nestt=(1,0), _rM=1, _rD=1, _rv_t=[]):  # recursive 
     rM,rD = 1,1  # sum derTT coefs: m_,d_ [M,D,n,o, I,G,A,L] / Et, baseT, dimension
     rv_t = np.ones((2,8))  # d value is borrowed from corresponding ms in proportion to d mag, both scaled by fb
     # feedback to scale m,d aves:
-    for fd, nest,_nest,Q in zip((0,1), (frame.nnest,frame.lnest), _nestt, (frame.node_[2:],frame.link_[1:])):  # skip blob_,PP_,link_PP_
+    for fd, nest,_nest, Q in zip((0,1), (frame.nnest,frame.lnest), _nestt, (frame.node_[2:],frame.link_[1:])):  # skip blob_,PP_,link_PP_
         if nest==_nest: continue  # no new nesting
         hG = Q[-1]  # top level, no feedback
         for lev_G in reversed(Q[:-1]):
@@ -338,7 +337,8 @@ def agg_H_seq(focus, image, _nestt=(1,0), _rM=1, _rD=1, _rv_t=[]):  # recursive 
             rD += (_d/_n) / (d/n)
             rv_t += np.abs((hG.derTT/_n) / (lev_G.derTT/n))
             hG = lev_G
-    if rM > ave:  # base-level
+    rV = (rM + rD) / 2 / (frame.nnest + frame.lnest - 3)  # accum levels in both forks
+    if rV > ave:  # normalized
         base = frame.node_[2]; Et,box,baseT = base.Et, base.box, base.baseT
         # project focus by bottom D_val:
         if Val_(Et, Et, ave, coef=20) > 0:  # mean value shift within focus, bottom only, internal search per G
@@ -348,7 +348,7 @@ def agg_H_seq(focus, image, _nestt=(1,0), _rM=1, _rD=1, _rv_t=[]):  # recursive 
             y = y+dy; x = x+dx; Y = Y+dy; X = X+dx  # alter focus shape, also focus size: +/m-, res decay?
             if y > 0 and x > 0 and Y < image.shape[0] and X < image.shape[1]:  # focus is inside the image
                 # rerun agg+ with new focus and aves:
-                agg_H_seq(image[y:Y,x:X], image, (frame.nnest,frame.lnest), rM, rD, rv_t)
+                agg_H_seq(image[y:Y,x:X], image, (frame.nnest,frame.lnest), rV, rv_t)
 
     return frame
 
