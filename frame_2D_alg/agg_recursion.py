@@ -154,28 +154,26 @@ def cluster_C_(root, rc):  # 0 nest gap from cluster_edge: same derH depth in ro
 
         return C
 
-    def centroid_cluster(N, N_, C_, root):  # form and refine fully fuzzy C cluster around N, in root node_|link_
-        # init:
-        N.fin = 1; CN_ = [N]
-        for n in N_:
-            if not hasattr(n,'fin') or n.fin or n is N: continue  # in other C or in C.node_, or not in root
-            radii = N.aRad + n.aRad
-            dy, dx = np.subtract(N.yx, n.yx)
-            dist = np.hypot(dy, dx)
-            if dist < max_dist * ((radii * icoef**3) * (val_(N.Et,ave)+ val_(n.Et,ave))):
-                n.fin = 1; CN_ += [n]
-        # refine:
-        C = sum_C(CN_)  # C.node_, add proximity bias for both match and overlap?
+    # draft
+    def refine_C_(N, node_, C_, root):  # form and refine fully fuzzy C cluster around N, in root node_|link_
+
+        C = sum_C([N, *node_])
+        # delete weaker memberships if corresponding N.m < ave * len(stronger_C_) * proximity?
         while True:
             dN_, M, dM = [], 0, 0  # pruned nodes and values, or comp all nodes again?
             for _N in C.node_:
                 m = sum( base_comp(C,_N)[0][0])  # derTT[0][0]
-                if C.altG and _N.altG: m += sum( base_comp(C.altG,_N.altG)[0][0])  # or Et if proximity-weighted overlap?
-                vm = m - ave
-                if vm > 0:
-                    M += m; dM += m - _N.m; _N.m = m  # adjust kept _N.m
-                else:  # remove _N from C
-                    _N.fin=0; _N.m=0; dN_+=[_N]; dM += -vm  # dM += abs m deviation
+                if C.altG and _N.altG:
+                    m += sum( base_comp(C.altG,_N.altG)[0][0])
+                _N.Ct_[C][1] = m  # pseudo for current-C index in Ct_
+                for i, [_C,_m,_dist] in enumerate(_N.Ct_, start=1):  # sort by _m
+                    vm = m - ave * i * (ave_dist /_dist)  # tentative proximity weight
+                    if vm > 0:
+                        M += m; dM += m - _m  # same _C?
+                    else:  # remove _N from C
+                        _N.Ct_.pop(i)
+            # not updated below:
+                        dN_+=[_N]; dM += -vm  # dM += abs m deviation
             if dM > ave and M > ave:  # loop update, break if low C reforming value
                 if dN_:
                     C = sum_C(list(set(dN_)),C)  # subtract dN_ from C
@@ -188,21 +186,28 @@ def cluster_C_(root, rc):  # 0 nest gap from cluster_edge: same derH depth in ro
                     for n in C.node_:  # unpack C.node_, including N
                         n.m = 0; n.fin = 0
                 break
-
-    C_t = [[],[]]  # concat exemplar/centroid nodes across top Gs for global frame cross_comp
+    # get centroid clusters of top Gs for next cross_comp
+    C_t = [[],[]]
     ave = globals()['ave'] * rc  # recursion count
-    # Ccluster top node_|link_:
+    # cluster top node_| link_:
     for fn, C_,nest,_N_ in zip((1,0), C_t, [root.nnest,root.lnest], [root.node_,root.link_]):
         if not nest: continue
         N_ = [N for N in sorted([N for N in _N_[-1].node_], key=lambda n: n.Et[fn], reverse=True)]
-        for N in N_:
-            N.sign, N.m, N.fin = 1, 0, 0  # C update sign, inclusion m, inclusion flag
-        for N in N_:
-            if not N.fin:  # not in prior C
-                if Val_(N.Et, root.Et, ave, coef=10) > 0:  # cross-similar in G
-                    centroid_cluster(N,N_, C_, root)  # form centroid cluster around N, C_ +=[C]
-                else:
+        for N in N_.pop(0):
+            node_, N.Ct_, N.M = [], [], 0  # C node_, alt C Ms, match
+            for i, _N in enumerate (N_):
+                if Val_(N.Et, root.Et, ave, coef=10) < 0:
                     break  # the rest of N_ is lower-M
+                dy,dx = np.subtract(_N.yx,N.yx); dist = np.hypot(dy,dx)
+                V = val_(_N.Et, ave) +val_(N.Et, ave)
+                if dist < max_dist * V:
+                    _N.Ct_ += [N]; node_ += [[_N, V, dist]]  # bilateral assign, close enough to compare
+                    if dist < max_dist/2 * V:  # too close to form separate C
+                        N_.pop(i)
+            # add initialized fuzzy C cluster:
+            C_ += [[N, node_]]
+        for C in C_:
+            refine_C_(C,N_, C_, root)  # refine centroid clusters, similar to SOM
         if len(C_) > ave_L:
             if fn:
                 root.node_ += [sum_G_(C_)]; root.nnest += 1
@@ -262,7 +267,7 @@ def centroid_M_(m_, M, ave):  # adjust weights on attr matches | diffs, recomput
     _w_ = np.ones(len(m_))  # add cost attrs?
     while True:
         M /= np.sum(_w_)  # mean
-        w_ = m_ / min(M, 1/M)  # rational deviations from mean
+        w_ = m_ / min(M, 1/M)  # rational deviations from the mean
         # in range 0:1, or 0:2: w = min(m/M, M/m) + mean(min(m/M, M/m))?
         Dw = np.sum( np.abs(w_-_w_))  # weight update
         m_[:] = m_ * w_  # replace in each cycle?
@@ -277,7 +282,7 @@ def agg_level(inputs):  # draft parallel
 
     frame, H, elevation = inputs
     lev_G = H[elevation]
-    Lev_G = cross_comp(frame)  # return combined top composition level, append frame.derH
+    Lev_G = cross_comp(frame, fn=1, rc=0)  # return combined top composition level, append frame.derH
     if lev_G:
         # feedforward
         if len(H) < elevation+1: H += [Lev_G]  # append graph hierarchy
@@ -337,7 +342,7 @@ def agg_H_seq(focus, image, _nestt=(1,0), rV=1, _rv_t=[]):  # recursive level-fo
             rD += (_d/_n) / (d/n)
             rv_t += np.abs((hG.derTT/_n) / (lev_G.derTT/n))
             hG = lev_G
-    rV = (rM + rD) / 2 / (frame.nnest + frame.lnest - 3)  # accum levels in both forks
+    rV = (rM + rD) / 2 / (frame.nnest + frame.lnest - 3)  # n accum levels in both forks
     if rV > ave:  # normalized
         base = frame.node_[2]; Et,box,baseT = base.Et, base.box, base.baseT
         # project focus by bottom D_val:
@@ -349,7 +354,7 @@ def agg_H_seq(focus, image, _nestt=(1,0), rV=1, _rv_t=[]):  # recursive level-fo
             if y > 0 and x > 0 and Y < image.shape[0] and X < image.shape[1]:  # focus is inside the image
                 # rerun agg+ with new focus and aves:
                 agg_H_seq(image[y:Y,x:X], image, (frame.nnest,frame.lnest), rV, rv_t)
-
+                # all aves *= rV, but ultimately differential weight backprop?
     return frame
 
 def max_g_window(i__, wsize=64):

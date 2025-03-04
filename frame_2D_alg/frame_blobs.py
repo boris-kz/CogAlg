@@ -184,10 +184,10 @@ class CrNode_(CFrame):
         rnode_.olp= blob.root.olp + 1.5
         rnode_.rng = blob.root.rng + 1
 
-def intra_blob_root(frame, rM=1):
+def intra_blob_root(frame, rV=1):
 
     global aveR
-    aveR *= rM
+    aveR *= rV
     frame.olp = frame.rng = 1
     for blob in frame.blob_:
         rblob(blob)
