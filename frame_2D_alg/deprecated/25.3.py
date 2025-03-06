@@ -78,3 +78,16 @@ def cluster_C_(root, rc):  # 0 nest gap from cluster_edge: same derH depth in ro
             if not root.root:  # frame
                 cross_comp(root, fn, rc+1)  # append derH, cluster_N_([root.node_,root.link_][fn][-1])
 
+def add_lay(Lay, lay_, rev=0, fc=0):  # merge lays, including mlay + dlay
+
+        if not isinstance(lay_,list): lay_ = [lay_]
+        for lay in lay_:
+            # rev = dir==-1, to sum/subtract numericals in m_ and d_:
+            for fd, (F_, f_) in enumerate(zip(Lay.derTT, lay.derTT)):
+                F_ += f_ * -1 if rev and (fd or fc) else f_  # m_|d_
+            # concat node_,link_:
+            Lay.node_ += [n for n in lay.node_ if n not in Lay.node_]
+            Lay.link_ += lay.link_
+            et = lay.Et * -1 if rev and fc else lay.Et
+            Lay.Et += et
+        return Lay

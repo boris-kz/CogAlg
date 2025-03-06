@@ -54,31 +54,30 @@ class CLay(CBase):  # layer of derivation hierarchy
         # ni = 0  # exemplar in node_, trace in both directions?
     def __bool__(l): return bool(l.node_)
 
-    def copy_(lay, root=None, rev=0, fc=0, i=None):  # comp direction may be reversed to -1
+    def copy_(lay, root=None, rev=0, i=None):  # comp direction may be reversed to -1
 
         if i:  # reuse self
             C = lay; lay = i; C.node_=copy(i.node_); C.link_ = copy(i.link_); C.derTT=[]; C.root=root
         else:  # init new C
             C = CLay(root=root, node_=copy(lay.node_), link_=copy(lay.link_))
-        C.Et = lay.Et * -1 if (fc and rev) else copy(lay.Et)
+        C.Et = copy(lay.Et)
 
         for fd, tt in enumerate(lay.derTT):  # nested array tuples
-            C.derTT += [tt * -1 if rev and (fd or fc) else deepcopy(tt)]
+            C.derTT += [tt * -1 if (rev and fd) else deepcopy(tt)]
 
         if not i: return C
 
-    def add_lay(Lay, lay_, rev=0, fc=0):  # merge lays, including mlay + dlay
+    def add_lay(Lay, lay_, rev=0):  # merge lays, including mlay + dlay
 
         if not isinstance(lay_,list): lay_ = [lay_]
         for lay in lay_:
             # rev = dir==-1, to sum/subtract numericals in m_ and d_:
             for fd, (F_, f_) in enumerate(zip(Lay.derTT, lay.derTT)):
-                F_ += f_ * -1 if rev and (fd or fc) else f_  # m_|d_
+                F_ += f_ * -1 if (rev and fd ) else f_  # m_|d_
             # concat node_,link_:
             Lay.node_ += [n for n in lay.node_ if n not in Lay.node_]
             Lay.link_ += lay.link_
-            et = lay.Et * -1 if rev and fc else lay.Et
-            Lay.Et += et
+            Lay.Et += lay.Et
         return Lay
 
     def comp_lay(_lay, lay, rn, root, dir=1):  # unpack derH trees down to numericals and compare them
@@ -106,9 +105,9 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.Et = kwargs.get('Et', np.zeros(4))  # sum all params M,D,n,o
         G.yx = kwargs.get('yx', np.zeros(2))  # init PP.yx = [(y+Y)/2,(x,X)/2], then ave node yx
         G.box = kwargs.get('box', np.array([np.inf,np.inf,-np.inf,-np.inf]))  # y,x,Y,X area: (Y-y)*(X-x)
-        G.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,Dy,Dx  # from slice_edge
-        G.derTT = kwargs.get('derTT',np.zeros((2,8)))  # m,d / Et,baseT: [M,D,n,o, I,G,A,L], summed across derH lay forks
-        G.derTTe = kwargs.get('derTTe',np.zeros((2,8)))  # sum across link.derHs
+        G.baseT = kwargs.get('baseT', np.zeros(4))  # I,G,Dy,Dx  # from slice_edge
+        G.derTT = kwargs.get('derTT', np.zeros((2,8)))  # m,d / Et,baseT: [M,D,n,o, I,G,A,L], summed across derH lay forks
+        G.derTTe = kwargs.get('derTTe', np.zeros((2,8)))  # sum across link.derHs
         G.derH = kwargs.get('derH',[])  # each lay is [m,d]: Clay(Et,node_,link_,derTT), sum|concat links across fork tree
         G.extH = kwargs.get('extH',[])  # sum from rims, single-fork
         G.maxL = kwargs.get('maxL', 0)  # if dist-nested in cluster_N_
@@ -243,15 +242,15 @@ def val_(Et, ave, coef=1):  # comparison / inclusion eval by m only, no contextu
     m, d, n, _ = Et  # skip overlap
     return m - ave * coef * n  # coef per compared param type
 
-def Val_(Et, _Et, ave, coef=1, fd=0):  # m|d cluster|batch eval, + cross|root projection
+def Val_(Et, _Et, ave, coef=1, fd=0):  # m|d cluster|batch eval, + cross|root _Et projection
 
     m, d, n, o = Et; _m,_d,_n,_o = _Et  # cross-fork induction of root Et alt, same overlap?
 
-    d_loc = d * (_m - ave * coef * _n)  # diff * co-projected m deviation, no bilateral deviation?
+    d_loc = d * (_m - ave * coef * (_n/n))  # diff * co-projected m deviation, no bilateral deviation?
     d_ave = d - avd * ave  # d deviation, ave_d is always relative to ave m
 
     if fd: val = d_ave + d_loc  # diff borrow val, generic + specific
-    else:  val = m + d_ave - d_loc  # proj match: += surround val - blocking val, * decay?
+    else:  val = m + d_ave - d_loc  # match + proj surround val - blocking val, * decay?
 
     return val - ave * coef * n * o
 
@@ -357,7 +356,7 @@ def base_comp(_N, N, dir=1):  # comp Et, Box, baseT, derTT
 
     _M,_D,_n,_o = _N.Et; M,D,n,o = N.Et
     rn = _n/n  # comp Et:
-    n*=rn; dn = _n - n; mn = min(_n,n) / max(_n,n)  # or multiplicative: min * rn?
+    n*=rn; dn = _n - n; mn = min(_n,n) / max(_n,n)  # or multiplicative for ratios: min * rn?
     o*=rn; do = _o - o; mo = min(_o,o) / max(_o,o)
     M*=rn; dM = _M - M; mM = min(_M,M) / max(_M,M)
     D*=rn; dD = _D - D; mD = min(_D,D) / max(_D,D)
@@ -479,29 +478,29 @@ def comb_H_(L_, root, fd):
         Lay.add_lay(lay); root.derTTe += lay.derTT
     return Lay
 
-def sum_H(Q, root, rev=0, fc=0, fd=0):  # sum derH in link_|node_
+def sum_H(Q, root, rev=0, fd=0):  # sum derH in link_|node_
     DerH = []
-    for e in Q: add_H(DerH, e.derH, root, rev, fc, fd)
+    for e in Q: add_H(DerH, e.derH, root, rev, fd)
     return DerH
 
-def add_H(H, h, root, rev=0, fc=0, fd=0):  # add fork L.derHs
+def add_H(H, h, root, rev=0, fd=0):  # add fork L.derHs
 
     for Lay,lay in zip_longest(H,h):  # different len if lay-selective comp
         if lay:
             if fd: # one-fork lays
-                if Lay: Lay.add_lay(lay,rev=rev,fc=fc)
-                else:   H += [lay.copy_(root=root,rev=rev,fc=fc)]
+                if Lay: Lay.add_lay(lay,rev=rev)
+                else:   H += [lay.copy_(root=root,rev=rev)]
                 root.derTTe += lay.derTT; root.Et += lay.Et
             else:  # two-fork lays
                 if Lay:
                     for Fork,fork in zip_longest(Lay,lay):
                         if fork:
-                            if Fork: Fork.add_lay(fork,rev=rev,fc=fc)
+                            if Fork: Fork.add_lay(fork,rev=rev)
                             else:    Lay += [fork.copy_(root=root)]
                 else:
                     Lay = []
                     for fork in lay:
-                        Lay += [fork.copy_(root=root,rev=rev,fc=fc)]
+                        Lay += [fork.copy_(root=root,rev=rev)]
                         root.derTT += fork.derTT; root.Et += fork.Et
                     H += [Lay]
 
@@ -523,21 +522,19 @@ def comp_H(H,h, rn, root, Et, fd):  # one-fork derH if fd, else two-fork derH
             derH += [dLay]
     return derH
 
-def sum_G_(node_, s=1, fc=0, G=None):
+def sum_G_(node_, G=None):
 
     if G is None:
         G = copy_(node_[0]); G.node_ = [node_[0]]; G.link_ = []; node_=node_[1:]
     for n in node_:
         G.node_ += [n]
-        G.baseT += n.baseT * s; G.derTT += n.derTT * s; G.Et += n.Et * s; G.aRad += n.aRad * s; G.yx += n.yx * s
-        if not G.fd: G.derTTe += n.derTTe * s  # G.Ete?
+        G.baseT += n.baseT; G.derTT += n.derTT; G.Et += n.Et; G.aRad += n.aRad; G.yx += n.yx
+        if not G.fd: G.derTTe += n.derTTe  # G.Ete?
         if n.derH:
-            add_H(G.derH, n.derH, root=G, rev=s==-1, fc=fc, fd=G.fd)
-        if fc:
-            G.M += n.m * s; G.L += s
-        else:
-            if n.extH: add_H(G.extH, n.extH, root=G, rev = s==-1, fd=1)  # empty in centroid, flat in extH?
-            G.box = extend_box( G.box, n.box)  # extended per separate node_ in centroid
+            add_H(G.derH, n.derH, root=G, fd=G.fd)
+        if n.extH:
+            add_H(G.extH, n.extH, root=G, fd=1)  # empty in centroid, flat in extH?
+        G.box = extend_box( G.box, n.box)  # extended per separate node_ in centroid
     return G
 
 def L2N(link_):
@@ -578,7 +575,8 @@ def PP2G(PP):
     baseT = np.array((*latuple[:2], *latuple[-1]))  # I,G,Dy,Dx
     [mM,mD,mI,mG,mA,mL], [dM,dD,dI,dG,dA,dL] = vert
     derTT = np.array([np.array([mM,mD,mL,0,mI,mG,mA,mL]), np.array([dM,dD,dL,0,dI,dG,dA,dL])])
-    y,x,Y,X = box; dy,dx = Y-y,X-x  # A = (dy,dx); L = np.hypot(dy,dx)
+    y,x,Y,X = box; dy,dx = Y-y,X-x
+    # A = (dy,dx); L = np.hypot(dy,dx)
     G = CG(root=root, fd=0, Et=Et, node_=P_, link_=[], baseT=baseT, derTT=derTT, box=box, yx=yx, aRad=np.hypot(dy/2, dx/2),
            derH=[[CLay(node_=P_,link_=link_, derTT=deepcopy(derTT)), CLay()]])  # empty dfork
     return G
