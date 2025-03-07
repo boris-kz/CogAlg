@@ -78,6 +78,33 @@ def cluster_C_(root, rc):  # 0 nest gap from cluster_edge: same derH depth in ro
             if not root.root:  # frame
                 cross_comp(root, fn, rc+1)  # append derH, cluster_N_([root.node_,root.link_][fn][-1])
 
+    # get centroid clusters of top Gs for next cross_comp
+    C_t = [[],[]]
+    ave = globals()['ave'] * rc  # recursion count
+    # cluster top node_| link_:
+    for fn, C_,nest,_N_ in zip((1,0), C_t, [root.nnest,root.lnest], [root.node_,root.link_]):
+        if not nest: continue
+        N_ = [N for N in sorted([N for N in _N_[-1].node_], key=lambda n: n.Et[fn], reverse=True)]
+        for N in N_: N.Ct_ = []
+        for N in N_:
+            node_ = [N]; dist_ = [0]  # C node_
+            for _N in N_:
+                if N is _N: continue
+                if Val_(N.Et, root.Et, ave, coef=1) < 0:  # the rest of N_ is lower-M
+                    break
+                dy,dx = np.subtract(_N.yx,N.yx); dist = np.hypot(dy,dx)
+                if dist < max_dist:  # close enough to compare
+                    node_ += [_N]; dist_ += [dist]
+            C = sum_C(node_)
+            for n, dist in zip(node_,dist_): n.Ct_ += [[C,0,dist]]  # empty m, same n in multiple Ns
+            C_+= [C]
+        refine_C_(C_)  # refine centroid clusters
+
+        if _C is C:
+            vm = m - ave * (max_dist / 2 / _dist) * (i + 1) * (_dist / max_dist) ** 2  # disc overlap
+            # ave * inverse dist deviation (lower ave m) * redundancy * relative overlap between clusters
+
+
 def add_lay(Lay, lay_, rev=0, fc=0):  # merge lays, including mlay + dlay
 
         if not isinstance(lay_,list): lay_ = [lay_]

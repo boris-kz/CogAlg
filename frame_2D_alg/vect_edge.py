@@ -127,7 +127,7 @@ def copy_(N):
     C = CG(); fd = N.fd
     for name, value in N.__dict__.items():
         val = getattr(N, name)
-        if name == '_id': continue  # skip id
+        if name == '_id' or name == "Ct_": continue  # skip id and Ct_
         elif name == 'derH':
             for lay in N.derH:
                 if fd: C.derH += [lay.copy_(root=C)]  # CLay
@@ -527,7 +527,7 @@ def sum_G_(node_, G=None):
     if G is None:
         G = copy_(node_[0]); G.node_ = [node_[0]]; G.link_ = []; node_=node_[1:]
     for n in node_:
-        G.node_ += [n]
+        if n not in G.node_: G.node_ += [n]  # prevent packing a same n in alts
         G.baseT += n.baseT; G.derTT += n.derTT; G.Et += n.Et; G.aRad += n.aRad; G.yx += n.yx
         if not G.fd: G.derTTe += n.derTTe  # G.Ete?
         if n.derH:
