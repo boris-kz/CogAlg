@@ -165,7 +165,7 @@ def vect_root(frame, rV=1, ww_t=[]):  # init for agg+:
         global ave, avd, arn, aveB, ave_L, max_dist, icoef, med_cost, wM, wD, wN, wO, wI, wG, wA, wL, w_t
         ave, avd, arn, aveB, ave_L, max_dist, icoef, med_cost = np.array([ave,avd,arn,aveB,ave_L,max_dist,icoef,med_cost]) / rV  # projected value change
         w_t = np.array( [np.array([wM,wD,wN,wO,wI,wG,wA,wL]), np.array([wM,wD,wN,wO,wI,wG,wA,wL])]) * ww_t  # or dw_ ~= w_/ 2?
-        # derTT weights
+        # derTT w_
     blob_ = unpack_blob_(frame)
     frame2G(frame, derH=[CLay(root=frame)], node_=[blob_], root=None)
     edge_ = []  # cluster, unpack
@@ -180,20 +180,19 @@ def vect_root(frame, rV=1, ww_t=[]):  # init for agg+:
                         edge_ += [cluster_edge(G_, frame)]  # 1layer derH, alt: converted adj_blobs of edge blob | alt_P_?
     # unpack edges:
     Lay = [CLay(root=frame), CLay(root=frame)]
-    PP_,G_,L_,lG_ = [],[],[],[]
+    PP_,G_ = [],[]
     for edget in edge_:
         if edget:
-            pp_,g_,l_,lg_,lay = edget
+            pp_,g_,lay = edget
             [F.add_lay(f) for F,f in zip(Lay,lay)]  # [mfork, dfork]
-            PP_+= pp_; G_+= g_; L_+= l_; lG_+= lg_
+            PP_+= pp_; G_+= g_
     frame.derH = [Lay]
-    frame.link_ = [L_]; frame.node_= [PP_]
+    frame.node_= [PP_]
     if G_:
-        frame.node_ += [sum_G_(G_)]; frame.nnest = 1
-    if lG_:
-        frame.link_ += [sum_G_(lG_)]; frame.lnest = 1
-    frame.baseT = np.sum([G.baseT for G in PP_+ G_], axis=0)
-    frame.derTT = np.sum([L.derTT for L in L_+ lG_], axis=0)
+        frame.node_ += [sum_G_(G_)]
+        frame.nnest = 1
+    frame.baseT = np.sum([G.baseT for G in PP_ + G_], axis=0)
+    frame.derTT = np.sum([G.derTT for G in PP_ + G_], axis=0)
 
     rave = []  # convert rave for comp_slice
     return frame, rave
@@ -226,6 +225,7 @@ def cluster_edge(iG_, frame):  # edge is CG but not a connectivity cluster, just
     if Val_(Et, Et, ave, fd=0) > 0:
         lay = [sum_lay_(L_, frame)]  # [mfork]
         G_ = cluster_PP_(copy(N_), fd=0) if len(N_) > ave_L else []
+        '''
         # dval -> comp dPP_:
         if Val_(Et, Et, ave*2, fd=1) > 0:  # likely not from the same links
             lN_,lL_,dEt = comp_link_(L2N(L_), ave*2)
@@ -235,7 +235,8 @@ def cluster_edge(iG_, frame):  # edge is CG but not a connectivity cluster, just
             else:
                 lG_=[]  # empty dfork
         else: lG_=[]
-        return [N_,G_, L_,lG_, lay]
+        '''
+        return [N_,G_,lay]
 
 def val_(Et, ave, coef=1):  # comparison / inclusion eval by m only, no contextual projection
 
