@@ -121,6 +121,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.node_ = kwargs.get('node_',[])
         G.link_ = kwargs.get('link_',[])  # internal links
         G.rim = kwargs.get('rim',[])  # external links
+        G.nrim = kwargs.get('nrim',[])
     def __bool__(G): return bool(G.node_)  # never empty
 
 def copy_(N):
@@ -217,7 +218,7 @@ def cluster_edge(iG_, frame):  # edge is CG but not a connectivity cluster, just
                 _eN_ = {*eN_}
             if Val_(et, et, ave*2, fd=fd) > 0:
                 Lay = CLay(); [Lay.add_lay(link.derH[0]) for link in link_]  # single-lay derH
-                G_ = [sum2graph(frame, [node_,link_,et, Lay], fd)]
+                G_ += [sum2graph(frame, [node_,link_,et, Lay], fd)]
         return G_
 
     N_,L_,Et = comp_node_(iG_, ave)  # comp PP_
@@ -395,7 +396,7 @@ def comp_N(_N,N, ave, fd, angle=None, dist=None, dir=1):  # compare links, relat
     Et = np.array([M,D, 8, (_N.Et[3]+N.Et[3]) /2])  # n comp vars, inherited olp
     _y,_x = _N.yx
     y, x = N.yx
-    Link = CL(fd=fd, nodet=[_N,N], baseT=baseT, derTT=derTT, yx=np.add(_N.yx,N.yx)/2, L=dist, box=np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)]))
+    Link = CL(nodet=[_N,N], baseT=baseT, derTT=derTT, yx=np.add(_N.yx,N.yx)/2, L=dist, box=np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)]))
     # spec / lay:
     if M > ave and (len(N.derH) > 2 or isinstance(N,CL)):  # else derH is redundant to dext,vert
         dderH = comp_H(_N.derH, N.derH, rn, Link, Et, fd)  # comp shared layers, if any
@@ -409,12 +410,15 @@ def comp_N(_N,N, ave, fd, angle=None, dist=None, dir=1):  # compare links, relat
             Link.altL = comp_N(_N.altG, N.altG, ave*2, fd=1)
             Et += Link.altL.Et
     Link.Et = Et
-    if val_(Et, ave) > 0:
-        for rev, node in zip((0,1), (N,_N)):  # reverse Link direction for _N
+    for rev, node in zip((0,1), (N,_N)):  # reverse Link direction for
+        if val_(Et, ave) > 0:
             if fd: node.rimt[1-rev] += [(Link,rev)]  # opposite to _N,N dir
             else:  node.rim += [(Link,dir)]
             add_H(node.extH, Link.derH, root=node, rev=rev, fd=1)
             node.Et += Et
+        else:
+            if fd: node.nrimt[1-rev] += [(Link,rev)]  # opposite to _N,N dir
+            else:  node.nrim += [(Link,dir)]
     return Link
 
 def get_rim(N,fd): return N.rimt[0] + N.rimt[1] if fd else N.rim  # add nesting in cluster_N_?
