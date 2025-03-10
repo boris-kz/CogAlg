@@ -157,14 +157,14 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         # add med, rimt, extH in der+
     def __bool__(l): return bool(l.nodet)
 
-ave, avd, arn, aI, aveB, ave_L, max_dist, icoef, med_cost = 10, 10, 1.2, 100, 100, 5, 10, 2, 2  # opportunity costs
+ave, avd, arn, aI, aveB, ave_L, max_dist, icoef = 10, 10, 1.2, 100, 100, 5, 10, 2  # opportunity costs
 wM, wD, wN, wO, wI, wG, wA, wL = 10, 10, 20, 20, 1, 1, 20, 20  # der params higher-scope weights = reversed relative estimated ave?
 w_t = np.ones((2,8))  # fb weights per derTT, adjust in agg+
 
 def vect_root(frame, rV=1, ww_t=[]):  # init for agg+:
     if np.any(ww_t):
-        global ave, avd, arn, aveB, ave_L, max_dist, icoef, med_cost, wM, wD, wN, wO, wI, wG, wA, wL, w_t
-        ave, avd, arn, aveB, ave_L, max_dist, icoef, med_cost = np.array([ave,avd,arn,aveB,ave_L,max_dist,icoef,med_cost]) / rV  # projected value change
+        global ave, avd, arn, aveB, ave_L, max_dist, icoef, wM, wD, wN, wO, wI, wG, wA, wL, w_t
+        ave, avd, arn, aveB, ave_L, max_dist, icoef = np.array([ave,avd,arn,aveB,ave_L,max_dist,icoef]) / rV  # projected value change
         w_t = np.array( [np.array([wM,wD,wN,wO,wI,wG,wA,wL]), np.array([wM,wD,wN,wO,wI,wG,wA,wL])]) * ww_t  # or dw_ ~= w_/ 2?
         # derTT w_
     blob_ = unpack_blob_(frame)
@@ -244,15 +244,15 @@ def val_(Et, ave, coef=1):  # comparison / inclusion eval by m only, no contextu
     m, d, n, _ = Et  # skip overlap
     return m - ave * coef * n  # coef per compared param type
 
-def Val_(Et, _Et, ave, coef=1, fd=0):  # m|d cluster|batch eval, + cross|root _Et projection
+def Val_(Et, _Et, ave, coef=1, fi=1):  # m|d cluster|batch eval, + cross|root _Et projection
 
     m, d, n, o = Et; _m,_d,_n,_o = _Et  # cross-fork induction of root Et alt, same overlap?
 
     d_loc = d * (_m - ave * coef * (_n/n))  # diff * co-projected m deviation, no bilateral deviation?
     d_ave = d - avd * ave  # d deviation, ave_d is always relative to ave m
 
-    if fd: val = d_ave + d_loc  # diff borrow val, generic + specific
-    else:  val = m + d_ave - d_loc  # match + proj surround val - blocking val, * decay?
+    if fi: val = m + d_ave - d_loc  # match + proj surround val - blocking val, * decay?
+    else:  val = d_ave + d_loc  # diff borrow val, generic + specific
 
     return val - ave * coef * n * o
 
@@ -296,58 +296,6 @@ def comp_node_(_N_, ave, L=0):  # rng+ forms layer of rim and extH per N, append
             break
 
     return  list(N_), L_, ET  # flat N__ and L__
-
-def comp_link_(iL_, ave):  # comp CLs via directional node-mediated link tracing: der+'rng+ in root.link_ rim_t node rims
-
-    fd = isinstance(iL_[0].nodet[0], CL)
-    for L in iL_:
-        # init mL_t: bilateral mediated Ls per L:
-        for rev, N, mL_ in zip((0,1), L.nodet, L.mL_t):
-            for _L,_rev in N.rimt[0]+N.rimt[1] if fd else N.rim:
-                if _L is not L and _L in iL_:  # nodet-mediated
-                    if val_(_L.Et, ave) > 0:
-                        mL_ += [(_L, rev ^_rev)]  # direction of L relative to _L
-    _L_, out_L_, LL_, ET = iL_,set(),[],np.zeros(4)  # out_L_: positive subset of iL_, Et = np.zeros(4)?
-    med = 1
-    while True:  # xcomp _L_
-        L_, Et = set(), np.zeros(4)
-        for L in _L_:
-            for mL_ in L.mL_t:
-                for _L, rev in mL_:  # rev is relative to L
-                    rn = _L.Et[2] / L.Et[2]
-                    if rn > arn: continue  # scope disparity, no diff nesting?
-                    dy,dx = np.subtract(_L.yx,L.yx)
-                    Link = comp_N(_L,L, ave, fd=1, angle=[dy,dx],dist=np.hypot(dy,dx), dir = -1 if rev else 1)  # d = -d if L is reversed relative to _L
-                    Link.med = med
-                    LL_ += [Link]  # include -ves, link order: nodet < L < rimt, mN.rim || L
-                    if val_(Link.Et, ave) > 0:  # link induction
-                        out_L_.update({_L,L}); L_.update({_L,L}); Et += Link.Et
-        ET += Et
-        if not any(L_): break
-        # extend mL_t per last medL:
-        if val_(Et, ave) - med * med_cost > 0:  # project prior-loop value, med adds fixed cost
-            _L_, ext_Et = set(), np.zeros(4)
-            for L in L_:
-                mL_t, lEt = [set(),set()], np.zeros(4)  # __Ls per L
-                for mL_,_mL_ in zip(mL_t, L.mL_t):
-                    for _L, rev in _mL_:
-                        for _rev, N in zip((0,1), _L.nodet):
-                            rim = N.rimt if fd else N.rim
-                            if len(rim) == med:  # append in comp loop
-                                for __L,__rev in rim[0]+rim[1] if fd else rim:
-                                    if __L in L.visited_ or __L not in iL_: continue
-                                    L.visited_ += [__L]; __L.visited_ += [L]
-                                    if val_(__L.Et, ave) > 0:  # add coef for loop induction?
-                                        mL_.add((__L, rev ^_rev ^__rev))  # combine reversals: 2 * 2 mLs, but 1st 2 are pre-combined
-                                        lEt += __L.Et
-                if val_(lEt, ave) > 0:  # L'rng+, vs L'comp above
-                    L.mL_t = mL_t; _L_.add(L); ext_Et += lEt
-            # refine eval by extension D:
-            if val_(ext_Et, ave) - med * med_cost > 0:
-                med +=1
-            else: break
-        else: break
-    return out_L_, LL_, ET
 
 def extend_box(_box, box):  # extend box with another box
     y0, x0, yn, xn = box; _y0, _x0, _yn, _xn = _box
