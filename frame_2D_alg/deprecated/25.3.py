@@ -144,6 +144,18 @@ def cross_comp(root, fn, rc):  # form agg_Level by breadth-first node_,link_ cro
         # no dfork cluster_C_, no ddfork
         # if val_: lev_G -> agg_H_seq
         return root.node_[-1]
+
+    long_V = 0
+    for n in N_:
+        for l, _ in n.rim:
+            co_nl_ = [nl for nl, _ in
+                      (l.nodet[0].nrim + l.nodet[0].rim + l.nodet[1].nrim) + l.nodet[1].rim
+                      if comp_angle(l.baseT[2:], nl.baseT[2:])[0] > .3 and nl.L < l.L]
+            # shorter p+n links represent likely CC overlap to LCs
+            if len(co_nl_) > 3: long_V += val_(n.Et, ave)
+    if long_V > ave:
+
+
 ''' 
  Hierarchical clustering should alternate between two phases: generative via connectivity and compressive via centroid.
 
