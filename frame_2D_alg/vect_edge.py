@@ -358,8 +358,8 @@ def comp_N(_N,N, ave, fi, angle=None, dist=None, dir=1):  # compare links, relat
             Link.altL = comp_N(_N.altG, N.altG, ave*2, fi=0)
             Et += Link.altL.Et
     Link.Et = Et
-    for rev, node in zip((0,1), (N,_N)):  # reverse Link direction for
-        if val_(Et, ave) > 0:
+    if val_(Et, ave) > 0:
+        for rev, node in zip((0,1), (N,_N)):  # reverse Link direction for
             if fi: node.rim += [(Link,dir)]
             else:  node.rimt[1-rev] += [(Link,rev)]  # opposite to _N,N dir
             add_H(node.extH, Link.derH, root=node, rev=rev, fi=0)
@@ -478,13 +478,13 @@ def sum_G_(node_, G=None):
     if G is None:
         G = copy_(node_[0]); G.node_ = [node_[0]]; G.link_ = []; node_=node_[1:]
     for n in node_:
-        if n not in G.node_: G.node_ += [n]  # prevent packing a same n in alts
-        G.baseT += n.baseT; G.derTT += n.derTT; G.Et += n.Et; G.aRad += n.aRad; G.yx += n.yx
-        if G.fi: G.derTTe += n.derTTe  # G.Ete?
-        if n.derH:
-            add_H(G.derH, n.derH, root=G, fi=G.fi)
-        if n.extH:
-            add_H(G.extH, n.extH, root=G, fi=0)  # empty in centroid, flat in extH?
+        if n not in G.node_: G.node_ += [n]  # prevent packing same n in alts
+        G.baseT += n.baseT; G.derTT += n.derTT; G.Et += n.Et;  G.yx += n.yx
+        if G.fi:
+            G.derTTe += n.derTTe; G.aRad += n.aRad
+            if n.extH: add_H(G.extH, n.extH, root=G, fi=0)
+            # empty in centroid?
+        if n.derH: add_H(G.derH, n.derH, root=G, fi=G.fi)
         G.box = extend_box( G.box, n.box)  # extended per separate node_ in centroid
     return G
 
