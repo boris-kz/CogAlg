@@ -138,3 +138,19 @@ def cross_comp(root, fn, rc):  # form agg_Level by breadth-first node_,link_ cro
             else:  node.nrimt[1-rev] += [(Link,rev)]  # opposite to _N,N dir
 '''
 
+def centroid_M_(m_, M, ave):  # adjust weights on attr matches | diffs, recompute with sum
+
+    _w_ = np.ones(len(m_))  # add cost attrs?
+    while True:
+        M /= np.sum(_w_)  # mean
+        w_ = m_ / min(M, 1/M)  # rational deviations from the mean
+        # in range 0:1, or 0:2: w = min(m/M, M/m) + mean(min(m/M, M/m))?
+        Dw = np.sum( np.abs(w_-_w_))  # weight update
+        m_[:] = (m_ * w_) / np.sum(m_)  # replace in each cycle?
+        M = np.sum(m_)  # weighted M update
+        if Dw > ave:
+            _w_ = w_
+        else:
+            break
+    return w_, M  # no need to return weights?
+

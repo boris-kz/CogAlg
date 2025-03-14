@@ -42,7 +42,7 @@ def cross_comp(root, rc, fi=1):  # recursion count, form agg_Level by breadth-fi
     nnest, lnest = root.nnest, root.lnest
     N_,L_,Et = comp_node_(root.node_[-1].node_, ave*rc) if fi else comp_link_(L2N(root.link_), ave*rc)  # nested node_ or flat link_
 
-    if Val_(Et, Et, ave*(rc+1), fi) > 0:
+    if Val_(Et, Et, ave*(rc+1), fi=fi) > 0:
         lay = comb_H_(L_, root, fi=0)
         if fi: root.derH += [[lay]]  # [mfork] feedback
         else: root.derH[-1] +=[lay]  # dfork
@@ -164,14 +164,16 @@ def cluster_N_(root, L_, ave, fi, rc):  # top-down segment L_ by >ave ratio of L
                             if L.L < max_dist:
                                 link_+=[L]; et+=L.Et
                 _eN_ = {*eN_}
+            # if not link_: continue  # when the first _L breaks, all other L.L should have longer L and not link_ will be added
             link_ = list({*link_});  Lay = CLay()
             [Lay.add_lay(lay) for lay in sum_H(link_, root, fi=0)]
             derTT = Lay.derTT
             # weigh m_|d_ by similarity to mean m|d, replacing derTT:
-            _,M = centroid_M_(derTT[0], np.sum(derTT[0]), ave)
-            _,D = centroid_M_(derTT[1], np.sum(derTT[1]), ave)
-            et[:2] = M,D
-            if Val_(et, Et, ave) > 0:  # cluster node roots:
+            _,m_,M = centroid_M_(derTT[0], np.sum(derTT[0]), ave)
+            _,d_,D = centroid_M_(derTT[1], np.sum(derTT[1]), ave)
+            et[:2] = M,D; Lay.derTT = np.array([m_,d_])
+            # cluster roots:
+            if Val_(et, Et, ave) > 0:
                 G_ += [sum2graph(root, [list({*node_}),link_, et, Lay], 1, min_dist, max_dist)]
         # longer links:
         L_ = L_[i + 1:]
@@ -346,20 +348,20 @@ def sort_H(H, fi):  # re-assign olp and form priority indices for comp_tree, if 
         H.root.node_ = H.node_
 
 def centroid_M_(m_, M, ave):  # adjust weights on attr matches | diffs, recompute with sum
-
     _w_ = np.ones(len(m_))  # add cost attrs?
+
     while True:
-        M /= np.sum(_w_)  # mean
-        w_ = m_ / min(M, 1/M)  # rational deviations from the mean
-        # in range 0:1, or 0:2: w = min(m/M, M/m) + mean(min(m/M, M/m))?
-        Dw = np.sum( np.abs(w_-_w_))  # weight update
-        m_[:] = m_ * w_  # replace in each cycle?
-        M = np.sum(m_)  # weighted M update
-        if Dw > ave:
+        mean = max(M / np.sum(_w_), 1e-7)
+        inverse_dev_ = np.minimum(m_/mean, mean/m_)  # rational deviation from mean rm in range 0:1, 1 if m=mean, 0 if one is 0?
+        w_ = inverse_dev_ / .5  # 2 / m=mean, 1 / ave_dev, 0 / inf max/min?
+        if np.sum(np.abs(w_ - _w_)) > ave:
+            m_ *= w_  # make sum(w_-_w_) ~ 0, so M won't change?
+            M = np.sum(m_)
             _w_ = w_
         else:
-            break
-    return w_, M  # no need to return weights?
+            break  # recursion while weight change
+
+    return w_, m_, M  # no return w_?
 
 def agg_level(inputs):  # draft parallel
 
