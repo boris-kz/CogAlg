@@ -303,10 +303,10 @@ def extend_box(_box, box):  # extend box with another box
     return min(y0, _y0), min(x0, _x0), max(yn, _yn), max(xn, _xn)
 
 def base_comp(_N, N, dir=1):  # comp Et, Box, baseT, derTT
-
+    # comp Et:
     _M,_D,_n,_o = _N.Et; M,D,n,o = N.Et
-    rn = _n/n  # comp Et:
-    n*=rn; dn = _n - n; mn = min(_n,n) / max(_n,n)  # or multiplicative for ratios: min * rn?
+    dn = _n - n; mn = min(_n,n) / max(_n,n)  # or multiplicative for ratios: min * rn?
+    rn = _n / n
     o*=rn; do = _o - o; mo = min(_o,o) / max(_o,o)
     M*=rn; dM = _M - M; mM = min(_M,M) / max(_M,M)
     D*=rn; dD = _D - D; mD = min(_D,D) / max(_D,D)
@@ -334,7 +334,7 @@ def base_comp(_N, N, dir=1):  # comp Et, Box, baseT, derTT
     # each [M,D,n,o, I,G,A,L]:
     return [m_+_m_, d_+_d_], rn
 
-def comp_N(_N,N, ave, fi, angle=None, dist=None, dir=1):  # compare links, relative N direction = 1|-1, no need for angle, dist?
+def comp_N(_N,N, ave, fi, angle=None, dist=None, dir=1, fshort=1):  # compare links, relative N direction = 1|-1, no need for angle, dist?
     dderH = []
 
     [m_,d_], rn = base_comp(_N, N, dir)
@@ -346,7 +346,7 @@ def comp_N(_N,N, ave, fi, angle=None, dist=None, dir=1):  # compare links, relat
     y, x = N.yx
     Link = CL(nodet=[_N,N], baseT=baseT, derTT=derTT, yx=np.add(_N.yx,N.yx)/2, L=dist, box=np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)]))
     # spec / lay:
-    if M > ave and (len(N.derH) > 2 or isinstance(N,CL)):  # else derH is redundant to dext,vert
+    if fshort and M > ave and (len(N.derH) > 2 or isinstance(N,CL)):  # else derH is redundant to dext,vert
         dderH = comp_H(_N.derH, N.derH, rn, Link, Et, fi)  # comp shared layers, if any
         # spec/ comp_node_(node_|link_)
     Link.derH = [CLay(root=Link,Et=Et,node_=[_N,N],link_=[Link], derTT=copy(derTT)), *dderH]

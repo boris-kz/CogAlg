@@ -154,3 +154,74 @@ def centroid_M_(m_, M, ave):  # adjust weights on attr matches | diffs, recomput
             break
     return w_, M  # no need to return weights?
 
+def cluster_N_(root, L_, ave, fi, rc):  # top-down segment L_ by >ave ratio of L.dists
+
+    nest = root.nnest if fi else root.lnest  # same process for nested link_?
+
+    L_ = sorted(L_, key=lambda x: x.L)  # short links first
+    min_dist = 0; Et = root.Et
+    while True:
+        # each loop forms G_ of contiguous-distance L_ segment
+        _L = L_[0]; N_, et = copy(_L.nodet), _L.Et
+        for n in [n for l in L_ for n in l.nodet]:
+            n.fin = 0
+        for i, L in enumerate(L_[1:], start=1):
+            rel_dist = L.L/_L.L  # >= 1
+            if rel_dist < 1.2 or len(L_[i:]) < ave_L:  # ~= dist Ns or either side of L is weak: continue dist segment
+                LV = Val_(et, Et, ave)  # link val
+                _G,G = L.nodet  # * surround density: extH (_Ete[0]/ave + Ete[0]/ave) / 2, after cross_comp:
+                surr_rV = (sum(_G.derTTe[0]) / (ave*_G.Et[2])) + (sum(G.derTTe[0]) / (ave*G.Et[2])) / 2
+                if LV * surr_rV > ave:
+                    _L = L; N_ += L.nodet; et += L.Et  # else skip weak link inside segment
+            else:
+                i -= 1; break  # terminate contiguous-distance segment
+        G_ = []
+        max_dist = _L.L
+        for N in {*N_}:  # cluster current distance segment
+            if N.fin: continue  # clustered from prior _N_
+            _eN_,node_,link_,et, = [N],[],[], np.zeros(4)
+            while _eN_:
+                eN_ = []
+                for eN in _eN_:  # cluster rim-connected ext Ns, all in root Gt
+                    node_+=[eN]; eN.fin = 1  # all rim
+                    for L,_ in get_rim(eN, fi=1):  # all +ve
+                        if L not in link_:
+                            eN_ += [n for n in L.nodet if not n.fin]
+                            if L.L < max_dist:
+                                link_+=[L]; et+=L.Et
+                _eN_ = {*eN_}
+            # if not link_: continue  # when the first _L breaks, all other L.L should have longer L and not link_ will be added
+            link_ = list({*link_});  Lay = CLay()
+            [Lay.add_lay(lay) for lay in sum_H(link_, root, fi=0)]
+            derTT = Lay.derTT
+            # weigh m_|d_ by similarity to mean m|d, replacing derTT:
+            _,m_,M = centroid_M_(derTT[0], np.sum(derTT[0]), ave)
+            _,d_,D = centroid_M_(derTT[1], np.sum(derTT[1]), ave)
+            et[:2] = M,D; Lay.derTT = np.array([m_,d_])
+            # cluster roots:
+            if Val_(et, Et, ave) > 0:
+                G_ += [sum2graph(root, [list({*node_}),link_, et, Lay], 1, min_dist, max_dist)]
+        # longer links:
+        L_ = L_[i + 1:]
+        if L_: min_dist = max_dist  # next loop connects current-distance clusters via longer links
+        # not updated:
+        else:
+            if G_:
+                [comb_altG_(G.altG.node_, ave, rc) for G in G_]
+                if fi:
+                    root.node_ += [sum_G_(G_)]  # node_ is already nested
+                    root.nnest += 1
+                else:
+                    if root.lnest: root.link_ += [sum_G_(G_)]
+                    else: root.link_ = [sum_G_(root.link_), sum_G_(G_)]  # init nesting
+                    root.lnest += 1
+            break
+    # draft:
+    if (root.nnest if fi else root.lnest) > nest:  # if nested above
+        node_ = root.node_[-1].node_ if fi else root.link_[-1].node_
+        for n in node_:
+            if Val_(n.Et, n.Et, ave*(rc+4), fi=0) > 0:
+                # cross_comp new-G' flat link_:
+                cross_comp(n, rc+4, fi=0)
+
+
