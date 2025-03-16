@@ -57,13 +57,13 @@ class CLay(CBase):  # layer of derivation hierarchy
     def copy_(lay, root=None, rev=0, i=None):  # comp direction may be reversed to -1
 
         if i:  # reuse self
-            C = lay; lay = i; C.node_=copy(i.node_); C.link_ = copy(i.link_); C.derTT=[]; C.root=root
+            C = lay; lay = i; C.node_=copy(i.node_); C.link_ = copy(i.link_); C.derTT=np.zeros((2,8)); C.root=root
         else:  # init new C
             C = CLay(root=root, node_=copy(lay.node_), link_=copy(lay.link_))
         C.Et = copy(lay.Et)
 
         for fd, tt in enumerate(lay.derTT):  # nested array tuples
-            C.derTT += [tt * -1 if (rev and fd) else deepcopy(tt)]
+            C.derTT[fd] += tt * -1 if (rev and fd) else deepcopy(tt)
 
         if not i: return C
 

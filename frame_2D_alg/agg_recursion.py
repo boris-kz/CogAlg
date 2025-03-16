@@ -40,6 +40,7 @@ ave, ave_L, max_med, icoef, ccoef, ave_dist, med_cost = 5, 2, 3, .5, 10, 2, 2
 def cross_comp(root, rc, fi=1):  # recursion count, form agg_Level by breadth-first node_,link_ cross-comp, connect clustering, recursion
 
     nnest, lnest = root.nnest, root.lnest
+    # default root is frame
     N_,L_,Et = comp_node_(root.node_[-1].node_, ave*rc) if fi else comp_link_(L2N(root.link_), ave*rc)  # nested node_ or flat link_
 
     if Val_(Et, Et, ave*(rc+1), fi=fi) > 0:
@@ -54,9 +55,9 @@ def cross_comp(root, rc, fi=1):  # recursion count, form agg_Level by breadth-fi
                 cluster_N_(root, pL_, ave*(rc+2), rc=rc+2)  # form multiple distance segments
                 if val_(lEt, ave*rc+3) > 0:  # shorter links are redundant to LC above: rc+ 1 | LC_link_ / pL_?
                     cluster_C_(root, pL_, rc+3)  # mfork G,altG exemplars, +altG surround borrow, root.derH + 1|2 lays, agg++
-                # if val CC_> LC_: delete root.node_[-2]:LC_, [-1] is CC_?
+                # if CC_V > LC_V: delete root.node_[-2]:LC_, [-1] is CC_?
             else:
-                cluster_L_(root, N_, L, ave*(rc+2), rc=rc+2)  # CC links via llinks, no dist-nesting
+                cluster_L_(root, N_, ave*(rc+2), rc=rc+2)  # CC links via llinks, no dist-nesting
                 # no cluster_C_ for links, connectivity only
         # recursion:
         lev_Gt = []
@@ -132,7 +133,7 @@ def comp_link_(iL_, ave):  # comp CLs via directional node-mediated link tracing
 '''
 def cluster_N_(root, L_, ave, rc):  # top-down segment L_ by >ave ratio of L.dists
 
-    nest = root.nnest  # same process for nested link_?
+    nest = root.nnest  # not for nested link_
 
     L_ = sorted(L_, key=lambda x: x.L)  # short links first
     min_dist = 0; Et = root.Et
@@ -145,40 +146,41 @@ def cluster_N_(root, L_, ave, rc):  # top-down segment L_ by >ave ratio of L.dis
             rel_dist = L.L/_L.L  # >= 1
             if rel_dist < 1.2 or len(L_[i:]) < ave_L:  # ~= dist Ns or either side of L is weak: continue dist segment
                 LV = Val_(et, Et, ave)  # link val
-                _G,G = L.nodet  # * surround density: extH (_Ete[0]/ave + Ete[0]/ave) / 2, after cross_comp:
-                surr_rV = (sum(_G.derTTe[0]) / (ave*_G.Et[2])) + (sum(G.derTTe[0]) / (ave*G.Et[2])) / 2
-                if LV * surr_rV > ave:
+                # add surround density term for clustering: extH (_Ete[0]/ave +Ete[0]/ave) /2:
+                _G,G = L.nodet; surr_V = (sum(_G.derTTe[0])+ sum(G.derTTe[0])/2) / ave*G.Et[2]
+                if LV * surr_V > ave:
                     _L = L; N_ += L.nodet; et += L.Et  # else skip weak link inside segment
             else:
                 i -= 1; break  # terminate contiguous-distance segment
-        if len(N_) < ave_L or et[0] < ave*ccoef: continue
-        # else cluster N_ of current distance segment:
-        G_ = []
         max_dist = _L.L
-        for N in {*N_}:
-            if N.fin: continue  # clustered from prior _N_
-            _eN_,node_,link_,et, = [N],[],[], np.zeros(4)
-            while _eN_:
-                eN_ = []
-                for eN in _eN_:  # cluster rim-connected ext Ns, all in root Gt
-                    node_+=[eN]; eN.fin = 1  # all rim
-                    for L,_ in get_rim(eN, fi=1):  # all +ve
-                        if L not in link_:
-                            eN_ += [n for n in L.nodet if not n.fin]
-                            if L.L < max_dist:
-                                link_+=[L]; et+=L.Et
-                _eN_ = {*eN_}
-            # Gt:
-            link_ = list({*link_});  Lay = CLay()
-            [Lay.add_lay(lay) for lay in sum_H(link_, root, fi=0)]
-            derTT = Lay.derTT
-            # weigh m_|d_ by similarity to mean m|d, replace derTT:
-            _,m_,M = centroid_M_(derTT[0], np.sum(derTT[0]), ave)
-            _,d_,D = centroid_M_(derTT[1], np.sum(derTT[1]), ave)
-            et[:2] = M,D; Lay.derTT = np.array([m_,d_])
-            # cluster roots:
-            if Val_(et, Et, ave) > 0:
-                G_ += [sum2graph(root, [list({*node_}),link_, et, Lay], 1, min_dist, max_dist)]
+        G_ = []  # cluster current distance segment N_:
+        if len(N_) > ave_L and et[0] > ave*ccoef:
+            for N in {*N_}:
+                if N.fin: continue  # clustered from prior _N_
+                _eN_,node_,link_,et, = [N],[],[], np.zeros(4)
+                while _eN_:
+                    eN_ = []
+                    for eN in _eN_:  # cluster rim-connected ext Ns, all in root Gt
+                        node_+=[eN]; eN.fin = 1  # all rim
+                        for L,_ in get_rim(eN, fi=1):  # all +ve
+                            if L not in link_:
+                                eN_ += [n for n in L.nodet if not n.fin]
+                                if L.L < max_dist:
+                                    link_+=[L]; et+=L.Et
+                    _eN_ = {*eN_}
+                # Gt:
+                link_ = list({*link_});  Lay = CLay()
+                [Lay.add_lay(lay) for lay in sum_H(link_, root, fi=0)]
+                derTT = Lay.derTT
+                # weigh m_|d_ by similarity to mean m|d, replace | add w_ to derTT:
+                _,m_,M = centroid_M(derTT[0], ave=ave)
+                _,d_,D = centroid_M(derTT[1], ave=ave)
+                et[:2] = M,D; Lay.derTT = np.array([m_,d_])
+                # cluster roots:
+                if Val_(et, Et, ave) > 0:
+                    G_ += [sum2graph(root, [list({*node_}),link_, et, Lay], 1, min_dist, max_dist)]
+            else:
+                G_ += N_  # unclustered nodes
         # longer links:
         L_ = L_[i + 1:]
         if L_: min_dist = max_dist  # next loop connects current-distance clusters via longer links
@@ -188,8 +190,8 @@ def cluster_N_(root, L_, ave, rc):  # top-down segment L_ by >ave ratio of L.dis
                 root.node_ += [sum_G_(G_)]  # node_ is already nested
                 root.nnest += 1
             break
-    # draft:
-    if root.nnest > nest:  # if nested above  (always fi == 1 in cluster_N_, else it's cluster_L_)
+    # if nested above:
+    if root.nnest > nest:
         for n in root.node_[-1].node_:
             if Val_(n.Et, n.Et, ave*(rc+4), fi=0) > 0:
                 # cross_comp new-G' flat link_:
@@ -235,10 +237,9 @@ def cluster_C_(root, L_, rc):  # 0 nest gap from cluster_edge: same derH depth i
         return C
 
     def refine_C_(C_):  # refine weights in fuzzy C cluster around N, in root node_|link_
-        '''
-        comp mean-node pairs, use match as weight of node_cluster_sum, - ave * cluster_overlap | (dist/max_dist)**2
-        delete weak clusters, recompute cluster_sums of mean-to-node matches / remaining cluster overlap
-        '''
+        # comp mean-node pairs, use match as weight of node_cluster_sum,
+        # delete weak clusters, recompute cluster_sums of mean_matches
+        # ave *= cluster_overlap | (dist/max_dist)**2
         remove_ = []
         for C in C_:
             r = 0  # recursion count
@@ -293,6 +294,15 @@ def cluster_C_(root, L_, rc):  # 0 nest gap from cluster_edge: same derH depth i
         root.node_ += [sum_G_(C_)]; root.nnest += 1
         # recursion in root cross_comp
 
+def backprop_C_(root, L_, rc):  # parallelize cluster_C_
+    '''
+    top layer: max-mediation centroids
+    mid-layers: incremental mediation centroids
+    bottom layer: nodes
+    reduce overlap by pruning weak centroids in top layer, not directly links
+    '''
+    pass
+
 def comb_altG_(G_, ave, rc=1):  # combine contour G.altG_ into altG (node_ defined by root=G), for agg+ cross-comp
     # internal and external alts: different decay / distance?
     # background + contour?
@@ -340,22 +350,22 @@ def sort_H(H, fi):  # re-assign olp and form priority indices for comp_tree, if 
     if fi:
         H.root.node_ = H.node_
 
-def centroid_M_(m_, M, L, ave):  # adjust weights on attr matches | diffs, recompute with sum
-    _w_ = np.ones(len(m_))  # add cost attrs?
-
+def centroid_M(m_, ave):  # adjust weights on attr matches | diffs, recompute with sum
+    _w_ = np.ones(len(m_))
+    am_ = np.abs(m_)  # m|d are signed, but their contribution to mean and w_ is absolute
+    M = np.sum(am_)
     while True:
         mean = max(M / np.sum(_w_), 1e-7)
-        inverse_dev_ = np.minimum(m_/mean, mean/m_)  # rational deviation from mean rm in range 0:1, 1 if m=mean, 0 if one is 0?
+        inverse_dev_ = np.minimum(am_/mean, mean/am_)  # rational deviation from mean rm in range 0:1, 1 if m=mean, 0 if one is 0?
         w_ = inverse_dev_ / .5  # 2/ m=mean, 0/ inf max/min, 1/ mid_rng | ave_dev?
-        w_ *= (L / np.sum(w_))  # for mean w = 1, M shouldn't change?
+        w_ *= (8 / np.sum(w_))  # for mean w = 1, M shouldn't change?
         if np.sum(np.abs(w_-_w_)) > ave:
-            m_ *= w_
-            M = np.sum(m_)
+            M = np.sum(am_* w_)
             _w_ = w_
         else:
             break
         # recursion if weights change
-    return w_, m_, M  # no return w_?
+    return w_, m_* w_, M  # no return w_?
 
 def agg_level(inputs):  # draft parallel
 
