@@ -216,14 +216,14 @@ def cluster_edge(iG_, frame):  # edge is CG but not a connectivity cluster, just
                                     eN_ += [eN]; N_.remove(eN)  # merged
                             link_ += [L]; et += L.Et
                 _eN_ = {*eN_}
-            if Val_(et, et, ave*2, fi=fi) > 0:
+            if val_(et, et, ave*2, fi=fi) > 0:
                 Lay = CLay(); [Lay.add_lay(link.derH[0]) for link in link_]  # single-lay derH
                 G_ += [sum2graph(frame, [node_,link_,et, Lay], fi)]
         return G_
 
     N_,L_,Et = comp_node_(iG_, ave)  # comp PP_
     # mval -> lay:
-    if Val_(Et, Et, ave, fi=1) > 0:
+    if val_(Et, Et, ave, fi=1) > 0:
         lay = [sum_lay_(L_, frame)]  # [mfork]
         G_ = cluster_PP_(copy(N_), fi=1) if len(N_) > ave_L else []
         '''
@@ -239,12 +239,7 @@ def cluster_edge(iG_, frame):  # edge is CG but not a connectivity cluster, just
         '''
         return [N_,G_,lay]
 
-def val_(Et, ave, coef=1):  # comparison / inclusion eval by m only, no contextual projection
-
-    m, d, n, _ = Et  # skip overlap
-    return m - ave * coef * n  # coef per compared param type
-
-def Val_(Et, _Et, ave, coef=1, fi=1):  # m|d cluster|batch eval, + cross|root _Et projection
+def val_(Et, _Et, ave, coef=1, fi=1):  # m|d cluster|batch eval, + cross|root _Et projection
 
     m, d, n, o = Et; _m,_d,_n,_o = _Et  # cross-fork induction of root Et alt, same overlap?
 
@@ -261,12 +256,11 @@ def comp_node_(_N_, ave, L=0):  # rng+ forms layer of rim and extH per N, append
     _Gp_ = []  # [G pair + co-positionals], for top-nested Ns, unless cross-nesting comp:
     if L: _N_ = filter(lambda N: len(N.derH)==L, _N_)  # if dist-nested
     for _G, G in combinations(_N_, r=2):  # if max len derH in agg+
-        _n, n = _G.Et[2], G.Et[2]; rn = _n/n if _n>n else n/_n
-        if rn > arn:  # scope disparity or _G.depth != G.depth, not needed?
+        if _G.nnest != G.nnest:
             continue
+        _n, n = _G.Et[2], G.Et[2]; rn = _n/n if _n>n else n/_n
         radii = G.aRad + _G.aRad
-        dy,dx = np.subtract(_G.yx,G.yx)
-        dist = np.hypot(dy,dx)
+        dy,dx = np.subtract(_G.yx,G.yx); dist = np.hypot(dy,dx)
         _G.add, G.add = 0, 0
         _Gp_ += [(_G,G, rn, dy,dx, radii, dist)]
     rng = 1
@@ -354,7 +348,7 @@ def comp_N(_N,N, ave, fi, angle=None, dist=None, dir=1, fshort=1):  # compare li
     # spec / alt:
     if fi and _N.altG and N.altG:
         et = _N.altG.Et + N.altG.Et  # comb val
-        if Val_(et, et, ave*2, fi=0) > 0:  # eval Ds
+        if val_(et, et, ave*2, fi=0) > 0:  # eval Ds
             Link.altL = comp_N(_N.altG, N.altG, ave*2, fi=0)
             Et += Link.altL.Et
     Link.Et = Et

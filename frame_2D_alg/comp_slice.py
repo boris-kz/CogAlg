@@ -1,228 +1,203 @@
 import numpy as np
-from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
-from slice_edge import CP, slice_edge, comp_angle
-from functools import reduce
+from collections import defaultdict
+from itertools import combinations
+from math import atan2, cos, floor, pi
+from frame_blobs import frame_blobs_root, intra_blob_root, CBase, imread, unpack_blob_
 '''
-comp_slice traces edge axis by cross-comparing vertically adjacent Ps: horizontal slices across an edge blob.
-These are low-M high-Ma blobs, vectorized into outlines of adjacent flat (high internal match) blobs.
-(high match or match of angle: M | Ma, roughly corresponds to low gradient: G | Ga)
+In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
+Potential object is proximate low-gradient (flat) blobs, with rough / thick boundary of adjacent high-gradient (edge) blobs.
+These edge blobs can be dimensionality-reduced to their long axis / median line: an effective outline of adjacent flat blob.
 -
-Vectorization is clustering of parameterized Ps + their derivatives (derPs) into PPs: patterns of Ps that describe edge blob.
-This process is a reduced-dimensionality (2D->1D) version of cross-comp and clustering cycle, common across this project.
-
-PP clustering in vertical (along axis) dimension is contiguous and exclusive because 
-Ps are relatively lateral (cross-axis), their internal match doesn't project vertically. 
-
-Primary clustering by match between Ps over incremental distance (rng++), followed by forming overlapping
-Secondary clusters of match of incremental-derivation (der++) difference between Ps. 
-
-As we add higher dimensions (3D and time), this dimensionality reduction is done in salient high-aspect blobs
-(likely edges in 2D or surfaces in 3D) to form more compressed 'skeletal' representations of full-dimensional patterns.
-
-comp_slice traces edge blob axis by cross-comparing vertically adjacent Ps: slices across edge blob, along P.G angle.
-These low-M high-Ma blobs are vectorized into outlines of adjacent flat (high internal match) blobs.
-(high match or match of angle: M | Ma, roughly corresponds to low gradient: G | Ga)
-
-Connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possibly forking. 
-len prior root_ sorted by G is root.olp, to eval for inclusion in PP or start new P by ave*olp
+Median line can be connected points that are most equidistant from other blob points, but we don't need to define it separately.
+An edge is meaningful if blob slices orthogonal to median line form some sort of a pattern: match between slices along the line.
+These patterns effectively vectorize representation: they represent match and change between slice parameters along the blob.
+-
+This process is very complex, so it must be selective. Selection should be by combined value of gradient deviation of edge blobs
+and inverse gradient deviation of flat blobs. But the latter is implicit here: high-gradient areas are usually quite sparse.
+A stable combination of a core flat blob with adjacent edge blobs is a potential object.
 '''
+ave_I, ave_G, ave_dangle  = 100, 100, 0.95
 
-ave, avd, aveB, ave_PPm, ave_PPd, ave_L, aI = 10, 10, 100, 50, 50, 4, 20
-wM, wD, wI, wG, wA, wL = 10, 10, 1, 1, 20, 20  # dert:
-w_t = np.ones((2,6))
-
-class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
-    name = "dP"
-
-    def __init__(l, nodet, span, angle, yx, Et, vertuple, latuple=None, root=None):
+class CP(CBase):
+    def __init__(P, yx, axis):
         super().__init__()
+        P.yx = yx
+        P.axis = axis
+        P.dert_ = []
+        P.latuple = None  # I,G, M,D, L, [Dy, Dx]
 
-        l.nodet = nodet  # e_ in kernels, else replaces _node,node: not used in kernels?
-        l.latuple = np.array([.0,.0,.0,.0,.0, np.zeros(2)], dtype=object) if latuple is None else latuple  # sum node_
-        l.vertuple = vertuple  # m_,d_
-        l.angle = angle  # dy,dx between node centers
-        l.span = span  # distance between node centers
-        l.yx = yx  # sum node_
-        l.Et = Et
-        l.root = root  # PPds containing dP
-        l.rim = []
-        l.lrim = []
-        l.prim = []
-    def __bool__(l): return l.nodet
-
-def comp_slice_root(frame, rV=1, ww_t=[]):
+def slice_edge_root(frame, rM=1):
 
     blob_ = unpack_blob_(frame)
     for blob in blob_:
-        if not blob.sign and blob.G > aveB * blob.root.olp:
-            edge = slice_edge(blob, ww_t[0][2:-1])  # wI,wG,wA?
-            if edge.G * (len(edge.P_) - 1) > ave_PPm:  # eval PP, olp=1
-                comp_slice(edge, rV, ww_t = ww_t)
+        if not blob.sign and blob.G > ave_G * blob.area * rM:
+            slice_edge(blob, rM)
 
-def comp_slice(edge, rV=1, ww_t=[]):  # root function
+def slice_edge(edge, rV=1):
+    if rV != 1:
+        global ave_I, ave_G, ave_dangle
+        ave_I, ave_G, ave_dangle = np.array([ave_I, ave_G, ave_dangle]) / rV  # projected value change
 
-    global ave, avd, wM, wD, wI, wG, wA, wL, ave_L, ave_PPm, ave_PPd, w_t
-    ave, avd, ave_L, ave_PPm, ave_PPd = np.array([ave, avd, ave_L, ave_PPm, ave_PPd]) / rV  # projected value change
-    if np.any(ww_t):
-        w_t = np.array([np.array([wM,wD,wI,wG,wA,wL]),np.array([wM,wD,wI,wG,wA,wL])]) * ww_t
-        # der weights
-    edge.Et, edge.vertuple = np.zeros(4), np.array([np.zeros(6), np.zeros(6)])  # (M, D, n, o), (m_,d_)
-    for P in edge.P_:  # add higher links
-        P.vertuple = np.array([np.zeros(6), np.zeros(6)])
-        P.rim = []; P.lrim = []; P.prim = []
+    axisd = select_max(edge)
+    yx_ = sorted(axisd.keys(), key=lambda yx: edge.dert_[yx][-1])  # sort by g
+    edge.P_ = []; edge.rootd = {}
+    # form P/ local max yx:
+    while yx_:
+        yx = yx_.pop(); axis = axisd[yx]  # get max of g maxes
+        P = form_P(CP(yx, axis), edge)
+        edge.P_ += [P]
+        yx_ = [yx for yx in yx_ if yx not in edge.rootd]    # remove merged maxes if any
+    edge.P_.sort(key=lambda P: P.yx, reverse=True)
+    trace_P_adjacency(edge)
+    if __name__ != "__main__": del edge.rootd   # keep for visual verification in slice_edge only
+    return edge
 
-    comp_P_(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
-    edge.node_ = form_PP_(edge, edge.P_, fd=0)  # all Ps are converted to PPs
+def select_max(edge):
+    axisd = {}  # map yx to axis
+    for (y, x), (i, gy, gx, g) in edge.dert_.items():
+        sa, ca = gy/g, gx/g
+        new_max = True
+        for dy, dx in [(-sa, -ca), (sa, ca)]:  # check neighbors
+            _y, _x = round(y+dy), round(x+dx)
+            if (_y, _x) not in edge.dert_: continue  # skip if pixel not in edge blob
+            _i, _gy, _gx, _g = edge.dert_[_y, _x]  # neighboring g
+            if g < _g:
+                new_max = False
+                break
+        if new_max: axisd[y, x] = sa, ca
+    return axisd
 
-    for PPm in edge.node_:  # eval sub-clustering, not recursive
-        P_, link_, vertuple, latuple, A, S, box, yx, Et = PPm[1:]   # or move Et up for simpler unpack?
-        if len(link_) > ave_L and sum(vertuple[1]) > ave_PPd:
-            comp_dP_(PPm)
-            link_[:] = form_PP_(PPm, link_, fd=1)  # add PPds within PPm link_
-            Et += np.sum([PPd[-1] for PPd in link_], axis=0)
-        edge.vertuple += vertuple
-        edge.Et += Et
+def form_P(P, edge):
+    y, x = P.yx
+    ay, ax = P.axis
+    center_dert = i,gy,gx,g = edge.dert_[y,x]  # dert is None if _y,_x not in edge.dert_: return` in `interpolate2dert`
+    edge.rootd[y, x] = P
+    I,Dy,Dx,G, M,D,L = i,gy,gx,g, 0,0,1
+    P.yx_ = [P.yx]
+    P.dert_ += [center_dert]
 
-def comp_P_(edge):  # form links from prelinks
+    for dy,dx in [(-ay,-ax),(ay,ax)]:  # scan in 2 opposite directions to add derts to P
+        P.yx_.reverse(); P.dert_.reverse()
+        (_y,_x), (_i,_gy,_gx,_g) = P.yx, center_dert  # start from center_dert
+        y,x = _y+dy, _x+dx  # 1st extension
+        while True:
+            # scan to blob boundary or angle miss:
+            ky, kx = round(y), round(x)
+            if (round(y),round(x)) not in edge.dert_: break
+            try: i,gy,gx,g = interpolate2dert(edge, y, x)
+            except TypeError: break  # out of bound (TypeError: cannot unpack None)
+            if edge.rootd.get((ky,kx)) is not None:
+                break  # skip overlapping P
+            mangle, dangle = comp_angle((_gy,_gx),(gy,gx))
+            if mangle < ave_dangle: break  # terminate P if angle miss
+            m = min(_i,i) + min(_g,g) + mangle
+            d = abs(-i-i) + abs(_g-g) + dangle
+            if m < ave_I + ave_G + ave_dangle: break  # terminate P if total miss, blob should be more permissive than P
+            # update P:
+            edge.rootd[ky, kx] = P
+            I+=i; Dy+=dy; Dx+=dx; G+=g; M+=m; D+=d; L+=1
+            P.yx_ += [(y,x)]; P.dert_ += [(i,gy,gx,g)]
+            # for next loop:
+            y += dy; x += dx
+            _y,_x,_gy,_gx,_i,_g = y,x,gy,gx,i,g
 
-    edge.rng = 1
-    for _P, pre_ in edge.pre__.items():
-        for P in pre_:  # prelinks
-            dy,dx = np.subtract(P.yx,_P.yx)  # between node centers
-            if abs(dy)+abs(dx) <= edge.rng * 2: # <max Manhattan distance
-                angle=[dy,dx]; distance=np.hypot(dy,dx)
-                derLay, et = comp_latuple(_P.latuple, P.latuple, len(_P.dert_), len(P.dert_))
-                _P.rim += [convert_to_dP(_P,P, derLay, angle, distance, et)]  # up only
-    del edge.pre__
+    P.yx = tuple(np.mean([P.yx_[0], P.yx_[-1]], axis=0))    # new center
+    P.latuple = new_latuple(I,G, M,D, L, [Dy, Dx])
 
-def comp_dP_(PP,):  # node_- mediated: comp node.rim dPs, call from form_PP_
+    return P
 
-    root, P_, link_, vert, lat, A, S, box, yx, (M,_,n,_) = PP
-    rM = M / (ave * n)  # dP D borrows from normalized PP M
-    for _dP in link_:
-        if _dP.Et[1] * rM > avd:
-            _P, P = _dP.nodet  # _P is lower
-            rn = len(P.dert_) / len(_P.dert_)
-            for dP in P.rim:  # higher links
-                if dP not in link_: continue  # skip removed node links
-                mdVer, et = comp_vert(_dP.vertuple[1], dP.vertuple[1], rn)
-                angle = np.subtract(dP.yx,_dP.yx)  # dy,dx of node centers
-                distance = np.hypot(*angle)  # between node centers
-                _dP.rim += [convert_to_dP(_dP, dP, mdVer, angle, distance, et)]  # up only
+def trace_P_adjacency(edge):  # fill and trace across slices
 
-def convert_to_dP(_P,P, derLay, angle, distance, Et):
+    margin_rim = [(P, y,x) for P in edge.P_ for y,x in edge.rootd if edge.rootd[y,x] is P]
+    prelink__ = defaultdict(list)
+    # bilateral
+    while margin_rim:   # breadth-first search for neighbors
+        _P, _y,_x = margin_rim.pop(0)  # also pop _P__
+        _margin = prelink__[_P]  # empty list per _P
+        for y,x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:  # adjacent pixels
+            if (y,x) not in edge.dert_: continue   # yx is outside the edge
+            if (y,x) not in edge.rootd:  # assign root, keep tracing
+                edge.rootd[y, x] = _P
+                margin_rim += [(_P, y, x)]
+                continue
+            # form link if yx has _P
+            P = edge.rootd[y,x]
+            margin = prelink__[P]  # empty list per P
+            if _P is not P and _P not in margin and P not in _margin:
+                margin += [_P]; _margin += [P]
+    # remove crossed links
+    for _P in edge.P_:
+        _yx = _P.yx
+        for P, __P in combinations(prelink__[_P], r=2):
+            if {__P,P}.intersection(prelink__[_P]) != {__P, P}: continue   # already removed
+            yx, __yx = P.yx, __P.yx
+            # get aligned line segments:
+            yx1 = np.subtract(P.yx_[0], P.axis)
+            yx2 = np.add(P.yx_[-1], P.axis)
+            __yx1 = np.subtract(__P.yx_[0], __P.axis)
+            __yx2 = np.add(__P.yx_[-1], __P.axis)
+            # remove crossed uplinks:
+            if xsegs(yx, _yx, __yx1, __yx2):
+                prelink__[P].remove(_P); prelink__[_P].remove(P)
+            elif xsegs(_yx, __yx, yx1, yx2):
+                prelink__[_P].remove(__P); prelink__[__P].remove(_P)
+    # for comp_slice:
+    edge.pre__ = {_P:[P for P in prelink__[_P] if _P.yx > P.yx] for _P in prelink__}
 
-    link = CdP(nodet=[_P,P], Et=Et, vertuple=derLay, angle=angle, span=distance, yx=np.add(_P.yx, P.yx)/2)
-    # bilateral, regardless of clustering:
-    _P.vertuple += link.vertuple; P.vertuple += link.vertuple
-    _P.lrim += [link]; P.lrim += [link]
-    _P.prim += [P];    P.prim +=[_P]  # all Ps are dPs if fd
+# --------------------------------------------------------------------------------------------------------------
+# utility functions
 
-    return link
+def interpolate2dert(edge, y, x):
+    if (y, x) in edge.dert_: return edge.dert_[y, x]  # if edge has (y, x) in it
 
-def form_PP_(root, iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
+    # get coords surrounding dert:
+    y_ = [fy] = [floor(y)]; x_ = [fx] = [floor(x)]
+    if y != fy: y_ += [fy+1]    # y is non-integer
+    if x != fx: x_ += [fx+1]    # x is non-integer
 
-    PPt_ = []
-    for P in iP_: P.merged = 0
-    for P in iP_:  # dP from link_ if fd
-        if P.merged or (not fd and len(P.dert_)==1): continue
-        _prim_ = P.prim; _lrim_ = P.lrim
-        I,G, M,D, L,_ = P.latuple
-        _P_ = {P}; link_ = set(); Et = np.array([I+M, G+D])
-        while _prim_:
-            prim_,lrim_ = set(),set()
-            for _P,_link in zip(_prim_,_lrim_):
-                if _link.Et[fd] < [ave,avd][fd] or _P.merged:
-                    continue
-                _P_.add(_P); link_.add(_link)
-                _I,_G,_M,_D,_L,_ = _P.latuple
-                Et += _link.Et + np.array([_I+_M,_G+_D])  # intra-P similarity and variance
-                L += _L  # latuple summation span
-                prim_.update(set(_P.prim) - _P_)
-                lrim_.update(set(_P.lrim) - link_)
-                _P.merged = 1
-            _prim_, _lrim_ = prim_, lrim_
-        Et = np.array([*Et, L, 1])  # Et + n,o
-        PPt_ += [sum2PP(root, list(_P_), list(link_), Et)]
+    I, Dy, Dx, G = 0, 0, 0, 0
+    K = 0
+    for _y in y_:
+        for _x in x_:
+            if (_y, _x) not in edge.dert_: continue
+            i, dy, dx, g = edge.dert_[_y, _x]
+            k = (1 - abs(_y-y)) * (1 - abs(_x-x))
+            I += i*k; Dy += dy*k; Dx += dx*k; G += g*k
+            K += k
+    if K != 0:
+        return I/K, Dy/K, Dx/K, G/K
 
-    return PPt_
+def comp_angle(_A, A):  # rn doesn't matter for angles
 
-def sum2PP(root, P_, dP_, Et):  # sum links in Ps and Ps in PP
+    _angle, angle = [atan2(Dy, Dx) for Dy, Dx in [_A, A]]
+    dangle = _angle - angle  # difference between angles
 
-    fd = isinstance(P_[0],CdP)
-    if fd: latuple = np.sum([n.latuple for n in set([n for dP in P_ for n in  dP.nodet])], axis=0)
-    else:  latuple = np.array([.0,.0,.0,.0,.0, np.zeros(2)], dtype=object)
-    vert = np.array([np.zeros(6),np.zeros(6)])
-    link_ = []
-    if dP_:  # add uplinks:
-        S,A = 0,[0,0]
-        for dP in dP_:
-            if dP.nodet[0] not in P_ or dP.nodet[1] not in P_: continue  # peripheral link
-            link_ += [dP]
-            vert += dP.vertuple
-            a = dP.angle; A = np.add(A,a); S += np.hypot(*a)  # span, links are contiguous but slanted
-    else:  # single P PP
-        S,A = P_[0].latuple[4:]  # [I, G, M, D, L, (Dy, Dx)]
-    box = [np.inf,np.inf,0,0]
-    for P in P_:
-        if not fd:  # else summed from P_ nodets on top
-            latuple += P.latuple
-        vert += P.vertuple
-        for y,x in P.yx_ if isinstance(P, CP) else [P.nodet[0].yx, P.nodet[1].yx]:  # CdP
-            box = accum_box(box,y,x)
-    y0,x0,yn,xn = box
-    PPt = [root, P_, link_, vert, latuple, A, S, box, [(y0+yn)/2,(x0+xn)/2], Et]
-    for P in P_: P.root = PPt
+    if dangle > pi: dangle -= 2*pi  # rotate full-circle clockwise
+    elif dangle < -pi: dangle += 2*pi  # rotate full-circle counter-clockwise
 
-    return PPt
+    mangle = (cos(dangle)+1)/2  # angle similarity, scale to [0,1]
+    dangle /= 2*pi  # scale to the range of mangle, signed: [-.5,.5]
 
-def comp_latuple(_latuple, latuple, _n,n):  # 0der params, add dir?
+    return [mangle, dangle]
 
-    _I, _G, _M, _D, _L, (_Dy, _Dx) = _latuple
-    I, G, M, D, L, (Dy, Dx) = latuple
-    rn = _n / n
+def new_latuple(I=0.0, G=0.0, M=0.0, Ma=0.0, L=0.0, A=(0.0, 0.0)):
+    return np.array([I, G, M, Ma, L, np.array(A, float)],dtype=object)
 
-    I*=rn; dI = _I - I;  mI = aI - dI / max(_I,I, 1e-7)  # vI = mI - ave
-    G*=rn; dG = _G - G;  mG = min(_G, G) / max(_G,G, 1e-7)  # vG = mG - ave_mG
-    M*=rn; dM = _M - M;  mM = min(_M, M) / max(_M,M, 1e-7)  # vM = mM - ave_mM
-    D*=rn; dD = _D - D;  mD = min(_D, D) / max(_D,D) if _D or D else 1e-7  # may be negative
-    L*=rn; dL = _L - L;  mL = min(_L, L) / max(_L,L)
-    mA, dA = comp_angle((_Dy,_Dx),(Dy,Dx))  # normalized
+def unpack_edge_(frame):
+    return [blob for blob in unpack_blob_(frame) if hasattr(blob, "P_")]
 
-    d_ = np.array([dM, dD, dI, dG, dA, dL])  # derTT[:3], Et
-    m_ = np.array([mM, mD, mI, mG, mA, mL])
-    M = sum(m_ * w_t[0]); D = sum(d_ * w_t[1])
-    return np.array([m_,d_]), np.array([M,D])
+def xsegs(yx1, yx2, yx3, yx4):
+    # return True if segments (yx1, yx2) & (yx3, yx4) crossed
+    # https://www.geeksforgeeks.org/check-if-two-given-line-segments-intersect/
+    (y1, x1), (y2, x2), (y3, x3), (y4, x4) = yx1, yx2, yx3, yx4
 
-def comp_vert(_i_,i_, rn=.1, dir=1):  # i_ is ds, dir may be -1
+    v1 = (y2 - y1)*(x3 - x2) - (x2 - x1)*(y3 - y2)
+    v2 = (y2 - y1)*(x4 - x2) - (x2 - x1)*(y4 - y2)
 
-    i_ = i_ * rn  # normalize by compared accum span
-    d_ = (_i_ - i_ * dir)  # np.arrays [I,G,A,M,D,L]
-    _a_,a_ = np.abs(_i_), np.abs(i_)
-    m_ = np.divide( np.minimum(_a_,a_), reduce(np.maximum, [_a_, a_, 1e-7]))  # rms
-    m_[(_i_<0) != (d_<0)] *= -1  # m is negative if comparands have opposite sign
-    M = sum(m_ * w_t[0]); D = sum(d_ * w_t[1])
+    v3 = (y4 - y3)*(x1 - x4) - (x4 - x3)*(y1 - y4)
+    v4 = (y4 - y3)*(x2 - x4) - (x4 - x3)*(y2 - y4)
 
-    return np.array([m_,d_]), np.array([M, D])  # Et
-''' 
-    sequential version:
-    md_, dd_ = [],[]
-    for _d, d in zip(_d_,d_):
-        d = d * rn
-        dd_ += [_d - d * dir]
-        md = min(abs(_d),abs(d))
-        md_ += [-md if _d<0 != d<0 else md]  # negate if only one compared is negative
-    md_, dd_ = np.array(md_), np.array(dd_)
-'''
-
-def accum_box(box, y, x):  # extend box with kernel
-    y0, x0, yn, xn = box
-    return min(y0,y), min(x0,x), max(yn,y), max(xn,x)
-
-def min_dist(a, b, pad=0.5):
-    if np.abs(a - b) < 1e-5:
-        return a-pad, b+pad
-    return a, b
+    return (v1*v2 <= 0 and v3*v4 <= 0)
 
 if __name__ == "__main__":
 
@@ -232,80 +207,51 @@ if __name__ == "__main__":
 
     frame = frame_blobs_root(image)
     intra_blob_root(frame)
-    comp_slice_root(frame)
-    # ----- verification -----
-    # draw PPms as graphs of Ps and dPs
-    # draw PPds as graphs of dPs and ddPs
-    # dPs are shown in black, ddPs are shown in red
+    slice_edge_root(frame)
+    # verification:
     import matplotlib.pyplot as plt
-    from frame_2D_alg.slice_edge import unpack_edge_
+    # settings
     num_to_show = 5
-    edge_ = sorted(
-        filter(lambda edge: hasattr(edge, "node_") and edge.node_, unpack_edge_(frame)),
-        key=lambda edge: len(edge.yx_), reverse=True)
+    show_gradient = True
+    show_slices = True
+    # unpack and sort edges:
+    edge_ = sorted(unpack_edge_(frame), key=lambda edge: len(edge.yx_), reverse=True)
+    # show first largest n edges
     for edge in edge_[:num_to_show]:
+        assert len(edge.P_) == len({P.yx for P in edge.P_})     # verify that P.yx is unique
         yx_ = np.array(edge.yx_)
         yx0 = yx_.min(axis=0) - 1
-        # show edge blob
+        # show edge-blob
         shape = yx_.max(axis=0) - yx0 + 2
         mask_nonzero = tuple(zip(*(yx_ - yx0)))
         mask = np.zeros(shape, bool)
         mask[mask_nonzero] = True
-        # flatten
-        assert all((isinstance(PPm, list) for PPm in edge.node_))
-        PPm_ = [*edge.node_]
-        P_, dP_, PPd_ = [], [], []
-        for PPm in PPm_:
-            # root, P_, link_, vert, latuple, A, S, box, yx, Et = PPm
-            P_ += PPm[1]
-            for link in PPm[2]:
-                if isinstance(link, CdP): dP_ += [link]
-                else: PPd_ += [link]
-        for PPd in PPd_:
-            dP_ += PPd[1] + PPd[2]  # dPs and ddPs
-
         plt.imshow(mask, cmap='gray', alpha=0.5)
-        # plt.title("")
-        print("Drawing Ps...")
-        for P in P_:
-            (y, x) = P.yx - yx0
-            plt.plot(x, y, "ok")
-        print("Drawing dPs...")
-        nodet_set = set()
-        for dP in dP_:
-            _node, node = dP.nodet  # node is P or dP
-            if (_node.id, node.id) in nodet_set:  # verify link uniqueness
-                raise ValueError(
-                    f"link not unique between {_node} and {node}. Duplicated links:\n" +
-                    "\n".join([
-                        f"dP.id={dP.id}, _node={dP.nodet[0]}, node={dP.nodet[1]}"
-                        for dP in dP_
-                        if dP.nodet[0] is _node and dP.nodet[1] is node
-                    ])
-                )
-            nodet_set.add((_node.id, node.id))
-            assert (*_node.yx,) > (*node.yx,)  # verify that link is up-link
-            (_y, _x), (y, x) = _node.yx - yx0, node.yx - yx0
-            style = "o-r" if isinstance(_node, CdP) else "-k"
-            plt.plot([_x, x], [_y, y], style)
+        plt.title(f"area = {edge.area}")
+        if show_gradient:
+            vu_ = [(-gy/g, gx/g) for i, gy, gx, g in edge.dert_.values()]
+            y_, x_ = zip(*(yx_ - yx0))
+            v_, u_ = zip(*vu_)
+            plt.quiver(x_, y_, u_, v_, scale=100)
+        if show_slices:
+            for _P in edge.P_:
+                _y_, _x_ = zip(*(_P.yx_ - yx0))
+                if len(_P.yx_) == 1:
+                    v, u = _P.axis
+                    _y_ = _y_[0]-v/2, _y_[0]+v/2
+                    _x_ = _x_[0]-u/2, _x_[0]+u/2
+                plt.plot(_x_, _y_, "k-", linewidth=3)
+                _yp, _xp = _P.yx - yx0
+                assert len(set(edge.pre__[_P])) == len(edge.pre__[_P])   # verify pre-link uniqueness
+                for P in edge.pre__[_P]:
+                    assert _P.yx > P.yx     # verify up-link
+                    yp, xp = P.yx - yx0
+                    plt.plot([_xp, xp], [_yp, yp], "ko--", alpha=0.5)
+                _cyx_ = [_yx for _yx in edge.rootd if edge.rootd[_yx] is _P]
+                if _cyx_:
+                    _cy_, _cx_ = zip(*(_cyx_ - yx0))
+                    plt.plot(_cx_, _cy_, 'o', alpha=0.5)
 
-        print("Drawing PPm boxes...")
-        for PPm in PPm_:
-            # root, P_, link_, vert, latuple, A, S, box, yx, Et = PPm
-            _, _, _, _, _, _, _, (y0, x0, yn, xn), _, _ = PPm
-            (y0, x0), (yn, xn) = ((y0, x0), (yn, xn)) - yx0
-            y0, yn = min_dist(y0, yn)
-            x0, xn = min_dist(x0, xn)
-            plt.plot([x0, x0, xn, xn, x0], [y0, yn, yn, y0, y0], '-k', alpha=0.4)
-
-        print("Drawing PPd boxes...")
-        for PPd in PPd_:
-            _, _, _, _, _, _, _, (y0, x0, yn, xn), _, _ = PPd
-            (y0, x0), (yn, xn) = ((y0, x0), (yn, xn)) - yx0
-            y0, yn = min_dist(y0, yn)
-            x0, xn = min_dist(x0, xn)
-            plt.plot([x0, x0, xn, xn, x0], [y0, yn, yn, y0, y0], '-r', alpha=0.4)
-        print("Max PPd size:", max((0, *(len(PPd[1]) for PPd in PPd_))))
-        print("Max PPd link_ size:", max((0, *(len(PPd[2]) for PPd in PPd_))))
-
+        ax = plt.gca()
+        ax.set_aspect('equal', adjustable='box')
         plt.show()
