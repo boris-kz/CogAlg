@@ -224,4 +224,35 @@ def cluster_N_(root, L_, ave, fi, rc):  # top-down segment L_ by >ave ratio of L
                 # cross_comp new-G' flat link_:
                 cross_comp(n, rc+4, fi=0)
 
+def cross_comp1(root, rc, fi=1):  # recursion count, form agg_Level by breadth-first node_,link_ cross-comp, connect clustering, recursion
 
+    nnest, lnest = root.nnest, root.lnest
+    # default root is frame
+    N_,L_,Et = comp_node_(root.node_[-1].node_, ave*rc) if fi else comp_link_(L2N(root.link_), ave*rc)  # nested node_ or flat link_
+
+    if Val_(Et, Et, ave*(rc+1), fi=fi) > 0:
+        lay = comb_H_(L_, root, fi=0)
+        if fi: root.derH += [[lay]]  # [mfork] feedback
+        else: root.derH[-1] +=[lay]  # dfork
+        pL_ = {l for n in N_ for l,_ in get_rim(n, fi=fi)}
+        lEt = np.sum([l.Et for l in pL_], axis=0)
+        L = len(pL_)
+        if L > ave_L and Val_(lEt, lEt, ave*rc+2) > 0:
+            if fi:
+                cluster_N_(root, pL_, ave*(rc+2), rc=rc+2)  # form multiple distance segments
+                if lEt[0] -  ave*(rc+2)  *  ccoef * lEt[2] > 0:  # shorter links are redundant to LC above: rc+ 1 | LC_link_ / pL_?
+                    cluster_C_(root, pL_, rc+3)  # mfork G,altG exemplars, +altG surround borrow, root.derH + 1|2 lays, agg++
+                # if CC_V > LC_V: delete root.node_[-2]:LC_, [-1] is CC_?
+            else:
+                cluster_L_(root, N_, ave*(rc+2), rc=rc+2)  # CC links via llinks, no dist-nesting
+                # no cluster_C_ for links, connectivity only
+        # recursion:
+        lev_Gt = []
+        for fi, N_, nest, inest in zip((1,0), (root.node_,root.link_),(root.nnest,root.lnest),(nnest,lnest)):
+            if nest > inest:  # nested above
+                lev_G = N_[-1]  # cross_comp CGs in link_[-1].node_
+                if Val_(lev_G.Et, lev_G.Et, ave*(rc+4), fi=fi) > 0:  # or global Et?
+                    cross_comp(root, rc+4, fi=fi)  # this cross_comp is per node_ or link_ so we need to parse different fi here?
+                lev_Gt += [lev_G]
+            else: lev_Gt+=[[]]
+        return lev_Gt
