@@ -226,17 +226,7 @@ def cluster_edge(iG_, frame):  # edge is CG but not a connectivity cluster, just
     if val_(Et, Et, ave, fi=1) > 0:
         lay = [sum_lay_(L_, frame)]  # [mfork]
         G_ = cluster_PP_(copy(N_), fi=1) if len(N_) > ave_L else []
-        '''
-        # dval -> comp dPP_:
-        if Val_(Et, Et, ave*2, fd=1) > 0:  # likely not from the same links
-            lN_,lL_,dEt = comp_link_(L2N(L_), ave*2)
-            if Val_(dEt, Et, ave*3, fd=1) > 0:
-                lay += [sum_lay_(lL_, frame)]  # dfork
-                lG_ = cluster_PP_(lN_, fd=1) if len(lN_) > ave_L else []
-            else:
-                lG_=[]  # empty dfork
-        else: lG_=[]
-        '''
+
         return [N_,G_,lay]
 
 def val_(Et, _Et, ave, coef=1, fi=1):  # m|d cluster|batch eval, + cross|root _Et projection
@@ -449,6 +439,19 @@ def add_H(H, h, root, rev=0, fi=1):  # add fork L.derHs
                 else:   H += [lay.copy_(root=root,rev=rev)]
                 root.derTTe += lay.derTT; root.Et += lay.Et
 
+def add_merge_H(H, h, root, rev=0):  # add derHs between forks
+
+    for Lay,lay in zip_longest(H,h):  # different len if lay-selective comp
+        if lay:
+            if isinstance(lay,list): lay = lay[0].add_lay(lay[1],rev=rev)  # two forks
+            if Lay:
+                if isinstance(Lay,list): Lay = Lay[0].add_lay(Lay[1], rev=rev)  # two forks
+                Lay.add_lay(lay,rev=rev)
+            else:
+                H += [lay.copy_(root=root,rev=rev)]
+            root.derTTe += lay.derTT; root.Et += lay.Et
+
+
 def comp_H(H,h, rn, root, Et, fi):  # one-fork derH if not fi, else two-fork derH
 
     derH = []
@@ -467,7 +470,7 @@ def comp_H(H,h, rn, root, Et, fi):  # one-fork derH if not fi, else two-fork der
             derH += [dLay]
     return derH
 
-def sum_G_(node_, G=None):
+def sum_G_(node_, G=None, merge=0):
 
     if G is None:
         G = copy_(node_[0]); G.node_ = [node_[0]]; G.link_ = []; node_=node_[1:]
@@ -476,9 +479,13 @@ def sum_G_(node_, G=None):
         G.baseT += n.baseT; G.derTT += n.derTT; G.Et += n.Et;  G.yx += n.yx
         if G.fi:
             G.derTTe += n.derTTe; G.aRad += n.aRad
-            if n.extH: add_H(G.extH, n.extH, root=G, fi=0)
-            # empty in centroid?
-        if n.derH: add_H(G.derH, n.derH, root=G, fi=G.fi)
+            if n.extH:
+                add_H(G.extH, n.extH, root=G, fi=0)
+        if n.derH:
+            if merge: add_merge_H(G.derH, n.derH, root=G)
+            else: add_H(G.derH, n.derH, root=G, fi=G.fi)
+        G.nnest = max(G.nnest, n.nnest)
+        G.lnest = max(G.lnest, n.lnest)
         G.box = extend_box( G.box, n.box)  # extended per separate node_ in centroid
     return G
 

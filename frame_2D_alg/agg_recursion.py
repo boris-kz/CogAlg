@@ -39,12 +39,11 @@ ave, ave_L, max_med, icoef, lcoef, ccoef, ave_dist, med_cost = 5, 2, 3, .5, 3, 1
 
 def cross_comp(root, rc, iL_=[]):  # recursion count, form agg_Level by breadth-first node_,link_ cross-comp, connect clustering, recursion
 
-    nnest, lnest = root.nnest, root.lnest  # default root is frame
     fi = not iL_
     N_,L_,Et = comp_node_(root.node_[-1].node_, ave*rc) if fi else comp_link_(L2N(iL_), ave*rc)   # nested node_ or flat link_
 
     if val_(Et, Et, ave*(rc+1), fi) > 0:
-        lev_Gt = []
+        lev_N, lev_L = [],[]
         lay = comb_H_(L_, root, fi=0)
         if fi: root.derH += [[lay]]  # [mfork] feedback
         else: root.derH[-1] +=[lay]  # dfork
@@ -53,35 +52,34 @@ def cross_comp(root, rc, iL_=[]):  # recursion count, form agg_Level by breadth-
         # m_fork:
         if val_(lEt, lEt, ave*(rc+2), fi=1, coef=ccoef) > 0:  # or rc += 1?
             if fi:
-                lev_seg_ = cluster_N_(root, pL_, ave*(rc+2), rc=rc+2)  # form multiple distance segments
-                lev_G = sum_G_(lev_seg_)
+                lev_N = cluster_N_(root, pL_, ave*(rc+2), rc=rc+2)  # combine distance segments
                 if lEt[0] > ave*(rc+3) * lEt[3] * ccoef:  # shorter links are redundant to LC above: rc+ 1 | LC_link_ / pL_?
                     lev_C = cluster_C_(pL_, rc+3)  # mfork G,altG exemplars, +altG surround borrow, root.derH + 1|2 lays, agg++
-                    lev_G = sum_G_([lev_G,lev_C])  # draft, add lev_G.nnest?
+                    lev_N = sum_G_([lev_N,lev_C])  # two nodes?
                 # if CC_V > LC_V: delete root.node_[-2]:LC_, [-1] is CC_?
             else:
-                lev_G = cluster_L_(root, N_, ave*(rc+2), rc=rc+2)  # via llinks, no dist-nesting, no cluster_C_
-            if lev_G:
-                root.nnest += lev_G.nnest
-                root.node_ += [lev_G]
-                lev_Gt += [lev_G]
+                lev_N = cluster_L_(root, N_, ave*(rc+2), rc=rc+2)  # via llinks, no dist-nesting, no cluster_C_
+            if lev_N:
+                if val_(lev_N.Et, lev_N.Et, ave*(rc+4), fi=1, coef=lcoef) > 0:  # or global _Et?
+                    # m_fork recursion:
+                    nG = cross_comp(root, rc+4)  # xcomp root.node_[-1]
+                    if nG: lev_N = nG[0]  # incr nesting
         # d_fork:
         if val_(lEt, lEt, ave*(rc+2), fi=0, coef=lcoef) > 0:
-            lev_G, L_ = cross_comp(root, rc+4, iL_=L_)  # comp L_
-            if lev_G:  # comb sub-forks
-                root.lnest += lev_G.nnest
-                root.link_ += [lev_G]
-                lev_Gt += [lev_G]
+            # comp L_, d_fork recursion:
+            lG = cross_comp(root, rc+4, iL_=L_)
+            if lG: lev_L = lG[0]
+        lev_G = []
+        if lev_L:
+            root.link_ += [lev_L]; root.lnest = lev_L.nnest
+        if lev_N:
+            root.node_ += [lev_N]; root.nnest = lev_N.nnest
+            if lev_L: lev_G = sum_G_([lev_N,lev_L], merge=1)  # merge forks
+            else:     lev_G = lev_N.copy_(root=root, node=[lev_N,[]])
+        elif lev_L:   lev_G = lev_L.copy_(root=root, node=[[],lev_L])
 
-        if root.nnest > nnest:  # recursion in m_fork, or both forks?
-            lev_G = lev_Gt[0]
-            if val_(lev_G.Et, lev_G.Et, ave*(rc+4), fi=1, coef=lcoef) > 0:  # or global Et?
-                lev_g, L_ = cross_comp(root, rc+4)  # recursive comp_node_
-                lev_Gt[0] = [lev_g]  # replace with deeper nesting
-
-        # return combined sub-forks, may be empty:
-        lev_G = sum_G_(lev_Gt) if lev_Gt else []
-        return lev_G, L_
+        if lev_G:
+            return lev_G
 
 def comp_link_(iL_, ave):  # comp CLs via directional node-mediated link tracing: der+'rng+ in root.link_ rim_t node rims
 
@@ -147,7 +145,6 @@ def cluster_N_(root, L_, ave, rc):  # top-down segment L_ by >ave ratio of L.dis
 
     L_ = sorted(L_, key=lambda x: x.L)  # short links first
     min_dist = 0; Et = root.Et
-    G_t = []
     while True:
         # each loop forms G_ of contiguous-distance L_ segment
         _L = L_[0]; N_, et = copy(_L.nodet), _L.Et
@@ -193,16 +190,14 @@ def cluster_N_(root, L_, ave, rc):  # top-down segment L_ by >ave ratio of L.dis
                 G_ += N_  # unclustered nodes
         # longer links:
         L_ = L_[i + 1:]
-        if L_: min_dist = max_dist  # next loop connects current-distance clusters via longer links
+        if L_:
+            min_dist = max_dist  # next loop connects current-distance clusters via longer links
         else:
-            if G_:
-                [comb_altG_(G.altG.node_, ave, rc) for G in G_]
-                G_ = sum_G_(G_)
-            G_t += [G_]  # may be empty
             break
-    # lev_G is dist_seg list, may be empty:
-    return G_t
-
+    if G_:
+        # highest dist segment, includes all nodes
+        [comb_altG_(G.altG.node_, ave, rc) for G in G_]
+        return sum_G_(G_)
 
 def cluster_L_(root, L_, ave, rc):  # CC links via direct llinks, no dist-nesting
 
@@ -422,14 +417,12 @@ def agg_H_seq(focus, image, _nestt=(1,0), rV=1, _rv_t=[]):  # recursive level-fo
         return frame
     comb_altG_(frame.node_[-1].node_, ave*2)  # PP graphs in frame.node_[2]
     # forward agg+:
-    cross_comp(frame, rc=1)  # node_+= edge.node_
+    lev_G = cross_comp(frame, rc=1)  # node_+= edge.node_
+    frame_link_ = [lG for lG in lev_G.node_[1].node_ if lG.nnest==frame.lnest] if lev_G and lev_G.node_[1] else []
     rM,rD = 1,1  # sum derTT coefs: m_,d_ [M,D,n,o, I,G,A,L] / Et, baseT, dimension
-    rv_t = np.ones((2,8))
-    # d value is borrowed from corresponding ms in proportion to d mag, both scaled by fb
-    frame_lnest = max(n.lnest for n in frame.node_[-1])
-    frame_link_ = [lG for lev_G in frame.node_[-1] for n in lev_G.node_ for lG in n.link_[-1] if n.lnest == frame_lnest]
-    # feedback to scale m,d weights:
-    for fd, nest,_nest, Q in zip((0,1), (frame.nnest,frame_lnest), _nestt, (frame.node_[1:],frame_link_)):  # skip blob_
+    rv_t = np.ones((2,8))  # d val is borrowed from pair m in proportion to d mag, scaled by fb:
+    # feedback weights:
+    for fd, nest,_nest, Q in zip((0,1), (frame.nnest,frame.lnest), _nestt, (frame.node_[1:],frame_link_)):  # skip blob_
         if nest==_nest: continue  # no new nesting
         hG = Q[-1]  # top level, no feedback
         for lev_G in reversed(Q[:-1]):  # CG or CL

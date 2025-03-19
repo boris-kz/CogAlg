@@ -136,6 +136,16 @@ def cross_comp(root, fn, rc):  # form agg_Level by breadth-first node_,link_ cro
          else:
             if fi: node.nrim += [(Link,dir)]
             else:  node.nrimt[1-rev] += [(Link,rev)]  # opposite to _N,N dir
+            
+        # dval -> comp dPP_:
+        if Val_(Et, Et, ave*2, fd=1) > 0:  # likely not from the same links
+            lN_,lL_,dEt = comp_link_(L2N(L_), ave*2)
+            if Val_(dEt, Et, ave*3, fd=1) > 0:
+                lay += [sum_lay_(lL_, frame)]  # dfork
+                lG_ = cluster_PP_(lN_, fd=1) if len(lN_) > ave_L else []
+            else:
+                lG_=[]  # empty dfork
+        else: lG_=[]
 '''
 
 def centroid_M_(m_, M, ave):  # adjust weights on attr matches | diffs, recompute with sum

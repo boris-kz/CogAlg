@@ -30,7 +30,7 @@ def slice_edge_root(frame, rM=1):
 
     blob_ = unpack_blob_(frame)
     for blob in blob_:
-        if not blob.sign and blob.G > ave_G * blob.n * rM:
+        if not blob.sign and blob.G > ave_G * blob.area * rM:
             slice_edge(blob, rM)
 
 def slice_edge(edge, rV=1):
@@ -68,9 +68,10 @@ def select_max(edge):
     return axisd
 
 def form_P(P, edge):
-    y, x = ix, iy = P.yx
+    y, x = P.yx
     ay, ax = P.axis
     center_dert = i,gy,gx,g = edge.dert_[y,x]  # dert is None if _y,_x not in edge.dert_: return` in `interpolate2dert`
+    edge.rootd[y, x] = P
     I,Dy,Dx,G, M,D,L = i,gy,gx,g, 0,0,1
     P.yx_ = [P.yx]
     P.dert_ += [center_dert]
@@ -102,7 +103,7 @@ def form_P(P, edge):
 
     P.yx = tuple(np.mean([P.yx_[0], P.yx_[-1]], axis=0))    # new center
     P.latuple = new_latuple(I,G, M,D, L, [Dy, Dx])
-    edge.rootd[iy,ix] = P
+
     return P
 
 def trace_P_adjacency(edge):  # fill and trace across slices
