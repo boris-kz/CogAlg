@@ -5,7 +5,7 @@ from itertools import zip_longest
 from multiprocessing import Pool, Manager
 from frame_blobs import frame_blobs_root, intra_blob_root, imread
 from slice_edge import comp_angle
-from vect_edge import L2N, base_comp, comp_N, sum_G_, comb_H_, sum_H, copy_, comp_node_, sum2graph, get_rim, CG,CL,CLay, vect_root, val_
+from vect_edge import base_comp, comp_N, sum_G_, comb_H_, sum_H, copy_, comp_node_, sum2graph, get_rim, CG,CL,CLay, vect_root, val_
 '''
 notation:
 prefix f: flag
@@ -37,12 +37,11 @@ Similar to cross-projection by data-coordinate filters, described in "imaginatio
 '''
 ave, ave_L, max_med, icoef, lcoef, ccoef, ave_dist, med_cost = 5, 2, 3, .5, 3, 10, 2, 2
 
-def cross_comp(root, rc, iL_=[]):  # recursion count, form agg_Level by breadth-first node_,link_ cross-comp, connect clustering, recursion
+def cross_comp(root, rc, iN_, fi=1):  # recursion count, form agg_Level by breadth-first node_,link_ cross-comp, connect clustering, recursion
 
-    fi = not iL_
-    N_,L_,Et = comp_node_(root.node_[-1].node_, ave*rc) if fi else comp_link_(L2N(iL_), ave*rc)   # nested node_ or flat link_
+    N_,L_,Et = comp_node_(iN_, ave*rc) if fi else comp_link_(iN_, ave*rc)   # nested node_ or flat link_
 
-    if L_ and val_(Et, Et, ave*(rc+1), fi) > 0:
+    if N_ and val_(Et, Et, ave*(rc+1), fi) > 0:
         lev_N, lev_L = [],[]
         lay = comb_H_(L_, root, fi=0)
         if fi: root.derH += [[lay]]  # [mfork] feedback
@@ -50,25 +49,22 @@ def cross_comp(root, rc, iL_=[]):  # recursion count, form agg_Level by breadth-
         pL_ = {l for n in N_ for l,_ in get_rim(n, fi)}
         lEt = np.sum([l.Et for l in pL_], axis=0)
         # m_fork:
-        if val_(lEt, lEt, ave*(rc+2), fi=1, coef=ccoef) > 0:  # or rc += 1?
+        if val_(lEt,lEt, ave*(rc+2), 1, ccoef) > 0:  # or rc += 1?
             if fi:
-                lev_N = cluster_N_(root, pL_, ave*(rc+2), rc=rc+2)  # combine distance segments
-                if lEt[0] > ave*(rc+3) * lEt[3] * ccoef:  # short links already in LC: rc+ 1 | LC_link_ / pL_?
-                    lev_C = cluster_C_(pL_, rc+3)  # mfork G,altG exemplars, +altG surround borrow, root.derH + 1|2 lays, agg++
-                else: lev_C = []
-                lev_N = comb_Gt(lev_N,lev_C,root)  # if CC_V > LC_V: delete root.node_[-2]:LC_, [-1] is CC_?
+                cG = cluster_C_(pL_,rc+2)  # exemplar CCs, same derH, select to form partly overlapping LCs:
+                if cG:
+                    if val_(cG.Et,cG.Et, ave*(rc+3), 1, ccoef) > 0:  # cluster CC nodes via short rims
+                        nG = cluster_N_(cG, ave*(rc+3), rc+3)  # combined distance segments
+                    else: nG = []
+                lev_N = comb_Gt(cG, nG, root)
             else:
                 lev_N = cluster_L_(root, N_, ave*(rc+2), rc=rc+2)  # via llinks, no dist-nesting, no cluster_C_
-            if lev_N:
+            if  lev_N:
                 if val_(lev_N.Et, lev_N.Et, ave*(rc+4), fi=1, coef=lcoef) > 0:  # or global _Et?
-                    # m_fork recursion:
-                    nG = cross_comp(root, rc+4)  # xcomp root.node_[-1]
-                    if nG: lev_N = nG  # incr nesting
+                    lev_N = cross_comp(lev_N, rc=rc+4, iN_=lev_N.node_)  # recursive comp N_
         # d_fork:
-        if val_(lEt, lEt, ave*(rc+2), fi=0, coef=lcoef) > 0:
-            # comp L_, d_fork recursion:
-            lG = cross_comp(root, rc+4, iL_=L_)
-            if lG: lev_L = lG
+        if val_(lEt,lEt, ave*(rc+2), fi=0, coef=lcoef) > 0:
+            lev_L = cross_comp(root, rc+4, iN_=L2N(L_), fi=0)  # recursive comp L_
         # combine:
         lev_G = comb_Gt(lev_N, lev_L, root)  # L derH is already in the root?
         if lev_G:
@@ -138,8 +134,10 @@ def comp_link_(iL_, ave):  # comp CLs via directional node-mediated link tracing
  LC is mainly generative: complexity of new derivatives and structured composition levels is greater than compression by LC 
  CC is strictly compressive, by similarity, no new diff representation. 
 '''
-def cluster_N_(root, L_, ave, rc):  # top-down segment L_ by >ave ratio of L.dists
+def cluster_N_(root, ave, rc):  # top-down segment L_ by >ave ratio of L.dists
 
+    # root is cG, get L_ from C_'node_'s short rims:
+    L_ = {L for C in root.node_ for n in C.node_ for L in n.rim if L.L < ave_L}
     L_ = sorted(L_, key=lambda x: x.L)  # short links first
     min_dist = 0; Et = root.Et
     while True:
@@ -187,6 +185,9 @@ def cluster_N_(root, L_, ave, rc):  # top-down segment L_ by >ave ratio of L.dis
                 G_ += N_  # unclustered nodes
         # longer links:
         L_ = L_[i + 1:]
+        if G_:
+            [comb_altG_(G.altG.node_, ave, rc) for G in G_]
+            # not nested in higher-dist Gs directly, but base nodes should have all-dist roots
         if L_:
             min_dist = max_dist  # next loop connects current-distance clusters via longer links
         else:
@@ -388,6 +389,12 @@ def agg_level(inputs):  # draft parallel
                 m, d = m/k, d/k
                 H[elevation-1].aves = [m, d]
             # else break?
+
+def L2N(link_):
+    for L in link_:
+        L.fi=0; L.mL_t,L.rimt=[[],[]],[[],[]]; L.aRad=0; L.visited_,L.extH=[],[]; L.derTTe=np.zeros((2,8))
+        if not hasattr(L,'root'): L.root=[]
+    return link_
 
 def agg_H_par(focus):  # draft parallel level-updating pipeline
 

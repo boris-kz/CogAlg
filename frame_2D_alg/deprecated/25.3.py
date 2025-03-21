@@ -146,6 +146,13 @@ def cross_comp(root, fn, rc):  # form agg_Level by breadth-first node_,link_ cro
             else:
                 lG_=[]  # empty dfork
         else: lG_=[]
+        
+                    if isinstance(LR.derH[0], list): 1Has a conversation. Original line has a conversation.
+                         if len(LR.derH[0])==2: LR.derH[0][1].add_lay(lay)  # direct root only
+                         else:                  LR.derH[0] += [lay.copy_(root=LR)]
+                     else:  # L.nodet is CL
+                         if len(LR.derH) == 2: LR.derH[1].add_lay(lay)  # direct root only
+                         else:                 LR.derH += [lay.copy_(root=LR)]
 '''
 
 def centroid_M_(m_, M, ave):  # adjust weights on attr matches | diffs, recompute with sum
@@ -266,3 +273,46 @@ def cross_comp1(root, rc, fi=1):  # recursion count, form agg_Level by breadth-f
                 lev_Gt += [lev_G]
             else: lev_Gt+=[[]]
         return lev_Gt
+
+def cross_comp3(root, rc, ifi=0, iL_=[]):  # recursion count, form agg_Level by breadth-first node_,link_ cross-comp, connect clustering, recursion
+
+    fi = not iL_
+    N_,L_,Et = comp_node_(root.node_[-1].node_, ave*rc) if (fi or ifi) else comp_link_(L2N(root.link_[-1].node_ if ifi else iL_), ave*rc)   # nested node_ or flat link_
+
+    if N_ and val_(Et, Et, ave*(rc+1), fi) > 0:
+        lev_N, lev_L = [],[]
+        lay = comb_H_(L_, root, fi=0)
+        if fi: root.derH += [[lay]]  # [mfork] feedback
+        else: root.derH[-1] +=[lay]  # dfork
+        pL_ = {l for n in N_ for l,_ in get_rim(n, fi)}
+        lEt = np.sum([l.Et for l in pL_], axis=0)
+        # m_fork:
+        if val_(lEt, lEt, ave*(rc+2), fi=1, coef=ccoef) > 0:  # or rc += 1?
+            if fi:
+                lev_N = cluster_N_(root, pL_, ave*(rc+2), rc=rc+2)  # combine distance segments
+                if lEt[0] > ave*(rc+3) * lEt[3] * ccoef:  # short links already in LC: rc+ 1 | LC_link_ / pL_?
+                    lev_C = cluster_C_(pL_, rc+3)  # mfork G,altG exemplars, +altG surround borrow, root.derH + 1|2 lays, agg++
+                else: lev_C = []
+                lev_N = comb_Gt(lev_N,lev_C,root)  # if CC_V > LC_V: delete root.node_[-2]:LC_, [-1] is CC_?
+                root.node_ += [lev_N]
+            else:
+                lev_N = cluster_L_(root, N_, ave*(rc+2), rc=rc+2)  # via llinks, no dist-nesting, no cluster_C_
+                root.link_ += [lev_N]
+            if lev_N:
+                if val_(lev_N.Et, lev_N.Et, ave*(rc+4), fi=1, coef=lcoef) > 0:  # or global _Et?
+                    # m_fork recursion:
+                    nG = cross_comp(root, rc=rc+4, ifi=fi)  # xcomp root.node_[-1]
+                    if nG: lev_N = nG  # incr nesting
+        # d_fork:
+        if val_(lEt, lEt, ave*(rc+2), fi=0, coef=lcoef) > 0:
+            # comp L_, d_fork recursion:
+            lG = cross_comp(root, rc+4, iL_=L_)
+            if lG: lev_L = lG
+        # combine:
+        lev_G = comb_Gt(lev_N, lev_L, root)  # L derH is already in the root?
+        if lev_G:
+            if lev_L:
+                root.link_ += [lev_L]; root.lnest = lev_L.nnest
+            if lev_N:
+                root.node_ += [lev_N]; root.nnest = lev_N.nnest
+            return lev_G
