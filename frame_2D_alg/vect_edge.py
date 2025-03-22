@@ -118,6 +118,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.nnest = kwargs.get('nnest',0)  # node_H if > 0, node_[-1] is top G_
         G.lnest = kwargs.get('lnest',0)  # link_H if > 0, link_[-1] is top L_
         G.node_ = kwargs.get('node_',[])
+        G.cent_ = kwargs.get('cent_',[])  # aligned node_ centroids, same nesting?
         G.link_ = kwargs.get('link_',[])  # internal links
         G.rim = kwargs.get('rim',[])  # external links
         G.nrim = kwargs.get('nrim',[])
@@ -354,21 +355,21 @@ def get_rim(N,fi): return N.rim if fi else N.rimt[0] + N.rimt[1]  # add nesting 
 
 def sum2graph(root, grapht, fi, minL=0, maxL=None):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
-    node_, link_, Et, Lay = grapht  # Et and Lay are summed from link_
-    n0 = node_[0]
+    node_, link_, Et, mfork = grapht  # Et and mfork are summed from link_
+    n0=node_[0]
     graph = CG(
-        fi=fi, Et= Et+n0.Et*icoef, root=root, node_=[],link_=link_, maxL=maxL, nnest=root.nnest, baseT=copy(n0.baseT), box=n0.box,
-        derTT=Lay.derTT, derH = [[Lay]] if fi else [Lay])  # higher layers are added by feedback, dfork added from comp_link_:
+        fi=fi, Et=Et+n0.Et*icoef, box=n0.box, baseT=copy(n0.baseT), derTT=mfork.derTT, root=root, node_=[],link_=link_, maxL=maxL, nnest=root.nnest,
+        derH = [[mfork]])  # higher layers are added by feedback, dfork added from comp_link_:
     for L in link_:
         L.root = graph  # reassign when L is node
         if not fi:  # add mfork as link.nodet(CL).root dfork
             LR_ = set([n.root for n in L.nodet if isinstance(n.root, CG)])  # skip frame, empty roots
             if LR_:
-                lay = reduce(lambda Lay, lay: Lay.add_lay(lay), L.derH, CLay())  # combine lL.derH
+                dfork = reduce(lambda F,f: F.add_lay(f), L.derH, CLay())  # combine lL.derH
                 for LR in LR_:  # lay0+= dfork
-                    if len(LR.derH[0])==2: LR.derH[0][1].add_lay(lay)  # direct root only
-                    else:                  LR.derH[0] += [lay.copy_(root=LR)]
-                    LR.derTT += lay.derTT
+                    if len(LR.derH[0])==2: LR.derH[0][1].add_lay(dfork)  # direct root only
+                    else:                  LR.derH[0] += [dfork.copy_(root=LR)]  # init by another node
+                    LR.derTT += dfork.derTT
     N_, yx_ = [],[]
     for i, N in enumerate(node_):
         fc = 0
@@ -382,7 +383,7 @@ def sum2graph(root, grapht, fi, minL=0, maxL=None):  # sum node and link params 
         N.root = graph
         yx_ += [N.yx]
         if i:
-            graph.baseT+=N.baseT; graph.Et+=N.Et*icoef; graph.box=extend_box(graph.box,N.box)
+            graph.Et+=N.Et*icoef; graph.baseT+=N.baseT; graph.box=extend_box(graph.box,N.box)
             # not in CL
     graph.node_= N_  # nodes or roots, link_ is still current-dist links only?
     yx = np.mean(yx_, axis=0)

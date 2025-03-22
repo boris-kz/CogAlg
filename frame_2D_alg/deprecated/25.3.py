@@ -153,6 +153,8 @@ def cross_comp(root, fn, rc):  # form agg_Level by breadth-first node_,link_ cro
                      else:  # L.nodet is CL
                          if len(LR.derH) == 2: LR.derH[1].add_lay(lay)  # direct root only
                          else:                 LR.derH += [lay.copy_(root=LR)]
+                         
+    L.derH = [reduce(lambda Lay, lay: Lay.add_lay(lay), L.derH, CLay(root=L))] # combine derH into single lay
 '''
 
 def centroid_M_(m_, M, ave):  # adjust weights on attr matches | diffs, recompute with sum
