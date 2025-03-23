@@ -318,3 +318,33 @@ def cross_comp3(root, rc, ifi=0, iL_=[]):  # recursion count, form agg_Level by 
             if lev_N:
                 root.node_ += [lev_N]; root.nnest = lev_N.nnest
             return lev_G
+
+def comb_Gt(nG,lG, root):
+    if nG:
+       if lG: Gt = sum_G_([nG,lG], merge=1)  # merge forks
+       else:  Gt = copy_(nG); nG.root=root; nG.node=[nG,[]]
+    elif lG:  Gt = copy_(lG); nG.root=root; nG.node=[[],lG]
+    else: Gt = []
+    return Gt
+
+def add_merge_H(H, h, root, rev=0):  # add derHs between level forks
+
+    for i, (Lay,lay) in enumerate(zip_longest(H,h)):  # different len if lay-selective comp
+        if lay:
+            if isinstance(lay, list):  # merge forks
+                for j, fork in zip((1,0), lay):
+                    if j: layt = fork.copy_(root=fork.root, rev=rev)  # create
+                    else: layt.add_lay(fork,rev=rev)  # merge
+                lay = layt
+            if Lay:
+                if isinstance(Lay,list):  # merge forks
+                    for k, fork in zip((1,0), Lay):
+                        if k: layt = fork.copy_(root=fork.root, rev=rev)
+                        else: layt.add_lay(fork,rev=rev)
+                    Lay = layt
+                    H[i] = Lay
+                Lay.add_lay(lay,rev=rev)
+            else:
+                H += [lay.copy_(root=root,rev=rev)]
+            root.derTTe += lay.derTT; root.Et += lay.Et
+
