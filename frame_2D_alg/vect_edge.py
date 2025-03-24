@@ -156,14 +156,15 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         # add med, rimt, extH in der+
     def __bool__(l): return bool(l.nodet)
 
-ave, avd, arn, aI, aveB, aveR, Lw, ave_dist, int_w, loop_w = 10, 10, 1.2, 100, 100, 3, 5, 10, 2, 5  # opportunity costs
+ave, avd, arn, aI, aveB, aveR, Lw, ave_dist, int_w, loop_w, clust_w = 10, 10, 1.2, 100, 100, 3, 5, 10, 2, 5, 10  # opportunity costs
 wM, wD, wN, wO, wI, wG, wA, wL = 10, 10, 20, 20, 1, 1, 20, 20  # der params higher-scope weights = reversed relative estimated ave?
 w_t = np.ones((2,8))  # fb weights per derTT, adjust in agg+
 
 def vect_root(frame, rV=1, ww_t=[]):  # init for agg+:
     if np.any(ww_t):
-        global ave, avd, arn, aveB, aveR, Lw, ave_dist, int_w, loop_w, wM, wD, wN, wO, wI, wG, wA, wL, w_t
-        ave, avd, arn, aveB, aveR, Lw, ave_dist, int_w, loop_w = np.array([ave,avd,arn,aveB, aveR,Lw,ave_dist,int_w,loop_w]) / rV  # projected value change
+        global ave, avd, arn, aveB, aveR, Lw, ave_dist, int_w, loop_w, clust_w, wM, wD, wN, wO, wI, wG, wA, wL, w_t
+        ave, avd, arn, aveB, aveR, Lw, ave_dist, int_w, loop_w, clust_w = (
+        np.array([ave,avd,arn,aveB, aveR,Lw,ave_dist,int_w,loop_w, clust_w]) / rV)  # projected value change
         w_t = np.array( [np.array([wM,wD,wN,wO,wI,wG,wA,wL]), np.array([wM,wD,wN,wO,wI,wG,wA,wL])]) * ww_t  # or dw_ ~= w_/ 2?
         # derTT w_
     blob_ = unpack_blob_(frame)
@@ -172,12 +173,12 @@ def vect_root(frame, rV=1, ww_t=[]):  # init for agg+:
     for blob in blob_:
         if not blob.sign and blob.G > aveB * blob.root.olp:
             edge = slice_edge(blob, rV)
-            if edge.G * (len(edge.P_)-1) > ave:  # eval PP
+            if edge.G*((len(edge.P_)-1)*Lw) > ave*edge.n:  # or add edge.Et?
                 comp_slice(edge, rV, np.array([(*ww_t[0][:2],*ww_t[0][4:]),(*ww_t[0][:2],*ww_t[1][4:])]) if ww_t else [])  # to scale vert
-                if edge.Et[0] * (len(edge.node_)-1)*(edge.rng+1) > ave:
-                    G_ = [PP2G(PP)for PP in edge.node_ if PP[-1][0] > ave]  # Et, no altGs
-                    if edge.Et[0] * len(G_) * Lw > ave:  # no comp node_,link_,PPd_
-                        edge_ += [cluster_edge(G_, frame)]  # 1layer derH, alt: converted adj_blobs of edge blob | alt_P_?
+                Et = edge.Et
+                if Et[0] *((len(edge.node_)-1)*(edge.rng+1)*Lw) > ave*Et[2]*clust_w:  # eval PP:
+                    G_ = [PP2G(PP)for PP in edge.node_ if PP[-1][0] > ave*PP[-1][2]]  # Et, no comp node_,link_,PPd_
+                    edge_ += [cluster_edge(G_, frame)]  # 1layer derH, alt: converted adj_blobs of edge blob | alt_P_?
     # unpack edges:
     Lay = [CLay(root=frame), CLay(root=frame)]
     PP_,G_ = [],[]
@@ -189,7 +190,7 @@ def vect_root(frame, rV=1, ww_t=[]):  # init for agg+:
     frame.derH = [Lay]
     frame.node_= [PP_]
     if G_:
-        frame.node_ += [sum_G_(G_)]
+        frame.node_ += [sum_N_(G_)]
         frame.nnest = 1
     frame.baseT = np.sum([G.baseT for G in PP_ + G_], axis=0)
     frame.derTT = np.sum([G.derTT for G in PP_ + G_], axis=0)
@@ -224,11 +225,11 @@ def cluster_edge(iG_, frame):  # edge is CG but not a connectivity cluster, just
     # mval -> lay:
     if N_ and val_(Et, Et, ave, fi=1) > 0:
         lay = [sum_lay_(L_, frame)]  # [mfork]
-        G_ = cluster_PP_(copy(N_), fi=1) if Et[0] * len(N_) * Lw > ave else []
+        G_ = cluster_PP_(copy(N_), fi=1) if Et[0] * (len(N_)-1)*Lw > ave*Et[2]*clust_w else []
 
         return [N_,G_,lay]
 
-def val_(Et, _Et, ave, coef=1, fi=1):  # m|d cluster|batch eval, + cross|root _Et projection
+def val_(Et, _Et, ave, coef=1, fi=1):  # m+d cluster | cross_comp eval, + cross|root _Et projection
 
     m, d, n, o = Et; _m,_d,_n,_o = _Et  # cross-fork induction of root Et alt, same overlap?
 
@@ -238,7 +239,8 @@ def val_(Et, _Et, ave, coef=1, fi=1):  # m|d cluster|batch eval, + cross|root _E
     if fi: val = m + d_ave - d_loc  # match + proj surround val - blocking val, * decay?
     else:  val = d_ave + d_loc  # diff borrow val, generic + specific
 
-    return val - ave * coef * n * o
+    return val - ave * coef * n * o  # simplified: np.add(Et[:2]) > ave * np.multiply(Et[2:])
+
 
 def comp_node_(_N_, ave, L=0):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et, ~ graph CNN without backprop
 
@@ -264,9 +266,9 @@ def comp_node_(_N_, ave, L=0):  # rng+ forms layer of rim and extH per N, append
             if _nrim & nrim:  # indirectly connected Gs,
                 continue     # no direct match priority?
             # dist vs. radii * induction, mainly / extH?
-            weighted_max = ave_dist * ((radii/aveR * int_w**3) * ((_G.Et[0]/_G.Et[0])+(G.Et[0]/G.Et[0])/2) /ave)  # all ratios
+            weighted_max = ave_dist * ((radii/aveR * int_w**3) * (_G.Et[0]/_G.Et[0]+G.Et[0]/G.Et[0])/2 / (ave*(_G.Et[2]+G.Et[2])))  # all ratios
             if dist < weighted_max:   # no density, ext V is not complete
-                Link = comp_N(_G,G, ave, fi=1, angle=[dy,dx], dist=dist, fshort=dist<weighted_max/2)  # draft for cluster_N_?
+                Link = comp_N(_G,G, ave, fi=1, angle=[dy,dx], dist=dist, fshort=dist<weighted_max/2)
                 L_ += [Link]  # include -ve links
                 if Link.Et[0] > ave * Link.Et[0] * loop_w:
                     N_.update({_G,G}); Et += Link.Et; _G.add,G.add = 1,1
@@ -342,7 +344,7 @@ def comp_N(_N,N, ave, fi, angle=None, dist=None, dir=1, fshort=1):  # compare li
             Link.altL = comp_N(_N.altG, N.altG, ave*2, fi=0)
             Et += Link.altL.Et
     Link.Et = Et
-    if Et[0] > ave * Et[3]:
+    if Et[0] > ave * Et[2]:  # | both forks: np.add(Et[:2]) > ave * np.multiply(Et[2:])
         for rev, node in zip((0,1), (N,_N)):  # reverse Link direction for
             if fi: node.rim += [(Link,dir)]
             else:  node.rimt[1-rev] += [(Link,rev)]  # opposite to _N,N dir
@@ -362,7 +364,7 @@ def sum2graph(root, grapht, fi, minL=0, maxL=None):  # sum node and link params 
     for L in link_:
         L.root = graph  # reassign when L is node
         if not fi:  # add mfork as link.nodet(CL).root dfork
-            LR_ = set([n.root for n in L.nodet if isinstance(n.root, CG)])  # skip frame, empty roots
+            LR_ = set([n.root for n in L.nodet if isinstance(n.root,CG)]) # skip frame, empty roots
             if LR_:
                 dfork = reduce(lambda F,f: F.add_lay(f), L.derH, CLay())  # combine lL.derH
                 for LR in LR_:  # lay0+= dfork
@@ -456,25 +458,22 @@ def comp_H(H,h, rn, root, Et, fi):  # one-fork derH if not fi, else two-fork der
             derH += [dLay]
     return derH
 
-def sum_G_(node_, G=None, fi=1):
+def sum_N_(node_, G=None, root=None, fi=1):
 
     if G is None:
-        G = copy_(node_[0]); G.node_ = [node_[0]]; G.link_ = []; node_=node_[1:]; G.fi = fi
-    for n in node_:
-        if n not in G.node_: G.node_ += [n]  # prevent packing same n in alts
-        G.baseT += n.baseT; G.derTT += n.derTT; G.Et += n.Et;  G.yx += n.yx
-        if G.fi:
+        G = copy_(node_[0]); G.node_=node_; G.link_=[]; G.fi=fi; G.root=root
+    for n in node_[1:]:
+        G.baseT+=n.baseT; G.derTT+=n.derTT; G.Et+=n.Et; G.yx+=n.yx; n.root=G; G.box=extend_box(G.box, n.box)
+        if fi:
             G.derTTe += n.derTTe; G.aRad += n.aRad
             if n.extH:
                 add_H(G.extH, n.extH, root=G, fi=0)
         if n.derH:
-            add_H(G.derH, n.derH, root=G, fi=1)
+            add_H(G.derH, n.derH, root=G, fi=fi)
         G.nnest = max(G.nnest, n.nnest+1)
         G.lnest = max(G.lnest, n.lnest)
-        G.box = extend_box( G.box, n.box)  # extended per separate node_ in centroid
-
-    if not fi:  # node_ is CLs
-        for lay in G.derH: lay[:] = [lay]  # add nesting
+    if not fi:
+        for lay in G.derH: lay[:] = [lay]  # nest
     return G
 
 def frame2G(G, **kwargs):

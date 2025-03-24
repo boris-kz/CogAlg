@@ -348,3 +348,27 @@ def add_merge_H(H, h, root, rev=0):  # add derHs between level forks
                 H += [lay.copy_(root=root,rev=rev)]
             root.derTTe += lay.derTT; root.Et += lay.Et
 
+def comb_altG_(G_, ave, rc=1):  # combine contour G.altG_ into altG (node_ defined by root=G), for agg+ cross-comp
+    # internal and external alts: different decay / distance?
+    # background + contour?
+    for G in G_:
+        if isinstance(G,list): continue
+        if G.altG:
+            if G.altG.node_:
+                G.altG = sum_N_(G.altG.node_)
+                G.altG.node_ = [G.altG]  # formality for single-lev_G
+                G.altG.root=G; G.altG.fi=0; G.altG.m=0
+                if val_(G.altG.Et, G.Et, ave):  # alt D * G rM
+                    cross_comp(G.altG, rc, G.altG.node_, fi=1)  # adds nesting
+        else:  # sum neg links
+            link_,node_,derH, Et = [],[],[], np.zeros(4)
+            for link in G.link_:
+                if val_(link.Et, G.Et, ave) > 0:  # neg link
+                    link_ += [link]  # alts are links | lGs
+                    node_ += [n for n in link.nodet if n not in node_]
+                    Et += link.Et
+            if link_ and val_(Et, G.Et, ave, coef=10) > 0:  # altG-specific coef for sum neg links (skip empty Et)
+                altG = CG(root=G, Et=Et, node_=node_, link_=link_, fi=0); altG.m=0  # other attrs are not significant
+                altG.derH = sum_H(altG.link_, altG, fi=0)   # sum link derHs
+                altG.derTT = np.sum([link.derTT for link in altG.link_],axis=0)
+                G.altG = altG
