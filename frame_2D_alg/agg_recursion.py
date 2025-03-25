@@ -66,20 +66,23 @@ def cross_comp(root, rc, iN_, fi=1):  # rc: recursion count, form agg_Level by b
                 nG = cluster_L_(root, N_, ave*(rc+2), rc=rc+2)  # via llinks, no dist-nesting, no cluster_C_
                 node_ = nG.node_ if nG else []
             if node_:
-                if val_(nG.Et, nG.Et, ave*(rc+4), fi=1, coef=loop_w) > 0:  # or global _Et?
+                nG.node_ = [copy_(nG)]  # add node_ nesting, nG may be accumulated in recursion:
+                if val_(nG.Et, nG.Et, ave*(rc+4), fi=1, coef=loop_w) > 0:  # | global _Et?
                     cross_comp(nG, rc=rc+4, iN_=node_)  # recursive cross_comp N_
+        if nG:
+            root.cG = cG  # precondition for nG, pref cluster node.root LCs within CC, aligned and same nest as node_?
+            root.node_ += [nG]; root.nnest = nG.nnest  # unpack node_[1] and cent_[1] nnest times:
+        ''' node_[0].node_: base nodes,
+            node_[1].node_[0].node_: next-level nodes,
+            node_[1].node_[1].node_[0].node_: next-next level nodes...
+            get Cs via node.rC_ or clearer with flat node_[0].cG, no root.cG
+        '''
         # d_fork:
         if val_(lEt,lEt, ave*(rc+2), fi=0, coef=loop_w) > 0:
             L2N(L_)
-            lG = sum_N_(L_)
+            lG = sum_N_(L_, fi=0); lG.node_ = [copy_(lG)]
             cross_comp(lG, rc+4, iN_=L_, fi=0)  # recursive cross_comp L_
-            if lG.nnest:
-                root.link_ = [lG, *lG.node_]; root.lnest = lG.nnest
-        if nG:
-            root.nnest = nG.nnest
-            root.node_ = [nG, *nG.node_] if isinstance(root,CG) else [*root.node_, nG, *nG.node_]  # keep PPs in frame
-            root.cent_ = [cG, *nG.cent_]  # precondition for nG, pref cluster node.root LCs within CC, aligned and same nest as node_?
-
+            root.link_ += [lG]; root.lnest = lG.nnest  # unpack link_[1] lnest times
 
 def comp_link_(iL_, ave):  # comp CLs via directional node-mediated link tracing: der+'rng+ in root.link_ rim_t node rims
 
@@ -129,6 +132,7 @@ def comp_link_(iL_, ave):  # comp CLs via directional node-mediated link tracing
             else: break
         else: break
     return out_L_, LL_, ET
+
 ''' 
  Connectivity clustering (LC) by short links (less interference), with comp_N forming new derLay, partly overlapping:
  Centroid clustering (CC) by any links, regardless of local structure, long links form only match via base_comp?
@@ -137,7 +141,7 @@ def comp_link_(iL_, ave):  # comp CLs via directional node-mediated link tracing
  LC terminates at contour alt_Gs, with next-level cross-comp between new core+contour clusters.
 
  LC is mainly generative: complexity of new derivatives and structured composition levels is greater than compression by LC 
- CC is strictly compressive, by similarity, no new diff representation. 
+ CC is strictly compressive, by similarity, with same syntax as its nodes, no new diff representation. 
 '''
 def cluster_N_(root, L_, ave, rc):  # top-down segment L_ by >ave ratio of L.dists
 
@@ -232,7 +236,7 @@ def cluster_C_(L_, rc):  # 0 nest gap from cluster_edge: same derH depth in root
         sum_N_(node_[1:], G=C)  # no extH, extend_box
         alt_ = [n.altG for n in node_ if n.altG]
         if alt_:
-            sum_N_(alt_, G=C.altG, fi=0)  # no m, M, L in altGs
+            sum_N_(alt_, G=C.altG, fi=1)  # no m, M, L in altG
         k = len(node_)
         for n in (C, C.altG):
             n.Et/=k; n.baseT/=k; n.derTT/=k; n.aRad/=k; n.yx /= k
@@ -271,7 +275,7 @@ def cluster_C_(L_, rc):  # 0 nest gap from cluster_edge: same derH depth in root
                 if dM > ave: C = sum_C(list(C.node_))  # recompute centroid, or ave * iterations: cost increase?
                 else: break
                 r += 1
-        # filter and assign root:
+        # filter and assign root in rC_: flat, overlapping within node_ level:
         C_[:] = [C for C in C_ if C not in remove_ and ([n.rC_.append(C) for n in C.node_] or True)]
 
     ave = globals()['ave'] * rc  # recursion count
@@ -306,9 +310,9 @@ def layer_C_(root, L_, rc):  # node-parallel cluster_C_ in mediation layers, pru
     pass
 
 def comb_altG_(G_, ave, rc=1):  # combine contour G.altG_ into altG (node_ defined by root=G),
-    # internal vs. external alts: different decay / distance, background + contour?
 
-    for G in G_:  #  if isinstance(G,list): continue?
+    # internal vs. external alts: different decay / distance, background + contour?
+    for G in G_:
         if G.altG:
             if G.altG.node_:
                 altG = sum_N_(G.altG.node_,fi=0)
@@ -318,9 +322,9 @@ def comb_altG_(G_, ave, rc=1):  # combine contour G.altG_ into altG (node_ defin
                     cross_comp(G.altG, rc, G.altG.node_, fi=1)  # adds nesting
         else:  # sum neg links
             negL_ = [L for L in G.link_ if val_(L.Et, G.Et, ave) < 0]
-            if negL_ and val_(np.sum([l.Et for l in negL_]), G.Et, ave, coef=10, fi=0) > 0:
-                altG = sum_N_(negL_,fi=1)
-                G.altG = copy_(altG); G.altG(node_=[altG]); G.altG.root=G
+            if negL_ and val_(np.sum([l.Et for l in negL_],axis=0), G.Et, ave, coef=10, fi=0) > 0:
+                altG = sum_N_(negL_,fi=0)
+                G.altG = copy_(altG); G.altG.node_=[altG]; G.altG.root=G
 
 def norm_H(H, n):
     for lay in H:
