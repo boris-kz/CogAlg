@@ -372,3 +372,48 @@ def comb_altG_(G_, ave, rc=1):  # combine contour G.altG_ into altG (node_ defin
                 altG.derH = sum_H(altG.link_, altG, fi=0)   # sum link derHs
                 altG.derTT = np.sum([link.derTT for link in altG.link_],axis=0)
                 G.altG = altG
+
+def cross_comp4(root, rc, iN_, fi=1):  # rc: recursion count, form agg_Level by breadth-first node_,link_ cross-comp, clustering, recursion
+
+    N_,L_,Et = comp_node_(iN_, ave*rc) if fi else comp_link_(iN_, ave*rc)  # flat node_ or link_
+
+    if N_ and val_(Et, Et, ave*(rc+1), fi) > 0:  # | np.add(Et[:2]) > (ave+ave_d) * np.multiply(Et[2:])?
+        cG,nG,lG = [],[],[]
+
+        lay = comb_H_(L_, root, fi=0)
+        if fi: root.derH += [[lay]]  # [mfork] feedback
+        else:  root.derH[-1] += [lay]  # dfork feedback
+        pL_ = {l for n in N_ for l,_ in get_rim(n, fi)}
+        lEt = np.sum([l.Et for l in pL_], axis=0)
+        # m_fork:
+        if val_(lEt,lEt, ave*(rc+2), 1, clust_w) > 0:  # or rc += 1?
+            node_ = []
+            if fi:
+                cG = cluster_C_(pL_,rc+2)  # exemplar CCs, same derH, select to form partly overlapping LCs:
+                if cG:
+                    if val_(cG.Et, cG.Et, ave*(rc+3), 1, clust_w) > 0:  # link-cluster CC nodes via short rim Ls:
+                        short_L_ = {L for C in cG.node_ for n in C.node_ for L,_ in n.rim if L.L < ave_dist}
+                        nG = cluster_N_(cG, short_L_, ave*(rc+3), rc+3) if short_L_ else []
+                        node_ = nG.node_ if nG else []
+                    else: nG = []
+            else:
+                nG = cluster_L_(root, N_, ave*(rc+2), rc=rc+2)  # via llinks, no dist-nesting, no cluster_C_
+                node_ = nG.node_ if nG else []
+            if node_:
+                nG.node_ = [copy_(nG)]  # add node_ nesting, nG may be accumulated in recursion:
+                if val_(nG.Et, nG.Et, ave*(rc+4), fi=1, coef=loop_w) > 0:  # | global _Et?
+                    cross_comp(nG, rc=rc+4, iN_=node_)  # recursive cross_comp N_
+        if nG:
+            root.cG = cG  # precondition for nG, pref cluster node.root LCs within CC, aligned and same nest as node_?
+            root.node_ += [nG]; root.nnest = nG.nnest  # unpack node_[1] and cent_[1] nnest times:
+        ''' node_[0].node_: base nodes,
+            node_[1].node_[0].node_: next-level nodes,
+            node_[1].node_[1].node_[0].node_: next-next level nodes...
+            get Cs via node.rC_ or clearer with flat node_[0].cG, no root.cG '''
+        # d_fork:
+        if val_(lEt,lEt, ave*(rc+2), fi=0, coef=loop_w) > 0:
+            L2N(L_)
+            lG = sum_N_(L_, fi=0); lG.node_ = [copy_(lG)]
+            cross_comp(lG, rc+4, iN_=L_, fi=0)  # recursive cross_comp L_
+            root.link_ += [lG]; root.lnest = lG.nnest  # unpack link_[1] lnest times
+

@@ -5,7 +5,7 @@ from itertools import zip_longest
 from multiprocessing import Pool, Manager
 from frame_blobs import frame_blobs_root, intra_blob_root, imread
 from slice_edge import comp_angle
-from vect_edge import base_comp, comp_N, sum_N_, comb_H_, sum_H, copy_, comp_node_, sum2graph, get_rim, CG,CL,CLay, vect_root, val_
+from vect_edge import base_comp, comp_N, sum_N_, add_N, comb_H_, sum_H, copy_, comp_node_, sum2graph, get_rim, CG,CL,CLay, vect_root, val_
 '''
 notation:
 prefix f: flag
@@ -53,36 +53,31 @@ def cross_comp(root, rc, iN_, fi=1):  # rc: recursion count, form agg_Level by b
         lEt = np.sum([l.Et for l in pL_], axis=0)
         # m_fork:
         if val_(lEt,lEt, ave*(rc+2), 1, clust_w) > 0:  # or rc += 1?
-            node_ = []
             if fi:
                 cG = cluster_C_(pL_,rc+2)  # exemplar CCs, same derH, select to form partly overlapping LCs:
                 if cG:
-                    if val_(cG.Et, cG.Et, ave*(rc+3), 1, clust_w) > 0:  # link-cluster CC nodes via short rim Ls:
-                        short_L_ = {L for C in cG.node_ for n in C.node_ for L,_ in n.rim if L.L < ave_dist}
-                        nG = cluster_N_(cG, short_L_, ave*(rc+3), rc+3) if short_L_ else []
-                        node_ = nG.node_ if nG else []
-                    else: nG = []
+                    if val_(cG.Et, cG.Et, ave*(rc+3), 1, clust_w) > 0:
+                        sL_ = {L for C in cG.node_ for n in C.node_ for L,_ in n.rim if L.L < ave_dist}
+                        if sL_: nG = cluster_N_(cG, sL_, ave*(rc+3), rc+3)  # link-cluster CC nodes via short rim Ls
             else:
                 nG = cluster_L_(root, N_, ave*(rc+2), rc=rc+2)  # via llinks, no dist-nesting, no cluster_C_
-                node_ = nG.node_ if nG else []
-            if node_:
-                nG.node_ = [copy_(nG)]  # add node_ nesting, nG may be accumulated in recursion:
+            if nG:
                 if val_(nG.Et, nG.Et, ave*(rc+4), fi=1, coef=loop_w) > 0:  # | global _Et?
-                    cross_comp(nG, rc=rc+4, iN_=node_)  # recursive cross_comp N_
+                    cross_comp(nG, rc=rc+4, iN_=nG.H)  # H used as node_, recursive cross_comp N_
         if nG:
-            root.cG = cG  # precondition for nG, pref cluster node.root LCs within CC, aligned and same nest as node_?
-            root.node_ += [nG]; root.nnest = nG.nnest  # unpack node_[1] and cent_[1] nnest times:
-        ''' node_[0].node_: base nodes,
-            node_[1].node_[0].node_: next-level nodes,
-            node_[1].node_[1].node_[0].node_: next-next level nodes...
-            get Cs via node.rC_ or clearer with flat node_[0].cG, no root.cG
-        '''
+            root.H += [[cG]]  # init lev
+            add_N(root,nG); root.H[-1] += [nG.H[0]]  # append higher levs in the end, if any
         # d_fork:
         if val_(lEt,lEt, ave*(rc+2), fi=0, coef=loop_w) > 0:
             L2N(L_)
-            lG = sum_N_(L_, fi=0); lG.node_ = [copy_(lG)]
+            lG = sum_N_(L_)
             cross_comp(lG, rc+4, iN_=L_, fi=0)  # recursive cross_comp L_
-            root.link_ += [lG]; root.lnest = lG.nnest  # unpack link_[1] lnest times
+            if not nG: root.H += [[],[]]  # empty cG and nG
+            add_N(root,lG); root.H[-1] += [lG]
+
+        if nG and len(nG.H) > 1:  # full higher levs, in nG only?
+            root.H += nG.H[1:]
+
 
 def comp_link_(iL_, ave):  # comp CLs via directional node-mediated link tracing: der+'rng+ in root.link_ rim_t node rims
 
@@ -421,13 +416,14 @@ def agg_H_seq(focus, image, _nestt=(1,0), rV=1, _rv_t=[]):  # recursive level-fo
     vect_root(frame, rV, _rv_t)
     if not frame.nnest:
         return frame
-    comb_altG_(frame.node_[-1].node_, ave*2)  # PP graphs in frame.node_[2]
+    comb_altG_(frame.H[-1], ave*2)  # PP graphs in frame.node_[2]
     # forward agg+:
-    cross_comp(frame, rc=1, iN_=frame.node_[-1].node_)  # node_+= edge.node_
+    cross_comp(frame, rc=1, iN_=frame.H[-1][1].H)  # node_+= edge.node_
     rM,rD = 1,1
     # sum derTT coefs: m_,d_ [M,D,n,o, I,G,A,L] / Et, baseT, dimension
     rv_t = np.ones((2,8))  # d val is borrowed from pair m in proportion to d mag, scaled by fb:
     # feedback weights:
+    # not revised:
     for fd, nest,_nest, Q in zip((0,1), (frame.nnest,frame.lnest), _nestt, (frame.node_[1:],frame.link_)):  # skip blob_
         if nest==_nest: continue  # no new nesting
         hG = Q[-1]  # top level, no feedback

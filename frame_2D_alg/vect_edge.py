@@ -124,8 +124,9 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.nrim = kwargs.get('nrim',[])
     def __bool__(G): return bool(G.node_)  # never empty
 
-def copy_(N):
-    C = CG()
+def copy_(N, root=None):
+    C = CG(root=root)
+
     for name, value in N.__dict__.items():
         val = getattr(N, name)
         if name == '_id' or name == "Ct_": continue  # skip id and Ct_
@@ -267,7 +268,8 @@ def comp_node_(_N_, ave, L=0):  # rng+ forms layer of rim and extH per N, append
             if _nrim & nrim:  # indirectly connected Gs,
                 continue     # no direct match priority?
             # dist vs. radii * induction, mainly / extH?
-            weighted_max = ave_dist * ((radii/aveR * int_w**3) * (_G.Et[0]/_G.Et[0]+G.Et[0]/G.Et[0])/2 / (ave*(_G.Et[2]+G.Et[2])))  # all ratios
+            (_m,_,_n,_),(m,_,n,_) = _G.Et,G.Et
+            weighted_max = ave_dist * ((radii/aveR * int_w**3) * (_m/_n + m/n)/2 / (ave*(_n+n)))  # all ratios
             if dist < weighted_max:   # no density, ext V is not complete
                 Link = comp_N(_G,G, ave, fi=1, angle=[dy,dx], dist=dist, fshort=dist<weighted_max/2)
                 L_ += [Link]  # include -ve links
@@ -459,25 +461,36 @@ def comp_H(H,h, rn, root, Et, fi):  # one-fork derH if not fi, else two-fork der
             derH += [dLay]
     return derH
 
-def sum_N_(node_, G=None, root=None, fi=1):  # form node_G, cent_G, or link_G
+def sum_N_(node_, root_G=None, root=None):  # form G
 
-    if G is None:
-        G = copy_(node_[0]); G.node_=node_; G.link_=[]; G.fi=fi; G.root=root
-    for n in node_[1:]:
-        G.baseT+=n.baseT; G.derTT+=n.derTT; G.Et+=n.Et; G.yx+=n.yx; n.root=G; G.box=extend_box(G.box, n.box)
-        if hasattr(n,'derTTe'):
-            G.derTTe += n.derTTe; G.aRad += n.aRad
-            if n.extH:
-                add_H(G.extH, n.extH, root=G, fi=0)
-        if isinstance(n,CG):
-            G.nnest = max(G.nnest, n.nnest+1)
-            G.lnest = max(G.lnest, n.lnest)
-        if n.derH:
-            add_H(G.derH, n.derH, root=G, fi=fi)
-
+    fi = isinstance(node_[0],CG)
+    if root_G: G = root_G
+    else:
+        g = node_.pop(0)
+        G = copy_(g); G.node_=[g]; G.fi=fi; G.root=root  # no link_?
+    for n in node_:
+        add_N(G,n)
     if not fi:
         G.derH = [[lay] for lay in G.derH]  # nest
     return G
+
+def add_N(N,n, fi=1, root=None):
+
+    N.baseT+=n.baseT; N.derTT+=n.derTT; N.Et+=n.Et; N.yx+=n.yx; N.box=extend_box(N.box, n.box)
+    if hasattr(n,'derTTe'):
+        N.derTTe += n.derTTe; N.aRad += n.aRad
+        if n.extH:
+            add_H(N.extH, n.extH, root=N, fi=0)
+        if fi:  # no H in CL?
+            for i, (Lev,lev) in zip_longest(N.H,n.H):
+                if lev:
+                    if Lev:  # cG,nG,lG
+                        for G,g in zip(Lev,lev): add_N(G,g)
+                    else: N.H += [lev]
+                    if root:
+                        for g in lev: add_N(root,g)
+        if n.derH:
+            add_H(N.derH, n.derH, root=N, fi=fi)
 
 def frame2G(G, **kwargs):
     blob2G(G, **kwargs)
@@ -503,7 +516,6 @@ def blob2G(G, **kwargs):
     G.maxL = 0  # nesting in nodes
     G.aRad = 0  # average distance between graph center and node center
     G.altG = []  # or altG? adjacent (contour) gap+overlap alt-fork graphs, converted to CG
-    G.cent_ = []  # aligned node_ centroids
     return G
 
 def PP2G(PP):
