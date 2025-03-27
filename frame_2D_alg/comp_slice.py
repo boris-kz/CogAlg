@@ -64,11 +64,11 @@ def comp_slice(edge, rV=1, ww_t=[]):  # root function
     global ave, avd, wM, wD, wI, wG, wA, wL, ave_L, ave_PPm, ave_PPd, w_t
     ave, avd, ave_L, ave_PPm, ave_PPd = np.array([ave, avd, ave_L, ave_PPm, ave_PPd]) / rV  # projected value change
     if np.any(ww_t):
-        w_t = np.array([np.array([wM,wD,wI,wG,wA,wL]),np.array([wM,wD,wI,wG,wA,wL])]) * ww_t
+        w_t = np.array([[wM, wD, wI, wG, wA, wL]] * 2) * ww_t
         # der weights
-    edge.Et, edge.vertuple = np.zeros(4), np.array([np.zeros(6), np.zeros(6)])  # (M, D, n, o), (m_,d_)
+    edge.Et, edge.vertuple = np.zeros(4), np.zeros((2,6))  # (M, D, n, o), (m_,d_)
     for P in edge.P_:  # add higher links
-        P.vertuple = np.array([np.zeros(6), np.zeros(6)])
+        P.vertuple = np.zeros((2,6))
         P.rim = []; P.lrim = []; P.prim = []
 
     comp_P_(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
@@ -152,7 +152,7 @@ def sum2PP(root, P_, dP_, Et):  # sum links in Ps and Ps in PP
     fd = isinstance(P_[0],CdP)
     if fd: latuple = np.sum([n.latuple for n in set([n for dP in P_ for n in  dP.nodet])], axis=0)
     else:  latuple = np.array([.0,.0,.0,.0,.0, np.zeros(2)], dtype=object)
-    vert = np.array([np.zeros(6),np.zeros(6)])
+    vert = np.zeros((2,6))
     link_ = []
     if dP_:  # add uplinks:
         S,A = 0,[0,0]
@@ -201,7 +201,7 @@ def comp_vert(_i_,i_, rn=.1, dir=1):  # i_ is ds, dir may be -1
     _a_,a_ = np.abs(_i_), np.abs(i_)
     m_ = np.divide( np.minimum(_a_,a_), reduce(np.maximum, [_a_, a_, 1e-7]))  # rms
     m_[(_i_<0) != (d_<0)] *= -1  # m is negative if comparands have opposite sign
-    M = sum(m_ * w_t[0]); D = sum(d_ * w_t[1])
+    M = m_ @ w_t[0]; D = d_ @ w_t[1]  # M = sum(m_ * w_t[0]); D = sum(d_ * w_t[1])
 
     return np.array([m_,d_]), np.array([M, D])  # Et
 ''' 
