@@ -956,3 +956,4 @@ if __name__ == "__main__":
     frame = frame_blobs_root(image)
     intra_blob_root(frame)
     vect_root(frame)
+    # PP_ = frame.H[0][0]; PPg = sum_N_(PP_); Et,box,baseT = PPg.Et, PPg.box, PPg.baseT  # 1st-level node_
