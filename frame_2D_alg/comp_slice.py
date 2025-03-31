@@ -70,55 +70,11 @@ def comp_slice(edge, rV=1, ww_t=[]):  # root function
     for P in edge.P_:  # add higher links
         P.vertuple = np.zeros((2,6))
         P.rim = []; P.lrim = []; P.prim = []
-
+    edge.dP_ = []
     comp_P_(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
     edge.node_ = form_PP_(edge, edge.P_, fd=0)  # all Ps are converted to PPs
-
-    for PPm in edge.node_:  # eval sub-clustering, not recursive
-        P_, link_, vertuple, latuple, A, S, box, yx, Et = PPm[1:]   # or move Et up for simpler unpack?
-        if len(link_) > ave_L and sum(vertuple[1]) > ave_PPd:
-            comp_dP_(PPm)
-            link_[:] = form_PP_(PPm, link_, fd=1)  # add PPds within PPm link_
-            Et += np.sum([PPd[-1] for PPd in link_], axis=0)
-        edge.vertuple += vertuple
-        edge.Et += Et
-
-def comp_P_(edge):  # form links from prelinks
-
-    edge.rng = 1
-    for _P, pre_ in edge.pre__.items():
-        for P in pre_:  # prelinks
-            dy,dx = np.subtract(P.yx,_P.yx)  # between node centers
-            if abs(dy)+abs(dx) <= edge.rng * 2: # <max Manhattan distance
-                angle=[dy,dx]; distance=np.hypot(dy,dx)
-                derLay, et = comp_latuple(_P.latuple, P.latuple, len(_P.dert_), len(P.dert_))
-                _P.rim += [convert_to_dP(_P,P, derLay, angle, distance, et)]  # up only
-    del edge.pre__
-
-def comp_dP_(PP,):  # node_- mediated: comp node.rim dPs, call from form_PP_
-
-    root, P_, link_, vert, lat, A, S, box, yx, (M,_,n,_) = PP
-    rM = M / (ave * n)  # dP D borrows from normalized PP M
-    for _dP in link_:
-        if _dP.Et[1] * rM > avd:
-            _P, P = _dP.nodet  # _P is lower
-            rn = len(P.dert_) / len(_P.dert_)
-            for dP in P.rim:  # higher links
-                if dP not in link_: continue  # skip removed node links
-                mdVer, et = comp_vert(_dP.vertuple[1], dP.vertuple[1], rn)
-                angle = np.subtract(dP.yx,_dP.yx)  # dy,dx of node centers
-                distance = np.hypot(*angle)  # between node centers
-                _dP.rim += [convert_to_dP(_dP, dP, mdVer, angle, distance, et)]  # up only
-
-def convert_to_dP(_P,P, derLay, angle, distance, Et):
-
-    link = CdP(nodet=[_P,P], Et=Et, vertuple=derLay, angle=angle, span=distance, yx=np.add(_P.yx, P.yx)/2)
-    # bilateral, regardless of clustering:
-    _P.vertuple += link.vertuple; P.vertuple += link.vertuple
-    _P.lrim += [link]; P.lrim += [link]
-    _P.prim += [P];    P.prim +=[_P]  # all Ps are dPs if fd
-
-    return link
+    comp_dP_(edge)
+    edge.link_ = form_PP_(edge, edge.dP_,fd=1)
 
 def form_PP_(root, iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
 
@@ -147,7 +103,46 @@ def form_PP_(root, iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
 
     return PPt_
 
-def sum2PP(root, P_, dP_, Et):  # sum links in Ps and Ps in PP
+def comp_P_(edge):  # form links from prelinks
+
+    edge.rng = 1
+    for _P, pre_ in edge.pre__.items():
+        for P in pre_:  # prelinks
+            dy,dx = np.subtract(P.yx,_P.yx)  # between node centers
+            if abs(dy)+abs(dx) <= edge.rng * 2: # <max Manhattan distance
+                angle=[dy,dx]; distance=np.hypot(dy,dx)
+                derLay, et = comp_latuple(_P.latuple, P.latuple, len(_P.dert_), len(P.dert_))
+                dP = convert_to_dP(_P, P, derLay, angle, distance, et)
+                _P.rim += [dP]  # up only
+                edge.dP_ += [dP]  # to form PPd_ by dval, separate from PPm_
+    del edge.pre__
+
+def comp_dP_(edge,):  # node_- mediated: comp node.rim dPs, call from form_PP_
+
+    M,_,n,_ = edge.Et
+    rM = M / (ave * n)  # dP D borrows from normalized PP M
+    for _dP in edge.dP_:
+        if _dP.Et[1] * rM > avd:
+            _P, P = _dP.nodet  # _P is lower
+            rn = len(P.dert_) / len(_P.dert_)
+            for dP in P.rim:  # higher links
+                if dP not in edge.dP_: continue  # skip removed node links
+                mdVer, et = comp_vert(_dP.vertuple[1], dP.vertuple[1], rn)
+                angle = np.subtract(dP.yx,_dP.yx)  # dy,dx of node centers
+                distance = np.hypot(*angle)  # between node centers
+                _dP.rim += [convert_to_dP(_dP, dP, mdVer, angle, distance, et)]  # up only
+
+def convert_to_dP(_P,P, derLay, angle, distance, Et):
+
+    link = CdP(nodet=[_P,P], Et=Et, vertuple=derLay, angle=angle, span=distance, yx=np.add(_P.yx, P.yx)/2)
+    # bilateral, regardless of clustering:
+    _P.vertuple += link.vertuple; P.vertuple += link.vertuple
+    _P.lrim += [link]; P.lrim += [link]
+    _P.prim += [P];    P.prim +=[_P]  # all Ps are dPs if fd
+
+    return link
+
+def sum2PP(edge, P_, dP_, Et):  # sum links in Ps and Ps in PP
 
     fd = isinstance(P_[0],CdP)
     if fd: latuple = np.sum([n.latuple for n in set([n for dP in P_ for n in  dP.nodet])], axis=0)
@@ -171,8 +166,10 @@ def sum2PP(root, P_, dP_, Et):  # sum links in Ps and Ps in PP
         for y,x in P.yx_ if isinstance(P, CP) else [P.nodet[0].yx, P.nodet[1].yx]:  # CdP
             box = accum_box(box,y,x)
     y0,x0,yn,xn = box
-    PPt = [root, P_, link_, vert, latuple, A, S, box, [(y0+yn)/2,(x0+xn)/2], Et]
+    PPt = [P_, link_, vert, latuple, A, S, box, [(y0+yn)/2,(x0+xn)/2], Et]
     for P in P_: P.root = PPt
+    edge.vert += vert
+    edge.Et += Et
 
     return PPt
 

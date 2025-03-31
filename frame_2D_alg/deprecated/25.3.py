@@ -597,7 +597,7 @@ def vect_root(frame, rV=1, ww_t=[]):  # init for agg+:
                 comp_slice(edge, rV, np.array([(*ww_t[0][:2],*ww_t[0][4:]),(*ww_t[0][:2],*ww_t[1][4:])]) if ww_t else [])  # to scale vert
                 Et = edge.Et
                 if Et[0] *((len(edge.node_)-1)*(edge.rng+1)*Lw) > ave*Et[2]*clust_w:  # eval PP:
-                    G_ = [PP2G(PP)for PP in edge.node_ if PP[-1][0] > ave*PP[-1][2]]  # Et, no comp node_,link_,PPd_
+                    G_ = [PP2G(PP) for PP in edge.node_ if PP[-1][0] > ave*PP[-1][2]]  # Et, no comp node_,link_,PPd_
                     edge_ += [cluster_edge(G_, frame)]  # 1layer derH, alt: converted adj_blobs of edge blob | alt_P_?
     # unpack edges:
     Lay = [CLay(root=frame), CLay(root=frame)]
