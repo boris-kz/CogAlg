@@ -117,10 +117,11 @@ def comp_P_(edge):  # form links from prelinks
                 edge.dP_ += [dP]  # to form PPd_ by dval, separate from PPm_
     del edge.pre__
 
-def comp_dP_(edge,):  # node_- mediated: comp node.rim dPs, call from form_PP_
+def comp_dP_(edge):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
     M,_,n,_ = edge.Et
     rM = M / (ave * n)  # dP D borrows from normalized PP M
+    for _dP in edge.dP_: _dP.prim = []; _dP.lrim = []
     for _dP in edge.dP_:
         if _dP.Et[1] * rM > avd:
             _P, P = _dP.nodet  # _P is lower
@@ -130,7 +131,8 @@ def comp_dP_(edge,):  # node_- mediated: comp node.rim dPs, call from form_PP_
                 mdVer, et = comp_vert(_dP.vertuple[1], dP.vertuple[1], rn)
                 angle = np.subtract(dP.yx,_dP.yx)  # dy,dx of node centers
                 distance = np.hypot(*angle)  # between node centers
-                _dP.rim += [convert_to_dP(_dP, dP, mdVer, angle, distance, et)]  # up only
+                _dP.lrim += [convert_to_dP(_dP, dP, mdVer, angle, distance, et)]  # up only
+                _dP.prim += [dP]
 
 def convert_to_dP(_P,P, derLay, angle, distance, Et):
 
@@ -168,7 +170,7 @@ def sum2PP(edge, P_, dP_, Et):  # sum links in Ps and Ps in PP
     y0,x0,yn,xn = box
     PPt = [P_, link_, vert, latuple, A, S, box, [(y0+yn)/2,(x0+xn)/2], Et]
     for P in P_: P.root = PPt
-    edge.vert += vert
+    edge.vertuple += vert
     edge.Et += Et
 
     return PPt
