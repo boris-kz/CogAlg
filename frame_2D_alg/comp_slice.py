@@ -66,31 +66,38 @@ def comp_slice(edge, rV=1, ww_t=[]):  # root function
     if np.any(ww_t):
         w_t = np.array([[wM, wD, wI, wG, wA, wL]] * 2) * ww_t
         # der weights
-    edge.Et, edge.vertuple = np.zeros(4), np.zeros((2,6))  # (M, D, n, o), (m_,d_)
     for P in edge.P_:  # add higher links
         P.vertuple = np.zeros((2,6))
         P.rim = []; P.lrim = []; P.prim = []
     edge.dP_ = []
     comp_P_(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
-    edge.node_ = form_PP_(edge, edge.P_, fd=0)  # all Ps are converted to PPs
+    PPm_,mEt,mvert = form_PP_(edge, edge.P_, fd=0)  # all Ps are converted to PPs
     comp_dP_(edge)
-    edge.link_ = form_PP_(edge, edge.dP_,fd=1)
+    PPd_,dEt,dvert = form_PP_(edge, edge.dP_,fd=1)
+
+    edge.node_ = PPm_; edge.link_ = PPd_
+    edge.vert = mvert + dvert
+    edge.Et = Et = mEt + dEt
+    return Et  # for eval
 
 def form_PP_(root, iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
 
-    PPt_ = []
+    PPt_ = []; rEt = np.zeros(4); rvert = np.zeros((2,6))
+
     for P in iP_: P.merged = 0
     for P in iP_:  # dP from link_ if fd
         if P.merged or (not fd and len(P.dert_)==1): continue
         _prim_ = P.prim; _lrim_ = P.lrim
         I,G, M,D, L,_ = P.latuple
         _P_ = {P}; link_ = set(); Et = np.array([I+M, G+D])
+        vert = np.zeros((2,6))
         while _prim_:
             prim_,lrim_ = set(),set()
             for _P,_link in zip(_prim_,_lrim_):
                 if _link.Et[fd] < [ave,avd][fd] or _P.merged:
                     continue
                 _P_.add(_P); link_.add(_link)
+                vert += _link.vert
                 _I,_G,_M,_D,_L,_ = _P.latuple
                 Et += _link.Et + np.array([_I+_M,_G+_D])  # intra-P similarity and variance
                 L += _L  # latuple summation span
@@ -99,9 +106,10 @@ def form_PP_(root, iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
                 _P.merged = 1
             _prim_, _lrim_ = prim_, lrim_
         Et = np.array([*Et, L, 1])  # Et + n,o
-        PPt_ += [sum2PP(root, list(_P_), list(link_), Et)]
+        rEt += Et; rvert += vert
+        PPt_ += [sum2PP(list(_P_), list(link_), Et)]
 
-    return PPt_
+    return PPt_, rvert, rEt
 
 def comp_P_(edge):  # form links from prelinks
 
@@ -144,11 +152,11 @@ def convert_to_dP(_P,P, derLay, angle, distance, Et):
 
     return link
 
-def sum2PP(edge, P_, dP_, Et):  # sum links in Ps and Ps in PP
+def sum2PP(P_, dP_, Et):  # sum links in Ps and Ps in PP
 
     fd = isinstance(P_[0],CdP)
-    if fd: latuple = np.sum([n.latuple for n in set([n for dP in P_ for n in  dP.nodet])], axis=0)
-    else:  latuple = np.array([.0,.0,.0,.0,.0, np.zeros(2)], dtype=object)
+    if fd: lat = np.sum([n.latuple for n in set([n for dP in P_ for n in  dP.nodet])], axis=0)
+    else:  lat = np.array([.0,.0,.0,.0,.0, np.zeros(2)], dtype=object)
     vert = np.zeros((2,6))
     link_ = []
     if dP_:  # add uplinks:
@@ -163,16 +171,13 @@ def sum2PP(edge, P_, dP_, Et):  # sum links in Ps and Ps in PP
     box = [np.inf,np.inf,0,0]
     for P in P_:
         if not fd:  # else summed from P_ nodets on top
-            latuple += P.latuple
+            lat += P.latuple
         vert += P.vertuple
         for y,x in P.yx_ if isinstance(P, CP) else [P.nodet[0].yx, P.nodet[1].yx]:  # CdP
             box = accum_box(box,y,x)
     y0,x0,yn,xn = box
-    PPt = [P_, link_, vert, latuple, A, S, box, [(y0+yn)/2,(x0+xn)/2], Et]
+    PPt = [P_, link_, vert, lat, A, S, box, [(y0+yn)/2,(x0+xn)/2], Et]
     for P in P_: P.root = PPt
-    edge.vertuple += vert
-    edge.Et += Et
-
     return PPt
 
 def comp_latuple(_latuple, latuple, _n,n):  # 0der params, add dir?
