@@ -71,9 +71,9 @@ def comp_slice(edge, rV=1, ww_t=[]):  # root function
         P.rim = []; P.lrim = []; P.prim = []
     edge.dP_ = []
     comp_P_(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
-    PPm_,mEt,mvert = form_PP_(edge, edge.P_, fd=0)  # all Ps are converted to PPs
-    comp_dP_(edge)
-    PPd_,dEt,dvert = form_PP_(edge, edge.dP_,fd=1)
+    PPm_, mvert, mEt = form_PP_(edge, edge.P_, fd=0)  # all Ps are converted to PPs
+    comp_dP_(edge, mEt)
+    PPd_, dvert, dEt = form_PP_(edge, edge.dP_,fd=1)
 
     edge.node_ = PPm_; edge.link_ = PPd_
     edge.vert = mvert + dvert
@@ -97,7 +97,7 @@ def form_PP_(root, iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
                 if _link.Et[fd] < [ave,avd][fd] or _P.merged:
                     continue
                 _P_.add(_P); link_.add(_link)
-                vert += _link.vert
+                vert += _link.vertuple
                 _I,_G,_M,_D,_L,_ = _P.latuple
                 Et += _link.Et + np.array([_I+_M,_G+_D])  # intra-P similarity and variance
                 L += _L  # latuple summation span
@@ -125,9 +125,9 @@ def comp_P_(edge):  # form links from prelinks
                 edge.dP_ += [dP]  # to form PPd_ by dval, separate from PPm_
     del edge.pre__
 
-def comp_dP_(edge):  # node_- mediated: comp node.rim dPs, call from form_PP_
+def comp_dP_(edge, mEt):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
-    M,_,n,_ = edge.Et
+    M,_,n,_ = mEt
     rM = M / (ave * n)  # dP D borrows from normalized PP M
     for _dP in edge.dP_: _dP.prim = []; _dP.lrim = []
     for _dP in edge.dP_:
