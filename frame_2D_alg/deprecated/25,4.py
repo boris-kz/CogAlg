@@ -34,3 +34,6 @@ def blob2G(G, **kwargs):
     G.aRad = 0  # average distance between graph center and node center
     G.altG = []  # or altG? adjacent (contour) gap+overlap alt-fork graphs, converted to CG
     return G
+
+def get_node_(G): return G.H[-1][0] if isinstance(G.H[-1][0],list) else G.H[-1][0].H  # node_ | nG.node_
+

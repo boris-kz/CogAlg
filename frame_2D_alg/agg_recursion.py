@@ -201,10 +201,10 @@ def vect_root(frame, rV=1, ww_t=[]):  # init for agg+:
         [F.add_lay(f) for F,f in zip(Lay,lay)]
         # [mfork,dfork]
     PPmg, Gmg, PPdg, Gdg, LPPmg = [sum_N_(g,frame,1) if g else [] for g in [PPm_,Gm_,PPd_,Gd_,LPPm_]]
-    # lev0, recursive dfork:
-    frame.H = [[PPmg, [PPdg,Gdg] if Gdg else PPdg]]
-    # lev1, dfork is link_PPm:
-    if Gmg: frame.H += [[[Gmg, LPPmg] if LPPmg else LPPmg]]
+    dH = [[PPdg,[]]]
+    if Gd_: dH += [Gdg,[]]  # nested dfork, keep empty dd?
+    frame.H = [[PPmg, dH]]  # 1st lev
+    if Gm_: frame.H += [[Gm_, LPPm_]] # 2nd lev
     baseT, derTT = np.zeros(4), np.zeros((2,8))
     for g in PPmg,Gmg,PPdg,Gdg:
         if g: baseT += g.baseT; derTT += g.derTT
@@ -245,7 +245,6 @@ def cluster_edge(edge, frame):  # non-recursive comp_PPm, comp_PPd, edge is not 
                 m, d, n, o = L.Et
                 if m > ave * n * loop_w: mL_ += [L]; mEt += L.Et; N_.update({_G, G})
                 if d > avd * n * loop_w: dL_ += [L]; dEt += L.Et
-
         return list(N_), mL_,mEt, dL_,dEt
 
     Lay = [CLay(root=frame),CLay(root=frame)]  # [mfork, dfork]
@@ -261,7 +260,7 @@ def cluster_edge(edge, frame):  # non-recursive comp_PPm, comp_PPd, edge is not 
                 fork = [PP_, Gm_]  # (ppm_,gm_)|(ppd_,gd_)
             else: fork = [[],[]]
             if fi:  # der+ is not recursive
-                if val_(dEt, dEt, ave, fi=0) > 0:
+                if val_(dEt, dEt, ave, fi=0) > 0:  # Gd_ = lG.H:
                     Gd_ = cluster_L_(frame, L2N(dL_), ave, rc=2, fnodet=1).H if dEt[0] * (len(dL_)-1) * Lw > ave * dEt[2] * clust_w else []
                     fork = [fork, Gd_] # ((ppm_,gm_),Lppm_)
                 else: fork = [fork,[]]
@@ -300,33 +299,34 @@ def cross_comp(root, rc, iN_, fi=1):  # rc: recursion count, fc: centroid phase,
                 if C_:
                     sL_ = {L for C in C_ for n in C.H for L,_ in n.rim if L.L < ave_dist}; m,n = 0,0
                     for l in sL_: m+=l.Et[0]; n+=l.Et[2]
-                    if m > ave * n * (rc+3) * clust_w:
-                        nG = cluster_N_(root, sL_, ave*(rc+3), rc+3)  # link-cluster CC nodes via short rim Ls
-            else:       # or transitive root nG?
-                nG = cluster_L_(root, N_, ave*(rc+2), rc=rc+2, fnodet=0)  # via llinks, no dist-nesting, no cluster_C_
+                    if m > ave * n * (rc+3) * clust_w:  # form transitive root:
+                        nG = cluster_N_(sum_N_(N_,flat=1), sL_, ave*(rc+3), rc+3)  # link-cluster CC nodes via short rim Ls
+            else:  # N_ = dfork L_
+                nG = cluster_L_(sum_N_(N_,flat=1), N_, ave*(rc+2), rc=rc+2, fnodet=0)  # via llinks, no dist-nesting, no cluster_C_
             if nG:
                 if val_(nG.Et,nG.Et, ave*(rc+3), fi=1, coef=loop_w) > 0:  # or global _Et?
                     cross_comp(nG, rc=rc+3, iN_=nG.H)  # agg recursion
         # dfork:
         dval = val_(dEt, mEt, avd*(rc+3), fi=0, coef=clust_w)  # mEt is alt fork?
         if dval > 0:
-            lG = sum_N_(dL_,root=root)  # transitive root
+            lG = sum_N_(dL_,root=root)  # transitive root, or L_: separate eval?
             if dval > ave:  # filter for higher res
-                cross_comp(lG, rc+3, dL_, fi=0)  # comp_link_, no CC
+                cross_comp(lG, rc+3, L2N(dL_), fi=0)  # comp_link_, no CC
             else:  # lower res
-                lG = cluster_L_(lG, dL_, ave*(rc+3), rc=rc+3, fnodet=1)
+                lG = cluster_L_(lG, L2N(dL_), ave*(rc+3), rc=rc+3, fnodet=1)
         if nG or lG:
             root.H += [[]]
-            for g in nG, lG:
-                if g: add_N(root, g, flat=1); root.H[1] += [g.H[0][0] if isinstance(g.H[0],list) else g]  # g.H is not nested in recursion
-                else: root.H[1] += [[]]
-            if nG and len(nG.H) > 1:
-                root.H += nG.H[1:]  # extend H if recursive mfork
-
-        if not lG:  # else lay is already in lG.derH?
-            lay = comb_H_(L_, root, fi=0)
-            if fi: root.derH += [[lay]]  # [mfork] feedback, not value-selective?
-            else:  root.derH[-1] += [lay]  # dfork feedback
+            for fn, g in ((1,0), (nG,lG)):
+                if g:
+                    add_N(root, g, flat=1)
+                    if fn:
+                        root.H[1] += [g.H[0][0] if isinstance(g.H[0],list) else g]  # g.H is not nested in recursion
+                        if len(nG.H) > 1:
+                            root.H += nG.H[1:]  # extend H if recursive mfork
+                else:  # add new lay instead of lG.derH:
+                    lay = comb_H_(L_,root,fi=0)
+                    if fi: root.derH += [[lay]]  # [mfork] feedback, no eval?
+                    else:  root.derH[-1] += [lay]  # dfork feedback
 
 def comp_node_(_N_, ave, L=0):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et, ~ graph CNN without backprop
 
@@ -609,7 +609,7 @@ def cluster_L_(root, L_, ave, rc, fnodet=1):  # CC links via nodet or rimt, no d
         L.fin = 1
         node_, link_, Et, Lay = [L], [], copy(L.Et), CLay()
         if fnodet:
-            for _L in L.nodet[0].rim + L.nodet[1].rim:
+            for _L in L.nodet[0].rim+L.nodet[1].rim if L.nodet[0].fi else [l for n in L.nodet for l,_ in n.rimt[0]+n.rimt[1]]:
                 if _L in L_ and not _L.fin and _L.Et[1] > avd * _L.Et[2]:  # cluster by d
                     link_ += [L.nodet]
                     Et += _L.Et; _L.fin = 1; node_ += [_L]
@@ -621,7 +621,7 @@ def cluster_L_(root, L_, ave, rc, fnodet=1):  # CC links via nodet or rimt, no d
                     Et += lL.Et; _L.fin = 1; node_ += [_L]
         if val_(Et, Et, ave*clust_w) > 0:
             Lay = CLay()
-            [Lay.add_lay(l) for l in sum_H(node_ if fnodet else link_, root, fi=fnodet)]
+            [Lay.add_lay(l) for l in sum_H(node_ if fnodet else link_, root, fi=0)]
             G_ += [sum2graph(root, [list({*node_}), link_, Et, Lay], fi=0)]
     if G_:
         [comb_altG_(G.altG.H, ave, rc) for G in G_]
@@ -731,17 +731,15 @@ def comb_altG_(G_, ave, rc=1):  # combine contour G.altG_ into altG (node_ defin
     for G in G_:
         if G.altG:
             if G.altG.H:
-                G.altG = sum_N_(G.altG.H)
+                G.altG = sum_N_(G.altG.H, flat=1)
                 G.altG.root=G; G.altG.m=0
                 if val_(G.altG.Et, G.Et, ave, fi=0):  # alt D * G rM
-                    cross_comp(G.altG, rc, G.altG.node_, fi=1)  # adds nesting
+                    cross_comp(G.altG, rc, G.altG.H, fi=1)  # adds nesting
         else:  # altG = sum dlinks
             dL_ = list(set([L for g in G.H[-1][0] for L,_ in g.rim if val_(L.Et,G.Et, ave, fi=0) > 0]))
             if dL_ and val_(np.sum([l.Et for l in dL_], axis=0), G.Et, ave, coef=10, fi=0) > 0:
                 altG = sum_N_(dL_)
                 G.altG = copy_(altG); G.altG.H = [altG]; G.altG.root=G
-
-def get_node_(G): return G.H[-1][0] if isinstance(G.H[-1][0],list) else G.H[-1][0].H  # node_ | nG.node_
 
 def comb_H_(L_, root, fi):
     derH = sum_H(L_,root,fi=fi)
@@ -804,7 +802,8 @@ def sum_N_(node_, root_G=None, root=None, flat=0):  # form G
     for n in node_:
         add_N(G,n, fi, flat)
         if root: n.root=root
-    G.H += [[node_, []]]  # add last layer
+    if flat: G.H += node_
+    else:    G.H += [[node_,[]]]  # last layer
     if not fi:
         G.derH = [[lay] for lay in G.derH]  # nest
     return G
@@ -922,10 +921,10 @@ def agg_H_seq(focus, image, _nestt=(1,0), rV=1, _rv_t=[]):  # recursive level-fo
     global ave, Lw, int_w, loop_w, clust_w, ave_dist, ave_med, med_w
     ave, Lw, int_w, loop_w, clust_w, ave_dist, ave_med, med_w = np.array([ave, Lw, int_w, loop_w, clust_w, ave_dist, ave_med, med_w]) / rV
     # sum filtered params, feedback rws: ~rvs?
-    frame = frame_blobs_root(focus, rV)  # no _rv_t
-    intra_blob_root(frame, rV)  # not sure
-    vect_root(frame, rV, _rv_t)
-    if len(frame.H)<2:  # skip if PP_ only
+    frame = frame_blobs_root(focus, rV)
+    intra_blob_root(frame, rV)
+    frame = vect_root(frame, rV, _rv_t)
+    if len(frame.H)<2:  # [PP_t]
         return frame
     comb_altG_(frame.H[-1][0].H[-1][0], ave*2)  # PP graphs in frame.node_[2]
     # forward agg+:
