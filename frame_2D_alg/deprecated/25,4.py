@@ -35,5 +35,24 @@ def blob2G(G, **kwargs):
     G.altG = []  # or altG? adjacent (contour) gap+overlap alt-fork graphs, converted to CG
     return G
 
-def get_node_(G): return G.H[-1][0] if isinstance(G.H[-1][0],list) else G.H[-1][0].H  # node_ | nG.node_
+def get_node_(G, fi): return G.H[-1][fi] if isinstance(G.H[0],list) else G.H  # node_ | nG.node_
+
+def sum_C(node_):  # sum|subtract and average C-connected nodes
+
+        C = copy_(node_[0]); C.H = node_  # add root and medoid / exemplar?
+        C.M = 0
+        sum_N_(node_[1:], root_G=C)  # no extH, extend_box
+        alt_ = [n.altG for n in node_ if n.altG]
+        if alt_:
+            sum_N_(alt_, root_G=C.altG)  # no m, M, L in altG
+        k = len(node_)
+        for n in (C, C.altG):
+            n.Et/=k; n.baseT/=k; n.derTT/=k; n.aRad/=k; n.yx /= k
+            norm_H(n.derH, k)
+        return C
+'''
+        lay = comb_H_(L_,root,fi=0)
+        if fi: root.derH += [[lay]]  # [mfork] feedback, no eval?
+        else:  root.derH[-1] += [lay]  # dfork feedback
+'''
 
