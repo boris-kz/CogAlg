@@ -55,4 +55,27 @@ def sum_C(node_):  # sum|subtract and average C-connected nodes
         if fi: root.derH += [[lay]]  # [mfork] feedback, no eval?
         else:  root.derH[-1] += [lay]  # dfork feedback
 '''
+def feedback(root, ifi):  # root is frame if ifi else lev_lG
+    # draft
+    rv_t = np.ones((2,8))  # sum derTT coefs: m_,d_ [M,D,n,o, I,G,A,L] / Et, baseT, dimension
+    rM, rD = 1, 1; hG = sum_N_(root.H[-1][0])  # top level, no  feedback (we need sum_N_ here? Since last layer is flat)
+
+    for lev in reversed(root.H[:-1]):
+        for fi, fork_G in lev[0], lev[2]:  # CG node_ if fi else, CL link_
+            if fi:
+                _m,_d,_n,_ = hG.Et; m,d,n,_ = fork_G.Et
+                rM += (_m/_n) / (m/n)  # no o eval?
+                rD += (_d/_n) / (d/n)
+                rv_t += np.abs((hG.derTT/_n) / (fork_G.derTT/n))
+                hG = fork_G
+            else:
+                # also for ddfork: not ifi?
+                rMd, rDd, rv_td = feedback(root, fi)  # intra-level recursion in lG
+                rv_t = rv_t + rv_td; rM += rMd; rD += rDd
+
+    return rM,rD,rv_t
+
+def get_rim(N,fi): return N.rim if fi else N.rimt[0] + N.rimt[1]  # add nesting in cluster_N_?
+
+
 
