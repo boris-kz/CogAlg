@@ -50,37 +50,36 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
         l.prim = []
     def __bool__(l): return l.nodet
 
-def comp_slice_root(frame, rV=1, ww_t=[]):
+def comp_slice_root(frame, rV=1, ww_t=None):
 
     blob_ = unpack_blob_(frame)
     for blob in blob_:
         if not blob.sign and blob.G > aveB * blob.root.olp:
-            edge = slice_edge(blob, ww_t[0][2:-1])  # wI,wG,wA?
+            edge = slice_edge(blob, rV)  # ww_t[0][2:-1])  # wI,wG,wA?
             if edge.G * (len(edge.P_) - 1) > ave_PPm:  # eval PP, olp=1
-                comp_slice(edge, rV, ww_t = ww_t)
+                comp_slice(edge, rV, ww_t=ww_t)
 
-def comp_slice(edge, rV=1, ww_t=[]):  # root function
+def comp_slice(edge, rV=1, ww_t=None):  # root function
 
     global ave, avd, wM, wD, wI, wG, wA, wL, ave_L, ave_PPm, ave_PPd, w_t
     ave, avd, ave_L, ave_PPm, ave_PPd = np.array([ave, avd, ave_L, ave_PPm, ave_PPd]) / rV  # projected value change
     if np.any(ww_t):
-        w_t = np.array([[wM, wD, wI, wG, wA, wL]] * 2) * ww_t
+        w_t = [[wM, wD, wI, wG, wA, wL]] * ww_t
         # der weights
     for P in edge.P_:  # add higher links
         P.vertuple = np.zeros((2,6))
         P.rim = []; P.lrim = []; P.prim = []
     edge.dP_ = []
     comp_P_(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
-    PPm_, mvert, mEt = form_PP_(edge, edge.P_, fd=0)  # all Ps are converted to PPs
+    edge.node_, mvert, mEt = form_PP_(edge.P_, fd=0)  # all Ps are converted to PPs
     comp_dP_(edge, mEt)
-    PPd_, dvert, dEt = form_PP_(edge, edge.dP_,fd=1)
+    edge.link_, dvert, dEt = form_PP_(edge.dP_, fd=1)
 
-    edge.node_ = PPm_; edge.link_ = PPd_
     edge.vert = mvert + dvert
     edge.Et = Et = mEt + dEt
     return Et  # for eval
 
-def form_PP_(root, iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
+def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
 
     PPt_ = []; rEt = np.zeros(4); rvert = np.zeros((2,6))
 
@@ -107,7 +106,8 @@ def form_PP_(root, iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
             _prim_, _lrim_ = prim_, lrim_
         Et = np.array([*Et, L, 1])  # Et + n,o
         rEt += Et; rvert += vert
-        PPt_ += [sum2PP(list(_P_), list(link_), Et)]
+        if _P_:
+            PPt_ += [sum2PP(list(_P_), list(link_), Et)]
 
     return PPt_, rvert, rEt
 
@@ -176,7 +176,7 @@ def sum2PP(P_, dP_, Et):  # sum links in Ps and Ps in PP
         for y,x in P.yx_ if isinstance(P, CP) else [P.nodet[0].yx, P.nodet[1].yx]:  # CdP
             box = accum_box(box,y,x)
     y0,x0,yn,xn = box
-    PPt = [P_, link_, vert, lat, A, S, box, np.array([(y0+yn)/2,(x0+xn)/2]), Et]
+    PPt = [P_, link_, vert, lat, A, S, box, [(y0+yn)/2,(x0+xn)/2], Et]
     for P in P_: P.root = PPt
     return PPt
 
@@ -257,16 +257,7 @@ if __name__ == "__main__":
         mask[mask_nonzero] = True
         # flatten
         assert all((isinstance(PPm, list) for PPm in edge.node_))
-        PPm_ = [*edge.node_]
-        P_, dP_, PPd_ = [], [], []
-        for PPm in PPm_:
-            # root, P_, link_, vert, latuple, A, S, box, yx, Et = PPm
-            P_ += PPm[1]
-            for link in PPm[2]:
-                if isinstance(link, CdP): dP_ += [link]
-                else: PPd_ += [link]
-        for PPd in PPd_:
-            dP_ += PPd[1] + PPd[2]  # dPs and ddPs
+        PPm_, PPd_, P_, dP_ = edge.node_, edge.link_, edge.P_, edge.dP_
 
         plt.imshow(mask, cmap='gray', alpha=0.5)
         # plt.title("")
@@ -295,8 +286,8 @@ if __name__ == "__main__":
 
         print("Drawing PPm boxes...")
         for PPm in PPm_:
-            # root, P_, link_, vert, latuple, A, S, box, yx, Et = PPm
-            _, _, _, _, _, _, _, (y0, x0, yn, xn), _, _ = PPm
+            # P_, link_, vert, lat, A, S, box, yx, Et = PPm
+            _, _, _, _, _, _, (y0, x0, yn, xn), _, _ = PPm
             (y0, x0), (yn, xn) = ((y0, x0), (yn, xn)) - yx0
             y0, yn = min_dist(y0, yn)
             x0, xn = min_dist(x0, xn)
@@ -304,7 +295,7 @@ if __name__ == "__main__":
 
         print("Drawing PPd boxes...")
         for PPd in PPd_:
-            _, _, _, _, _, _, _, (y0, x0, yn, xn), _, _ = PPd
+            _, _, _, _, _, _, (y0, x0, yn, xn), _, _ = PPd
             (y0, x0), (yn, xn) = ((y0, x0), (yn, xn)) - yx0
             y0, yn = min_dist(y0, yn)
             x0, xn = min_dist(x0, xn)
