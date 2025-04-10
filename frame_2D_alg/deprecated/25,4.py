@@ -77,5 +77,80 @@ def feedback(root, ifi):  # root is frame if ifi else lev_lG
 
 def get_rim(N,fi): return N.rim if fi else N.rimt[0] + N.rimt[1]  # add nesting in cluster_N_?
 
+def cluster_C_(L_, rc):  # 0 nest gap from cluster_edge: same derH depth in root and top Gs
+
+    def refine_C_(C_):  # refine weights in fuzzy C cluster around N, in root node_|link_
+        '''
+        comp mean-node pairs, node_cluster_sum weight = match / (ave * cluster_overlap | (dist/max_dist)**2)
+        delete weak clusters, redefine node_ by proximity, recompute cluster_sums of mean_matches'''
+        remove_ = []
+        for C in C_:
+            r = 0  # recursion count
+            while True:
+                C.M = 0; dM = 0  # pruned nodes and values, or comp all nodes again?
+                for N in C.node_:
+                    m = sum( base_comp(C,N)[0][0])  # derTT[0][0]
+                    if C.altG and N.altG:
+                        m += sum( base_comp(C.altG,N.altG)[0][0])
+                    N.Ct_ = sorted(N.Ct_, key=lambda c: c[1], reverse=True)  # _N.M rdn = n stronger root Cts
+                    for i, [_C,_m] in enumerate(N.Ct_):
+                        if _C is C:
+                            vm = m - ave * (ave_dist/np.hypot(*(C.yx-N.yx))) * (len(set(C.node_)&set(_C.node_))/(len(C.node_)+len(_C.node_)) * (i+1))
+                            # ave * rel_distance * redundancy * rel_overlap between clusters
+                            dm = (_m-vm) if r else vm  # replace init 0
+                            dM += dm; _C.M += dm
+                            if _C.M > ave: N.Ct_[i][1] = vm
+                            else:          N.Ct_.pop(i)
+                            break  # CCt update only
+                if C.M < ave*C.Et[2]*clust_w:
+                    for n in C.node_:
+                        if C in n.Ct_: n.Ct_.remove(C)
+                    remove_ += [C]  # delete weak | redundant cluster
+                    break
+                # separate drift eval
+                if dM > ave:
+                    C = sum_N_(C.node_)  # recompute centroid, or ave * iterations: cost increase?
+                    C.M = 0; k = len(node_)
+                    for n in (C, C.altG): n.Et /= k; n.baseT /= k; n.derTT /= k; n.aRad /= k; n.yx /= k; norm_H(n.derH, k)
+                else: break
+                r += 1
+        # filter and assign root in rC_: flat, overlapping within node_ level:
+        return [C for C in C_ if C not in remove_]
+
+    ave = globals()['ave'] * rc  # recursion count
+    C_ = []  # init centroid clusters for next cross_comp
+    N_ = list(set([node for link in L_ for node in link.nodet]))
+    N_ = sorted(N_, key=lambda n: n.Et[0], reverse=True)  # strong nodes initialize centroids
+    for N in N_:
+        if N.Et[0] < ave * N.Et[2]: break
+        med = 1; node_,_n_ = [],[N]; N.Ct_ = []
+        while med <= ave_med and _n_:  # init C.node_ is _Ns connected to N by <=3 mediation degrees
+            n_ = []
+            for n in [n for _n in _n_ for link,_ in _n.rim for n in link.nodet]:
+                if hasattr(n,'Ct_'):
+                    if med==1: continue  # skip directly connected nodes if in other CC
+                else:
+                    n.Ct_ = []; n_ += [n]  # add to CC
+            node_ += n_; _n_ = n_; med += 1
+            # add node_ margin for C drift?
+        if node_:
+            C = sum_N_(list(set(node_)), fw=1)  # weigh nodes by inverse dist to node_[0]
+            C.M = 0; k = len(node_)
+            for n in (C, C.altG): n.Et /= k; n.baseT /= k; n.derTT /= k; n.aRad /= k; n.yx /= k; norm_H(n.derH, k)
+            for n in node_:  # node_ is flat?
+                n.Ct_ += [[C,0]]  # empty m, may be in multiple Ns
+            C_ += [C]
+
+    return refine_C_(C_)  # refine centroid clusters
+
+def add_N(N,n, fi=1, fappend=0, fw=0):
+
+    if fw:  # proximity weighting in centroid only, other params not used
+        r = ave_dist / np.hypot(*(N.yx - n.yx))
+        n.baseT*=r; n.derTT*=r; n.Et*=r
+        # also scale yx drift contribution?
+
+
+
 
 
