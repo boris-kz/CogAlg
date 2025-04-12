@@ -186,10 +186,9 @@ def vect_root(frame, rV=1, ww_t=[]):  # init for agg+:
     if np.any(ww_t):
         global ave, avd, arn, aveB, aveR, Lw, ave_dist, int_w, loop_w, clust_w, wM, wD, wN, wO, wI, wG, wA, wL, w_t
         ave, avd, arn, aveB, aveR, Lw, ave_dist, int_w, loop_w, clust_w = (
-            np.array([ave,avd,arn,aveB, aveR,Lw,ave_dist,int_w,loop_w, clust_w]) / rV)  # projected value change
+            np.array([ave,avd,arn,aveB,aveR, Lw, ave_dist, int_w, loop_w, clust_w]) / rV)  # projected value change
         w_t = [[wM,wD,wN,wO,wI,wG,wA,wL]] * ww_t  # or dw_ ~= w_/ 2?
-        ww_t = np.delete(ww_t,(2,3), axis=1)  # for comp_slice input
-        # ww_t = np.array([(*ww_t[0][:2],*ww_t[0][4:]),(*ww_t[0][:2],*ww_t[1][4:])])
+        ww_t = np.delete(ww_t,(2,3), axis=1)  #-> comp_slice, = np.array([(*ww_t[0][:2],*ww_t[0][4:]),(*ww_t[0][:2],*ww_t[1][4:])])
     blob_ = unpack_blob_(frame)
     frame = CG(root = None)
     lev0, lev1, dH = [[],[]], [[],[]], [[],[]]  # two forks per level and derlay, two levs in dH
@@ -311,7 +310,7 @@ def cross_comp(root, rc, iN_, fi=1):  # rc: recursion count, fc: centroid phase,
         # mfork:
         if val_(mEt,dEt, ave*(rc+2), mw=(len(mL_)-1)*Lw, aw=clust_w) > 0:  # np.add(Et[:2]) > (ave+ave_d) * np.multiply(Et[2:])?
             if fi:                                                         # cc_w if fc else lc_w? rc+=1 for all subseq ops?
-                exemplars = cluster_C_(mL_,rc+2)  # form exemplar medoids, same derH
+                exemplars = cluster_C_(mL_,rc+2)  # form exemplar medoids, same derH, not in link_?
                 if exemplars:
                     short_L_ = {l for n in exemplars for l in n.rim if l.L < ave_dist}; m,n = 0,1e-7
                     for l in short_L_: m+=l.Et[0]; n+=l.Et[2]
@@ -587,33 +586,38 @@ def cluster_C_(L_, rc):  # select medoids for LC, next cross_comp
         while med <= ave_med and _n_:  # node_ is _Ns connected to N by <=3 mediation degrees
             n_ = [n for _n in _n_ for link,_ in _n.rim for n in link.nodet  # +ve Ls
                   if med >1 or not n.C]  # skip directly connected medoids
-            node_ += n_; _n_ = n_; med += 1
+            node_ += list(set(n_)); _n_ = n_; med += 1
         C = sum_N_(list(set(node_)))  # default
         k = len(node_)
         for n in (C, C.altG): n.Et /= k; n.baseT /= k; n.derTT /= k; n.aRad /= k; n.yx /= k; norm_H(n.derH, k)
         maxM, m_ = 0,[]
         for n in node_:
-            m = sum( base_comp(C,N)[0][0])  # derTT[0][0]
+            m = sum( base_comp(C,n)[0][0])  # derTT[0][0]
             if C.altG and N.altG: m += sum( base_comp(C.altG,N.altG)[0][0])
             m_ += [m]
             if m > maxM: maxN = n; maxM = m
-        if maxN not in medoid_:
-            for _medoid, _m in N.mroott_:
-                rel_olp = len(set(C.node_) & set(maxN.C.node_)) / (len(C.node_) + len(maxN.C.node_))
+        if maxN.C:
+            return  # or compare m to mroott_'C'm and replace with local C if stronger?
+        if N.mroott_:
+            for _medoid,_m in N.mroott_:
+                rel_olp = len(set(C.node_) & set(_medoid.C.node_)) / (len(C.node_) + len(_medoid.C.node_))
                 if _m > m:
                     if m > ave * rel_olp:  # add medoid
-                        for _N, __m in zip(maxN.C.node_, m_): _N.mroott_ += [[maxN, __m]]  # _N match to C
+                        for _N, __m in zip(C.node_, m_): _N.mroott_ += [[maxN, __m]]  # _N match to C
                         maxN.C = C; medoid_ += [maxN]; M += m
-                # needed?
-                elif _m < ave * rel_olp:
-                    maxN.C = None; medoid_.remove(_medoid); M += _m  # abs change? remove mroots?
+                    elif _m < ave * rel_olp:
+                        medoid_.C = None; medoid_.remove(_medoid); M += _m  # abs change? remove mroots?
+        elif m > ave:
+            N.mroott_ = [[maxN, m]]; maxN.C = C; medoid_ += [maxN]; M += m
 
     N_ = list(set([node for link in L_ for node in link.nodet]))
     ave = globals()['ave'] * rc
     medoid__ = []
+    for N in N_:
+        N.C = None; N.mroott_ = []  # init
     while N_:
         M, medoid_ = 0, []
-        N_ = sorted(N_, key=lambda n: n.Et[0], reverse=True)  # strong nodes initialize centroids
+        N_ = sorted(N_, key=lambda n: n.Et[0]/n.Et[2], reverse=True)  # strong nodes initialize centroids
         for N in N_:
             if N.Et[0] > ave * N.Et[2]:
                 cluster_C(N, M, medoid_)
@@ -625,8 +629,7 @@ def cluster_C_(L_, rc):  # select medoids for LC, next cross_comp
         else:
             N_ = medoid_
 
-    return {n for N in medoid__ for n in N.C.node_ if sum([Ct[1] for Ct in n.mroott_]) > ave * clust_w}
-    # exemplars
+    return {n for N in medoid__ for n in N.C.node_ if sum([Ct[1] for Ct in n.mroott_]) > ave * clust_w}  # exemplars
 
 def layer_C_(root, L_, rc):  # node-parallel cluster_C_ in mediation layers, prune Cs in top layer?
     # same nodes on all layers, hidden layers mediate links up and down, don't sum or comp anything?
