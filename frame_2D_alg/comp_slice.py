@@ -71,13 +71,14 @@ def comp_slice(edge, rV=1, ww_t=None):  # root function
         P.rim = []; P.lrim = []; P.prim = []
     edge.dP_ = []
     comp_P_(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
-    edge.node_, mvert, mEt = form_PP_(edge.P_, fd=0)  # all Ps are converted to PPs
-    comp_dP_(edge, mEt)
-    edge.link_, dvert, dEt = form_PP_(edge.dP_, fd=1)
-
-    edge.vert = mvert + dvert
-    edge.Et = Et = mEt + dEt
-    return Et  # for eval
+    PPt, mvert, mEt = form_PP_(edge.P_, fd=0)  # all Ps are converted to PPs
+    if PPt:
+        edge.node_ = PPt
+        comp_dP_(edge, mEt)
+        edge.link_, dvert, dEt = form_PP_(edge.dP_, fd=1)
+        edge.vert = mvert + dvert
+        edge.Et = Et = mEt + dEt
+        return Et  # for eval
 
 def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
 
@@ -85,7 +86,7 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
 
     for P in iP_: P.merged = 0
     for P in iP_:  # dP from link_ if fd
-        if P.merged or (not fd and len(P.dert_)==1): continue
+        if P.merged: continue
         _prim_ = P.prim; _lrim_ = P.lrim
         I,G, M,D, L,_ = P.latuple
         _P_ = {P}; link_ = set(); Et = np.array([I+M, G+D])
@@ -106,8 +107,9 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
             _prim_, _lrim_ = prim_, lrim_
         Et = np.array([*Et, L, 1])  # Et + n,o
         rEt += Et; rvert += vert
-        if _P_:
-            PPt_ += [sum2PP(list(_P_), list(link_), Et)]
+        if len(_P_)==1 and len(_P_[0].dert_)==1:
+            continue  # no single-dert PPs
+        PPt_ += [sum2PP(list(_P_), list(link_), Et)]
 
     return PPt_, rvert, rEt
 

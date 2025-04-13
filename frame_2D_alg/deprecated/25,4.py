@@ -143,12 +143,79 @@ def cluster_C_(L_, rc):  # 0 nest gap from cluster_edge: same derH depth in root
 
     return refine_C_(C_)  # refine centroid clusters
 
+def cluster_C_1(L_, rc):  # select medoids for LC, next cross_comp
+
+    def cluster_C(N, M, medoid_, medoid__):  # compute C per new medoid, compare C-node pairs, recompute C if max match is not medoid
+
+        node_,_n_, med = [], [N], 1
+        while med <= ave_med and _n_:  # node_ is _Ns connected to N by <=3 mediation degrees
+            n_ = [n for _n in _n_ for link,_ in _n.rim for n in link.nodet  # +ve Ls
+                  if med >1 or not n.C]  # skip directly connected medoids
+                  # also test overlap?
+            node_ += n_; _n_ = n_; med += 1
+        node_ = list(set(node_))
+        C = sum_N_(node_); k = len(node_)  # default
+        for n in (C, C.altG): n.Et /= k; n.baseT /= k; n.derTT /= k; n.aRad /= k; n.yx /= k; norm_H(n.derH, k)
+        maxM, m_ = 0,[]
+        for n in node_:
+            m = sum( base_comp(C,n)[0][0])  # derTT[0][0]
+            if C.altG and N.altG: m += sum( base_comp(C.altG,N.altG)[0][0])
+            m_ += [m]
+            if m > maxM: maxN = n; maxM = m
+        if maxN.C:
+            return  # or compare m to mroott_'C'm and replace with local C if stronger?
+        if N.mroott_:
+            for _medoid,_m in N.mroott_:
+                rel_olp = len(set(C.node_) & set(_medoid.C.node_)) / (len(C.node_) + len(_medoid.C.node_))
+                if _m > m:
+                    if m > ave * rel_olp:  # add medoid
+                        for _N, __m in zip(C.node_, m_): _N.mroott_ += [[maxN, __m]]  # _N match to C
+                        maxN.C = C; medoid_ += [maxN]; M += m
+                    elif _m < ave * rel_olp:
+                        medoid_.C = None; medoid_.remove(_medoid); M += _m  # abs change? remove mroots?
+        elif m > ave:
+            N.mroott_ = [[maxN, m]]; maxN.C = C; medoid_ += [maxN]; M += m
+
+    N_ = iN_ = list(set([node for link in L_ for node in link.nodet]))
+    ave = globals()['ave'] * rc
+    medoid__ = []
+    for N in N_:
+        N.C = None; N.mroott_ = []  # init
+    while N_:
+        M, medoid_ = 0, []
+        N_ = sorted(N_, key=lambda n: n.Et[0]/n.Et[2], reverse=True)  # strong nodes initialize centroids
+        for N in N_:
+            if N.Et[0] > ave * N.Et[2]:
+                cluster_C(N, M, medoid_, medoid__)
+            else:
+                break  # rest of N_ is weaker
+        medoid__ += medoid_
+        if M < ave * len(medoid_):
+            break  # converged
+        else:
+            N_ = medoid_
+
+    return {n for N in medoid__ for n in N.C.node_ if sum([Ct[1] for Ct in n.mroott_]) > ave * clust_w}  # exemplars
+
+def layer_C_(root, L_, rc):  # node-parallel cluster_C_ in mediation layers, prune Cs in top layer?
+    # same nodes on all layers, hidden layers mediate links up and down, don't sum or comp anything?
+    pass
+
 def add_N(N,n, fi=1, fappend=0, fw=0):
 
     if fw:  # proximity weighting in centroid only, other params not used
         r = ave_dist / np.hypot(*(N.yx - n.yx))
         n.baseT*=r; n.derTT*=r; n.Et*=r
         # also scale yx drift contribution?
+
+def add_node_H(H,h):
+
+    for Lev, lev in zip(H, h):  # always aligned?
+        for F, f in zip_longest(Lev, lev, fillvalue=None):
+            if f:
+                if F: add_N(F,f)  # nG|lG
+                else: Lev += [f]  # if lG
+
 
 
 
