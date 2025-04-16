@@ -93,7 +93,7 @@ class CLay(CBase):  # layer of derivation hierarchy, subset of CG
             # concat node_,link_:
             Lay.node_ += [n for n in lay.node_ if n not in Lay.node_]
             Lay.link_ += lay.link_
-            Lay.Et += lay.Et  # exclude o, no sum M and n in comb_Lt
+            Lay.Et[:3] += lay.Et[:3]  # fixed o
         return Lay
 
     def comp_lay(_lay, lay, rn, root, dir=1):  # unpack derH trees down to numericals and compare them
@@ -355,27 +355,30 @@ def comp_node_(_N_, ave, L=0):  # rng+ forms layer of rim and extH per N, append
         Gp_,Et = [],np.zeros(4)
         for Gp in _Gp_:
             _G,G, rn, dy,dx, radii, dist = Gp
-            medG_ = _G._N_ & G._N_; Link = []  # combined Link
+            medG_ = _G._N_ & G._N_
             if medG_:
-                _mL,mL =[],[]  # indirectly connected Gs, new Link = addN(_mL,mL):
+                _mL_,mL_ =[],[]; fcomp=1; fshort = 0  # compare indirectly connected Gs
                 for g in medG_:
-                    for ml in g.rim:
-                        if ml in G.rim: mL += [ml]
-                        elif ml in _G.rim: _mL += [ml]
-                Lpt_ = [[_l,l,comp_angle(_l.baseT[2:],l.baseT[2:])[1]] for (_l,_),(l,_) in product(_mL,_mL)]
+                    for mL in g.rim:
+                        if mL in G.rim: mL_ += [mL]
+                        elif mL in _G.rim: _mL_ += [mL]
+                Lpt_ = [[_l,l,comp_angle(_l.baseT[2:],l.baseT[2:])[1]] for (_l,_),(l,_) in product(mL_,_mL_)]
                 [_l,l,dA] = max(Lpt_, key=lambda x: x[2])  # links closest to the opposite from medG
-                Link = add_L(_l, l, merge=1, w_t=w_t)  # combine links in Link, if aligned: if abs(dA) > .4?
-            if not Link:
-                # eval new Link, dist vs radii * induction, mainly / extH?
+                _G,G = set(_l.nodet) ^ set(l.nodet)
+                # end nodes
+            else:  # eval new Link, dist vs radii * induction, mainly / extH?
                 (_m,_,_n,_),(m,_,n,_) = _G.Et,G.Et
                 weighted_max = ave_dist * ((radii/aveR * int_w**3) * (_m/_n + m/n)/2 / (ave*(_n+n)))  # all ratios
-                if dist < weighted_max:   # no density, ext V is not complete
-                    Link = comp_N(_G,G, ave, fi=1, angle=[dy,dx], dist=dist, fshort = dist < weighted_max/2)
-                    L_ += [Link]  # include -ve links
-                    if Link.Et[0] > ave * Link.Et[2] * loop_w:
-                        N_.update({_G,G}); Et += Link.Et; _G.add,G.add = 1,1
-                else:
-                    Gp_ += [Gp]  # re-evaluate not-compared pairs with one incremented N.M
+                if dist < weighted_max:
+                    fcomp=1; fshort = dist < weighted_max/2  # no density, ext V is not complete
+                else: fcomp=0
+            if fcomp:
+                Link = comp_N(_G,G, ave, fi=1, angle=[dy,dx], dist=dist, fshort=fshort)
+                L_ += [Link]  # include -ve links
+                if Link.Et[0] > ave * Link.Et[2] * loop_w:
+                    N_.update({_G,G}); Et += Link.Et; _G.add,G.add = 1,1
+            else:
+                Gp_ += [Gp]  # re-evaluate not-compared pairs with one incremented N.M
         ET += Et
         if Et[0] > ave * Et[0] * loop_w:  # current-rng vM
             _Gp_ = [Gp for Gp in Gp_ if Gp[0].add or Gp[1].add]  # one incremented N.M
@@ -591,13 +594,15 @@ def get_exemplars(L_, ave):  # select for next cross_comp
     exemplars, _N_ = [], set()
     for N in sorted(N_, key=lambda n: n.et[0]/n.et[2], reverse=True):
         M,_,n,_ = N.et  # sum from rim
-        if eval(M, weights=[ave, n, clust_w, len(N._N_ & _N_)]):
-            # last term is the intersect of inhibition zones,
-            # more accurate to accumulate overlap M instead of len?
+        if eval(M, weights=[ave, n, clust_w, rolp_M(M, N,_N_)]):  # 1 + rolp_M to the intersect of inhibition zones
             exemplars += [N]; _N_.update(N._N_)
         else:
             break  # the rest of N_ is weaker
     return exemplars
+
+def rolp_M(M, N, _N_):
+    oL_ = [L for L,_ in N.rim if [n for n in L.nodet if n in _N_]]
+    return 1 + sum([L.Et[0] for L in oL_]) / M  # ave weight in range 1:2
 
 def eval(V, weights):  # weights[0] is ave
     W = 1
@@ -733,12 +738,12 @@ def add_H(H, h, root, rev=0, fi=1):  # add fork L.derHs
                     Lay = []
                     for fork in lay:
                         Lay += [fork.copy_(root=root,rev=rev)]
-                        root.derTT += fork.derTT; root.Et += fork.Et
+                        root.derTT += fork.derTT; root.Et[:3] += fork.Et[:3]  # olp is not accumulated
                     H += [Lay]
             else:  # one-fork lays
                 if Lay: Lay.add_lay(lay,rev=rev)
                 else:   H += [lay.copy_(root=root,rev=rev)]
-                root.extTT += lay.derTT; root.Et += lay.Et
+                root.extTT += lay.derTT; root.Et[:3] += lay.Et[:3]
 
 def sum_N_(node_, root_G=None, root=None):  # form cluster G
 
@@ -753,35 +758,6 @@ def sum_N_(node_, root_G=None, root=None):  # form cluster G
         G.derH = [[lay] for lay in G.derH]  # nest
     return G
 
-def add_L(L, l, merge=0, w_t=None):  # merge for reconstructed Link, else sum
-
-    if merge:
-        L = copy_(L)  # convert to CG or use nodet as node_?
-        L.nodet = list(set(L.nodet) ^ set(l.nodet))  # get end nodes and remove mediator
-    else: L.nodet += l.nodet  # use as node_
-    L.box = extend_box(L.box, l.box)
-    L.yx = (L.yx + l.yx) / 2
-    L.baseT += l.baseT
-    for Lay,lay in zip(L.derH, l.derH):
-        if merge:
-            L.derTT[1] += lay.derTT[1]
-            L.Et[1] += lay.Et[1]  # D only, keep iL n,o?
-        else:
-            L.derTT += lay.derTT
-            L.Et[:3] += lay.Et[:3]  # keep iL o
-    if merge:
-        # compute M: get max comparands from L.nodet, L=A:
-        M,D,n,o = np.max( np.abs(L.nodet[0].Et), np.abs(L.nodet[1].Et))
-        I,G = np.max(L.nodet[0].baseT[:2], L.nodet[1].baseT[:2])
-        _y0,_x0,_yn,_xn = L.nodet[0].box; y0,x0,yn,xn = L.nodet[1].box
-        Len = max((_yn-_y0) * (_xn-_x0), (yn-y0) * (xn-x0))
-        A = .5  # max dA
-        # recompute match as max comparands - abs diff:
-        L.derTT[0] = np.array([M,D,n,o,I,G,Len,A]) * w_t
-        L.Et[0] = np.sum(L.derTT[0] - np.abs(L.derTT[1]))
-    return L
-
-# change to add_G?
 def add_N(N,n, fi=1, fappend=0):
 
     N.baseT+=n.baseT; N.derTT+=n.derTT; N.Et+=n.Et

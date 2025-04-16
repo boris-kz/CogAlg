@@ -216,7 +216,32 @@ def add_node_H(H,h):
                 if F: add_N(F,f)  # nG|lG
                 else: Lev += [f]  # if lG
 
+    if len(_P_)==1 and len(next(iter(_P_)).dert_)==1:  # skip single-dert PPs
+        continue
 
+def merge_Lp(L, l, w_):  # combine med_Ls into Link
+
+    L = copy_(L)
+    L.nodet = list(set(L.nodet) ^ set(l.nodet))  # get end nodes and remove mediator
+    L.box = extend_box(L.box, l.box)
+    L.yx = (L.yx + l.yx) / 2
+    L.baseT += l.baseT
+    for Lay,lay in zip(L.derH, l.derH):
+        L.derTT[1] += lay.derTT[1]
+        L.Et[1] += lay.Et[1]  # D only, keep iL n,o?
+    # get max comparands from L.nodet to compute M, L=A:
+    _Et, Et = np.abs(L.nodet[0].Et), np.abs(L.nodet[1].Et)
+    M,D,n,o = np.minimum(_Et,Et) / np.maximum(_Et,Et)
+    _IG, IG = L.nodet[0].baseT[:2], L.nodet[1].baseT[:2]
+    I,G = np.minimum(_IG) / np.maximum(IG)
+    _y0,_x0,_yn,_xn = L.nodet[0].box; y0,x0,yn,xn = L.nodet[1].box
+    _Len = (_yn-_y0) * (_xn-_x0); Len = (yn-y0) * (xn-x0)
+    mL = min(_Len,Len) / max(_Len,Len)
+    A = .5  # max dA
+    # recompute match as max comparands - abs diff:
+    L.derTT[0] = np.array([M,D,n,o,I,G,mL,mA]) * w_
+    L.Et[0] = np.sum(L.derTT[0] - np.abs(L.derTT[1]))
+    return L
 
 
 

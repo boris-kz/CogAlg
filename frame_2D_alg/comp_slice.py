@@ -99,7 +99,7 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
                 _P_.add(_P); link_.add(_link)
                 vert += _link.vertuple
                 _I,_G,_M,_D,_L,_ = _P.latuple
-                Et += _link.Et + np.array([_I+_M,_G+_D])  # intra-P similarity and variance
+                Et += _link.Et + np.array([_I+_M, _G+_D])  # intra-P similarity and variance
                 L += _L  # latuple summation span
                 prim_.update(set(_P.prim) - _P_)
                 lrim_.update(set(_P.lrim) - link_)
@@ -107,8 +107,6 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
             _prim_, _lrim_ = prim_, lrim_
         Et = np.array([*Et, L, 1])  # Et + n,o
         rEt += Et; rvert += vert
-        if not fd and len(_P_)==1 and len(next(_P_).dert_)==1:
-            continue  # skip single-dert PPs
         PPt_ += [sum2PP(list(_P_), list(link_), Et)]
 
     return PPt_, rvert, rEt
@@ -146,7 +144,7 @@ def comp_dP_(edge, mEt):  # node_- mediated: comp node.rim dPs, call from form_P
 
 def convert_to_dP(_P,P, derLay, angle, distance, Et):
 
-    link = CdP(nodet=[_P,P], Et=Et, vertuple=derLay, angle=angle, span=distance, yx=np.add(_P.yx, P.yx)/2)
+    link = CdP(nodet=[_P,P], Et=Et, latuple=_P.latuple, vertuple=derLay, angle=angle, span=distance, yx=np.add(_P.yx, P.yx)/2)
     # bilateral, regardless of clustering:
     _P.vertuple += link.vertuple; P.vertuple += link.vertuple
     _P.lrim += [link]; P.lrim += [link]
