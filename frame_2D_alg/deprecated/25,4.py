@@ -216,9 +216,39 @@ def add_node_H(H,h):
                 if F: add_N(F,f)  # nG|lG
                 else: Lev += [f]  # if lG
 
-    if len(_P_)==1 and len(next(iter(_P_)).dert_)==1:  # skip single-dert PPs
-        continue
-
+    # if len(_P_)==1 and len(next(iter(_P_)).dert_)==1: continue
+'''
+        for Gp in _Gp_:
+            _G,G, rn, dy,dx, radii, dist = Gp
+            medG_ = _G._N_ & G._N_
+            if medG_:
+                _mL_,mL_ =[],[]; fcomp=0; fshort = 0  # compare indirectly connected Gs
+                for g in medG_:
+                    for mL in g.rim:
+                        if mL in G.rim: mL_ += [mL]
+                        elif mL in _G.rim: _mL_ += [mL]
+                Lpt_ = [[_l,l,comp_angle(_l.baseT[2:],l.baseT[2:])[1]] for (_l,_),(l,_) in product(mL_,_mL_)]
+                [_l,l,dA] = max(Lpt_, key=lambda x: x[2])  # links closest to the opposite from medG
+                if dA > 0.4:  # we probably can include dA back?
+                    G_ = set(_l.nodet) ^ set(l.nodet)  # we might get 4 Gs here now, _G, G and the other 2 different nodes from both of their rim
+                    if len(G_) == 2: 
+                        _G,G = list(G_)[:2]  # if there's 4 Gs, that's mean they are not directly mediated by link? So we should skip them?
+                        fcomp=1
+                # end nodes
+            else:  # eval new Link, dist vs radii * induction, mainly / extH?
+                (_m,_,_n,_),(m,_,n,_) = _G.Et,G.Et
+                weighted_max = ave_dist * ((radii/aveR * int_w**3) * (_m/_n + m/n)/2 / (ave*(_n+n)))  # all ratios
+                if dist < weighted_max:
+                    fcomp=1; fshort = dist < weighted_max/2  # no density, ext V is not complete
+                else: fcomp=0
+            if fcomp:
+                Link = comp_N(_G,G, ave, fi=1, angle=[dy,dx], dist=dist, fshort=fshort)
+                L_ += [Link]  # include -ve links
+                if Link.Et[0] > ave * Link.Et[2] * loop_w:
+                    N_.update({_G,G}); Et += Link.Et; _G.add,G.add = 1,1
+            else:
+                Gp_ += [Gp]  # re-evaluate not-compared pairs with one incremented N.M
+'''
 def merge_Lp(L, l, w_):  # combine med_Ls into Link
 
     L = copy_(L)
@@ -242,7 +272,4 @@ def merge_Lp(L, l, w_):  # combine med_Ls into Link
     L.derTT[0] = np.array([M,D,n,o,I,G,mL,mA]) * w_
     L.Et[0] = np.sum(L.derTT[0] - np.abs(L.derTT[1]))
     return L
-
-
-
 

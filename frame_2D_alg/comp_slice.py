@@ -38,7 +38,7 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
         super().__init__()
 
         l.nodet = nodet  # e_ in kernels, else replaces _node,node: not used in kernels?
-        l.latuple = np.array([.0,.0,.0,.0,.0, np.zeros(2)], dtype=object) if latuple is None else latuple  # sum node_
+        l.L = 1  # min nodet
         l.vertuple = vertuple  # m_,d_
         l.angle = angle  # dy,dx between node centers
         l.span = span  # distance between node centers
@@ -88,8 +88,9 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
     for P in iP_:  # dP from link_ if fd
         if P.merged: continue
         _prim_ = P.prim; _lrim_ = P.lrim
-        I,G, M,D, L,_ = P.latuple
-        _P_ = {P}; link_ = set(); Et = np.array([I+M, G+D])
+        if fd: Et= P.Et; L = P.L  # summed vertuple, min L in dP
+        else:  I,G,M,D,L,A = P.latuple; Et = np.array([I+M, G+D])
+        _P_ = {P}; link_ = set()
         vert = np.zeros((2,6))
         while _prim_:
             prim_,lrim_ = set(),set()
@@ -98,8 +99,9 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
                     continue
                 _P_.add(_P); link_.add(_link)
                 vert += _link.vertuple
-                _I,_G,_M,_D,_L,_ = _P.latuple
-                Et += _link.Et + np.array([_I+_M, _G+_D])  # intra-P similarity and variance
+                if fd: (_M,_D),_L = _P.Et, _P.L
+                else: _I,_G,_M,_D,_L,_ = _P.latuple; _M,_D = _I+_M, _G+_D
+                Et += _link.Et + np.array([_M,_D])  # intra-P similarity and variance
                 L += _L  # latuple summation span
                 prim_.update(set(_P.prim) - _P_)
                 lrim_.update(set(_P.lrim) - link_)
@@ -144,12 +146,12 @@ def comp_dP_(edge, mEt):  # node_- mediated: comp node.rim dPs, call from form_P
 
 def convert_to_dP(_P,P, derLay, angle, distance, Et):
 
-    link = CdP(nodet=[_P,P], Et=Et, latuple=_P.latuple, vertuple=derLay, angle=angle, span=distance, yx=np.add(_P.yx, P.yx)/2)
+    link = CdP(nodet=[_P,P], Et=Et, vertuple=derLay, angle=angle, span=distance, yx=np.add(_P.yx, P.yx)/2)
     # bilateral, regardless of clustering:
     _P.vertuple += link.vertuple; P.vertuple += link.vertuple
     _P.lrim += [link]; P.lrim += [link]
     _P.prim += [P];    P.prim +=[_P]  # all Ps are dPs if fd
-
+    link.L = min(_P.latuple[4],P.latuple[4])
     return link
 
 def sum2PP(P_, dP_, Et):  # sum links in Ps and Ps in PP
