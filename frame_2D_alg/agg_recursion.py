@@ -247,6 +247,7 @@ def cluster_edge(edge, frame, lev0, lev1, dH, derlay):  # non-recursive comp_PPm
                 if m > ave * n * loop_w: mEt += L.Et; N_.update({_G, G})  # mL_ += [L]
                 if d > avd * n * loop_w: dEt += L.Et  # dL_ += [L]
                 L_ += [L]
+        if not dEt[2]: dEt[2] = 1e-7
         return list(N_),L_, mEt, dEt
 
     for fi in 1,0:
@@ -257,7 +258,7 @@ def cluster_edge(edge, frame, lev0, lev1, dH, derlay):  # non-recursive comp_PPm
             for l in L_:
                 derlay[fi].add_lay(l.derH[0])
             G_ = []
-            if val_(mEt, mEt, ave, mw=len(PP_)*Lw, aw=clust_w, fi=1) > 0:
+            if PP_ and val_(mEt, mEt, ave, mw=len(PP_)*Lw, aw=clust_w, fi=1) > 0:
                 G_ = cluster_PP_(copy(PP_)) if mEt[0] * (len(PP_)-1)*Lw > ave * mEt[2] * clust_w else []
             if G_:
                 lev1[1-fi] += G_; lev0[1-fi] += PP_  # H[0]
@@ -270,9 +271,9 @@ def cluster_edge(edge, frame, lev0, lev1, dH, derlay):  # non-recursive comp_PPm
                 if Gd_:
                     dH[1] += Gd_  # frame.dH
 
-def val_(Et, _Et, ave, mw=1, aw=1, fi=1):  # m+d cluster | cross_comp eval, + cross|root _Et projection
+def val_(Et, _Et, ave, mw=1, aw=1, fi=1):  # m+d cluster | cross_comp eval, including cross|root alt_Et projection
 
-    m, d, n, o = Et; _m,_d,_n,_o = _Et  # cross-fork induction of root Et alt, same overlap?
+    m, d, n, o = Et; _m,_d,_n,_o = _Et  # cross-fork induction of root Et alt, same o (overlap)?
     m *= mw  # such as len*Lw
 
     d_loc = d * (_m - ave * aw * (_n/n))  # diff * co-projected m deviation, no bilateral deviation?
@@ -438,8 +439,8 @@ def base_comp(_N, N, dir=1):  # comp Et, Box, baseT, derTT
         _L,L = _N.L, N.L   # not cumulative
         mL,dL = min(_L,L)/ max(_L,L), _L - L
     else:  # dimension is box area
-        _y0,_x0,_yn,_xn =_N.box; _A = (_yn+1-_y0) * (_xn-_x0)
-        y0, x0, yn, xn = N.box;   A = (yn+1 - y0) * (xn - x0)
+        _y0,_x0,_yn,_xn =_N.box; _A = (_yn+1-_y0) * (_xn+1-_x0)
+        y0, x0, yn, xn = N.box;   A = (yn+1 - y0) * (xn+1 - x0)
         mL, dL = min(_A,A)/ max(_A,A), _A - A
         # mA, dA
     _m_,_d_ = np.array([[mM,mD,mn,mo,mI,mG,mA,mL], [dM,dD,dn,do,dI,dG,dA,dL]])
@@ -666,13 +667,13 @@ def comb_altG_(G_, ave, rc=1):  # combine contour G.altG_ into altG (node_ defin
     # internal vs. external alts: different decay / distance, background + contour?
     for G in G_:
         if G.altG:
-            if G.altG.H:
-                G.altG = sum_N_(G.altG.H)
+            if G.altG.node_:
+                G.altG = sum_N_(G.altG.node_)
                 G.altG.root=G; G.altG.m=0
                 if val_(G.altG.Et, G.Et, ave, fi=0):  # alt D * G rM
-                    cross_comp(G.altG, rc, G.altG.H, fi=1)  # adds nesting
+                    cross_comp(G.altG, rc, G.altG.node_, fi=1)  # adds nesting
         elif G.H:
-            # G is not PP, altG = sum dlinks
+            # altG = sum dlinks, if G is not PP
             dL_ = list(set([L for g in G.node_ for L,_ in (g.rim if isinstance(g, CG) else g.rimt[0]+g.rimt[1]) if val_(L.Et,G.Et, ave, fi=0) > 0]))
             if dL_ and val_(np.sum([l.Et for l in dL_], axis=0), G.Et, ave, aw=10, fi=0) > 0:
                 altG = sum_N_(dL_)
@@ -786,7 +787,7 @@ def PP2G(PP, frame):
     P_, link_, vert, latuple, A, S, box, yx, Et = PP
     baseT = np.array((*latuple[:2], *latuple[-1]))  # I,G,Dy,Dx
     [mM,mD,mI,mG,mA,mL], [dM,dD,dI,dG,dA,dL] = vert
-    derTT = np.array([[mM,mD,mL,0,mI,mG,mA,mL], [dM,dD,dL,0,dI,dG,dA,dL]])
+    derTT = np.array([[mM,mD,mL,1,mI,mG,mA,mL], [dM,dD,dL,1,dI,dG,dA,dL]])  # rolp = 1
     y,x,Y,X = box; dy,dx = Y-y,X-x
     # A = (dy,dx); L = np.hypot(dy,dx)
     G = CG(root=frame, fi=1, Et=Et, node_=P_,link_=link_, baseT=baseT, derTT=derTT, box=box, yx=yx, aRad=np.hypot(dy/2, dx/2),
@@ -881,9 +882,9 @@ def feedback(root):  # root is frame or lG
 
     rv_t = np.ones((2,8))  # sum derTT coefs: m_,d_ [M,D,n,o, I,G,A,L] / Et, baseT, dimension
     rM,rD = 1,1
-    hlG = sum_N_(root.link_+ root.dH[1])  # not sure about root.dH (so dH has dL_ and Gd_, i think we need to select the higher Gd_ only?)
+    hlG = sum_N_(root.link_ + root.dH[-1])  # top Gd_?
     for lev in reversed(root.H):
-        lG = lev[1]  # eval link_: comp results per level?
+        lG = np.minimum(lev[1],1e-7)  # eval link_: comp results per level?
         if not lG: continue
         _m,_d,_n,_ = hlG.Et; m,d,n,_ = lG.Et
         rM += (_m/_n) / (m/n)  # no o eval?

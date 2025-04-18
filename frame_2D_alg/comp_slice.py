@@ -151,7 +151,7 @@ def convert_to_dP(_P,P, derLay, angle, distance, Et):
     _P.vertuple += link.vertuple; P.vertuple += link.vertuple
     _P.lrim += [link]; P.lrim += [link]
     _P.prim += [P];    P.prim +=[_P]  # all Ps are dPs if fd
-    link.L = min(_P.latuple[4],P.latuple[4])
+    link.L = min(_P.latuple[4],P.latuple[4]) if isinstance(_P,CP) else min(_P.L,P.L)  # P is CdP
     return link
 
 def sum2PP(P_, dP_, Et):  # sum links in Ps and Ps in PP
@@ -169,7 +169,7 @@ def sum2PP(P_, dP_, Et):  # sum links in Ps and Ps in PP
             vert += dP.vertuple
             a = dP.angle; A = np.add(A,a); S += np.hypot(*a)  # span, links are contiguous but slanted
     else:  # single P PP
-        S,A = P_[0].latuple[4:]  # [I, G, M, D, L, (Dy, Dx)]
+        S,A = (P_[0].angle, P_[0].span) if fd else P_[0].latuple[4:]  # [I, G, M, D, L, (Dy, Dx)]
     box = [np.inf,np.inf,0,0]
     for P in P_:
         if not fd:  # else summed from P_ nodets on top
