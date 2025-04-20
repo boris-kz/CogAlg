@@ -273,3 +273,15 @@ def merge_Lp(L, l, w_):  # combine med_Ls into Link
     L.Et[0] = np.sum(L.derTT[0] - np.abs(L.derTT[1]))
     return L
 
+def val_(Et, _Et, ave, mw=1, aw=1, fi=1):  # m+d cluster | cross_comp eval, including cross|root alt_Et projection
+
+    m, d, n, o = Et; _m,_d,_n,_o = _Et  # cross-fork induction of root Et alt, same o (overlap)?
+    m *= mw  # such as len*Lw
+
+    d_loc = d * (_m - ave * aw * (_n/n))  # diff * co-projected m deviation, no bilateral deviation?
+    d_ave = d - avd / ave  # d deviation, filter ave_d decreases with ave m, which lends value to d
+
+    if fi: val = m + d_ave - d_loc  # match + proj surround val - blocking val, * decay?
+    else:  val = d_ave + d_loc  # diff borrow val, generic + specific
+
+    return val - ave * aw * n * o  # simplified: np.add(Et[:2]) > ave * np.multiply(Et[2:])
