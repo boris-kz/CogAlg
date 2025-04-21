@@ -285,3 +285,29 @@ def val_(Et, _Et, ave, mw=1, aw=1, fi=1):  # m+d cluster | cross_comp eval, incl
     else:  val = d_ave + d_loc  # diff borrow val, generic + specific
 
     return val - ave * aw * n * o  # simplified: np.add(Et[:2]) > ave * np.multiply(Et[2:])
+
+def val_1(Et, _Et=None, mw=1, aw=1, fi=1):  # m+d val per cluster|cross_comp
+
+    m, d, n, o = Et  # m->d lend cancels-out in Et scope, not in higher-scope _Et?
+    am = ave * aw
+    ad = avd * aw
+    if _Et:  # higher scope values
+        _m,_d,_n,_o = _Et; rn = _n / n
+        _m_dev = _m * rn - am
+        _d_dev = _d * rn - ad
+    else: _m_dev,_d_dev = 0,0
+
+    if fi: return m*mw - am - (d - ad + _d_dev)  # m_dev -= lend to d_dev, local + global
+    else:  return d*mw - ad + (m - am + _m_dev)  # d_dev += borrow from m_dev, local + global
+
+def add_node_H(H, h, root):
+
+    for Lev, lev in zip(H, h):  # always aligned?
+        for i, (F, f) in enumerate(zip_longest(Lev, lev, fillvalue=None)):
+            if f:  # nG | lG | dH
+                if isinstance(F,CG): add_N(F,f)  # nG|lG
+                elif isinstance(F,list): add_node_H(F,f, root=Lev[1])  # dH rooted in lG?
+                elif F is None: Lev += [f]  # if lG, no empty layers?
+                else:  Lev[i] = copy_(f, root=root)  # replace empty layer
+
+
