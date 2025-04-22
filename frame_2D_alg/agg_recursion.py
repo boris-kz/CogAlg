@@ -119,7 +119,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.node_ = kwargs.get('node_',[])  # flat
         G.link_ = kwargs.get('link_',[])  # spliced node link_s
         G.H = kwargs.get('H',[])  # list of lower levels: [nG,lG]: node_,link_ packed in sum2graph
-        G.lH = kwargs.get('dH',[])  # link_ agg+ levels in top level: node_,link_,dH, | nG,lG too?
+        G.lH = kwargs.get('lH',[])  # link_ agg+ levels in top level: node_,link_,lH
         G.Et = kwargs.get('Et',np.zeros(4))  # sum all M,D,n,o from link_
         G.et = kwargs.get('et',np.zeros(4))  # sum from rim
         G.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,Dy,Dx  # from slice_edge,
@@ -193,7 +193,7 @@ def vect_root(frame, rV=1, ww_t=[]):  # init for agg+:
         ww_t = np.delete(ww_t,(2,3), axis=1)  #-> comp_slice, = np.array([(*ww_t[0][:2],*ww_t[0][4:]),(*ww_t[0][:2],*ww_t[1][4:])])
     blob_ = unpack_blob_(frame)
     frame = CG(root = None)
-    lev0, lev1, lH = [[],[]], [[],[]], [[],[]]  # two forks per level and derlay, two levs in dH
+    lev0, lev1, lH = [[],[]], [[],[]], [[],[]]  # two forks per level and derlay, two levs in lH
     derlay = [CLay(root=frame), CLay(root=frame)]
     for blob in blob_:
         if not blob.sign and blob.G > aveB * blob.root.olp:
@@ -231,44 +231,50 @@ def cluster_edge(edge, frame, lev0, lev1, lH, derlay):  # non-recursive comp_PPm
                                     eN_ += [eN]; PP_.remove(eN)  # merged
                             link_ += [L]; et += L.Et
                 _eN_ = {*eN_}
-            if et[0] * (len(node_)*Lw) > ave*2 * et[2] * clust_w:
+            if val_(et, mw=(len(node_)-1)*Lw, aw=2*clust_w) > 0:
                 Lay = CLay(); [Lay.add_lay(link.derH[0]) for link in link_]  # single-lay derH
                 G_ += [sum2graph(frame, [node_,link_,et, Lay], fi=1)]
         return G_
 
     def comp_PP_(PP_):
-        L_,mEt,dEt, N_ = [], np.zeros(4),np.zeros(4), set()
+        N_,L_,mEt,dEt = [],[],np.zeros(4),np.zeros(4)
 
         for _G, G in combinations(PP_, r=2):
             dy,dx = np.subtract(_G.yx,G.yx); dist = np.hypot(dy,dx)
             if dist - (G.aRad+_G.aRad) < ave_dist /10 :  # very short here
                 L = comp_N(_G, G, ave, fi=1, angle=[dy, dx], dist=dist, fshort=1)
                 m, d, n, o = L.Et
-                if m > ave * n * o * loop_w: mEt += L.Et; N_.update({_G, G})  # mL_ += [L]
+                if m > ave * n * o * loop_w: mEt += L.Et; N_ += [_G,G]  # mL_ += [L]
                 if d > avd * n * o * loop_w: dEt += L.Et  # dL_ += [L]
                 L_ += [L]
-        if not dEt[2]: dEt[2] = 1e-7
-        return list(N_),L_, mEt, dEt
+        dEt[2], dEt[3] = dEt[2] or 1e-7, dEt[3] or 1e-7
+        return list({N_}),L_, mEt, dEt
 
     for fi in 1,0:
-        if (edge.Et[1-fi] *((len(edge.node_ if fi else edge.link_)-1)*(edge.rng+1) *Lw)
-            > ave * edge.Et[2] * clust_w):
-            N_ = [PP2G(PP, frame) for PP in (edge.node_ if fi else edge.link_)]
-            PP_,L_,mEt,dEt = comp_PP_(N_)
-            for l in L_:
-                derlay[fi].add_lay(l.derH[0])
+        PP_ = edge.node_ if fi else edge.link_
+        if val_(edge.Et, mw=(len(PP_)-edge.rng+1)*Lw, aw=loop_w) > 0:
+            # PPm_|PPd_:
+            PP_,L_,mEt,dEt = comp_PP_([PP2G(PP,frame) for PP in PP_])
             if PP_:
                 if val_(mEt, mw=(len(PP_)-1)*Lw, aw=clust_w, fi=1) > 0:
                     G_ = cluster_PP_(copy(PP_))
                 else: G_ = []
-                if G_: lev1[1-fi] += G_; lev0[1-fi]+=PP_  # H[0]
-                else:  lev1[1-fi] += PP_  # node_|link_
-                if fi:  # der+ in mfork
-                    if val_(dEt, mw=(len(L_)-1)*Lw, aw=clust_w, fi=0) > 0:
-                        Gd_ = cluster_L_(frame, L2N(L_), ave,rc=2, fnodet=1).node_
-                    else: Gd_ = []
-                    if Gd_: lev1[1] += Gd_; lH[0] += L_  # lG.H?
-                    else:   lev1[1] += L_
+                if G_:
+                    if fi: lev1[0] += G_  # node_
+                    else:  lH[0] += G_
+                    lev0[0] += PP_  # H[0] = PPm_
+                elif fi: lev1[0] += PP_  # PPm_
+                else:    lH[0] += PP_  # PPd_
+            for l in L_: derlay[fi].add_lay(l.derH[0])
+            if fi:  # mfork der+
+                if val_(dEt, mw= (len(L_)-1)*Lw, aw=2*clust_w, fi=0) > 0:
+                    Gd = cluster_L_(frame, L2N(L_), ave, rc=2, fnodet=1)
+                    Gd_ = Gd.node_ if Gd else []
+                else: Gd_ = []
+                lev1[1] += L_  # default
+                if Gd_: lH[1] += Gd_
+            else:
+                lH[1] += L_  # lL_?
 
 def val_(Et, _Et=None, mw=1, aw=1, fi=1):  # m+d val per cluster|cross_comp
 
@@ -310,21 +316,21 @@ def cross_comp(root, rc, iN_, fi=1):  # rc: recursion count, fc: centroid phase,
         if val_(Et, mw=(len(mL_)-1)*Lw, aw=(rc+2)*clust_w) > 0:  # np.add(Et[:2]) > (ave+ave_d) * np.multiply(Et[2:])?
             if fi:                                               # cc_w if fc else lc_w? rc+=1 for all subseq ops?
                 eN_ = get_exemplars(mL_, ave*(rc+2))
-                if eN_: # exemplars: typical sparse nodes
+                if eN_:  # exemplars: typical sparse nodes
                     eL_ = {l for n in eN_ for l,_ in n.rim}  # if l.L < ave_dist?
                     if val_(np.sum([l.Et for l in eL_]), Et, mw=((len(eL_)-1)*Lw), aw=(rc+3)*clust_w) > 0:
-                        for n in N_: n.fin=0
+                        for n in iN_: n.fin=0
                         nG = cluster_N_(root, eL_, ave*(rc+3), rc+3)  # cluster exemplars
             else:  # N_ = dfork L_
-                nG = cluster_L_(root, N_, ave*(rc+2), rc=rc+2, fnodet=0)  # no CC, via llinks, no dist-nesting
+                nG = cluster_L_(root, N_, ave*(rc+2), rc=rc+2, fnodet=0)  # via llinks, no CC, no dist-nesting
             if nG:
                 if val_(nG.Et, Et, mw=(len(nG.node_)-1)*Lw, aw=(rc+3)*loop_w) > 0:
-                    cross_comp(nG, rc=rc+3, iN_=nG.node_)  # recursive agglomeration
+                    cross_comp(nG, rc=rc+3, iN_=nG.node_) # recursive agglomeration -> root node_H
         # dfork:
         dval = val_(Et, mw=(len(dL_)-1)*Lw, aw=(rc+3)*clust_w, fi=0)
         if dval > 0:
-            if dval > ave:  # recursive derivation
-                lG = cross_comp(sum_N_(L_),rc+3, L2N(L_), fi=0)  # comp_link_, no CC, lG.H in the same lev
+            if dval > ave:  # recursive derivation in node_H level
+                lG = cross_comp(sum_N_(L_),rc+3, L2N(L_), fi=0)  # comp_link_, no CC
             else:  # lower res, dL_ eval?
                 lG = cluster_L_(sum_N_(dL_), L2N(L_), ave*(rc+3), rc=rc+3, fnodet=1)
         if nG or lG:
@@ -333,7 +339,8 @@ def cross_comp(root, rc, iN_, fi=1):  # rc: recursion count, fc: centroid phase,
                 if g: lev += [g]; add_N(root, g)  # appends root.derH
                 else: lev += [[]]
             root.H += [lev] + nG.H if nG else []  # nG.H from recursion, if any
-
+            if lG and lG.H:
+                add_node_H(root.lH, lG.H, root.root)
         return nG
 
 def comp_node_(_N_, ave, L=0):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et, ~ graph CNN without backprop
@@ -351,12 +358,13 @@ def comp_node_(_N_, ave, L=0):  # rng+ forms layer of rim and extH per N, append
         _Gp_ += [(_G,G, rn, dy,dx, radii, dist)]
     rng = 1
     N_,L_,ET = set(),[],np.zeros(4)
-    _Gp_ = sorted(_Gp_, key=lambda x: x[-1])  # sort by dist, closest pairs first
+    _Gp_ = sorted(_Gp_, key=lambda x: x[-1])  # sort pairs by proximity
     while True:  # prior vM
         Gp_,Et = [],np.zeros(4)
         for Gp in _Gp_:
-            _G, G, rn, dy,dx, radii, dist = Gp;  (_m,_,_n,_), (m,_,n,_) = _G.Et, G.Et
-            max_dist = ave_dist * (radii/aveR) * ((_m+m)/(ave*(_n+n))/ int_w)  # dist * radii * induction
+            _G, G, rn, dy,dx, radii, dist = Gp
+            (_m,_,_n,_o),(m,_,n,o) = _G.Et, Et
+            max_dist = ave_dist * (radii/aveR) * ((_m+m)/(ave*(_n+n+_o+o)) / int_w)  # ave_dist * radii * induction
             if max_dist > dist or _G._N_ & G._N_:
                 # comp if close or share matching mediators
                 Link = comp_N(_G,G, ave, fi=1, angle=[dy,dx], dist=dist, fshort = dist < max_dist/2)  # no density: incomplete ext V
@@ -523,7 +531,7 @@ def cluster_N_(root, L_, ave, rc):  # top-down segment L_ by >ave ratio of L.dis
                                 if L.L < max_dist:
                                     link_+=[L]; et+=L.Et  # current distance segment
                     _eN_ = {*eN_}
-                # form Gt:
+                # Gt:
                 link_ = list({*link_})
                 Lay = CLay(); [Lay.add_lay(lay) for lay in sum_H(link_, nG, fi=0)]
                 derTT = Lay.derTT
@@ -633,10 +641,10 @@ def sum2graph(root, grapht, fi, minL=0, maxL=None):  # sum node and link params 
             if fg and N.H: add_node_H(graph.H, N.H, root=graph)
         if fg and isinstance(N.node_[0],CG): # skip Ps
             n_ += N.node_; l_ += N.link_
-            if N.dH: add_node_H(lH, N.lH, graph)
+            if N.lH: add_node_H(lH, N.lH, graph)  # top level only
     if fg:  # pack prior top level
-        nG, lG = sum_N_(n_), sum_N_(l_); lG.H = lH
-        graph.H += [[nG,lG]]
+        graph.H += [[sum_N_(n_), sum_N_(l_)]]
+        graph.lH = lH
     graph.node_ = N_  # current-dist link_ only?
     yx = np.mean(yx_, axis=0)
     dy_,dx_ = (graph.yx - yx_).T; dist_ = np.hypot(dy_,dx_)
@@ -761,7 +769,7 @@ def add_N(N,n, fi=1, fappend=0):
         if fi: N.link_ += [n.link_]  # splice if CG
     elif fi:  # empty in append and altG
         if n.H: add_node_H(N.H, n.H, root=N)
-        if n.dH: add_node_H(N.dH, n.dH, root=N)
+        if n.lH: add_node_H(N.lH, n.lH, root=N)
     if n.derH:
         add_H(N.derH, n.derH, root=N, fi=fi)
     if hasattr(n,'extTT'):  # node, = fi?
@@ -787,7 +795,7 @@ def extend_box(_box, box):  # extend box with another box
 def L2N(link_):
     for L in link_:
         L.fi=0; L.et=np.zeros(4); L._N_=set(); L.mL_t, L.rimt = [[],[]], [[],[]]; L.aRad=0; L.extTT=np.zeros((2,8))
-        L.compared_=[]; L.visited_, L.extH, L.node_, L.link_, L.H, L.dH = [],[],[],[],[],[]
+        L.compared_=[]; L.visited_, L.extH, L.node_, L.link_, L.H, L.lH = [],[],[],[],[],[]
         if not hasattr(L,'root'): L.root=[]
     return link_
 
@@ -890,7 +898,7 @@ def feedback(root):  # root is frame or lG
 
     rv_t = np.ones((2,8))  # sum derTT coefs: m_,d_ [M,D,n,o, I,G,A,L] / Et, baseT, dimension
     rM,rD = 1,1
-    hlG = sum_N_(root.link_ + root.dH[-1])  # top Gd_?
+    hlG = sum_N_(root.link_)
     for lev in reversed(root.H):
         lG = lev[1]  # level link_: all comp results?
         if not lG: continue
