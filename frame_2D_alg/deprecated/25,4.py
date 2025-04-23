@@ -208,14 +208,6 @@ def add_N(N,n, fi=1, fappend=0, fw=0):
         n.baseT*=r; n.derTT*=r; n.Et*=r
         # also scale yx drift contribution?
 
-def add_node_H(H,h):
-
-    for Lev, lev in zip(H, h):  # always aligned?
-        for F, f in zip_longest(Lev, lev, fillvalue=None):
-            if f:
-                if F: add_N(F,f)  # nG|lG
-                else: Lev += [f]  # if lG
-
     # if len(_P_)==1 and len(next(iter(_P_)).dert_)==1: continue
 '''
         for Gp in _Gp_:
@@ -307,6 +299,15 @@ def add_node_H(H, h, root):
             if f:  # nG | lG | dH
                 if isinstance(F,CG): add_N(F,f)  # nG|lG
                 elif isinstance(F,list): add_node_H(F,f, root=Lev[1])  # dH rooted in lG?
+                elif F is None: Lev += [f]  # if lG, no empty layers?
+                else:  Lev[i] = copy_(f, root=root)  # replace empty layer
+
+def add_node_H(H, h, root):
+
+    for Lev, lev in zip(H, h):  # always aligned?
+        for i, (F, f) in enumerate(zip_longest(Lev, lev, fillvalue=None)):
+            if f:
+                if F: add_N(F,f)  # nG|lG
                 elif F is None: Lev += [f]  # if lG, no empty layers?
                 else:  Lev[i] = copy_(f, root=root)  # replace empty layer
 

@@ -118,7 +118,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         super().__init__()
         G.node_ = kwargs.get('node_',[])  # flat
         G.link_ = kwargs.get('link_',[])  # spliced node link_s
-        G.H = kwargs.get('H',[])  # list of lower levels: [nG,lG]: node_,link_ packed in sum2graph
+        G.H = kwargs.get('H',[])  # list of lower levels: [nG,lG]: pack node_,link_ in sum2graph; lG.H: packed-level lH:
         G.lH = kwargs.get('lH',[])  # link_ agg+ levels in top level: node_,link_,lH
         G.Et = kwargs.get('Et',np.zeros(4))  # sum all M,D,n,o from link_
         G.et = kwargs.get('et',np.zeros(4))  # sum from rim
@@ -193,7 +193,7 @@ def vect_root(frame, rV=1, ww_t=[]):  # init for agg+:
         ww_t = np.delete(ww_t,(2,3), axis=1)  #-> comp_slice, = np.array([(*ww_t[0][:2],*ww_t[0][4:]),(*ww_t[0][:2],*ww_t[1][4:])])
     blob_ = unpack_blob_(frame)
     frame = CG(root = None)
-    lev0, lev1, lH = [[],[]], [[],[]], [[],[]]  # two forks per level and derlay, two levs in lH
+    lev0, lev1, lH = [[],[]], [[],[]], [[],[],[]]  # two forks per level and derlay, two levs in lH
     derlay = [CLay(root=frame), CLay(root=frame)]
     for blob in blob_:
         if not blob.sign and blob.G > aveB * blob.root.olp:
@@ -231,7 +231,7 @@ def cluster_edge(edge, frame, lev0, lev1, lH, derlay):  # non-recursive comp_PPm
                                     eN_ += [eN]; PP_.remove(eN)  # merged
                             link_ += [L]; et += L.Et
                 _eN_ = {*eN_}
-            if val_(et, mw=(len(node_)-1)*Lw, aw=2*clust_w) > 0:
+            if val_(et, mw=(len(node_)-1)*Lw, aw=2*clust_w) > 0:  # rc=2
                 Lay = CLay(); [Lay.add_lay(link.derH[0]) for link in link_]  # single-lay derH
                 G_ += [sum2graph(frame, [node_,link_,et, Lay], fi=1)]
         return G_
@@ -241,18 +241,19 @@ def cluster_edge(edge, frame, lev0, lev1, lH, derlay):  # non-recursive comp_PPm
 
         for _G, G in combinations(PP_, r=2):
             dy,dx = np.subtract(_G.yx,G.yx); dist = np.hypot(dy,dx)
-            if dist - (G.aRad+_G.aRad) < ave_dist /10 :  # very short here
+            if dist - (G.aRad+_G.aRad) < ave_dist / 10:  # very short here
                 L = comp_N(_G, G, ave, fi=1, angle=[dy, dx], dist=dist, fshort=1)
                 m, d, n, o = L.Et
                 if m > ave * n * o * loop_w: mEt += L.Et; N_ += [_G,G]  # mL_ += [L]
                 if d > avd * n * o * loop_w: dEt += L.Et  # dL_ += [L]
                 L_ += [L]
-        dEt[2], dEt[3] = dEt[2] or 1e-7, dEt[3] or 1e-7
-        return list({N_}),L_, mEt, dEt
+        dEt[2],dEt[3] = dEt[2] or 1e-7, dEt[3] or 1e-7
+        if N_: N_ = list({N_})
+        return N_,L_,mEt,dEt
 
     for fi in 1,0:
         PP_ = edge.node_ if fi else edge.link_
-        if val_(edge.Et, mw=(len(PP_)-edge.rng+1)*Lw, aw=loop_w) > 0:
+        if val_(edge.Et, mw=(len(PP_)- edge.rng) *Lw, aw=loop_w) > 0:
             # PPm_|PPd_:
             PP_,L_,mEt,dEt = comp_PP_([PP2G(PP,frame) for PP in PP_])
             if PP_:
@@ -262,7 +263,7 @@ def cluster_edge(edge, frame, lev0, lev1, lH, derlay):  # non-recursive comp_PPm
                 if G_:
                     if fi: lev1[0] += G_  # node_
                     else:  lH[0] += G_
-                    lev0[0] += PP_  # H[0] = PPm_
+                    lev0[1-fi] += PP_  # H[0] = [PPm_,PPd_]
                 elif fi: lev1[0] += PP_  # PPm_
                 else:    lH[0] += PP_  # PPd_
             for l in L_: derlay[fi].add_lay(l.derH[0])
@@ -272,9 +273,9 @@ def cluster_edge(edge, frame, lev0, lev1, lH, derlay):  # non-recursive comp_PPm
                     Gd_ = Gd.node_ if Gd else []
                 else: Gd_ = []
                 lev1[1] += L_  # default
-                if Gd_: lH[1] += Gd_
+                if Gd_: lH[2] += Gd_  # new layer
             else:
-                lH[1] += L_  # lL_?
+                lH[1] += L_ # lL_
 
 def val_(Et, _Et=None, mw=1, aw=1, fi=1):  # m+d val per cluster|cross_comp
 
@@ -318,7 +319,7 @@ def cross_comp(root, rc, iN_, fi=1):  # rc: recursion count, fc: centroid phase,
                 eN_ = get_exemplars(mL_, ave*(rc+2))
                 if eN_:  # exemplars: typical sparse nodes
                     eL_ = {l for n in eN_ for l,_ in n.rim}  # if l.L < ave_dist?
-                    if val_(np.sum([l.Et for l in eL_]), Et, mw=((len(eL_)-1)*Lw), aw=(rc+3)*clust_w) > 0:
+                    if val_(np.sum([l.Et for l in eL_],axis=0), Et, mw=((len(eL_)-1)*Lw), aw=(rc+3)*clust_w) > 0:
                         for n in iN_: n.fin=0
                         nG = cluster_N_(root, eL_, ave*(rc+3), rc+3)  # cluster exemplars
             else:  # N_ = dfork L_
@@ -339,8 +340,8 @@ def cross_comp(root, rc, iN_, fi=1):  # rc: recursion count, fc: centroid phase,
                 if g: lev += [g]; add_N(root, g)  # appends root.derH
                 else: lev += [[]]
             root.H += [lev] + nG.H if nG else []  # nG.H from recursion, if any
-            if lG and lG.H:
-                add_node_H(root.lH, lG.H, root.root)
+            if lG:
+                root.lH += lG.H+[sum_N_(lG.node_,root=lG)]  # lH~H but within a level
         return nG
 
 def comp_node_(_N_, ave, L=0):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et, ~ graph CNN without backprop
@@ -781,12 +782,23 @@ def add_N(N,n, fi=1, fappend=0):
 def add_node_H(H, h, root):
 
     for Lev, lev in zip(H, h):  # always aligned?
-        for i, (F, f) in enumerate(zip_longest(Lev, lev, fillvalue=None)):
-            if f:
-                if F: add_N(F,f)  # nG|lG
-                elif F is None: Lev += [f]  # if lG, no empty layers?
-                else:  Lev[i] = copy_(f, root=root)  # replace empty layer
-
+         for i, (F, f) in enumerate(zip_longest(Lev, lev, fillvalue=None)):
+             if f:
+                 if F: add_N(F,f)  # nG|lG
+                 elif F is None: Lev += [f]  # for lG only?
+                 else:  Lev[i] = copy_(f, root=root)  # empty fork
+    '''
+    for Lev, lev in zip_longest(H, h, fillvalue=None):  # always aligned?
+        if lev:
+            if Lev:
+                for i, (F,f) in enumerate(zip_longest(Lev, lev, fillvalue=None)):
+                    if f:
+                        if F: add_N(F,f)  # nG|lG
+                        elif F is None: Lev += [f]
+                        else:  Lev[i] = copy_(f, root=root)  # empty fork
+            else:
+                H += [copy_(f, root=root) for f in lev]
+    '''
 def extend_box(_box, box):  # extend box with another box
     y0, x0, yn, xn = box; _y0, _x0, _yn, _xn = _box
 
