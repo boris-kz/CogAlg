@@ -302,13 +302,20 @@ def add_node_H(H, h, root):
                 elif F is None: Lev += [f]  # if lG, no empty layers?
                 else:  Lev[i] = copy_(f, root=root)  # replace empty layer
 
-def add_node_H(H, h, root):
+def get_exemplars(L_, ave):  # select for next cross_comp
 
-    for Lev, lev in zip(H, h):  # always aligned?
-        for i, (F, f) in enumerate(zip_longest(Lev, lev, fillvalue=None)):
-            if f:
-                if F: add_N(F,f)  # nG|lG
-                elif F is None: Lev += [f]  # if lG, no empty layers?
-                else:  Lev[i] = copy_(f, root=root)  # replace empty layer
+    N_ = list(set([node for link in L_ for node in link.nodet]))
+    exemplars, _N_ = [], set()
+    for N in sorted(N_, key=lambda n: n.et[0]/n.et[2], reverse=True):
+        M,_,n,_ = N.et  # sum from rim
+        if eval(M, weights=[ave, n, clust_w, rolp_M(M, N,_N_)]):  # 1 + rolp_M to the intersect of inhibition zones
+            exemplars += [N]; _N_.update(N._N_)
+        else:
+            break  # the rest of N_ is weaker
+    return exemplars
+
+def rolp_M(M, N, _N_):
+    oL_ = [L for L,_ in N.rim if [n for n in L.nodet if n in _N_]]
+    return 1 + sum([L.Et[0] for L in oL_]) / M  # ave weight in range 1:2
 
 
