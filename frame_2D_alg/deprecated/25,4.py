@@ -318,4 +318,44 @@ def rolp_M(M, N, _N_):
     oL_ = [L for L,_ in N.rim if [n for n in L.nodet if n in _N_]]
     return 1 + sum([L.Et[0] for L in oL_]) / M  # ave weight in range 1:2
 
+def comp_node_(_N_, ave, L=0):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et, ~ graph CNN without backprop
+
+    _Gp_ = [] # [G pair + co-positionals], for top-nested Ns, unless cross-nesting comp:
+    if L: _N_ = filter(lambda N: len(N.derH)==L, _N_)
+    # max len derH only
+    for _G, G in combinations(_N_, r=2):
+        if len(_G.H) != len(G.H):  # | root.H: comp top nodes only?
+            continue
+        _n, n = _G.Et[2], G.Et[2]; rn = _n/n if _n>n else n/_n
+        radii = G.aRad + _G.aRad
+        dy,dx = np.subtract(_G.yx,G.yx); dist = np.hypot(dy,dx)
+        _G.add, G.add = 0, 0
+        _Gp_ += [(_G,G, rn, dy,dx, radii, dist)]
+    rng = 1
+    N_,L_,ET = set(),[],np.zeros(4)
+    _Gp_ = sorted(_Gp_, key=lambda x: x[-1])  # sort pairs by proximity
+    while True:  # prior vM
+        Gp_,Et = [],np.zeros(4)
+        # add distance bands for nodes with incremented M?
+        for Gp in _Gp_:
+            _G, G, rn, dy,dx, radii, dist = Gp
+            (_m,_,_n,_o),(m,_,n,o) = _G.Et, Et
+            max_dist = ave_dist * (radii/aveR) * ((_m+m)/(ave*(_n+n+_o+o)) / int_w)  # ave_dist * radii * induction
+            if max_dist > dist or _G._N_ & G._N_:
+                # comp if close or share matching mediators
+                Link = comp_N(_G,G, ave, fi=1, angle=[dy,dx], dist=dist, fshort = dist < max_dist/2)  # no density: incomplete ext V
+                L_ += [Link]  # include -ve links
+                if Link.Et[0] > ave * Link.Et[2] * loop_w:
+                    N_.update({_G,G}); Et += Link.Et; _G.add,G.add = 1,1
+            else:
+                Gp_ += [Gp]  # re-evaluate not-compared pairs with one incremented N.M
+        ET += Et
+        if Et[0] > ave * Et[2] * loop_w:  # current-rng vM
+            _Gp_ = [Gp for Gp in Gp_ if Gp[0].add or Gp[1].add]  # one incremented N.M
+            rng += 1
+        else:  # low projected rng+ vM
+            break
+
+    return  list(N_), L_, ET  # flat N__ and L__
+
 
