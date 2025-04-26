@@ -358,4 +358,134 @@ def comp_node_(_N_, ave, L=0):  # rng+ forms layer of rim and extH per N, append
 
     return  list(N_), L_, ET  # flat N__ and L__
 
+def cluster_N_(root, L_, ave, rc):  # top-down segment L_ by >ave ratio of L.dists
 
+    nG = CG(root=root)
+    L_ = sorted(L_, key=lambda x: x.L)  # short links first
+    min_dist = 0; Et = root.Et
+    while True:
+        # each loop forms G_ of L_ segment with contiguous distance values: L.L
+        _L = L_[0]; N_, et = copy(_L.nodet), _L.Et
+        for n in [n for l in L_ for n in l.nodet]:
+            n.fin = 0
+        for i, L in enumerate(L_[1:], start=1):
+            if L.L/_L.L < 1.2: # >=1, no dist+ if weak?
+                _G,G = L.nodet
+                if val_((_G.Et+G.Et)*int_w + (_G.et+G.et), root.Et, aw= 2*rc*loop_w) > 0:  # _G.et+G.et: surround density
+                    _L = L; N_ += L.nodet; et += L.Et  # else skip weak link inside segment
+            else:
+                i -= 1; break  # terminate contiguous-distance segment
+        max_dist = _L.L
+        G_ = []  # cluster current distance segment N_:
+        if val_(et, Et, mw=(len(N_)-1)*Lw, aw=rc*clust_w) > 0:
+            for N in {*N_}:
+                if N.fin: continue  # clustered from prior _N_
+                _eN_,node_,link_,et, = [N],[],[], np.zeros(4)
+                while _eN_:
+                    eN_ = []
+                    for eN in _eN_:  # cluster rim-connected ext Ns, all in root Gt
+                        node_+=[eN]; eN.fin = 1  # all rim
+                        for L,_ in eN.rim:  # all +ve
+                            if L not in link_:
+                                eN_ += [n for n in L.nodet if not n.fin]
+                                if L.L < max_dist:
+                                    link_+=[L]; et+=L.Et  # current distance segment
+                    _eN_ = {*eN_}
+                # Gt:
+                link_ = list({*link_})
+                Lay = CLay(); [Lay.add_lay(lay) for lay in sum_H(link_, nG, fi=0)]
+                derTT = Lay.derTT
+                # weigh m_|d_ by similarity to mean m|d, weigh derTT:
+                m_,M = centroid_M(derTT[0], ave=ave); d_,D = centroid_M(derTT[1], ave=ave)
+                et[:2] = M,D; Lay.derTT = np.array([m_,d_])
+                node_ = list({*node_})  # cluster roots:
+                if val_(et, Et, mw=(len(node_)-1)*Lw, aw=rc*clust_w) > 0:
+                    G_ += [sum2graph(nG, [node_,link_, et, Lay], 1, min_dist, max_dist)]
+                else: G_ += [N]
+        else:
+            G_ += N_  # unclustered nodes
+        G_ = list(set(G_)); L_ = L_[i + 1:] # longer links:
+        if G_:
+            [comb_alt_(G.alt_, ave, rc) for G in G_ if isinstance(G.alt_,list)]  # not nested in higher-dist Gs, but nodes have all-dist roots
+        if L_:
+            min_dist = max_dist  # next loop connects current-distance clusters via longer links
+        else:
+            break
+    if G_:
+        return sum_N_(G_, root_G=nG)  # highest dist segment, includes all nodes
+
+def cluster_L_(root, L_, ave, rc, fnodet=1):  # CC links via nodet or rimt, no dist-nesting
+
+    lG = CG(root=root)
+    G_ = []  # flood-fill link clusters
+    for L in L_: L.fin = 0
+    for L in L_:
+        if L.fin: continue
+        L.fin = 1
+        node_, link_, Et, Lay = [L], [], copy(L.Et), CLay()
+        if fnodet:
+            for _L in L.nodet[0].rim+L.nodet[1].rim if isinstance(L.nodet[0],CG) else [l for n in L.nodet for l,_ in n.rimt[0]+n.rimt[1]]:
+                if _L in L_ and not _L.fin and _L.Et[1] > avd * _L.Et[2]:  # direct clustering by dval
+                    link_ += L.nodet; Et += _L.Et; _L.fin = 1; node_ += [_L]
+        else:
+            for lL,_ in L.rimt[0] + L.rimt[1]:
+                _L = lL.nodet[0] if lL.nodet[1] is L else lL.nodet[1]
+                if _L in L_ and not _L.fin:  # +ve only, eval by directional density?
+                    link_ += [lL]
+                    Et += lL.Et; _L.fin = 1; node_ += [_L]
+        node_ = list({*node_})
+        if val_(Et, mw=(len(node_)-1)*Lw, aw=rc*clust_w) > 0:
+            Lay = CLay()
+            [Lay.add_lay(l) for l in sum_H(node_ if fnodet else link_, root=lG, fi=0)]
+            G_ += [sum2graph(lG, [node_, link_, Et, Lay], fi=0)]
+    if G_:
+        [comb_alt_(G.alt_, ave, rc) for G in G_ if isinstance(G.alt_,list)]  # no alt_ in dgraph?
+        sum_N_(G_, root_G = lG)
+        # return lG
+
+def cross_comp(root, rc, iN_, fi=1):  # rc: recursion count, fc: centroid phase, cross-comp, clustering, recursion
+
+    N_,L_,Et = comp_node_(iN_, ave*rc) if fi else comp_link_(iN_, ave*rc)  # flat node_ or link_
+    # N__,L__ if comp_node_
+    if N_:
+        mL_,dL_ = [],[]
+        for l in [l for l_ in L_[1:] for l in l_] if fi else L_:  # exemplars in L__[1:] if comp_node_?
+            if l.Et[0] > ave * l.Et[2]:
+                mL_+= [l]
+            if l.Et[1] > avd * l.Et[2]: dL_+= [l]
+        nG, lG = [],[]
+        # mfork:
+        if val_(Et, mw=(len(mL_)-1)*Lw, aw=(rc+2)*clust_w) > 0:  # np.add(Et[:2]) > (ave+ave_d) * np.multiply(Et[2:])?
+            if fi:                                               # cc_w if fc else lc_w? rc+=1 for all subseq ops?
+                N__ = [n for n_ in N_[1:] for n in n_]
+                if len(N__) > 1:  # N__ has >ave rim nodes
+                    eN_ = get_exemplars(N__, ave*(rc+2))  # same as N__[1:]? (It should be different? Why it is the same?)
+                    if eN_:  # exemplars: typical sparse nodes
+                        eL_ = {l for n in eN_ for l,_ in n.rim}  # +connectivity: if l.L < ave_dist?
+                        if val_(np.sum([l.Et for l in eL_],axis=0), Et, mw=((len(eL_)-1)*Lw), aw=(rc+3)*clust_w) > 0:
+                            for n in iN_: n.fin=0
+                            nG = cluster_exemplar_(root, eL_, ave*(rc+3), rc+3)  # cluster exemplars
+            else:  # N_ = dfork L_
+                nG = cluster_L_(root, N_, ave*(rc+2), rc=rc+2, fnodet=0)  # via llinks, no CC, no dist-nesting
+            if nG:
+                if val_(nG.Et, Et, mw=(len(nG.node_)-1)*Lw, aw=(rc+3)*loop_w) > 0:
+                    cross_comp(nG, rc=rc+3, iN_=nG.node_) # recursive agglomeration -> root node_H
+        # dfork:
+        dval = val_(Et, mw=(len(dL_)-1)*Lw, aw=(rc+3)*clust_w, fi=0)
+        if dval > 0:
+            if isinstance(L_[0], list): L__ = [l for l_ in L_[1:] for l in l_]
+            else:                       L__ = L_
+            if dval > ave:  # recursive derivation -> lH within node_H level
+                lG = cross_comp(sum_N_(L__),rc+3, L2N(L__), fi=0)  # comp_link_, no CC
+            else:  # lower res, dL_ eval?
+                lG = cluster_L_(sum_N_(dL_), L2N(L__), ave*(rc+3), rc=rc+3, fnodet=1)
+                if nG: [comb_alt_(G.alt_, ave, rc) for G in nG.node_ if isinstance(G.alt_,list)]  # after mfork
+        if nG or lG:
+            lev = []
+            for g in nG,lG:
+                if g: lev += [g]; add_N(root, g)  # appends root.derH
+                else: lev += [[]]
+            root.H += [lev] + nG.H if nG else []  # nG.H from recursion, if any
+            if lG:
+                root.lH += lG.H+[sum_N_(lG.node_,root=lG)]  # lH: H within node_ level
+        return nG
