@@ -119,7 +119,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.node_ = kwargs.get('node_',[])  # flat
         G.link_ = kwargs.get('link_',[])  # spliced node link_s
         G.H = kwargs.get('H',[])  # list of lower levels: [nG,lG]: pack node_,link_ in sum2graph; lG.H: packed-level lH:
-        G.lH = kwargs.get('lH',[])  # link_ agg+ levels in top level: node_,link_,lH
+        G.lH = kwargs.get('lH',[])  # link_ agg+ levels in top node_H level: node_,link_,lH
         G.Et = kwargs.get('Et',np.zeros(4))  # sum all M,D,n,o from link_
         G.et = kwargs.get('et',np.zeros(4))  # sum from rim
         G.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,Dy,Dx  # from slice_edge,
@@ -132,14 +132,15 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.box = kwargs.get('box', np.array([np.inf,np.inf,-np.inf,-np.inf]))  # y,x,Y,X area: (Y-y)*(X-x)
         G.maxL = kwargs.get('maxL', 0)  # if dist-nested in cluster_N_
         G.aRad = kwargs.get('aRad', 0)  # average distance between graph center and node center
-        # alt.altG is empty, more selective?
+        # empty alt.alt_: select+?
         G.alt_ = []  # adjacent (contour) gap+overlap alt-fork graphs, converted to CG
         # G.fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge
         # G.fback_ = []  # node fb buffer, n in fb[-1]
         G.fi = kwargs.get('fi',0)  # or fd_: list of forks forming G, 1 if cluster of Ls | lGs, for feedback only?
         G.rim = kwargs.get('rim',[])  # external links
         G._N_ = kwargs.get('_N_', set())  # linked nodes
-        G.root = kwargs.get('root')  # may be a list in cluster_N_: same nodes in multiple dist layers
+        G.rng = kwargs.get('rng',1)  # nested node if > 1, get root.root?
+        G.root = kwargs.get('root')  # maybe a list of rng layers, added in cluster_N_
     def __bool__(G): return bool(G.node_)  # never empty
 
 def copy_(N, root=None, init=0):
@@ -307,7 +308,7 @@ def val_(Et, _Et=None, mw=1, aw=1, fi=1):  # m+d val per cluster|cross_comp
 def comp_node_(_N_, rc, L=0):  # rng+ forms layer of rim and extH per N?
 
     for n in _N_: n.compared_ = []
-    N__,L_,ET = [_N_],[],np.zeros(4)  # range banded, default rng=1
+    N__,L_,ET = [],[],np.zeros(4)  # range banded, default rng=1
     rng = 1
     while True:  # _vM
         Gp_ = []  # [G pair + co-positionals], for top-nested Ns, unless cross-nesting comp:
@@ -331,7 +332,7 @@ def comp_node_(_N_, rc, L=0):  # rng+ forms layer of rim and extH per N?
                     Et += Link.Et
                     for n,_n in zip((_G,G),(G,_G)):
                         n.compared_ += [_n]
-                        if n not in N_ and val_(n.et + n.Et*int_w, aw= rc* rng* loop_w) > 0:  # cost+/ rng
+                        if n not in N_ and val_(n.et, aw= rc* rng* loop_w) > 0:  # cost+/ rng
                             N_ += [n]  # for rng+ and exemplar eval
         N__ += [N_]; ET += Et
         if Et[0] > ave * Et[2] * loop_w:  # current-rng vM
@@ -351,7 +352,7 @@ def comp_link_(iL_, rc):  # comp CLs via directional node-mediated link tracing:
                     if L.Et[0] > ave * L.Et[2] * loop_w:
                         mL_ += [(_L, rev ^_rev)]  # direction of L relative to _L
     med = 1; _L_ = iL_
-    L__, LL_, ET = [_L_], [], np.zeros(4)
+    L__,LL_,ET = [],[],np.zeros(4)
     while True:  # xcomp _L_
         L_, Et = [], np.zeros(4)
         for L in _L_:
@@ -361,11 +362,10 @@ def comp_link_(iL_, rc):  # comp CLs via directional node-mediated link tracing:
                     dy,dx = np.subtract(_L.yx,L.yx)
                     Link = comp_N(_L,L, ave*rc, fi=0, angle=[dy,dx], dist=np.hypot(dy,dx), dir = -1 if rev else 1)  # d = -d if L is reversed relative to _L
                     Link.med = med
-                    LL_ += [Link]  # include -ves, link order: nodet < L < rimt, mN.rim || L
-                    Et += Link.Et
-                    for l,_l in zip((_L,L),(L,_L)):  # potential exemplars and next-rng eval
+                    LL_ += [Link]; Et += Link.Et  # include -ves, link order: nodet < L < rimt, mN.rim || L
+                    for l,_l in zip((_L,L),(L,_L)):
                         l.compared_ += [_l]
-                        if l not in L_ and val_(l.et + l.Et*int_w, aw= rc* med* loop_w) > 0:  # cost+/ rng
+                        if l not in L_ and val_(l.et, aw= rc* med* loop_w) > 0:  # cost+/ rng
                             L_ += [l]  # for med+ and exemplar eval
         L__ += [L_]; ET += Et
         # extend mL_t per last medL:
@@ -462,22 +462,21 @@ def cross_comp(root, rc, iN_, fi=1):  # rc: recursion count, fc: centroid phase,
     N__,L_,Et = comp_node_(iN_,rc) if fi else comp_link_(iN_,rc)  # flat node_ or link_
     if N__:  # CLs if not fi
         mL_,dL_ = [],[]
-        for l in L_:   # not rng-banded
+        for l in L_:  # not rng-banded
             if l.Et[0] > ave * l.Et[2]: mL_+= [l]
             if l.Et[1] > avd * l.Et[2]: dL_+= [l]
-        nG_ = []  # rng bands
-        # mfork:
+        nG_ = []  # mfork
         if val_(Et, mw=(len(mL_)-1)*Lw, aw=(rc+2)*clust_w) > 0:  # np.add(Et[:2]) > (ave+avd) * np.multiply(Et[2:])?
-            for N_ in N__[1:]:  # >ave, rng|med - banded
-                nG = []
+            nG_ = [sum_N_(iN_)]  # default
+            for N_ in N__:  # >ave rng|med bands, may be empty
                 eN_ = get_exemplars(N_, ave*(rc+2), fi)  # typical and sparse nodes or links
                 if eN_ and val_(np.sum([n.et for n in eN_],axis=0), Et, mw=((len(eN_)-1)*Lw), aw=(rc+3)*clust_w, fi=fi) > 0:
-                    for n in iN_: n.fin=0
                     nG = cluster_N_(root, eN_, ave*(rc+3), rc+3, fi)  # cluster exemplars
-                if nG:
-                    if val_(nG.Et, Et, mw=(len(nG.node_)-1)*Lw, aw=(rc+3)*loop_w) > 0:
-                        cross_comp(nG, rc=rc+3, iN_=nG.node_) # recursive agglomeration -> root node_H
-                    nG_ += [nG]
+                    if nG:
+                        if val_(nG.Et, Et, mw=(len(nG.node_)-1)*Lw, aw=(rc+3)*loop_w) > 0:
+                            rnG = cross_comp(nG, rc=rc+3, iN_=nG.node_) # recursive agglomeration -> root node_H
+                            nG_ += [rnG if rnG else nG]
+                        else: nG_ += [nG]
         lG = []  # dfork
         dval = val_(Et, mw=(len(dL_)-1)*Lw, aw=(rc+3)*clust_w, fi=0)
         if dval > 0:
@@ -485,22 +484,18 @@ def cross_comp(root, rc, iN_, fi=1):  # rc: recursion count, fc: centroid phase,
                 lG = cross_comp(sum_N_(L_), rc+3, L2N(L_), fi=0)  # comp_link_, no CC
             else:  # lower res, dL_ eval?
                 lG = cluster_N_(sum_N_(dL_), L2N(L_), ave*(rc+3), rc=rc+3, fi=0, fnodet=1)
-                # not revised:
-                if nG: [comb_alt_(G.alt_, ave, rc) for G in nG.node_ if isinstance(G.alt_,list)]  # after mfork
-        if nG or lG:
-            lev = []
-            for g in nG,lG:
-                if g: lev += [g]; add_N(root, g)  # appends root.derH
-                else: lev += [[]]
-            root.H += [lev] + nG.H if nG else []  # nG.H from recursion, if any
-            if lG:
-                root.lH += lG.H+[sum_N_(lG.node_,root=lG)]  # lH: H within node_ level
-        return nG
+        if nG_ or lG:
+            nG = nG_[-1]  # top nG mediates lower-rng nGs
+            root.H += [[nG, lG]]  # current lev
+            # one fork maybe empty
+            if nG: add_N(root,nG); add_node_H(root.H, nG.H, root)  # appends derH, H from recursion, if any
+            if lG: add_N(root,lG); root.lH += lG.H + [sum_N_(lG.node_, root=lG)]  # lH: H within node_ level
+        if nG:
+            return nG
 
-def cluster_N_(root, N_, ave, rc, fi, fnodet=0):  # CC nodes via rim or links via nodet or rimt
+def cluster_N_(root, N_, ave, rc, fi, fnodet=0):  # CC exemplar nodes via rim or links via nodet or rimt
 
-    nG = CG(root=root)
-    G_ = []  # flood-filled clusters
+    nG = CG(root= root); G_ = []  # flood-filled clusters
     for N in N_: N.fin = 0
     for N in N_:
         if N.fin: continue
@@ -515,33 +510,17 @@ def cluster_N_(root, N_, ave, rc, fi, fnodet=0):  # CC nodes via rim or links vi
                 if _N in N_ and not _N.fin:  # +ve only, eval by directional density?
                     link_ += [lL]
                     Et += lL.Et; _N.fin = 1; node_ += [_N]
-        node_ = list({*node_})
+        node_ = list(set(node_))
         if val_(Et, mw=(len(node_)-1)*Lw, aw=rc*clust_w, fi=fi) > 0:
-            Lay = CLay()
-            [Lay.add_lay(l) for l in sum_H(node_ if fnodet else link_, root=nG, fi=fi)]
-            G_ += [sum2graph(nG, [node_, link_, Et, Lay], fi=fi)]
+            Lay = CLay(); n_ = node_ if fnodet else link_
+            [Lay.add_lay(l) for l in sum_H(n_, nG, fi = isinstance(n_[0], CL))]
+            m_,M = centroid_M(Lay.derTT[0],ave*rc)  # weigh by match to mean m|d
+            d_,D = centroid_M(Lay.derTT[1],ave*rc); Lay.derTT = np.array([m_,d_])
+            G_ += [sum2graph(nG, [node_, link_, np.array([M,D,Et[2:]]), Lay], fi)]
     if G_:
         if fi: [comb_alt_(G.alt_, ave, rc) for G in G_ if isinstance(G.alt_,list)]  # no alt_ in dgraph?
         sum_N_(G_, root_G = nG)
         return nG
-    '''
-             if rim: 
-                 _rim = list(set(rim)); rim = []  # remove duplicates
-             else:  # form exemplars
-                 # below is the same with cluster_N_
-                 link_ = list(set(link_))
-                 Lay = CLay(); [Lay.add_lay(lay) for lay in sum_H(link_, nG, fi=0)]
-                 derTT = Lay.derTT
-                 Lay = CLay(); [Lay.add_lay(lay) for lay in sum_H(link_, nG, fi=0)]
-                 derTT = Lay.derTT
-                 # weigh m_|d_ by similarity to mean m|d, weigh derTT:
-                 m_,M = centroid_M(derTT[0], ave=ave); d_,D = centroid_M(derTT[1], ave=ave)
-                 et[:2] = M,D; Lay.derTT = np.array([m_,d_])
-                 node_ = list({*node_})  # cluster roots:
-                 if val_(et, root.Et, mw=(len(node_)-1)*Lw, aw=rc*clust_w) > 0:
-                     G_ += [sum2graph(nG, [node_,link_, et, Lay], 1)]
-                 break  # continue with the next exemplar
-    '''
 
 def get_exemplars(N_, ave, fi):
     exemplars = []  # next cross_comp

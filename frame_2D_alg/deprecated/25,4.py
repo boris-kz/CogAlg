@@ -488,4 +488,13 @@ def cross_comp(root, rc, iN_, fi=1):  # rc: recursion count, fc: centroid phase,
             root.H += [lev] + nG.H if nG else []  # nG.H from recursion, if any
             if lG:
                 root.lH += lG.H+[sum_N_(lG.node_,root=lG)]  # lH: H within node_ level
-        return nG
+
+        if nG_ or lG:
+            nG = CG(root=root)
+            for g in nG_: add_N(nG, g, root)  # comb rng if >1 else iN_?  or top-rng anyway, it mediates all lower-rng nGs?
+            if nG: add_N(root, nG); add_node_H(root.H, nG.H, root)  # appends derH, H from recursion, if any
+            if lG: add_N(root, lG); root.lH += lG.H + [sum_N_(lG.node_, root=lG)]  # lH: H within node_ level
+            # one fork maybe empty
+            root.H += [[nG, lG]] + root.H
+        if nG:
+            return nG
