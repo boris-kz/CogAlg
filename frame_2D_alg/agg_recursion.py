@@ -116,7 +116,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
     # graph / node
     def __init__(G,  **kwargs):
         super().__init__()
-        G.node_ = kwargs.get('node_',[])  # flat
+        G.node_ = kwargs.get('node_',[])  # maybe rng-banded
         G.link_ = kwargs.get('link_',[])  # spliced node link_s
         G.H = kwargs.get('H',[])  # list of lower levels: [nG,lG]: pack node_,link_ in sum2graph; lG.H: packed-level lH:
         G.lH = kwargs.get('lH',[])  # link_ agg+ levels in top node_H level: node_,link_,lH
@@ -139,8 +139,8 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.fi = kwargs.get('fi',0)  # or fd_: list of forks forming G, 1 if cluster of Ls | lGs, for feedback only?
         G.rim = kwargs.get('rim',[])  # external links
         G._N_ = kwargs.get('_N_', set())  # linked nodes
-        G.rng = kwargs.get('rng',1)  # nested node if > 1, get root.root?
-        G.root = kwargs.get('root')  # maybe a list of rng layers, added in cluster_N_
+        G.rng = kwargs.get('rng',1)  # nested node if >1
+        G.root = kwargs.get('root')  # maybe a list of rng layers, add in cluster_N_
     def __bool__(G): return bool(G.node_)  # never empty
 
 def copy_(N, root=None, init=0):
@@ -465,18 +465,21 @@ def cross_comp(root, rc, iN_, fi=1):  # rc: recursion count, fc: centroid phase,
         for l in L_:  # not rng-banded
             if l.Et[0] > ave * l.Et[2]: mL_+= [l]
             if l.Et[1] > avd * l.Et[2]: dL_+= [l]
-        nG_ = []  # mfork
+        nG, nG_ = [],[]
+        # mfork
         if val_(Et, mw=(len(mL_)-1)*Lw, aw=(rc+2)*clust_w) > 0:  # np.add(Et[:2]) > (ave+avd) * np.multiply(Et[2:])?
             nG_ = [sum_N_(iN_)]  # default
             for N_ in N__:  # >ave rng|med bands, may be empty
-                eN_ = get_exemplars(N_, ave*(rc+2), fi)  # typical and sparse nodes or links
+                eN_ = get_exemplars(root, N_, ave*(rc+3), fi)  # typical and sparse nodes or links
                 if eN_ and val_(np.sum([n.et for n in eN_],axis=0), Et, mw=((len(eN_)-1)*Lw), aw=(rc+3)*clust_w, fi=fi) > 0:
-                    nG = cluster_N_(root, eN_, ave*(rc+3), rc+3, fi)  # cluster exemplars
-                    if nG:
-                        if val_(nG.Et, Et, mw=(len(nG.node_)-1)*Lw, aw=(rc+3)*loop_w) > 0:
-                            rnG = cross_comp(nG, rc=rc+3, iN_=nG.node_) # recursive agglomeration -> root node_H
+                    eN_ = cross_comp(root, rc+3, eN_, fi).node_  # no use for other params?
+                    if eN_ and val_(np.sum([n.et for n in eN_],axis=0), Et, mw=((len(eN_)-1)*Lw), aw=(rc+4)*clust_w, fi=fi) > 0:
+                        nG = cluster_N_(root,eN_, ave*(rc+4),rc+4, fi)  # cluster exemplars
+                        if nG:
+                            rnG = []  # eval recursive agglomeration forming root node_H:
+                            if val_(nG.Et, Et, mw=(len(nG.node_)-1)*Lw, aw=(rc+5)*loop_w) > 0:
+                                rnG = cross_comp(nG, rc+5, nG.node_)
                             nG_ += [rnG if rnG else nG]
-                        else: nG_ += [nG]
         lG = []  # dfork
         dval = val_(Et, mw=(len(dL_)-1)*Lw, aw=(rc+3)*clust_w, fi=0)
         if dval > 0:
@@ -486,17 +489,20 @@ def cross_comp(root, rc, iN_, fi=1):  # rc: recursion count, fc: centroid phase,
                 lG = cluster_N_(sum_N_(dL_), L2N(L_), ave*(rc+3), rc=rc+3, fi=0, fnodet=1)
         if nG_ or lG:
             nG = nG_[-1]  # top nG mediates lower-rng nGs
-            root.H += [[nG, lG]]  # current lev
-            # one fork maybe empty
+            if len(nG_) > 1:
+                node_H = [list(nG.node_)]  # add nesting
+                for ng in reversed(nG_[1:]):  # flatten and splice ng.node_H
+                    node_H += [list(itertools.chain.from_iterable(n_)) for n_ in ng.node_]  # ng.node_: node_H of flat n_s
+                nG.node_ = list(reversed(node_H))
+            root.H += [[nG,lG]]  # current lev, each fork may be empty
             if nG: add_N(root,nG); add_node_H(root.H, nG.H, root)  # appends derH, H from recursion, if any
-            if lG: add_N(root,lG); root.lH += lG.H + [sum_N_(lG.node_, root=lG)]  # lH: H within node_ level
+            if lG: add_N(root,lG); sum_N_(lG.node_, root=lG); root.lH += lG.H + [sum_N_(lG.node_, root=lG)]  # lH: H within node_ level
         if nG:
             return nG
 
 def cluster_N_(root, N_, ave, rc, fi, fnodet=0):  # CC exemplar nodes via rim or links via nodet or rimt
 
     nG = CG(root= root); G_ = []  # flood-filled clusters
-    for N in N_: N.fin = 0
     for N in N_:
         if N.fin: continue
         N.fin = 1; node_, link_, Et, Lay = [N], [], copy(N.Et), CLay()
@@ -513,16 +519,16 @@ def cluster_N_(root, N_, ave, rc, fi, fnodet=0):  # CC exemplar nodes via rim or
         node_ = list(set(node_))
         if val_(Et, mw=(len(node_)-1)*Lw, aw=rc*clust_w, fi=fi) > 0:
             Lay = CLay(); n_ = node_ if fnodet else link_
-            [Lay.add_lay(l) for l in sum_H(n_, nG, fi = isinstance(n_[0], CL))]
+            [Lay.add_lay(l) for l in sum_H(n_, nG, fi = isinstance(n_[0],CG))]
             m_,M = centroid_M(Lay.derTT[0],ave*rc)  # weigh by match to mean m|d
             d_,D = centroid_M(Lay.derTT[1],ave*rc); Lay.derTT = np.array([m_,d_])
-            G_ += [sum2graph(nG, [node_, link_, np.array([M,D,Et[2:]]), Lay], fi)]
+            G_ += [sum2graph(nG, [node_, link_, np.array([M,D,*Et[2:]]), Lay], fi)]
     if G_:
         if fi: [comb_alt_(G.alt_, ave, rc) for G in G_ if isinstance(G.alt_,list)]  # no alt_ in dgraph?
         sum_N_(G_, root_G = nG)
         return nG
 
-def get_exemplars(N_, ave, fi):
+def get_exemplars(root, N_, ave, fi):
     exemplars = []  # next cross_comp
     _N_ = set()  # stronger-N inhibition zones
 
@@ -530,7 +536,8 @@ def get_exemplars(N_, ave, fi):
         M,_,n,_ = N.et  # summed from rim
         if eval(M, weights=[ave, n, clust_w, rolp_M(M, N,_N_, fi) *rdn]):  # roM * rdn: lower rank?
             # 1 + rolp_M to intersection with stronger N inhibition zones
-            exemplars += [N]; _N_.update(N._N_)
+            NG = sum2graph(root, [[[N]+N._N_], N.rim, N.et, comb_H_(N, root)], fi)
+            exemplars += [NG]; _N_.update(N._N_)
         else:
             break  # the rest of N_ is weaker
     return exemplars
@@ -635,8 +642,11 @@ def comb_alt_(G_, ave, rc=1):  # combine contour G.altG_ into altG (node_ define
                 alt_ = sum_N_(dL_)
                 G.alt_ = copy_(alt_); G.altG.H = [alt_]; G.altG.root=G
 
-def comb_H_(L_, root, fi):
-    derH = sum_H(L_,root,fi=fi)
+def comb_H_(L_, root, fi=0):  # fi is always 0?
+    if isinstance(L_,CG):
+        derH = L_.extH  # L_ is an exemplar
+    else:
+        derH = sum_H(L_,root,fi=fi)
     Lay = CLay(root=root)
     for lay in derH:
         Lay.add_lay(lay); root.extTT += lay.derTT
@@ -688,6 +698,7 @@ def add_H(H, h, root, rev=0, fi=1):  # add fork L.derHs
 
 def sum_N_(node_, root_G=None, root=None):  # form cluster G
 
+    if isinstance(node_[0],list): node_ = node_[-1]  # rng-banded
     fi = isinstance(node_[0],CG)
     if root_G is not None: G = root_G
     else:

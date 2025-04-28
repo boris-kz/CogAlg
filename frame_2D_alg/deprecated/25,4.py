@@ -498,3 +498,56 @@ def cross_comp(root, rc, iN_, fi=1):  # rc: recursion count, fc: centroid phase,
             root.H += [[nG, lG]] + root.H
         if nG:
             return nG
+
+def sum2graph(root, grapht, fi, minL=0, maxL=None):  # sum node and link params into graph, aggH in agg+ or player in sub+
+
+    node_, link_, Et, mfork = grapht  # Et and mfork are summed from link_
+    n0=node_[0]
+    graph = CG(
+        fi=fi, H = n0.H, Et=Et+n0.Et*int_w, link_=link_, box=n0.box, baseT=copy(n0.baseT), derTT=mfork.derTT, root=root, maxL=maxL,
+        derH = [[mfork]])  # higher layers are added by feedback, dfork added from comp_link_:
+    for L in link_:
+        L.root = graph  # reassign when L is node
+        if not fi:  # add mfork as link.nodet(CL).root dfork
+            LR_ = set([n.root for n in L.nodet if isinstance(n.root,CG)]) # skip frame, empty roots
+            if LR_:
+                dfork = reduce(lambda F,f: F.add_lay(f), L.derH, CLay())  # combine lL.derH
+                for LR in LR_:  # lay0 += dfork
+                    if len(LR.derH[0])==2: LR.derH[0][1].add_lay(dfork)  # direct root only
+                    else:                  LR.derH[0] += [dfork.copy_(root=LR)]  # init by another node
+                    LR.derTT += dfork.derTT
+    N_, n_,l_,lH, yx_ = [],[],[],[],[]
+    fg = fi and isinstance(n0.node_[0],CG) # no PPs
+    for i, N in enumerate(node_):
+        if minL:  # max,min L.dist in graph.link_, inclusive, = lower-layer exclusive maxL, if G was dist-nested in cluster_N_
+            fc = 0
+            while N.root.maxL and N.root is not graph and (minL != N.root.maxL):  # maxL=0 in edge|frame, not fd
+                if N.root is graph:
+                    fc = 1; break  # graph was assigned as root via prior N
+                else: N = N.root  # cluster prior-dist graphs vs nodes
+            if fc:
+                continue  # N.root, was clustered in prior loop
+        N_ += [N]; yx_ += [N.yx]; N.root = graph  # roots if minL
+        if i:
+            graph.Et += N.Et*int_w; graph.baseT+=N.baseT; graph.box=extend_box(graph.box,N.box)
+            if fg and N.H: add_node_H(graph.H, N.H, root=graph)
+        if fg and isinstance(N.node_[0],CG): # skip Ps
+            n_ += N.node_; l_ += N.link_
+            if N.lH: add_node_H(lH, N.lH, graph)  # top level only
+    if fg:  # pack prior top level
+        graph.H += [[sum_N_(n_), sum_N_(l_)]]
+        graph.lH = lH
+    graph.node_ = N_  # current-dist link_ only?
+    yx = np.mean(yx_, axis=0)
+    dy_,dx_ = (graph.yx - yx_).T; dist_ = np.hypot(dy_,dx_)
+    graph.aRad = dist_.mean()  # ave distance from graph center to node centers
+    graph.yx = yx
+    if not fi:  # dgraph, no mGs / dG for now  # and val_(Et, _Et=root.Et) > 0:
+        alt_ = []  # mGs overlapping dG
+        for L in node_:
+            for n in L.nodet:  # map root mG
+                mG = n.root
+                if isinstance(mG, CG) and mG not in alt_:  # root is not frame
+                    mG.alt_ += [graph]  # cross-comp|sum complete altG before next agg+ cross-comp, multi-layered?
+                    alt_ += [mG]
+    return graph
