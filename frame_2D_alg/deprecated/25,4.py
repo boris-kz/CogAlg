@@ -496,6 +496,13 @@ def cross_comp(root, rc, iN_, fi=1):  # rc: recursion count, fc: centroid phase,
             if lG: add_N(root, lG); root.lH += lG.H + [sum_N_(lG.node_, root=lG)]  # lH: H within node_ level
             # one fork maybe empty
             root.H += [[nG, lG]] + root.H
+
+            if nG_:
+                nG = nG_[-1]  # top nG mediates lower-rng nGs
+                if len(nG_) > 1:
+                    node_H = [list(nG.node_)]  # add nesting
+                    for ng in reversed(nG_[1:]): node_H += [list(chain.from_iterable(ng.node_))]  # ng.node_ is node_H
+                    nG.node_ = list(reversed(node_H))
         if nG:
             return nG
 
