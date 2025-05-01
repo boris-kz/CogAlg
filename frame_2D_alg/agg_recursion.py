@@ -235,7 +235,7 @@ def cluster_edge(edge, frame, lev0, lev1, lH, derlay):  # non-recursive comp_PPm
                 _eN_ = {*eN_}
             if val_(et, mw=(len(node_)-1)*Lw, aw=2+clust_w) > 0:  # rc=2
                 Lay = CLay(); [Lay.add_lay(link.derH[0]) for link in link_]  # single-lay derH
-                G_ += [sum2graph(frame, [node_,link_,et, Lay], rng=1, fi=1)]
+                G_ += [sum2graph(frame, [node_,link_,[],et, Lay], rng=1, fi=1)]
         return G_
 
     def comp_PP_(PP_):
@@ -321,10 +321,10 @@ def comp_node_(_N_, rc, frng=0):  # rng+ forms layer of rim and extH per N?
         for Gp in Gp_:
             _G, G, dy,dx, radii, dist = Gp
             (_m,_,_n,_o),(m,_,n,o) = _G.Et, G.Et; _m = _m * int_w +_G.et[0]; m = m * int_w + G.et[0]  # same n, o?
-            # density/ comp_N: et or M, 0/ rng=1?
-            max_dist = ave_dist * (radii/aveR) * ((_m+m)/(ave*(_n+n+_o+o)) / int_w)  # ave_dist * radii * induction
+            # density/ comp_N: et|M, 0/rng=1?
+            max_dist = ave_dist * (radii/aveR) * ((_m+m)/(ave*(_n+n+_o+o))/ int_w)  # ave_dist * radii * induction
             if max_dist > dist or _G._N_ & G._N_:
-                # comp if close or share matching mediators
+                # comp if close or share matching mediators: add to inhibited?
                 Link = comp_N(_G,G, ave, fi=1, angle=[dy,dx], dist=dist, fshort = dist < max_dist/2, rng=rng)
                 L_ += [Link]  # include -ve links
                 if Link.Et[0] > ave * Link.Et[2] * loop_w:
@@ -452,7 +452,7 @@ def comp_N(_N,N, ave, fi, angle=None, dist=None, dir=1, fshort=0, rng=1):  # com
             node.et += Et
             node._N_.add(_node)
             if fi: node.rim += [(Link,dir)]
-            else:  node.rimt[1-rev] += [(Link,rev)]  # opposite to _N,N dir
+            else: node.rimt[1-rev] += [(Link,rev)]  # opposite to _N,N dir
             add_H(node.extH, Link.derH, root=node, rev=rev, fi=0)
     return Link
 
@@ -472,7 +472,7 @@ def cross_comp(root, rc, iN_, fi=1):  # rc: recursion count, fc: centroid phase,
                 eN__,_,et = comp_node_(eN_, rc+3, frng=1)
                 if val_(et, mw=(len(eN__[-1])-1)*Lw, aw=rc+4+clust_w) > 0:
                     for rng, eN_ in enumerate(reversed(eN__), start=1):
-                         nG = cluster_N_(root, eN_, ave*(rc+4), rc+4, rng)
+                         nG = cluster_N_(root, eN_, ave*(rc+4), rc+4, 1, rng)
                          if nG and val_(nG.Et, Et, mw=(len(nG.node_)-1)*Lw, aw=rc+4+rng+loop_w) > 0:
                              rnG = cross_comp(nG, rc+4+rng, nG.node_)  # agg+-> root node_H, or over full nG_?
                              if rnG: nG = rnG  # top-composition only
@@ -485,18 +485,23 @@ def cross_comp(root, rc, iN_, fi=1):  # rc: recursion count, fc: centroid phase,
                 lG = cluster_N_(sum_N_(dL_), L2N(L_), ave*(rc+3), rc=rc+3, fi=0, fnodet=1)
         if nG or lG:
             root.H += [[nG,lG]]  # current lev
-            if nG: add_N(root,nG); add_node_H(root.H, nG.H, root)  # appends derH, H from recursion, if any
-            if lG: add_N(root,lG); sum_N_(lG.node_, root=lG); root.lH += lG.H + [sum_N_(lG.node_, root=lG)]  # lH: H within node_ level
+            if nG: add_N(root,nG); add_node_H(root.H, nG.H, root)  # appends derH,H if recursion
+            if lG: add_N(root,lG); sum_N_(lG.node_, root=lG); root.lH += lG.H + [sum_N_(copy(lG.node_), root=lG)]  # lH: H within node_ level
         if nG:
             return nG
 
 def cluster_N_(root, N_, ave, rc, fi, rng=1, fnodet=0):  # CC exemplar nodes via rim or links via nodet or rimt
 
     nG = CG(root= root); G_ = []  # flood-filled clusters
-    for N in N_: N.fin = 0
+    for n in N_: n.fin = 0
     for N in N_:
         if N.fin: continue
-        N.fin = 1; node_,link_,llink_,Et = [],[],[],copy(N.Et)
+        N.fin = 1
+        if rng > 1:
+            NR = N.root  # cluster top-rng roots
+            while N.root.rng > N.rng: NR = N.root
+            node_= [NR]; link_= NR.link_; llink_= NR.llink_; Et= copy(N.Et)
+        else: node_=[N]; link_=[]; llink_=[]; Et= copy(N.Et)
         if fnodet:
             # cluster via nodes
             for _N in N.nodet[0].rim+N.nodet[1].rim if isinstance(N.nodet[0],CG) else [l for n in N.nodet for l,_ in n.rimt[0]+n.rimt[1]]:
@@ -506,13 +511,14 @@ def cluster_N_(root, N_, ave, rc, fi, rng=1, fnodet=0):  # CC exemplar nodes via
             for L,_ in N.rim if fi else (N.rimt[0]+N.rimt[1]):  # +ve only
                 _N = L.nodet[0] if L.nodet[1] is N else L.nodet[1]
                 if rng > 1:
-                    while _N.root.rng > _N.rng: _N = _N.root  # cluster prior top-rng roots
-                    lenI = len(list(set(N.llink_) & set(_N.llink_)))
-                    if lenI / len(N.llink_) <.2 and lenI / len(_N.llink_) <.2:  #| oEt?
+                    _NR = _N.root  # cluster top-rng roots
+                    while _N.root.rng > _N.rng: _NR = _N.root
+                    lenI = len(list(set(NR.llink_) & set(_NR.llink_)))
+                    if lenI / len(NR.llink_) <.2 and lenI / len(_NR.llink_) <.2:  #| oEt?
                         _N.fin = 1  # skip low rim_intersect
                 if _N.fin: continue
                 _N.fin = 1; node_ += [_N]
-                for L in [L] if rng==1 else _N.llink_:
+                for L in [L] if rng==1 else _N.llink_:  # rng=1: rim L.rng was set in comp_node_
                     if L.rng == rng and L not in link_: link_ += [L]; Et += L.Et
                     elif L.rng> rng and L not in llink_: llink_ += [L]  # longer-rng rims
         node_ = list(set(node_))
@@ -521,13 +527,14 @@ def cluster_N_(root, N_, ave, rc, fi, rng=1, fnodet=0):  # CC exemplar nodes via
             [Lay.add_lay(lay) for n in (node_ if fnodet else link_) for lay in n.derH]  # always CL?
             m_,M = centroid_M(Lay.derTT[0],ave*rc)  # weigh by match to mean m|d
             d_,D = centroid_M(Lay.derTT[1],ave*rc); Lay.derTT = np.array([m_,d_])
-            G_ += [sum2graph(nG, [node_, link_, llink_, np.array([M,D,*Et[2:]]), Lay], rng, fi)]
+            G_ += [sum2graph(nG, node_,link_,llink_,Lay.Et+np.array([M,D,*Et[2:]])*int_w, Lay, rng, fi)]
     if G_:
         if fi: [comb_alt_(G.alt_, ave, rc) for G in G_ if isinstance(G.alt_,list)]  # no alt_ in dgraph?
         sum_N_(G_, root_G = nG)
         return nG
 
-def get_exemplars(root, N_, ave, fi):
+def get_exemplars(root, N_, ave, fi):  # get sparse representative nodes|links: non-maximum suppression via stronger-N inhibition zones
+
     exemplars = []; Et = np.zeros(4); _N_ = set()  # stronger-N inhibition zones
 
     for rdn, N in enumerate(sorted(N_, key=lambda n: n.et[0]/n.et[2], reverse=True), start=1):
@@ -557,11 +564,10 @@ def eval(V, weights):  # conditionally progressive eval, with default ave in wei
         if V < W: return 0
     return 1
 
-def sum2graph(root, grapht, fi, rng=1):  # sum node and link params into graph, aggH in agg+ or player in sub+
+def sum2graph(root, node_,link_,llink_,Et, Lay, rng, fi):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
-    node_, link_, llink_, Et, mfork = grapht  # Et and mfork are summed from link_
     n0 = node_[0]
-    graph = CG(fi=fi, rng=rng, H=copy(n0.H), Et=Et+n0.Et*int_w, link_=link_,llink_=llink_, box=n0.box, baseT=copy(n0.baseT), derTT=mfork.derTT, root=root, derH=[[mfork]])
+    graph = CG(fi=fi,rng=rng+1,root=root, Et=Et, node_=node_, link_=link_,llink_=llink_, box=n0.box, baseT=copy(n0.baseT), derTT=Lay.derTT, derH=[[Lay]])
     # higher derH layers are added by feedback, dfork added from comp_link_:
     for L in link_:
         L.root = graph  # reassign when L is node
@@ -576,9 +582,9 @@ def sum2graph(root, grapht, fi, rng=1):  # sum node and link params into graph, 
     N_, n_,l_,lH, yx_ = [],[],[],[],[]
     fg = fi and isinstance(n0.node_[0],CG) # no PPs
     for i, N in enumerate(node_):
-        N_ += [N]; yx_ += [N.yx]; N.root = graph  # roots if minL
+        yx_ += [N.yx]; N.root = graph  # roots if minL
         if i:
-            graph.Et += N.Et*int_w; graph.baseT+=N.baseT; graph.box=extend_box(graph.box,N.box)
+            graph.baseT+=N.baseT; graph.box=extend_box(graph.box,N.box)
             if fg and N.H: add_node_H(graph.H, N.H, root=graph)
         if fg and isinstance(N.node_[0],CG): # skip Ps
             n_ += N.node_; l_ += N.link_
