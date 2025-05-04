@@ -82,7 +82,7 @@ def comp_slice(edge, rV=1, ww_t=None):  # root function
 
 def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
 
-    PPt_ = []; rEt = np.zeros(4); rvert = np.zeros((2,6))
+    PPt_ = []; rEt = np.zeros(3); rvert = np.zeros((2,6))
 
     for P in iP_: P.merged = 0
     for P in iP_:  # dP from link_ if fd
@@ -107,7 +107,7 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
                 lrim_.update(set(_P.lrim) - link_)
                 _P.merged = 1
             _prim_, _lrim_ = prim_, lrim_
-        Et = np.array([*Et, L, 1])  # Et + n,o
+        Et = np.array([*Et, L])  # Et + n
         rEt += Et; rvert += vert
         PPt_ += [sum2PP(list(_P_), list(link_), Et)]
 
@@ -129,7 +129,7 @@ def comp_P_(edge):  # form links from prelinks
 
 def comp_dP_(edge, mEt):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
-    M,_,n,_ = mEt
+    M,_,n = mEt
     rM = M / (ave * n)  # dP D borrows from normalized PP M
     for _dP in edge.dP_: _dP.prim = []; _dP.lrim = []
     for _dP in edge.dP_:
