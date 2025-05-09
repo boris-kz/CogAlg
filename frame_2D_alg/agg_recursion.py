@@ -141,6 +141,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.rim = kwargs.get('rim',[])  # external links
         G._N_ = kwargs.get('_N_',[])  # linked nodes
         G.alt_ = []  # adjacent (contour) gap+overlap alt-fork graphs, converted to CG, empty alt.alt_: select+?
+        G.fin = kwargs.get('fin',0)  # in cluster, temporary?
         G.root = kwargs.get('root')
     def __bool__(G): return bool(G.node_)  # never empty
 
@@ -307,7 +308,7 @@ def eval(V, weights):  # conditionally progressive eval, with default ave in wei
  Core process:
  Cross-compare nodes, evaluate incremental-derivation cross-comp of new >ave difference links, recursively.
  
- Select sparse exemplars of strong node types, convert to centroids of their rim to select mutual match.
+ Select sparse exemplars of strong node types, convert to centroids of their rim to select by mutual match.
  This selection is essential due to complexity of subsequent connectivity clustering (CC):
   
  Connectivity cluster exemplar nodes by >ave match links, correlation-cluster links by >ave difference.
@@ -478,13 +479,13 @@ def cross_comp(root, rc, iN_, fi=1):  # rc: redundancy count; (cross-comp, exemp
             n__ += [n]; n.sel = 0  # for cluster_N_
         if val_(Et, mw=(len(n__)-1)*Lw, aw=rc+loop_w) > 0:  # rc += is local
             E_,eEt = sel_exemplars(n__, rc+loop_w, fi)  # sel=1 for typical sparse nodes
+            # call from sel_exemplars?:
             if val_(eEt, mw=(len(E_)-1)*Lw, aw=rc+clust_w) > 0:
                 C_,cEt = cluster_C_(root, E_, rc+clust_w)  # refine _N_+_N__ by mutual similarity
-                # add cross_comp C_, hier centroid clustering?
-                if val_(eEt, mw=(len(E_)-1)*Lw, aw=rc+clust_w) > 0:  # refine exemplars by new et
+                # internal cross_comp C_, recursion?
+                if val_(cEt, mw=(len(C_)-1)*Lw, aw=rc+loop_w) > 0:  # refine exemplars by new et
                     S_,sEt = sel_exemplars([n for C in C_ for n in C.node_], rc+loop_w, fi, fC=1)
                 else: S_,sEt = [],np.zeros(3)
-                for n in iN_: n.fin = 0
                 if val_(sEt+eEt, mw=(len(S_+E_)-1)*Lw, aw=rc+clust_w) > 0:
                     for rng, N_ in enumerate(N__, start=1):  # bottom-up, cluster via rng exemplars:
                         en_ = [n for n in N_ if n.sel]; eet = np.sum([n.et for n in en_])
@@ -540,7 +541,7 @@ def cluster_C_(root, N_, rc):  # form centroids from exemplar _N_, drifting / co
         N.C_, N.et_ = [],[];  N._N_ += [N]  # N is a member
         N._N__ = list({_n for n in N._N_ for _n in n._N_})  # surround + members for comp to _N_ mean
     while True:
-        DEt, ET = np.zeros(3), np.zeros(3)
+        DEt, ET = np.zeros(3), np.zeros(3)  # olp?
         C_ = []
         for N in sorted(N_,key=lambda n: n.et[0]/n.et[2], reverse=True):  # et summed from rim
             if val_(N.et, mw=(len(N._N_)-1)*Lw, aw=clust_w+rc) > 0:
@@ -577,6 +578,8 @@ def cluster_C_(root, N_, rc):  # form centroids from exemplar _N_, drifting / co
             break  # converged
     remove_ = {n for C in C_ for n in C.node_}  # to be clustered in cG, not nG
     N_[:] = [n for n in N_ if n not in remove_]
+
+    # if val_(ET, mw=(len(C_)-1)*Lw, aw=loop_w+clust_w+rc) > 0: cross_comp(C_): longer-range, higher-resolution, full cycle?
     return C_, ET
 
 def cluster_N_(root, N_, rc, fi, rng=1, fnodet=0):  # connectivity cluster exemplar nodes via rim or links via nodet or rimt
@@ -589,7 +592,7 @@ def cluster_N_(root, N_, rc, fi, rng=1, fnodet=0):  # connectivity cluster exemp
             node_, link_, llink_, Et, olp = [N],[],[], copy(N.Et), N.olp
             for l,_ in N.rim if fi else (N.rimt[0]+N.rimt[1]):  # +ve
                 if l.rng ==rng: link_ += [l]
-                elif l.rng>rng: llink_+= [l]
+                elif l.rng>rng: llink_+= [l]  # longer-rng rim
         else:  # rng > 1, cluster top-rng roots instead
             n = N; R = n.root
             while R and R.rng > n.rng: n=R; R=R.root
@@ -601,28 +604,25 @@ def cluster_N_(root, N_, rc, fi, rng=1, fnodet=0):  # connectivity cluster exemp
             # cluster via nodes
             for _N in N.nodet[0].rim+N.nodet[1].rim if isinstance(N.nodet[0],CG) else list(set([l for n in N.nodet for l,_ in n.rimt[0]+n.rimt[1]])):
                 if _N in N_ and not _N.fin and _N.Et[1] > avd * _N.Et[2] * nrc:  # d_value
-                    link_ += _N.nodet; Et += _N.Et; olp += _N.olp; _N.fin = 1; node_ += [_N]
-            if link_: link_ = list(set(link_))
+                    Et += _N.Et; olp += _N.olp; _N.fin = 1; node_ += [_N]
+                    link_ += [n for n in _N.nodet if n not in link_]
         else:  # cluster via links
             for L in link_[:]:  # snapshot
                 for _N in L.nodet:
                     if _N.fin: continue  # connectivity clusters don't overlap
-                    if rng == 1: _Et,_olp = copy(_N.Et),_N.olp
+                    if rng == 1:
+                        node_ += [_N]; Et += _N.Et; olp += _N.olp; _N.fin = 1
+                        for l,_ in _N.rim if fi else (_N.rimt[0]+_N.rimt[1]):  # +ve
+                            if l not in link_ and l.rng == rng: link_ += [l]
+                            elif l not in llink_ and l.rng>rng: llink_+= [l]  # longer-rng rim
                     else:  # rng > 1, cluster top-rng roots if rim intersect:
-                        _n =_N; _R=_n.root; _link_,_llink_ = [],[]
-                        while _R and _R.rng >_n.rng: _n=_R; _R=_R.root
+                        _n =_N; _R=_n.root
+                        while _R and _R.rng > _n.rng: _n=_R; _R=_R.root
                         if _R.fin: continue
-                        _link_,_llink_,_Et,_olp = _R.link_,_R.llink_,copy(_R.Et),_R.olp
                         lenI = len(list(set(llink_) & set(_R.llink_)))
-                        if lenI and (lenI / len(llink_) >.2 or lenI / len(_R.llink_) >.2):  # | eval oEt?
-                            _N=_R; _Et=copy(_R.Et); _olp=_R.olp; _link_=_R.link_; _llink_=_R.llink_
-                        else: continue  # skip low rim intersect
-                    _N.fin =1; Et += _Et; olp += _olp; node_ += [_N]
-                if rng==1:
-                    if L.rng == rng and L not in link_: link_ += [L]
-                    elif L.rng> rng and L not in llink_: llink_ += [L]  # longer-rng rims
-                else:
-                    link_ = list(set(link_+_link_)); llink_ = list(set(llink_+_llink_))
+                        if lenI and (lenI / len(llink_) >.2 or lenI / len(_R.llink_) >.2):  # min rim intersect | intersect oEt?
+                            link_ = list(set(link_+_R.link_)); llink_ = list(set(llink_+_R.llink_))
+                            node_+= [_R]; Et +=_R.Et; olp += _R.olp; _R.fin = 1; _N.fin = 1
         node_ = list(set(node_))
         nrc = rc + olp  # updated
         if val_(Et, mw=(len(node_)-1)*Lw, aw=nrc, fi=fi) > 0:
@@ -892,23 +892,35 @@ def agg_H_seq(focus, image, rV=1, _rv_t=[]):  # recursive level-forming pipeline
     global ave, Lw, int_w, loop_w, clust_w, ave_dist, ave_med, med_w
     ave, Lw, int_w, loop_w, clust_w, ave_dist, ave_med, med_w = np.array([ave, Lw, int_w, loop_w, clust_w, ave_dist, ave_med, med_w]) / rV
     # sum filtered params, feedback rws:~rvs?
-    frame = frame_blobs_root(focus, rV)
-    intra_blob_root(frame, rV)
-    frame = vect_root(frame, rV, _rv_t)
-    if frame.H:  # updated
-        comb_alt_(frame.node_, ave*2)
-        cross_comp(frame, rc=frame.olp+loop_w, iN_=frame.node_)  # top level
-        # adjust weights:
-        rM, rD, rv_t = feedback(frame)
-        if val_(frame.Et, mw=rM+rD, aw=frame.olp+clust_w*20):
-            nG = frame.H[0][0] if frame.H[0][0] else sum_N_(frame.node_)  # base PP_ focus shift by dval + temp Dm_+Ddm_?
-            dy,dx = nG.baseT[-2:]  # gA from summed Gs
-            y,x,Y,X = nG.box  # current focus
-            y = y+dy; x = x+dx; Y = Y+dy; X = X+dx  # alter focus shape, also focus size: +/m-, res decay?
-            if y > 0 and x > 0 and Y < image.shape[0] and X < image.shape[1]:  # focus is inside the image
-                # rerun agg+ with new focus and aves:
-                agg_H_seq(image[y:Y,x:X], image, rV, rv_t)
-                # all aves *= rV, but ultimately differential backprop per ave?
+    node_,H = [],[]
+    while True:
+        frame = frame_blobs_root(focus, rV)
+        intra_blob_root(frame, rV)
+        frame = vect_root(frame, rV, _rv_t)
+        _depth = 0  # past len(frame.H)
+        lenn_ = len(frame.node_)
+        while len(frame.H) > _depth:  # updated
+            comb_alt_(frame.node_, ave*2)
+            cross_comp(frame, rc=frame.olp+loop_w, iN_=frame.node_)  # top level
+            # adjust weights:
+            rM, rD, rv_t = feedback(frame)
+            if val_(frame.Et, mw=rM+rD, aw=frame.olp+clust_w*20):
+                nG = frame.H[0][0] if frame.H[0][0] else sum_N_(frame.node_)  # base PP_ focus shift by dval + temp Dm_+Ddm_?
+                dy,dx = nG.baseT[-2:]  # gA from summed Gs
+                y,x,Y,X = nG.box  # current focus
+                y = y+dy; x = x+dx; Y = Y+dy; X = X+dx  # alter focus shape, also focus size: +/m-, res decay?
+                if y > 0 and x > 0 and Y < image.shape[0] and X < image.shape[1]:  # focus is inside the image
+                    # rerun agg+ with new focus and aves:
+                    focus = agg_H_seq(image[y:Y,x:X], image, rV, rv_t)
+                    node_ += focus.node_
+                    add_node_H(H, focus.H, frame)
+                    # all aves *= rV, ultimately differential backprop per ave?
+        # replace with val_:
+        if len(node_) / lenn_ > 10:
+            cross_comp(frame, rc=frame.olp+loop_w, iN_=node_)  # node_ is combined across foci
+        else:
+            frame.node_ = node_; frame.H = H
+            break
     return frame
 
 def feedback(root):  # root is frame or lG
