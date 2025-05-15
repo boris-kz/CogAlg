@@ -70,10 +70,12 @@ aveR = 10  # for range+, fixed overhead per blob
 
 class CFrame(CBase):
 
-    def __init__(frame, i__):
+    def __init__(frame, image):
         super().__init__()
-        frame.i__, frame.latuple, frame.blob_ = i__, [0, 0, 0, 0], []
-
+        frame.box = np.array([0,0,image.shape[0],image.shape[1]])
+        frame.latuple = [0,0,0,0]  # I, Dy, Dx, G
+        frame.i__= image
+        frame.blob_ = []
     def __repr__(frame): return f"frame(id={frame.id})"
 
 class CBlob(CBase):
