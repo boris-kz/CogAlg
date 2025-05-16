@@ -227,3 +227,67 @@ def sum2graph(root, node_,link_,llink_,Et,olp, Lay, rng, fi, C_):  # sum node an
                     alt_ += [mG]
     return graph
 
+def cluster_edge(edge, frame, lev, derlay):  # non-recursive comp_PPm, comp_PPd, edge is not a PP cluster, unpack by default
+
+    def cluster_PP_(PP_, fi):
+        G_ = []
+        while PP_:  # flood fill
+            node_,link_, et = [],[], np.zeros(3)
+            PP = PP_.pop(); _eN_ = [PP]
+            while _eN_:
+                eN_ = []
+                for eN in _eN_:  # rim-connected ext Ns
+                    node_ += [eN]
+                    for L,_ in (eN.rim if hasattr(eN,'rim') else eN.rimt[0] + eN.rimt[1]):  # all +ve, *= density?
+                        if L not in link_:
+                            for eN in L.N_:
+                                if eN in PP_:
+                                    eN_ += [eN]; PP_.remove(eN)  # merged
+                            link_ += [L]; et += L.Et
+                _eN_ = {*eN_}
+            if val_(et, mw=(len(node_)-1)*Lw, aw=2+clust_w) > 0:  # rc=2
+                Lay = CLay(); [Lay.add_lay(link.derH[0]) for link in link_]  # single-lay derH
+                G_ += [sum2graph(frame, node_,link_,[], et, 1+1-fi, Lay, rng=1, fi=1, C_=[])]
+        return G_
+
+    def comp_PP_(PP_):
+        N_,L_,mEt,dEt = [],[],np.zeros(3),np.zeros(3)
+
+        for _G, G in combinations(PP_, r=2):
+            dy,dx = np.subtract(_G.yx,G.yx); dist = np.hypot(dy,dx)
+            if dist - (G.span+_G.span) < ave_dist / 10:  # very short here
+                L = comp_N(_G, G, ave, fi=isinstance(_G, CG), angle=[dy, dx], dist=dist, fdeep=1)
+                m, d, n = L.Et
+                if m > ave * n * _G.olp * loop_w: mEt += L.Et; N_ += [_G,G]  # mL_ += [L]
+                if d > avd * n * _G.olp * loop_w: dEt += L.Et  # dL_ += [L]
+                L_ += [L]
+        dEt[2] = dEt[2] or 1e-7
+        return set(N_),L_,mEt,dEt
+
+    for fi in 1,0:
+        PP_ = edge.node_ if fi else edge.link_
+        if val_(edge.Et, mw=(len(PP_)- edge.rng) *Lw, aw=loop_w) > 0:
+            # PPm_|PPd_:
+            PP_,L_,mEt,dEt = comp_PP_([PP2N(PP,frame, fG=fi) for PP in PP_])
+            if PP_:
+                if val_(mEt, mw=(len(PP_)-1)*Lw, aw=clust_w, fi=1) > 0:
+                    G_ = cluster_PP_(copy(PP_), fi)
+                else: G_ = []
+                if G_:
+                    if fi: frame.N_ += G_; lev.N_ += PP_
+                    else: frame.Lt.N_ += G_; lev.Lt.N_ += PP_
+                elif fi: frame.N_ += PP_  # PPm_
+                else: frame.Lt.N_ += PP_  # PPd_
+            for l in L_:
+                derlay[fi].add_lay(l.derH[0]); frame.baseT+=l.baseT; frame.derTT+=l.derTT; frame.Et += l.Et
+            if fi:  # mfork der+
+                Gd_ = []
+                if val_(dEt, mw= (len(L_)-1)*Lw, aw=2+clust_w, fi=0) > 0:
+                    Nd = CN(N_=L2N(L_))
+                    cluster_N_(Nd, rc=2, fi=0, fnode_=1-fi)  # mediates via nodes when N is CL
+                    if Nd: Gd_ = Nd.N_
+                if Gd_: frame.Lt.H[0] += L_; frame.Lt.N_ += Gd_  # new level
+                else: frame.Lt.N_ += L_  # no new level
+            else:
+                frame.Lt.Lt.N_ += L_  # lL_?
+
