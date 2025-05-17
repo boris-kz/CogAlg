@@ -291,3 +291,21 @@ def cluster_edge(edge, frame, lev, derlay):  # non-recursive comp_PPm, comp_PPd,
             else:
                 frame.Lt.Lt.N_ += L_  # lL_?
 
+def feedback(root):  # root is frame or lG
+
+    rv_t = np.ones((2,8))  # sum derTT coefs: m_,d_ [M,D,n,o, I,G,A,L] / Et, baseT, dimension
+    rM,rD = 1,1
+    hlG = sum_N_(root.L_)
+    for lev in reversed(root.H):
+        lG = lev.lH[-1]  # level link_: all comp results?
+        if not lG: continue
+        lG.derTT[np.where(lG.derTT==0)] = 1e-7
+        _m,_d,_n = hlG.Et; m,d,n = lG.Et
+        rM += (_m/_n) / (m/n)  # o eval?
+        rD += (_d/_n) / (d/n)
+        rv_t += np.abs((hlG.derTT/_n) / (lG.derTT/n))
+        if lG.H:  # ddfork, not recursive?
+            rMd, rDd, rv_td = feedback(lG)  # intra-level recursion in lG
+            rv_t = rv_t + rv_td; rM += rMd; rD += rDd
+
+    return rM,rD,rv_t

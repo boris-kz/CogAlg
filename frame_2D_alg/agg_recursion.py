@@ -73,12 +73,12 @@ class CN(CBase):  # light version of CG
     name = "node"
     def __init__(N, **kwargs):
         super().__init__()
-        N.N_ = kwargs.get('N_',[])  # top nodes, may include singletons of lower nodes, with links in corresponding H lev?
-        N.Et = kwargs.get('Et',np.zeros(3))  # sum M,D,n from N_ and H
-        N.H  = kwargs.get('H', [])  # top-down: nested node levels (from P_): CN with corresponding L_,lH,et (from dP_,PPd_)
+        N.N_ = kwargs.get('N_',[])  # top nodes, may include singletons of lower nodes, then links in corresponding H lev only?
         N.L_ = kwargs.get('L_',[])  # links between Ns
-        N.et = kwargs.get('et',[])  # sum Ets from L_ and lH
-        N.lH = kwargs.get('lH',[])  # bottom-up: higher link graphs hierarchy, CN levs
+        N.Et = kwargs.get('Et',np.zeros(3))  # sum Ets from N_ and H
+        N.et = kwargs.get('et',np.zeros(3))  # sum Ets from L_ and lH
+        N.H  = kwargs.get('H', [])  # top-down: nested-node levels, each CN with corresponding L_,et,lH, no H
+        N.lH = kwargs.get('lH',[])  # bottom-up: higher link graphs hierarchy, also CN levs
         N.C_ = kwargs.get('C_',[])  # make it CN?
         N.olp= kwargs.get('olp',1)  # overlap to other Ns, same for links?
         # no root?
@@ -88,17 +88,16 @@ class CL(CN):  # link or edge, a product of comparison between two nodes or link
     name = "link"
     def __init__(L, **kwargs):
         super().__init__(**kwargs)
-        # use N_ as nodet
+        # nodet: N_ or rim, may have different depth?
         L.fi =   kwargs.get('fi', 0)  # nodet fi, 1 if cluster of Ls | lGs, for feedback only? or fd_: list of forks forming G
         L.rng =  kwargs.get('rng', 1)  # or med: loop count in comp_node_|link_
-        L.derH = kwargs.get('derH',[])  # list of single-fork CLays
+        L.derH = kwargs.get('derH',[]) # [CLay], [m,d] in CG, merged in CL, sum|concat links across fork tree
         L.baseT= kwargs.get('baseT',np.zeros(4))  # I,G,Dy,Dx  # from slice_edge
         L.derTT= kwargs.get('derTT',np.zeros((2,8)))  # m,d / Et,baseT: [M,D,n,o, I,G,A,L], summed across derH lay forks
         L.yx =   kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
         L.box =  kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
-        L.span = kwargs.get('span',0) # distance in nodet or aRad
-        # splice L_ across N_s to cluster by diff,
-        # L.N_ depth may differ?
+        L.span = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_) but not additive?
+        # splice L_ across N_s, cluster by diff
     def __bool__(L): return bool(L.N_)
 
 class CG(CL):  # PP | graph | blob: params of single-fork node_ cluster
@@ -112,8 +111,6 @@ class CG(CL):  # PP | graph | blob: params of single-fork node_ cluster
         G.alt_ = []  # adjacent (contour) gap+overlap alt-fork graphs, converted to CG, empty alt.alt_: select+?
         G.root = kwargs.get('root')
         G.fin =  kwargs.get('fin',0)  # in cluster, temporary?
-        # G.et = kwargs.get('et',np.zeros(3))  # sum Et from rim
-        # each derH lay is [m,d]: Clay(Et,node_,link_,derTT), sum|concat links across fork tree
         # G.fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge
         # G.fback_ = []  # node fb buffer, n in fb[-1]
     def __bool__(G): return bool(G.N_)  # never empty
@@ -129,9 +126,8 @@ class CLay(CBase):  # layer of derivation hierarchy, subset of CG
         l.derTT = kwargs.get('derTT', np.zeros((2,8)))  # m_,d_ [M,D,n,o, I,G,A,L], sum across fork tree,
         # add weights for cross-similarity, along with vertical aves, for both m_ and d_?
         # altL = CLay from comp altG
-        # i = kwargs.get('i', 0)  # lay index in root.node_, link_, to revise olp
-        # i_ = kwargs.get('i_',[])  # priority indices to compare node H by m | link H by d
-        # ni = 0  # exemplar in node_, trace in both directions?
+        # i: lay index in root node_,link_, to revise olp; i_: m,d priority indices in comp node|link H
+        # ni: exemplar in node_, trace in both directions?
     def __bool__(l): return bool(l.node_)
 
     def copy_(lay, rev=0, i=None):  # comp direction may be reversed to -1
@@ -275,8 +271,8 @@ def cluster_edge(edge, frame, lev, derlay):  # non-recursive comp_PPm, comp_PPd,
         if val_(dEt, mw= (len(L_)-1)*Lw, aw=2+clust_w, fi=0) > 0:
             Lt = CN(N_=L2N(L_))
             cluster_N_(Lt, rc=2, fi=0)
-            frame.lH += [Lt]  # new level?
-        frame.L_ += L_
+            lev.lH += [Lt]
+        lev.L_ += L_  # links are between PPms, not Gs
 
 def val_(Et, _Et=None, mw=1, aw=1, fi=1):  # m+d val per cluster|cross_comp
 
@@ -332,7 +328,7 @@ def comp_node_(_N_, rc):  # rng+ forms layer of rim and extH per N?
             max_dist = ave_dist * (radii/aveR) * ((_m+m)/(ave*(_n+n+0))/ int_w)  # ave_dist * radii * induction
             if max_dist > dist or set(_G.nrim) & set(G.nrim):
                 # comp if close or share matching mediators: add to inhibited?
-                Link = comp_N(_G,G, ave, fi=1, angle=[dy,dx], dist=dist, fdeep = dist < max_dist/2, rng=rng)
+                Link = comp_N(_G,G, ave, fi=1, angle=[dy,dx], span=dist, fdeep = dist < max_dist/2, rng=rng)
                 L_ += [Link]  # include -ve links
                 if Link.Et[0] > ave * Link.Et[2] * loop_w * olp:
                     Et += Link.Et; olp_ += [olp]  # link.olp is the same with o
@@ -366,7 +362,7 @@ def comp_link_(iL_, rc):  # comp CLs via directional node-mediated link tracing:
                 for _L, rev in mL_:  # rev is relative to L
                     if _L in L.compared_: continue
                     dy,dx = np.subtract(_L.yx,L.yx)
-                    Link = comp_N(_L,L, ave*rc, fi=0, angle=[dy,dx], dist=np.hypot(dy,dx), dir = -1 if rev else 1)  # d = -d if L is reversed relative to _L
+                    Link = comp_N(_L,L, ave*rc, fi=0, angle=[dy,dx], span=np.hypot(dy,dx), dir = -1 if rev else 1)  # d = -d if L is reversed relative to _L
                     Link.med = med
                     LL_ += [Link]; Et += Link.Et  # include -ves, link order: nodet < L < rimt, mN.rim || L
                     for l,_l in zip((_L,L),(L,_L)):
@@ -408,7 +404,6 @@ def base_comp(_N, N, dir=1):  # comp Et, Box, baseT, derTT
     M*=rn; dM = _M - M; mM = min(_M,M) / max(_M,M)
     D*=rn; dD = _D - D; mD = min(_D,D) / max(_D,D)
     # comp baseT:
-    # add element link span: density?
     _I,_G,_Dy,_Dx = _N.baseT; I,G,Dy,Dx = N.baseT  # I, G|D, angle
     I*=rn; dI = _I - I; mI = abs(dI) / aI
     G*=rn; dG = _G - G; mG = min(_G,G) / max(_G,G)
@@ -420,6 +415,7 @@ def base_comp(_N, N, dir=1):  # comp Et, Box, baseT, derTT
     else:  # dimension is distance
         _L,L = _N.span, N.span   # dist, not cumulative, still positive?
         mL,dL = min(_L,L)/ max(_L,L), _L - L
+    # comp G.span | density | len H, combined from N_ in links?
     _m_,_d_ = np.array([[mM,mD,mn,mo,mI,mG,mA,mL], [dM,dD,dn,do,dI,dG,dA,dL]])
     # comp derTT:
     _i_ = _N.derTT[1]; i_ = N.derTT[1] * rn  # normalize by compared accum span
@@ -499,8 +495,7 @@ def cross_comp(root, rc, fi=1):  # rc: redundancy; (cross-comp, exemplar selecti
             add_NH(root.H, Nt.H+[new_lev], root)  # assuming same H elevation?
         root.L_ = L_  # N_ links
         root.et += Lt.Et
-        root.lH += [Lt] + Lt.H
-        # link graphs, flatten H if recursive?
+        root.lH += [Lt] + Lt.H  # link graphs, flatten H if recursive?
 
 def select_exemplars(root, N_, rc, fi, fC=0):  # get sparse representative nodes|links: non-maximum suppression via stronger-N inhibition zones
 
@@ -654,10 +649,11 @@ def sum2graph(root, node_,link_,llink_,Et,olp, Lay, rng, fi, C_):  # sum node an
             if LR_:
                 dfork = reduce(lambda F,f: F.add_lay(f), L.derH, CLay())  # combine lL.derH
                 for LR in LR_:  # lay0 += dfork
+                    LR.derTT += dfork.derTT
                     if len(LR.derH[0])==2: LR.derH[0][1].add_lay(dfork)  # direct root only
                     else:                  LR.derH[0] += [dfork.copy_()]  # init by another node
-                    LR.derTT += dfork.derTT
-                    LR.lH[0].N_ += [graph]  # or test for init as above?
+                    if LR.lH: LR.lH[-1].N_ += [graph]  # last lev
+                    else:     LR.lH += [CN(N_=graph)]  # init lev
         alt_=[]  # add mGs overlapping dG
         for L in node_:
             for n in L.N_:  # map root mG
@@ -806,9 +802,9 @@ def PP2N(PP, frame):
     derTT = np.array([[mM,mD,mL,1,mI,mG,mA,mL], [dM,dD,dL,1,dI,dG,dA,dL]])
     derH = [[CLay(node_=P_, link_=link_, derTT=deepcopy(derTT)), CLay()]]  # empty dfork
     y,x,Y,X = box; dy,dx = Y-y,X-x  # A = (dy,dx); L = np.hypot(dy,dx), rolp = 1
-    LEt = np.array([*np.sum([L.Et for L in link_],axis=0), 1]) if link_ else np.array([0,0,1])  # n=1
+    et = np.array([*np.sum([L.Et for L in link_],axis=0), 1]) if link_ else np.array([0,0,1])  # n=1
 
-    return CG(root=frame, fi=1, Et=Et, N_=P_, Lt=CN(Et=LEt, N_=link_), baseT=baseT, derTT=derTT, derH=derH, box=box, yx=yx, span=np.hypot(dy/2,dx/2))
+    return CG(root=frame, fi=1, Et=Et,et=et, N_=P_,L_=link_, baseT=baseT, derTT=derTT, derH=derH, box=box, yx=yx, span=np.hypot(dy/2,dx/2))
 
 def norm_H(H, n):
     for lay in H:
@@ -862,21 +858,21 @@ def init_frame(i__, dim=64):  # set frame and focus, updated by feedback to shif
 def feedback(root):  # root is frame or lG
 
     rv_t = np.ones((2,8))  # sum derTT coefs: m_,d_ [M,D,n,o, I,G,A,L] / Et, baseT, dimension
-    rM,rD = 1,1
-    hlG = sum_N_(root.L_)
-    for lev in reversed(root.H):
-        lG = lev[1]  # level link_: all comp results?
-        if not lG: continue
-        lG.derTT[np.where(lG.derTT==0)] = 1e-7
-        _m,_d,_n = hlG.Et; m,d,n = lG.Et
+    rM, rD = 1,1
+    hLt = sum_N_(root.L_)  # links between top nodes
+    _derTT = np.sum([l.derTT for l in hLt.N_])  # _derTT[np.where(derTT==0)] = 1e-7: this should be in base_comp
+    for lev in reversed(root.H):  # top-down
+        Lt = lev.lH[-1]
+        _m,_d,_n = hLt.Et; m,d,n = Lt.Et
         rM += (_m/_n) / (m/n)  # o eval?
         rD += (_d/_n) / (d/n)
-        rv_t += np.abs((hlG.derTT/_n) / (lG.derTT/n))
-        if lG.H:  # ddfork, not recursive?
-            rMd, rDd, rv_td = feedback(lG)  # intra-level recursion in lG
-            rv_t = rv_t + rv_td; rM += rMd; rD += rDd
-
-    return rM,rD,rv_t
+        derTT = np.sum([l.derTT for l in Lt.N_])  # top link_ is all comp results
+        rv_t += np.abs((_derTT/_n) / (derTT/n))
+        if Lt.lH:  # ddfork, not recursive?
+            rMd, rDd, rv_td = feedback(Lt)  # intra-level recursion, always dfork
+            rv_t = rv_t + rv_td
+            rM += rMd; rD += rDd
+    return rM, rD, rv_t
 
 def agg_search(image, frame, focus, rV=1, _rv_t=[]):  # recursive level-forming pipeline, called from cluster_C_
 
