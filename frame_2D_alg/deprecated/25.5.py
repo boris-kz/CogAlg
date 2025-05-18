@@ -309,3 +309,40 @@ def feedback(root):  # root is frame or lG
             rv_t = rv_t + rv_td; rM += rMd; rD += rDd
 
     return rM,rD,rv_t
+
+def cross_comp(root, rc, fi=1):  # rc: redundancy; (cross-comp, exemplar selection, clustering), recursion
+
+    N__,L_,Et = comp_node_(root.N_,rc) if fi else comp_link_(root.N_,rc)  # or root.L_?  rc has root.olp
+    # if root[-1]: C_= comp_node_(C_), rng*= C.k, C_ olp N_?
+    if N__:  # CLs if not fi
+        Nt = CN(); n__ = []
+        for n in {N for N_ in N__ for N in N_}: n__ += [n]; n.sel = 0  # for cluster_N_
+        # mfork:
+        if val_(Et, mw=(len(n__)-1)*Lw, aw=rc+loop_w) > 0:  # local rc+
+            E_,eEt = select_exemplars(root, n__, rc+loop_w, fi)  # typical sparse nodes, refine by cluster_C_
+            if val_(eEt, mw=(len(E_)-1)*Lw, aw=rc+clust_w) > 0:
+                for rng, N_ in enumerate(N__,start=1):  # bottom-up
+                    rng_E_ = [n for n in N_ if n.sel];  eet = np.sum([n.Et for n in rng_E_])
+                    if val_(eet, mw=(len(rng_E_)-1)*Lw, aw=rc+clust_w*rng) > 0:  # cluster via rng exemplars
+                        Nt = CN(N_=rng_E_)
+                        cluster_N_(Nt, rc+clust_w*rng, fi,rng)
+                if Nt and val_(Nt.Et,Et, mw=(len(Nt.N_)-1)*Lw, aw=rc+clust_w*rng+loop_w) > 0:
+                    cross_comp(Nt, rc+clust_w*rng+loop_w)  # top rng, select lower-rng spec comp_N: scope+?
+        # dfork:
+        Lt = CN(N_=L_, Et=Et)
+        dval = val_(Et, mw=(len(L_)-1)*Lw, aw=rc+3+clust_w, fi=0)
+        if dval > 0:
+            if Nt: comb_alt_(Nt.N_, rc+ clust_w*3)  # from dLs
+            Lt.N_ = L2N(L_)
+            if dval > ave:  # recursive derivation -> lH / nLev, rng-banded?
+                cross_comp(Lt, rc+loop_w*2, fi=0)  # comp_link_, no centroids?
+            else:  # lower res
+                cluster_N_(Lt, rc+clust_w*2, fi=0, fnode_=1)  # overlaps the mfork above
+        if Nt:
+            new_lev = CN(N_=Nt.N_, Et=Nt.Et)  # pack N_ in H
+            if Nt.H:  # lower levs: derH,H if recursion
+                root.N_ = Nt.H.pop().N_  # top lev nodes
+            add_NH(root.H, Nt.H+[new_lev], root)  # assuming same H elevation?
+        root.L_ = L_  # N_ links
+        root.et += Lt.Et
+        root.lH += [Lt] + Lt.H  # link graphs, flatten H if recursive?
