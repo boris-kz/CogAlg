@@ -190,7 +190,7 @@ There are three dimensionality nodes:
 - G: graph (class CG) of PPs or lower graphs in agg_recursion. This should also be a generic node on all higher levels, so internal encoding is quite complex.
 Corresponding node comparison functions are comp_P() in comp_slice and comp_N() in agg_recursion.
  
-[Agg_recursion](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/vectorize_edge_blob/agg_recursion.py) is a prototype for final indefinitely scalable algorithm.  
+[Agg_recursion](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/agg_recursion.py) is a prototype for final indefinitely scalable algorithm.  
 Initial testing could be on recognition of labeled images, but video or stereo video should be much better. We will then add colors, maybe audio and text. 
 For more detailed account of current development see [WIKI](https://github.com/boris-kz/CogAlg/wiki).
 Suggestions and collaboration are most welcome, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
