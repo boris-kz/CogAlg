@@ -30,14 +30,14 @@ But it's the easiest to develop basic principles and operations, which can then 
  Basic edge-detection, laying ground for higher modules with consistent encoding:
 - [frame_blobs](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/frame_blobs.py) defines initial blobs: contiguous areas of same-sign deviation of gradient per pixel. It's a basic cross-correlation and connectivity clustering within an image, but resulting blobs also contain comparison-derived parameters for future comparison between blobs (comp_blob). Old [Diagram](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_blob_scheme.png).
 
-- [vectorize_edge_blob](https://github.com/boris-kz/CogAlg/tree/master/frame_2D_alg/vectorize_edge_blob) is a terminal fork of frame_blobs for high-gradient blobs: likely edges / contours of flat low-gradient blobs. Graphs of connected edge blobs combined with connected flat blobs should represent visual objects.
+- [vectorize_edge_blob](https://github.com/boris-kz/CogAlg/tree/master/frame_2D_alg) is a terminal fork of frame_blobs for high-gradient blobs: likely edges / contours of flat low-gradient blobs. Graphs of connected edge blobs combined with connected flat blobs should represent visual objects.
 
  This is a 2D -> 1D dimensionality reduction, converting edges into vector representations. It's a 2D analog of line_PPs and line_recursive in 1D alg, which cross-compares horizontally discontinuous Ps. Automatic edge tracing and vectorization is still an unsolved problem. 
   
-  - [slice_blob](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/vectorize_edge_blob/slice_blob.py), which forms edge-orthogonal Ps: 1D patterns or blob slices.
-  - [comp_slice](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/vectorize_edge_blob/comp_slice.py) cross-compares vertically consecutive Ps and forms PPs (2D-contiguous patterns of patterns) along the axis of edge blob. This code is not fully debugged.
+  - [slice_edge](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/slice_edge.py), which forms edge-orthogonal Ps: 1D patterns or blob slices.
+  - [comp_slice](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_slice.py) cross-compares vertically consecutive Ps and forms PPs (2D-contiguous patterns of patterns) along the axis of edge blob. This code is not fully debugged.
 
-  - [agg_recursion](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/vectorize_edge_blob/agg_recursion.py) is an extension of comp_slice for agglomerative clustering, not fully functional yet. It cross-compares distant PPs, graphs of PPs, graphs of graphs, etc., along blob edges or skeletons. Resulting graphs (Gs) will have incremental composition and sparsity. These graphs are within edges of the same blob, so complexity of the code may seem like a huge overkill, but it's a fairly complete prototype for general agglomerative recursion in 2D and higher.
+  - [agg_recursion](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/agg_recursion.py) is an extension of comp_slice for agglomerative clustering, not fully functional yet. It cross-compares distant PPs, graphs of PPs, graphs of graphs, etc., along blob edges or skeletons. Resulting graphs (Gs) will have incremental composition and sparsity. These graphs are within edges of the same blob, so complexity of the code may seem like a huge overkill, but it's a fairly complete prototype for general agglomerative recursion in 2D and higher.
 
  Initial drafts, way out of date:
  2nd level is [frame_graphs](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/frame_graphs.py): cross-comp of blobs formed by frame_blobs, forming graphs of blobs, currently a draft.
