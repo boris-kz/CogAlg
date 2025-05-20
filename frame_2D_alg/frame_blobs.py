@@ -94,7 +94,7 @@ class CBlob(CBase):
         y, x = perimeter_.pop()  # pixel coord
         if (y, x) not in dert__: return  # out of bound
         i,dy,dx,g,s = dert__[y,x]
-        if (y, x) not in fill_yx_:
+        if (y, x) not in fill_yx_:  # there is a bug with last blob here
             if blob.sign != s:  # adjacent blobs have opposite sign
                 _blob = root__[y, x]
                 if _blob not in blob.adj_: blob.adj_ += [_blob]
@@ -122,25 +122,26 @@ class CBlob(CBase):
         frame.blob_ += [blob]
         if blob.sign:   # transfer adj_ from +blob to -blobs and remove
             for _blob in blob.adj_:
-                _blob.adj_ += [blob]
-            del blob.adj_
-
+                if blob not in _blob.adj_: _blob.adj_ += [blob]
+            del blob.adj_  # prevents circular assignment
+        # edges are unpacked so adjacents have to be assigned to slices) PPs as higher-order Alt_, probably not worth it
     @property
     def G(blob): return blob.latuple[-1]
     @property
     def yx_(blob): return list(blob.dert_.keys())
 
 
-def frame_blobs_root(image, rV=1):
+def frame_blobs_root(image, rV=1, dert__=None):
     global ave, aveR
     ave *= rV; aveR *= rV
-    dert__ = comp_pixel(image)
+    if not dert__:
+        dert__ = comp_pixel(image)
     frame = CFrame(image)
     flood_fill(frame, dert__)  # flood-fill 1 pixel at a time
 
     return frame
 
-def comp_pixel(i__): # compare all in parallel -> i__, dy__, dx__, g__, s__
+def comp_pixel(i__):  # compare all in parallel -> i__, dy__, dx__, g__, s__
     # compute directional derivatives:
     dy__ = (
             (i__[2:, :-2] - i__[:-2, 2:]) * 0.25 +
@@ -153,9 +154,8 @@ def comp_pixel(i__): # compare all in parallel -> i__, dy__, dx__, g__, s__
             (i__[2:, 2:] - i__[:-2, 2:]) * 0.25
     )
     g__ = np.hypot(dy__, dx__)  # compute gradient magnitude, -> separate G because it's not signed, dy,dx cancel out in Dy,Dx
-    s__ = ave - g__ > 0  # sign is positive for below-average g
-    # convert to dert__:
-    y__, x__ = np.indices(i__.shape)
+    s__ = ave - g__ > 0  # sign, positive = below-average g
+    y__, x__ = np.indices(i__.shape)  # convert to dert__:
     dert__ = dict(zip(
         zip(y__[1:-1, 1:-1].flatten(), x__[1:-1, 1:-1].flatten()),
         zip(i__[1:-1, 1:-1].flatten(), dy__.flatten(), dx__.flatten(), g__.flatten(), s__.flatten()),
@@ -177,6 +177,7 @@ def flood_fill(frame, dert__):
 intra_blob recursively segments each blob for two forks of extended internal cross-comp and sub-clustering:
 - comp_range: incremental range cross-comp in low-variation blobs: >ave negative gradient
 - vectorize_root: slice_edge -> comp_slice -> agg_recursion
+blobs that terminate on frame edge will have to be spliced across frames
 '''
 
 class CrNode_(CFrame):
@@ -209,7 +210,6 @@ def rblob(blob):
 
     for bl in rnode_.blob_: # recursive eval cross-comp per blob
         rblob(bl)
-
 
 def comp_r(rnode_):   # rng+ comp
     # compute kernel
