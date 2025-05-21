@@ -226,7 +226,7 @@ def vect_root(frame, rV=1, ww_t=[]):  # init for agg+:
 def cluster_edge(edge, frame, lev, derlay):  # non-recursive comp_PPm, comp_PPd, edge is not a PP cluster, unpack by default
 
     def cluster_PP_(PP_):
-        G_ = []
+        G_,Et = [],np.zeros(3)
         while PP_:  # flood fill
             node_,link_, et = [],[], np.zeros(3)
             PP = PP_.pop(); _eN_ = [PP]
@@ -241,9 +241,10 @@ def cluster_edge(edge, frame, lev, derlay):  # non-recursive comp_PPm, comp_PPd,
                             link_ += [L]; et += L.Et
                 _eN_ = {*eN_}
             if val_(et, mw=(len(node_)-1)*Lw, aw=2+clust_w) > 0:  # rc=2
+                Et += et
                 Lay = CLay(); [Lay.add_lay(link.derH[0]) for link in link_]  # single-lay derH
                 G_ += [sum2graph(frame, node_,link_,[], et, 1, Lay, rng=1, fi=1)]
-        return G_
+        return G_, Et
 
     def comp_PP_(PP_):
         N_,L_,mEt,dEt = [],[],np.zeros(3),np.zeros(3)
@@ -264,18 +265,20 @@ def cluster_edge(edge, frame, lev, derlay):  # non-recursive comp_PPm, comp_PPd,
         PP_,L_,mEt,dEt = comp_PP_([PP2N(PP,frame) for PP in PP_])
         if PP_:
             if val_(mEt, mw=(len(PP_)-1)*Lw, aw=clust_w, fi=1) > 0:
-                G_ = cluster_PP_(copy(PP_))
+                G_, Et = cluster_PP_(copy(PP_))
             else: G_ = []
-            if G_: frame.N_ += G_; lev.N_ += PP_
+            if G_:
+                frame.N_ += G_; lev.N_ += PP_; lev.Et += Et
             else:  frame.N_ += PP_ # PPm_
-        lev.L_+= L_  # links between PPms
+        lev.L_+= L_; lev.et = mEt+dEt  # links between PPms
         for l in L_:
             derlay[0].add_lay(l.derH[0]); frame.baseT+=l.baseT; frame.derTT+=l.derTT; frame.Et += l.Et
-        if val_(dEt, mw= (len(L_)-1)*Lw, aw= 2+clust_w, fi=0) > 0:
+        if val_(dEt, mw = (len(L_)-1)*Lw, aw = 2+clust_w, fi=0) > 0:
             Lt = cluster_N_(L2N(L_), rc=2, fi=0)
             if Lt:  # L_ graphs
                 if lev.lH: lev.lH[0].N_ += Lt.N_; lev.lH[0].Et += Lt.Et
                 else:      lev.lH += [Lt]
+                lev.et += Lt.Et
 
 def val_(Et, _Et=None, mw=1, aw=1, fi=1):  # m+d val per cluster|cross_comp
 
@@ -418,7 +421,8 @@ def base_comp(_N, N, dir=1):  # comp Et, Box, baseT, derTT
     else:  # dimension is distance
         _L,L = _N.span, N.span   # dist, not cumulative, still positive?
         mL,dL = min(_L,L)/ max(_L,L), _L - L
-    # comp len H, density: combined from N_ in links?
+    # comp depth, density:
+    # lenH, ave span, combined from N_ in links?
     _m_,_d_ = np.array([[mM,mD,mn,mo,mI,mG,mA,mL], [dM,dD,dn,do,dI,dG,dA,dL]])
     # comp derTT:
     _i_ = _N.derTT[1]; i_ = N.derTT[1] * rn  # normalize by compared accum span
@@ -492,7 +496,7 @@ def cross_comp(iN_, rc, root, fi=1):  # rc: redundancy; (cross-comp, exemplar se
         if Nt:
             # higher-level feedback:
             new_lev = CN(N_=Nt.N_, Et=Nt.Et)  # pack N_ in H
-            add_NH(root.H, Nt.H+[new_lev], root)  # assuming same H elevation?
+            add_NH(root.H, Nt.H+[new_lev], root)  #| different H elevation?
             if Nt.H:  # lower levs: derH,H if recursion
                 root.N_ = Nt.H.pop().N_  # top lev nodes
             comb_alt_(Nt.N_, rc + clust_w * 3)  # from dLs
@@ -866,17 +870,26 @@ def feedback(root):  # root is frame or lG
             rM += rMd; rD += rDd
     return rM, rD, rv_t
 
-def agg_search(frame, focus,foci, image, rV=1, _rv_t=[], dert__=None):  # recursive level-forming pipeline
+def agg_focus(frame, focus, image, rV, rv_t, dert__):  # single-focus agg+ level-forming pipeline
+
+    y,x, Y,X = focus
+    Fg = frame_blobs_root(image[y:Y,x:X],rV, dert__[y:Y,x:X]); Fg.box=focus; intra_blob_root(Fg,rV)
+    Fg = vect_root(Fg, rV, rv_t)
+    comb_alt_(Fg.N_, ave*2)
+    cross_comp(Fg.N_, root=Fg, rc=frame.olp+loop_w)
+    return Fg
+
+def agg_search(frame, focus,foci, image, rV=1, _rv_t=[], dert__=None):  # recursive frame search
 
     global ave, Lw, int_w, loop_w, clust_w, ave_dist, ave_med, med_w
     ave, Lw, int_w, loop_w, clust_w, ave_dist, ave_med, med_w = np.array([ave, Lw, int_w, loop_w, clust_w, ave_dist, ave_med, med_w]) / rV
     # fb rws: ~rvs
-    node_,C_ = [],[]  # extend frame.node_ with new foci from search
     y,x, Y,X = focus
     Fg = frame_blobs_root(image[y:Y,x:X],rV, dert__[y:Y,x:X]); Fg.box=focus; intra_blob_root(Fg,rV)
     Fg = vect_root(Fg, rV,_rv_t)
     lenn_, depth = len(Fg.N_), 0
-    while len(Fg.H) > depth:  # added in cross_comp
+    node_, C_ = [],[]
+    while len(Fg.H) > depth:  # depth added in cross_comp, extend frame.node_ with searched foci:
         comb_alt_(Fg.N_, ave*2)
         cross_comp(Fg.N_, root=Fg, rc=frame.olp+loop_w)  # top level, Ft += G.C_ in sum_N_?
         # adjust weights: all aves *= rV, ultimately differential backprop per ave? this adjustment should be after search cycle
@@ -886,15 +899,15 @@ def agg_search(frame, focus,foci, image, rV=1, _rv_t=[], dert__=None):  # recurs
             ny = (abs(dy) + (wY-1)) // wY * np.sign(dy)  # ≥1 if _dy>0, n new windows along axis
             nx = (abs(dx) + (wX-1)) // wX * np.sign(dx)
             _y,_x,_Y,_X = focus
-            y = _y+ ny*wY; x = _x+ nx*wX; Y = _Y+ ny*wY; X = _X+ nx*wX  # next box
+            y,x,Y,X =_y+ny*wY,_x+nx*wX,_Y+ny*wY,_X+nx*wX  # next focus
             if y >= 0 and x >= 0 and Y < frame.box[2] and X < frame.box[3]:  # focus inside the image
-                np.int_([y,x,Y,X]); fin = 0
+                y,x,Y,X = focus = np.int_([y,x,Y,X]); fin = 0
                 for _y,_x,_,_ in foci:
                     if y==_y and x==_x: fin=1; break
                 if not fin:  # new focus
                     foci += [focus]  # rerun agg+ with new focus window and aves:
-                    Fg = agg_search(frame, focus,foci, image, rV, rv_t, dert__[y:Y,x:X])
-                    if Fg: node_ += Fg.N_; depth = len(Fg.H)
+                    Fg = agg_focus(frame, focus, image[y:Y,x:X], rV,rv_t, dert__[y:Y,x:X])
+                    if Fg: node_ += Fg.N_; depth = max(depth, len(Fg.H))
                     else: break
                 else: break
             else: break

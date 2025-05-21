@@ -157,8 +157,8 @@ def comp_pixel(i__):  # compare all in parallel -> i__, dy__, dx__, g__, s__
     s__ = ave - g__ > 0  # sign, positive = below-average g
     y__, x__ = np.indices(i__.shape)  # convert to dert__:
     dert__ = dict(zip(
-        zip(y__[1:-1, 1:-1].flatten(), x__[1:-1, 1:-1].flatten()),
-        zip(i__[1:-1, 1:-1].flatten(), dy__.flatten(), dx__.flatten(), g__.flatten(), s__.flatten()),
+        zip(y__[:-2, :-2].flatten(), x__[:-2, :-2].flatten()),
+        zip(i__[:-2, :-2].flatten(), dy__.flatten(), dx__.flatten(), g__.flatten(), s__.flatten()),
     ))
     return dert__
 
