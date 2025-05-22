@@ -346,3 +346,9 @@ def cross_comp(root, rc, fi=1):  # rc: redundancy; (cross-comp, exemplar selecti
         root.L_ = L_  # N_ links
         root.et += Lt.Et
         root.lH += [Lt] + Lt.H  # link graphs, flatten H if recursive?
+        '''
+                ny = (abs(dy) + (wY-1)) // wY * np.sign(dy)  # ≥1 if _dy>0, n new windows along axis
+                nx = (abs(dx) + (wX-1)) // wX * np.sign(dx)
+                y,x,Y,X =_y+ny*wY,_x+nx*wX,_Y+ny*wY,_X+nx*wX  # next focus
+                if y >= 0 and x >= 0 and Y < iY and X < iX:  # focus inside the image
+        '''

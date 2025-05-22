@@ -97,6 +97,7 @@ class CL(CN):  # link or edge, a product of comparison between two nodes or link
         L.yx =   kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
         L.box =  kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
         L.span = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_) but not additive?
+        L.angle= kwargs.get('angle',np.zeros(2))  # dy,dx
         # splice L_ across N_s, cluster by diff
     def __bool__(L): return bool(L.N_)
 
@@ -648,6 +649,7 @@ def sum2graph(root, node_,link_,llink_,Et,olp, Lay, rng, fi):  # sum node and li
     if fg: graph.H = Nt.H + [Nt]  # pack prior top level
     yx = np.mean(yx_,axis=0); dy_,dx_ = (graph.yx-yx_).T; dist_ = np.hypot(dy_,dx_)
     graph.span = dist_.mean()  # ave distance from graph center to node centers
+    graph.angle = np.sum([l.angle for l in link_])
     graph.yx = yx
     if not fi:  # add mfork as link.node_(CL).root dfork
         for L in link_:  # higher derH layers are added by feedback, dfork added from comp_link_:
@@ -834,12 +836,32 @@ def sort_H(H, fi):  # re-assign olp and form priority indices for comp_tree, if 
     if fi:
         H.root.node_ = H.node_
 
+def feedback(root):  # adjust weights: all aves *= rV, ultimately differential backprop per ave?
+
+    rv_t = np.ones((2, 8))  # sum derTT coefs: m_,d_ [M,D,n,o, I,G,A,L] / Et, baseT, dimension
+    rM, rD = 1, 1
+    hLt = sum_N_(root.L_)  # links between top nodes
+    _derTT = np.sum([l.derTT for l in hLt.N_])  # _derTT[np.where(derTT==0)] = 1e-7
+    for lev in reversed(root.H):  # top-down
+        if not lev.lH: continue
+        Lt = lev.lH[-1]  # dfork
+        _m, _d, _n = hLt.Et; m, d, n = Lt.Et
+        rM += (_m / _n) / (m / n)  # relative higher val, | simple relative val?
+        rD += (_d / _n) / (d / n)
+        derTT = np.sum([l.derTT for l in Lt.N_])  # top link_ is all comp results
+        rv_t += np.abs((_derTT / _n) / (derTT / n))
+        if Lt.lH:  # ddfork, not recursive?
+            rMd, rDd, rv_td = feedback(Lt)  # intra-level recursion, always dfork
+            rv_t = rv_t + rv_td
+            rM += rMd; rD += rDd
+    return rM, rD, rv_t
+
 def init_frame(i__):  # set frame and focus, updated by feedback to shift the focus
 
     dert__ = comp_pixel(i__)
-    Y, X = image.shape[0], image.shape[1]
+    Y, X = i__.shape[0], i__.shape[1]
     nY = (Y+ wY-1) // wY; nX = (X+ wY-1) // wX  # image / dimension -> n windows
-    win_, max_g = [], 0
+    max_g = 0
     for iy in range(nY):
         for ix in range(nX):
             y0 = iy * wY; yn = y0 + wY; x0 = ix * wX; xn = x0 + wX
@@ -850,68 +872,65 @@ def init_frame(i__):  # set frame and focus, updated by feedback to shift the fo
     frame = CG(box = np.array([0,0,Y,X]), yx = np.array([Y/2,X/2]))  # define frame with whole image
     return frame, focus, dert__
 
-def feedback(root):  # root is frame or lG
-
-    rv_t = np.ones((2,8))  # sum derTT coefs: m_,d_ [M,D,n,o, I,G,A,L] / Et, baseT, dimension
-    rM, rD = 1,1
-    hLt = sum_N_(root.L_)  # links between top nodes
-    _derTT = np.sum([l.derTT for l in hLt.N_])  # _derTT[np.where(derTT==0)] = 1e-7
-    for lev in reversed(root.H):  # top-down
-        if not lev.lH: continue
-        Lt = lev.lH[-1]  # dfork
-        _m,_d,_n = hLt.Et; m,d,n = Lt.Et
-        rM += (_m/_n) / (m/n)  # o eval?
-        rD += (_d/_n) / (d/n)
-        derTT = np.sum([l.derTT for l in Lt.N_])  # top link_ is all comp results
-        rv_t += np.abs((_derTT/_n) / (derTT/n))
-        if Lt.lH:  # ddfork, not recursive?
-            rMd, rDd, rv_td = feedback(Lt)  # intra-level recursion, always dfork
-            rv_t = rv_t + rv_td
-            rM += rMd; rD += rDd
-    return rM, rD, rv_t
-
 def agg_focus(frame, focus, image, rV, rv_t, dert__):  # single-focus agg+ level-forming pipeline
 
     y,x, Y,X = focus
-    Fg = frame_blobs_root(image[y:Y,x:X],rV, dert__[y:Y,x:X]); Fg.box=focus; intra_blob_root(Fg,rV)
+    Fg = frame_blobs_root(image[y:Y,x:X],rV, dert__[y:Y,x:X]); Fg.box=focus
     Fg = vect_root(Fg, rV, rv_t)
-    comb_alt_(Fg.N_, ave*2)
     cross_comp(Fg.N_, root=Fg, rc=frame.olp+loop_w)
+    add_N(frame, Fg)
     return Fg
 
-def agg_search(frame, focus,foci, image, rV=1, _rv_t=[], dert__=None):  # recursive frame search
+def proj_focus(frame, focus, Fg, iY,iX):  # Project expected focus value along displacement direction
+
+    m,d,n = Fg.Et
+    pV = (m-ave*n) + (d-avd*n)  # symmetrical, project in both directions
+    dy,dx = Fg.angle
+    rd = dy/ max(dx,1e-7)  # aspect ratio
+    _y,_x,_Y,_X = focus
+    cy,cx = _y+ wY/2, _x+ wX/2
+    step = np.hypot(wY*rd, wX/rd)  # scale by the aspect ratio
+    dist = 0.0
+    pfoci = []  # add projected foci+pV along dy,dx while pV > 0
+    while pV > ave:
+        for ny,nx in (cy+step*wY, cx+step*wX), (cy-step*wY, cx-step*wX):  # project in both directions
+            y, x, Y, X = _y + ny * wY, _x + nx * wX, _Y + ny * wY, _X + nx * wX  # next focus
+            if y >= 0 and x >= 0 and Y < iY and X < iX:  # focus inside the image
+                pfocus = frame[ny,nx]  # pseudo for map ny,nx to windows, can be multiple per direction?
+                pfoci += [[pV,pfocus]]
+        dist += step
+        pV *= ave/(Fg.baseT[0]/n) * dist/ave_dist  # decrement by rel dist. ave_dist is not correct here
+
+    return pfoci
+
+def agg_search(image, rV=1, rv_t=[]):  # recursive frame search
 
     global ave, Lw, int_w, loop_w, clust_w, ave_dist, ave_med, med_w
     ave, Lw, int_w, loop_w, clust_w, ave_dist, ave_med, med_w = np.array([ave, Lw, int_w, loop_w, clust_w, ave_dist, ave_med, med_w]) / rV
     # fb rws: ~rvs
-    y,x, Y,X = focus
-    Fg = frame_blobs_root(image[y:Y,x:X],rV, dert__[y:Y,x:X]); Fg.box=focus; intra_blob_root(Fg,rV)
-    Fg = vect_root(Fg, rV,_rv_t)
-    lenn_, depth = len(Fg.N_), 0
-    node_, C_ = [],[]
-    while len(Fg.H) > depth:  # depth added in cross_comp, extend frame.node_ with searched foci:
-        comb_alt_(Fg.N_, ave*2)
-        cross_comp(Fg.N_, root=Fg, rc=frame.olp+loop_w)  # top level, Ft += G.C_ in sum_N_?
-        # adjust weights: all aves *= rV, ultimately differential backprop per ave? this adjustment should be after search cycle
-        rM, rD, rv_t = feedback(Fg)
-        dy, dx = map(int, Fg.baseT[-2:])  # gA from summed Gs, eval focus shift:
-        if val_(Fg.Et, mw=(rM+rD) * (np.hypot(dy,dx)/wYX), aw=frame.olp+clust_w*20):  # focus shift by dval + temp Dm_+Ddm_?
-            ny = (abs(dy) + (wY-1)) // wY * np.sign(dy)  # ≥1 if _dy>0, n new windows along axis
-            nx = (abs(dx) + (wX-1)) // wX * np.sign(dx)
-            _y,_x,_Y,_X = focus
-            y,x,Y,X =_y+ny*wY,_x+nx*wX,_Y+ny*wY,_X+nx*wX  # next focus
-            if y >= 0 and x >= 0 and Y < frame.box[2] and X < frame.box[3]:  # focus inside the image
-                y,x,Y,X = focus = np.int_([y,x,Y,X]); fin = 0
-                for _y,_x,_,_ in foci:
-                    if y==_y and x==_x: fin=1; break
-                if not fin:  # new focus
-                    foci += [focus]  # rerun agg+ with new focus window and aves:
-                    Fg = agg_focus(frame, focus, image[y:Y,x:X], rV,rv_t, dert__[y:Y,x:X])
-                    if Fg: node_ += Fg.N_; depth = max(depth, len(Fg.H))
-                    else: break
-                else: break
-            else: break
-        else: break  # tentative
+    frame, focus, dert__ = init_frame(image)
+    lenn_, depth = 0,0; node_,C_,foci, proj_foci = [],[],[],[]
+    iY,iX = frame.box[2], frame.box[3]
+    while True:
+        # extend frame.node_ with new foci:
+        _y,_x,_Y,_X = focus; fbreak = 1
+        Fg = agg_focus(frame, focus, image[_y:_Y,_x:_X], rV,rv_t, dert__[_y:_Y,_x:_X])
+        if Fg:
+            node_+= Fg.N_; depth = max(depth, len(Fg.H))
+            dy,dx = Fg.angle
+            # not updated:
+            if val_(Fg.Et, mw=np.hypot(dy,dx)/wYX, aw=frame.olp+clust_w*20):
+                pfoci = proj_focus(frame, focus, Fg, iY, iX)
+                for pfocus in pfoci:
+                    _,(y,x,Y,X) = pfocus; fin = 0
+                    for _y,_x,_,_ in foci:
+                        if y==_y and x==_x: fin=1; break
+                    if not fin:  # new focus
+                        focus = [np.int_([y,x,Y,X])]
+                        foci += [focus]
+                        fbreak = 0
+        if fbreak:
+            break  # else rerun agg+ with new focus window and aves
     # scope+ node_-> agg+ H, splice and cross_comp centroids in G.C_ within focus ) frame?
     if node_:
         Fg = sum_N_(node_, root=frame, fCG=1)
@@ -920,12 +939,5 @@ def agg_search(frame, focus,foci, image, rV=1, _rv_t=[], dert__=None):  # recurs
             # project higher-scope Gs, eval for new foci, splice foci into frame
         return Fg
 
-if __name__ == "__main__":
-    image = imread('./images/toucan_small.jpg')  # './images/toucan.jpg' './images/raccoon_eye.jpeg'
-    frame, focus, dert__ = init_frame(image)
-    frame = agg_search(frame,focus,[], image, dert__)  # focus is shifted within a frame by internal feedback
-''' without agg+:
-    frame = frame_blobs_root(image)
-    intra_blob_root(frame)
-    vect_root(frame)
-'''
+if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg'
+    frame = agg_search(imread('./images/toucan.jpg'))  # focus in frame is shifted by prior foci

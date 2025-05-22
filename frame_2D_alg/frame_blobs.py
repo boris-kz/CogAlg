@@ -131,14 +131,21 @@ class CBlob(CBase):
     def yx_(blob): return list(blob.dert_.keys())
 
 
-def frame_blobs_root(image, rV=1, dert__=None):
+def frame_blobs_root(image, rV=1, dert__=None, fintra=0):
     global ave, aveR
     ave *= rV; aveR *= rV
     if not dert__:
         dert__ = comp_pixel(image)
+    i__, dy__, dx__, g__, s__ = dert__  # convert to dict for flood-fill
+    y__, x__ = np.indices(i__.shape)
+    dert__ = dict(zip(
+        zip(y__.flatten(), x__.flatten()),
+        zip(i__.flatten(), dy__.flatten(), dx__.flatten(), g__.flatten(), s__.flatten()),
+    ))
     frame = CFrame(image)
     flood_fill(frame, dert__)  # flood-fill 1 pixel at a time
-
+    if fintra and frame.latuple[3] > ave:
+        intra_blob_root(frame)  # kernel size extension
     return frame
 
 def comp_pixel(i__):  # compare all in parallel -> i__, dy__, dx__, g__, s__
@@ -155,11 +162,8 @@ def comp_pixel(i__):  # compare all in parallel -> i__, dy__, dx__, g__, s__
     )
     g__ = np.hypot(dy__, dx__)  # compute gradient magnitude, -> separate G because it's not signed, dy,dx cancel out in Dy,Dx
     s__ = ave - g__ > 0  # sign, positive = below-average g
-    y__, x__ = np.indices(i__.shape)  # convert to dert__:
-    dert__ = dict(zip(
-        zip(y__[:-2, :-2].flatten(), x__[:-2, :-2].flatten()),
-        zip(i__[:-2, :-2].flatten(), dy__.flatten(), dx__.flatten(), g__.flatten(), s__.flatten()),
-    ))
+    dert__ = [i__[:-2,:-2], dy__,dx__,g__,s__]
+
     return dert__
 
 def flood_fill(frame, dert__):
@@ -268,9 +272,7 @@ if __name__ == "__main__":
     # image_file = './images//raccoon_eye.jpeg'
     image_file = './images//toucan_small.jpg'
     image = imread(image_file)
-    frame = frame_blobs_root(image) # without intra_blob
-    intra_blob_root(frame)
-
+    frame = frame_blobs_root(image)
     # verification (intra):
     for blob in unpack_blob_(frame):
         print(f"{blob}'s parent is {blob.root}", end="")
