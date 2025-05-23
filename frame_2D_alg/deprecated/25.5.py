@@ -352,3 +352,24 @@ def cross_comp(root, rc, fi=1):  # rc: redundancy; (cross-comp, exemplar selecti
                 y,x,Y,X =_y+ny*wY,_x+nx*wX,_Y+ny*wY,_X+nx*wX  # next focus
                 if y >= 0 and x >= 0 and Y < iY and X < iX:  # focus inside the image
         '''
+def feedback(root):  # adjust weights: all aves *= rV, ultimately differential backprop per ave?
+
+    rv_t = np.ones((2, 8))  # sum derTT coefs: m_,d_ [M,D,n,o, I,G,A,L] / Et, baseT, dimension
+    rM, rD = 1, 1
+    hLt = sum_N_(root.L_)  # links between top nodes
+    _derTT = np.sum([l.derTT for l in hLt.N_])  # _derTT[np.where(derTT==0)] = 1e-7
+    for lev in reversed(root.H):  # top-down
+        if not lev.lH: continue
+        Lt = lev.lH[-1]  # dfork
+        _m, _d, _n = hLt.Et; m, d, n = Lt.Et
+        rM += (_m / _n) / (m / n)  # relative higher val, | simple relative val?
+        rD += (_d / _n) / (d / n)
+        derTT = np.sum([l.derTT for l in Lt.N_])  # top link_ is all comp results
+        rv_t += np.abs((_derTT / _n) / (derTT / n))
+        if Lt.lH:  # ddfork, not recursive?
+            rMd, rDd, rv_td = feedback(Lt)  # intra-level recursion, always dfork
+            rv_t = rv_t + rv_td
+            rM += rMd; rD += rDd
+    return rM, rD, rv_t
+
+

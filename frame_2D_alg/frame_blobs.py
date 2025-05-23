@@ -134,7 +134,7 @@ class CBlob(CBase):
 def frame_blobs_root(image, rV=1, dert__=None, fintra=0):
     global ave, aveR
     ave *= rV; aveR *= rV
-    if not dert__:
+    if not np.any(dert__):
         dert__ = comp_pixel(image)
     i__, dy__, dx__, g__, s__ = dert__  # convert to dict for flood-fill
     y__, x__ = np.indices(i__.shape)
@@ -162,7 +162,7 @@ def comp_pixel(i__):  # compare all in parallel -> i__, dy__, dx__, g__, s__
     )
     g__ = np.hypot(dy__, dx__)  # compute gradient magnitude, -> separate G because it's not signed, dy,dx cancel out in Dy,Dx
     s__ = ave - g__ > 0  # sign, positive = below-average g
-    dert__ = [i__[:-2,:-2], dy__,dx__,g__,s__]
+    dert__ = np.stack([i__[:-2,:-2], dy__,dx__,g__,s__])
 
     return dert__
 
