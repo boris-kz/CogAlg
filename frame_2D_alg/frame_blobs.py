@@ -131,11 +131,12 @@ class CBlob(CBase):
     def yx_(blob): return list(blob.dert_.keys())
 
 
-def frame_blobs_root(image, rV=1, dert__=None, fintra=0):
+def frame_blobs_root(image, rV=1, fintra=0):
+
     global ave, aveR
     ave *= rV; aveR *= rV
-    if not np.any(dert__):
-        dert__ = comp_pixel(image)
+
+    dert__ =  image if isinstance(image[0], np.array) else comp_pixel(image)
     i__, dy__, dx__, g__, s__ = dert__  # convert to dict for flood-fill
     y__, x__ = np.indices(i__.shape)
     dert__ = dict(zip(
