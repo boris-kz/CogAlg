@@ -68,12 +68,13 @@ class CBase:
 ave  = 30  # base filter, directly used for comp_r fork
 aveR = 10  # for range+, fixed overhead per blob
 
-class CFrame(CBase):
+class CG(CBase):
 
     def __init__(frame, image):
         super().__init__()
         frame.box = np.array([0,0,image.shape[0],image.shape[1]])
-        frame.latuple = [0,0,0,0]  # I, Dy, Dx, G
+        frame.yx  = np.array([image.shape[0]//2, image.shape[1]//2])
+        frame.baseT = [0,0,0,0]  # I, Dy, Dx, G
         frame.i__= image
         frame.blob_ = []
     def __repr__(frame): return f"frame(id={frame.id})"
@@ -136,16 +137,16 @@ def frame_blobs_root(image, rV=1, fintra=0):
     global ave, aveR
     ave *= rV; aveR *= rV
 
-    dert__ =  image if isinstance(image[0], np.array) else comp_pixel(image)
+    dert__ = comp_pixel(image) if isinstance(image[0],int) else image  # precomputed
     i__, dy__, dx__, g__, s__ = dert__  # convert to dict for flood-fill
     y__, x__ = np.indices(i__.shape)
     dert__ = dict(zip(
         zip(y__.flatten(), x__.flatten()),
         zip(i__.flatten(), dy__.flatten(), dx__.flatten(), g__.flatten(), s__.flatten()),
     ))
-    frame = CFrame(image)
+    frame = CG(image)
     flood_fill(frame, dert__)  # flood-fill 1 pixel at a time
-    if fintra and frame.latuple[3] > ave:
+    if fintra and frame.baseT[3] > ave:
         intra_blob_root(frame)  # kernel size extension
     return frame
 
@@ -185,7 +186,7 @@ intra_blob recursively segments each blob for two forks of extended internal cro
 blobs that terminate on frame edge will have to be spliced across frames
 '''
 
-class CrNode_(CFrame):
+class CrNode_(CG):
     def __init__(rnode_, blob):
         super().__init__(blob.root.i__)  # init params, extra params init below:
         rnode_.root = blob
@@ -282,7 +283,7 @@ if __name__ == "__main__":
             print(f", has {cnt} sub-blob{'' if cnt == 1 else 's'}")
         else: print()  # the blob is not extended, skip
 
-    I, Dy, Dx, G = frame.latuple
+    I, Dy, Dx, G = frame.baseT
     # verification:
     i__ = np.zeros_like(image, dtype=np.float32)
     dy__ = np.zeros_like(image, dtype=np.float32)

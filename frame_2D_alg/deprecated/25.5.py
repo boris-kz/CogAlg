@@ -352,6 +352,46 @@ def cross_comp(root, rc, fi=1):  # rc: redundancy; (cross-comp, exemplar selecti
                 y,x,Y,X =_y+ny*wY,_x+nx*wX,_Y+ny*wY,_X+nx*wX  # next focus
                 if y >= 0 and x >= 0 and Y < iY and X < iX:  # focus inside the image
         '''
+
+def agg_search(image, rV=1, rv_t=[]):  # recursive frame search
+
+    global ave, Lw, int_w, loop_w, clust_w, ave_dist, ave_med, med_w
+    ave, Lw, int_w, loop_w, clust_w, ave_dist, ave_med, med_w = np.array([ave, Lw, int_w, loop_w, clust_w, ave_dist, ave_med, med_w]) / rV  # fb rws: ~rvs
+
+    nY,nX = image.shape[0] // wY, image.shape[1] // wX  # n complete blocks
+    i__ = image[:nY*wY, :nX*wX]  # drop partial rows/cols
+    dert__ = comp_pixel(i__)
+    win__= dert__.reshape(nY, wY, nX, wX, dert__.shape[0]).swapaxes(1, 2)  # nY=20, nY=13, wY=64, wX=64, dert=5
+    PV__ = win__[..., 3].sum(axis=(2, 3))  # init proj foci vals = sum G in dert[3], shape: nY=20, nX=13
+    node_,C_,foci = [],[],[]
+    lenn_,depth = 0,0
+    Y,X = i__.shape[0],i__.shape[1]
+    frame = CG(box=np.array([0,0,Y,X]), yx=np.array([Y/2, X/2]))  # do not accum these in add_N?
+    while True:
+        # extend frame.N_ with new foci, if any projV > ave:
+        if np.max(PV__) < ave * (frame.olp+clust_w*20): # max G + pV,*coef?
+            break
+        y,x = np.unravel_index(PV__.argmax(), PV__.shape)  # new max window
+        fbreak = 1; fin = 0
+        for _y,_x in foci:
+            if y==_y and x==_x: fin = 1; break
+        if not fin: foci += [[y,x]]  # new focus
+        Fg = agg_focus(frame, image, y,x, win__[y,x], rV,rv_t)
+        if Fg:
+            node_+= Fg.N_; depth = max(depth, len(Fg.H))
+            if val_(Fg.Et, mw=np.hypot(*Fg.angle)/wYX, aw=frame.olp+clust_w*20):
+                proj_focus(PV__, y,x, Fg)  # radial accum of projected focus value in PV__
+                fbreak = 0
+        if fbreak:
+            break  # else rerun agg+ with new max PV__ focus window
+    # scope+ node_-> agg+ H, splice and cross_comp centroids in G.C_ within focus ) frame?
+    if node_:
+        Fg = sum_N_(node_, root=frame, fCG=1)
+        if val_(frame.Et, mw=len(node_)/lenn_*Lw, aw=frame.olp+clust_w*20) > 0:  # node_ is combined across foci
+            cross_comp(node_, rc=frame.olp+loop_w, root=Fg)
+            # project higher-scope Gs, eval for new foci, splice foci into frame
+        return Fg
+
 def feedback(root):  # adjust weights: all aves *= rV, ultimately differential backprop per ave?
 
     rv_t = np.ones((2, 8))  # sum derTT coefs: m_,d_ [M,D,n,o, I,G,A,L] / Et, baseT, dimension
