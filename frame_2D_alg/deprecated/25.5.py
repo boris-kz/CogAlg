@@ -227,6 +227,59 @@ def sum2graph(root, node_,link_,llink_,Et,olp, Lay, rng, fi, C_):  # sum node an
                     alt_ += [mG]
     return graph
 
+def sum2graph2(root, node_,link_,llink_,Et,olp, Lay, rng, fi):  # sum node and link params into graph, aggH in agg+ or player in sub+
+
+    n0 = node_[0]; C_=root.C_ if root else []
+    graph = CG(fi=fi,rng=rng,olp=olp, Et=Et,et=Lay.Et, N_=node_,L_=link_, box=n0.box, baseT=copy(n0.baseT), derTT=Lay.derTT, derH=[[Lay]], C_=C_,root=root)
+    # 1st Lay is single-fork, or feedback
+    graph.hL_ = llink_
+    n0.root = graph; yx_ = [n0.yx]; fg = fi and isinstance(n0.N_[0],CG)  # not PPs
+    Nt = copy_(n0)  #->CN, comb forks: add_N(Nt,Nt.Lt)?
+    for N in node_[1:]:
+        graph.baseT+=N.baseT; graph.box=extend_box(graph.box,N.box); yx_ += [N.yx]
+        if fg: add_N(Nt, N)
+    if fg: graph.H = Nt.H + [Nt]  # pack prior top level
+    yx = np.mean(yx_,axis=0); dy_,dx_ = (yx_-yx).T; dist_ = np.hypot(dy_,dx_)
+    graph.span = dist_.mean()  # ave distance from graph center to node centers
+    graph.angle = np.sum([l.angle for l in link_])
+    graph.yx = yx
+    return graph
+
+def sum2graph(root, node_,link_,llink_,Et,olp, Lay, rng, fi):  # sum node and link params into graph, aggH in agg+ or player in sub+
+
+    n0 = node_[0]; C_=root.C_ if root else []
+    graph = CG(fi=fi,rng=rng,olp=olp, Et=Et,et=Lay.Et, N_=node_,L_=link_, box=n0.box, baseT=copy(n0.baseT), derTT=Lay.derTT, derH=[[Lay]], C_=C_,root=root)
+    graph.hL_ = llink_
+    n0.root = graph; yx_ = [n0.yx]; fg = fi and isinstance(n0.N_[0],CG)  # not PPs
+    Nt = copy_(n0)  #->CN, comb forks: add_N(Nt,Nt.Lt)?
+    for N in node_[1:]:
+        graph.baseT+=N.baseT; graph.box=extend_box(graph.box,N.box); yx_ += [N.yx]
+        if fg: add_N(Nt, N)
+    if fg: graph.H = Nt.H + [Nt]  # pack prior top level
+    yx = np.mean(yx_,axis=0); dy_,dx_ = (yx_-yx).T; dist_ = np.hypot(dy_,dx_)
+    graph.span = dist_.mean()  # ave distance from graph center to node centers
+    graph.angle = np.sum([l.angle for l in link_])
+    graph.yx = yx
+    if not fi:  # add mfork as link.node_(CL).root dfork
+        for L in link_:  # higher derH layers are added by feedback, dfork added from comp_link_:
+            LR_ = set([n.root for n in L.N_ if isinstance(n.root,CG)])  # nodet, skip frame, empty roots
+            if LR_:
+                dfork = reduce(lambda F,f: F.add_lay(f), L.derH, CLay())  # combine lL.derH
+                for LR in LR_:  # lay0 += dfork
+                    LR.derTT += dfork.derTT
+                    if len(LR.derH[0])==2: LR.derH[0][1].add_lay(dfork)  # direct root only: 1-layer derH
+                    else:                  LR.derH[0] += [dfork.copy_()]  # init by another node
+                    if LR.lH: LR.lH[-1].N_ += [graph]  # last lev
+                    else:     LR.lH += [CN(N_=[graph])]  # init
+        alt_=[]  # add mGs overlapping dG
+        for L in node_:
+            for n in L.N_:  # map root mG
+                mG = n.root
+                if isinstance(mG, CG) and mG not in alt_:  # root is not frame
+                    mG.alt_ += [graph]  # cross-comp|sum complete alt before next agg+ cross-comp, multi-layered?
+                    alt_ += [mG]
+    return graph
+
 def cluster_edge(edge, frame, lev, derlay):  # non-recursive comp_PPm, comp_PPd, edge is not a PP cluster, unpack by default
 
     def cluster_PP_(PP_, fi):
@@ -412,4 +465,31 @@ def feedback(root):  # adjust weights: all aves *= rV, ultimately differential b
             rM += rMd; rD += rDd
     return rM, rD, rv_t
 
+def agg_search2(image, rV=1, rv_t=[]):  # recursive frame search
+
+    nY,nX = image.shape[0] // wY, image.shape[1] // wX  # n complete blocks
+    i__ = image[:nY*wY+2, :nX*wX+2]  # drop partial rows/cols
+    dert__= comp_pixel(i__)
+    win__ = dert__.reshape(dert__.shape[0], wX, wY, nX, nY).swapaxes(1, 2)  # dert=5, wX=64, wY=64, nX=20, nY=13
+    # axis=(0,1) to sum wX and wY
+    PV__  = win__[3].sum( axis=(0,1))  # init proj vals = sum G in dert[3], shape: nY=20, nX=13
+    frame = i__.shape[0],i__.shape[1]  # init
+    node_ = []; aw = clust_w * 20
+    while np.max(PV__) > ave * aw:
+        # max G + pV,* coef?
+        y,x = np.unravel_index(PV__.argmax(), PV__.shape)  # max window index
+        PV__[y,x] = -np.inf  # skip in the future, or map from separate in__?
+        Fg, frame = agg_focus(frame,y,x, win__[:,:,:,y,x],rV,rv_t) # [dert,wX,wY,nX,nY]
+        if Fg:
+            node_ += Fg.N_
+            if val_(Fg.Et, mw=np.hypot(*Fg.angle)/ wYX, aw=Fg.olp + clust_w * 20):
+                proj_focus(PV__, y,x, Fg)  # accum projected value in PV__
+        aw = clust_w * 20 * frame.Et[2] * frame.olp
+    # scope+ node_-> agg+ H, splice and cross_comp centroids in G.C_ within focus ) frame?
+    if node_:
+        Fg = sum_N_(node_, root=frame, fCG=1)
+        if val_(frame.Et, mw=len(node_)*Lw, aw=frame.olp+clust_w*20) > 0:  # node_ is combined across foci
+            cross_comp(node_, rc=frame.olp+loop_w, root=Fg)
+            # project higher-scope Gs, eval for new foci, splice foci into frame
+        return Fg
 
