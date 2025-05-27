@@ -116,10 +116,10 @@ class CBlob(CBase):
     def term(blob):
         blob.yx = np.array(list(map(np.mean, zip(*blob.yx_))))
         frame = blob.root
-        *_, I, Dy, Dx, G = frame.latuple
+        *_, I, Dy, Dx, G = frame.baseT
         *_, i, dy, dx, g = blob.latuple
         I += i; Dy += dy; Dx += dx; G += g
-        frame.latuple[-4:] = I, Dy, Dx, G
+        frame.baseT = I, Dy, Dx, G
         frame.blob_ += [blob]
         if blob.sign:   # transfer adj_ from +blob to -blobs and remove
             for _blob in blob.adj_:
@@ -261,7 +261,7 @@ def imread(filename, raise_if_not_read=True):  # Read an image in grayscale, ret
 
 def unpack_blob_(frame):
     blob_ = []
-    q_ = list(frame.blob_)
+    q_ = list(frame.N_)
     while q_:
         blob = q_.pop(0)
         blob_ += [blob]

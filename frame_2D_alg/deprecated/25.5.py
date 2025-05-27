@@ -467,6 +467,8 @@ def feedback(root):  # adjust weights: all aves *= rV, ultimately differential b
 
 def agg_search2(image, rV=1, rv_t=[]):  # recursive frame search
 
+    # image = image[:image.shape[0]-2, :image.shape[1]-2]  # shrink by 2 after comp_pixel
+
     nY,nX = image.shape[0] // wY, image.shape[1] // wX  # n complete blocks
     i__ = image[:nY*wY+2, :nX*wX+2]  # drop partial rows/cols
     dert__= comp_pixel(i__)
