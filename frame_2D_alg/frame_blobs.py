@@ -68,16 +68,37 @@ class CBase:
 ave  = 30  # base filter, directly used for comp_r fork
 aveR = 10  # for range+, fixed overhead per blob
 
-class CG(CBase):
-
-    def __init__(frame, image):
+class CN(CBase):  # light version of CG
+    name = "node"
+    def __init__(N, **kwargs):
         super().__init__()
-        frame.box = np.array([0,0,image.shape[0],image.shape[1]])
-        frame.yx  = np.array([image.shape[0]//2, image.shape[1]//2])
-        frame.baseT = [0,0,0,0]  # I, Dy, Dx, G
-        frame.i__= image
-        frame.blob_ = []
-    def __repr__(frame): return f"frame(id={frame.id})"
+        N.N_ = kwargs.get('N_',[])  # top nodes, may include singletons of lower nodes, then links in corresponding H lev only?
+        N.L_ = kwargs.get('L_',[])  # links between Ns
+        N.Et = kwargs.get('Et',np.zeros(3))  # sum Ets from N_ and H
+        N.et = kwargs.get('et',np.zeros(3))  # sum Ets from L_ and lH
+        N.H  = kwargs.get('H', [])  # top-down: nested-node levels, each CN with corresponding L_,et,lH, no H
+        N.lH = kwargs.get('lH',[])  # bottom-up: higher link graphs hierarchy, also CN levs
+        N.C_ = kwargs.get('C_',[])  # make it CN?
+        N.olp= kwargs.get('olp',1)  # overlap to other Ns, same for links?
+        N.derH = kwargs.get('derH', [])  # [CLay], [m,d] in CG, merged in CL, sum|concat links across fork tree
+        # no root?
+    def __bool__(N): return bool(N.N_ or N.L_)
+
+class CL(CN):  # link or edge, a product of comparison between two nodes or links
+    name = "link"
+    def __init__(L, **kwargs):
+        super().__init__(**kwargs)
+        # nodet: N_ or rim, may have different depth?
+        L.fi =   kwargs.get('fi', 0)  # nodet fi, 1 if cluster of Ls | lGs, for feedback only? or fd_: list of forks forming G
+        L.rng =  kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
+        L.baseT= kwargs.get('baseT',np.zeros(4))  # I,G,Dy,Dx  # from slice_edge
+        L.derTT= kwargs.get('derTT',np.zeros((2,8)))  # m,d / Et,baseT: [M,D,n,o, I,G,A,L], summed across derH lay forks
+        L.yx =   kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
+        L.box =  kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
+        L.span = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_) but not additive?
+        L.angle= kwargs.get('angle',np.zeros(2))  # dy,dx
+        # splice L_ across N_s, cluster by diff
+    def __bool__(L): return bool(L.N_)
 
 class CBlob(CBase):
 
@@ -133,7 +154,6 @@ class CBlob(CBase):
 
 
 def frame_blobs_root(image, rV=1, fintra=0):
-
     global ave, aveR
     ave *= rV; aveR *= rV
 
@@ -144,7 +164,9 @@ def frame_blobs_root(image, rV=1, fintra=0):
         zip(y__.flatten(), x__.flatten()),
         zip(i__.flatten(), dy__.flatten(), dx__.flatten(), g__.flatten(), s__.flatten()),
     ))
-    frame = CG(image)
+    frame = CL(box = np.array([0,0,image.shape[0],image.shape[1]]),
+               yx  = np.array([image.shape[0]//2, image.shape[1]//2]),
+               L_  = image)  # temporary
     flood_fill(frame, dert__)  # flood-fill 1 pixel at a time
     if fintra and frame.baseT[3] > ave:
         intra_blob_root(frame)  # kernel size extension
@@ -186,9 +208,9 @@ intra_blob recursively segments each blob for two forks of extended internal cro
 blobs that terminate on frame edge will have to be spliced across frames
 '''
 
-class CrNode_(CG):
+class CrNode_(CL):
     def __init__(rnode_, blob):
-        super().__init__(blob.root.i__)  # init params, extra params init below:
+        super().__init__(blob.root.L_)  # init params, extra params init below:
         rnode_.root = blob
         rnode_.olp= blob.root.olp + 1.5
         rnode_.rng = blob.root.rng + 1
@@ -198,7 +220,7 @@ def intra_blob_root(frame, rV=1):
     global aveR
     aveR *= rV
     frame.olp = frame.rng = 1
-    for blob in frame.blob_:
+    for blob in frame.N_:
         rblob(blob)
 
 def rblob(blob):
@@ -214,7 +236,7 @@ def rblob(blob):
     blob.rnode_ = rnode_
     flood_fill(rnode_, dert__)
 
-    for bl in rnode_.blob_: # recursive eval cross-comp per blob
+    for bl in rnode_.N_: # recursive eval cross-comp per blob
         rblob(bl)
 
 def comp_r(rnode_):   # rng+ comp
@@ -226,9 +248,9 @@ def comp_r(rnode_):   # rng+ comp
         try:
             # comparison. i,j: relative coord within kernel 0 -> rng*2+1
             for i, j in zip(*ky__.nonzero()):
-                dy += ky__[i, j] * rnode_.i__[y+i-rnode_.rng, x+j-rnode_.rng]    # -rng to get i__ coord
+                dy += ky__[i, j] * rnode_.L_[y+i-rnode_.rng, x+j-rnode_.rng]    # -rng to get i__ coord
             for i, j in zip(*kx__.nonzero()):
-                dx += kx__[i, j] * rnode_.i__[y+i-rnode_.rng, x+j-rnode_.rng]
+                dx += kx__[i, j] * rnode_.L_[y+i-rnode_.rng, x+j-rnode_.rng]
         except IndexError: continue     # out of bound
         g = np.hypot(dy, dx)
         s = ave*(rnode_.olp + 1) - g > 0
@@ -265,8 +287,8 @@ def unpack_blob_(frame):
     while q_:
         blob = q_.pop(0)
         blob_ += [blob]
-        if hasattr(blob, "rnode_") and blob.rnode_.blob_:  # if blob is extended with rnode_
-            q_ += blob.rnode_.blob_
+        if hasattr(blob, "rnode_") and blob.rnode_.N_:  # if blob is extended with rnode_
+            q_ += blob.rnode_.N_
     return blob_
 
 if __name__ == "__main__":
@@ -278,8 +300,8 @@ if __name__ == "__main__":
     # verification (intra):
     for blob in unpack_blob_(frame):
         print(f"{blob}'s parent is {blob.root}", end="")
-        if hasattr(blob, "rnode_") and blob.rnode_.blob_:  # if blob is extended with rnode_
-            cnt = len(blob.rnode_.blob_)
+        if hasattr(blob, "rnode_") and blob.rnode_.N_:  # if blob is extended with rnode_
+            cnt = len(blob.rnode_.N_)
             print(f", has {cnt} sub-blob{'' if cnt == 1 else 's'}")
         else: print()  # the blob is not extended, skip
 
@@ -291,7 +313,7 @@ if __name__ == "__main__":
     g__ = np.zeros_like(image, dtype=np.float32)
     s__ = np.zeros_like(image, dtype=np.float32)
     line_ = []
-    for blob in frame.blob_:
+    for blob in frame.N_:
         for (y, x), (i, dy, dx, g) in blob.dert_.items():
             i__[y, x] = i; dy__[y, x] = dy; dx__[y, x] = dx; g__[y, x] = g; s__[y, x] = blob.sign
         y,x = blob.yx

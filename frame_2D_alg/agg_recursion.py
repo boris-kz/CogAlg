@@ -2,7 +2,7 @@ import numpy as np, weakref
 from copy import copy, deepcopy
 from functools import reduce
 from itertools import zip_longest, combinations, chain, product;  from multiprocessing import Pool, Manager
-from frame_blobs import frame_blobs_root, intra_blob_root, imread, unpack_blob_, comp_pixel
+from frame_blobs import frame_blobs_root, intra_blob_root, imread, unpack_blob_, comp_pixel, CN, CL
 from slice_edge import CP, slice_edge, comp_angle
 from comp_slice import CdP, comp_slice
 '''
@@ -36,7 +36,9 @@ Meta-code will generate/compress base code by process cross-comp (tracing functi
 Meta-feedback must combine code compression and data compression values: higher-level match is still the ultimate criterion.
 
 Code-coordinate filters may extend base code by cross-projecting and combining patterns found in the original base code
-(which may include extending eval function with new match-projecting derivatives) 
+Extend eval function with new match-projecting derivatives? 
+
+Designing this generative cross-comp and compressive clustering ~ exploration in derivative space: recycling results?  
 Similar to cross-projection by data-coordinate filters, described in "imagination, planning, action" section of part 3 in Readme.
 -
 old diagrams: 
@@ -65,38 +67,6 @@ class CBase:
             return inst
     def __repr__(obj): return f"{obj.__class__.__name__}(id={obj.id})"
 
-class CN(CBase):  # light version of CG
-    name = "node"
-    def __init__(N, **kwargs):
-        super().__init__()
-        N.N_ = kwargs.get('N_',[])  # top nodes, may include singletons of lower nodes, then links in corresponding H lev only?
-        N.L_ = kwargs.get('L_',[])  # links between Ns
-        N.Et = kwargs.get('Et',np.zeros(3))  # sum Ets from N_ and H
-        N.et = kwargs.get('et',np.zeros(3))  # sum Ets from L_ and lH
-        N.H  = kwargs.get('H', [])  # top-down: nested-node levels, each CN with corresponding L_,et,lH, no H
-        N.lH = kwargs.get('lH',[])  # bottom-up: higher link graphs hierarchy, also CN levs
-        N.C_ = kwargs.get('C_',[])  # make it CN?
-        N.olp= kwargs.get('olp',1)  # overlap to other Ns, same for links?
-        N.derH = kwargs.get('derH', [])  # [CLay], [m,d] in CG, merged in CL, sum|concat links across fork tree
-        # no root?
-    def __bool__(N): return bool(N.N_ or N.L_)
-
-class CL(CN):  # link or edge, a product of comparison between two nodes or links
-    name = "link"
-    def __init__(L, **kwargs):
-        super().__init__(**kwargs)
-        # nodet: N_ or rim, may have different depth?
-        L.fi =   kwargs.get('fi', 0)  # nodet fi, 1 if cluster of Ls | lGs, for feedback only? or fd_: list of forks forming G
-        L.rng =  kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
-        L.baseT= kwargs.get('baseT',np.zeros(4))  # I,G,Dy,Dx  # from slice_edge
-        L.derTT= kwargs.get('derTT',np.zeros((2,8)))  # m,d / Et,baseT: [M,D,n,o, I,G,A,L], summed across derH lay forks
-        L.yx =   kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
-        L.box =  kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
-        L.span = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_) but not additive?
-        L.angle= kwargs.get('angle',np.zeros(2))  # dy,dx
-        # splice L_ across N_s, cluster by diff
-    def __bool__(L): return bool(L.N_)
-
 class CG(CL):  # PP | graph | blob: params of single-fork node_ cluster
     # graph / node
     name = "graph"
@@ -107,10 +77,30 @@ class CG(CL):  # PP | graph | blob: params of single-fork node_ cluster
         G.rim =  kwargs.get('rim',[])  # external links
         G.nrim = kwargs.get('nrim',[])  # rim-linked nodes
         G.alt_ = []  # adjacent (contour) gap+overlap alt-fork graphs, converted to CG, empty alt.alt_: select+?
-        G.root = kwargs.get('root')
-        G.fin =  kwargs.get('fin',0)  # in cluster, temporary?
-        # G.fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge
-        # G.fback_ = []  # node fb buffer, n in fb[-1]
+        G.root = kwargs.get('root',[])
+        G.fin =  kwargs.get('fin', 0)  # in cluster, temporary?
+        # G.fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
+        ''' 
+        from CN:
+        N_ = kwargs.get('N_',[])  # top nodes, may include singletons of lower nodes, then links in corresponding H lev only?
+        L_ = kwargs.get('L_',[])  # links between Ns
+        Et = kwargs.get('Et',np.zeros(3))  # sum Ets from N_ and H
+        et = kwargs.get('et',np.zeros(3))  # sum Ets from L_ and lH
+        H  = kwargs.get('H', [])  # top-down: nested-node levels, each CN with corresponding L_,et,lH, no H
+        lH = kwargs.get('lH',[])  # bottom-up: higher link graphs hierarchy, also CN levs
+        C_ = kwargs.get('C_',[])  # make it CN?
+        olp= kwargs.get('olp',1)  # overlap to other Ns, same for links?
+        derH = kwargs.get('derH', [])  # [CLay], [m,d] in CG, merged in CL, sum|concat links across fork tree
+        from CL:  
+        # link from comparison between two nodes or links, nodet: N_ or rim, may have different depth?
+        fi =   kwargs.get('fi', 0)  # nodet fi, 1 if cluster of Ls | lGs, for feedback only? or fd_: list of forks forming G
+        rng =  kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
+        baseT= kwargs.get('baseT',np.zeros(4))  # I,G,Dy,Dx  # from slice_edge
+        derTT= kwargs.get('derTT',np.zeros((2,8)))  # m,d / Et,baseT: [M,D,n,o, I,G,A,L], summed across derH lay forks
+        yx =   kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
+        box =  kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
+        span = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_) but not additive?
+        angle= kwargs.get('angle',np.zeros(2))  # dy,dx '''
     def __bool__(G): return bool(G.N_)  # never empty
 
 N_pars = ['N_', 'L_', 'Et', 'et', 'H', 'lH', 'C_', 'olp', 'derH']
@@ -386,11 +376,12 @@ def comp_node_(_N_, rc):  # rng+ forms layer of rim and extH per N?
                         n.compared_ += [_n]
                         if n not in N_ and val_(n.et, aw= rc+rng-1+loop_w+olp) > 0:  # cost+/ rng
                             n.med = rng; N_ += [n]  # for rng+ and exemplar eval
-        N__ += [N_]; ET += Et
-        if val_(Et, mw = (len(N_)-1)*Lw, aw = loop_w* sum(olp_)/max(1, len(olp_))) > 0:  # current-rng vM
-            _N_ = N_; rng += 1; olp_ = []  # reset
-        else:  # low projected rng+ vM
-            break
+        if N_:
+            N__ += [N_]; ET += Et
+            if val_(Et, mw = (len(N_)-1)*Lw, aw = loop_w* sum(olp_)/max(1, len(olp_))) > 0:  # current-rng vM
+                _N_ = N_; rng += 1; olp_ = []  # reset
+            else: break  # low projected rng+ vM
+        else: break
     return N__,L_,ET
 
 def comp_link_(iL_, rc):  # comp CLs via directional node-mediated link tracing: der+'rng+ in root.link_ rim_t node rims
@@ -803,9 +794,6 @@ def extend_box(_box, box):  # extend box with another box
 
     return min(y0,_y0), min(x0,_x0), max(yn,_yn), max(xn,_xn)
 
-def F2G(frame):
-    pass
-
 def L2N(link_):
     for L in link_:
         L.fi=0; L.et=np.zeros(3); L.nrim=[]; L.mL_t, L.rimt = [[],[]], [[],[]]; L.extTT=np.zeros((2,8)); L.compared_, L.visited_, L.extH = [],[],[]; L.fin = 0
@@ -893,17 +881,19 @@ def proj_focus(PV__, y,x, Fg):  # radial accum of projected focus value in PV__
         n += 1
 
 def agg_frame(floc, image, iY, iX, rV=1, rv_t=[]):  # search foci within image, additionally nested if no root
-
-    if floc: # local img was converted to dert__
+    '''
+    add cross_comp(proj_N_): interactive pattern projection to eval search, + spectral reframing?
+    '''
+    if floc:   # local img was converted to dert__
         dert__ = image
-    else:    # global img
+    else:      # global img
         dert__ = comp_pixel(image)
         global ave, Lw, int_w, loop_w, clust_w, ave_dist, ave_med, med_w
         ave, Lw, int_w, loop_w, clust_w, ave_dist, ave_med, med_w = np.array([ave, Lw, int_w, loop_w, clust_w, ave_dist, ave_med, med_w]) / rV
         # fb rws: ~rvs
-    nY,nX = dert__.shape[-1] // iX, dert__.shape[-2] // iY  # n complete blocks
+    nY,nX = dert__.shape[-2] // iY, dert__.shape[-1] // iX  # n complete blocks
     Y, X  = nY * iY, nX * iX  # sub-frame dims
-    frame = CG(box=np.array([0,0,Y,X]), yx=np.array([Y//2,X//2]))
+    frame = CL(box=np.array([0,0,Y,X]), yx=np.array([Y//2,X//2]))
     dert__= dert__[:,:Y,:X]  # drop partial rows/cols
     win__ = dert__.reshape(dert__.shape[0], iY,iX, nY,nX).swapaxes(1,2)  # dert=5, wY=64, wX=64, nY=13, nX=20
     PV__  = win__[3].sum( axis=(0,1)) * int_w  # init proj vals = sum G in dert[3],       shape: nY=13, nX=20
@@ -912,25 +902,24 @@ def agg_frame(floc, image, iY, iX, rV=1, rv_t=[]):  # search foci within image, 
     while np.max(PV__) > ave * aw:  # max G * int_w + pV
         # max win index:
         y,x = np.unravel_index(PV__.argmax(), PV__.shape)
-        PV__[y,x] = -np.inf  # skip in the future | map separate in__?
+        PV__[y,x] = -np.inf  # to skip, | separate in__?
         if floc:
-            # focal dert__ clustering:
-            Fg = frame_blobs_root( win__[:,:,:,y,x], rV); F2G(Fg)  # [dert, iY, iX, nY, nX]
-            Fg = vect_root(Fg, rV, rv_t)
+            Fg = frame_blobs_root( win__[:,:,:,y,x], rV)  # [dert, iY, iX, nY, nX]
+            Fg = vect_root(Fg, rV, rv_t)  # focal dert__ clustering
             cross_comp(Fg.N_, root=Fg, rc=frame.olp)
         else:
             Fg = agg_frame(1, win__[:,:,:,y,x], wY,wX, rV=1, rv_t=[])  # use global wY,wX in nested call
-            rV, rv_t = feedback(Fg)  # adjust filters
+            if Fg: rV, rv_t = feedback(Fg)  # adjust filters
         if Fg:
             add_N(frame,Fg)
             node_ += Fg.N_  # keep compared_ to skip in final global cross_comp
-            if val_(Fg.Et, mw=np.hypot(*Fg.angle)/wYX, aw=Fg.olp + clust_w*20):
+            if val_(Fg.Et, mw=np.hypot(*Fg.angle) /wYX, aw=Fg.olp + clust_w*20):
                 proj_focus(PV__, y,x, Fg)  # accum proj val in PV__
             aw = clust_w * 20 * frame.Et[2] * frame.olp
     if node_:
         # global cross_comp
-        Fg = sum_N_(node_, root=frame, fCG=1)
-        if val_(frame.Et, mw=len(node_) * Lw, aw=frame.olp+ clust_w*20) > 0:
+        Fg = sum_N_(node_, root=frame, fCL=1)
+        if val_(frame.Et, mw=len(node_)*Lw, aw=frame.olp+ clust_w*20) > 0:
             cross_comp(node_, rc=frame.olp+loop_w, root=Fg)
         return Fg
 

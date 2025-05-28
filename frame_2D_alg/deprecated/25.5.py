@@ -495,3 +495,15 @@ def agg_search2(image, rV=1, rv_t=[]):  # recursive frame search
             # project higher-scope Gs, eval for new foci, splice foci into frame
         return Fg
 
+def agg_focus(frame, dert__, rV, rv_t):  # single-focus agg+ level-forming pipeline
+
+    Fg = F2G( frame_blobs_root(dert__, rV))  # dert__ replaces image
+    Fg = vect_root(Fg, rV, rv_t)
+    if isinstance(Fg.N_[0], CG):  # forms PP or G_, else N_ is blob
+        cross_comp(Fg.N_, root=Fg, rc=(frame.olp if isinstance(frame, CG) else Fg.olp)+loop_w)
+        if isinstance(frame, CG):
+            add_N(frame, Fg)
+        else:  # init frame
+            Y,X = frame; frame = copy_(Fg, fCG=1); frame.YX=np.array([Y//2,X//2]); frame.Box=np.array([0,0,Y,X])
+        return Fg
+
