@@ -2,7 +2,7 @@ import numpy as np, weakref
 from copy import copy, deepcopy
 from functools import reduce
 from itertools import zip_longest, combinations, chain, product;  from multiprocessing import Pool, Manager
-from frame_blobs import frame_blobs_root, intra_blob_root, imread, unpack_blob_, comp_pixel, CN, CL
+from frame_blobs import frame_blobs_root, intra_blob_root, imread, unpack_blob_, comp_pixel, CN
 from slice_edge import CP, slice_edge, comp_angle
 from comp_slice import CdP, comp_slice
 '''
@@ -67,6 +67,32 @@ class CBase:
             return inst
     def __repr__(obj): return f"{obj.__class__.__name__}(id={obj.id})"
 
+class CL(CN):  # link or edge, a product of comparison between two nodes or links
+    name = "link"
+    def __init__(L, **kwargs):
+        super().__init__(**kwargs)
+        # nodet: N_ or rim, may have different depth?
+        L.fi =   kwargs.get('fi', 0)  # nodet fi, 1 if cluster of Ls | lGs, for feedback only? or fd_: list of forks forming G
+        L.span = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_) but not additive?
+        L.angle= kwargs.get('angle',np.zeros(2))  # dy,dx
+        '''  from CN:
+        N_ = kwargs.get('N_',[])  # top nodes, may include singletons of lower nodes, then links in corresponding H lev only?
+        L_ = kwargs.get('L_',[])  # links between Ns, splice across N_s, cluster by diff
+        Et = kwargs.get('Et',np.zeros(3))  # sum Ets from N_ and H
+        et = kwargs.get('et',np.zeros(3))  # sum Ets from L_ and lH
+        H  = kwargs.get('H', [])  # top-down: nested-node levels, each CN with corresponding L_,et,lH, no H
+        lH = kwargs.get('lH',[])  # bottom-up: higher link graphs hierarchy, also CN levs
+        C_ = kwargs.get('C_',[])  # make it CN?
+        yx = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
+        box = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
+        rng =  kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
+        olp = kwargs.get('olp',1)  # overlap to other Ns, same for links?
+        derH = kwargs.get('derH', [])  # [CLay], [m,d] in CG, merged in CL, sum|concat links across fork tree
+        baseT = kwargs.get('baseT',np.zeros(4))  # I,G,Dy,Dx  # from slice_edge
+        derTT = kwargs.get('derTT',np.zeros((2,8)))  # m,d / Et,baseT: [M,D,n,o, I,G,A,L], summed across derH lay forks
+        '''
+    def __bool__(L): return bool(L.N_)
+
 class CG(CL):  # PP | graph | blob: params of single-fork node_ cluster
     # graph / node
     name = "graph"
@@ -77,30 +103,9 @@ class CG(CL):  # PP | graph | blob: params of single-fork node_ cluster
         G.rim =  kwargs.get('rim',[])  # external links
         G.nrim = kwargs.get('nrim',[])  # rim-linked nodes
         G.alt_ = []  # adjacent (contour) gap+overlap alt-fork graphs, converted to CG, empty alt.alt_: select+?
-        G.root = kwargs.get('root',[])
+
         G.fin =  kwargs.get('fin', 0)  # in cluster, temporary?
         # G.fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
-        ''' 
-        from CN:
-        N_ = kwargs.get('N_',[])  # top nodes, may include singletons of lower nodes, then links in corresponding H lev only?
-        L_ = kwargs.get('L_',[])  # links between Ns
-        Et = kwargs.get('Et',np.zeros(3))  # sum Ets from N_ and H
-        et = kwargs.get('et',np.zeros(3))  # sum Ets from L_ and lH
-        H  = kwargs.get('H', [])  # top-down: nested-node levels, each CN with corresponding L_,et,lH, no H
-        lH = kwargs.get('lH',[])  # bottom-up: higher link graphs hierarchy, also CN levs
-        C_ = kwargs.get('C_',[])  # make it CN?
-        olp= kwargs.get('olp',1)  # overlap to other Ns, same for links?
-        derH = kwargs.get('derH', [])  # [CLay], [m,d] in CG, merged in CL, sum|concat links across fork tree
-        from CL:  
-        # link from comparison between two nodes or links, nodet: N_ or rim, may have different depth?
-        fi =   kwargs.get('fi', 0)  # nodet fi, 1 if cluster of Ls | lGs, for feedback only? or fd_: list of forks forming G
-        rng =  kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
-        baseT= kwargs.get('baseT',np.zeros(4))  # I,G,Dy,Dx  # from slice_edge
-        derTT= kwargs.get('derTT',np.zeros((2,8)))  # m,d / Et,baseT: [M,D,n,o, I,G,A,L], summed across derH lay forks
-        yx =   kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
-        box =  kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
-        span = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_) but not additive?
-        angle= kwargs.get('angle',np.zeros(2))  # dy,dx '''
     def __bool__(G): return bool(G.N_)  # never empty
 
 N_pars = ['N_', 'L_', 'Et', 'et', 'H', 'lH', 'C_', 'olp', 'derH']
@@ -263,6 +268,7 @@ def cluster_edge(edge, frame, lev, derlay):  # non-recursive comp_PPm, comp_PPd,
         if val_(dEt, mw = (len(L_)-1)*Lw, aw = 2+clust_w, fi=0) > 0:
             Lt = cluster_N_(L2N(L_), rc=2, fi=0)
             if Lt:  # L_ graphs
+                if PP_ and G_: comb_alt_(G_)
                 if lev.lH: lev.lH[0].N_ += Lt.N_; lev.lH[0].Et += Lt.Et
                 else:      lev.lH += [Lt]
                 lev.et += Lt.Et
@@ -584,7 +590,7 @@ def cluster_N_(N_, rc, fi, rng=1, fnode_=0, root=None):  # connectivity cluster 
     for n in N_: n.fin = 0
     for N in N_:
         if N.fin: continue
-        if rng == 1:
+        if rng == 1 or hasattr(N,root) and N.root.rng==1:  # N is not rng-nested
             node_, link_, llink_, Et, olp = [N],[],[], copy(N.Et), N.olp
             for l,_ in N.rim if fi else (N.rimt[0]+N.rimt[1]):  # +ve
                 if l.rng ==rng: link_ += [l]
@@ -622,7 +628,8 @@ def cluster_N_(N_, rc, fi, rng=1, fnode_=0, root=None):  # connectivity cluster 
                             node_+= [_R]; Et +=_R.Et; olp += _R.olp; _R.fin = 1; _N.fin = 1
         node_ = list(set(node_))
         nrc = rc + olp  # updated
-        _Et = root.Et if (not fi and root) else None  # G.alt_.Et if fi, form it here?
+        _Et = root.Et if (not fi and root) else None
+        # or contour: G.alt_.Et if fi, form it here?
         if val_(Et, _Et, mw=(len(node_)-1)*Lw, aw=nrc, fi=fi) > 0:
             Lay = CLay()  # sum combined n.derH:
             [Lay.add_lay(lay) for n in (node_ if fnode_ else link_) for lay in n.derH]  # always CL?
@@ -631,6 +638,7 @@ def cluster_N_(N_, rc, fi, rng=1, fnode_=0, root=None):  # connectivity cluster 
             Et = Lay.Et + np.array([M, D, Et[2]]) * int_w
             olp = (Lay.olp + olp*int_w) / len(node_)
             G_ += [sum2graph(root, node_, link_, llink_, Et, olp, Lay, rng, fi)]
+        # else recycle node_ for higher-rng eval?
     if G_:
         return CN(N_=G_, Et=Et)   # root replace if fi else append?
 
@@ -797,13 +805,12 @@ def extend_box(_box, box):  # extend box with another box
 def L2N(link_):
     for L in link_:
         L.fi=0; L.et=np.zeros(3); L.nrim=[]; L.mL_t, L.rimt = [[],[]], [[],[]]; L.extTT=np.zeros((2,8)); L.compared_, L.visited_, L.extH = [],[],[]; L.fin = 0
-        if not hasattr(L,'root'): L.root=[]
     return link_
 
 def PP2N(PP, frame):
 
     P_, link_, vert, latuple, A, S, box, yx, Et = PP
-    baseT = np.array((*latuple[:2], *latuple[-1]))  # I,G,Dy,Dx
+    baseT = np.array(*latuple[:4])  # I,G,Dy,Dx
     [mM,mD,mI,mG,mA,mL], [dM,dD,dI,dG,dA,dL] = vert  # re-pack in derTT:
     derTT = np.array([[mM,mD,mL,1,mI,mG,mA,mL], [dM,dD,dL,1,dI,dG,dA,dL]])
     derH = [[CLay(node_=P_, link_=link_, derTT=deepcopy(derTT)), CLay()]]  # empty dfork

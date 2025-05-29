@@ -70,35 +70,23 @@ aveR = 10  # for range+, fixed overhead per blob
 
 class CN(CBase):  # light version of CG
     name = "node"
-    def __init__(N, **kwargs):
+    def __init__(n, **kwargs):
         super().__init__()
-        N.N_ = kwargs.get('N_',[])  # top nodes, may include singletons of lower nodes, then links in corresponding H lev only?
-        N.L_ = kwargs.get('L_',[])  # links between Ns
-        N.Et = kwargs.get('Et',np.zeros(3))  # sum Ets from N_ and H
-        N.et = kwargs.get('et',np.zeros(3))  # sum Ets from L_ and lH
-        N.H  = kwargs.get('H', [])  # top-down: nested-node levels, each CN with corresponding L_,et,lH, no H
-        N.lH = kwargs.get('lH',[])  # bottom-up: higher link graphs hierarchy, also CN levs
-        N.C_ = kwargs.get('C_',[])  # make it CN?
-        N.olp= kwargs.get('olp',1)  # overlap to other Ns, same for links?
-        N.derH = kwargs.get('derH', [])  # [CLay], [m,d] in CG, merged in CL, sum|concat links across fork tree
-        # no root?
-    def __bool__(N): return bool(N.N_ or N.L_)
-
-class CL(CN):  # link or edge, a product of comparison between two nodes or links
-    name = "link"
-    def __init__(L, **kwargs):
-        super().__init__(**kwargs)
-        # nodet: N_ or rim, may have different depth?
-        L.fi =   kwargs.get('fi', 0)  # nodet fi, 1 if cluster of Ls | lGs, for feedback only? or fd_: list of forks forming G
-        L.rng =  kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
-        L.baseT= kwargs.get('baseT',np.zeros(4))  # I,G,Dy,Dx  # from slice_edge
-        L.derTT= kwargs.get('derTT',np.zeros((2,8)))  # m,d / Et,baseT: [M,D,n,o, I,G,A,L], summed across derH lay forks
-        L.yx =   kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
-        L.box =  kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
-        L.span = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_) but not additive?
-        L.angle= kwargs.get('angle',np.zeros(2))  # dy,dx
-        # splice L_ across N_s, cluster by diff
-    def __bool__(L): return bool(L.N_)
+        n.N_ = kwargs.get('N_',[])  # top nodes, may include singletons of lower nodes, then links in corresponding H lev only?
+        n.L_ = kwargs.get('L_',[])  # links between Ns
+        n.Et = kwargs.get('Et',np.zeros(3))  # sum Ets from N_ and H
+        n.et = kwargs.get('et',np.zeros(3))  # sum Ets from L_ and lH
+        n.H  = kwargs.get('H', [])  # top-down: nested-node levels, each CN with corresponding L_,et,lH, no H
+        n.lH = kwargs.get('lH',[])  # bottom-up: higher link graphs hierarchy, also CN levs
+        n.C_ = kwargs.get('C_',[])  # make it CN?
+        n.yx = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
+        n.box = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
+        n.rng = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
+        n.olp = kwargs.get('olp',1)  # overlap to other Ns, same for links?
+        n.derH  = kwargs.get('derH', [])  # [CLay], [m,d] in CG, merged in CL, sum|concat links across fork tree
+        n.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,Dy,Dx  # from slice_edge
+        n.derTT = kwargs.get('derTT',np.zeros((2,8)))  # m,d / Et,baseT: [M,D,n,o, I,G,A,L], summed across derH lay forks
+    def __bool__(n): return bool(n.N_ or n.L_)
 
 class CBlob(CBase):
 
@@ -107,15 +95,15 @@ class CBlob(CBase):
         blob.root = root
         blob.sign = None
         blob.area = 0
-        blob.latuple = [0, 0, 0, 0, 0, 0]  # Y, X, I, Dy, Dx, G
-        blob.dert_ = {}  # keys: (y, x). values: (i, dy, dx, g)
+        blob.latuple = [0, 0, 0, 0, 0, 0]  #I, G, Dy, Dx, Y, X
+        blob.dert_ = {}  # keys: (y, x). values: (i, g, dy, dx)
         blob.adj_ = []  # adjacent blobs
         blob.yx = np.zeros(2)
 
     def fill_blob(blob, fill_yx_, perimeter_, root__, dert__):
         y, x = perimeter_.pop()  # pixel coord
         if (y, x) not in dert__: return  # out of bound
-        i,dy,dx,g,s = dert__[y,x]
+        i, g, dy, dx, s = dert__[y,x]
         if (y, x) not in fill_yx_:  # there is a bug with last blob here
             if blob.sign != s:  # adjacent blobs have opposite sign
                 _blob = root__[y, x]
@@ -126,10 +114,10 @@ class CBlob(CBase):
         fill_yx_.remove((y,x))
         root__[y,x] = blob  # assign root, for link forming
         blob.area += 1
-        Y, X, I, Dy, Dx, G = blob.latuple
+        I, G, Dy, Dx, Y, X  = blob.latuple
         Y += y; X += x; I += i; Dy += dy; Dx += dx; G += g  # update params
-        blob.latuple = Y, X, I, Dy, Dx, G
-        blob.dert_[y, x] = i, dy, dx, g  # update elements
+        blob.latuple = I, G, Dy, Dx, Y, X
+        blob.dert_[y, x] = i, g, dy, dx  # update elements
 
         perimeter_ += [(y-1,x), (y,x+1), (y+1,x), (y,x-1)]  # extend perimeter
         if blob.sign: perimeter_ += [(y-1,x-1), (y-1,x+1), (y+1,x+1), (y+1,x-1)]  # ... include diagonals for +blobs
@@ -137,11 +125,11 @@ class CBlob(CBase):
     def term(blob):
         blob.yx = np.array(list(map(np.mean, zip(*blob.yx_))))
         frame = blob.root
-        *_, I, Dy, Dx, G = frame.baseT
+        I, G, Dy, Dx = frame.baseT
         *_, i, dy, dx, g = blob.latuple
-        I += i; Dy += dy; Dx += dx; G += g
-        frame.baseT = I, Dy, Dx, G
-        frame.blob_ += [blob]
+        I += i; G += g; Dy += dy; Dx += dx
+        frame.baseT = I, G, Dy, Dx
+        frame.N_ += [blob]
         if blob.sign:   # transfer adj_ from +blob to -blobs and remove
             for _blob in blob.adj_:
                 if blob not in _blob.adj_: _blob.adj_ += [blob]
@@ -158,21 +146,21 @@ def frame_blobs_root(image, rV=1, fintra=0):
     ave *= rV; aveR *= rV
 
     dert__ = comp_pixel(image) if isinstance(image[0],int) else image  # precomputed
-    i__, dy__, dx__, g__, s__ = dert__  # convert to dict for flood-fill
+    i__, g__, dy__, dx__, s__ = dert__  # convert to dict for flood-fill
     y__, x__ = np.indices(i__.shape)
     dert__ = dict(zip(
         zip(y__.flatten(), x__.flatten()),
-        zip(i__.flatten(), dy__.flatten(), dx__.flatten(), g__.flatten(), s__.flatten()),
+        zip(i__.flatten(), g__.flatten(), dy__.flatten(), dx__.flatten(), s__.flatten()),
     ))
-    frame = CL(box = np.array([0,0,image.shape[0],image.shape[1]]),
+    frame = CN(box = np.array([0,0,image.shape[0],image.shape[1]]),
                yx  = np.array([image.shape[0]//2, image.shape[1]//2]),
                L_  = image)  # temporary
     flood_fill(frame, dert__)  # flood-fill 1 pixel at a time
-    if fintra and frame.baseT[3] > ave:
+    if fintra and frame.baseT[1] > ave:
         intra_blob_root(frame)  # kernel size extension
     return frame
 
-def comp_pixel(i__):  # compare all in parallel -> i__, dy__, dx__, g__, s__
+def comp_pixel(i__):  # compare all in parallel -> i__, g__, dy__, dx__, s__
     # compute directional derivatives:
     dy__ = (
             (i__[2:, :-2] - i__[:-2, 2:]) * 0.25 +
@@ -186,7 +174,7 @@ def comp_pixel(i__):  # compare all in parallel -> i__, dy__, dx__, g__, s__
     )
     g__ = np.hypot(dy__, dx__)  # compute gradient magnitude, -> separate G because it's not signed, dy,dx cancel out in Dy,Dx
     s__ = ave - g__ > 0  # sign, positive = below-average g
-    dert__ = np.stack([i__[:-2,:-2], dy__,dx__,g__,s__])
+    dert__ = np.stack([i__[:-2,:-2],g__,dy__,dx__,s__])
 
     return dert__
 
@@ -208,7 +196,7 @@ intra_blob recursively segments each blob for two forks of extended internal cro
 blobs that terminate on frame edge will have to be spliced across frames
 '''
 
-class CrNode_(CL):
+class CrNode_(CN):
     def __init__(rnode_, blob):
         super().__init__(blob.root.L_)  # init params, extra params init below:
         rnode_.root = blob
@@ -244,7 +232,7 @@ def comp_r(rnode_):   # rng+ comp
     ky__, kx__ = compute_kernel(rnode_.rng)
     # loop through root_blob's pixels
     dert__ = {}     # mapping from y, x to dert
-    for (y, x), (p, dy, dx, g) in rnode_.root.dert_.items():
+    for (y, x), (p, g, dy, dx) in rnode_.root.dert_.items():
         try:
             # comparison. i,j: relative coord within kernel 0 -> rng*2+1
             for i, j in zip(*ky__.nonzero()):
@@ -254,7 +242,7 @@ def comp_r(rnode_):   # rng+ comp
         except IndexError: continue     # out of bound
         g = np.hypot(dy, dx)
         s = ave*(rnode_.olp + 1) - g > 0
-        dert__[y, x] = p, dy, dx, g, s
+        dert__[y, x] = p, g, dy, dx, s
     return dert__
 
 def compute_kernel(rng):
@@ -305,17 +293,17 @@ if __name__ == "__main__":
             print(f", has {cnt} sub-blob{'' if cnt == 1 else 's'}")
         else: print()  # the blob is not extended, skip
 
-    I, Dy, Dx, G = frame.baseT
+    I, G, Dy, Dx = frame.baseT
     # verification:
     i__ = np.zeros_like(image, dtype=np.float32)
+    g__ = np.zeros_like(image, dtype=np.float32)
     dy__ = np.zeros_like(image, dtype=np.float32)
     dx__ = np.zeros_like(image, dtype=np.float32)
-    g__ = np.zeros_like(image, dtype=np.float32)
     s__ = np.zeros_like(image, dtype=np.float32)
     line_ = []
     for blob in frame.N_:
-        for (y, x), (i, dy, dx, g) in blob.dert_.items():
-            i__[y, x] = i; dy__[y, x] = dy; dx__[y, x] = dx; g__[y, x] = g; s__[y, x] = blob.sign
+        for (y, x), (i, g, dy, dx) in blob.dert_.items():
+            i__[y, x] = i; g__[y, x] = g; dy__[y, x] = dy; dx__[y, x] = dx; s__[y, x] = blob.sign
         y,x = blob.yx
         if not blob.sign:
             for _blob in blob.adj_:  # show adjacents
