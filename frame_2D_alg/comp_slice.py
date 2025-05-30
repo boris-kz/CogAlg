@@ -89,7 +89,7 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
         if P.merged: continue
         _prim_ = P.prim; _lrim_ = P.lrim
         if fd: Et= P.Et; L = P.L  # summed vertuple, min L in dP
-        else:  I,G,M,D,L,A = P.latuple; Et = np.array([I+M, G+D])
+        else:  I,G,Dy,Dx,M,D,L = P.latuple; Et = np.array([I+M, G+D])
         _P_ = {P}; link_ = set()
         vert = np.zeros((2,6))
         while _prim_:
@@ -100,7 +100,7 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
                 _P_.add(_P); link_.add(_link)
                 vert += _link.vertuple
                 if fd: (_M,_D),_L = _P.Et, _P.L
-                else: _I,_G,_M,_D,_L,_ = _P.latuple; _M,_D = _I+_M, _G+_D
+                else: _I,_G,_Dy,_Dx,_M,_D,_L = _P.latuple; _M,_D = _I+_M, _G+_D
                 Et += _link.Et + np.array([_M,_D])  # intra-P similarity and variance
                 L += _L  # latuple summation span
                 prim_.update(set(_P.prim) - _P_)
@@ -151,14 +151,14 @@ def convert_to_dP(_P,P, derLay, angle, distance, Et):
     _P.vertuple += link.vertuple; P.vertuple += link.vertuple
     _P.lrim += [link]; P.lrim += [link]
     _P.prim += [P];    P.prim +=[_P]  # all Ps are dPs if fd
-    link.L = min(_P.latuple[4],P.latuple[4]) if isinstance(_P,CP) else min(_P.L,P.L)  # P is CdP
+    link.L = min(_P.latuple[-1],P.latuple[-1]) if isinstance(_P,CP) else min(_P.L,P.L)  # P is CdP
     return link
 
 def sum2PP(P_, dP_, Et):  # sum links in Ps and Ps in PP
 
     fd = isinstance(P_[0],CdP)
     if fd: lat = np.sum([n.latuple for n in set([n for dP in P_ for n in  dP.nodet])], axis=0)
-    else:  lat = np.array([.0,.0,.0,.0,.0, np.zeros(2)], dtype=object)
+    else:  lat = np.zeros(7)
     vert = np.zeros((2,6))
     link_ = []
     if dP_:  # add uplinks:
@@ -169,7 +169,7 @@ def sum2PP(P_, dP_, Et):  # sum links in Ps and Ps in PP
             vert += dP.vertuple
             a = dP.angle; A = np.add(A,a); S += np.hypot(*a)  # span, links are contiguous but slanted
     else:  # single P PP
-        S,A = (P_[0].angle, P_[0].span) if fd else P_[0].latuple[4:]  # [I, G, M, D, L, (Dy, Dx)]
+        S,A = (P_[0].angle, P_[0].span) if fd else P_[0].latuple[2:4]  # [I, G, Dy, Dx, M, D, L]
     box = [np.inf,np.inf,0,0]
     for P in P_:
         if not fd:  # else summed from P_ nodets on top
@@ -184,8 +184,8 @@ def sum2PP(P_, dP_, Et):  # sum links in Ps and Ps in PP
 
 def comp_latuple(_latuple, latuple, _n,n):  # 0der params, add dir?
 
-    _I, _G, _M, _D, _L, (_Dy, _Dx) = _latuple
-    I, G, M, D, L, (Dy, Dx) = latuple
+    _I, _G, _Dy, _Dx, _M, _D, _L = _latuple
+    I, G, Dy, Dx, M, D, L = latuple
     rn = _n / n
 
     I*=rn; dI = _I - I;  mI = aI - dI / max(_I,I, 1e-7)  # vI = mI - ave

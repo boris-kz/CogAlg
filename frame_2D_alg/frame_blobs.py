@@ -79,13 +79,17 @@ class CN(CBase):  # light version of CG
         n.H  = kwargs.get('H', [])  # top-down: nested-node levels, each CN with corresponding L_,et,lH, no H
         n.lH = kwargs.get('lH',[])  # bottom-up: higher link graphs hierarchy, also CN levs
         n.C_ = kwargs.get('C_',[])  # make it CN?
+        n.fi = kwargs.get('fi',0)  # G else L fd_: list of forks forming G
         n.yx = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
         n.box = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
-        n.rng = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
-        n.olp = kwargs.get('olp',1)  # overlap to other Ns, same for links?
+        n.span = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_) but not additive?
+        n.angle = kwargs.get('angle',np.zeros(2))  # dy,dx
         n.derH  = kwargs.get('derH', [])  # [CLay], [m,d] in CG, merged in CL, sum|concat links across fork tree
         n.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,Dy,Dx  # from slice_edge
         n.derTT = kwargs.get('derTT',np.zeros((2,8)))  # m,d / Et,baseT: [M,D,n,o, I,G,A,L], summed across derH lay forks
+        n.rng   = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
+        n.olp   = kwargs.get('olp',1)  # overlap to other Ns, same for links?
+        n.root  = kwargs.get('root',0)
     def __bool__(n): return bool(n.N_ or n.L_)
 
 class CBlob(CBase):

@@ -24,7 +24,6 @@ class CP(CBase):
         P.yx = yx
         P.axis = axis
         P.dert_ = []
-        P.latuple = None  # I,G, M,D, L, [Dy, Dx]
 
 def slice_edge_root(frame, rM=1):
 
@@ -70,21 +69,21 @@ def select_max(edge):
 def form_P(P, edge):
     y, x = P.yx
     ay, ax = P.axis
-    center_dert = i,gy,gx,g = edge.dert_[y,x]  # dert is None if _y,_x not in edge.dert_: return` in `interpolate2dert`
+    center_dert = i,g,gy,gx = edge.dert_[y,x]  # dert is None if _y,_x not in edge.dert_: return` in `interpolate2dert`
     edge.rootd[y, x] = P
-    I,Dy,Dx,G, M,D,L = i,gy,gx,g, 0,0,1
+    I,G,Dy,Dx,M,D,L = i,g,gy,gx, 0,0,1
     P.yx_ = [P.yx]
     P.dert_ += [center_dert]
 
     for dy,dx in [(-ay,-ax),(ay,ax)]:  # scan in 2 opposite directions to add derts to P
         P.yx_.reverse(); P.dert_.reverse()
-        (_y,_x), (_i,_gy,_gx,_g) = P.yx, center_dert  # start from center_dert
+        (_y,_x), (_i,_g,_gy,_gx) = P.yx, center_dert  # start from center_dert
         y,x = _y+dy, _x+dx  # 1st extension
         while True:
             # scan to blob boundary or angle miss:
             ky, kx = round(y), round(x)
             if (round(y),round(x)) not in edge.dert_: break
-            try: i,gy,gx,g = interpolate2dert(edge, y, x)
+            try: i,g,gy,gx = interpolate2dert(edge, y, x)
             except TypeError: break  # out of bound (TypeError: cannot unpack None)
             if edge.rootd.get((ky,kx)) is not None:
                 break  # skip overlapping P
@@ -96,13 +95,13 @@ def form_P(P, edge):
             # update P:
             edge.rootd[ky, kx] = P
             I+=i; Dy+=dy; Dx+=dx; G+=g; M+=m; D+=d; L+=1
-            P.yx_ += [(y,x)]; P.dert_ += [(i,gy,gx,g)]
+            P.yx_ += [(y,x)]; P.dert_ += [(i,g,gy,gx)]
             # for next loop:
             y += dy; x += dx
-            _y,_x,_gy,_gx,_i,_g = y,x,gy,gx,i,g
+            _y,_x,i,g,_gy,_gx = y,x,i,g,gy,gx
 
     P.yx = tuple(np.mean([P.yx_[0], P.yx_[-1]], axis=0))    # new center
-    P.latuple = new_latuple(I,G, M,D, L, [Dy, Dx])
+    P.latuple = np.array([I, G, Dy, Dx, M, D, L])
 
     return P
 
@@ -179,9 +178,6 @@ def comp_angle(_A, A):  # rn doesn't matter for angles
     dangle /= 2*pi  # scale to the range of mangle, signed: [-.5,.5]
 
     return [mangle, dangle]
-
-def new_latuple(I=0.0, G=0.0, M=0.0, Ma=0.0, L=0.0, A=(0.0, 0.0)):
-    return np.array([I, G, M, Ma, L, np.array(A, float)],dtype=object)
 
 def unpack_edge_(frame):
     return [blob for blob in unpack_blob_(frame) if hasattr(blob, "P_")]
