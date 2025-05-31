@@ -54,7 +54,7 @@ def slice_edge(edge, rV=1):
 def select_max(edge):
     axisd = {}  # map yx to axis
     for (y, x), (i, gy, gx, g) in edge.dert_.items():
-        sa, ca = gy/g, gx/g
+        sa, ca = gy/max(g,1e-7), gx/max(g,1e-7)
         new_max = True
         for dy, dx in [(-sa, -ca), (sa, ca)]:  # check neighbors
             _y, _x = round(y+dy), round(x+dx)

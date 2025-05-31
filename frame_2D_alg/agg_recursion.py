@@ -59,7 +59,7 @@ class CG(CN):  # PP | graph | blob: params of single-fork node_ cluster
         super().__init__(**kwargs)
         g.extH = kwargs.get('extH',[])  # sum derH from rims, single-fork
         g.extTT= kwargs.get('extTT',np.zeros((2,8)))  # sum from extH, add baset from rim?
-        g.rim =  kwargs.get('rim',[])  # external links
+        g.rim =  kwargs.get('rim',[])  # external links, or nodet if not fi
         g.nrim = kwargs.get('nrim',[])  # rim-linked nodes
         g.alt_ = []  # adjacent (contour) gap+overlap alt-fork graphs, converted to CG, empty alt.alt_: select+?
         g.fin =  kwargs.get('fin', 0)  # in cluster, temporary?
@@ -78,8 +78,8 @@ class CLay(CBase):  # layer of derivation hierarchy, subset of CG
         l.node_ = kwargs.get('node_', [])  # concat across fork tree
         l.link_ = kwargs.get('link_', [])
         l.derTT = kwargs.get('derTT', np.zeros((2,8)))  # m_,d_ [M,D,n,o, I,G,A,L], sum across fork tree,
+        # alt_L / comp alt_?
         # add weights for cross-similarity, along with vertical aves, for both m_ and d_?
-        # altL = CLay from comp altG
         # i: lay index in root node_,link_, to revise olp; i_: m,d priority indices in comp node|link H
         # ni: exemplar in node_, trace in both directions?
     def __bool__(l): return bool(l.node_)
@@ -160,7 +160,7 @@ def vect_root(Fg, rV=1, ww_t=[]):  # init for agg+:
         w_t = [[wM,wD,wN,wO,wI,wG,wA,wL]] * ww_t  # or dw_ ~= w_/ 2?
         ww_t = np.delete(ww_t,(2,3), axis=1)  #-> comp_slice, = np.array([(*ww_t[0][:2],*ww_t[0][4:]),(*ww_t[0][:2],*ww_t[1][4:])])
     blob_ = unpack_blob_(Fg)
-    Fg.N_ = []; lev = CN(); derlay = [CLay(root=Fg),CLay(root=Fg)]
+    Fg.N_,Fg.L_ = [],[]; lev = CN(); derlay = [CLay(root=Fg),CLay(root=Fg)]
     for blob in blob_:
         if not blob.sign and blob.G > aveB:
             edge = slice_edge(blob, rV)
@@ -236,31 +236,33 @@ def val_(Et, _Et=None, mw=1, aw=1, fi=1):  # m,d eval per cluster or cross_comp
     ad = avd * aw
     m, d, n = Et
     val = (m-am if fi else d-ad) * mw
-    if np.any(_Et):  # borrow alt contour if fi else root as rational deviation, local borrow is circular
+    if np.any(_Et): # borrow alt contour if fi else root as rational deviation, no circular local borrow
         _m, _d, _n = _Et
         val *= (_d/ad if fi else _m/am) * (mw*(_n/n))
     return val
 
-def eval(V, weights):  # conditionally progressive eval, with default ave in weights[0]
+def eval(V, weights):  # conditional progressive eval, with default ave in weights[0]
     W = 1
     for w in weights:
         W *= w
         if V < W: return 0
     return 1
 
-''' Core process per agg level:
+''' 
+Core process per agg level:
 Cross-compare nodes, evaluate incremental-derivation cross-comp of new >ave difference links, recursively.
  
-Select sparse exemplars of strong node types, convert to centroids of their rim, reselect by mutual match.
-This selection is essential due to complexity of subsequent connectivity clustering:
+Select sparse exemplars of strong node types, convert to centroids of their rim, reselect by mutual match
+(this selection is essential due to complexity of subsequent connectivity clustering)
   
-CC: Connectivity cluster exemplar nodes by >ave match links, correlation-cluster links by >ave difference.
-Evaluate resulting clustered node_ or link_ for recursively higher-composition cross_comparison. 
+Connectivity cluster exemplar nodes by >ave match links, correlation-cluster links by >ave difference.
+Evaluate resulting node_ or link_ clusters for higher-composition or intra-param_set cross_comp. 
+The clusters have contours, next level cross-comps complemented core+contour clusters.
 
-Min distance in CC is more restrictive than in cross-comp due to higher costs and density eval.
-CCs terminate at contour altGs, and next-level cross-comp is between core+contour clusters. 
-
-Coord feedback in micro search ) filter feedback in macro search '''
+coords feedback: to bottom level or prior level if node-specific shortcut?
+filter feedback: wider-rng per higher cost, may run over prior input? 
+cross_comp projections for feedback, may reframe by der param?
+'''
 
 def cross_comp(iN_, rc, root, fi=1):  # rc: redundancy+olp; (cross-comp, exemplar selection, clustering), recursion
 
@@ -346,6 +348,7 @@ def comp_link_(iL_, rc):  # comp CLs via directional node-mediated link tracing:
     for L in iL_:   # init mL_t: bilateral mediated Ls per L:
         for rev, N, mL_ in zip((0,1), L.N_, L.mL_t):
             for _L,_rev in N.rim if fi else N.rim[0]+N.rim[1]:
+                # if not fi: mL_ += N.N_: comp mediated nodets?
                 if _L is not L and _L in iL_:  # nodet-mediated
                     if L.Et[0] > ave * L.Et[2] * loop_w:
                         mL_ += [(_L, rev ^_rev)]  # direction of L relative to _L
@@ -412,7 +415,7 @@ def base_comp(_N, N, dir=1):  # comp Et, Box, baseT, derTT
         _L,L = _N.span, N.span   # dist, not cumulative, still positive?
         mL,dL = min(_L,L)/ max(_L,L), _L - L
     # comp depth, density:
-    # lenH, ave span, combined from N_ in links?
+    # lenH and ave span, combined from N_ in links?
     _m_,_d_ = np.array([[mM,mD,mn,mo,mI,mG,mA,mL], [dM,dD,dn,do,dI,dG,dA,dL]])
     # comp derTT:
     _i_ = _N.derTT[1]; i_ = N.derTT[1] * rn  # normalize by compared accum span
@@ -495,14 +498,14 @@ def cluster_C_(root, E_,eEt, rc, fi):  # form centroids from exemplar _N_, drift
         C_ = []
         for N in sorted(E_,key=lambda n: n.et[0]/n.et[2], reverse=True):  # et summed from rim
             if val_(N.et, mw=(len(N.nrim)-1)*Lw, aw=clust_w+rc) > 0:
-                # get the mean of cluster members in nrim:
-                C = sum_N_(copy(N.nrim), root=root)
+                # mean cluster members:
+                C = sum_N_(copy(N.nrim), root=root, fCG=1)
                 C.nrim_= list(set([_n for n in N.nrim_ for _n in n.nrim_]))
                 if C.alt_ and isinstance(C.alt_, list): C.alt_ = sum_N_(C.alt_)
                 k = len(N.nrim)
                 for n in (C, C.alt_):
                     if n:
-                        n.Et /= k; n.baseT /= k; n.derTT /= k; n.aRad /= k; n.yx /= k
+                        n.Et /= k; n.baseT /= k; n.derTT /= k; n.span /= k; n.yx /= k
                         if n.derH: norm_H(n.derH, k)
                 _N_,_N__= [],[]
                 Et, dEt = np.zeros(3), np.zeros(3)
@@ -542,8 +545,8 @@ def cluster_N_(N_, rc, fi, rng=1, fnode_=0, root=None):  # connectivity cluster 
         if rng == 1 or N.root and N.root.rng==1:  # N is not rng-nested
             node_, link_, llink_, Et, olp = [N],[],[], copy(N.Et), N.olp
             for l,_ in N.rim if fi else (N.rim[0]+N.rim[1]):  # +ve
-                if l.rng ==rng: link_ += [l]
-                elif l.rng>rng: llink_+= [l]  # longer-rng rim
+                if l.rng==rng: link_ += [l]
+                elif l.rng>rng: llink_ += [l]  # longer-rng rim
         else:  # rng > 1, cluster top-rng roots instead
             n = N; R = n.root
             while R and R.rng > n.rng: n = R; R = R.root
@@ -642,21 +645,19 @@ def centroid_M(m_, ave):  # adjust weights on attr matches | diffs, recompute wi
         # recursion if weights change
     return m_* w_, M  # no return w_?
 
-def comb_alt_(G_, rc=1):  # combine contour G.altG_ into altG (node_ defined by root=G),
-    # internal vs. external alts: different decay / distance, background + contour?
-    for G in G_:
-        o = G.olp
+def comb_alt_(G_, rc=1): # combine contour G.altG_ into altG (node_ defined by root=G),
+
+    for G in G_:  # internal vs. external alts: different decay / distance, background + contour?
         if G.alt_:
             if isinstance(G.alt_, list):
-                G.alt_ = sum_N_(G.alt_)  # G.alt_.root=G; G.alt_.m=0 or remove sum_N_ and sum Et separately?
-                if val_(G.alt_.Et, G.Et, aw=o, fi=0):  # alt D * G rM
+                G.alt_ = sum_N_(G.alt_,root=G)
+                if val_(G.alt_.Et, G.Et, aw=G.olp, fi=0):  # alt D * G rM
                     cross_comp(G.alt_.N_, rc, fi=1, root=G.alt_)  # adds nesting
         elif G.H:  # not PP
             # alt_G = sum dlinks:
-            dL_ = list(set([L for g in G.N_ for L,_ in (g.rim if g.fi else g.rim[0]+g.rim[1]) if val_(L.Et,G.Et, aw=o, fi=0) > 0]))
-            if dL_ and val_(np.sum([l.Et for l in dL_],axis=0), G.Et, aw=10+o, fi=0) > 0:
-                alt_ = sum_N_(dL_)
-                G.alt_ = copy_(alt_); G.alt_.H = [alt_]; G.alt_.root=G
+            dL_ = list(set([L for g in G.N_ for L,_ in (g.rim if g.fi else g.rim[0]+g.rim[1]) if val_(L.Et,G.Et, aw=G.olp, fi=0) > 0]))
+            if dL_ and val_(np.sum([l.Et for l in dL_],axis=0), G.Et, aw=10+G.olp, fi=0) > 0:
+                G.alt_ = sum_N_(dL_,root=G)
 
 def comp_H(H,h, rn, root, Et, fi):  # one-fork derH if not fi, else two-fork derH
 
@@ -724,11 +725,11 @@ def add_N(N,n, fi=1, fCG=0, fappend=0):
     N.Et += n.Et * rn; N.et += n.et * rn; N.C_ += n.C_
     N.olp = (N.olp + n.olp * rn) / 2  # ave
     N.yx = (N.yx + n.yx * rn) / 2
-    for Par, par in zip((N.angle, N.baseT, N.derTT), (n.angle, n.baseT, n.derTT)):
-        if par: Par += par * rn
+    N.span = max(N.span,n.span)
+    if np.any(n.box): N.box = extend_box(N.box, n.box)
+    for Par,par in zip((N.angle, N.baseT, N.derTT), (n.angle, n.baseT, n.derTT)): Par += par * rn
     if n.H: add_NH(N.H, n.H, root=N)
     if n.lH: add_NH(N.lH, n.lH, root=N)
-    if n.box: N.box=extend_box(N.box,n.box); N.span = max(N.span,n.span)
     if n.derH: add_H(N.derH, n.derH, root=N, fi=fi)
     if fCG:
         for Par, par in zip((N.nrim,N.rim),(n.nrim, n.rim)):  # rim should be rimt if not fi
@@ -753,7 +754,7 @@ def extend_box(_box, box):  # extend box with another box
 
 def L2N(link_):
     for L in link_:
-        L.nrim=[]; L.mL_t, L.rim = [[],[]], [[],[]]; L.extTT=np.zeros((2,8)); L.compared_, L.visited_, L.extH = [],[],[]; L.fin = 0
+        L.nrim=[]; L.mL_t,L.rim = [[],[]], [[],[]]; L.extTT=np.zeros((2,8)); L.compared_,L.visited_,L.extH = [],[],[]; L.fin = 0
     return link_
 
 def PP2N(PP, frame):
@@ -812,8 +813,8 @@ def feedback(root):  # adjust weights: all aves *= rV, ultimately differential b
 
 def proj_focus(PV__, y,x, Fg):  # radial accum of projected focus value in PV__
 
-    m,d,n = Fg.Et;    V = (m-ave*n) + (d-avd*n)
-    # Fg.angle should be accumulated from Lt.angle only?
+    m,d,n = Fg.Et
+    V = (m-ave*n) + (d-avd*n)
     dy,dx = Fg.angle; a = dy/ max(dx,1e-7)  # average link_ orientation, projection
     decay = (ave / (Fg.baseT[0]/n)) * (wYX / ave_dist)  # base decay = ave_match / ave_template * rel dist (ave_dist is a placeholder)
     H, W = PV__.shape  # = win__
@@ -836,10 +837,8 @@ def proj_focus(PV__, y,x, Fg):  # radial accum of projected focus value in PV__
         PV__[r,c] += pV__  # in-place accum pV to rim
         n += 1
 
-def agg_frame(floc, image, iY, iX, rV=1, rv_t=[]):  # search foci within image, additionally nested if no root
-    '''
-    add cross_comp(proj_N_): interactive pattern projection to eval search, reframe by derived param, level-specific?
-    '''
+def agg_frame(floc, image, iY, iX, rV=1, rv_t=[]):  # search foci within image, additionally nested if floc
+
     if floc:   # local img was converted to dert__
         dert__ = image
     else:      # global img
