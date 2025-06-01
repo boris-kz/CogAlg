@@ -507,3 +507,109 @@ def agg_focus(frame, dert__, rV, rv_t):  # single-focus agg+ level-forming pipel
             Y,X = frame; frame = copy_(Fg, fCG=1); frame.YX=np.array([Y//2,X//2]); frame.Box=np.array([0,0,Y,X])
         return Fg
 
+def cluster_N_(N_, rc, fi, rng=1, fnode_=0, root=None):  # connectivity cluster exemplar nodes via rim or links via nodet or rimt
+
+    G_ = []  # flood-filled clusters
+    for n in N_: n.fin = 0
+    for N in N_:
+        if N.fin: continue
+        if rng == 1 or N.root and N.root.rng==1:  # N is not rng-nested
+            node_, link_, llink_, Et, olp = [N],[],[], copy(N.Et), N.olp
+            for l,_ in N.rim if fi else (N.rim[0]+N.rim[1]):  # +ve
+                if l.rng==rng: link_ += [l]
+                elif l.rng>rng: llink_ += [l]  # longer-rng rim
+        else:  # rng > 1, cluster top-rng roots instead
+            n = N; R = n.root
+            while R and R.rng > n.rng: n = R; R = R.root
+            if R.fin: continue
+            node_,link_,llink_,Et,olp = [R],R.L_,R.hL_,copy(R.Et),R.olp
+            R.fin = 1
+        nrc = rc+olp; N.fin = 1
+        if fnode_:
+            # cluster via nodet, which may also be links
+            for _N,_ in N.N_[0].rim+N.N_[1].rim if isinstance(N.N_[0],CG) else list(set([lt for n in N.N_ for lt in n.rim[0]+n.rim[1]])):
+                if not _N.fin and _N.Et[1] > avd * _N.Et[2] * nrc:
+                    Et += _N.Et; olp += _N.olp; _N.fin = 1; node_ += [_N]
+                    link_ += [n for n in _N.N_ if n not in link_]
+        else:  # cluster via links
+            for L in link_[:]:  # snapshot
+                for _N in L.N_:
+                    if _N not in N_ or _N.fin: continue  # connectivity clusters don't overlap
+                    if rng == 1:
+                        node_ += [_N]; Et += _N.Et; olp += _N.olp; _N.fin = 1
+                        for l,_ in _N.rim if fi else (_N.rim[0]+_N.rim[1]):  # +ve
+                            if l not in link_ and l.rng == rng: link_ += [l]
+                            elif l not in llink_ and l.rng>rng: llink_+= [l]  # longer-rng rim
+                    else:  # rng > 1, cluster top-rng roots if rim intersect:
+                        _n =_N; _R=_n.root
+                        while _R and isinstance(R, CG) and _R.rng > _n.rng: _n=_R; _R=_R.root
+                        if isinstance(_R, list) or _R.fin: continue
+                        lenI = len(list(set(llink_) & set(_R.hL_)))
+                        if lenI and (lenI / len(llink_) >.2 or lenI / len(_R.hL_) >.2):
+                            # min rim intersect | intersect oEt?
+                            link_ = list(set(link_+_R.link_)); llink_ = list(set(llink_+_R.hL_))
+                            node_+= [_R]; Et +=_R.Et; olp += _R.olp; _R.fin = 1; _N.fin = 1
+        node_ = list(set(node_))
+        nrc = rc + olp  # updated
+        _Et = root.Et if (not fi and root) else None
+        # or contour: G.alt_.Et if fi, form it here?
+        if val_(Et, _Et, mw=(len(node_)-1)*Lw, aw=nrc, fi=fi) > 0:
+            Lay = CLay()  # sum combined n.derH:
+            [Lay.add_lay(lay) for n in (node_ if fnode_ else link_) for lay in n.derH]  # always CL?
+            m_,M = centroid_M(Lay.derTT[0],ave*nrc)  # weigh by match to mean m|d
+            d_,D = centroid_M(Lay.derTT[1],ave*nrc); Lay.derTT = np.array([m_,d_])
+            Et = Lay.Et + np.array([M, D, Et[2]]) * int_w
+            olp = (Lay.olp + olp*int_w) / len(node_)
+            G_ += [sum2graph(root, node_, link_, llink_, Et, olp, Lay, rng, fi)]
+    if G_:
+        return CN(N_=G_, Et=Et)   # root replace if fi else append?
+
+def comp_link_(iL_, rc):  # comp CLs via directional node-mediated link tracing: der+'rng+ in root.link_ rim_t node rims
+
+    fi = iL_[0].N_[0].fi
+    for L in iL_:   # init mL_t: nodet-mediated Ls:
+        for rev, N, mL_ in zip((0,1), L.N_, L.mL_t):  # L.mL_t is empty
+            for _L,_rev in N.rim if fi else N.rim[0]+N.rim[1]:
+                if _L is not L and _L in iL_:
+                    if L.Et[0] > ave * L.Et[2] * loop_w:
+                        mL_ += [(_L, rev ^_rev)]  # direction of L relative to _L
+    med = 1; _L_ = iL_
+    L__,LL_,ET = [],[],np.zeros(3)
+    while True:  # xcomp _L_
+        L_, Et = [], np.zeros(3)
+        for L in _L_:
+            for mL_ in L.mL_t:
+                for _L, rev in mL_:  # rev is relative to L
+                    if _L in L.compared_: continue
+                    dy,dx = np.subtract(_L.yx,L.yx)
+                    Link = comp_N(_L,L, ave*rc, fi=0, angle=[dy,dx], span=np.hypot(dy,dx), dir = -1 if rev else 1)  # d = -d if L is reversed relative to _L
+                    Link.med = med
+                    LL_ += [Link]; Et += Link.Et  # include -ves, link order: nodet < L < rim, mN.rim || L
+                    for l,_l in zip((_L,L),(L,_L)):
+                        l.compared_ += [_l]
+                        if l not in L_ and val_(l.et, aw= rc+med+loop_w) > 0:  # cost+/ rng
+                            L_ += [l]  # for med+ and exemplar eval
+        L__ += [L_]; ET += Et
+        # extend mL_t per last medL:
+        if Et[0] > ave * Et[2] * (rc + loop_w + med*med_w):  # project prior-loop value, med adds fixed cost
+            _L_, ext_Et = set(), np.zeros(3)
+            for L in L_:
+                mL_t, lEt = [set(),set()], np.zeros(3)  # __Ls per L
+                for mL_,_mL_ in zip(mL_t, L.mL_t):
+                    for _L, rev in _mL_:
+                        for _rev, N in zip((0,1), _L.N_):
+                            rim = N.rim
+                            if len(rim) == med:  # append in comp loop
+                                for __L,__rev in rim if fi else rim[0]+rim[1]:
+                                    if __L in L.visited_ or __L not in iL_: continue
+                                    L.visited_ += [__L]; __L.visited_ += [L]
+                                    if __L.Et[0] > ave * __L.Et[2] * loop_w:
+                                        mL_.add((__L, rev ^_rev ^__rev))  # combine reversals: 2 * 2 mLs, but 1st 2 are pre-combined
+                                        lEt += __L.Et
+                if lEt[0] > ave * lEt[2]:  # L rng+, vs. L comp above, add coef
+                    L.mL_t = mL_t; _L_.add(L); ext_Et += lEt
+            # refine eval by extension D:
+            if ext_Et[0] > ave * ext_Et[2] * (loop_w + med*med_w): med += 1
+            else: break
+        else: break
+    return L__, LL_, ET
