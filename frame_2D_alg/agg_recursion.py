@@ -259,8 +259,8 @@ Connectivity cluster exemplar nodes by >ave match links, correlation-cluster lin
 Evaluate resulting node_ or link_ clusters for higher-composition or intra-param_set cross_comp. 
 The clusters have contours, next level cross-comps complemented core+contour clusters.
 
-coords feedback: to bottom level or prior level if node-specific shortcut?
-filter feedback: wider-rng per higher cost, may run over prior input? 
+coords feedback: to bottom level or prior-level in parallel pipelines, if any
+filter feedback: wider-rng per higher cost, may run over same input 
 cross_comp projections for feedback, may reframe by der param?
 '''
 
@@ -280,6 +280,7 @@ def cross_comp(iN_, rc, root, fi=1):  # rc: redundancy+olp; (cross-comp, exempla
                         hNt = cluster_N_(rng_E_, rc+clust_w*rng, fi,rng)
                         if hNt: Nt = hNt  # else keep lower rng
                 if Nt and val_(Nt.Et, Et, mw=(len(Nt.N_)-1)*Lw, aw=rc+clust_w*rng+loop_w) > 0:
+                    # cross_comp root.C_| mix in exclusive N_?
                     cross_comp(Nt.N_, rc+clust_w*rng+loop_w, root=Nt)  # top rng, select lower-rng spec comp_N: scope+?
         # dfork
         root.L_ = L_  # top N_ links
@@ -299,7 +300,7 @@ def cross_comp(iN_, rc, root, fi=1):  # rc: redundancy+olp; (cross-comp, exempla
         if Nt:
             # feedback:
             lev = CN(N_=Nt.N_, Et=Nt.Et)  # N_ is new top H level
-            add_NH(root.H, Nt.H+[lev], root)  #| same depth?
+            add_NH(root.H, Nt.H+[lev], root)  # same depth?
             if Nt.H:  # lower levs: derH,H if recursion
                 root.N_ = Nt.H.pop().N_  # top lev nodes
             comb_alt_(Nt.N_, rc + clust_w * 3)  # from dLs
@@ -333,7 +334,7 @@ def comp_node_(_N_, rc):  # rng+ forms layer of rim and extH per N?
                     for n,_n in zip((_G,G),(G,_G)):
                         n.compared_ += [_n]
                         if n not in N_ and val_(n.et, aw= rc+rng-1+loop_w+olp) > 0:  # cost+/ rng
-                            n.med = rng; N_ += [n]  # for rng+ and exemplar eval
+                            N_ += [n]  # for rng+ and exemplar eval
         if N_:
             N__ += [N_]; ET += Et
             if val_(Et, mw = (len(N_)-1)*Lw, aw = loop_w* sum(olp_)/max(1, len(olp_))) > 0:  # current-rng vM
@@ -542,14 +543,14 @@ def cluster_N_(N_, rc, fi, rng=1, fnode_=0, root=None):  # connectivity cluster 
     for N in N_:
         if N.fin: continue
         # init N cluster:
-        if rng==1 or (N.root and N.root.rng==1):  # N is not rng-nested
+        if rng==1 or N.root.rng==1:  # N is not rng-nested
             node_, link_, llink_, Et, olp = [N],[],[], copy(N.Et),N.olp
             for l,_ in N.rim if fi else (N.rim[0] + N.rim[1]):  # +ve
                 if l.rng==rng: link_ += [l]
                 elif l.rng>rng: llink_ += [l]  # longer-rng rim
         else:  # rng > 1, cluster top-rng roots instead
             n = N; R = n.root
-            while R and R.rng > n.rng: n = R; R = R.root
+            while R and R.rng > n.rng: n = R; R = R.root  # must start true
             if R.fin: continue
             node_,link_,llink_,Et,olp = [R],R.L_,R.hL_,copy(R.Et),R.olp
             R.fin = 1
@@ -558,14 +559,14 @@ def cluster_N_(N_, rc, fi, rng=1, fnode_=0, root=None):  # connectivity cluster 
             for _N in N.N_:
                 if _N.fin: continue
                 _N.fin = 1; link_ += [_N]  # nodet is mediator
-                for L in _N.rim if fi else _N.rim[0]+_N.rim[0]:  # maybe L
+                for L,_ in _N.rim if fi else _N.rim[0]+_N.rim[0]:  # may be L
                     if L not in node_ and _N.Et[1] > avd * _N.Et[2] * nrc:  # direct eval diff
                         node_ += [L]; Et += L.Et; olp += L.olp  # /= len node_
         else:  # cluster nodes via links
             for L in link_[:]:  # snapshot
                 for _N in L.N_:
                     if _N not in N_ or _N.fin: continue  # connectivity clusters don't overlap
-                    if rng==1 or (_N.root and _N.root.rng==1):
+                    if rng==1 or _N.root.rng==1:  # _N is not rng-nested
                         node_ += [_N]; Et += _N.Et; olp += _N.olp; _N.fin = 1
                         for l,_ in _N.rim if fi else (_N.rim[0]+_N.rim[1]):  # +ve
                             if l not in link_ and l.rng == rng: link_ += [l]
@@ -605,8 +606,8 @@ def sum2graph(root, node_,link_,llink_,Et,olp, Lay, rng, fi):  # sum node and li
         if fg: add_N(Nt, N)
     if fg: graph.H = Nt.H + [Nt]  # pack prior top level
     yx = np.mean(yx_,axis=0); dy_,dx_ = (yx_-yx).T; dist_ = np.hypot(dy_,dx_)
-    graph.span = dist_.mean()  # ave distance from graph center to node centers
-    graph.angle = np.sum([l.angle for l in link_])
+    graph.span = dist_.mean()  # node centers distance to graph center
+    graph.angle = np.sum([l.angle for l in link_],axis=0)
     graph.yx = yx
     if not fi:  # add mfork as link.node_(CL).root dfork, 1st layer, higher layers are added in cross_comp
         for L in link_:  # LL from comp_link_
@@ -690,17 +691,17 @@ def add_H(H, h, root, rev=0, fi=1):  # add fork L.derHs
                 if Lay:
                     for Fork,fork in zip_longest(Lay,lay):
                         if fork:
-                            if Fork: Fork.add_lay(fork,rev=rev)
-                            else:    Lay += [fork.copy_(root=root)]
+                            if Fork: Fork.add_lay(fork,rev)
+                            else:    Lay+= [fork.copy_(rev)]
                 else:
                     Lay = []
                     for fork in lay:
-                        if fork: Lay += [fork.copy_(root=root,rev=rev)]; root.derTT += fork.derTT; root.Et += fork.Et
+                        if fork: Lay += [fork.copy_(rev)]; root.derTT += fork.derTT; root.Et += fork.Et
                         else:    Lay += [[]]
                     H += [Lay]
             else:  # one-fork lays
-                if Lay: Lay.add_lay(lay,rev=rev)
-                else:   H += [lay.copy_(rev=rev)]
+                if Lay: Lay.add_lay(lay,rev)
+                else:   H += [lay.copy_(rev)]
 
 def sum_N_(node_, root_G=None, root=None, fCG=0):  # form cluster G
 
@@ -725,18 +726,19 @@ def add_N(N,n, fi=1, fCG=0):
     N.yx = (N.yx + n.yx * rn) / 2
     N.span = max(N.span,n.span)
     if np.any(n.box): N.box = extend_box(N.box, n.box)
-    for Par,par in zip((N.angle, N.baseT, N.derTT), (n.angle, n.baseT, n.derTT)): Par += par * rn
+    for Par,par in zip((N.angle, N.baseT, N.derTT), (n.angle, n.baseT, n.derTT)):
+        Par += par * rn
     if n.H: add_NH(N.H, n.H, root=N)
     if n.lH: add_NH(N.lH, n.lH, root=N)
     if n.derH: add_H(N.derH,n.derH, root=N, fi=fi)
     if fCG:
-        for Par, par in zip((N.nrim,N.rim),(n.nrim, n.rim)):  # rim should be rimt if not fi
+        for Par, par in zip((N.nrim,N.rim),(n.nrim, n.rim)):  # rim is rimt if not fi
             if par: Par += par
         if np.any(n.extTT): N.extTT += n.extTT * rn
         if n.extH: add_H(N.extH, n.extH, root=N, fi=0)
         if n.alt_: N.alt_ = add_N(N.alt_ if N.alt_ else CG(), n.alt_)
-        # N = CG if fCG else CN
-    return N
+
+    return N  # CG if fCG else CN
 
 def add_NH(H, h, root):
 
