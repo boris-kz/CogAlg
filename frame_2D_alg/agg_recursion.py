@@ -126,7 +126,7 @@ class CLay(CBase):  # layer of derivation hierarchy, subset of CG
         if root: root.Et += Et
         return CLay(Et=Et, olp=(_lay.olp+lay.olp*rn)/2, node_=node_, link_=link_, derTT=derTT)
 
-def copy_(N, root=None, fCL=0, fCG=0, init=0):
+def copy_(N, root=None, fCG=0, init=0):
 
     C, pars = (CG(),G_pars) if fCG else (CN(),N_pars)
     C.root = root
@@ -136,12 +136,12 @@ def copy_(N, root=None, fCL=0, fCG=0, init=0):
         elif name == "H" and init: C.H = []
         elif name == 'derH':
             for lay in N.derH:
-                C.derH += [[fork.copy_() if fork else [] for fork in lay]] if isinstance(N,CG) else [lay.copy_()]  # CL
+                C.derH += [[fork.copy_() if fork else [] for fork in lay]] if isinstance(lay,list) else [lay.copy_()]  # single-fork
         elif name == 'extH': C.extH = [lay.copy_() for lay in N.extH]  # single fork
         elif isinstance(val,list) or isinstance(val,np.ndarray):
-            setattr(C, name, copy(val))  # Et,yx,box, node_,link_,rim_, altG, baseT, derTT
+            setattr(C, name, copy(val))  # Et,yx,box, node_,link_,rim, alt_, baseT, derTT
         else:
-            setattr(C, name, val)  # numeric or object: fi, root, maxL, aRad, nnest, lnest
+            setattr(C, name, val)  # numeric or object: fi, root, span, nnest, lnest
     return C
 
 ave, avd, arn, aI, aveB, aveR, Lw, int_w, loop_w, clust_w = 10, 10, 1.2, 100, 100, 3, 5, 2, 5, 10  # value filters + weights
@@ -257,10 +257,10 @@ Select sparse exemplars of strong node types, convert to centroids of their rim,
   
 Connectivity cluster exemplar nodes by >ave match links, correlation-cluster links by >ave difference.
 Evaluate resulting node_ or link_ clusters for higher-composition or intra-param_set cross_comp. 
-The clusters have contours, next level cross-comps complemented core+contour clusters.
+Assign cluster contours, next level cross-comps core+contour: complemented clusters.
 
 coords feedback: to bottom level or prior-level in parallel pipelines, if any
-filter feedback: wider-rng per higher cost, may run over same input 
+filter feedback: more coarse with higher cost, may run over same input 
 cross_comp projections for feedback, may reframe by der param?
 '''
 
@@ -548,9 +548,9 @@ def cluster_N_(N_, rc, fi, rng=1, fnode_=0, root=None):  # connectivity cluster 
             for l,_ in N.rim if fi else (N.rim[0] + N.rim[1]):  # +ve
                 if l.rng==rng: link_ += [l]
                 elif l.rng>rng: llink_ += [l]  # longer-rng rim
-        else:  # rng > 1, cluster top-rng roots instead
-            n = N; R = n.root
-            while R and R.rng > n.rng: n = R; R = R.root  # must start true
+        else:
+            n = N; R = n.root  # N.rng=1, R.rng > 1, cluster top-rng roots instead
+            while R.root and R.root.rng > n.rng: n = R; R = R.root
             if R.fin: continue
             node_,link_,llink_,Et,olp = [R],R.L_,R.hL_,copy(R.Et),R.olp
             R.fin = 1
@@ -571,9 +571,9 @@ def cluster_N_(N_, rc, fi, rng=1, fnode_=0, root=None):  # connectivity cluster 
                         for l,_ in _N.rim if fi else (_N.rim[0]+_N.rim[1]):  # +ve
                             if l not in link_ and l.rng == rng: link_ += [l]
                             elif l not in llink_ and l.rng>rng: llink_+= [l]  # longer-rng rim
-                    else:  # rng > 1, cluster top-rng roots if rim intersect:
-                        _n =_N; _R=_n.root
-                        while _R and isinstance(_R, CG) and _R.rng > _n.rng: _n=_R; _R=_R.root
+                    else:
+                        _n =_N; _R=_n.root  # _N.rng=1, _R.rng > 1, cluster top-rng roots if rim intersect:
+                        while _R.root and _R.root.rng > _n.rng: _n=_R; _R=_R.root
                         if _R.fin: continue
                         lenI = len(list(set(llink_) & set(_R.hL_)))
                         if lenI and (lenI / len(llink_) >.2 or lenI / len(_R.hL_) >.2):
@@ -811,7 +811,27 @@ def feedback(root):  # adjust weights: all aves *= rV, ultimately differential b
             rM += rMd; rD += rDd
     return rM+rD, rv_t
 
-def proj_focus(PV__, y,x, Fg):  # radial accum of projected focus value in PV__
+def project(Fg, y, x):
+
+    dy, dx   = Fg.yx - np.array([y, x])
+    foc_dist = np.hypot(dy, dx)
+    angle = np.zeros(2)
+    dist  = 0.0
+    for L in Fg.L_:
+        span   = L.span
+        angle += L.angle / span # unit step vector
+        dist  += span
+    ave_dist = dist / len(Fg.L_)
+    _dy, _dx = angle / dist
+    rel_dist = foc_dist / ave_dist
+    cos_dang = (dx*_dx + dy*_dy) / foc_dist
+    scaling  = rel_dist * cos_dang       # (dx*_dx + dy*_dy)/(ave_dist*norm)
+    # pseudo:
+    N_ = [d * scaling for N in Fg.N_ for d in N]
+
+    return sum_N_(N_)
+
+def proj_focus(PV__, y,x, Fg, fproj=0):  # radial accum of projected focus value in PV__
 
     m,d,n = Fg.Et
     V = (m-ave*n) + (d-avd*n)
@@ -837,7 +857,7 @@ def proj_focus(PV__, y,x, Fg):  # radial accum of projected focus value in PV__
         PV__[r,c] += pV__  # in-place accum pV to rim
         n += 1
 
-def agg_frame(floc, image, iY, iX, rV=1, rv_t=[]):  # search foci within image, additionally nested if floc
+def agg_frame(floc, image, iY, iX, rV=1, rv_t=[], fproj=0):  # search foci within image, additionally nested if floc
 
     if floc:   # local img was converted to dert__
         dert__ = image
@@ -869,6 +889,8 @@ def agg_frame(floc, image, iY, iX, rV=1, rv_t=[]):  # search foci within image, 
             add_N(frame,Fg)
             node_ += Fg.N_  # keep compared_ to skip in final global cross_comp
             if val_(Fg.Et, mw=np.hypot(*Fg.angle) /wYX, aw=Fg.olp + clust_w*20):
+                if fproj:
+                    cross_comp( project(Fg,y,x), rc=Fg.olp, root=frame)
                 proj_focus(PV__, y,x, Fg)  # accum proj val in PV__
             aw = clust_w * 20 * frame.Et[2] * frame.olp
     if node_:
