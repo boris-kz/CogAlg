@@ -443,7 +443,8 @@ def comp_N(_N,N, ave, fi, angle=None, span=None, dir=1, fdeep=0, rng=1):  # comp
         dderH = comp_H(_N.derH, N.derH, rn, Link, Et, fi)  # comp shared layers, if any
         # spec/ comp_node_(node_|link_)
     Link.derH = [CLay(root=Link, Et=Et, node_=[_N,N],link_=[Link], derTT=copy(derTT)), *dderH]
-    for lay in dderH: derTT += lay.derTT
+    for lay in dderH:
+        derTT += lay.derTT; Et += lay.Et
     # spec / alt:
     if fi and _N.alt_ and N.alt_:
         et = _N.alt_.Et + N.alt_.Et  # comb val
@@ -791,6 +792,42 @@ def sort_H(H, fi):  # re-assign olp and form priority indices for comp_tree, if 
     if fi:
         H.root.node_ = H.node_
 
+def comb_H(H):
+    derTT = np.zeros((2, 8))
+    Et = np.zeros(3)
+    for lay in H:
+        if isinstance(lay, CLay): derTT += lay.derTT; Et += lay.Et
+        else:
+            for fork in lay:
+                if fork: derTT += fork.derTT; Et += fork.Et
+    return derTT, Et
+
+def project(Fg, y, x):
+
+    def proj_TT(TT):
+        return np.array([TT[0],TT[1] * proj])
+    def proj_H(_H):
+        H = []
+        for lay in _H: H += [proj_TT(lay) if isinstance(lay,CLay) else [lay[0].copy_(), proj_TT(lay[1]) if lay[1] else []]]  # two-fork
+        return H
+
+    angle = np.zeros(2); iDist = 0
+    for L in Fg.L_:
+        span = L.span; iDist += span; angle += L.angle / span  # unit step vector
+    _dy, _dx = angle / np.hypot(*angle)
+    dy, dx = Fg.yx - np.array([y,x])
+    foc_dist = np.hypot(dy,dx)
+    rel_dist = foc_dist / (iDist / len(Fg.L_))
+    cos_dang = (dx*_dx + dy*_dy) / foc_dist
+    proj = cos_dang * (rel_dist * (Fg.Et[0]/Fg.baseTT[0]))  # d projection cancelled by decay rate = M/I?
+    N_ = []
+    for _N in Fg.N_:
+        derH = proj_H(_N.derH); derTT, Et = comb_H(derH)
+        extH = proj_H(_N.extH); extTT, et = comb_H(extH)
+        # olp, scale alt_?
+        N_ += [CG(Et=Et,et=et, derTT=derTT,extTT=extTT, derH=derH,extH=extH)]
+    return sum_N_(N_)
+
 def feedback(root):  # adjust weights: all aves *= rV, ultimately differential backprop per ave?
 
     rv_t = np.ones((2, 8))  # sum derTT coefs: m_,d_ [M,D,n,o, I,G,A,L] / Et, baseT, dimension
@@ -810,26 +847,6 @@ def feedback(root):  # adjust weights: all aves *= rV, ultimately differential b
             rv_t = rv_t + rv_td
             rM += rMd; rD += rDd
     return rM+rD, rv_t
-
-def project(Fg, y, x):
-
-    dy, dx   = Fg.yx - np.array([y, x])
-    foc_dist = np.hypot(dy, dx)
-    angle = np.zeros(2)
-    dist  = 0.0
-    for L in Fg.L_:
-        span   = L.span
-        angle += L.angle / span # unit step vector
-        dist  += span
-    ave_dist = dist / len(Fg.L_)
-    _dy, _dx = angle / dist
-    rel_dist = foc_dist / ave_dist
-    cos_dang = (dx*_dx + dy*_dy) / foc_dist
-    scaling  = rel_dist * cos_dang       # (dx*_dx + dy*_dy)/(ave_dist*norm)
-    # pseudo:
-    N_ = [d * scaling for N in Fg.N_ for d in N]
-
-    return sum_N_(N_)
 
 def proj_focus(PV__, y,x, Fg, fproj=0):  # radial accum of projected focus value in PV__
 
@@ -884,11 +901,12 @@ def agg_frame(floc, image, iY, iX, rV=1, rv_t=[], fproj=0):  # search foci withi
             cross_comp(Fg.N_, root=Fg, rc=frame.olp)
         else:
             Fg = agg_frame(1, win__[:,:,:,y,x], wY,wX, rV=1, rv_t=[])  # use global wY,wX in nested call
-            if Fg: rV, rv_t = feedback(Fg)  # adjust filters
+            if Fg and Fg.L_:  # only after cross_comp(PP_)
+                rV, rv_t = feedback(Fg)  # adjust filters
         if Fg:
             add_N(frame,Fg)
             node_ += Fg.N_  # keep compared_ to skip in final global cross_comp
-            if val_(Fg.Et, mw=np.hypot(*Fg.angle) /wYX, aw=Fg.olp + clust_w*20):
+            if val_(Fg.Et, mw=np.hypot(*Fg.angle)/wYX, aw=Fg.olp + clust_w*20):
                 if fproj:
                     cross_comp( project(Fg,y,x), rc=Fg.olp, root=frame)
                 proj_focus(PV__, y,x, Fg)  # accum proj val in PV__
