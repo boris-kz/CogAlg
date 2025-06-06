@@ -68,7 +68,7 @@ class CG(CN):  # PP | graph | blob: params of single-fork node_ cluster
     def __bool__(g): return bool(g.N_)  # never empty
 
 N_pars = ['N_', 'L_', 'Et', 'et', 'H', 'lH', 'C_', 'fi', 'olp', 'derH','rng', 'baseT', 'derTT', 'yx', 'box', 'span', 'angle', 'root']
-G_pars = ['extH', 'extTT', 'rim', 'nrim', 'alt_', 'fin', 'hL_']
+G_pars = ['extH', 'extTT', 'rim', 'nrim', 'alt_', 'fin', 'hL_'] + N_pars
 
 class CLay(CBase):  # layer of derivation hierarchy, subset of CG
     name = "lay"
@@ -120,7 +120,7 @@ class CLay(CBase):  # layer of derivation hierarchy, subset of CG
         m_ = np.minimum(_a_,a_) / reduce(np.maximum,[_a_,a_,1e-7])  # match = min/max comparands
         m_ *= np.where((_i_<0) != (i_<0), -1,1)  # match is negative if comparands have opposite sign
         derTT = np.array([m_,d_])
-        node_ = list(set(_lay.node_+ lay.node_))  # concat
+        node_ = list(set(_lay.node_+ lay.node_))  # concat, redundant to nodet?
         link_ = _lay.link_ + lay.link_
         M = sum(m_ * w_t[0]); D = sum(d_ * w_t[1])
         Et = np.array([M, D, 8])  # n compared params = 8
@@ -261,7 +261,9 @@ Evaluate resulting node_ or link_ clusters for higher-composition or intra-param
 Assign cluster contours, next level cross-comps core+contour: complemented clusters.
 
 coords feedback: to bottom level or prior-level in parallel pipelines, if any
-filter feedback: more coarse with higher cost, may run over same input 
+filter feedback: more coarse with higher cost, may run over same input?
+
+internal proj x external ders / lay: comp_H(proj node.derH[1:], link.derH[1::-1])
 cross_comp projections for feedback, may reframe by der param?
 '''
 
@@ -442,6 +444,8 @@ def comp_N(_N,N, ave, fi, angle=None, span=None, dir=1, fdeep=0, rng=1):  # comp
     # spec / lay:
     if fdeep and (val_(Et, mw=len(N.derH)-2, aw=o) > 0 or N.name=='link'):  # else derH is dext,vert
         dderH = comp_H(_N.derH, N.derH, rn, Link, Et, fi)  # comp shared layers, if any
+        # comp int proj x ext ders:
+        # comp_H( proj_dH(_N.derH[1:]), dderH[:-1])
         # spec/ comp_node_(node_|link_)
     Link.derH = [CLay(root=Link, Et=Et, node_=[_N,N],link_=[Link], derTT=copy(derTT)), *dderH]
     for lay in dderH:
@@ -600,14 +604,16 @@ def cluster_N_(N_, rc, fi, rng=1, fnode_=0, root=None):  # connectivity cluster 
 def sum2graph(root, node_,link_,llink_,Et,olp, Lay, rng, fi):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
     n0 = node_[0]
-    graph = CG(fi=fi,rng=rng,olp=olp, Et=Et,et=Lay.Et, N_=node_,L_=link_, box=n0.box, baseT=copy(n0.baseT), derTT=Lay.derTT, derH=[[Lay,[]]], root=root)
+    graph = CG( fi=fi,rng=rng,olp=olp, Et=Et,et=Lay.Et, N_=node_,L_=link_, root=root,
+                box=n0.box, baseT=Lay.baseT+n0.baseT, derTT=Lay.derTT+n0.derTT, derH=copy(n0.derH))
     graph.hL_ = llink_
     n0.root = graph; yx_ = [n0.yx]; fg = fi and isinstance(n0.N_[0],CG)  # not PPs
     Nt = copy_(n0)  #->CN, comb forks: add_N(Nt,Nt.Lt)?
     for N in node_[1:]:
-        graph.baseT+=N.baseT; graph.box=extend_box(graph.box,N.box); yx_ += [N.yx]
+        add_H(graph.derH,N.derH,graph); graph.baseT+=N.baseT; graph.derTT+=N.derTT; graph.box=extend_box(graph.box,N.box); yx_+=[N.yx]
         if fg: add_N(Nt, N)
     if fg: graph.H = Nt.H + [Nt]  # pack prior top level
+    graph.derH += [[Lay,[]]]  # append flat
     yx = np.mean(yx_,axis=0); dy_,dx_ = (yx_-yx).T; dist_ = np.hypot(dy_,dx_)
     graph.span = dist_.mean()  # node centers distance to graph center
     graph.angle = np.sum([l.angle for l in link_],axis=0)
@@ -618,9 +624,9 @@ def sum2graph(root, node_,link_,llink_,Et,olp, Lay, rng, fi):  # sum node and li
             if LR_:
                 dfork = reduce(lambda F,f: F.add_lay(f), L.derH, CLay())  # combine lL.derH
                 for LR in LR_:
-                    LR.Et +=dfork.Et; LR.derTT += dfork.derTT  # lay0 += dfork
-                    if LR.derH[0][1]: LR.derH[0][1].add_lay(dfork)  # direct root only: 1-layer derH
-                    else:             LR.derH[0][1] =dfork.copy_()  # was init by another node
+                    LR.Et += dfork.Et; LR.derTT += dfork.derTT  # lay0 += dfork
+                    if LR.derH[-1][1]: LR.derH[-1][1].add_lay(dfork)  # direct root only
+                    else:              LR.derH[-1][1] =dfork.copy_()  # was init by another node
                     if LR.lH: LR.lH[-1].N_ += [graph]  # last lev
                     else:     LR.lH += [CN(N_=[graph])]  # init
         alt_=[]  # add mGs overlapping dG
@@ -678,7 +684,7 @@ def comp_H(H,h, rn, root, Et, fi):  # one-fork derH if not fi, else two-fork der
             else:  # one-fork lays
                  dLay = _lay.comp_lay(lay, rn, root=root)
             Et += dLay.Et
-            derH += [dLay]
+            derH += [dLay]  # no compared layers
     return derH
 
 def sum_H(Q, root, rev=0, fi=1):  # sum derH in link_|node_
@@ -807,8 +813,9 @@ def comb_H(H):
 
 def project_N_(Fg, y, x):
 
-    def proj_TT(TT):
-        return np.array([TT[0], TT[1] * proj * dec])  # only Et M is projected?
+    def proj_TT(_Lay):
+        Lay = _Lay.copy_(); Lay.derTT[1] *= proj * dec  # only ds are projected?
+        return Lay
     def proj_dH(_H):
         H = []
         for lay in _H: H += [proj_TT(lay) if isinstance(lay,CLay) else [lay[0].copy_(), proj_TT(lay[1]) if lay[1] else []]]  # two-fork
@@ -818,7 +825,7 @@ def project_N_(Fg, y, x):
     for L in Fg.L_:
         span = L.span; iDist += span; angle += L.angle / span  # unit step vector
     _dy,_dx = angle / np.hypot(*angle)
-    dy, dx = Fg.yx - np.array([y,x])
+    dy, dx  = Fg.yx - np.array([y,x])
     foc_dist = np.hypot(dy,dx)
     rel_dist = foc_dist / (iDist / len(Fg.L_))
     cos_dang = (dx*_dx + dy*_dy) / foc_dist
@@ -826,7 +833,7 @@ def project_N_(Fg, y, x):
     ET,eT = np.zeros((2,3)); DerTT,ExtTT = np.zeros(((2,2,8)))
     N_ = []
     for _N in Fg.N_:
-        # sum _N-specific projections, add CG.baset?
+        # sum _N-specific projections for cross_comp
         (M,D,n),(m,d,en), I,eI = _N.Et,_N.et, _N.baseT[0],_N.baset[0]
         rn = en/n
         dec = rel_dist * ((M+ m*rn) / (I+ eI*rn))  # match decay rate, same for ds, * ddecay?
@@ -841,10 +848,10 @@ def project_N_(Fg, y, x):
         Et, et = pEt_
         if val_(Et+et, aw=clust_w):
             ET+=Et; eT+=et; DerTT+=derTT; ExtTT+=extTT
-            N_ += [CG(Et=Et,et=et, derTT=derTT,extTT=extTT, derH=derH,extH=extH)]
-    # project Fg:
+            N_ += [CG(N_=_N.N_, Et=Et,et=et, derTT=derTT,extTT=extTT, derH=derH,extH=extH)]  # same target position?
+    # proj Fg:
     if val_(ET+eT, mw=len(N_)*Lw, aw=clust_w):
-        return CN(N_=N_,L_=Fg.L_,Et=ET+et, derTT=DerTT+extTT)
+        return CN(N_=N_,L_=Fg.L_,Et=ET+eT, derTT=DerTT+ExtTT)
 
 def feedback(root):  # adjust weights: all aves *= rV, ultimately differential backprop per ave?
 
@@ -922,21 +929,23 @@ def agg_frame(floc, image, iY, iX, rV=1, rv_t=[], fproj=0):  # search foci withi
             Fg = agg_frame(1, win__[:,:,:,y,x], wY,wX, rV=1, rv_t=[])  # use global wY,wX in nested call
             if Fg and Fg.L_:  # only after cross_comp(PP_)
                 rV, rv_t = feedback(Fg)  # adjust filters
-        if Fg:
-            add_N(frame,Fg)
-            node_ += Fg.N_  # keep compared_ to skip in final global cross_comp
-            if fproj and val_(Fg.Et, mw=np.hypot(*Fg.angle)/wYX, aw=Fg.olp + clust_w*20):
-                # proj N_ eval, no comp to focus?
-                Fg = cross_comp( project_N_(Fg,y,x), rc=Fg.olp, root=frame)
-                if Fg:
-                    project_focus(PV__, y,x, Fg)  # accum proj val in PV__
+        if Fg and Fg.L_:
+            if fproj and val_(Fg.Et, mw=(len(Fg.N_)-1)*Lw, aw=Fg.olp+loop_w*20):
+                pFg = project_N_(Fg,y,x)
+                if pFg:
+                    cross_comp(pFg.N_, rc=Fg.olp, root=frame)  # skip compared_ in FG cross_comp
+                    if val_(pFg.Et, mw=(len(pFg.N_)-1)*Lw, aw=pFg.olp+clust_w*20):
+                        project_focus(PV__, y,x, Fg)  # += proj val in PV__
+            # no target proj
+            add_N(frame,Fg); node_+=Fg.N_
             aw = clust_w * 20 * frame.Et[2] * frame.olp
     if node_:
         # global cross_comp
-        Fg = sum_N_(node_,root=frame)
-        if val_(frame.Et, mw=len(node_)*Lw, aw=frame.olp+ clust_w*20) > 0:
-            cross_comp(node_, rc=frame.olp+loop_w, root=Fg)
-        return Fg
+        FG = sum_N_(node_,root=frame)  # frame =FG?
+        if val_(FG.Et, mw=(len(node_)-1)*Lw, aw=FG.olp+loop_w*20) > 0:
+            cross_comp(node_, rc=FG.olp+loop_w, root=FG)
+
+        if not floc: return FG  # foci are not preserved
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
 
