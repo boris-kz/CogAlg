@@ -97,22 +97,20 @@ class CLay(CBase):  # layer of derivation hierarchy, subset of CG
 
         if not i: return C
 
-    def add_lay(Lay, lay_, rev=0):  # merge lays, including mlay + dlay
+    def add_lay(Lay, lay, rev=0):  # merge lays, including mlay + dlay
 
-        for lay in lay_:
-            # rev = dir==-1, to sum/subtract numericals in m_,d_
-            for fd, Fork_, fork_ in zip((0,1), Lay.derTT, lay.derTT):
-                Fork_ += fork_ * -1 if (rev and fd) else fork_  # m_| d_
-            # concat node_,link_:
-            Lay.node_ += [n for n in lay.node_ if n not in Lay.node_]
-            Lay.link_ += lay.link_
-            Lay.Et += lay.Et
-            rn = lay.Et[2] / Lay.Et[2]
-            Lay.olp = (Lay.olp + lay.olp*rn) /2
+        # rev = dir==-1, to sum/subtract numericals in m_,d_
+        for fd, Fork_, fork_ in zip((0,1), Lay.derTT, lay.derTT):
+            Fork_ += fork_ * -1 if (rev and fd) else fork_  # m_| d_
+        # concat node_,link_:
+        Lay.node_ += [n for n in lay.node_ if n not in Lay.node_]
+        Lay.link_ += lay.link_
+        Lay.Et += lay.Et
+        rn = lay.Et[2] / Lay.Et[2]
+        Lay.olp = (Lay.olp + lay.olp*rn) /2
         return Lay
 
     def comp_lay(_lay, lay, rn, root, dir=1):  # unpack derH trees down to numericals and compare them
-        # make it two-fork?
 
         i_ = lay.derTT[1] * rn * dir; _i_ = _lay.derTT[1]  # i_ is ds, scale and direction- normalized
         d_ = _i_ - i_
@@ -120,7 +118,7 @@ class CLay(CBase):  # layer of derivation hierarchy, subset of CG
         m_ = np.minimum(_a_,a_) / reduce(np.maximum,[_a_,a_,1e-7])  # match = min/max comparands
         m_ *= np.where((_i_<0) != (i_<0), -1,1)  # match is negative if comparands have opposite sign
         derTT = np.array([m_,d_])
-        node_ = list(set(_lay.node_+ lay.node_))  # concat, redundant to nodet?
+        node_ = list(set(_lay.node_+ lay.node_))  # concat, or redundant to nodet?
         link_ = _lay.link_ + lay.link_
         M = sum(m_ * w_t[0]); D = sum(d_ * w_t[1])
         Et = np.array([M, D, 8])  # n compared params = 8
@@ -233,7 +231,7 @@ def cluster_edge(edge, frame, lev, derlay):  # non-recursive comp_PPm, comp_PPd,
 
 def val_(Et, _Et=None, mw=1, aw=1, fi=1):  # m,d eval per cluster or cross_comp
 
-    am = ave * aw  # includes olp, M /= max I or D?  div comp / mag vs. norm / span
+    am = ave * aw  # includes olp, M /= maxI |D? div comp / mag disparity vs. span norm
     ad = avd * aw
     m, d, n = Et
     val = (m-am if fi else d-ad) * mw
@@ -340,7 +338,7 @@ def comp_node_(_N_, rc):  # rng+ forms layer of rim and extH per N?
                             N_ += [n]  # for rng+ and exemplar eval
         if N_:
             N__ += [N_]; ET += Et
-            if val_(Et, mw = (len(N_)-1)*Lw, aw = loop_w* sum(olp_)/max(1, len(olp_))) > 0:  # current-rng vM
+            if val_(Et, mw = (len(N_)-1)*Lw, aw = loop_w* sum(olp_)/max(1,len(olp_))) > 0:  # current-rng vM
                 _N_ = N_; rng += 1; olp_ = []  # reset
             else: break  # low projected rng+ vM
         else: break
@@ -440,17 +438,17 @@ def comp_N(_N,N, ave, fi, angle=None, span=None, dir=1, fdeep=0, fproj=0, rng=1)
     _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
     o = (_N.olp+N.olp) / 2
     Link = CN(rng=rng, olp=o, N_=[_N,N], baseT=baseT, derTT=derTT, yx=np.add(_N.yx,N.yx)/2, span=span, angle=angle, box=box)
+    Link.derH = [[CLay(root=Link, Et=Et, node_=[_N, N], link_=[Link], derTT=copy(derTT))], []]  # empty dlay
     # spec / lay:
     if fdeep and (val_(Et, mw=len(N.derH)-2, aw=o) > 0 or N.name=='link'):
         # else derH is dext,vert
         ddH,ddTT,dEt = comp_H(_N.derH, N.derH, rn, Link)  # comp same lays if any, add dlay = []
         derTT += ddTT; Et += dEt
         if fproj and val_(dEt, mw=len(ddH)-2,aw=o) > 0:  # comp int proj x ext ders, shifted by one lay
-            dddH = comp_H( proj_dH(_N.derH[1:]), ddH[:-1], rn, Link); merge_dlays(dddH)
+            dddH = comp_H( proj_dH(_N.derH[1:]), ddH[:-1], rn, Link)
             # or add_H|comp_H( proj_dH(_N.derH[1:]), proj_dH(N.derH[1:]))?
-            for lay, dlay in zip(ddH, dddH): lay[1] = dlay
-    else: ddH = []
-    Link.derH = [CLay(root=Link, Et=Et, node_=[_N,N],link_=[Link], derTT=copy(derTT))]; Link.derH += ddH
+            append_dH(ddH, dddH)  # merged mfork += [merged dfork], keep nesting
+        Link.derH += ddH
     # spec / comp_node_(node_|link_), alt:
     if fi and _N.alt_ and N.alt_:
         et = _N.alt_.Et + N.alt_.Et  # comb val
@@ -463,7 +461,8 @@ def comp_N(_N,N, ave, fi, angle=None, span=None, dir=1, fdeep=0, fproj=0, rng=1)
             node.nrim += [node]
             if fi: node.rim += [(Link,rev)]
             else: node.rim[1-rev] += [(Link,rev)]  # rimt opposite to _N,N dir
-            add_H(node.extH, Link.derH, root=node, rev=rev, fi=0)
+            add_H(node.extH, Link.derH, root=node, rev=rev)
+
     return Link
 
 def select_exemplars(root, N_, rc, fi, fC=0):  # get sparse representative nodes|links: non-maximum suppression via stronger-N inhibition zones
@@ -607,11 +606,10 @@ def sum2graph(root, node_,link_,llink_, Et, olp, rng, fi, fC=0):  # sum node and
     Nt = copy_(n0)  #->CN, comb forks: add_N(Nt,Nt.Lt)?
     for N in node_[1:]:
         add_H(derH,N.derH,graph); graph.baseT+=N.baseT; graph.derTT+=N.derTT; graph.box=extend_box(graph.box,N.box); yx_+=[N.yx]
-        if fg: add_N(Nt, N)
+        if fg: add_N(Nt,N)
     for L in link_[1:]:
         add_H(DerH,L.derH,graph); graph.baseT+=L.baseT; graph.derTT+=L.derTT; et+=L.Et
-    merge_dlays(DerH)
-    graph.derH = add_H(derH,DerH, graph) # aligned lay0?
+    graph.derH = append_dH(derH,DerH)  # aligned lay0s? merged mfork += [merged dfork]
     if fg: graph.H = Nt.H + [Nt]  # pack prior top level
     yx = np.mean(yx_,axis=0); dy_,dx_ = (yx_-yx).T; dist_ = np.hypot(dy_,dx_)
     graph.span = dist_.mean()  # node centers distance to graph center
@@ -641,6 +639,17 @@ def sum2graph(root, node_,link_,llink_, Et, olp, rng, fi, fC=0):  # sum node and
                     mG.alt_ += [graph]  # cross-comp|sum complete alt before next agg+ cross-comp, multi-layered?
                     alt_ += [mG]
     return graph
+
+def append_dH(H, dH):  # merged mfork += [merged dfork], keep nesting
+
+    for lay, dlay in zip_longest(H,dH):  # different len if lay-selective comp
+        if dlay:
+            if dlay[1]: dlay[0].add_lay(dlay[1]); dlay[1] = []
+        if lay:
+            if lay[1]: lay[0].add_lay(lay[1])
+            if dlay:   lay[1] = dlay[0].copy()
+        elif dlay:     H += dlay
+    return H
 
 def centroid_M(m_, ave):  # adjust weights on attr matches | diffs, recompute with sum
     _w_ = np.ones(len(m_))
@@ -676,15 +685,14 @@ def comb_alt_(G_, rc=1): # combine contour G.altG_ into altG (node_ defined by r
 def comp_H(H,h, rn, root):  # one-fork derH if not fi, else two-fork derH
 
     derH, derTT, Et = [], np.zeros((2,8)), np.zeros(3)
-    for _lay,lay in zip_longest(H,h):  # different len if lay-selective comp
+    for _lay,lay in zip_longest(H,h):  # different len if lay-selective comp?
         if _lay and lay:
             dlay = []
             for _fork, fork in zip_longest(_lay, lay):  # dfork: xproj in link | xlink in node
                 if _fork and fork:
                     dfork = _fork.comp_lay(fork, rn, root=root)
-                    if dlay: dlay.add_lay(dfork)  # sum dforks to keep nesting
-                    else:    dlay = dfork
-                    derTT = dfork.derTT; Et += dfork.Et
+                    if dfork: dlay += [dfork]; derTT = dfork.derTT; Et += dfork.Et
+                else: dlay += [[]]
             derH += [dlay]
     return derH, derTT, Et
 
@@ -693,33 +701,31 @@ def sum_H(Q, root, rev=0):  # sum derH in link_|node_
     for e in Q: add_H(DerH, e.derH, root, rev)
     return DerH
 
-def merge_dlays(H):
-    for lay in H:
-        if lay[1]: lay = [lay[0].add_lay(lay[1]), []]  # merge dlay
+def add_H(H, h, root, rev=0):  # add fork derHs
 
-def add_H(H, h, root, rev=0):  # add fork L.derHs
-
-    for Lay,lay in zip_longest(H,h):  # different len if lay-selective comp
+    for Lay, lay in zip_longest(H,h):  # different len if lay-selective comp
         if lay:
             if Lay:
-                Lay = [F.add_lay(f) for F,f in zip(Lay,lay) if f]  # default mfork
+                for F, f in zip_longest(Lay, lay):
+                    if F: F.add_lay(f)
+                    else: Lay[1] = f.copy_(rev)  # default mfork
             else:
-                Lay = [f.copy_(rev) if f else [] for f in lay]
+                H += [[f.copy_(rev) if f else [] for f in lay]]
             for fork in lay:
                 if fork: root.derTT += fork.derTT; root.Et += fork.Et
-        H += [Lay]
     return H
 
 def sum_N_(node_, root_G=None, root=None, fCG=0):  # form cluster G
 
+    fi = node_[0].fi
     if root_G is not None: G = root_G; G.L_ = []
     else:
-        G = copy_(node_[0], init=1, root=root, fCG=fCG); G.N_=node_; G.fi=node_[0].fi
+        G = copy_(node_[0], init=1, root=root, fCG=fCG); G.N_=node_; G.fi=fi
     for n in node_[1:]:
-        add_N(G, n, fCG)
-        if root: n.root=root
-    # do we need this: if hasattr(G,'nrim'): G.nrim = list(set(G.nrim))  # in CG
+        add_N(G, n, fCG); n.root=root
+        G.L_ += n.rim if fi else n.N_  # nodet
     G.olp /= len(node_)
+    G.L_ = list(set(G.L_))
     return G
 
 def add_N(N,n, fCG=0):
@@ -736,8 +742,6 @@ def add_N(N,n, fCG=0):
     if n.lH: add_NH(N.lH, n.lH, root=N)
     if n.derH: add_H(N.derH,n.derH, root=N)
     if fCG:
-        for Par, par in zip((N.nrim,N.rim),(n.nrim, n.rim)):  # rim is rimt if not fi
-            if par: Par += par
         if np.any(n.extTT): N.extTT += n.extTT * rn
         if n.extH: add_H(N.extH, n.extH, root=N)
         if n.alt_: N.alt_ = add_N(N.alt_ if N.alt_ else CG(), n.alt_)
