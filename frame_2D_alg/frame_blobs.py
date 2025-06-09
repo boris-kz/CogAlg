@@ -68,29 +68,33 @@ class CBase:
 ave  = 30  # base filter, directly used for comp_r fork
 aveR = 10  # for range+, fixed overhead per blob
 
-class CN(CBase):  # light version of CG
+class CN(CBase):
     name = "node"
     def __init__(n, **kwargs):
         super().__init__()
-        n.N_ = kwargs.get('N_',[])  # top nodes, may include singletons of lower nodes, then links in corresponding H lev only?
-        n.L_ = kwargs.get('L_',[])  # links between Ns
-        n.Et = kwargs.get('Et',np.zeros(3))  # sum Ets from N_ and H
-        n.et = kwargs.get('et',np.zeros(3))  # sum Ets from L_ and lH
+        n.N_ = kwargs.get('node_',[])  # N_| nrim
+        n.L_ = kwargs.get('link_',[])  # L_| rim
         n.H  = kwargs.get('H', [])  # top-down: nested-node levels, each CN with corresponding L_,et,lH, no H
         n.lH = kwargs.get('lH',[])  # bottom-up: higher link graphs hierarchy, also CN levs
-        n.C_ = kwargs.get('C_',[])  # make it CN?
-        n.fi = kwargs.get('fi',0)  # G else L fd_: list of forks forming G
-        n.yx = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
-        n.box = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
-        n.span = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_) but not additive?
-        n.angle = kwargs.get('angle',np.zeros(2))  # dy,dx
-        n.derH  = kwargs.get('derH', [])  # [CLay], [m,d] in CG, merged in CL, sum|concat links across fork tree
-        n.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,Dy,Dx  # from slice_edge
-        n.derTT = kwargs.get('derTT',np.zeros((2,8)))  # m,d / Et,baseT: [M,D,n,o, I,G,A,L], summed across derH lay forks
-        n.rng   = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
+        n.Et    = kwargs.get('Et', np.zeros(3))  # sum from L_ or rims
         n.olp   = kwargs.get('olp',1)  # overlap to other Ns, same for links?
-        n.root  = kwargs.get('root',0)
-    def __bool__(n): return bool(n.N_ or n.L_)
+        n.derH  = kwargs.get('derH',[])  # sum from L_ or rims
+        n.derTT = kwargs.get('derTT',np.zeros((2,8)))  # sum from derH
+        n.baseT = kwargs.get('baseT',np.zeros(4))
+        n.yx    = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
+        n.rng   = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
+        n.box   = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
+        n.span  = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_) but not additive?
+        n.angle = kwargs.get('angle',np.zeros(2))  # dy,dx
+        # nested CNs:
+        n.root= kwargs.get('root',[])  # not in ext_
+        n.ext = kwargs.get('rim',[])  # nrim, rim and their attrs, replaces CG
+        n.alt = kwargs.get('alt',[])  # adjacent (contour) gap+overlap alt-fork graphs, converted to CG, empty alt.alt_: select+?
+        n.C_  = kwargs.get('C_', [])  # make it CN?
+        n.fin = kwargs.get('fin', 0)  # in cluster, temporary?
+        n.fi  = kwargs.get('fi', 0)  # G else L fd_: list of forks forming G
+        # n.fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
+    def __bool__(n): return bool(n.N_)
 
 class CBlob(CBase):
 

@@ -117,3 +117,80 @@ def add_H(H, h, root, rev=0, fi=1):  # add fork L.derHs
                 if Lay: Lay.add_lay(lay,rev)
                 else:   H += [lay.copy_(rev)]
 
+def cross_comp(iN_, rc, root, fi=1):  # rc: redundancy+olp; (cross-comp, exemplar selection, clustering), recursion
+
+    N__,L_,Et = comp_node_(iN_,rc) if fi else comp_link_(iN_,rc)  # CLs if not fi, olp comp_node_(C_)?
+    if N__:
+        Nt, n__ = [],[]
+        for n in {N for N_ in N__ for N in N_}: n__ += [n]; n.sel = 0  # for cluster_N_
+        # mfork:
+        if val_(Et, mw=(len(n__)-1)*Lw, aw=rc+loop_w) > 0:
+            E_,eEt = select_exemplars(root, n__, rc+loop_w, fi)  # typical nodes, refine by cluster_C_
+            if val_(eEt, mw=(len(E_)-1)*Lw, aw=rc+clust_w) > 0:
+                for rng, N_ in enumerate(N__,start=1):  # bottom-up rng incr
+                    rng_E_ = [n for n in N_ if n.sel]   # cluster via rng exemplars
+                    if rng_E_ and val_(np.sum([n.Et for n in rng_E_],axis=0), mw=(len(rng_E_)-1)*Lw, aw=rc+clust_w*rng) > 0:
+                        hNt = cluster_N_(rng_E_, rc+clust_w*rng, fi,rng)
+                        if hNt: Nt = hNt  # else keep lower rng
+                if Nt and val_(Nt.Et, Et, mw=(len(Nt.N_)-1)*Lw, aw=rc+clust_w*rng+loop_w) > 0:
+                    # cross_comp root.C_| mix in exclusive N_?
+                    cross_comp(Nt.N_, rc+clust_w*rng+loop_w, root=Nt)  # top rng, select lower-rng spec comp_N: scope+?
+        # dfork
+        root.L_ = L_  # top N_ links
+        mLay = CLay(); [mLay.add_lay(lay) for L in L_ for lay in L.derH]  # comb,sum L.derHs
+        root.angle = np.sum([L.angle for L in L_],axis=0)
+        LL_, Lt, dLay = [], [], []
+        dval = val_(Et, mw=(len(L_)-1)*Lw, aw=rc+3+clust_w, fi=0)
+        if dval > 0:
+            L_ = N2G(L_)
+            if dval > ave:  # recursive derivation -> lH/nLev, rng-banded?
+                LL_ = cross_comp(L_, rc+loop_w*2, root, fi=0)  # comp_link_, no centroids?
+                if LL_: dLay = CLay(); [dLay.add_lay(lay) for LL in LL_ for lay in LL.derH]  # optional dfork
+            else:  # lower res
+                Lt = cluster_N_(L_, rc+clust_w*2, fi=0, fnode_=1)
+                if Lt: root.et += Lt.Et; root.lH += [Lt] + Lt.H  # link graphs, flatten H if recursive?
+        root.derH += [[mLay,dLay]]
+        if Nt:
+            # feedback:
+            lev = CN(N_=Nt.N_, Et=Nt.Et)  # N_ is new top H level
+            add_NH(root.H, Nt.H+[lev], root)  # same depth?
+            if Nt.H:  # lower levs: derH,H if recursion
+                root.N_ = Nt.H.pop().N_  # top lev nodes
+            comb_alt_(Nt.N_, rc + clust_w * 3)  # from dLs
+
+    if not fi: return L_  # LL_
+
+class CG(CN):  # PP | graph | blob: params of single-fork node_ cluster
+    # graph / node
+    name = "graph"
+    def __init__(g, **kwargs):
+        super().__init__(**kwargs)
+        g.rim   = kwargs.get('rim', [])  # external links, or nodet if not fi?
+        g.nrim  = kwargs.get('nrim',[])  # rim-linked nodes, = rim if not fi
+        g.baset = kwargs.get('baset',np.zeros(4))  # sum baseT from rims
+        g.extH  = kwargs.get('extH',[])  # sum derH from rims, single-fork
+        g.extTT = kwargs.get('extTT',np.zeros((2,8)))  # sum from extH
+    def __bool__(g): return bool(g.N_)  # never empty
+
+N_pars = ['N_', 'L_', 'Et', 'et', 'H', 'lH', 'C_', 'fi', 'olp', 'derH','rng', 'baseT', 'derTT', 'yx', 'box', 'span', 'angle', 'root']
+G_pars = ['extH', 'extTT', 'rim', 'nrim', 'alt_', 'fin', 'hL_'] + N_pars
+
+def copy_(N, root=None, fCG=0, init=0):
+
+    C, pars = (CG(),G_pars) if fCG else (CN(),N_pars)
+    C.root = root
+    for name, val in N.__dict__.items():
+        if name == "_id" or name not in pars: continue  # for param pruning, not really used now
+        elif name == "N_" and init: C.N_ = [N]
+        elif name == "H" and init: C.H = []
+        elif name == 'derH':
+            for lay in N.derH:
+                C.derH += [[fork.copy_() if fork else [] for fork in lay]] if isinstance(lay,list) else [lay.copy_()]  # single-fork
+        elif name == 'extH': C.extH = [lay.copy_() for lay in N.extH]  # single fork
+        elif isinstance(val,list) or isinstance(val,np.ndarray):
+            setattr(C, name, copy(val))  # Et,yx,box, node_,link_,rim, alt_, baseT, derTT
+        else:
+            setattr(C, name, val)  # numeric or object: fi, root, span, nnest, lnest
+    return C
+
+
