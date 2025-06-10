@@ -193,4 +193,40 @@ def copy_(N, root=None, fCG=0, init=0):
             setattr(C, name, val)  # numeric or object: fi, root, span, nnest, lnest
     return C
 
+def project_N_(Fg, y, x):
+
+    angle = np.zeros(2); iDist = 0
+    for L in Fg.L_:
+        span = L.span; iDist += span; angle += L.angle / span  # unit step vector
+    _dy,_dx = angle / np.hypot(*angle)
+    dy, dx  = Fg.yx - np.array([y,x])
+    foc_dist = np.hypot(dy,dx)
+    rel_dist = foc_dist / (iDist / len(Fg.L_))
+    cos_dang = (dx*_dx + dy*_dy) / foc_dist
+    proj = cos_dang * rel_dist  # dir projection
+    ET,eT = np.zeros((2,3)); DerTT,RimTT = np.zeros(((2,2,8)))
+    N_ = []
+    for _N in Fg.N_:
+        # sum _N-specific projections for cross_comp
+        (M,D,n),(m,d,en), I,eI = _N.Et,_N.rim.Et, _N.baseT[0],_N.baset[0]
+        rn = en/n
+        dec = rel_dist * ((M+m*rn) / (I+eI*rn))  # match decay rate, same for ds, * ddecay?
+        derH = proj_dH(_N.derH,proj,dec);     derTT, Et = val_H(derH)
+        rimH = proj_dH(_N.rim.derH,proj,dec); rimTT, et = val_H(rimH)
+        pEt_ = []
+        for pd,_d,_m,_n,_rn in zip((Et[1],et[1]), (D,d), (M,m), (n,en), (1,rn)):  # only d was projected
+            pdd = pd - d * dec * _rn
+            pm = _m * dec * _rn
+            val_pdd = pdd * (pm / (ave*_n))  # val *= (_d/ad if fi else _m/am) * (mw*(_n/n))
+            pEt_ += [np.array([pm-val_pdd, pd, _n])]
+        Et, et = pEt_
+        if val_(Et+et, aw=clust_w):
+            ET+=Et; eT+=et; DerTT+=derTT; RimTT+=rimTT
+            rim = CN(N_=_N.N_, Et=Et,et=et, derTT=derTT,extTT=rimTT, derH=derH,extH=rimH, root=CN())
+            N_ += [CN(N_=_N.N_, Et=Et,et=et, derTT=derTT,extTT=rimTT, derH=derH,extH=rimH, root=CN())]  # same target position?
+    # proj Fg:
+    if val_(ET+eT, mw=len(N_)*Lw, aw=clust_w):
+        return CN(N_=N_,L_=Fg.L_,Et=ET+eT, derTT=DerTT+RimTT)
+
+
 

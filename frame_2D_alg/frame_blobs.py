@@ -72,8 +72,8 @@ class CN(CBase):
     name = "node"
     def __init__(n, **kwargs):
         super().__init__()
-        n.N_ = kwargs.get('node_',[])  # N_| nrim
-        n.L_ = kwargs.get('link_',[])  # L_| rim
+        n.N_ = kwargs.get('N_',[])  # N_| nrim
+        n.L_ = kwargs.get('L_',[])  # L_| rim
         n.H  = kwargs.get('H', [])  # top-down: nested-node levels, each CN with corresponding L_,et,lH, no H
         n.lH = kwargs.get('lH',[])  # bottom-up: higher link graphs hierarchy, also CN levs
         n.Et    = kwargs.get('Et', np.zeros(3))  # sum from L_ or rims
@@ -88,10 +88,10 @@ class CN(CBase):
         n.angle = kwargs.get('angle',np.zeros(2))  # dy,dx
         # nested CNs:
         n.root= kwargs.get('root',[])  # not in ext_
-        n.ext = kwargs.get('rim',[])  # nrim, rim and their attrs, replaces CG
+        n.rim = kwargs.get('rim',[])  # nrim, rim and their attrs, replaces CG
         n.alt = kwargs.get('alt',[])  # adjacent (contour) gap+overlap alt-fork graphs, converted to CG, empty alt.alt_: select+?
-        n.C_  = kwargs.get('C_', [])  # make it CN?
-        n.fin = kwargs.get('fin', 0)  # in cluster, temporary?
+        n.C_  = kwargs.get('C_', [])  # CN if exclusive?
+        n.fin = kwargs.get('fin',0)  # in cluster, temporary?
         n.fi  = kwargs.get('fi', 0)  # G else L fd_: list of forks forming G
         # n.fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.N_)
