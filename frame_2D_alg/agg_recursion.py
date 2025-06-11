@@ -6,33 +6,29 @@ from frame_blobs import frame_blobs_root, imread, unpack_blob_, comp_pixel, CN, 
 from slice_edge import slice_edge, comp_angle
 from comp_slice import comp_slice
 '''
-Each agg+ cycle refines input nodes in cluster_C_, forms complemented graphs in two forks of cluster_N_:
+4-stage agg_cycle: generative cross-comp, compressive clustering, filter-adjusting feedback, and code-extending forward. 
+
+Cross-comp forms Miss, Match: min= shared_quantity for directly predictive params, else inverse deviation of miss=variation, 2 forks:
 rng+: incremental-range cross-comp nodes: edge segments at < max distance, cluster if they match. 
 der+: incremental-derivation cross-comp links, from node cross-comp, if abs_diff * rel_adjacent_match
- 
-Diff clusters attenuate projection of adjacent match clusters, so they should be assigned as contour: G.alt_.
-Alt match would borrow already borrowed diff value, which is too tenuous to track, so we use average borrowed value.
-Clustering criterion within each fork is summed match of >ave vars (<ave vars are not compared and don't add comp costs).
 
+Clustering is compressive by grouping the elements, by direct similarity to centroids or transitive similarity in graphs, 2 forks:
+connectivity clustering of matching nodes, progressively reducing overlap by exemplar selection, centroid clustering, flood-fill.
+correlation clustering of >ave diff links, forming contours that complement adjacent connectivity clusters.
+ 
 Connectivity clustering is exclusive per fork,ave, with fork selected per variable | derLay | aggLay 
 Fuzzy clustering can only be centroid-based: overlapping connectivity-based clusters will merge.
 Param clustering if MM, compared along derivation sequence, or combinatorial?
 
-Graph representation is nested in a dual tree of down-forking elements: node_, and up-forking clusters: root_:
+Graph representation is nested in a dual tree of down-forking elements: node_H, and up-forking clusters: root_H:
 https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/generic%20graph.drawio.png
-It resembles neurons: dendritic input tree and axonal output tree
-But my graphs have recursively nested param sets per branching, formed by very different comparison process.
+It resembles neurons: dendritic input tree and axonal output tree, but they have no recursively nested param sets per branching.
 
-Ultimate criterion is lateral match, with projecting sub-criteria to add distant | aggregate lateral match
-If a property is found to be independently predictive, its match is defined as min comparands: their shared quantity.
-Else match is an inverted deviation of miss: instability of that property. 
+Feedback of projected match adjusts filters to maximize next match, including coordinate filters to select new inputs.
+Refine projection by cross_comp of coprojected patterns, described in "imagination, planning, action" section of part 3 in Readme.
 
-Feedback of projected match adjusts filters to maximize next match, including coordinate filters to select new input.
-Forward pass may generate code by process cross-comp (tracing function calls), and clustering by evaluated code blocks.
+Forward pass may generate code by cross-comp (tracing function calls) and clustering (code blocks) of past and simulated process.
 Meta-feedback combines code compression and data compression values, higher-level match is still the ultimate criterion.
-
-Code coordinates may extend base code by cross-projecting patterns found in original base code, adding match-projecting ders to eval. 
-Similar to cross-projection by data-coordinate filters, described in "imagination, planning, action" section of part 3 in Readme.
 
 notation:
 prefix  f denotes flag
@@ -103,6 +99,7 @@ def copy_(N, root=None, init=0):
         if name == "_id": continue
         elif name == "N_" and init: C.N_ = [N]
         elif name == "H" and init: C.H = []
+        elif name == "rim":  C.rim = copy_(val) if val else []  # rim of rim
         elif name == 'derH': C.derH = [[fork.copy_() if fork else [] for fork in lay] for lay in N.derH]
         elif isinstance(val,list) or isinstance(val,np.ndarray):
             setattr(C, name, copy(val))  # Et,yx,box, node_,link_,rim, alt_, baseT, derTT
@@ -197,8 +194,9 @@ def cluster_edge(edge, frame, lev, derlay):  # non-recursive comp_PPm, comp_PPd,
 def val_(Et, _Et=None, mw=1, aw=1, fi=1):  # m,d eval per cluster or cross_comp
 
     am = ave * aw  # includes olp, M /= maxI |D? div comp / mag disparity vs. span norm
-    ad = avd * aw
+    ad = avd * aw  # diff value is borrowed from co-projected or higher-scope match value
     m, d, n = Et
+
     val = (m-am if fi else d-ad) * mw
     if np.any(_Et): # borrow alt contour if fi else root as rational deviation, no circular local borrow
         _m, _d, _n = _Et
@@ -212,22 +210,17 @@ def eval(V, weights):  # conditional progressive eval, with default ave in weigh
         if V < W: return 0
     return 1
 ''' 
-Core process per agg level:
+Core process per agg level, as described in top docstring:
 Cross-compare nodes, evaluate incremental-derivation cross-comp of new >ave difference links, recursively.
  
 Select sparse exemplars of strong node types, convert to centroids of their rim, reselect by mutual match
-(this selection is essential due to complexity of subsequent connectivity clustering)
-  
-Connectivity cluster exemplar nodes by >ave match links, correlation-cluster links by >ave difference.
-Evaluate resulting node_ or link_ clusters for higher-composition or intra-param_set cross_comp. 
-Assign cluster contours, next level cross-comps core+contour: complemented clusters.
+Connectivity-cluster exemplars by >ave match links, correlation-cluster links by >ave difference.
 
-coords feedback: to bottom level or prior-level in parallel pipelines, if any
-filter feedback: more coarse with higher cost, may run over same input?
+Form complemented clusters (core + contour) for recursive higher-composition or intra-param_set cross_comp. 
+Feedback coords to bottom level or prior-level in parallel pipelines, filter updates in more coarse cycles.
 
 surprise = comp projected node ders x external link ders
-conflict = cross-node comp proj -> feedback
-centroid-mediated cluster_N_? '''
+conflict = cross-node comp proj -> feedback '''
 
 def cross_comp(iN_, rc, root, fi=1):  # rc: redundancy+olp; (cross-comp, exemplar selection, clustering), recursion
 
@@ -237,27 +230,29 @@ def cross_comp(iN_, rc, root, fi=1):  # rc: redundancy+olp; (cross-comp, exempla
         for n in {N for N_ in N__ for N in N_}: n__ += [n]; n.sel = 0  # for cluster_N_
         # mfork:
         if val_(Et, mw=(len(n__)-1)*Lw, aw=rc+loop_w) > 0:
-            E_,eEt = select_exemplars(root, n__, rc+loop_w, fi)  # typical nodes, refine by cluster_C_
-            # if E_= C_: cluster via C.rims+N.rims, ~ Rs with rims?
+            E_,eEt,fc = get_exemplars(root, n__, rc+loop_w, fi)  # typical nodes, refine|replace by cluster_C_
             if val_(eEt, mw=(len(E_)-1)*Lw, aw=rc+clust_w) > 0:
-                for rng, N_ in enumerate(N__,start=1):  # bottom-up rng incr
-                    rng_E_ = [n for n in N_ if n.sel]   # cluster via rng exemplars
-                    if rng_E_ and val_(np.sum([n.Et for n in rng_E_],axis=0), mw=(len(rng_E_)-1)*Lw, aw=rc+clust_w*rng) > 0:
-                        hNt = cluster_N_(rng_E_, rc+clust_w*rng, fi,rng)
-                        if hNt: Nt = hNt  # else keep lower rng
-                if Nt and val_(Nt.Et, Et, mw=(len(Nt.N_)-1)*Lw, aw=rc+clust_w*rng+loop_w) > 0:
+                if fc:
+                    hNt = cluster_N_(E_,rc+clust_w, fi,fc)  # cluster flat C_
+                else:
+                    for rng, N_ in enumerate(N__,start=1):  # bottom-up rng incr
+                        rng_E_ = [n for n in N_ if n.sel]   # cluster via rng exemplars
+                        if rng_E_ and val_(np.sum([n.Et for n in rng_E_],axis=0), mw=(len(rng_E_)-1)*Lw, aw=rc+clust_w*rng) > 0:
+                            hNt = cluster_N_(rng_E_, rc+clust_w*rng, fi,rng)
+                            # shouldn't be empty?
+                if hNt and val_(hNt.Et, Et, mw=(len(hNt.N_)-1)*Lw, aw=rc+clust_w*rng+loop_w) > 0:
                     # cross_comp root.C_| mix in exclusive N_?
-                    cross_comp(Nt.N_, rc+clust_w*rng+loop_w, root=Nt)  # top rng, select lower-rng spec comp_N: scope+?
+                    cross_comp(hNt.N_, rc+clust_w*rng+loop_w, root=hNt)  # top rng, select lower-rng spec comp_N: scope+?
         # dfork
         root.L_ = L_  # top N_ links
-        derH = sum_H([L.derH for L in L_], root)
+        derH = sum_H_([L.derH for L in L_], root)
         root.angle = np.sum([L.angle for L in L_],axis=0)
         dval = val_(Et, mw=(len(L_)-1)*Lw, aw=rc+3+clust_w, fi=0)
         if dval > 0:
             L_ = N2G(L_)
             if dval > ave:  # recursive derivation -> lH/nLev, rng-banded?
                 LL_ = cross_comp(L_, rc+loop_w*2, root, fi=0)  # comp_link_, select exemplars, centroids?
-                if LL_: append_dH(derH, sum_H([L.derH for L in LL_], root))  # optional dfork
+                if LL_: append_dH(derH, sum_H_([L.derH for L in LL_], root))  # optional dfork
             else:  # lower res
                 Lt = cluster_N_(L_, rc+clust_w*2, fi=0, fnode_=1)
                 if Lt: root.rim.Et += Lt.Et; root.lH += [Lt] + Lt.H  # link graphs, flatten H if recursive?
@@ -429,10 +424,10 @@ def comp_N(_N,N, ave, fi, angle=None, span=None, dir=1, fdeep=0, fproj=0, rng=1)
 
     return Link
 
-def select_exemplars(root, N_, rc, fi, fC=0):  # get sparse representative nodes|links: non-maximum suppression via stronger-N inhibition zones
+def get_exemplars(root, N_, rc, fi, fC=0):  # get sparse representative nodes|links: non-maximum suppression via stronger-N inhibition zones
 
     exemplars = []; Et = np.zeros(3); _N_ = set()  # stronger-N inhibition zones
-
+    fc = 0
     for rdn, N in enumerate(sorted(N_, key=lambda n: n.rim.Et[0]/n.rim.Et[2], reverse=True), start=1):
         M,_,n = N.rim.Et  # summed from rim
         if eval(M, weights=[ave*rc, n, clust_w, rolp_M(M, N,_N_, fi, fC) *rdn]):  # roM * rdn: lower rank?
@@ -445,11 +440,11 @@ def select_exemplars(root, N_, rc, fi, fC=0):  # get sparse representative nodes
     if fi and not fC and val_(Et, mw=(len(exemplars)-1)*Lw, aw=rc+clust_w) > 0:
         Ct = cluster_C_(root, exemplars, Et, rc+clust_w, fi)  # refine _N_+_N__ by mutual similarity, add centroids as mediators
         if Ct:
-            C_, cEt = Ct
+            C_, cEt = Ct; fc = 1
             cross_comp(C_, rc+1, root)
             exemplars,Et = C_,cEt  # not sure, may be return both?
 
-    return exemplars, Et
+    return exemplars, Et, fc
 
 def rolp_M(M, N, _N_, fi, fC=0):  # rel sum of overlapping links Et, or _N_ Et in cluster_C_?
 
@@ -504,21 +499,21 @@ def cluster_C_(root, E_,eEt, rc, fi):  # form centroids from exemplar _N_, drift
 
     if val_(ET, mw=(len(C_)-1)*Lw, aw=rc+loop_w) > 0:
         root.C_ = C_  # higher-scope cross_comp in
-        Ec_, Et = select_exemplars(root, [n for C in C_ for n in C.N_], rc+loop_w, fi=fi, fC=1)
-        if Ec_:   # refine exemplars by cEt
+        Ec_, Et, fc = get_exemplars(root, [n for C in C_ for n in C.N_], rc+loop_w, fi=fi, fC=1)
+        if Ec_:  # refine exemplars / cEt
             remove_ = {n for C in C_ for n in C.N_}
             E_[:] = [n for n in E_ if n not in remove_] + Ec_
 
-            return (C_, ET+eEt)
+            return (C_, ET+eEt)  # replace E_
 
-def cluster_N_(N_, rc, fi, rng=1, fnode_=0, root=None):  # connectivity cluster exemplar nodes via rim or links via nodet or rimt
+def cluster_N_(N_, rc, fi, rng=1, fnode_=0, root=None, fc=0):  # connectivity cluster exemplar nodes via rim or links via nodet or rimt
 
     G_ = []  # flood-filled clusters
     for n in N_: n.fin = 0
     for N in N_:
         if N.fin: continue
         # init N cluster:
-        if rng==1 or N.root.rng==1:  # N is not rng-nested
+        if rng==1 or N.root.rng==1:  # N is not rng-nested, including centroids
             node_, link_, llink_, Et, olp = [N],[],[], N.Et+N.rim.Et, N.olp
             for l,_ in N.rim.L_ if fi else (N.rim.L_[0] + N.rim.L_[1]):  # +ve
                 if l.rng==rng: link_ += [l]
@@ -537,11 +532,13 @@ def cluster_N_(N_, rc, fi, rng=1, fnode_=0, root=None):  # connectivity cluster 
                 for L,_ in _N.rim.L_ if fi else _N.rim.L_[0]+_N.rim.L_[0]:  # may be L
                     if L not in node_ and _N.Et[1] > avd * _N.Et[2] * nrc:  # direct eval diff
                         node_ += [L]; Et += L.Et; olp += L.olp  # /= len node_
-        else:  # cluster nodes via links
+        else:  # cluster nodes | centroids via links
             for L in link_[:]:  # snapshot
                 for _N in L.N_:
                     if _N not in N_ or _N.fin: continue  # connectivity clusters don't overlap
                     if rng==1 or _N.root.rng==1:  # _N is not rng-nested
+                        if fc and L_olp(N,_N, link_, frim=1):  # rim olp eval for centroids
+                            continue
                         node_ +=[_N]; Et += _N.Et+_N.rim.Et; olp+=_N.olp; _N.fin=1
                         for l,_ in _N.rim.L_ if fi else (_N.rim.L_[0]+_N.rim.L_[1]):  # all +ve
                             if l not in link_ and l.rng == rng: link_ += [l]
@@ -562,6 +559,21 @@ def cluster_N_(N_, rc, fi, rng=1, fnode_=0, root=None):  # connectivity cluster 
             G_ += [sum2graph(root, node_, link_, llink_, Et, olp, rng, fi)]
     if G_:
         return CN(N_=G_, Et=Et)   # root replace if fi else append?
+
+# need to use in all 3 forks:
+def L_olp(C,_C, link_, frim=0):  # rim, link_ olp eval for centroids
+
+    if link_: # R or C
+        Lo_Et = np.sum([l.Et for l in list(set(link_) & set(_C.L_))]) * int_w
+        LEt = _C.Et * int_w; rM = Lo_Et[0] / LEt[0]; Et = Lo_Et
+    else:
+        rM = 1; Et = np.zeros(3)
+    if frim:  # N or C
+        ro_Et = np.sum([l.Et for l in list(set(C.rim) & set(_C.rim))])
+        rEt = _C.rim.Et; rM *= ro_Et[0]/rEt[0]; Et += ro_Et
+
+    if val_(Et*rM, aw=clust_w) < 0:
+        return 1  # continue
 
 def sum2graph(root, node_,link_,llink_, Et, olp, rng, fi, fC=0):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
@@ -591,11 +603,11 @@ def sum2graph(root, node_,link_,llink_, Et, olp, rng, fi, fC=0):  # sum node and
         for L in link_:  # LL from comp_link_
             LR_ = set([n.root for n in L.N_ if isinstance(n.root,CN)])  # nodet, skip frame, empty roots
             if LR_:
-                dfork = reduce(lambda F,f: F.add_lay(f), L.derH, CLay())  # combine lL.derH
+                dfork = sum_H(L.derH)  # combine lL.derH into single CLay
                 for LR in LR_:
                     LR.Et += dfork.Et; LR.derTT += dfork.derTT  # lay0 += dfork
                     if LR.derH[-1][1]: LR.derH[-1][1].add_lay(dfork)  # direct root only
-                    else:              LR.derH[-1][1] =dfork.copy_()  # was init by another node
+                    else:              LR.derH[-1][1] = dfork.copy_()  # was init by another node
                     if LR.lH: LR.lH[-1].N_ += [graph]  # last lev
                     else:     LR.lH += [CN(N_=[graph])]  # init
         # add mGs overlapping dG
@@ -663,7 +675,13 @@ def comp_H(H,h, rn, root):  # one-fork derH if not fi, else two-fork derH
             derH += [dlay]
     return derH, derTT, Et
 
-def sum_H(Q, root, rev=0, DerH=[]):  # sum derH in link_|node_
+def sum_H(H, Lay=CLay()):
+    for lay in H:
+        for fork in lay:
+            if fork: Lay.add_lay(fork)  # merge in dfork
+    return Lay
+
+def sum_H_(Q, root, rev=0, DerH=[]):  # sum derH in link_|node_
     for derH in Q: add_H(DerH, derH, root, rev)
     return DerH
 
@@ -698,7 +716,8 @@ def sum_N_(node_, root_G=None, root=None):  # form cluster G
 def add_N(N,n):
 
     rn = n.Et[2] / N.Et[2]
-    N.Et += n.Et * rn; N.rim.Et += n.rim.Et * rn; N.C_ += n.C_
+    N.Et += n.Et * rn; N.C_ += n.C_
+    if N.rim: N.rim.Et += n.rim.Et * rn  # rim.rim is empty
     N.olp = (N.olp + n.olp * rn) / 2  # ave
     N.yx = (N.yx + n.yx * rn) / 2
     N.span = max(N.span,n.span)
@@ -707,7 +726,7 @@ def add_N(N,n):
     if n.H: add_NH(N.H, n.H, root=N)
     if n.lH: add_NH(N.lH, n.lH, root=N)
     if n.rim: add_N(N.rim, n.rim)
-    if n.alt: add_N(N.alt if N.alt else CN(), n.alt)
+    if n.alt: N.alt = add_N(N.alt if N.alt else CN(), n.alt)
     if n.derH: add_H(N.derH,n.derH, root=N)
     for Par,par in zip((N.angle, N.baseT, N.derTT), (n.angle, n.baseT, n.derTT)):
         Par += par * rn
@@ -743,14 +762,8 @@ def PP2N(PP, frame):
 
 def norm_H(H, n):
     for lay in H:
-        if lay:
-            if isinstance(lay, CLay):
-                for v_ in lay.derTT: v_ *= n  # array
-                lay.Et *= n
-            else:
-                for fork in lay:
-                    for v_ in fork.derTT: v_ *= n  # array
-                    fork.Et *= n  # same node_, link_
+        for fork in lay:
+            if fork: fork.derTT *= n; fork.Et[:2] *= n; fork.Et[2] += n
 # not used:
 def sort_H(H, fi):  # re-assign olp and form priority indices for comp_tree, if selective and aligned
 
