@@ -228,5 +228,19 @@ def project_N_(Fg, y, x):
     if val_(ET+eT, mw=len(N_)*Lw, aw=clust_w):
         return CN(N_=N_,L_=Fg.L_,Et=ET+eT, derTT=DerTT+RimTT)
 
+def L_olp(C,_C, link_, frim=0):  # rim, link_ olp eval for centroids
+
+    if link_: # R or C
+        Lo_Et = np.sum([l.Et for l in list(set(link_) & set(_C.L_))]) * int_w
+        LEt = _C.Et * int_w; rM = Lo_Et[0] / LEt[0]; Et = Lo_Et
+    else:
+        rM = 1; Et = np.zeros(3)
+    if frim:  # N or C
+        ro_Et = np.sum([l.Et for l in list(set(C.rim) & set(_C.rim))])
+        rEt = _C.rim.Et; rM *= ro_Et[0]/rEt[0]; Et += ro_Et
+
+    if val_(Et*rM, aw=clust_w) < 0:
+        return 1  # continue
+
 
 
