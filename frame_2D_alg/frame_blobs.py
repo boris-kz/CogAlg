@@ -90,7 +90,6 @@ class CN(CBase):
         n.root= kwargs.get('root',[])  # not in ext_
         n.rim = kwargs.get('rim',[])  # nrim, rim and their attrs, replaces CG
         n.alt = kwargs.get('alt',[])  # adjacent (contour) gap+overlap alt-fork graphs, converted to CG, empty alt.alt_: select+?
-        n.C_  = kwargs.get('C_', [])  # CN if exclusive?
         n.fin = kwargs.get('fin',0)  # in cluster, temporary?
         n.fi  = kwargs.get('fi', 0)  # G else L fd_: list of forks forming G
         # n.fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]

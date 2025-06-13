@@ -242,5 +242,14 @@ def L_olp(C,_C, link_, frim=0):  # rim, link_ olp eval for centroids
     if val_(Et*rM, aw=clust_w) < 0:
         return 1  # continue
 
+def rolp_M(M, N, _N_, fi, fC=0):  # rel sum of overlapping links Et, or _N_ Et in cluster_C_?
+
+    if fC:  # from cluster_C_
+        olp_N_ = [n for n in N.rim.N_ if n in _N_]  # previously accumulated inhibition zone
+    else:   # from sel_exemplars
+        olp_N_ = [L for L,_ in (N.rim.L_ if fi else N.rim.L_[0]+N.rim.L_[1]) if [n for n in L.N_ if n in _N_]]  # += in max dist?
+
+    return 1 + sum([n.Et[0] for n in olp_N_]) / M  # w in range 1:2, rel_oM
+
 
 
