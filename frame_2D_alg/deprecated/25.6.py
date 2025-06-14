@@ -242,6 +242,26 @@ def L_olp(C,_C, link_, frim=0):  # rim, link_ olp eval for centroids
     if val_(Et*rM, aw=clust_w) < 0:
         return 1  # continue
 
+def rolp(N, link_=[], rim=[]):  # relative rim, link_ olp eval for clustering, replace rolp_M?
+
+    LrM, RrM, LEt, REt = 0,0,[],[]
+    if link_: # R | C
+        oL_ = [L for L in N.L_ if L in link_]
+        if oL_:
+            oEt = np.sum([l.Et for l in oL_]) *int_w; LEt = N.Et *int_w; LrM = oEt[0]/LEt[0]
+    if rim:  # N | C pairwise
+        oR_ = [L for L,_ in N.rim.L_ if L in rim.L_]
+        if oR_:
+            oEt = np.sum([l.Et for l in oR_]); REt = N.rim.Et; RrM = oEt[0]/REt[0]
+    _rM = 0
+    for rM,Et in zip((LrM,LEt),(RrM,REt)):
+        if rM:
+            if _rM: _rM*= rM; _Et+= Et
+            else:   _rM = rM; _Et = Et
+
+    return val_(_Et*_rM, aw=clust_w) if _rM else 0
+
+
 def rolp_M(M, N, _N_, fi, fC=0):  # rel sum of overlapping links Et, or _N_ Et in cluster_C_?
 
     if fC:  # from cluster_C_
