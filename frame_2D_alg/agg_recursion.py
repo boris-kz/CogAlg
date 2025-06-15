@@ -432,7 +432,7 @@ def get_exemplars(root, N_, rc, fi, fC=0):  # get sparse representative nodes|li
     fc = 0
     for rdn, N in enumerate(sorted(N_, key=lambda n: n.rim.Et[0]/n.rim.Et[2], reverse=True), start=1):
         # select low overlap with stronger-N inhibition zones:
-        if val_(N.rim.Et, aw = rc + rdn + loop_w + rolp_N(N, list(_N_),0)) > 0:
+        if val_(N.rim.Et, aw = rc + rdn + loop_w + rn_olp(N, list(_N_),0)) > 0:
             Et += N.rim.Et; _N_.update(N.rim.N_)
             # add as olp in exemplar?
             N.sel = 1  # select for cluster_N_
@@ -443,13 +443,11 @@ def get_exemplars(root, N_, rc, fi, fC=0):  # get sparse representative nodes|li
         for n in root.N_: n.C_,n.et_ = [],[]
         Ct = cluster_C_(root, exemplars, Et, rc+clust_w, fi)  # refine _N_+_N__ by mutual similarity, add centroids as mediators
         if Ct:
-            C_, cEt = Ct  # cross_comp(C_, rc+1, root)  # simpler/ coarser than C extension?
-            root.N_ = C_; root.Et += cEt
-            exemplars = []
-            # centroids are global, no further cluster_N_?
+            C_, cEt = Ct; root.N_ = C_; root.Et += cEt
+            exemplars = []  # centroids are global, no further cluster_N_?
     return exemplars, Et
 
-def rolp_N(N, inhib_, C):  # inhibition zone for centroids & exemplars
+def rn_olp(N, inhib_, C):  # inhibition zone for centroids & exemplars
 
     if C: olp_ = [n for n in N.rim.N_ if n in inhib_]
     else: olp_ = [L for L,_ in N.rim.L_ if [n for n in L.N_ if n in inhib_]]  # += in max dist?
@@ -460,7 +458,7 @@ def rolp_N(N, inhib_, C):  # inhibition zone for centroids & exemplars
     else:
         return 0
 
-def rolp_L(N, L_, fR=0):  # relative N.rim or R.link_ olp eval for clustering
+def rl_olp(N, L_, fR=0):  # relative N.rim or R.link_ olp eval for clustering
 
     oL_ = [L for L in (N.L_ if fR else N.rim.L_) if L in L_]
     if oL_:
@@ -496,14 +494,13 @@ def cluster_C_(root, E_,eEt, rc, fi):  # form centroids from exemplar _N_, drift
                 for n in N.rim.N_:
                     _,et,_ = base_comp(C,n)  # comp to mean
                     if C.alt and n.alt: _,aet,_ = base_comp(C.alt,n.alt); et += aet
-                    # need to track removed Ns instead:
-                    if N in n.C_: dEt += et - n.et_[n.C_.index(N)]
-                    else:         dEt += et
-                    if val_(et, aw=loop_w+rc) > 0:
-                         n.C_ += [C]; n.et_ += [et]; _N_ += [n]; _N__ += n.rim.N_
-                    Et += et
+                    if val_(et, aw=loop_w + rc) > 0:
+                        n.C_ += [C]; n.et_ += [et]; Et += et
+                        _N_ += [n]; _N__ += n.rim.N_
+                        if C not in n._C_: dEt += et
+                    elif C in n._C_: dEt += et
                 C.rim.Et = Et; C.rim.N_ = list(set(_N_)); C.rim.N_ = list(set(_N__))
-                C.olp += rolp_N(N, inhib_=_N_, C=1)
+                C.olp += rn_olp(N, inhib_=_N_, C=1)
                 if val_(C.rim.Et, aw=clust_w+rc+C.olp) > 0:
                     C_ += [C]; DEt += dEt; ET += Et
                 else: ET += N.rim.Et
@@ -512,16 +509,18 @@ def cluster_C_(root, E_,eEt, rc, fi):  # form centroids from exemplar _N_, drift
                 break  # rest of N_ is weaker
         if val_(DEt, mw=(len(C_)-1)*Lw, aw=(loop_w+clust_w+rc)) <= 0:
             break  # converged
-        cluster_N_(C_, rc + clust_w, fi, fL=1)  # cluster C_ by overlap in C.N_?
-        # draft
+        # Cluster_C_(C_, rc+clust_w, root)  # cluster C_ by overlap in C.N_
+
     if val_(ET, mw=(len(C_)-1)*Lw, aw=rc+loop_w) > 0:
         root.C_ = C_  # higher-scope cross_comp in
         Ec_, Et = get_exemplars(root, [n for C in C_ for n in C.N_], rc+loop_w, fi=fi, fC=1)
-        if Ec_:  # refine exemplars / cEt
+        if Ec_ and val_(Et, mw=(len(Ec_)-1)*Lw, aw=rc+loop_w) > 0:
+            # refine exemplars,
+            # else keep C_, no further clustering?
             remove_ = {n for C in C_ for n in C.N_}
             E_[:] = [n for n in E_ if n not in remove_] + Ec_
-            # eval to pack in root.N_ vs replacing E_?
             return (C_, ET+eEt)
+
 
 def cluster_N_(N_, rc, fi, rng=1, fL=0, root=None, _Nt=[]):  # connectivity cluster exemplar nodes via rim or links via nodet or rimt
 
@@ -554,7 +553,7 @@ def cluster_N_(N_, rc, fi, rng=1, fL=0, root=None, _Nt=[]):  # connectivity clus
                 for _N in L.N_:
                     if _N not in N_ or _N.fin: continue  # connectivity clusters don't overlap
                     if rng==1 or _N.root.rng==1:  # not rng-nested
-                        if rolp_L(N, get_rim(_N)):
+                        if rl_olp(N, get_rim(_N)):
                             node_ +=[_N]; Et += _N.Et+_N.rim.Et; olp+=_N.olp; _N.fin=1
                             for l,_ in get_rim(_N):
                                 if l not in link_ and l.rng == rng: link_ += [l]
@@ -562,7 +561,7 @@ def cluster_N_(N_, rc, fi, rng=1, fL=0, root=None, _Nt=[]):  # connectivity clus
                     else:
                         _n =_N; _R=_n.root  # _N.rng=1, _R.rng > 1, cluster top-rng roots if rim intersect:
                         while _R.root and _R.root.rng > _n.rng: _n=_R; _R=_R.root
-                        if not _R.fin and rolp_L(N,link_,fR=1):
+                        if not _R.fin and rl_olp(N,link_,fR=1):
                             link_ = list(set(link_+_R.link_)); llink_ = list(set(llink_+_R.hL_))
                             node_+= [_R]; Et +=_R.Et; olp += _R.olp; _R.fin = 1; _N.fin = 1
         node_ = list(set(node_))
@@ -747,7 +746,7 @@ def extend_box(_box, box):  # extend box with another box
     return min(y0,_y0), min(x0,_x0), max(yn,_yn), max(xn,_xn)
 
 def L2N(link_):
-    for L in link_: L.rim.L_,L.mL_t = [[],[]], [[],[]]; L.compared_,L.visited_ = [],[]
+    for L in link_: L.mL_t = [[],[]]; L.compared_,L.visited_ = [],[]; L.rim = CN(rim=[], L_=[[],[]])
     return link_
 
 def PP2N(PP, frame):

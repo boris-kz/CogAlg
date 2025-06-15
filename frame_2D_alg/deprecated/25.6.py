@@ -271,5 +271,21 @@ def rolp_M(M, N, _N_, fi, fC=0):  # rel sum of overlapping links Et, or _N_ Et i
 
     return 1 + sum([n.Et[0] for n in olp_N_]) / M  # w in range 1:2, rel_oM
 
+def Cluster_C_(c_, rc, root):  # cluster centroids in c_ by rel_val of overlap in their members
+
+    C_ = []  # flood-filled clusters of centroids
+    for c in c_:
+        if c.fin: continue
+        C = CN(N_=c.N_, Et=copy(c.Et), olp=c.olp)  # init C cluster
+        oN_ = [n for n in c.N_ if len(n.C_) > 1]  # each n has not-c centroids
+        oc_ = set([_c for on in oN_ for _c in on.C_ if _c is not c])  # not-c centroids in all member N.C_s
+        for N in oN_:
+            for _c in N.C_:
+                if _c is not c:
+                    oEt = np.sum([n.Et for n in _c.N_ if n in oN_], axis=0)
+                    if val_(oEt/_c.Et, aw=clust_w) > arn:  # element-wise
+                       add_N(C,_c)
+                       _c.fin=1
+        C_ += [C]
 
 
