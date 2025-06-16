@@ -288,4 +288,36 @@ def Cluster_C_(c_, rc, root):  # cluster centroids in c_ by rel_val of overlap i
                        _c.fin=1
         C_ += [C]
 
+    if val_(ET, mw=(len(C_)-1)*Lw, aw=rc+loop_w) > 0:
+        root.C_ = C_  # higher-scope cross_comp in
+        Ec_, Et = get_exemplars(root, [n for C in C_ for n in C.N_], rc+loop_w, fi=fi, fC=1)
+        if Ec_ and val_(Et, mw=(len(Ec_)-1)*Lw, aw=rc+loop_w) > 0:
+            # refine exemplars,
+            # else keep C_, no further clustering?
+            remove_ = {n for C in C_ for n in C.N_}
+            E_[:] = [n for n in E_ if n not in remove_] + Ec_
+            return (C_, ET+eEt)
+
+def cluster_R_(_R_, rc):  # merge root centroids if L_overlap Et, pairwise
+
+    R_ = []; Et = np.zeros(3)
+    for R in _R_:
+        if R.fin: continue  # merged
+        # or in R.rim.N_ after cross_comp
+        for _R in set([C for n in R.N_ for C in n.C_ if C is not R]):  # overlapping root centroids
+            oN_ = list(set(R.N_) & set(R.N_))
+            oV = val_(np.sum([n.Et for n in oN_], axis=0))
+            aw = rc+clust_w
+            _V = min(val_(_R.Et,aw), val_(R.Et,aw))
+            if oV /_V > arn:  # pairwise eval, add link V if cross_comp
+                add_N(R,_R, fmerge=1)
+                _R.fin = 1
+        R_ += [R]; Et += R.Et
+
+    return CN(N_=R_,Et=Et)
+
+
+
+
+
 
