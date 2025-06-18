@@ -316,8 +316,30 @@ def cluster_R_(_R_, rc):  # merge root centroids if L_overlap Et, pairwise
 
     return CN(N_=R_,Et=Et)
 
+def copy_(N, root=None, init=0):
 
+    C = CN(root=root)
+    N.root = C if init else root
+    for name, val in N.__dict__.items():
+        if name == "_id" or name == "root": continue
+        elif name == "N_" and init: C.N_ = [N]
+        elif name == "L_" and init: C.L_ = []
+        elif name == "H"  and init: C.H = []
+        elif name == "rim":  C.rim = copy_(val) if val else []  # rim of rim
+        elif name == 'derH': C.derH = [[fork.copy_() if fork else [] for fork in lay] for lay in N.derH]
+        elif isinstance(val,list) or isinstance(val,np.ndarray):
+            setattr(C, name, copy(val))  # Et,yx,box, node_,link_,rim, alt_, baseT, derTT
+        else:
+            setattr(C, name, val)  # numeric or object: fi, root, span, nnest, lnest
+    return C
 
+    if G_:
+        for G in G_:
+            if val_(G.Et, (len(G.N_)-1)*Lw, rc+1, fi) > 0:
+                # divisive sub-clustering with reduced rc, redundant to cluster_C_?
+                G.N_ = cluster_N_(G.N_, rc* (1/ val_(root.Et, (len(root.N_)-1)*Lw)), fi=fi, root=G, _Nt=G).N_
+        _Nt = CN(N_=G_,Et=Et)
 
+    return _Nt   # root N_|L_ replacement
 
 
