@@ -340,6 +340,8 @@ def copy_(N, root=None, init=0):
                 G.N_ = cluster_N_(G.N_, rc* (1/ val_(root.Et, (len(root.N_)-1)*Lw)), fi=fi, root=G, _Nt=G).N_
         _Nt = CN(N_=G_,Et=Et)
 
+    C._N_ = list(set([_n for n in _C._N_ for _n in n.rim.N_]))  # extend surround, add olp?
+
     return _Nt   # root N_|L_ replacement
 
 
