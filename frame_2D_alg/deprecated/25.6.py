@@ -344,4 +344,16 @@ def copy_(N, root=None, init=0):
 
     return _Nt   # root N_|L_ replacement
 
+def rn_olp(N, inhib_, fC):  # inhibition zone for centroids & exemplars
+
+    if fC: olp_ = [n for n in N.rim.N_ if n in inhib_]
+    else:  olp_ = [L for L,_ in N.rim.L_ if [n for n in L.N_ if n in inhib_]]  # += in max dist?
+    if olp_:
+        oEt = np.sum([i.Et for i in olp_], axis=0)
+        rM = oEt[0] / N.Et[0]
+        return val_(N.Et*rM, clust_w)
+    else: return 0
+
+
+
 
