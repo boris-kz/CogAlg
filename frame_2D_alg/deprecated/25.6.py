@@ -354,6 +354,105 @@ def rn_olp(N, inhib_, fC):  # inhibition zone for centroids & exemplars
         return val_(N.Et*rM, clust_w)
     else: return 0
 
+def comb_alt_(G_, rc=1): # combine contour G.altG_ into altG (node_ defined by root=G),
 
+    for G in G_:  # internal vs. external alts: different decay / distance, background + contour?
+        if G.alt:
+            if isinstance(G.alt, list):
+                G.alt = sum_N_(G.alt,root=G)
+                if val_(G.alt.Et, aw=G.olp, _Et=G.Et, fi=0):  # alt D * G rM
+                    if not G.alt.N_[0].fi: L2N(G.alt.N_)
+                    cross_comp(G.alt.N_, rc,fi=G.alt.N_[0].fi, root=G.alt)  # adds nesting
+        elif G.H:  # not PP, sum dlinks:
+            dL_ = list(set([L for g in G.N_ for L,_ in get_rim(g) if val_(L.Et, aw=G.olp, _Et=G.Et, fi=0) > 0]))
+            if dL_ and val_(np.sum([l.Et for l in dL_],axis=0), aw=10+G.olp, _Et=G.Et, fi=0) > 0:
+                G.alt = sum_N_(dL_,root=G)
+
+def sum_N_(node_, root=None):  # form cluster G
+
+    G = copy_(node_[0], root, init=1)
+    for n in node_[1:]: add_N(G,n)
+    if G.alt: # list
+        G.alt = sum_N_(G.alt)  # internal
+        if val_(G.alt.Et, aw=G.olp, _Et=G.Et, fi=0):
+            cross_comp(G.alt.N_, G.olp+clust_w, root=G.alt)
+    G.olp /= len(node_)
+    for L in G.L_:
+        if L not in G.L_: G.Et += L.Et; G.L_+=[L]
+    # no rim
+    return G
+
+def add_N(N,n, fmerge=0):
+
+    if fmerge:
+        for node in n.N_: node.root=N; N.N_ += [node]
+        N.L_ += n.L_ # no L.root assign
+    else:
+        n.root=N; N.N_ += [n]
+        if n.rim: N.L_ += n.rim.L_ if N.fi else n.rim.N_  # rim else nodet
+    rn = n.Et[2] / N.Et[2]
+    N.Et += n.Et * rn
+    if hasattr(n,'C_') and hasattr(N,'C_'): N.C_ += n.C_; N.et_ += n.et_  # check N to skip frame
+    N.olp = (N.olp + n.olp * rn) / 2  # ave?
+    N.yx = (N.yx + n.yx * rn) / 2
+    N.span = max(N.span,n.span)
+    if np.any(n.box): N.box = extend_box(N.box, n.box)
+    # add norm by rn:
+    if n.H: add_NH(N.H, n.H, root=N)
+    if n.lH: add_NH(N.lH, n.lH, root=N)
+    if n.rim: add_N(N.rim, n.rim)
+    if n.alt: N.alt = add_N(N.alt if N.alt else CN(), n.alt)
+    if n.derH: add_H(N.derH,n.derH, root=N)
+    for Par,par in zip((N.angle, N.baseT, N.derTT), (n.angle, n.baseT, n.derTT)):
+        Par += par * rn
+    return N
+
+def cross_comp1(iN_, rc, root, fi=1):  # rc: redundancy+olp; (cross-comp, exemplar selection, clustering), recursion
+
+    N__,L_,Et = comp_node_(iN_,rc) if fi else comp_link_(iN_,rc)  # CLs if not fi, olp comp_node_(C_)?
+    if N__:
+        Nt, n__, cL_,fC = [],[],[],0
+        for n in {N for N_ in N__ for N in N_}: n__ += [n]; n.sel = 0  # for cluster_N_
+        # mfork:
+        if val_(Et, (len(n__)-1)*Lw, rc+loop_w) > 0:
+            if fi:
+                E_,cL_,eEt, fC = get_exemplars(root, n__, rc+loop_w, fi)  # focal nodes, ~ point cloud
+                if fC:  # E_ = C_, no cluster_N_, or refine exemplars by centroid M?
+                    if cL_: L_ = cL_  # not empty if from cluster_NC_
+                else:
+                    if E_ and val_(eEt, (len(E_)-1)*Lw, rc+clust_w) > 0:
+                        for rng, N_ in enumerate(N__,start=1):  # bottom-up rng incr
+                            rng_E_ = [n for n in N_ if n.sel]; rc+=clust_w*rng  # cluster via exemplars
+                            if rng_E_ and val_(np.sum([n.Et for n in rng_E_], axis=0), (len(rng_E_)-1)*Lw, rc) > 0:
+                                Nt = cluster_N_(rng_E_, rc, fi,rng, _Nt=Nt)  # top G_
+            else:
+                Nt = cluster_N_(n__, rc+clust_w, fi, rng=1, _Nt=Nt)  # cluster L_/ nodet
+            if Nt:
+                if val_(Nt.Et, (len(Nt.N_)-1)*Lw, rc+loop_w, _Et=Et) > 0:
+                    L_ = cross_comp(Nt.N_, rc, root=Nt)  # top Nt agg+
+            elif fC:
+                Nt = sum_N_(E_)  # Nt=Ct, no L_=cL_, Et=eEt?
+        # dfork
+        root.L_ = L_  # links between top Ns | Cs
+        derH = sum_H_([L.derH for L in L_], root)
+        root.angle = np.sum([L.angle for L in L_], axis=0)
+        dval = val_(Et, (len(L_)-1)*Lw, rc+3+loop_w, fi=0)
+        if dval > 0:
+            L_ = L2N(L_)
+            if dval > ave:  # recursive derivation -> lH/nLev, rng-banded?
+                LL_ = cross_comp(L_, rc+loop_w*2, root, fi=0)  # comp_link_, select exemplars, centroids?
+                if LL_: append_dH(derH, sum_H_([L.derH for L in LL_], root))  # ddfork
+            else:  # lower res
+                Lt = cluster_N_(L_, rc+clust_w*2, fi=0, fL=1, root=root)
+                if Lt: root.Et += Lt.Et; root.lH += [Lt] + Lt.H  # link graphs, flatten H if recursive?
+        append_dH(root.derH, derH)
+        if Nt:
+            lev = CN(N_=Nt.N_, Et=Nt.Et)  # N_ is new top H level
+            add_NH(root.H, Nt.H+[lev], root)  # same depth?
+            if Nt.H:  # lower levs: derH,H if recursion
+                root.N_ = Nt.H.pop().N_  # top lev nodes
+            root = Nt # higher composition and derivation, including L_ and lH
+
+    return L_  # may be LL_ or agg+ L_
 
 
