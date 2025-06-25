@@ -382,29 +382,35 @@ def sum_N_(node_, root=None):  # form cluster G
     # no rim
     return G
 
-def add_N(N,n, fmerge=0):
+def add_N(N,n, fmerge=0, fC=0, rev=[]):
 
     if fmerge:
         for node in n.N_: node.root=N; N.N_ += [node]
-        N.L_ += n.L_ # no L.root assign
+        N.L_ += n.L_  # no L.root assign
+    elif fC and n.rim:
+        add_N(N.rim, n.rim)
+    elif rev:  # N=rim, n=link
+        rev,_N = rev
+        N.N_ += [_N]
+        if N.fi: N.L_ += [(n,rev)]  # N.L_ is rim links
+        else:    N.L_[1-rev] += [(n,rev)]  # N.L_ is rimt, opposite to _N,N dir
     else:
         n.root=N; N.N_ += [n]
-        if n.rim: N.L_ += n.rim.L_ if N.fi else n.rim.N_  # rim else nodet
-    rn = n.Et[2] / N.Et[2]
+        if n.rim: N.L_ += n.rim.L_ if N.fi else n.rim.N_  # rim else
+    if n.alt: N.alt += [n.alt]  # always flat?
+    if n.H: add_NH(N.H, n.H, root=N)
+    if n.lH: add_NH(N.lH, n.lH, root=N)
+    rn = n.Et[2]/N.Et[2]
+    if n.derH: add_H(N.derH,n.derH, N, rn)
+    for Par,par in zip((N.angle, N.baseT, N.derTT), (n.angle, n.baseT, n.derTT)):
+        Par += par * rn
     N.Et += n.Et * rn
-    if hasattr(n,'C_') and hasattr(N,'C_'): N.C_ += n.C_; N.et_ += n.et_  # check N to skip frame
     N.olp = (N.olp + n.olp * rn) / 2  # ave?
     N.yx = (N.yx + n.yx * rn) / 2
     N.span = max(N.span,n.span)
-    if np.any(n.box): N.box = extend_box(N.box, n.box)
-    # add norm by rn:
-    if n.H: add_NH(N.H, n.H, root=N)
-    if n.lH: add_NH(N.lH, n.lH, root=N)
-    if n.rim: add_N(N.rim, n.rim)
-    if n.alt: N.alt = add_N(N.alt if N.alt else CN(), n.alt)
-    if n.derH: add_H(N.derH,n.derH, root=N)
-    for Par,par in zip((N.angle, N.baseT, N.derTT), (n.angle, n.baseT, n.derTT)):
-        Par += par * rn
+    N.box = extend_box(N.box, n.box)
+    if hasattr(n,'C_') and hasattr(N,'C_'):
+        N.C_ += n.C_; N.vo_ += n.vo_
     return N
 
 def cross_comp1(iN_, rc, root, fi=1):  # rc: redundancy+olp; (cross-comp, exemplar selection, clustering), recursion
