@@ -40,6 +40,20 @@ def sum2graph(root, node_,link_,llink_,Et,olp, Lay, rng, fi):  # sum node and li
                     alt_ += [mG]
     return graph
 '''
+    else:
+        # add mfork as link.node_(CL).root dfork, 1st layer, higher layers are added in cross_comp
+        for L in link_:  # LL from comp_link_
+            LR_ = set([n.root for n in L.N_ if isinstance(n.root,CN)])  # nodet, skip frame, empty roots
+            if LR_:
+                dfork = sum_H(L.derH)  # combine lL.derH into single CLay
+                for LR in LR_:
+                    LR.Et += dfork.Et; LR.derTT += dfork.derTT  # lay0 += dfork
+                    if LR.derH[-1][1]: LR.derH[-1][1].add_lay(dfork)  # direct root only
+                    else:              LR.derH[-1][1] = dfork.copy_()  # was init by another node
+                    if LR.lH: LR.lH[-1].N_ += [graph]  # last lev
+                    else:     LR.lH += [CN(N_=[graph])]  # init
+
+
             n_ = node_ if fnode_ else link_
             n0 = n_[0]; derH, derTT, baseT, Et, olp = copy_(n0.derH), n0.derTT.copy, n0.baseT.copy, n0.Et.copy, n0.olp
             for n in n_[1:]:
