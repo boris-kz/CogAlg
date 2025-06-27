@@ -74,7 +74,7 @@ class CN(CBase):
         super().__init__()
         n.N_ = kwargs.get('N_',[])  # N_| nrim
         n.L_ = kwargs.get('L_',[])  # L_| rim
-        n.H  = kwargs.get('H', [])  # top-down: nested-node levels, each CN with corresponding L_,et,lH, no H
+        n.H  = kwargs.get('H', [])  # top-down: feedback of summed sub-node levels: CN with single added-layer derH, no H
         n.lH = kwargs.get('lH',[])  # bottom-up: higher link graphs hierarchy, also CN levs
         n.Et    = kwargs.get('Et', np.zeros(3))  # sum from L_ or rims
         n.olp   = kwargs.get('olp',1)  # overlap to other Ns, same for links?
@@ -90,8 +90,8 @@ class CN(CBase):
         n.root= kwargs.get('root',[])  # not in ext_
         n.rim = kwargs.get('rim',[])  # nrim, rim and their attrs, replaces CG
         n.alt = kwargs.get('alt',[])  # adjacent (contour) gap+overlap alt-fork graphs, converted to CG, empty alt.alt_: select+?
+        n.fi  = kwargs.get('fi', 1)  # if G else 0, fd_: list of forks forming G?
         n.fin = kwargs.get('fin',0)  # in cluster, temporary?
-        n.fi  = kwargs.get('fi', 0)  # G else L fd_: list of forks forming G
         # n.fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.N_)
 

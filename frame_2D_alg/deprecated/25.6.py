@@ -475,4 +475,48 @@ def cross_comp1(iN_, rc, root, fi=1):  # rc: redundancy+olp; (cross-comp, exempl
 
     return L_  # may be LL_ or agg+ L_
 
+def comp_H(H,h, rn, root, DerTT=None, ET=None):  # one-fork derH if not fi, else two-fork derH
 
+    derH, derTT, Et = [], np.zeros((2,8)), np.zeros(3)
+    for _lay,lay in zip_longest(H,h):  # different len if lay-selective comp?
+        if _lay and lay:
+            dlay = []
+            for _fork, fork in zip_longest(_lay, lay):  # dfork: xproj in link | xlink in node
+                if _fork and fork:
+                    dfork = _fork.comp_lay(fork, rn, root=root)
+                    if dfork: dlay += [dfork]; derTT = dfork.derTT; Et += dfork.Et
+                else: dlay += [[]]
+            derH += [dlay]
+    if Et[2]: DerTT += derTT; ET += Et
+    return derH
+
+def add_H(H, h, root, rev=0, rn=1):  # add fork derHs
+
+    for Lay, lay in zip_longest(H,h):  # different len if lay-selective comp
+        if lay:
+            if Lay:
+                for F, f in zip_longest(Lay, lay):
+                    if f:
+                        if F: F.add_lay(f)
+                        else: Lay[1] = f.copy_(rev)  # default mfork
+            else:
+                H += [[f.copy_(rev) if f else [] for f in lay]]
+            for fork in lay:
+                if fork: root.derTT += fork.derTT*rn; root.Et += fork.Et*rn
+    return H
+
+def sum_H_(Q, Lay=CLay()):  # sum derH in link_|node_
+    for derH in Q:
+        for lay in derH: Lay.add_lay(lay)  # merge in dfork?
+    return Lay
+
+def append_dH(H, dH):  # merged mfork += [merged dfork], keep nesting
+
+    for lay, dlay in zip_longest(H,dH):  # different len if lay-selective comp
+        if dlay:
+            if dlay[1]: dlay[0].add_lay(dlay[1]); dlay[1] = []
+        if lay:
+            if lay[1]: lay[0].add_lay(lay[1])
+            if dlay:   lay[1] = dlay[0].copy_()
+        elif dlay:     H += [dlay]
+    return H
