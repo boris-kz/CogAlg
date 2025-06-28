@@ -128,7 +128,7 @@ def vect_root(Fg, rV=1, ww_t=[]):  # init for agg+:
         w_t = np.multiply([[wM,wD,wN,wO,wI,wG,wA,wL]], ww_t)  # or dw_ ~= w_/ 2?
         ww_t = np.delete(ww_t,(2,3), axis=1)  #-> comp_slice, = np.array([(*ww_t[0][:2],*ww_t[0][4:]),(*ww_t[0][:2],*ww_t[1][4:])])
     blob_ = unpack_blob_(Fg)
-    Fg.N_,Fg.L_ = [],[]; lev = CN(); derlay = [CLay(root=Fg),CLay(root=Fg)]
+    Fg.N_,Fg.L_ = [],[]; lev = CN(); derlay = CLay(root=Fg),CLay(root=Fg)
     for blob in blob_:
         if not blob.sign and blob.G > aveB:
             edge = slice_edge(blob, rV)
@@ -187,7 +187,7 @@ def cluster_edge(edge, frame, lev, derlay):  # non-recursive comp_PPm, comp_PPd,
             else:  frame.N_ += PP_ # PPm_
         lev.L_+= L_; lev.Et = mEt+dEt  # links between PPms
         for l in L_:
-            derlay[0].add_lay(l.derH[0][0]); frame.baseT+=l.baseT; frame.derTT+=l.derTT; frame.Et += l.Et
+            derlay.add_lay(l.derH[0]); frame.baseT+=l.baseT; frame.derTT+=l.derTT; frame.Et += l.Et
         if val_(dEt, (len(L_)-1)*Lw, 2+clust_w, fi=0) > 0:
             Lt = cluster_N_(L2N(L_), rc=2, fi=0)
             if Lt:  # L_ graphs
@@ -212,56 +212,50 @@ def val_(Et, mw=1, aw=1, _Et=np.zeros(3), fi=1):  # m,d eval per cluster or cros
 Core process per agg level, as described in top docstring:
 Cross-compare nodes, evaluate incremental-derivation cross-comp of new >ave difference links, recursively.
  
-Select sparse exemplars of strong node types, may covert to centroids, refined & extended by mutual match.
+Select sparse exemplars of strong node types, may covert to sub-centroids, refined & extended by mutual match.
+(sub-centroids are more selective than divisive clustering)
 Connectivity-cluster exemplars or centroids by >ave match links, correlation-cluster links by >ave difference.
 
 Form complemented clusters (core+contour) for recursive higher-composition cross_comp, reorder by eigenvalues. 
-Feedback coords to bottom level or prior-level in parallel pipelines, filter updates in more coarse cycles.
-
-surprise: comp projected node ders x external link ders, conflict: cross-node comp proj -> feedback 
-sub-centroids instead of divisive clustering? '''
+Feedback coords to bottom level or prior-level in parallel pipelines, filter updates in more coarse cycles. 
+'''
 
 def cross_comp(root, rc, fi=1):  # rc: redundancy+olp; (cross-comp, exemplar selection, clustering), recursion
 
     N__,L_,Et = comp_node_(root.N_,rc) if fi else comp_link_(root.N_,rc)
     if N__:
-        Lt, NT,Nt = [], [],[]
-        dval = val_(Et, (len(L_)-1)*Lw, rc+loop_w, fi=0)  # dfork xcomp:
+        dval = val_(Et, (len(L_)-1)*Lw, rc+loop_w, fi=0)
         if dval > 0:
-            Lt = sum_N_(L2N(L_))  # root.H extend, not replace
-            if dval > ave:
-                LT = cross_comp(Lt, rc+clust_w, fi=0)  # -> Lt.H, +2 layers / clustering
-            else:  # lower-res
-                LT = cluster_N_(L_, rc+clust_w, fi=0, rng=1)  # cluster L_/ nodet, +1 der layer
-            Lt = LT or Lt
-        # m cluster -> mm,md xcomp:
+            root.L_= L_; root.Et += Et  # agg+ L_
+            if dval>ave: Lt = cross_comp(CN(N_=L2N(L_)), rc+clust_w, fi=0)  # -> Lt.H, +2 der layers
+            else:        Lt = cluster_N_(L_, rc+clust_w, fi=0, rng=1)  # low-res cluster / nodet, +1 der layer
+            if Lt:       root.lH += Lt.H; root.Et += Lt.Et; root.derH += Lt.derH  # append new lays
+        # m cluster, mm,md xcomp
         if fi: n__ = {N for N_ in N__ for N in N_}
         else:  n__ = N__; N__ = [N__]
         for n in n__: n.sel=0
         if val_(Et, (len(n__)-1)*Lw, rc+loop_w) > 0:  # L_ mEt
-            E_, eEt = get_exemplars(root, n__, rc+loop_w, fi=1)  # point cloud of focal nodes
-            if isinstance(E_,CN):
-                NT = E_  # Ct from cluster_C_)_NC_
-            elif E_ and val_(eEt, (len(E_)-1)*Lw, rc+clust_w) > 0:
-                for rng, N_ in enumerate(N__, start=1):  # bottom-up rng incr
-                    rng_E_ = [n for n in N_ if n.sel]    # cluster via exemplars
-                    if rng_E_ and val_(np.sum([n.Et for n in rng_E_], axis=0), (len(rng_E_)-1)*Lw, rc) > 0:
-                        Nt = cluster_N_(rng_E_, rc, 1, rng)  # top-rng G_
-                if Nt:
-                    if val_(Nt.Et, (len(Nt.N_)-1)*Lw, rc+loop_w, _Et=Et) > 0:
-                        NT = cross_comp(Nt, rc+clust_w*rng)  # agg+
-            Nt = NT or Nt
-        if Lt or Nt:
-           feedback(root, Lt,Nt)  # add two-fork H level?
-    return root  # higher feedback?
-
-# draft, unpack?
-def feedback(root, Lt, Nt):
-    # if Lt: root.lH += [Lt]+Lt.H
-    # root.angle = np.sum([L.angle for L in Nt.L_], axis=0)
-    # add_H(root.derH, sum_H_([L.derH for L in Nt.L_]), root)  # *rn?
-    root.Et += Nt.Et
-    root.H += [[Lt,Nt]]  # derH = top derLay only?
+            NT, Nt, rng = [],[], 1
+            if fi:  # else explore all links
+                E_, eEt = get_exemplars(root, n__, rc+loop_w)  # point cloud of focal nodes
+                if isinstance(E_,CN):
+                    NT = E_  # Ct from cluster_C_)_NC_
+                elif E_ and val_(eEt, (len(E_)-1)*Lw, rc+clust_w) > 0:
+                    for rng, N_ in enumerate(N__, start=1):  # bottom-up rng incr
+                        rng_E_ = [n for n in N_ if n.sel]    # cluster via exemplars
+                        if rng_E_ and val_(np.sum([n.Et for n in rng_E_], axis=0), (len(rng_E_)-1)*Lw, rc) > 0:
+                            Nt = cluster_N_(rng_E_, rc, 1, rng)  # top-rng G_
+            else: Nt = cluster_N_(n__, rc, 0)
+            if Nt:
+                if val_(Nt.Et, (len(Nt.N_)-1)*Lw, rc+loop_w, _Et=Et) > 0:
+                    NT = cross_comp(Nt, rc+clust_w*rng)
+                    # agg recursion
+            if (Nt := NT or Nt):
+                _H = root.H; root.H = []
+                Nt.H = _H + [root] + Nt.H  # pack root in Nt.H, has own L_,lH
+                root = Nt
+    # recursive feedback:
+    return root
 
 def comp_node_(_N_, rc):  # rng+ forms layer of rim and extH per N?
 
@@ -404,9 +398,9 @@ def comp_N(_N,N, ave, angle=None, span=None, dir=1, fdeep=0, fproj=0, rng=1):  #
     # contour:
     if fi and (_N.alt and N.alt) and val_(_N.alt.Et+N.alt.Et, aw=2+o, fi=0) > 0:  # eval Ds
         Link.altL = comp_N(L2N(_N.alt), L2N(N.alt), ave*2, angle,span); Et += Link.altL.Et
-    # derH, proj derH:
+    # comp derH:
     if fdeep and (val_(Et, len(N.derH)-2, o) > 0 or fi==0):  # else derH is dext,vert
-        ddH = comp_H(_N.derH, N.derH, rn, Link, derTT, Et)  # comp same lays, add dlay = []
+        ddH = comp_H(_N.derH, N.derH, rn, Link, derTT, Et)
         if fproj and val_(Et, len(ddH)-2, o) > 0:
             M,D,_ = Et; dec = M / (M+D)  # final Et
             comp_prj_dH(_N,N, ddH, rn, Link, angle, span, dec)  # surprise = comp combined-N prj_dH to actual ddH
@@ -422,7 +416,7 @@ def comp_N(_N,N, ave, angle=None, span=None, dir=1, fdeep=0, fproj=0, rng=1):  #
 
     return Link
 
-def get_exemplars(root, iN_, rc, fi):  # get sparse nodes by multi-layer non-maximum suppression
+def get_exemplars(root, iN_, rc):  # get sparse nodes by multi-layer non-maximum suppression
 
     def nolp(N, inhib_): # inhibition zone
         olp_ = [L for L, _ in N.rim.L_ if [n for n in L.N_ if n in inhib_]]  # += in max dist?
@@ -444,7 +438,7 @@ def get_exemplars(root, iN_, rc, fi):  # get sparse nodes by multi-layer non-max
             break  # the rest of N_ is weaker
     V = val_(Et, (len(N_)-1)*Lw, rc+clust_w)
     if V > 0:
-        if fi and V > ave*clust_w:  # replace exemplars with centroids if high match: low decay, else no divisive clustering?
+        if V > ave*clust_w:  # replace exemplars with centroids if high match: low decay, else no divisive clustering?
             for n in root.N_: n.C_,n.vo_, n._C_,n._vo_ = [],[],[],[]
             Ct = cluster_C_(root, N_, rc+clust_w)  # sub-cluster by rim + group similarity, no groups before
             if Ct: N_ = Ct; Et = Ct.Et
@@ -613,8 +607,8 @@ def sum2graph(root, node_,link_,llink_, Et, olp, rng, fC=0):  # sum node and lin
     graph.angle = np.sum([l.angle for l in link_],axis=0)
     graph.yx = yx
     if node_[0].fi:
-        alt_ = list(set([L.root for L in link_]))  # individual rims are too weak for contour
-        if alt_: graph.alt = sum_N_(alt_)
+        alt_ = [L.root for L in link_ if L.root]
+        if alt_: graph.alt = sum_N_(list(set(alt_)))  # individual rims are too weak for contour
     if fC:
         m_,M = centroid_M(graph.derTT[0],ave*olp)  # weigh by match to mean m|d
         d_,D = centroid_M(graph.derTT[1],ave*olp)
@@ -651,7 +645,7 @@ def comp_H(H,h, rn, root, DerTT=None, ET=None):  # one-fork derH
     if Et[2]: DerTT += derTT; ET += Et
     return derH
 
-def sum_H_(Q):  # sum derH in link_|node_
+def sum_H_(Q):  # sum derH in link_|node_, not used
     H = Q[0]; [add_H(H,h) for h in Q[1:]]
     return H
 
@@ -726,7 +720,7 @@ def PP2N(PP, frame):
     baseT = np.array(latuple[:4])
     [mM,mD,mI,mG,mA,mL], [dM,dD,dI,dG,dA,dL] = vert  # re-pack in derTT:
     derTT = np.array([[mM,mD,mL,1,mI,mG,mA,mL], [dM,dD,dL,1,dI,dG,dA,dL]])
-    derH = [[CLay(node_=P_, link_=link_, derTT=deepcopy(derTT)), CLay()]]  # empty dfork
+    derH = [CLay(node_=P_, link_=link_, derTT=deepcopy(derTT))]
     y,x,Y,X = box; dy,dx = Y-y,X-x  # A = (dy,dx); L = np.hypot(dy,dx), rolp = 1
     et = np.array([*np.sum([L.Et for L in link_],axis=0), 1]) if link_ else np.array([.0,.0,1.])  # n=1
 
@@ -809,7 +803,7 @@ def project_N_(Fg, yx):
     if val_(ET, mw=len(N_)*Lw, aw=clust_w):
         return CN(N_=N_,L_=Fg.L_,Et=ET, derTT=DerTT)  # proj Fg, add Prj_H?
 
-def feedback(root):  # adjust weights: all aves *= rV, ultimately differential backprop per ave?
+def ffeedback(root):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
 
     rv_t = np.ones((2,8))  # sum derTT coefs: m_,d_ [M,D,n,o, I,G,A,L] / Et, baseT, dimension
     rM, rD, rVd = 1, 1, 0
@@ -825,7 +819,7 @@ def feedback(root):  # adjust weights: all aves *= rV, ultimately differential b
         rv_t += np.abs((_derTT / _n) / (derTT / n))
         if Lt.lH:  # ddfork only, not recursive?
             # intra-level recursion in dfork
-            rVd, rv_td = feedback(Lt)
+            rVd, rv_td = ffeedback(Lt)
             rv_t = rv_t + rv_td
 
     return rM+rD+rVd, rv_t
@@ -879,16 +873,16 @@ def agg_frame(floc, image, iY, iX, rV=1, rv_t=[], fproj=0):  # search foci withi
         if floc:
             Fg = frame_blobs_root( win__[:,:,:,y,x], rV)  # [dert, iY, iX, nY, nX]
             Fg = vect_root(Fg, rV, rv_t)  # focal dert__ clustering
-            cross_comp(Fg, rc=frame.olp)
+            Fg = cross_comp(Fg, rc=frame.olp)
         else:
             Fg = agg_frame(1, win__[:,:,:,y,x], wY,wX, rV=1, rv_t=[])  # use global wY,wX in nested call
             if Fg and Fg.L_:  # only after cross_comp(PP_)
-                rV, rv_t = feedback(Fg)  # adjust filters
+                rV, rv_t = ffeedback(Fg)  # adjust filters
         if Fg and Fg.L_:
             if fproj and val_(Fg.Et, mw=(len(Fg.N_)-1)*Lw, aw=Fg.olp+loop_w*20):
                 pFg = project_N_(Fg, np.array([y,x]))
                 if pFg:
-                    cross_comp(pFg, rc=Fg.olp)  # skip compared_ in FG cross_comp
+                    pFg = cross_comp(pFg, rc=Fg.olp)  # skip compared_ in FG cross_comp
                     if val_(pFg.Et, mw=(len(pFg.N_)-1)*Lw, aw=pFg.olp+clust_w*20):
                         project_focus(PV__, y,x, Fg)  # += proj val in PV__
             # no target proj
@@ -897,7 +891,7 @@ def agg_frame(floc, image, iY, iX, rV=1, rv_t=[], fproj=0):  # search foci withi
 
     if frame.N_ and val_(frame.Et, mw=(len(frame.N_)-1)*Lw, aw=frame.olp+loop_w*20) > 0:
         # xcomp Fg.N_s:
-        cross_comp(frame, rc=frame.olp+loop_w)  # recursive
+        frame = cross_comp(frame, rc=frame.olp+loop_w)  # recursive
         if not floc: return frame  # foci are not preserved
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
