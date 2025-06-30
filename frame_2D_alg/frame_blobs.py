@@ -74,10 +74,10 @@ class CN(CBase):
         super().__init__()
         n.N_ = kwargs.get('N_',[])  # N_| nrim
         n.L_ = kwargs.get('L_',[])  # L_| rim
-        n.H  = kwargs.get('H', [])  # top-down: feedback of summed sub-node levels: CN with single added-layer derH, no H
+        n.nH = kwargs.get('nH',[])  # top-down: feedback of summed sub-node levels: CN with single added-layer derH, no H
         n.lH = kwargs.get('lH',[])  # bottom-up: higher link graphs hierarchy, also CN levs
-        n.Et    = kwargs.get('Et', np.zeros(3))  # sum from L_ or rims
-        n.olp   = kwargs.get('olp',1)  # overlap to other Ns, same for links?
+        n.Et = kwargs.get('Et', np.zeros(3))  # sum from L_ or rims
+        n.olp = kwargs.get('olp',1)  # overlap to other Ns, same for links?
         n.derH  = kwargs.get('derH',[])  # sum from L_ or rims
         n.derTT = kwargs.get('derTT',np.zeros((2,8)))  # sum from derH
         n.baseT = kwargs.get('baseT',np.zeros(4))
