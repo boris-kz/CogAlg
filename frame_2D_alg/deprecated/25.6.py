@@ -520,3 +520,52 @@ def append_dH(H, dH):  # merged mfork += [merged dfork], keep nesting
             if dlay:   lay[1] = dlay[0].copy_()
         elif dlay:     H += [dlay]
     return H
+
+def cluster_C_(root, E_, rc):  # form centroids from exemplar _N_, drifting / competing via rims of new member nodes
+
+    def comp_C(C, n):
+        _,et,_ = base_comp(C, n)
+        if C.rim and n.rim: _,_et,_= base_comp(C.rim,n.rim); et +=_et
+        if C.alt and n.alt: _,_et,_= base_comp(C.alt,n.alt); et +=_et
+        return et
+    _C_ = []
+    for E in E_:
+        Et = E.rim.Et; C = copy_(E,root); C.N_=[E]; C.L_=[]; C.Et=Et  # init centroid, reset some other attrs?
+        C._N_ = list({_n for n in E.rim.N_ for _n in n.rim.N_})  # core members + surround for comp to N_ mean
+        _C_ += [C]
+    while True:
+        C_, ET, Olp, Dvo = [],np.zeros(3),0,np.zeros(2)  # per _C_
+        for _C in sorted(_C_, key=lambda n: n.rim.Et[0]/n.rim.Et[2], reverse=True):
+            # olp via _N_ of higher prior-loop vals?
+            if val_(_C.Et, (len(_C._N_)-1)*Lw, clust_w+rc) > 0:
+                # get mean cluster:
+                C = sum_N_(_C.N_, root=root, fC=1)  # merge rim,alt before cluster_NC_
+                _N_,_N__, Et,O,dvo = [],[], np.zeros(3),0,np.zeros(2)  # per C
+                for n in _C._N_:  # core + surround
+                    if C in n.C_: continue
+                    et = comp_C(C,n); v = val_(et,aw=rc)
+                    if v > 0:
+                        olp = np.sum([vo[0] / v for vo in n.vo_ if vo[0] > v])  # olp: rel n val in stronger Cs, not summed with C
+                        vo = np.array([v,olp]); O += olp  # current Cs overlap: norm by n+o
+                        if v > ave * olp:
+                            n.C_ += [C]; n.vo_ += [vo]; Et += et; _N_ += [n]; _N__ += n.rim.N_
+                        if C not in n._C_: dvo += vo
+                    elif C in n._C_:
+                        dvo += n._vo_[n._C_.index(C)]  # old vo_
+                Dvo += dvo  # new incl or excl
+                C.Et = Et; C.olp = O; C.N_ = list(set(_N_)); C._N_ = list(set(_N__))  # select core, surround
+                if val_(C.Et, aw=clust_w+rc+ C.olp) > 0:
+                    C_ += [C]; ET += Et; Olp += O
+            else: break  # expensive
+        if np.sum(Dvo) > ave * loop_w+clust_w:  # both V and O represent change, comeasurable?
+            _C_ = C_
+            for n in root.N_:
+                n._C_ = n.C_; n._vo_= n.vo_; n.C_,n.vo_ = [],[]  # new n.C_s
+        else: break
+        # converged, also break if low ET: no expansion?
+    V = val_(ET, aw=rc+loop_w + Olp)  # C_ value
+    if V > 0:
+        Nt = sum_N_(E_)
+        if V * ((len(C_)-1)*Lw) > ave*clust_w:
+            Nt = cluster_NC_(C_, rc+clust_w, Nt)
+        return Nt
