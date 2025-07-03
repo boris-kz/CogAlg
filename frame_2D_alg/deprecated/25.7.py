@@ -36,3 +36,42 @@ def norm_(n, L):  # not needed, comp is normalized anyway?
     for lay in n.derH:
         lay.derTT /= L; lay.Et /= L
 
+def cross_comp(root, rc, fi=1):  # cross-comp, clustering, recursion
+
+    N__,L_,Et = comp_node_(root.N_,rc) if fi else comp_link_(root.N_,rc)  # rc: redundancy+olp
+    if N__:
+        mV,dV = val_(Et, (len(L_)-1)*Lw, rc+loop_w, fi=2)
+        if dV > 0:    # dfork is still G-external but nodet-mediated?
+            if root.L_: root.lH += [sum_N_(root.L_)]  # replace L_ with agg+ L_:
+            root.L_=L_; root.Et += Et
+            if dV >avd: Lt = cross_comp(CN(N_=L2N(L_)), rc+clust_w, fi=0)  # -> Lt.nH, +2 der layers
+            else:       Lt = cluster_N_(L_, rc+clust_w, fi=0, fL=1)  # low-res cluster / nodet, +1 layer
+            if Lt:      root.lH += [Lt] + Lt.nH; root.Et += Lt.Et; root.derH += Lt.derH  # append new der lays
+        # m cluster, mm,md xcomp
+        if fi: n__ = {N for N_ in N__ for N in N_}
+        else:  n__ = N__; N__ = [N__]
+        for n in n__: n.sel=0
+        if mV > 0:
+            Ct,Nt, rng = [],[], 1
+            if fi:
+                E_, eEt = get_exemplars(root, n__, rc+loop_w)  # point cloud of focal nodes
+                if isinstance(E_,CN):
+                    Ct = E_  # from cluster_C_) _NC_, C-internal
+                elif E_ and val_(eEt, (len(E_)-1)*Lw, rc+clust_w) > 0:
+                    for rng, N_ in enumerate(N__, start=1):  # bottom-up rng incr
+                        rE_ = [n for n in N_ if n.sel]       # cluster via rng exemplars
+                        if rE_ and val_(np.sum([n.Et for n in rE_], axis=0), (len(rE_)-1)*Lw, rc) > 0:
+                            Nt = cluster_N_(rE_,rc,1,rng) or Nt  # keep top-rng Gt
+            else:  # trace all arg links via llinks
+                Nt = cluster_N_(n__, rc,0)
+            if Nt:
+                if val_(Nt.Et, (len(Nt.N_)-1)*Lw, rc+loop_w, _Et=Et) > 0:
+                    Nt = cross_comp(Nt, rc+clust_w*rng) or Nt
+                    # agg+
+            if Nt := Ct or Nt:
+                _H = root.nH; root.nH = []
+                Nt.nH = _H + [root] + Nt.nH  # pack root in Nt.nH, has own L_,lH
+                # recursive feedback:
+                return Nt
+
+
