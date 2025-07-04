@@ -74,4 +74,16 @@ def cross_comp(root, rc, fi=1):  # cross-comp, clustering, recursion
                 # recursive feedback:
                 return Nt
 
+def get_rim(N):  # test N.rim.N_ fi for further nodet forking?
+    return N.rim.L_ if N.fi else N.rim.L_[0] + N.rim.L_[1]
+
+def lolp(N, L_, fR=0):  # relative N.rim or R.link_ olp eval for clustering
+    oL_ = [L for L in (N.L_ if fR else [l for l,_ in flatten(N.rim.L_)]) if L in L_]
+    if oL_:
+        oEt = np.sum([l.Et for l in oL_], axis=0)
+        _Et = N.Et if fR else N.rim.Et
+        rM  = (oEt[0]/oEt[2]) / (_Et[0]/_Et[2])
+        return val_(_Et * rM, contw)
+    else: return 0
+
 
