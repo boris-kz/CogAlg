@@ -86,4 +86,96 @@ def lolp(N, L_, fR=0):  # relative N.rim or R.link_ olp eval for clustering
         return val_(_Et * rM, contw)
     else: return 0
 
+def cluster(root, N_, rc, fi):
+    Nf_ = list(set([N for n_ in N_ for N in n_])) if fi else N_
 
+    E_, Et = get_exemplars(root, Nf_, rc, fi)
+    if val_(Et, (len(E_)-1)*Lw, rc+centw) > 0:  # replace exemplars with centroids
+        for n in root.N_: n.C_, n.vo_, n._C_, n._vo_ = [], [], [], []
+        Ct = cluster_C_(root, E_, rc+centw, fi)
+        if Ct:
+            return Ct
+        elif val_(Et, (len(E_)-1)*Lw, rc+contw, fi=fi) > 0:
+            for n in Nf_: n.sel=0
+            if fi:
+                Nt = []  # rng-banded clustering:
+                for rng, rN_ in enumerate(N_, start=1):  # bottom-up rng incr
+                    rE_ = [n for n in rN_ if n.sel]      # cluster via rng exemplars
+                    if rE_ and val_(np.sum([n.Et for n in rE_], axis=0), (len(rE_)-1)*Lw, rc) > 0:
+                        Nt = cluster_N_(root, rE_,rc,rng) or Nt  # keep top-rng Gt
+            else:
+                Nt = cluster_L_(root, N_, E_, rc)
+            return Nt
+
+def C_merge(N,_N, root, rc, fi):  # eval _N.c_ merge in N.c_, may overlap
+    '''
+    N is incomplete connectivity cluster with sub-centroids N.c_: internally coherent sub-clusters of c.N_, each a subset of N.N_.
+    '''
+    ln = len(N.c_)
+    if ln:
+        for c in N.c_:
+            if _N.c_:
+                for _c in _N.c_:  # all unique
+                    dy, dx = np.subtract(_N.yx, N.yx)
+                    link = comp_N(_c,c, ave, angle=np.array([dy,dx]),span=np.hypot(dy,dx))
+                    if val_(link.Et, aw=rc+contw) > 0:
+                        _c.N_ += c.N_; _c.Et += c.Et  # no overlap?
+                    # else Ns are different but may be connected?
+            if len(c.N_) / ln > arn:
+                C_form(_N, root, rc, fi)  # for N.C only, also merging N, multiple: N.c_?
+
+# draft
+def C_form(_C, root, rc, fi=0):
+
+    C = sum_N_(_C.N_, root=root, fC=1)  # merge rim,alt before cluster_NC_
+    N_,_N__,o,Et,dvo = [],[],0, np.zeros(3),np.zeros(2)  # per C
+    for n in _C._N_:  # core + surround
+        if C in n.C_: continue  # clear/ loop?
+        et = comp_C(C,n); v = val_(et,aw=rc,fi=fi)
+        olp = np.sum([vo[0] / v for vo in n.vo_ if vo[0] > v])  # olp: rel n val in stronger Cs, not summed with C
+        vo = np.array([v,olp])  # val, overlap per current root C
+        if et[1-fi]/et[2] > ave*olp:
+            n.C_ += [C]; n.vo_ += [vo]; Et += et; o+=olp  # _N_ += [n]?
+            _N__ += flat(n.rim.N_ if fi else n.rim.L_)
+            if C not in n._C_: dvo += vo
+        elif C in n._C_:
+            dvo += n._vo_[n._C_.index(C)]  # old vo_, or pack in _C_?
+
+def cluster_NC_(_C_, rc):  # cluster centroids if pairwise Et + overlap Et
+
+    C_,L_ = [],[]; Et = np.zeros(3)
+    # form links:
+    for _C,C in combinations(_C_,2):
+        oN_ = list(set(C.N_) & set(_C.N_))  # exclude from comp?
+        dy,dx = np.subtract(_C.yx,C.yx)
+        link = comp_N(_C, C, ave, angle=np.array([dy,dx]), span=np.hypot(dy,dx))
+        if val_(link.Et, aw=rc+contw) > 0:
+            _C.N_ += C.N_  # refine _C if len(C.N_) / len(_C.N_) > ave?
+            continue  # else Cs are different but may be connected:
+        oV = val_(np.sum([n.Et for n in oN_],axis=0), rc)  # use rolp?
+        _V = min(val_(C.Et, rc), val_(_C.Et, rc), 1e-7)
+        link.Et[:2] *= intw
+        link.Et[0] += oV/_V - arn  # or separate connect | centroid eval, re-centering?
+        if val_(link.Et, rc) > 0:
+            C_ += [_C,C]; L_+= [link]; Et += link.Et
+    C_ = list(set(C_))
+    if val_(Et, (len(C_)-1)*Lw, rc) > 0:
+        G_ = []
+        for C in C_:
+            if C.fin: continue
+            G = copy_(C, init=1); C.fin = 1
+            for _C, Lt in zip(C.rim.N_,C.rim.L_):
+                G.L_+= [Lt[0]]
+                if _C.fin and _C.root is not G:
+                    add_N(G,_C.root, fmerge=1)
+                else: add_N(G,_C); _C.fin=1
+            G_ += [G]
+        Gt = sum_N_(G_); Gt.L_ = L_
+        if val_(Et, (len(G_)-1)*Lw, rc+1) > 0:  # new len G_, aw
+            Gt = cluster_NC_(G_, rc+1) or Gt  # agg recursion, also return top L_?
+        return Gt
+'''
+    if V > 0:
+        Nt = sum_N_(E_)
+        if V * ((len(C_)-1)*Lw) > av*contw: Nt = cluster_NC_(C_, O+rc+contw) or Nt
+'''
