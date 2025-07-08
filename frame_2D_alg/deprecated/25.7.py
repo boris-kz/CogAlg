@@ -179,3 +179,88 @@ def cluster_NC_(_C_, rc):  # cluster centroids if pairwise Et + overlap Et
         Nt = sum_N_(E_)
         if V * ((len(C_)-1)*Lw) > av*contw: Nt = cluster_NC_(C_, O+rc+contw) or Nt
 '''
+def cluster_N_(root, E_, rc, rng=1):  # connectivity cluster exemplar nodes via rim or links via nodet or rimt
+
+    G_ = []  # flood-fill Gs, exclusive per fork,ave, only centroid-based can be fuzzy
+    for n in root.N_: n.fin = 0
+    for N in E_:
+        if N.fin: continue
+        # init N cluster with rim | root:
+        if rng==1 or N.root.rng==1: # N is not rng-nested
+            node_,link_,llink_,Et, olp = [N],[],[], N.Et+N.rim.Et, N.olp
+            for l,_ in flat(N.rim.L_):  # +ve
+                if l.rng==rng and val_(l.Et,aw=rc+contw)>0: link_ += [l]
+                elif l.rng>rng: llink_ += [l]  # longer-rng rim
+        else:
+            n = N; R = n.root  # N.rng=1, R.rng > 1, cluster top-rng roots instead
+            while R.root and R.root.rng > n.rng: n = R; R = R.root
+            if R.fin: continue
+            node_,link_,llink_,Et, olp = [R],R.L_,R.hL_,copy(R.Et),R.olp
+            R.fin = 1
+        nrc = rc+olp; N.fin = 1  # extend N cluster:
+        for L in link_[:]:  # cluster nodes via links
+            for _N in L.N_:
+                if _N not in root.N_ or _N.fin: continue  # connectivity clusters don't overlap
+                if rng==1 or _N.root.rng==1:  # not rng-nested
+                    if rolp(N, [l for l,_ in flat(N.rim.L_)], fi=1) > ave*nrc:
+                        node_ +=[_N]; Et += _N.Et+_N.rim.Et; olp+=_N.olp; _N.fin=1
+                        for l,_ in flat(N.rim.L_):
+                            if l not in link_ and l.rng == rng: link_ += [l]
+                            elif l not in llink_ and l.rng>rng: llink_+= [l]  # longer-rng rim
+                else:
+                    _n =_N; _R=_n.root  # _N.rng=1, _R.rng > 1, cluster top-rng roots if rim intersect:
+                    while _R.root and _R.root.rng > _n.rng: _n=_R; _R=_R.root
+                    if not _R.fin and rolp(N,link_,fi=1, R=1) > ave*nrc:
+                        # cluster by N_|L_ connectivity: oN_ = list(set(N.N_) & set(_N.N_))  # exclude from comp and merge?
+                        link_ = list(set(link_+_R.link_)); llink_ = list(set(llink_+_R.hL_))
+                        node_+= [_R]; Et +=_R.Et; olp += _R.olp; _R.fin = 1; _N.fin = 1
+                nrc = rc+olp
+        node_ = list(set(node_))
+        alt = [L.root for L in link_ if L.root]  # get link clusters, individual rims are too weak for contour
+        if alt:
+            alt = sum_N_(list(set(alt)))
+            if val_(alt.Et, (len(alt.N_)-1)*Lw, olp, _Et=Et, fi=0):
+                alt = cross_comp(alt, olp) or alt
+            _Et = alt.Et
+        else: _Et = np.zeros(3)
+        V = val_(Et, (len(node_)-1)*Lw, nrc, _Et)
+        if V > 0:
+            if V > ave*centw: Ct = cluster_C_(root, node_, rc+centw)  # form N.c_, doesn't affect clustering?
+            else:             Ct = []   # option to keep as list, same for alt and rim?
+            G_ += [sum2graph(root, node_, link_, llink_, Et, olp, rng, Ct, alt)]
+        if G_:
+            return sum_N_(G_, root)   # root N_|L_ replacement
+
+def cluster_L_(root, N_, E_, rc):  # connectivity cluster links from exemplar node.rims
+
+    G_ = []  # cluster by exemplar rim overlap
+    fi = not E_[0].rim  # empty in base L_
+    for n in N_: n.fin = 0
+    for E in E_:
+        if E.fin: continue
+        node_,Et, olp = [E], E.rim.Et, E.olp
+        link_ = [l for l,_ in flat(E.rim.L_) if l.Et[1] > avd*l.Et[2]*rc]  # L val is always diff?
+        nrc = rc+olp; E.fin = 1  # extend N cluster:
+        if fi:  # cluster Ls by L diff
+            for _N in E.rim.N_:  # links here
+                if _N.fin: continue
+                _N.fin = 1
+                for n in _N.N_:  # L.nodet
+                    for L,_ in flat(n.rim.L_):
+                        if L not in node_ and _N.Et[1] > avd * _N.Et[2] * nrc:  # diff
+                            link_+= [_N]; node_+= [L]; Et += L.Et; olp+= L.olp  # /= len node_
+        else:  # cluster Ls by rimt match
+            for L in link_[:]: # snapshot
+                for _N in L.N_:
+                    if _N in N_ and not _N.fin and rolp(E, [l for l,_ in flat(_N.rim.L_)], fi=0) > ave * nrc:
+                        node_ +=[_N]; Et += _N.Et+_N.rim.Et; olp+=_N.olp; _N.fin=1
+                        for l,_ in flat(_N.rim.L_):
+                            if l not in link_: link_ += [l]
+        node_ = list(set(node_))
+        V = val_(Et, (len(node_)-1)*Lw, rc+olp, _Et=root.Et, fi=fi)
+        if V > 0:
+            if V > ave*centw: Ct = cluster_C_(root, node_, rc+centw)  # form N.c_, doesn't affect clustering?
+            else:             Ct = []   # option to keep as list, same for alt and rim?
+            G_ += [sum2graph(root, node_, link_,[], Et, olp, 1, Ct)]
+        if G_:
+            return sum_N_(G_,root)
