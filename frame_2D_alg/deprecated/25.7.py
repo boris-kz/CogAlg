@@ -21,8 +21,9 @@ def comp_N(_N,N, ave, angle=None, span=None, dir=1, fdeep=0, fproj=0, rng=1):  #
     if Et[0] > ave * Et[2]:
         for rev, node, _node in zip((0,1),(N,_N),(_N,N)):  # reverse Link dir in _N.rimt
             # simplified sum_N_:
-            if fi: node.rim.L_ += [(Link,rev)]
-            else:  node.rim.L_[1-rev] += [(Link,rev)]  # rimt opposite to _N,N dir
+            if fi: node.rim.L_ += [(Link,rev)]; node.rim.N_ += [_node]
+            else:  node.rim.L_[1-rev] += [(Link,rev)]; node.rim.N_[1-rev] += [_node]
+            # add to rimt opposite to _N,N dir
             node.rim.Et += Et; node.rim.N_ += [_node]; node.rim.baseT += baseT
             node.rim.derTT += derTT  # simplified add_H(node.rim.derH, Link.derH, root=node, rev=rev)?
 
@@ -181,12 +182,12 @@ def cluster_NC_(_C_, rc):  # cluster centroids if pairwise Et + overlap Et
 '''
 def cluster_N_(root, E_, rc, rng=1):  # connectivity cluster exemplar nodes via rim or links via nodet or rimt
 
-    G_ = []  # flood-fill Gs, exclusive per fork,ave, only centroid-based can be fuzzy
+    G_ = []
     for n in root.N_: n.fin = 0
     for N in E_:
         if N.fin: continue
         # init N cluster with rim | root:
-        if rng==1 or N.root.rng==1: # N is not rng-nested
+        if rng==1 or N.root.rng==1:
             node_,link_,llink_,Et, olp = [N],[],[], N.Et+N.rim.Et, N.olp
             for l,_ in flat(N.rim.L_):  # +ve
                 if l.rng==rng and val_(l.Et,aw=rc+contw)>0: link_ += [l]
