@@ -27,6 +27,18 @@ def comp_N(_N,N, ave, angle=None, span=None, dir=1, fdeep=0, fproj=0, rng=1):  #
             node.rim.Et += Et; node.rim.N_ += [_node]; node.rim.baseT += baseT
             node.rim.derTT += derTT  # simplified add_H(node.rim.derH, Link.derH, root=node, rev=rev)?
 
+    for rev, n,_n in zip((0,1),(N,_N),(_N,N)):  # reverse Link dir in _N.rimt
+        fn = isinstance(n.rim, CN)  # else rim is listt, simplified add_N_(rim), +|-:
+        if fi:
+            if fn: n.rim.L_ += [(Link,rev)]; n.rim.N_ += [_n]
+            else:  n.rim[0] += [(Link,rev)]; n.rim[1] += [_n]
+        else:
+            if n.N_: n = CN(root=n, rim=[Link]); Link.rim = [n,_n]  # in der+: replace N with blank CN pseudo-nodet, keep N as root?
+            if fn: n.rim.L_[1-rev] += [(Link,rev)]; n.rim.N_[1-rev] += [_n]  # rimt opposite to _N,N dir
+            else:  n.rim[1-rev][0] += [(Link,rev)]; n.rim[1-rev][1] += [_n]
+        if fn:
+            n.rim.Et += Et; n.rim.baseT += baseT; n.rim.derTT += derTT  # simplified add_H(node.rim.derH, Link.derH, root=node, rev=rev)?
+
     return Link
 
 def norm_(n, L):  # not needed, comp is normalized anyway?
@@ -265,3 +277,12 @@ def cluster_L_(root, N_, E_, rc):  # connectivity cluster links from exemplar no
             G_ += [sum2graph(root, node_, link_,[], Et, olp, 1, Ct)]
         if G_:
             return sum_N_(G_,root)
+
+def rim_(N, fi):
+    Rim = []  # rim N_|L_
+    rim = (N.rim[fi] if isinstance(N.rim,list) else (N.rim.N_,N.rim.L_)[fi]) if fi else N.rim  # rim is nodet in link
+    for r in rim:
+        if isinstance(r,CN): Rim.extend(rim_(r,fi))  # rim element is nodet[i], keep unpacking
+        else:                Rim += [r]  # Lt|N: terminal rim element
+    return Rim
+
