@@ -286,3 +286,51 @@ def rim_(N, fi):
         else:                Rim += [r]  # Lt|N: terminal rim element
     return Rim
 
+def comp_link_(iL_, rc):  # comp CLs via directional node-mediated link tracing: der+'rng+ in root.link_ rim_t node rims
+
+    for L in iL_:  # init mL_t: nodet-mediated Ls:
+        for rev, N, mL_ in zip((0, 1), L.N_, L.mL_t):  # L.mL_t is empty
+            for _L,_rev in rim_(N,0):
+                if _L is not L and _L in iL_:
+                    if val_(L.Et,0,aw=loopw) > 0:
+                        mL_ += [(_L, rev ^ _rev)]  # direction of L relative to _L
+    med = 1; _L_ = iL_
+    L__,LL_,ET = [],[],np.zeros(3)
+    while True:  # xcomp _L_
+        L_, Et = [], np.zeros(3)
+        for L in _L_:
+            for mL_ in L.mL_t:
+                for _L, rev in mL_:  # rev is relative to L
+                    if _L in L.compared_: continue
+                    dy,dx = np.subtract(_L.yx,L.yx)
+                    Link = comp_N(_L,L, rc, np.array([dy,dx]), np.hypot(dy,dx), -1 if rev else 1)  # d = -d if L is reversed relative to _L
+                    Link.med = med
+                    LL_ += [Link]; Et += Link.Et  # include -ves, link order: nodet < L < rim, mN.rim || L
+                    for l,_l in zip((_L,L),(L,_L)):
+                        l.compared_ += [_l]
+                        if l not in L_ and val_(l.et, aw=rc+med+loopw) > 0:  # cost+/ rng
+                            L_ += [l]  # for med+ and exemplar eval
+        if L_: L__ += L_; ET += Et
+        # extend mL_t per last medL:
+        if val_(Et,aw=rc+loopw+med*medw) > 0:  # project prior-loop value, med adds fixed cost
+            _L_, ext_Et = set(), np.zeros(3)
+            for L in L_:
+                mL_t, lEt = [set(),set()], np.zeros(3)  # __Ls per L
+                for mL_,_mL_ in zip(mL_t, L.mL_t):
+                    for _L, rev in _mL_:
+                        for _rev, N in zip((0,1), _L.N_):
+                            rim = rim_(N,0)
+                            if len(rim) == med:  # rim should not be nested?
+                                for __L,__rev in rim:
+                                    if __L in L.visited_ or __L not in iL_: continue
+                                    L.visited_ += [__L]; __L.visited_ += [L]
+                                    if val_(__L.Et,aw=loopw) > 0:
+                                        mL_.add((__L, rev ^_rev ^__rev))  # combine reversals: 2 * 2 mLs, but 1st 2 are pre-combined
+                                        lEt += __L.Et
+                if lEt[0] > ave * lEt[2]:  # L rng+, vs. L comp above, add coef
+                    L.mL_t = mL_t; _L_.add(L); ext_Et += lEt
+            # refine eval by extension D:
+            if val_(ext_Et, aw=rc+loopw+med*medw) > 0: med += 1
+            else: break
+        else: break
+    return list(set(L__)), LL_, ET
