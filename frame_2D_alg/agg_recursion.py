@@ -96,8 +96,8 @@ class CN(CBase):
         n.lH = kwargs.get('lH',[])  # bottom-up hierarchy of L_ graphs: CN(sum_N_(Lt_))/ lev, within each nH lev
         n.Et = kwargs.get('Et',np.zeros(3))  # sum from L_
         n.et = kwargs.get('et',np.zeros(3))  # sum from rim
-        n.olp = kwargs.get('olp',1)  # overlap to other Ns, same for links?  separate olp for rim?
-        n.rim = kwargs.get('rim',[[],[]])  # [L_,N_], sum attrs from links?
+        n.olp = kwargs.get('olp',1)  # overlap to ext Gs, ave in links? separate olp for rim, or internally overlapping?
+        n.rim = kwargs.get('rim',[])  # [(L,rev,N)], sum attrs from links?
         # nested CN | lists, too much overlap
         n.cntr = kwargs.get('cntr',[])  # adjacent (contour) gap+overlap alt-fork graphs, converted to CG, empty alt.cntr_: select+?
         n.cent = kwargs.get('cent',[])  # sub-centroids
@@ -133,12 +133,14 @@ def copy_(N, root=None, init=0):
     for attr in ['olp','rng', 'fi', 'fin', 'span']: setattr(C, attr, getattr(N, attr))
     return C
 
-def rim_(N, fi, Rim=[]):  # Rim = rim N_|L_
+def rim_(N, Rim=[]):  # unpack terminal rt_s, or specific-med rt_s?
 
-    for r in N.rim[fi] if isinstance(N.rim[0],list) else {r for n in N.rim for r in n.rim[fi]}:  # rim is nodet
+    for r in N.rim:  # n if link, [] if nested n.rim, else rt: (l,rev,_n)
         if r not in Rim:
-            if isinstance(r,CN): Rim.extend(rim_(r,fi))  # rim element is nodet[i], keep unpacking
-            else:                Rim += [r]  # Lt|N: terminal rim element
+            if isinstance(r,tuple): Rim += [r]  # terminal rim (l,rev,_n)
+            elif isinstance(r, CN): Rim.extend(rim_(r.rim))
+            else:
+                Rim.extend(rim_(r[-1]))  # get top layer, or flatten rim?
     return Rim
 
 ave, avd, arn, aI, aveB, aveR, Lw, intw, loopw, centw, contw = 10, 10, 1.2, 100, 100, 3, 5, 2, 5, 10, 15  # value filters + weights
@@ -303,61 +305,44 @@ def comp_node_(_N_, rc):  # rng+ forms layer of rim and extH per N?
         else: break
     return N__,L_,ET
 
-def comp_link_(iL_, rc):  # comp CLs via directional node-mediated link tracing: der+'rng+ in root.link_ rim_t node rims
+def comp_link_(iL_, rc):  # comp links via directional node-mediated _link tracing with incr mediation
 
-    for L in iL_:
-        rim = []  # replace L.rim with lower L.rim N_ rims:
-        for n in L.rim:  # nodet
-            lrim, nrim = [],[]
-            for _n in n.rim[1]:
-                lrim += _n.rim[0]; nrim += _n.rim[1]
-            rim += [CN(root=n, rim=[list({lrim}), list({nrim})])]
-        L.rim = rim
-        ''' no eval 
-            for _L,_rev in rim_(N,0):
-                if _L is not L and _L in iL_:
-                    if val_(L.Et,0,aw=loopw) > 0:
-                        mL_ += [(_L, rev ^ _rev)]  # direction of L relative to _L '''
-    # not revised:
     med = 1; _L_ = iL_
     L__,LL_,ET = [],[],np.zeros(3)
-    while True:  # xcomp _L_
+    # init rim conversion and extension:
+    for L in _L_:
+        # rim: [(_n,n)] in links, [[(l,rev,_n)]] in nodes, nested by mediation
+        for n,_rev in zip(L.rim, (0,1)):
+            if n.med: continue  # already extended
+            _rim, rim = [],[]  # extended rim = _rim _n rims
+            for rt in n.rim:  # not yet nested
+                if rt not in _rim and val_(rt[0],0, aw=rc) > 0:  # high-d only?
+                    l,rev,_n = rt; _rim += [rt]; rim += [(l, rev^_rev, _n)]  # direction of l relative to L
+            if rim: n.rim = [n.rim, rim]; n.med=1; n._rim = []  # new rt_
+    while _L_ and med < 4:
+        med += 1
         L_, Et = [], np.zeros(3)
         for L in _L_:
-            for mL_ in L.mL_t:
-                for _L, rev in mL_:  # rev is relative to L
-                    if _L in L.compared_: continue
-                    dy,dx = np.subtract(_L.yx,L.yx)
-                    Link = comp_N(_L,L, rc, np.array([dy,dx]), np.hypot(dy,dx), -1 if rev else 1)  # d = -d if L is reversed relative to _L
-                    Link.med = med
-                    LL_ += [Link]; Et += Link.Et  # include -ves, link order: nodet < L < rim, mN.rim || L
-                    for l,_l in zip((_L,L),(L,_L)):
-                        l.compared_ += [_l]
-                        if l not in L_ and val_(l.et, aw=rc+med+loopw) > 0:  # cost+/ rng
-                            L_ += [l]  # for med+ and exemplar eval
-        if L_: L__ += L_; ET += Et
-        # extend mL_t per last medL:
-        if val_(Et,aw=rc+loopw+med*medw) > 0:  # project prior-loop value, med adds fixed cost
-            _L_, ext_Et = set(), np.zeros(3)
-            for L in L_:
-                mL_t, lEt = [set(),set()], np.zeros(3)  # __Ls per L
-                for mL_,_mL_ in zip(mL_t, L.mL_t):
-                    for _L, rev in _mL_:
-                        for _rev, N in zip((0,1), _L.N_):
-                            rim = rim_(N,0)
-                            if len(rim) == med:  # rim should not be nested?
-                                for __L,__rev in rim:
-                                    if __L in L.visited_ or __L not in iL_: continue
-                                    L.visited_ += [__L]; __L.visited_ += [L]
-                                    if val_(__L.Et,aw=loopw) > 0:
-                                        mL_.add((__L, rev ^_rev ^__rev))  # combine reversals: 2 * 2 mLs, but 1st 2 are pre-combined
-                                        lEt += __L.Et
-                if lEt[0] > ave * lEt[2]:  # L rng+, vs. L comp above, add coef
-                    L.mL_t = mL_t; _L_.add(L); ext_Et += lEt
-            # refine eval by extension D:
-            if val_(ext_Et, aw=rc+loopw+med*medw) > 0: med += 1
-            else: break
-        else: break
+            for _L,rev,N in rim_(L):
+                if _L not in iL_: L2N([_L])
+                if _L in L.compared_: continue
+                dy, dx = np.subtract(_L.yx, L.yx)
+                Link = comp_N(_L,L, rc, np.array([dy,dx]), np.hypot(dy,dx), -1 if rev else 1)  # d = -d if L is reversed relative to _L
+                LL_ += [Link]; Link.med = med; Et += Link.Et
+                for l,_l in zip((_L,L),(L,_L)):
+                    l.compared_ += [_l]
+                    if l not in L_ and val_(l.et,0, aw=rc+med+loopw) > 0:  # cost+/ rng
+                        rimt = []
+                        for n,_rev in zip(l.rim, (0,1)):
+                            _rim, rim = [], []  # extend by one layer:
+                            for rt in rim_(n):  # terminal rt_
+                                if rt not in _rim and val_(rt[0],0, aw=rc+med) > 0:  # high-d only?
+                                    __l,_rev,_n = rt; _rim += [rt]; rim += [(__l, rev^_rev, _n)]  # direction of l relative to L
+                            if rim:  # new rt_
+                                n.rim += [[rim]]; n.med=med; n._rim = []; rimt += rim
+                        if rimt: L_ += [l]  # for med+ and exemplar eval
+        L__+= L_; _L_ = L_
+
     return list(set(L__)), LL_, ET
 
 def base_comp(_N,N, rc, dir=1):  # comp Et, Box, baseT, derTT
@@ -421,11 +406,10 @@ def comp_N(_N,N, rc, angle=None, span=None, dir=1, fdeep=0, flist=0, rng=1):  # 
                 if _S and S: # add spec overlap, fill empty or absent attrs?
                     comp_spec(_S,S, rc, Link.Et, LS, flist)
     Link.Et = Et
-    for rev, n,_n in zip((0,1),(N,_N),(_N,N)):  # reverse Link dir in _N.rimt
-        if fi:
-            n.rim[0] += [(Link,rev)]; n.rim[1] += [_n]  # n is node else link:
-        else:
-            n.rim[1-rev].rim[0] += [(Link,rev)]; n.rim[1-rev].rim[1] += [_n]  # nodet-mediated rim opposite to _N,N dir
+    for rev, n,_n in zip((0,1),(N,_N),(_N,N)):
+        # reverse Link dir in _N.rim
+        if fi: n._rim += [(Link,rev,_n)]  # n is node else link:
+        else:  n._rim[1-rev].rim += [(Link,rev,_n)]  # nodet-mediated rim opposite to _N,N dir
     return Link
 
 def comp_spec(_spec,spec, rc, LEt,Lspec, flist):

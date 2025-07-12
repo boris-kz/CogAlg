@@ -334,3 +334,12 @@ def comp_link_(iL_, rc):  # comp CLs via directional node-mediated link tracing:
             else: break
         else: break
     return list(set(L__)), LL_, ET
+
+def rim_1(N, fi, Rim=[]):  # unpack terminal rt_
+
+    for r in N.rim[fi] if isinstance(N.rim[0],list) else {r for n in N.rim for r in n.rim[fi]}:  # rim is nodet
+        if r not in Rim:
+            if isinstance(r,CN): Rim.extend(rim_(r,fi))  # rim element is nodet[i], keep unpacking
+            else:                Rim += [r]  # Lt|N: terminal rim element
+    return Rim
+
