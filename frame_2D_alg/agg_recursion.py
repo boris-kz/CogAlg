@@ -97,7 +97,9 @@ class CN(CBase):
         n.Et = kwargs.get('Et',np.zeros(3))  # sum from L_
         n.et = kwargs.get('et',np.zeros(3))  # sum from rim
         n.olp = kwargs.get('olp',1)  # overlap to ext Gs, ave in links? separate olp for rim, or internally overlapping?
+        n.med = kwargs.get('med',1)  # = rim nesting for both nodes and links?
         n.rim = kwargs.get('rim',[])  # [(L,rev,N)], sum attrs from links?
+        n._rim = kwargs.get('_rim',[])  # new rim before merging
         # nested CN | lists, too much overlap
         n.cntr = kwargs.get('cntr',[])  # adjacent (contour) gap+overlap alt-fork graphs, converted to CG, empty alt.cntr_: select+?
         n.cent = kwargs.get('cent',[])  # sub-centroids
@@ -138,9 +140,8 @@ def rim_(N, Rim=[]):  # unpack terminal rt_s, or specific-med rt_s?
     for r in N.rim:  # n if link, [] if nested n.rim, else rt: (l,rev,_n)
         if r not in Rim:
             if isinstance(r,tuple): Rim += [r]  # terminal rim (l,rev,_n)
-            elif isinstance(r, CN): Rim.extend(rim_(r.rim))
-            else:
-                Rim.extend(rim_(r[-1]))  # get top layer, or flatten rim?
+            elif isinstance(r, CN): Rim.extend(rim_(r))  # may be nested
+            else: Rim.extend(rim_(r[-1]))  # get top layer | flatten all?
     return Rim
 
 ave, avd, arn, aI, aveB, aveR, Lw, intw, loopw, centw, contw = 10, 10, 1.2, 100, 100, 3, 5, 2, 5, 10, 15  # value filters + weights
@@ -182,7 +183,7 @@ def cluster_edge(edge, frame, lev, derlay):  # non-recursive comp_PPm, comp_PPd,
                 eN_ = []
                 for eN in _eN_:  # rim-connected ext Ns
                     node_ += [eN]
-                    for L,_ in eN.rim[0]:  # all +ve, *= density?
+                    for L,_,_ in eN.rim:  # all +ve, *= density?
                         if L not in link_:
                             for eN in L.N_:
                                 if eN in PP_: eN_ += [eN]; PP_.remove(eN)  # merged
@@ -204,11 +205,13 @@ def cluster_edge(edge, frame, lev, derlay):  # non-recursive comp_PPm, comp_PPd,
                 if d > avd * n * _G.olp * loopw: dEt += L.Et  # dL_ += [L]
                 L_ += [L]
         dEt[2] = dEt[2] or 1e-7
+        for PP in PP_: PP.rim = PP._rim; PP._rim = []  # initial rim is not nested
         return list(set(N_)),L_,mEt,dEt  # can't be empty
 
     PP_ = edge.node_
     if val_(edge.Et, (len(PP_)-edge.rng)*Lw, loopw) > 0:
         PP_,L_,mEt,dEt = comp_PP_([PP2N(PP,frame) for PP in PP_])
+        if not L_: return
         if val_(mEt,1, (len(PP_)-1)*Lw, contw) > 0:
             G_, Et = cluster_PP_(copy(PP_))  # can't be empty
         else: G_ = []
@@ -252,14 +255,14 @@ def cross_comp(root, rc, fi=1):  # rng+ and der+ cross-comp and clustering
     N_,L_,Et = comp_node_(root.N_,rc) if fi else comp_link_(root.N_,rc)  # rc: redundancy+olp
     if len(L_) > 1:
         for n in [n for N in N_ for n in N] if fi else N_:
-            for l,_ in rim_(n,0): n.et += l.Et  # any fork, n.olp+=l.olp | fixed?
+            for l,_,_ in rim_(n): n.et += l.Et  # n.olp+=l.olp | fixed?
         mV,dV = val_(Et,2, (len(L_)-1)*Lw, rc+loopw)
         if dV > 0:
             if root.L_: root.lH += [sum_N_(root.L_)]  # replace L_ with agg+ L_:
             root.L_=L_; root.Et += Et
-            if dV >avd: Lt = cross_comp(CN(N_=L2N(L_)), rc+contw, fi=0)  # -> Lt.nH, +2 der layers
+            if dV >avd: Lt = cross_comp(CN(N_=L_), rc+contw, fi=0)  # -> Lt.nH, +2 der layers
             else:       Lt = Cluster(root, N_, rc+contw, fi=0)  # cluster N.rim.L_s, +1 layer
-            if Lt: root.lH += [Lt] + Lt.nH; root.Et += Lt.Et; root.derH += Lt.derH  # append new der lays
+            if Lt: root.lH += [Lt] + Lt.nH; root.Et += Lt.Et; root.derH += Lt.derH  # new der lays
         if mV > 0:
             Nt = Cluster(root, N_, rc+loopw, fi)   # get_exemplars, cluster_C_, rng-banded if fi
             if Nt and val_(Nt.Et,1, (len(Nt.N_)-1)*Lw, rc+loopw+Nt.rng, Et) > 0:
@@ -273,7 +276,9 @@ def cross_comp(root, rc, fi=1):  # rng+ and der+ cross-comp and clustering
 def comp_node_(_N_, rc):  # rng+ forms layer of rim and extH per N?
 
     N__,L_,ET = [],[],np.zeros(3); rng,olp_ = 1,[]  # range banded if frng only?
-    for n in _N_: n.compared_ = []
+    for n in _N_:
+        n.compared_ = []; n._rim = []
+        if isinstance(n.rim[0], tuple): n.rim = [n.rim]
     while True:  # _vM
         Gp_ = []  # [G pair + co-positionals], for top-nested Ns, unless cross-nesting comp:
         for _G, G in combinations(_N_, r=2):
@@ -287,7 +292,7 @@ def comp_node_(_N_, rc):  # rng+ forms layer of rim and extH per N?
             (_m,_,_n),(m,_,n) = _G.Et,G.Et; olp = (_G.olp+G.olp)/2; _m = _m * intw +_G.et[0]; m = m * intw + G.et[0]
             # density / comp_N: et|M, 0/rng=1?
             max_dist = adist * (radii/aveR) * ((_m+m)/(ave*(_n+n+0))/ intw)  # ave_dist * radii * induction
-            if max_dist > dist or set(_G.rim[1]) & set(G.rim[1]):
+            if max_dist > dist or set(_G.rim) & set(G.rim):
                 # comp if close or share matching mediators: add to inhibited?
                 Link = comp_N(_G,G, rc, angle=np.array([dy,dx]), span=dist, fdeep = dist < max_dist/2, rng=rng)
                 L_ += [Link]  # include -ve links
@@ -303,29 +308,29 @@ def comp_node_(_N_, rc):  # rng+ forms layer of rim and extH per N?
                 _N_ = N_; rng += 1; olp_ = []  # reset
             else: break  # low projected rng+ vM
         else: break
-    return N__,L_,ET
+    for n in _N_:
+        n.rim += [n._rim] or []; n._rim=[]  # merge new rim
+    return N__, L_, ET
 
 def comp_link_(iL_, rc):  # comp links via directional node-mediated _link tracing with incr mediation
 
-    med = 1; _L_ = iL_
-    L__,LL_,ET = [],[],np.zeros(3)
-    # init rim conversion and extension:
-    for L in _L_:
-        # rim: [(_n,n)] in links, [[(l,rev,_n)]] in nodes, nested by mediation
+    for L in iL_:  # init conversion
+        L.compared_,L.visited_ = [],[]  # rim: [(_n,n)] in links, [[(l,rev,_n)]] in nodes, nested by mediation:
         for n,_rev in zip(L.rim, (0,1)):
             if n.med: continue  # already extended
             _rim, rim = [],[]  # extended rim = _rim _n rims
             for rt in n.rim:  # not yet nested
-                if rt not in _rim and val_(rt[0],0, aw=rc) > 0:  # high-d only?
+                if rt not in _rim and val_(rt[0].Et,0, aw=rc) > 0:  # high-d only?
                     l,rev,_n = rt; _rim += [rt]; rim += [(l, rev^_rev, _n)]  # direction of l relative to L
-            if rim: n.rim = [n.rim, rim]; n.med=1; n._rim = []  # new rt_
+            if rim: n.med=1; n.rim = []  # new rt_
+            if isinstance(n.rim[0],tuple): n.rim = [n.rim]
+    med = 1
+    L__,LL_,ET,_L_ = [],[], np.zeros(3), iL_
     while _L_ and med < 4:
-        med += 1
         L_, Et = [], np.zeros(3)
         for L in _L_:
             for _L,rev,N in rim_(L):
-                if _L not in iL_: L2N([_L])
-                if _L in L.compared_: continue
+                if _L in L.compared_ or _L not in iL_: continue  # new links only, can't be outside iL_ anyway?
                 dy, dx = np.subtract(_L.yx, L.yx)
                 Link = comp_N(_L,L, rc, np.array([dy,dx]), np.hypot(dy,dx), -1 if rev else 1)  # d = -d if L is reversed relative to _L
                 LL_ += [Link]; Link.med = med; Et += Link.Et
@@ -336,13 +341,15 @@ def comp_link_(iL_, rc):  # comp links via directional node-mediated _link traci
                         for n,_rev in zip(l.rim, (0,1)):
                             _rim, rim = [], []  # extend by one layer:
                             for rt in rim_(n):  # terminal rt_
-                                if rt not in _rim and val_(rt[0],0, aw=rc+med) > 0:  # high-d only?
+                                if rt not in _rim and val_(rt[0].Et,0, aw=rc+med) > 0:  # high-d only?
                                     __l,_rev,_n = rt; _rim += [rt]; rim += [(__l, rev^_rev, _n)]  # direction of l relative to L
                             if rim:  # new rt_
-                                n.rim += [[rim]]; n.med=med; n._rim = []; rimt += rim
+                                n._rim += [rim]; n.med=med; rimt += rim
                         if rimt: L_ += [l]  # for med+ and exemplar eval
-        L__+= L_; _L_ = L_
-
+        for L in _L_:
+            for n in L.rim: n.rim += [n._rim] or []; n._rim = []  # merge new rim per med
+        L__ += L_; _L_ = L_
+        med += 1
     return list(set(L__)), LL_, ET
 
 def base_comp(_N,N, rc, dir=1):  # comp Et, Box, baseT, derTT
@@ -403,15 +410,14 @@ def comp_N(_N,N, rc, angle=None, span=None, dir=1, fdeep=0, flist=0, rng=1):  # 
             Link.derH += comp_H(_N.derH,N.derH, rn, Link, derTT,Et)  # append
         if fi:
             for _S, S, LS in zip((_N.N_,_N.rim,_N.cntr,_N.cent), (N.N_,N.rim,N.cntr,N.cent), (Link.N_,Link.L_,Link.cntr,Link.cent)):
-                if _S and S: # add spec overlap, fill empty or absent attrs?
+                if _S and S:  # add spec overlap, fill empty or absent attrs?
                     comp_spec(_S,S, rc, Link.Et, LS, flist)
     Link.Et = Et
-    for rev, n,_n in zip((0,1),(N,_N),(_N,N)):
-        # reverse Link dir in _N.rim
-        if fi: n._rim += [(Link,rev,_n)]  # n is node else link:
-        else:  n._rim[1-rev].rim += [(Link,rev,_n)]  # nodet-mediated rim opposite to _N,N dir
+    for n, _n, rev in zip((N,_N),(_N,N),(0,1)):  # reverse Link dir in _N.rim:
+        n._rim += [(Link,rev,_n)]
     return Link
 
+# revise all specs as lists:
 def comp_spec(_spec,spec, rc, LEt,Lspec, flist):
 
     if isinstance(_spec,CN) and isinstance(spec,CN):  # CN or list, may be CLay if include derH
@@ -426,7 +432,7 @@ def comp_spec(_spec,spec, rc, LEt,Lspec, flist):
                 else: dspec_ += [comp_N(_e,e,rc)]  # comp_spec if e can be list?
         if len(dspec_) * Lw > ave:
             Dspec = sum_N_(dspec_)
-            if isinstance(Lspec,list): Lspec = sum_N_(Lspec)  # all specs are lists by default, or always?
+            if isinstance(Lspec,list): Lspec = sum_N_(Lspec)
             add_N(Lspec,Dspec); LEt+=Dspec.Et
         else:
             for de in dspec_:
@@ -435,8 +441,8 @@ def comp_spec(_spec,spec, rc, LEt,Lspec, flist):
 
 def rolp(N, _N_, fi, E=0, R=0): # rV of N.rim |L_ overlap with _N_: inhibition|shared zone, oN_ = list(set(N.N_) & set(_N.N_)), no comp?
 
-    if R: olp_ = [n for n in (N.N_ if fi else N.L_) if n in _N_]  # current fi=1
-    else: olp_ = [L for L,_ in rim_(N,fi) if any(n in _N_ for n in L.N_)]
+    if R: olp_ = [n for n in (N.N_ if fi else N.L_) if n in _N_]  # currently fi=1
+    else: olp_ = [L for L,_,_ in rim_(N) if any(n in _N_ for n in L.N_)]
     if olp_:
         oEt = np.sum([i.Et for i in olp_], axis=0)
         _Et = N.Et if (R or E) else N.et  # not sure
@@ -450,7 +456,7 @@ def get_exemplars(N_, rc, fi):  # get sparse nodes by multi-layer non-maximum su
     E_, Et = [], np.zeros(3)  # ~ point cloud of focal nodes
     _E_ = set()  # prior = stronger:
     for rdn, N in enumerate(sorted(N_, key=lambda n: n.et[1-fi]/ n.et[2], reverse=True), start=1):
-        # ave *= relV of overlap by stronger-E inhibition zones:
+        # ave *= relV of overlap by stronger-E inhibition zones
         roV = rolp(N, list(_E_), fi, E=1)  # roV is cost:
         if val_(N.et, fi, aw = rc + rdn + loopw + roV) > 0:
             Et += N.et; _E_.update( rim_(N,fi)); N.sel = 1  # in cluster
@@ -490,7 +496,7 @@ def cluster(root, N_, E_, rc, fi, rng=1):  # flood-fill node | link clusters
                 for l,_ in rim_(E,0):
                     if l.rng==rng and val_(l.Et,aw=rc) > 0: link_ += [l]
                     elif l.rng>rng: llink_ += [l]
-            else:  # E is rng-nested, cluster top-rng roots
+            else: # E is rng-nested, cluster top-rng roots
                 n = E; R = n.root
                 while R.root and R.root.rng > n.rng: n = R; R = R.root
                 if R.fin: continue
@@ -546,9 +552,10 @@ def cluster(root, N_, E_, rc, fi, rng=1):  # flood-fill node | link clusters
         else:
             _Et = root.Et  # root is a lender
             cntr = []
-        V = val_(Et,fi, (len(node_)-1)*Lw, rc+olp, _Et)
-        if V > 0:
-            if V> ave*rc*centw: cent = cluster_C_(root, E_, rc+centw, fi=fi)  # seed CC_ = E_, may extend beyond node_?
+        mV,dV = val_(Et,2, (len(node_)-1)*Lw, rc+olp, _Et)
+        if mV > 0:
+            if dV > ave * centw:  # divisive clustering eval by variance, seed CC_ = E_, may extend beyond node_?
+                cent = cluster_C_(root, E_, rc+centw, fi=fi)
             else: cent = []
             G_ += [sum2graph(root, node_, link_, llink_, Et, olp, rng, cent, cntr)]
     if G_:
@@ -569,7 +576,7 @@ def cluster_C_(root, E_, rc, fi=1):  # form centroids from exemplar _N_, driftin
     for E in E_:
         Et = np.sum([l.Et for l in E.rim[0]])  # rim[0] is L_
         C = copy_(E,root); C.N_=[E]; C.L_=[]; C.Et=Et  # init centroid
-        C._N_ = list({n for N in rim_(E,fi) for n in rim_(N,fi)})  # core members + surround for comp to N_ mean
+        C._N_ = list({n for N in rim_(E) for n in rim_(N)})  # core members + surround for comp to N_ mean
         _C_ += [C]
     while True:  # recompute C, refine C.N_
         C_, ET, O, Dvo, Ave = [], np.zeros(3), 0, np.zeros(2), av*rc*loopw
@@ -585,7 +592,7 @@ def cluster_C_(root, E_, rc, fi=1):  # form centroids from exemplar _N_, driftin
                     vo = np.array([v,olp])  # val, overlap per current root C
                     if et[1-fi]/et[2] > Ave*olp:
                         n.C_ += [C]; n.vo_ += [vo]; Et += et; o+=olp; _N_ += [n]
-                        _N__ += rim_(n,fi)
+                        _N__ += rim_(n)
                         if C not in n._C_: dvo += vo
                     elif C in n._C_:
                         dvo += n._vo_[n._C_.index(C)]  # old vo_, or pack in _C_?
@@ -718,10 +725,6 @@ def add_NH(H, h, root, rn=1):
 def extend_box(_box, box):
     y0, x0, yn, xn = box; _y0, _x0, _yn, _xn = _box
     return min(y0,_y0), min(x0,_x0), max(yn,_yn), max(xn,_xn)
-
-def L2N(link_):
-    for L in link_: L.mL_t = [[],[]]; L.compared_,L.visited_ = [],[]
-    return link_
 
 def PP2N(PP, frame):
 

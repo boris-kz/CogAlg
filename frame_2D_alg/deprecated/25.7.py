@@ -36,6 +36,7 @@ def comp_N(_N,N, ave, angle=None, span=None, dir=1, fdeep=0, fproj=0, rng=1):  #
             if n.N_: n = CN(root=n, rim=[Link]); Link.rim = [n,_n]  # in der+: replace N with blank CN pseudo-nodet, keep N as root?
             if fn: n.rim.L_[1-rev] += [(Link,rev)]; n.rim.N_[1-rev] += [_n]  # rimt opposite to _N,N dir
             else:  n.rim[1-rev][0] += [(Link,rev)]; n.rim[1-rev][1] += [_n]
+        # else:  n.rim[1 - rev]._rim += [(Link, rev, _n)]  # if n is link, nodet-mediated rim opposite to _N,N dir
         if fn:
             n.rim.Et += Et; n.rim.baseT += baseT; n.rim.derTT += derTT  # simplified add_H(node.rim.derH, Link.derH, root=node, rev=rev)?
 
@@ -342,4 +343,8 @@ def rim_1(N, fi, Rim=[]):  # unpack terminal rt_
             if isinstance(r,CN): Rim.extend(rim_(r,fi))  # rim element is nodet[i], keep unpacking
             else:                Rim += [r]  # Lt|N: terminal rim element
     return Rim
+
+def L2N(link_):
+    for L in link_: L.mL_t = [[],[]]; L.compared_,L.visited_ = [],[]; L.rim[0].med = 0; L.rim[1].med = 0; L._rim = [CN(rim=[[],[]]), CN(rim=[[],[]])]
+    return link_
 
