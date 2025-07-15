@@ -348,3 +348,23 @@ def L2N(link_):
     for L in link_: L.mL_t = [[],[]]; L.compared_,L.visited_ = [],[]; L.rim[0].med = 0; L.rim[1].med = 0; L._rim = [CN(rim=[[],[]]), CN(rim=[[],[]])]
     return link_
 
+def comp_spec(_spec,spec, rc, LEt,Lspec, flist):
+
+    if isinstance(_spec,CN) and isinstance(spec,CN):  # CN or list, may be CLay if include derH
+        dspec = comp_N(_spec, spec, ave)
+        Lspec += [dspec]; LEt += dspec.Et
+        return
+    elif flist:
+        dspec_,dEt = [], np.zeros(3)  # dEt is not used here?
+        for _e in _spec if isinstance(_spec,list) else _spec.N_:
+            for e in spec if isinstance(spec,list) else spec.N_:
+                if _e is e: LEt += e.Et  # not sure
+                else: dspec_ += [comp_N(_e,e,rc)]  # comp_spec if e can be list?
+        if len(dspec_) * Lw > ave:
+            Dspec = sum_N_(dspec_)
+            if isinstance(Lspec,list): Lspec = sum_N_(Lspec)
+            add_N(Lspec,Dspec); LEt+=Dspec.Et
+        else:
+            for de in dspec_:
+                Lspec += [de] if isinstance(Lspec,list) else add_N(Lspec,de)
+                LEt += de.Et
