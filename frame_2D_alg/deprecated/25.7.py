@@ -279,12 +279,17 @@ def cluster_L_(root, N_, E_, rc):  # connectivity cluster links from exemplar no
         if G_:
             return sum_N_(G_,root)
 
-def rim_(N, fi):
-    Rim = []  # rim N_|L_
-    rim = (N.rim[fi] if isinstance(N.rim,list) else (N.rim.N_,N.rim.L_)[fi]) if fi else N.rim  # rim is nodet in link
-    for r in rim:
-        if isinstance(r,CN): Rim.extend(rim_(r,fi))  # rim element is nodet[i], keep unpacking
-        else:                Rim += [r]  # Lt|N: terminal rim element
+def rim_(N, fi=None):  # unpack terminal rt_s, or med rt_s?
+    Rim = []
+    for r in (N if isinstance(N,list) else N.rim):  # n if link, [] if nested n.rim, else rt: (l,rev,_n)
+        if r not in Rim:
+            if isinstance(r,tuple):  # final rim: l,rev,_n
+                Rim += [r if fi is None else r[2] if fi else r[0]]  # if val_(fi): always selective?
+            elif isinstance(r, CN):
+                Rim.extend(rim_(r,fi))  # r is nodet[i], may be nested
+            else:
+                Rim.extend(rim_(N.rim[-1],fi))  # get top layer | flatten all?
+                break
     return Rim
 
 def comp_link_(iL_, rc):  # comp CLs via directional node-mediated link tracing: der+'rng+ in root.link_ rim_t node rims
