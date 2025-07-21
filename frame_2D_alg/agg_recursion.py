@@ -212,11 +212,16 @@ def cluster_edge(edge, frame, lev, derlay):  # non-recursive comp_PPm, comp_PPd,
                 else:      lev.lH += [Lt]
                 lev.Et += Lt.Et
 
-def rim_(N, fi=None):  # get max-med [(L,rev,_N)], rev: L dir relative to N
+def rim_(N, fi=None, f0=0):  # get max-med [(L,rev,_N)], rev: L dir relative to N
 
-    if N.fi:                      rt_ = N.rim
-    elif isinstance(N.rim[0],CN): rt_ = N.rim[0].rim+N.rim[1].rim  # L.nodet
-    else:                         rt_ = N.rim[-1]  # med-nested L.rim
+    if N.fi: rt_ = N.rim
+    elif isinstance(N.rim[0], CN):
+        n_ = N.rim
+        while isinstance(n_[0], CN) and not n_[0].fi:  # unpack n_: terminal L.[n,_n] tree branches
+            n_ = [n for L in n_ for n in L.rim]  # if L.rim is not nested
+        rt_ = [n.rim for n in n_]  # n.fi=1
+    else:
+        rt_ = N.rim[-1]  # med-nested L.rim
     return [r if fi is None else r[2] if fi else r[0] for r in rt_]
 
 def val_(Et, fi=1, mw=1, aw=1, _Et=np.zeros(3)):  # m,d eval per cluster or cross_comp
@@ -408,7 +413,7 @@ def spec(_spe,spe, rc, Et, dspe=None, fdeep=0):  # for N_|cent_ | altg_
     for _N in _spe:
         for N in spe:
             if _N is not N:
-                dN = comp_N(_N, N, rc); Et += dN.Et
+                dN = comp_N(_N, N, rc); Et += dN.Et  # may be d=cent_?
                 if dspe is not None: dspe += [dN]
                 if fdeep:
                     for L,l in [(L,l) for L in rim_(_N,0) for l in rim_(N,0)]:
@@ -445,9 +450,10 @@ def get_exemplars(N_, rc, fi):  # get sparse nodes by multi-layer non-maximum su
 def Cluster(root, N_, rc, fi):  # clustering root
 
     Nflat_ = list(set([N for n_ in N_ for N in n_])) if fi else N_
-    E_, Et = get_exemplars(Nflat_, rc, fi)
+    if N_[0].fi: E_, Et = get_exemplars(N_, rc, fi)
+    else:        E_, Et = N_, root.Et  # also fi=0?
 
-    if val_(Et,fi, (len(E_)-1)*Lw, rc+contw, root.Et) > 0:
+    if val_(Et,fi, (len(Nflat_)-1)*Lw, rc+contw, root.Et) > 0:
         for n in Nflat_: n.sel=0
         if fi:
             Nt = []  # bottom-up rng-banded clustering:
@@ -508,22 +514,22 @@ def cluster(root, N_, E_, rc, fi, rng=1):  # flood-fill node | link clusters
                         if n in N_ and not n.fin and rolp(E, set(rim_(n,0)), fi) > ave*rc:
                             link_ += [n]; n.fin = 1  # no link eval?
                             node_ = [l for l in rim_(n,0) if l not in node_ and  val_(l.Et,0,aw=rc) > 0]
-            else:  # by LL match
+            else:
+                # cluster Ls by LL m, via flat E.rim if E.fi else max med Ls?
                 for _L in rim_(E,0):
                     if _L.fin: continue
                     _L.fin = 1
-                    for n in _L.rim:  # nodet
-                        for LL in rim_(n,0):
-                            if LL not in link_ and val_(_L.Et,0,aw=rc) > 0:
-                                node_ += [_L]; link_ += [LL]
+                    for LL in rim_(_L,0):
+                        if LL not in link_ and val_(_L.Et,0,aw=rc) > 0:
+                           node_ += [_L]; link_ += [LL]
         node_ = list(set(node_))
         Et, olp = np.zeros(3),0  # sum node_:
         for n in node_:
             Et += n.et; olp += n.olp  # not fork-specific
 
         if fi: altg_ = {L.root for L in link_ if L.root}  # contour if fi else cores, individual rims are too weak
-        else:  altg_ = {n.root for N in node_ for n in N.rim[0]}  # node_ is Ls, get nodet roots
-        _Et = np.sum([o.Et for o in altg_]) if altg_ else np.zeros(3)
+        else:  altg_ = {n.root for N in node_ for n in N.rim[0] if n.root}  # node_ is Ls, get nodet roots
+        _Et = np.sum([o.Et for o in altg_], axis=0) if altg_ else np.zeros(3)
 
         if val_(Et,1, (len(node_)-1)*Lw, rc+olp, _Et) > 0:
             G_ += [sum2graph(root, E_, node_, link_, llink_, Et, olp, rng, altg_)]
@@ -536,7 +542,7 @@ def sum2graph(root, E_, node_,link_,llink_, Et, olp, rng, altg_, fC=0):  # sum n
     l0 = Copy_(link_[0]); DerH = l0.derH
     graph = CN(root=root, fi=1,rng=rng, N_=node_,L_=link_,olp=olp, Et=Et, altg_=altg_,box=n0.box, baseT=n0.baseT+l0.baseT, derTT=n0.derTT+l0.derTT)
     graph.hL_ = llink_
-    n0.root = graph; yx_ = [n0.yx]; fg = isinstance(n0.N_[0],CN)  # not PPs
+    n0.root = graph; yx_ = [n0.yx]; fg = n0.fi and isinstance(n0.N_[0],CN)   # not PPs
     Nt = Copy_(n0)  #->CN, comb forks: add_N(Nt,Nt.Lt)?
     for N in node_[1:]:
         add_H(derH,N.derH,graph); graph.baseT+=N.baseT; graph.derTT+=N.derTT; graph.box=extend_box(graph.box,N.box); yx_+=[N.yx]; N.root = graph

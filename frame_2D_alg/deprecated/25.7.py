@@ -341,13 +341,12 @@ def comp_link_(iL_, rc):  # comp CLs via directional node-mediated link tracing:
         else: break
     return list(set(L__)), LL_, ET
 
-def rim_1(N, fi, Rim=[]):  # unpack terminal rt_
+def rim_1(N, fi=None):  # get max-med [(L,rev,_N)], rev: L dir relative to N
 
-    for r in N.rim[fi] if isinstance(N.rim[0],list) else {r for n in N.rim for r in n.rim[fi]}:  # rim is nodet
-        if r not in Rim:
-            if isinstance(r,CN): Rim.extend(rim_(r,fi))  # rim element is nodet[i], keep unpacking
-            else:                Rim += [r]  # Lt|N: terminal rim element
-    return Rim
+    if N.fi:                      rt_ = N.rim
+    elif isinstance(N.rim[0],CN): rt_ = N.rim[0].rim+N.rim[1].rim  # L.nodet
+    else:                         rt_ = N.rim[-1]  # med-nested L.rim
+    return [r if fi is None else r[2] if fi else r[0] for r in rt_]
 
 def L2N(link_):
     for L in link_: L.mL_t = [[],[]]; L.compared_,L.visited_ = [],[]; L.rim[0].med = 0; L.rim[1].med = 0; L._rim = [CN(rim=[[],[]]), CN(rim=[[],[]])]
