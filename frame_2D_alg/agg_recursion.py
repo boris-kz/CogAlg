@@ -214,7 +214,7 @@ def rim_(N, fi=None):  # get max-med [(L,rev,_N)], rev: L dir relative to N
     if N.fi:
         rt_ = N.rim
     elif isinstance(N.rim[0], list):
-        rt_ = N.rim[-1]  # med-nested L.rim
+        rt_ = N.rim[-1]  # max-med layer in nested L.rim
     else:
         n_ = N.rim
         while isinstance(n_[0], CN) and not n_[0].fi:  # unpack n_: terminal L.[n,_n] tree branches
@@ -260,8 +260,8 @@ def cross_comp(root, rc, fi=1):  # rng+ and der+ cross-comp and clustering
             if dV >avd: lG = cross_comp(CN(N_=L_), rc+contw, fi=0)  # -> Lt.nH, +2 der layers
             else:       lG = Cluster(root, N_, rc+contw, fi=0)  # cluster N.rim Ls, +1 layer
             if lG:
-                lG.altg_ = [(core,rdn) for rdn,core in enumerate(sorted(lG.altg_, key=lambda x:(x.Et[0]/x.Et[2]), reverse=True), start=1)]
-                comb_altg_(N_,rc)  # pack, cross_comp in N.altg_
+                lG.altg_ = [(core,rdn) for rdn,core in enumerate(sorted(lG.altg_[0], key=lambda x:(x.Et[0]/x.Et[2]), reverse=True), start=1)]
+                comb_altg_([n for N in N_ for n in N] if fi else N_, rc)  # pack, cross_comp in N.altg_
                 root.lH += [lG] + lG.nH; root.Et +=lG.Et; root.derH += lG.derH  # new der lays
         if mV > 0:
             nG = Cluster(root, N_, rc+loopw, fi)   # get_exemplars, cluster_C_, rng-banded if fi
@@ -278,11 +278,12 @@ def comb_altg_(N_, rc):  # cross_comp contour/background per node:
         alt_ = N.altg_  # or N.altg_.N_?
         if not alt_: continue
         Et, Rdn = np.zeros(3), 0
-        for core, rdn in [cr for cntr in alt_ for cr in cntr.altg_ if cr[0] is N]:  # map contour rdns to core N
+        for core,rdn in [cr for core_t in alt_ for cr in core_t[0] if cr[0] is N]:  # map contour rdns to core N
             Et += core.Et; Rdn += rdn  # add to Et[2]?
         N.altg_ = CN(N_=alt_, Et=Et)
         if val_(Et,0,(len(alt_)-1)*Lw, rc+Rdn+N.olp+loopw) > 0:  # norm by core_ rdn
-            N.altg_ = cross_comp(N.altg_, rc=N.olp) or N.altg_
+            nG = cross_comp(CN(N_=N.altg_), rc=N.olp)
+            N.altg_ = (nG.N_,nG.Et) if nG else (N.altg_,Et)
 
 def comp_node_(iN_, rc):  # rng+ forms layer of rim and extH per N?
 
@@ -451,9 +452,9 @@ def Cluster(root, N_, rc, fi):  # clustering root
 
     Nflat_ = list(set([N for n_ in N_ for N in n_])) if fi else N_
     if fi:
-        for n in Nflat_: n.sel=0  # this should be here, else it's reset to 0
-        E_,Et = get_exemplars(Nflat_, rc, fi)
-    else: E_,Et = N_,root.Et # fi=0?
+        for n in Nflat_: n.sel=0
+        E_, Et = get_exemplars(Nflat_, rc, fi)
+    else: E_, Et = N_,root.Et # fi=0?
 
     if val_(Et,fi, (len(Nflat_)-1)*Lw, rc+contw, root.Et) > 0:
         if fi:
@@ -474,67 +475,68 @@ def cluster(root, N_, E_, rc, fi, rng=1):  # flood-fill node | link clusters
     for n in (root.N_ if fi else N_):
         n.fin = 0
     for E in E_:  # init
-        if E.fin: continue
         if fi:  # node clustering
+            if E.fin: continue
             if rng==1 or E.root.rng==1:  # E is not rng-nested
-                node_,link_,llink_ = [E],[],[]
+                node_,_link_,llink_ = [E],[],[]; E.fin = 1
                 for l in rim_(E,0):  # lrim
-                    if l.rng==rng and val_(l.Et,aw=rc) > 0: link_ += [l]  # +ve links only?
-                    elif l.rng>rng: llink_ += [l]
+                    if l.rng==rng and val_(l.Et,aw=rc) > 0: _link_+=[l]  # +ve links only?
+                    elif l.rng>rng: llink_+=[l]
             else: # E is rng-nested, cluster top-rng roots
                 n = E; R = n.root
                 while R.root and R.root.rng > n.rng: n = R; R = R.root
                 if R.fin: continue
-                node_,link_,llink_ = [R], R.L_, R.hL_
-                R.fin = 1
+                node_,_link_,llink_ = [R], R.L_, R.hL_; R.fin = 1
         else:  # link clustering
-            node_,llink_ = [],[]  # node_ is rim only
-            link_ = rim_(E,1) if fln else []  # ?
-        E.fin = 1
-        if fi:  # cluster nodes via rng-specific links
-            for L in link_[:]:  # snapshot
-                for _N in L.rim if fln else L.rim[-1]:  # med-nested?
-                    if _N not in N_ or _N.fin:
-                        continue
-                    if rng==1 or _N.root.rng==1:  # not rng-nested
-                        if rolp(E, set(rim_(E,0)), fi=1) > ave*rc:  # N_,L_ += full-rim connected _N,_L
-                            node_ += [_N]; _N.fin = 1
-                            for l in rim_(_N,0):
-                                if l not in link_ and l.rng == rng and val_(l.Et,aw=rc) > 0: link_ += [l]
-                                elif l not in llink_ and l.rng > rng: llink_ += [l]
-                    else:  # cluster top-rng roots
-                        _n = _N; _R = _n.root
-                        while _R.root and _R.root.rng > _n.rng: _n = _R; _R = _R.root
-                        if not _R.fin and rolp(E, set(link_), fi=1, R=1) > ave*rc:
-                            node_ += [_R]; _R.fin = 1; _N.fin = 1
-                            link_ = list(set(link_ + _R.link_))
-                            llink_= list(set(llink_+ _R.hL_))
-        # this should be recursive via rim.rim...?
-        else:  # cluster links via rim
-            if fln:  # by L diff
-                for L in link_[:]:
-                    for n in L.rim:  # in nodet, no eval
-                        if n in N_ and not n.fin and rolp(E, set(rim_(n,0)), fi) > ave*rc:
-                            link_ += [n]; n.fin = 1  # no link eval?
-                            node_ += [l for l in rim_(n,0) if l not in node_ and  val_(l.Et,0,aw=rc) > 0]
-            else:  # by LL match
-                for _L in rim_(E,1):  # via E.rim if E.fi else E.rim[-1]
-                    if _L.fin: continue
-                    _L.fin = 1
-                    for LL in rim_(_L,0):
-                        if LL not in link_ and val_(_L.Et,0,aw=rc) > 0:
-                           node_ += [_L]; link_ += [LL]
-        node_ = list(set(node_))
-        Et, olp = np.zeros(3),0  # sum node_:
-        for n in node_:
-            Et += n.et; olp += n.olp  # not fork-specific
+            node_,llink_ = [],[]; _link_ = rim_(E, 1 if fln else 0)  # nodet or lrim
+        L_ = copy(_link_)
+        link_ = []
+        while _link_:  # extend cluster node_
+            if fi:     # cluster nodes via rng-specific links
+                for L in _link_[:]:  # snapshot
+                    for _N in L.rim if fln else L.rim[-1]:  # med-nested?
+                        if _N not in N_ or _N.fin:
+                            continue
+                        if rng==1 or _N.root.rng==1:  # not rng-nested
+                            if rolp(E, set(rim_(E,0)), fi=1) > ave*rc:  # N_,L_ += full-rim connected _N,_L
+                                node_ += [_N]; _N.fin = 1
+                                for l in rim_(_N,0):
+                                    if l not in L_ and l.rng == rng and val_(l.Et,aw=rc) > 0: link_ += [l]; L_ += [l]
+                                    elif l not in llink_ and l.rng > rng: llink_ += [l]
+                        else:  # cluster top-rng roots
+                            _n = _N; _R = _n.root
+                            while _R.root and _R.root.rng > _n.rng: _n = _R; _R = _R.root
+                            if not _R.fin and rolp(E, set(link_), fi=1, R=1) > ave*rc:
+                                node_ += [_R]; _R.fin = 1; _N.fin = 1
+                                link_ += _R.link_; L_ += _R.link_; llink_+= _R.hL_
+            else:  # cluster links via rim
+                if fln:  # by L diff
+                    for L in link_[:]:
+                        for n in L.rim:  # in nodet, no eval
+                            if n in N_ and not n.fin and rolp(E, set(rim_(n,0)), fi) > ave*rc:
+                                node_ += [l for l in rim_(n,0) if l not in node_ and  val_(l.Et,0,aw=rc) > 0]
+                                link_ += [n]; L_ += [n]; n.fin = 1  # no link eval?
+                else:  # by LL match
+                    for _L in rim_(E,1):  # via E.rim if E.fi else E.rim[-1]
+                        if _L.fin: continue
+                        _L.fin = 1
+                        for LL in rim_(_L,0):
+                            if LL not in L_ and val_(_L.Et,0,aw=rc) > 0:
+                                node_ += [_L]; link_ += [LL]; L_ += [LL]
+            _link_ = list(set(link_))
+            L_ = list(set(L_))
+        if node_:
+            node_ = list(set(node_))
+            Et, olp = np.zeros(3),0  # sum node_:
+            for n in node_:
+                Et += n.et; olp += n.olp
+                # any fork
+            if fi: altg_ = {L.root for L in link_ if L.root}  # contour if fi else cores, individual rims are too weak
+            else:  altg_ = {n for N in node_ for n in (N.rim if fln else N.rim[0])}  # node_ is Ls, assign nodets
+            _Et  = np.sum([i.Et for i in altg_], axis=0) if altg_ else np.zeros(3)
 
-        if fi: altg_ = {L.root for L in link_ if L.root}  # contour if fi else cores, individual rims are too weak
-        else:  altg_ = {n for N in node_ for n in N.rim}  # node_ is Ls, assign nodets
-        _Et = np.sum([i.Et for i in altg_], axis=0) if altg_ else np.zeros(3)
-
-        if val_(Et,1, (len(node_)-1)*Lw, rc+olp, _Et) > 0:
-            G_ += [sum2graph(root, E_, node_, link_, llink_, Et, olp, rng, [altg_,_Et] if altg_ else [])]
+            if val_(Et,1, (len(node_)-1)*Lw, rc+olp, _Et) > 0:
+                G_ += [sum2graph(root, E_, node_, link_, llink_, Et, olp, rng, ([altg_,_Et] if fi else altg_) if altg_ else [])]
     if G_:
         return sum_N_(G_, root)
 
@@ -563,7 +565,7 @@ def sum2graph(root, E_, node_,link_,llink_, Et, olp, rng, altg_, fC=0):  # sum n
         graph.derTT = np.array([m_,d_])
         graph.Et = np.array([M,D,Et[2]])
 
-    # add divisive centroid clustering if proj internal variance:
+    # divisive centroid clustering if projected internal variance:
     if val_(Et,0, mw = graph.span * 2 * slope(link_), aw = olp + centw) > 0:
         cluster_C_(graph, E_, olp + centw, fi=node_[0].fi)
         # seed CC_=E_, ex node_?
@@ -625,7 +627,7 @@ def cluster_C_(root, E_, rc, fi=1, fdeep=0):  # form centroids by clustering exe
         else:  # converged
             break
     if val_(ET,fi, aw=O+rc) > 0:  # no _Et?
-        root.cent_ = CN(N_=set(C_), Et=ET)
+        root.cent_ = set(C_),ET
         # add cross_comp for low overlap?
 
 def centroid_M(m_, ave):  # adjust weights on attr matches | diffs, recompute with sum
@@ -681,8 +683,7 @@ def sum_N_(node_, root=None, fC=0):  # form cluster G
     return G   # no rim
 
 def add_sett(Sett,sett):
-    N_,n_,Et,et = Sett.N_,sett.N_,Sett.Et,sett.Et
-    N_.update(n_); Et += np.sum([t.Et for t in n_-N_])
+    N_,Et = Sett; n_ = sett[0]; N_.update(n_); Et += np.sum([t.Et for t in n_-N_])
 
 def add_N(N,n, fmerge=0, fC=0):
 
