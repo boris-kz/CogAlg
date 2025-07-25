@@ -204,7 +204,7 @@ def cluster_edge(edge, frame, lev, derlay):  # non-recursive comp_PPm, comp_PPd,
         lev.L_+= L_; lev.Et = mEt+dEt  # links between PPms
         for l in L_: derlay.add_lay(l.derH[0]); frame.baseT+=l.baseT; frame.derTT+=l.derTT; frame.Et += l.Et
         if val_(dEt,0, (len(L_)-1)*Lw, 2+contw) > 0:
-            Lt = Cluster(frame, PP_, rc=2,fi=0)
+            Lt = cluster(frame, PP_, [n for PP in PP_ for n in PP.rim], rc=2,fi=0)
             if Lt:  # L_ graphs
                 if lev.lH: lev.lH[0].N_ += Lt.N_; lev.lH[0].Et += Lt.Et
                 else:      lev.lH += [Lt]
@@ -454,98 +454,103 @@ def Cluster(root, N_, rc, fi):  # clustering root
     if fi:
         for n in Nflat_: n.sel=0
         E_, Et = get_exemplars(Nflat_, rc, fi)
-    else: E_, Et = N_,root.Et # fi=0?
+    else: E_, Et = N_, root.Et  # fi=0?
 
     if val_(Et,fi, (len(Nflat_)-1)*Lw, rc+contw, root.Et) > 0:
         if fi:
-            Nt = []  # bottom-up rng-banded clustering:
+            nG = []  # bottom-up rng-banded clustering:
             for rng, rN_ in enumerate(N_, start=1):
                 rE_ = [n for n in rN_ if n.sel]
                 aw = rc * rng + contw  # cluster Nf_ via rng exemplars:
                 if rE_ and val_(np.sum([n.Et for n in rE_], axis=0),1,(len(rE_)-1)*Lw, aw) > 0:
-                    Nt = cluster(root, Nflat_, rE_, aw, 1, rng) or Nt  # keep top-rng Gt
+                    nG = cluster(root, Nflat_, rE_, aw, 1, rng) or nG  # keep top-rng Gt
         else:
-            Nt = cluster(root, N_, E_, rc, fi=0)
-        return Nt
+            nG = cluster(root, N_, E_, rc, fi=0)
+        return nG
 
-def cluster(root, N_, E_, rc, fi, rng=1):  # flood-fill node | link clusters
+def cluster(root, iN_, E_, rc, fi, rng=1):  # flood-fill node | link clusters
 
     G_ = []  # exclusive per fork,ave, only centroids can be fuzzy
     fln = isinstance(E_[0].rim[0], tuple)  # flat rim
-    for n in (root.N_ if fi else N_):
+    for n in (root.N_ if fi else iN_):
         n.fin = 0
     for E in E_:  # init
-        if fi:  # node clustering
-            if E.fin: continue
-            if rng==1 or E.root.rng==1:  # E is not rng-nested
-                node_,_link_,llink_ = [E],[],[]; E.fin = 1
+        if E.fin: continue
+        E.fin = 1
+        if fi: # node clustering
+            if rng==1 or E.root.rng==1:  # E is not rng-banded
+                N_,link_,long_ = [E],[],[]
                 for l in rim_(E,0):  # lrim
-                    if l.rng==rng and val_(l.Et,aw=rc) > 0: _link_+=[l]  # +ve links only?
-                    elif l.rng>rng: llink_+=[l]
-            else: # E is rng-nested, cluster top-rng roots
+                    if l.rng==rng and val_(l.Et,aw=rc) > 0: link_+=[l]  # or select links here?
+                    elif l.rng>rng: long_+=[l]
+            else: # E is rng-banded, cluster top-rng roots
                 n = E; R = n.root
                 while R.root and R.root.rng > n.rng: n = R; R = R.root
                 if R.fin: continue
-                node_,_link_,llink_ = [R], R.L_, R.hL_; R.fin = 1
-        else:  # link clustering
-            node_,llink_ = [],[]; _link_ = rim_(E, 1 if fln else 0)  # nodet or lrim
-        L_ = copy(_link_)
-        link_ = []
-        while _link_:  # extend cluster node_
-            if fi:     # cluster nodes via rng-specific links
-                for L in _link_[:]:  # snapshot
-                    for _N in L.rim if fln else L.rim[-1]:  # med-nested?
-                        if _N not in N_ or _N.fin:
-                            continue
-                        if rng==1 or _N.root.rng==1:  # not rng-nested
+                N_,link_,long_ = [R], R.L_, R.hL_; R.fin = 1
+        else: # link clustering
+            N_,long_ = [],[]; link_ = rim_(E, 1 if fln else 0)  # nodet or lrim
+        Seen_ = set(link_)  # all links
+        L_ = []
+        while link_:  # extend cluster N_
+            _link_ = link_; link_ = []; seen_ = []
+            for L in _link_:  # buffer
+                if fi: # cluster nodes via rng (density) - specific links
+                    for _N in L.rim if fln else L.rim[-1]:
+                        if _N not in iN_ or _N.fin: continue
+                        if rng==1 or _N.root.rng==1:  # not rng-banded
                             if rolp(E, set(rim_(E,0)), fi=1) > ave*rc:  # N_,L_ += full-rim connected _N,_L
-                                node_ += [_N]; _N.fin = 1
+                                N_ += [_N]; _N.fin = 1  # conditional
                                 for l in rim_(_N,0):
-                                    if l not in L_ and l.rng == rng and val_(l.Et,aw=rc) > 0: link_ += [l]; L_ += [l]
-                                    elif l not in llink_ and l.rng > rng: llink_ += [l]
+                                    seen_+=[l]
+                                    if l.rng==rng and val_(l.Et, aw=rc) > 0: link_+=[l]
+                                    elif l.rng>rng: long_ += [l]
                         else:  # cluster top-rng roots
                             _n = _N; _R = _n.root
                             while _R.root and _R.root.rng > _n.rng: _n = _R; _R = _R.root
-                            if not _R.fin and rolp(E, set(link_), fi=1, R=1) > ave*rc:
-                                node_ += [_R]; _R.fin = 1; _N.fin = 1
-                                link_ += _R.link_; L_ += _R.link_; llink_+= _R.hL_
-            else:  # cluster links via rim
-                if fln:  # by L diff
-                    for L in link_[:]:
-                        for n in L.rim:  # in nodet, no eval
-                            if n in N_ and not n.fin and rolp(E, set(rim_(n,0)), fi) > ave*rc:
-                                node_ += [l for l in rim_(n,0) if l not in node_ and  val_(l.Et,0,aw=rc) > 0]
-                                link_ += [n]; L_ += [n]; n.fin = 1  # no link eval?
-                else:  # by LL match
-                    for _L in rim_(E,1):  # via E.rim if E.fi else E.rim[-1]
-                        if _L.fin: continue
-                        _L.fin = 1
-                        for LL in rim_(_L,0):
-                            if LL not in L_ and val_(_L.Et,0,aw=rc) > 0:
-                                node_ += [_L]; link_ += [LL]; L_ += [LL]
-            _link_ = list(set(link_))
-            L_ = list(set(L_))
-        if node_:
-            node_ = list(set(node_))
+                            if not _R.fin:
+                                seen_+=_R.link_
+                                if rolp(E, link_, fi=1, R=1) > ave*rc:
+                                    N_ += [_R]; _R.fin = 1; _N.fin = 1
+                                    link_+=_R.link_; long_+=_R.hL_
+                else:  # cluster links via rim
+                    if fln:  # by L diff
+                       for n in L.rim:  # in nodet, no eval
+                            if n in iN_ and not n.fin:
+                                seen_+=[n]
+                                if rolp(E, set(rim_(n,0)), fi) > ave*rc:
+                                    N_ += [l for l in rim_(n,0) if val_(l.Et,0,aw=rc) > 0]; n.fin = 1
+                                    link_ += [n]
+                    else:  # by LL match
+                        for _L in rim_(L,1):  # via E.rim if E.fi else E.rim[-1]
+                            if _L.fin: continue
+                            for LL in rim_(_L,0):
+                                seen_.add(LL)
+                                if val_(_L.Et,0,aw=rc) > 0:
+                                    N_ += [_L]; _L.fin = 1; link_+=[LL]
+            link_ = list(set(link_)-Seen_)
+            Seen_.update(set(seen_))
+        if N_:
+            N_, long_ = list(set(N_)), list(set(long_))
             Et, olp = np.zeros(3),0  # sum node_:
-            for n in node_:
+            for n in N_:
                 Et += n.et; olp += n.olp
                 # any fork
-            if fi: altg_ = {L.root for L in link_ if L.root}  # contour if fi else cores, individual rims are too weak
-            else:  altg_ = {n for N in node_ for n in (N.rim if fln else N.rim[0])}  # node_ is Ls, assign nodets
+            if fi: altg_ = {L.root for L in L_ if L.root}  # contour if fi else cores, individual rims are too weak
+            else:  altg_ = {n for N in N_ for n in (N.rim if fln else N.rim[0])}  # N_ is Ls, assign nodets
             _Et  = np.sum([i.Et for i in altg_], axis=0) if altg_ else np.zeros(3)
 
-            if val_(Et,1, (len(node_)-1)*Lw, rc+olp, _Et) > 0:
-                G_ += [sum2graph(root, E_, node_, link_, llink_, Et, olp, rng, ([altg_,_Et] if fi else altg_) if altg_ else [])]
+            if val_(Et,1, (len(N_)-1)*Lw, rc+olp, _Et) > 0:
+                G_ += [sum2graph(root, E_,N_,L_,long_, Et, olp, rng, ([altg_,_Et] if fi else altg_) if altg_ else [])]
     if G_:
         return sum_N_(G_, root)
 
-def sum2graph(root, E_, node_,link_,llink_, Et, olp, rng, altg_, fC=0):  # sum node,link attrs in graph, aggH in agg+ or player in sub+
+def sum2graph(root, E_, node_,link_,long_, Et, olp, rng, altg_, fC=0):  # sum node,link attrs in graph, aggH in agg+ or player in sub+
 
     n0 = Copy_(node_[0]); derH = n0.derH
     l0 = Copy_(link_[0]); DerH = l0.derH
     graph = CN(root=root, fi=1,rng=rng, N_=node_,L_=link_,olp=olp, Et=Et, altg_=altg_,box=n0.box, baseT=n0.baseT+l0.baseT, derTT=n0.derTT+l0.derTT)
-    graph.hL_ = llink_
+    graph.hL_ = long_
     n0.root = graph; yx_ = [n0.yx]; fg = n0.fi and isinstance(n0.N_[0],CN)   # not PPs
     Nt = Copy_(n0)  #->CN, comb forks: add_N(Nt,Nt.Lt)?
     for N in node_[1:]:
