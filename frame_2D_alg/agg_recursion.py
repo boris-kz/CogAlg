@@ -12,7 +12,7 @@ Cross-comp forms Miss, Match: min= shared_quantity for directly predictive param
 rng+: incremental-range cross-comp nodes: edge segments at < max distance, cluster if they match. 
 der+: incremental-derivation cross-comp links, from node cross-comp, if abs_diff * rel_adjacent_match
 
-Clustering is compressive by grouping the elements, by direct similarity to centroids or transitive similarity in graphs, 2 forks:
+Clustering is compressively grouping the elements, by direct similarity to centroids or transitive similarity in graphs, 2 forks:
 nodes: connectivity clustering / >ave M, progressively reducing overlap by exemplar selection, centroid clustering, floodfill.
 links: correlation clustering if >ave D, forming contours that complement adjacent connectivity clusters.
 
@@ -130,7 +130,7 @@ def Copy_(N, root=None, init=0):
     return C
 
 ave, avd, arn, aI, aveB, aveR, Lw, intw, loopw, centw, contw = 10, 10, 1.2, 100, 100, 3, 5, 2, 5, 10, 15  # value filters + weights
-adist, amed, distw, medw = 10, 3, 2, 2  # cost filters + weights, add alen for ?
+adist, amed, distw, medw = 10, 3, 2, 2  # cost filters + weights, add alen?
 wM, wD, wN, wO, wI, wG, wA, wL = 10, 10, 20, 20, 1, 1, 20, 20  # der params higher-scope weights = reversed relative estimated ave?
 w_t = np.ones((2,8))  # fb weights per derTT, adjust in agg+
 wY = wX = 64; wYX = np.hypot(wY,wX)  # focus dimensions
@@ -204,7 +204,7 @@ def cluster_edge(edge, frame, lev, derlay):  # non-recursive comp_PPm, comp_PPd,
         lev.L_+= L_; lev.Et = mEt+dEt  # links between PPms
         for l in L_: derlay.add_lay(l.derH[0]); frame.baseT+=l.baseT; frame.derTT+=l.derTT; frame.Et += l.Et
         if val_(dEt,0, (len(L_)-1)*Lw, 2+contw) > 0:
-            Lt = cluster(frame, PP_, [n for PP in PP_ for n in PP.rim], rc=2,fi=0)
+            Lt = cluster(frame, L_,L_, rc=2, fi=0)
             if Lt:  # L_ graphs
                 if lev.lH: lev.lH[0].N_ += Lt.N_; lev.lH[0].Et += Lt.Et
                 else:      lev.lH += [Lt]
@@ -216,9 +216,9 @@ def rim_(N, fi=None):  # get max-med [(L,rev,_N)], rev: L dir relative to N
     elif isinstance(N.rim[0], list):
         rt_ = N.rim[-1]  # max-med layer in nested L.rim
     else:
-        n_ = N.rim
+        n_ = N.rim  # flat L.rim = nodet
         while isinstance(n_[0], CN) and not n_[0].fi:  # unpack n_: terminal L.[n,_n] tree branches
-            n_ = [n for L in n_ for n in L.rim]  # L.rim is not nested
+           n_ = [n for L in n_ for n in L.rim]  # L.rims stay flat
         rt_ = [rt for n in n_ for rt in n.rim]  # n.fi = 1
     return [r if fi is None else r[2] if fi else r[0] for r in rt_]
 
@@ -231,7 +231,7 @@ def val_(Et, fi=1, mw=1, aw=1, _Et=np.zeros(3)):  # m,d eval per cluster or cros
     if fi==2: val = np.array([m-am, d-ad]) * mw
     else:     val = (m-am if fi else d-ad) * mw  # m: m/ (m+d), d: d/ (m+d)?
     if _Et[2]:
-        # borrow rational deviation of contour if fi else root Et: multiple?, not circular
+        # borrow rational deviation of contour if fi else root Et: multiple? not circular
         _m,_d,_n = _Et; _mw = mw*(_n/n)
         if fi==2: val *= np.array([_d/ad, _m/am]) * _mw
         else:     val *= (_d/ad if fi else _m/am) * _mw
@@ -476,24 +476,25 @@ def cluster(root, iN_, E_, rc, fi, rng=1):  # flood-fill node | link clusters
         n.fin = 0
     for E in E_:  # init
         if E.fin: continue
-        E.fin = 1
+        E.fin = 1; seen_ = []
         if fi: # node clustering
             if rng==1 or E.root.rng==1:  # E is not rng-banded
-                N_,link_,long_ = [E],[],[]
+                N_,link_,long_ = [],[],[]
                 for l in rim_(E,0):  # lrim
-                    if l.rng==rng and val_(l.Et,aw=rc) > 0: link_+=[l]  # or select links here?
+                    seen_ += [l]
+                    if l.rng==rng and val_(l.Et,aw=rc) > 0: link_+=[l]; N_ += [E]
                     elif l.rng>rng: long_+=[l]
             else: # E is rng-banded, cluster top-rng roots
                 n = E; R = n.root
                 while R.root and R.root.rng > n.rng: n = R; R = R.root
                 if R.fin: continue
-                N_,link_,long_ = [R], R.L_, R.hL_; R.fin = 1
+                N_,link_,long_ = [R], R.L_, R.hL_; R.fin = 1; seen_+=R.link_
         else: # link clustering
             N_,long_ = [],[]; link_ = rim_(E, 1 if fln else 0)  # nodet or lrim
-        Seen_ = set(link_)  # all links
+        Seen_ = set(link_)  # all visited
         L_ = []
         while link_:  # extend cluster N_
-            _link_ = link_; link_ = []; seen_ = []
+            L_+=link_; _link_=link_; link_=[]; seen_=[]
             for L in _link_:  # buffer
                 if fi: # cluster nodes via rng (density) - specific links
                     for _N in L.rim if fln else L.rim[-1]:
@@ -525,9 +526,9 @@ def cluster(root, iN_, E_, rc, fi, rng=1):  # flood-fill node | link clusters
                         for _L in rim_(L,1):  # via E.rim if E.fi else E.rim[-1]
                             if _L.fin: continue
                             for LL in rim_(_L,0):
-                                seen_.add(LL)
+                                seen_ += [LL]
                                 if val_(_L.Et,0,aw=rc) > 0:
-                                    N_ += [_L]; _L.fin = 1; link_+=[LL]
+                                    N_ += [_L]; _L.fin = 1; link_ += [LL]
             link_ = list(set(link_)-Seen_)
             Seen_.update(set(seen_))
         if N_:
@@ -541,7 +542,7 @@ def cluster(root, iN_, E_, rc, fi, rng=1):  # flood-fill node | link clusters
             _Et  = np.sum([i.Et for i in altg_], axis=0) if altg_ else np.zeros(3)
 
             if val_(Et,1, (len(N_)-1)*Lw, rc+olp, _Et) > 0:
-                G_ += [sum2graph(root, E_,N_,L_,long_, Et, olp, rng, ([altg_,_Et] if fi else altg_) if altg_ else [])]
+                G_ += [sum2graph(root, E_,N_,L_,long_,Et, olp,rng, ([altg_,_Et] if fi else altg_) if altg_ else [])]
     if G_:
         return sum_N_(G_, root)
 
