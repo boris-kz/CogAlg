@@ -457,3 +457,22 @@ def rim_(N, fi=None):  # get max-med [(L,rev,_N)], rev: L dir relative to N
         # rt_ = [rt for n in n_ for rt in n.rim]  # n.fi = 1
     return [r if fi is None else r[2] if fi else r[0] for r in rt_]
 
+def Cluster(root, N_, rc, fi):  # clustering root
+
+    Nflat_ = list(set([N for n_ in N_ for N in n_])) if fi else N_
+    if fi:
+        for n in Nflat_: n.sel=0
+        E_, Et = get_exemplars(Nflat_, rc, fi)
+    else: E_, Et = N_, root.Et  # fi=0?
+
+    if val_(Et,fi, (len(Nflat_)-1)*Lw, rc+contw, root.Et) > 0:
+        if fi:
+            nG = []  # bottom-up rng-banded clustering:
+            for rng, rN_ in enumerate(N_, start=1):
+                rE_ = [n for n in rN_ if n.sel]
+                aw = rc * rng + contw  # cluster Nf_ via rng exemplars:
+                if rE_ and val_(np.sum([n.Et for n in rE_], axis=0),1,(len(rE_)-1)*Lw, aw) > 0:
+                    nG = cluster(root, Nflat_, rE_, aw, 1, rng) or nG  # keep top-rng Gt
+        else:
+            nG = cluster(root, N_, E_, rc, fi=0)
+        return nG

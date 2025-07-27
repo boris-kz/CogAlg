@@ -108,6 +108,7 @@ class CN(CBase):
         n.cent_ = kwargs.get('cent_',[])  # int centroid Gs, replace/combine N_?
         n.altg_ = kwargs.get('altg_',[])  # ext contour Gs, replace/combine rim?
         n.fin = kwargs.get('fin',0)  # in cluster, temporary
+        n.sel = kwargs.get('fin',1)  # exemplar, temporary
         n.compared_ = set()
         # n.fork_tree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.N_)
@@ -176,7 +177,7 @@ def cluster_edge(edge, frame, lev, derlay):  # non-recursive comp_PPm, comp_PPd,
                 _eN_ = {*eN_}
             if val_(et, mw=(len(node_)-1)*Lw, aw=2+contw) > 0:  # rc=2
                 Et += et
-                G_ += [sum2graph(frame, node_,node_,link_,[],et, olp=1,rng=1, altg_=[])]  # single-lay link_derH
+                G_ += [sum2graph(frame, node_,link_,[],et, olp=1,rng=1, altg_=[])]  # single-lay link_derH
         return G_, Et
 
     def comp_PP_(PP_):
@@ -258,7 +259,7 @@ def cross_comp(root, rc, fi=1):  # rng+ and der+ cross-comp and clustering
             if root.L_: root.lH += [sum_N_(root.L_)]  # replace L_ with agg+ L_:
             root.L_=L_; root.Et += Et
             if dV >avd: lG = cross_comp(CN(N_=L_), rc+contw, fi=0)  # -> Lt.nH, +2 der layers
-            else:       lG = Cluster(root, N_, rc+contw, fi=0)  # cluster N.rim Ls, +1 layer
+            else:       lG = Cluster(root, L_, rc+contw, fi=0)  # cluster N.rim Ls, +1 layer
             if lG:
                 lG.altg_ = [(core,rdn) for rdn,core in enumerate(sorted(lG.altg_[0], key=lambda x:(x.Et[0]/x.Et[2]), reverse=True), start=1)]
                 comb_altg_([n for N in N_ for n in N] if fi else N_, rc)  # pack, cross_comp in N.altg_
@@ -435,62 +436,54 @@ def rolp(N, _N_, fi, E=0, R=0): # rV of N.rim |L_ overlap with _N_: inhibition|s
 
 def get_exemplars(N_, rc, fi):  # get sparse nodes by multi-layer non-maximum suppression
 
-    E_, Et = [], np.zeros(3)  # ~ point cloud of focal nodes
-    _E_ = set()  # prior = stronger:
-    for rdn, N in enumerate(sorted(N_, key=lambda n: n.et[1-fi]/ n.et[2], reverse=True), start=1):
+    _E_ = set()
+    # prior: stronger
+    for rdn, N in enumerate(sorted(N_, key=lambda n: n.et[1-fi] / n.et[2], reverse=True), start=1):
         # ave *= relV of overlap by stronger-E inhibition zones
         roV = rolp(N, _E_, fi, E=1)
         if val_(N.et, fi, aw = rc + rdn + loopw + roV) > 0:  # cost
             _E_.update([r for r in rim_(N,fi) if val_(r.Et,fi,aw=rc) > 0])  # selective nrim|lrim
-            Et += N.et; N.sel = 1  # in cluster
-            E_ += [N]  # exemplars
+            N.sel = 1  # in point cloud of focal nodes
         else:
             break  # the rest of N_ is weaker, trace via rims
-    return E_, Et
 
 def Cluster(root, N_, rc, fi):  # clustering root
 
-    Nflat_ = list(set([N for n_ in N_ for N in n_])) if fi else N_
+    if isinstance(N_[0],CN): Nf_ = N_; N_= [N_]; Et = root.Et  # convert to rng-banded format
+    else:                    Nf_ = list(set([N for n_ in N_ for N in n_]));  Et = None
     if fi:
-        for n in Nflat_: n.sel=0
-        E_, Et = get_exemplars(Nflat_, rc, fi)
-    else: E_, Et = N_, root.Et  # fi=0?
-
-    if val_(Et,fi, (len(Nflat_)-1)*Lw, rc+contw, root.Et) > 0:
-        if fi:
-            nG = []  # bottom-up rng-banded clustering:
-            for rng, rN_ in enumerate(N_, start=1):
-                rE_ = [n for n in rN_ if n.sel]
-                aw = rc * rng + contw  # cluster Nf_ via rng exemplars:
-                if rE_ and val_(np.sum([n.Et for n in rE_], axis=0),1,(len(rE_)-1)*Lw, aw) > 0:
-                    nG = cluster(root, Nflat_, rE_, aw, 1, rng) or nG  # keep top-rng Gt
-        else:
-            nG = cluster(root, N_, E_, rc, fi=0)
+        get_exemplars(Nf_, rc, fi)  # set n.sel, cluster rN_ via rng exemplars
+    nG = []
+    for rng, rN_ in enumerate(N_, start=1):  # bottom-up rng-banded clustering
+        aw = rc * rng +contw
+        Et = Et if Et is not None else np.sum([n.Et for n in rN_], axis=0)
+        if rN_ and val_(rN_, Et, fi, (len(rN_)-1)*Lw, aw) > 0:
+            nG = cluster(root, root.N_ if  fi else Nf_, rN_, aw, fi, rng) or nG
+            # last valid nG
         return nG
 
-def cluster(root, iN_, E_, rc, fi, rng=1):  # flood-fill node | link clusters
+def cluster(root, iN_, N_, rc, fi, rng=1):  # flood-fill node | link clusters
 
     G_ = []  # exclusive per fork,ave, only centroids can be fuzzy
-    fln = isinstance(E_[0].rim[0], tuple)  # flat rim
-    for n in (root.N_ if fi else iN_):
-        n.fin = 0
-    for E in E_:  # init
-        if E.fin: continue
-        E.fin = 1; seen_ = []
+    fln = isinstance(N_[0].rim[0], CN)  # flat nodet
+    for n in iN_: n.fin = 0
+    for N in N_:  # init
+        if not N.sel or N.fin: continue  # exemplars or all
+        N.fin = 1; seen_ = []
         if fi: # node clustering
-            if rng==1 or E.root.rng==1:  # E is not rng-banded
+            if rng==1 or N.root.rng==1:  # E is not rng-banded
                 N_,link_,long_ = [],[],[]
-                for l in rim_(E,0):  # lrim
+                for l in rim_(N,0):  # lrim
                     seen_ += [l]
-                    if l.rng==rng and val_(l.Et,aw=rc) > 0: link_+=[l]; N_ += [E]
+                    if l.rng==rng and val_(l.Et,aw=rc) > 0: link_+=[l]; N_ += [N]
                     elif l.rng>rng: long_+=[l]
-            else: # E is rng-banded, cluster top-rng roots
-                n = E; R = n.root
+            else: # N is rng-banded, cluster top-rng roots
+                n = N; R = n.root
                 while R.root and R.root.rng > n.rng: n = R; R = R.root
                 if R.fin: continue
                 N_,link_,long_ = [R], R.L_, R.hL_; R.fin = 1; seen_+=R.link_
         else: # link clustering
-            N_,long_ = [],[]; link_ = rim_(E, 1 if fln else 0)  # nodet or lrim
+            N_,long_ = [],[]; link_ = rim_(N,0)  # nodet or lrim
         Seen_ = set(link_)  # all visited
         L_ = []
         while link_:  # extend cluster N_
@@ -500,7 +493,7 @@ def cluster(root, iN_, E_, rc, fi, rng=1):  # flood-fill node | link clusters
                     for _N in L.rim if fln else L.rim[-1]:
                         if _N not in iN_ or _N.fin: continue
                         if rng==1 or _N.root.rng==1:  # not rng-banded
-                            if rolp(E, set(rim_(E,0)), fi=1) > ave*rc:  # N_,L_ += full-rim connected _N,_L
+                            if rolp(N, set(rim_(N,0)), fi=1) > ave*rc:  # N_,L_ += full-rim connected _N,_L
                                 N_ += [_N]; _N.fin = 1  # conditional
                                 for l in rim_(_N,0):
                                     seen_+=[l]
@@ -511,7 +504,7 @@ def cluster(root, iN_, E_, rc, fi, rng=1):  # flood-fill node | link clusters
                             while _R.root and _R.root.rng > _n.rng: _n = _R; _R = _R.root
                             if not _R.fin:
                                 seen_+=_R.link_
-                                if rolp(E, link_, fi=1, R=1) > ave*rc:
+                                if rolp(N, link_, fi=1, R=1) > ave*rc:
                                     N_ += [_R]; _R.fin = 1; _N.fin = 1
                                     link_+=_R.link_; long_+=_R.hL_
                 else:  # cluster links via rim
@@ -519,7 +512,7 @@ def cluster(root, iN_, E_, rc, fi, rng=1):  # flood-fill node | link clusters
                        for n in L.rim:  # in nodet, no eval
                             if n in iN_ and not n.fin:
                                 seen_+=[n]
-                                if rolp(E, set(rim_(n,0)), fi) > ave*rc:
+                                if rolp(N, set(rim_(n,0)), fi) > ave*rc:
                                     N_ += [l for l in rim_(n,0) if val_(l.Et,0,aw=rc) > 0]; n.fin = 1
                                     link_ += [n]
                     else:  # by LL match
@@ -542,11 +535,11 @@ def cluster(root, iN_, E_, rc, fi, rng=1):  # flood-fill node | link clusters
             _Et  = np.sum([i.Et for i in altg_], axis=0) if altg_ else np.zeros(3)
 
             if val_(Et,1, (len(N_)-1)*Lw, rc+olp, _Et) > 0:
-                G_ += [sum2graph(root, E_,N_,L_,long_,Et, olp,rng, ([altg_,_Et] if fi else altg_) if altg_ else [])]
+                G_ += [sum2graph(root, N_,L_,long_,Et, olp,rng, ([altg_,_Et] if fi else altg_) if altg_ else [])]
     if G_:
         return sum_N_(G_, root)
 
-def sum2graph(root, E_, node_,link_,long_, Et, olp, rng, altg_, fC=0):  # sum node,link attrs in graph, aggH in agg+ or player in sub+
+def sum2graph(root, node_,link_,long_, Et, olp, rng, altg_, fC=0):  # sum node,link attrs in graph, aggH in agg+ or player in sub+
 
     n0 = Copy_(node_[0]); derH = n0.derH
     l0 = Copy_(link_[0]); DerH = l0.derH
@@ -573,20 +566,11 @@ def sum2graph(root, E_, node_,link_,long_, Et, olp, rng, altg_, fC=0):  # sum no
 
     # divisive centroid clustering if projected internal variance:
     if val_(Et,0, mw = graph.span * 2 * slope(link_), aw = olp + centw) > 0:
-        cluster_C_(graph, E_, olp + centw, fi=node_[0].fi)
+        cluster_C_(graph, node_, olp + centw, fi=node_[0].fi)
         # seed CC_=E_, ex node_?
     return graph
 
-def slope(link_):  # get ave 2nd rate of change with distance in cluster
-
-    Link_ = sorted(link_, key=lambda x: x.span)
-    dists = np.array([l.span for l in Link_])
-    diffs = np.array([l.Et[1]/l.Et[2] for l in Link_])
-    rates = diffs / dists
-    # ave rate of change incr / unit dist: d(rate)/d(distance):
-    return (np.diff(rates) / np.diff(dists)).mean()
-
-def cluster_C_(root, E_, rc, fi=1, fdeep=0):  # form centroids by clustering exemplar surround, drifting via rims of new member nodes
+def cluster_C_(root, N_, rc, fi=1, fdeep=0):  # form centroids by clustering exemplar surround, drifting via rims of new member nodes
 
     def comp_C(C, n):
         _,et,_ = base_comp(C,n, rc)
@@ -598,9 +582,10 @@ def cluster_C_(root, E_, rc, fi=1, fdeep=0):  # form centroids by clustering exe
         return et
 
     _C_ = []; av = ave if fi else avd; _N_ = []
-    for E in E_:
-        C = Copy_(E,root, init=fi+2)  # init centroid
-        C._N_ = list({n for N in rim_(E,fi) for n in rim_(N,fi)})  # core members + surround for comp to N_ mean
+    for N in N_:
+        if not N.sel: continue  # exemplars or all
+        C = Copy_(N,root, init=fi+2)  # init centroid
+        C._N_ = list({n for N in rim_(N,fi) for n in rim_(N,fi)})  # core members + surround for comp to N_ mean
         _N_ += C._N_; _C_ += [C]
     # reset per root:
     for n in set(root.N_+_N_): n.C_, n.vo_, n._C_, n._vo_ = [], [], [], []
@@ -634,7 +619,16 @@ def cluster_C_(root, E_, rc, fi=1, fdeep=0):  # form centroids by clustering exe
             break
     if val_(ET,fi, aw=O+rc) > 0:  # no _Et?
         root.cent_ = set(C_),ET
-        # add cross_comp for low overlap?
+        # cross_comp, low overlap eval in comp_node_?
+
+def slope(link_):  # get ave 2nd rate of change with distance in cluster
+
+    Link_ = sorted(link_, key=lambda x: x.span)
+    dists = np.array([l.span for l in Link_])
+    diffs = np.array([l.Et[1]/l.Et[2] for l in Link_])
+    rates = diffs / dists
+    # ave rate of change incr / unit dist: d(rate)/d(distance):
+    return (np.diff(rates) / np.diff(dists)).mean()
 
 def centroid_M(m_, ave):  # adjust weights on attr matches | diffs, recompute with sum
 
