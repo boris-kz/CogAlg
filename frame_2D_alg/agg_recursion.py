@@ -108,7 +108,7 @@ class CN(CBase):
         n.cent_ = kwargs.get('cent_',[])  # int centroid Gs, replace/combine N_?
         n.altg_ = kwargs.get('altg_',[])  # ext contour Gs, replace/combine rim?
         n.fin = kwargs.get('fin',0)  # in cluster, temporary
-        n.sel = kwargs.get('fin',1)  # exemplar, temporary
+        n.exe = kwargs.get('fin',1)  # exemplar, temporary
         n.compared_ = set()
         # n.fork_tree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.N_)
@@ -211,16 +211,15 @@ def cluster_edge(edge, frame, lev, derlay):  # non-recursive comp_PPm, comp_PPd,
                 else:      lev.lH += [Lt]
                 lev.Et += Lt.Et
 
-def rim_(N, fi=None):  # get max-med [(L,rev,_N)], rev: L dir relative to N
+def rim_(N, fi=None, fln=0):  # get nodet or [(L,rev,_N)], rev: L dir relative to N
     if N.fi:
         rt_ = N.rim
-    elif isinstance(N.rim[0], list):
-        rt_ = N.rim[-1]  # max-med layer in nested L.rim
-    else:
-        n_ = N.rim  # flat L.rim = nodet
-        while isinstance(n_[0], CN) and not n_[0].fi:  # unpack n_: terminal L.[n,_n] tree branches
-           n_ = [n for L in n_ for n in L.rim]  # L.rims stay flat
-        rt_ = [rt for n in n_ for rt in n.rim]  # n.fi = 1
+    elif isinstance(N.rim[0],list) and not fln:  # get all rim layers except nodet
+        rt_ = [rt for lay in N.rim[1:] for rt in lay]
+    else:  # get nodet tree
+        n_ = N.rim if isinstance(N.rim[0],CN) else N.rim[0]
+        return list(set([_n for n in n_ for _n in rim_(n, fi, fln=1)]))  # all nodet tree leaves
+
     return [r if fi is None else r[2] if fi else r[0] for r in rt_]
 
 def val_(Et, fi=1, mw=1, aw=1, _Et=np.zeros(3)):  # m,d eval per cluster or cross_comp
@@ -304,13 +303,13 @@ def comp_node_(iN_, rc):  # rng+ forms layer of rim and extH per N?
             # density / comp_N: et|M, 0/rng=1?
             max_dist = adist * (radii/aveR) * ((_m+m)/(ave*(_n+n+0))/ intw)  # ave_dist * radii * induction
             if max_dist > dist or set(_G.rim) & set(G.rim):
-                # comp if close or share matching mediators: add to inhibited?
+                # comp if close or share matching mediators:
                 Link = comp_N(_G,G, rc, L_=L_, angle=np.array([dy,dx]), span=dist, fdeep = dist < max_dist/2, rng=rng)
                 if val_(Link.Et, aw=loopw*olp) > 0:
                     Et += Link.Et; olp_ += [olp]  # link.olp is the same with o
                     for n in _G,G:
                         if n not in N_ and val_(n.et, aw=rc+rng-1+loopw+olp) > 0:  # cost+ / rng?
-                            N_ += [n]  # for rng+ and exemplar eval
+                            N_ += [n]  #-> rng+ eval
         if N_:
             N__ += [N_]; ET += Et
             if val_(Et, mw=(len(N_)-1)*Lw, aw=loopw * sum(olp_)/max(1,len(olp_))) > 0:  # current-rng vM
@@ -443,7 +442,7 @@ def get_exemplars(N_, rc, fi):  # get sparse nodes by multi-layer non-maximum su
         roV = rolp(N, _E_, fi, E=1)
         if val_(N.et, fi, aw = rc + rdn + loopw + roV) > 0:  # cost
             _E_.update([r for r in rim_(N,fi) if val_(r.Et,fi,aw=rc) > 0])  # selective nrim|lrim
-            N.sel = 1  # in point cloud of focal nodes
+            N.exe = 1  # in point cloud of focal nodes
         else:
             break  # the rest of N_ is weaker, trace via rims
 
@@ -452,7 +451,7 @@ def Cluster(root, N_, rc, fi):  # clustering root
     if isinstance(N_[0],CN): Nf_ = N_; N_= [N_]; Et = root.Et  # convert to rng-banded format
     else:                    Nf_ = list(set([N for n_ in N_ for N in n_]));  Et = None
     if fi:
-        get_exemplars(Nf_, rc, fi)  # set n.sel, cluster rN_ via rng exemplars
+        get_exemplars(Nf_, rc, fi)  # set n.exe, cluster rN_ via rng exemplars
     nG = []
     for rng, rN_ in enumerate(N_, start=1):  # bottom-up rng-banded clustering
         aw = rc * rng +contw
@@ -468,7 +467,7 @@ def cluster(root, iN_, N_, rc, fi, rng=1):  # flood-fill node | link clusters
     fln = isinstance(N_[0].rim[0], CN)  # flat nodet
     for n in iN_: n.fin = 0
     for N in N_:  # init
-        if not N.sel or N.fin: continue  # exemplars or all
+        if not N.exe or N.fin: continue  # exemplars or all
         N.fin = 1; seen_ = []
         if fi: # node clustering
             if rng==1 or N.root.rng==1:  # E is not rng-banded
@@ -583,7 +582,7 @@ def cluster_C_(root, N_, rc, fi=1, fdeep=0):  # form centroids by clustering exe
 
     _C_ = []; av = ave if fi else avd; _N_ = []
     for N in N_:
-        if not N.sel: continue  # exemplars or all
+        if not N.exe: continue  # exemplars or all
         C = Copy_(N,root, init=fi+2)  # init centroid
         C._N_ = list({n for N in rim_(N,fi) for n in rim_(N,fi)})  # core members + surround for comp to N_ mean
         _N_ += C._N_; _C_ += [C]

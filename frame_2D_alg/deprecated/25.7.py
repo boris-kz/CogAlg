@@ -445,16 +445,16 @@ def cluster(root, iN_, E_, rc, fi, rng=1):  # flood-fill node | link clusters
     if G_:
         return sum_N_(G_, root)
 
-def rim_(N, fi=None):  # get max-med [(L,rev,_N)], rev: L dir relative to N
+def rim_1(N, fi=None):  # get max-med [(L,rev,_N)], rev: L dir relative to N
     if N.fi:
         rt_ = N.rim
     elif isinstance(N.rim[0], list):
         rt_ = N.rim[-1]  # max-med layer in nested L.rim
     else:
-        return [r for n in N.rim for r in rim_(n, fi=fi)]
-        # while isinstance(n_[0], CN) and not n_[0].fi:  # unpack n_: terminal L.[n,_n] tree branches
-        #     n_ = [n for L in n_ for n in L.rim]  # L.rim is not nested
-        # rt_ = [rt for n in n_ for rt in n.rim]  # n.fi = 1
+        n_ = N.rim  # flat L.rim = nodet
+        while isinstance(n_[0], CN) and not n_[0].fi:  # unpack n_: terminal L.[n,_n] tree branches
+           n_ = [n for L in n_ for n in L.rim]  # L.rims stay flat
+        rt_ = [rt for n in n_ for rt in n.rim]  # n.fi = 1
     return [r if fi is None else r[2] if fi else r[0] for r in rt_]
 
 def Cluster(root, N_, rc, fi):  # clustering root
