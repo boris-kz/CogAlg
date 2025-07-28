@@ -320,20 +320,20 @@ def comp_node_(iN_, rc):  # rng+ forms layer of rim and extH per N?
 
 def comp_link_(iL_, rc):  # comp links via directional node-mediated _link tracing with incr mediation
 
-    for L in iL_: L._rim = []  # _rim append in comp
-    L__,LL_,ET,_L_ = [],[],np.zeros(3),iL_
+    for L in iL_:
+        L._rim = []; L.rim = [L.rim, L.rim[0].rim+L.rim[1].rim]  # nest nodet, rim
+    L__,LL_,ET,_L_ = [],[], np.zeros(3), iL_
     med = 1
     while _L_ and med < 4:
         L_, Et = [], np.zeros(3)
         for L in _L_:
-            for _L,rev,_ in rim_(L):  # top-med Ls, _rev^rev in comp_N
+            for _L,rev,_ in L.rim[-1]:  # top-med Ls, _rev^rev in comp_N
                 if _L not in L.compared_ and _L in iL_ and val_(_L.Et,0, aw=rc+med) > 0:  # high-d, new links can't be outside iL_
                     dy, dx = np.subtract(_L.yx, L.yx)
                     Link = comp_N(_L,L, rc, med, LL_, np.array([dy,dx]), np.hypot(dy,dx), rev)  # d = -d if L is reversed relative to _L
                     if val_(Link.Et,1, aw=rc+med) > 0:  # recycle Ls if high m
                         L_ += [L,_L]; Et += Link.Et
         for L in _L_:
-            if med==1: L.rim = [L.rim]  # nest nodet
             if L._rim: L.rim += [L._rim]; L._rim = []  # merge new rim per med loop
         if L_:
             L_ = list(set(L_)); L__ += L_; _L_ = []
@@ -467,7 +467,7 @@ def cluster(root, iN_, N_, rc, fi, rng=1):  # flood-fill node | link clusters
     fln = isinstance(N_[0].rim[0], CN)  # flat nodet
     for n in iN_: n.fin = 0
     for N in N_:  # init
-        if not N.exe or N.fin: continue  # exemplars or all
+        if not N.exe or N.fin: continue  # exemplars or all N_
         N.fin = 1; seen_ = []
         if fi: # node clustering
             if rng==1 or N.root.rng==1:  # E is not rng-banded
@@ -482,14 +482,14 @@ def cluster(root, iN_, N_, rc, fi, rng=1):  # flood-fill node | link clusters
                 if R.fin: continue
                 N_,link_,long_ = [R], R.L_, R.hL_; R.fin = 1; seen_+=R.link_
         else: # link clustering
-            N_,long_ = [],[]; link_ = rim_(N,0)  # nodet or lrim
+            N_,long_ = [],[]; link_ = rim_(N,0, fln)  # nodet or lrim
         Seen_ = set(link_)  # all visited
         L_ = []
         while link_:  # extend cluster N_
             L_+=link_; _link_=link_; link_=[]; seen_=[]
             for L in _link_:  # buffer
                 if fi: # cluster nodes via rng (density) - specific links
-                    for _N in L.rim if fln else L.rim[-1]:
+                    for _N in rim_(L,1):  #
                         if _N not in iN_ or _N.fin: continue
                         if rng==1 or _N.root.rng==1:  # not rng-banded
                             if rolp(N, set(rim_(N,0)), fi=1) > ave*rc:  # N_,L_ += full-rim connected _N,_L
@@ -508,12 +508,12 @@ def cluster(root, iN_, N_, rc, fi, rng=1):  # flood-fill node | link clusters
                                     link_+=_R.link_; long_+=_R.hL_
                 else:  # cluster links via rim
                     if fln:  # by L diff
-                       for n in L.rim:  # in nodet, no eval
-                            if n in iN_ and not n.fin:
-                                seen_+=[n]
-                                if rolp(N, set(rim_(n,0)), fi) > ave*rc:
-                                    N_ += [l for l in rim_(n,0) if val_(l.Et,0,aw=rc) > 0]; n.fin = 1
-                                    link_ += [n]
+                       for n in L.rim:  # flat nodet, no eval
+                            if n.fin: continue
+                            seen_ += [n]
+                            if rolp(N, set(rim_(n,0,1)), fi) > ave*rc:
+                                N_ += [l for l in rim_(n,0,1) if val_(l.Et,0,aw=rc) > 0]; n.fin = 1
+                                link_ += [n]
                     else:  # by LL match
                         for _L in rim_(L,1):  # via E.rim if E.fi else E.rim[-1]
                             if _L.fin: continue
@@ -530,7 +530,7 @@ def cluster(root, iN_, N_, rc, fi, rng=1):  # flood-fill node | link clusters
                 Et += n.et; olp += n.olp
                 # any fork
             if fi: altg_ = {L.root for L in L_ if L.root}  # contour if fi else cores, individual rims are too weak
-            else:  altg_ = {n for N in N_ for n in (N.rim if fln else N.rim[0])}  # N_ is Ls, assign nodets
+            else:  altg_ = {n for N in N_ for n in rim_(N.rim,1,1)}  # N_ is Ls, assign nodets
             _Et  = np.sum([i.Et for i in altg_], axis=0) if altg_ else np.zeros(3)
 
             if val_(Et,1, (len(N_)-1)*Lw, rc+olp, _Et) > 0:
