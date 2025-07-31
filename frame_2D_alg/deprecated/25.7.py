@@ -476,3 +476,63 @@ def Cluster(root, N_, rc, fi):  # clustering root
         else:
             nG = cluster(root, N_, E_, rc, fi=0)
         return nG
+
+def rim_2(N, fi=None, fln=0):
+
+    if N.fi: rt_ = N.rim
+    # base rim = [(L,rev,_N)], rev: L dir to N
+    elif isinstance(N.rim[0],list) and not fln:
+        rt_ = [rt for lay in N.rim[1:] for rt in lay]  # all L.rim layers above nodet
+    else:  # get nodet leaves
+        n_ = N.rim if isinstance(N.rim[0],CN) else N.rim[0]
+        return list(set([_n for n in n_ for _n in rim_(n, fi, fln=1)]))  # nodet tree leaves
+
+    return [r if fi is None else r[2] if fi else r[0] for r in rt_]
+
+
+def cross_comp1(root, rc, fi=1):  # rng+ and der+ cross-comp and clustering
+
+    N_,L_,Et = comp_node_(root.N_,rc) if fi else comp_link_(root.N_,rc)  # rc: redundancy+olp, lG.N_ is Ls
+    if len(L_) > 1:
+        for n in [n for N in N_ for n in N] if fi else N_:
+            for l in rim_(n,0): n.et+=l.Et  # ext olp
+        mV,dV = val_(Et,2, (len(L_)-1)*Lw, rc+loopw)
+        if dV > 0:
+            if root.L_: root.lH += [sum_N_(root.L_)]  # replace L_ with agg+ L_:
+            root.L_=L_; root.Et += Et
+            if dV >avd: lG = cross_comp(CN(N_=L_), rc+contw, fi=0)  # -> Lt.nH, +2 der layers
+            else:       lG = Cluster(root, L_, rc+contw, fi=0)  # cluster N.rim Ls, +1 layer
+            if lG: root.lH+= [lG]+lG.nH; root.Et+=lG.Et; root.derH+=lG.derH  # new der lays
+        if mV > 0:
+            nG = Cluster(root, N_, rc+loopw, fi)   # get_exemplars, cluster_C_, rng-banded if fi
+            if nG and val_(nG.Et,1, (len(nG.N_)-1)*Lw, rc+loopw+nG.rng, Et) > 0:
+                nG = cross_comp(nG, rc+loopw) or nG  # agg+
+            if nG:
+                _H = root.nH; root.nH = []
+                nG.nH = _H + [root] + nG.nH  # pack root in Nt.nH, has own L_,lH
+                return nG  # recursive feedback
+
+def comp_link_1(iL_, rc):  # comp links via directional node-mediated _link tracing with incr mediation
+
+    for L in iL_:
+        L._rim = []; L.rim = [L.rim, L.rim[0].rim+L.rim[1].rim]  # nest nodet, rim
+    L__,LL_,ET,_L_ = [],[], np.zeros(3), iL_
+    med = 1
+    while _L_ and med < 4:
+        L_, Et = [], np.zeros(3)
+        for L in _L_:
+            for _L,rev,_ in L.rim[-1]:  # top-med Ls, _rev^rev in comp_N
+                if _L not in L.compared_ and _L in iL_ and val_(_L.Et,0, aw=rc+med) > 0:  # high-d, new links can't be outside iL_
+                    dy, dx = np.subtract(_L.yx, L.yx)
+                    Link = comp_N(_L,L, rc, med, LL_, np.array([dy,dx]), np.hypot(dy,dx), rev)  # d = -d if L is reversed relative to _L
+                    if val_(Link.Et,1, aw=rc+med) > 0:  # recycle Ls if high m
+                        L_ += [L,_L]; Et += Link.Et
+        for L in _L_:
+            if L._rim: L.rim += [L._rim]; L._rim = []  # merge new rim per med loop
+        if L_:
+            L_ = list(set(L_)); L__ += L_; _L_ = []
+            for l in L_:
+                if l not in _L_ and len(l.rim) > med and val_(l.Et,0, aw=rc+med) > 0:
+                    _L_ += [l]  # high-d, rim extended in loop
+        med += 1
+    return list(set(L__)), LL_, ET
