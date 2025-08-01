@@ -536,3 +536,47 @@ def comp_link_1(iL_, rc):  # comp links via directional node-mediated _link trac
                     _L_ += [l]  # high-d, rim extended in loop
         med += 1
     return list(set(L__)), LL_, ET
+
+def base_comp(_N,N, rc, dir=1):  # comp Et, Box, baseT, derTT
+    """
+    pairwise similarity kernel:
+    m_ = element‑wise min(shared quantity) / max(total quantity) of eight attributes (sign‑aware)
+    d_ = element‑wise signed difference after size‑normalisation
+    DerTT = np.vstack([m_,d_])
+    Et[0] = Σ(m_ * w_t[0])    # total match (≥0) = relative shared quantity
+    Et[1] = Σ(|d_| * w_t[1])  # total absolute difference (≥0)
+    Et[2] = min(_n, n)        # min accumulation span
+    """
+    _M,_D,_n = _N.Et; M,D,n = N.Et
+    dn = _n - n; mn = min(_n,n) / max(_n,n)  # or multiplicative for ratios: min * rn?
+    rn = _n / n  # size ratio, add _o/o?
+    o, _o = N.olp, _N.olp
+    o*=rn; do = _o - o; mo = min(_o,o) / max(_o,o)
+    M*=rn; dM = _M - M; mM = min(_M,M) / max(_M,M)
+    D*=rn; dD = _D - D; mD = min(_D,D) / max(_D,D)
+    # skip baseT?
+    _I,_G,_Dy,_Dx = _N.baseT; I,G,Dy,Dx = N.baseT  # I, G|D, angle
+    I*=rn; dI = _I - I; mI = abs(dI) / aI
+    G*=rn; dG = _G - G; mG = min(_G,G) / max(_G,G)
+    mA, dA = comp_angle((_Dy,_Dx),(Dy*rn,Dx*rn))  # current angle if CL
+    # comp dimension:
+    if N.fi: # dimension is n nodes
+        _L,L = len(_N.N_), len(N.N_)
+        mL,dL = min(_L,L)/ max(_L,L), _L - L
+    else:  # dimension is distance
+        _L,L = _N.span, N.span   # dist, not cumulative, still positive?
+        mL,dL = min(_L,L)/ max(_L,L), _L - L
+    # comp depth, density:
+    # lenH and ave span, combined from N_ in links?
+    _m_,_d_ = np.array([[mM,mD,mn,mo,mI,mG,mA,mL], [dM,dD,dn,do,dI,dG,dA,dL]])
+    # comp derTT:
+    _i_ = _N.derTT[1]; i_ = N.derTT[1] * rn  # normalize by compared accum span
+    d_ = (_i_ - i_ * dir)  # np.arrays
+    _a_,a_ = np.abs(_i_),np.abs(i_)
+    m_ = np.divide( np.minimum(_a_,a_), np.maximum.reduce([_a_,a_, np.zeros(8) + 1e-7]))  # rms
+    m_ *= np.where((_i_<0)!=(i_<0), -1,1)  # match is negative if comparands have opposite sign
+    m_ += _m_; d_ += _d_
+    DerTT = np.array([m_,d_])  # [M,D,n,o, I,G,A,L], weigh by centroid_M?
+    Et = np.array([np.sum(m_* w_t[0] * rc), np.sum(np.abs(d_* w_t[1] * rc)), min(_n,n)])
+    # feedback*rc -weighted sum of m,d between comparands
+    return DerTT, Et, rn
