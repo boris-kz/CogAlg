@@ -580,3 +580,78 @@ def base_comp(_N,N, rc, dir=1):  # comp Et, Box, baseT, derTT
     Et = np.array([np.sum(m_* w_t[0] * rc), np.sum(np.abs(d_* w_t[1] * rc)), min(_n,n)])
     # feedback*rc -weighted sum of m,d between comparands
     return DerTT, Et, rn
+
+def cluster_edge(edge, frame, lev, derlay):  # light non-recursive version of cross_comp for PPs, unpack edge: not PP cluster
+
+    def comp_PP_(PP_):
+        N_,L_,mEt,dEt = [],[],np.zeros(3),np.zeros(3)
+        for _G, G in combinations(PP_, r=2):
+            dy,dx = np.subtract(_G.yx,G.yx); dist = np.hypot(dy,dx)
+            if dist - (G.span+_G.span) < adist / 10:  # very short here
+                L = comp_N(_G,G,2, angle=np.array([dy,dx]), span=dist)
+                m, d, n = L.Et
+                if m > ave * n * _G.olp * loopw: mEt += L.Et; N_ += [_G,G]  # mL_ += [L]
+                if d > avd * n * _G.olp * loopw: dEt += L.Et  # dL_ += [L]
+                L_ += [L]
+        dEt[2] = dEt[2] or 1e-7
+        return list(set(N_)),L_,mEt,dEt  # can't be empty
+
+    def cluster_PP_(PP_):
+        G_,Et = [],np.zeros(3)
+        while PP_:  # flood fill
+            node_,link_, et = [],[], np.zeros(3)
+            PP = PP_.pop(); _eN_ = [PP]
+            while _eN_:
+                eN_ = []
+                for _eN in _eN_:  # rim-connected ext Ns
+                    node_ += [_eN]
+                    for L,_,_ in _eN.rim:  # all +ve, *= density?
+                        if L not in link_:
+                            for eN in L.rim:
+                                if eN in PP_: eN_ += [eN]; PP_.remove(eN)  # merged
+                            link_ += [L]; et += L.Et
+                _eN_ = {*eN_}
+            if val_(et, mw=(len(node_)-1)*Lw, aw=2+contw) > 0:  # rc=2
+                Et += et
+                G_ += [sum2graph(frame, node_,link_,[],et, olp=1,rng=1, altg_=[])]  # single-lay link_derH
+        return G_, Et
+
+    def cluster_L_(L_, root):
+        lG_ = []
+        for L in L_:
+            if L.fin: continue
+            L.fin = 1; node_ = [L]
+            for n in L.rim:  # nodet PPs
+                for _L,_,_ in n.rim:
+                    if not _L.fin and val_(_L.Et,aw=2) > 0: node_ += [_L]; _L.fin = 1
+            node_ = list(set(node_)); Et, olp = np.zeros(3),0  # sum node_:
+            for n in node_:
+                Et += n.et; olp += n.olp
+            altg_ = {PP.root for L in node_ for PP in L.N_ if PP.root.root}  # rdn core Gs, exclude frame
+            _Et = np.sum([i.Et for i in altg_], axis=0) if altg_ else np.zeros(3)
+            altg_ = [[(core,rdn) for rdn,core in enumerate(sorted(altg_, key=lambda x:(x.Et[0]/x.Et[2]), reverse=True), start=1)], _Et]
+            if val_(Et,1, (len(node_)-1)*Lw, 2+olp, _Et) > 0:
+                lG_ += [sum2graph(root, node_,[],[],Et, olp,1,altg_)]
+        return lG_
+
+    PP_ = edge.node_
+    if val_(edge.Et, (len(PP_)-edge.rng)*Lw, loopw) > 0:
+        PP_,L_,mEt,dEt = comp_PP_([PP2N(PP,frame) for PP in PP_])
+        if not L_: return
+        if val_(mEt,1, (len(PP_)-1)*Lw, contw) > 0:
+            G_, Et = cluster_PP_(copy(PP_))  # can't be empty
+        else: G_ = []
+        if G_: frame.N_ += G_; lev.N_ += PP_; lev.Et += Et
+        else:  frame.N_ += PP_  # PPm_
+        lev.L_+= L_; lev.Et = mEt+dEt  # links between PPms
+        for l in L_: derlay.add_lay(l.derH[0]); frame.baseT+=l.baseT; frame.derTT+=l.derTT; frame.Et += l.Et
+        if val_(dEt,0, (len(L_)-1)*Lw, 2+contw) > 0:
+            lG_ = cluster_L_(L_,edge)
+            if lG_:
+                lG = sum_N_(lG_, edge)
+                if lev.lH: lev.lH[0].N_ += lG.N_; lev.lH[0].Et += lG.Et
+                else:      lev.lH += [lG]
+                lev.Et += lG.Et
+                for G in G_:
+                    altg_ = {L.root for N in G.N_ for L,_,_ in N.rim if L.root}
+                    if altg_: G.altg_ = comb_altg_(G, altg_,rc=3)  # pack, cross_comp

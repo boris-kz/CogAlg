@@ -169,7 +169,6 @@ def interpolate2dert(edge, y, x):
 def comp_angle(_A, A):  # rn doesn't matter for angles
 
     _angle, angle = [atan2(Dy, Dx) for Dy, Dx in [_A, A]]
-    # if _sign != sign: angle = (angle + pi)
     dangle = _angle - angle  # difference between angles
 
     if dangle > pi: dangle -= 2*pi  # rotate full-circle clockwise
