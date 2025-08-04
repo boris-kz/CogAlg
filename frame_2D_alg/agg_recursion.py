@@ -147,14 +147,13 @@ def vect_root(Fg, rV=1, ww_t=[]):  # init for agg+:
             np.array([ave,avd,arn,aveB,aveR, Lw, adist, amed, intw, loopw, centw, contw]) / rV)  # projected value change
         w_t = np.multiply([[wM,wD,wN,wO,wI,wG,wA,wL]], ww_t)  # or dw_ ~= w_/ 2?
         ww_t = np.delete(ww_t,(2,3), axis=1)  #-> comp_slice, = np.array([(*ww_t[0][:2],*ww_t[0][4:]),(*ww_t[0][:2],*ww_t[1][4:])])
-    blob_ = unpack_blob_(Fg)
+    blob_ = unpack_blob_(Fg); N_ = []
     for blob in blob_:
         if not blob.sign and blob.G > aveB:
             edge = slice_edge(blob, rV)
-            if edge.G*((len(edge.P_)-1)*Lw) > ave * sum([P.latuple[4] for P in edge.P_]):
-                Fg.N_ += comp_slice(edge, rV, ww_t)
-    for PP in Fg.N_:
-        PP2N(PP,frame)
+            if edge.G * ((len(edge.P_) - 1) * Lw) > ave * sum([P.latuple[4] for P in edge.P_]):
+                N_ += comp_slice(edge, rV, ww_t)
+    Fg.N_ = [PP2N(PP, frame) for PP in N_]
 
 def val_(Et, fi=1, mw=1, aw=1, _Et=np.zeros(3)):  # m,d eval per cluster or cross_comp
 
@@ -184,7 +183,7 @@ def cross_comp(root, rc, fi=1):  # rng+ and der+ cross-comp and clustering
 
     N_,L_,Et = comp_(root.N_, rc, fi)  # rc: redundancy+olp, lG.N_ is Ls
     if len(L_) > 1:
-        mV,dV = val_(Et,2, (len(L_)-1)*Lw, rc+loopw)
+        mV,dV = val_(Et,2, (len(L_)-1)*Lw, rc+loopw); lG = []
         if dV > 0:
             if root.L_: root.lH += [sum_N_(root.L_)]  # replace L_ with agg+ L_:
             root.L_ =L_; root.Et += Et
@@ -206,8 +205,8 @@ def comb_altg_(nG, lG, rc):  # cross_comp contour/background per node:
     for Lg in lG.N_:
         altg_ = {n.root for L in Lg.N_ for n in L.N_ if n.root and n.root.root}  # rdn core Gs, exclude frame
         if altg_:
-            altg_ = {(core, rdn) for rdn, core in enumerate(sorted(altg_[0], key=lambda x: (x.Et[0] / x.Et[2]), reverse=True), start=1)}
-            Lg.altg_ = [altg_, np.sum([i.Et for i in altg_], axis=0)]
+            altg_ = {(core, rdn) for rdn, core in enumerate(sorted(altg_, key=lambda x: (x.Et[0] / x.Et[2]), reverse=True), start=1)}
+            Lg.altg_ = [altg_, np.sum([i.Et for i,_ in altg_], axis=0)]
     for Ng in nG.N_:
         Et, Rdn = np.zeros(3), 0  # contour/core clustering
         altl_ = {L.root for n in Ng.N_ for L in n.rim if L.root}  # lGs, individual rims are too weak
@@ -223,7 +222,7 @@ def comb_altg_(nG, lG, rc):  # cross_comp contour/background per node:
 
 def comp_(iN_, rc, fi):  # comp pairs of nodes or links within max_dist
 
-    N__,L_,ET = [],[],np.zeros(3); rng,olp_,_N_ = 1,[],copy(iN_)
+    N__,L_, ET = [],[], np.zeros(3); rng,olp_,_N_ = 1,[],copy(iN_)
     # frng: range-band?
     while True:  # _vM
         Np_ = []  # [G pair + co-positionals], for top-nested Ns, unless cross-nesting comp:
@@ -239,9 +238,9 @@ def comp_(iN_, rc, fi):  # comp pairs of nodes or links within max_dist
             vett = _N.et[1-fi]/_N.et[2] + N.et[1-fi]/_N.et[2]  # partial density?
             mA,dA = comp_angle(_N.angle, N.angle)
             if fi:
-                V = ((_m+m)* intw + vett) / (ave*(_n+n)); et = np.zeros(3)  # no mA for nodes, only for directed links:
+                V = ((_m + m + mA)* intw + vett) / (ave*(_n+n)); et = np.array([mA,dA,1])  # mA for nodes, x20 for directed links:
             else:
-                V = ((_d+d + mA*20) *intw + vett) / (avd*(_n+n)); et = np.array([mA,dA,1])
+                V = ((_d+d+ mA*20)* intw + vett) / (avd*(_n+n)); et = np.array([mA*20,dA*20, 1])  # angw = 20?
             max_dist = adist * (radii / aveR) * V
             # min induction distance
             if max_dist > dist or set(_N.rim) & set(N.rim):  # close or share matching mediators
@@ -493,33 +492,34 @@ def cluster_C_(root, N_, rc, fi=1, fdeep=0):  # form centroids by clustering exe
     for n in set(root.N_+_N_): n.C_, n.vo_, n._C_, n._vo_ = [], [], [], []
     # recompute C, refine / extend C.N_:
     while True:
-        C_, ET, O, Dvo, Ave = [], np.zeros(3), 0, np.zeros(2), av*rc*loopw
+        C_, ET,olp, Dv,Do, Ave = [], np.zeros(3),0,0,0, av*rc*loopw
         _Ct_ = [[c, c.Et[1-fi]/c.Et[2], c.olp] for c in _C_]
         for _C,_v,_o in sorted(_Ct_, key=lambda t: t[1]/t[2], reverse=True):
             if _v > Ave*_o:
-                C = sum_N_(_C.N_, root=root, fC=1)
-                _N_,_N__,o,Et,dvo = [],[],0, np.zeros(3),np.zeros(2)  # per C
+                C = sum_N_(_C.N_, root=root, fC=1)  # add olp in N.vo_ to C.olp?
+                _N_,_N__,Et,O, dv,do = [],[], np.zeros(3),0,0,0  # per C
                 for n in _C._N_:  # core + surround
                     if C in n.C_: continue  # clear/ loop?
-                    et = comp_C(C,n); v = val_(et,fi,aw=rc)
-                    olp = np.sum([vo[0] / v for vo in n.vo_ if vo[0] > v])  # olp: rel n val in stronger Cs, add to et[2]?
-                    vo = np.array([v,olp])  # val, overlap per current root C
-                    if et[1-fi]/et[2] > Ave*olp:
-                        n.C_ += [C]; n.vo_ += [vo]; Et += et; o+=olp; _N_ += [n]
+                    et = comp_C(C,n)
+                    v = val_(et,fi, aw=rc+_o)  # _o: combined _C overlap, update for next loop:
+                    o = np.sum([vo[0] / v for vo in n.vo_ if vo[0] > v])  # overlap = rel n val in stronger Cs, add to et[2]?
+                    vo = np.array([v,o])  # val, overlap per current root C
+                    if et[1-fi] /et[2] > Ave * olp:
+                        n.C_ += [C]; n.vo_ += [vo]; Et+=et; O+=o; _N_ += [n]
                         _N__ += [_n for l in n.rim for _n in l.N_ if _n is not n]
-                        if C not in n._C_: dvo += vo
+                        if C not in n._C_: dv += v; do += o
                     elif C in n._C_:
-                        dvo += n._vo_[n._C_.index(C)]  # old vo_, or pack in _C_?
-                if Et[1-fi]/Et[2] > Ave*o:
+                        __v,__o = n._vo_[n._C_.index(C)]; dv +=__v; do +=__o
+                if Et[1-fi]/Et[2] > Ave*O:
                     C.Et = Et; C.N_ = list(set(_N_)); C._N_ = list(set(_N__))  # core, surround elements
-                    C_+=[C]; ET+=Et; O+=o; Dvo+=dvo  # new incl or excl
+                    C_+=[C]; ET+=Et; Dv+=dv; Do+=do  # new incl or excl
             else: break  # the rest is weaker
-        if np.sum(Dvo) > Ave*O:  # both V and O represent change, comeasurable?
+        if Dv > Ave * Do:  # Dv: C_ value change, Do: overlap increases as Cs may expand in each loop?
             _C_ = C_
             for n in root.N_: n._C_ = n.C_; n._vo_= n.vo_; n.C_,n.vo_ = [],[]  # new n.C_s, combine with vo_ in Ct_?
         else:  # converged
             break
-    if val_(ET,fi, aw=O+rc) > 0:  # no _Et?
+    if val_(ET,fi, aw=olp+rc) > 0:  # no _Et?
         root.cent_ = set(C_),ET
         # cross_comp, low overlap eval in comp_node_?
 
@@ -604,7 +604,8 @@ def add_N(N,n, fmerge=0, fC=0):
     for Par,par in zip((N.angle, N.baseT, N.derTT), (n.angle, n.baseT, n.derTT)):
         Par += par * rn
     N.Et += n.Et * rn
-    N.olp = (N.olp + n.olp * rn) / 2  # ave?
+    if fC: N.olp += np.sum([vo[1] for vo in n._vo_])
+    else:  N.olp = (N.olp + n.olp * rn) / 2  # ave?
     N.yx = (N.yx + n.yx * rn) / 2
     N.span = max(N.span,n.span)
     N.box = extend_box(N.box, n.box)
@@ -633,7 +634,7 @@ def PP2N(PP, frame):
     y,x,Y,X = box; dy,dx = Y-y,X-x  # A = (dy,dx); L = np.hypot(dy,dx), rolp = 1
     et = np.array([*np.sum([L.Et for L in link_],axis=0), 1]) if link_ else np.array([.0,.0,1.])  # n=1
 
-    return CN(root=frame, fi=1, Et=Et+et, N_=P_, L_=link_, baseT=baseT, derTT=derTT, derH=derH, box=box, yx=yx, span=np.hypot(dy/2,dx/2))
+    return CN(root=frame, fi=1, Et=Et+et, N_=P_, L_=link_, baseT=baseT, derTT=derTT, derH=derH, box=box, yx=yx, angle=A, span=np.hypot(dy/2,dx/2))
 
 # not used, make H a centroid of layers, same for nH?
 def sort_H(H, fi):  # re-assign olp and form priority indices for comp_tree, if selective and aligned
@@ -779,8 +780,8 @@ def agg_frame(foc, image, iY, iX, rV=1, rv_t=[], fproj=0):  # search foci within
         PV__[y,x] = -np.inf  # to skip, | separate in__?
         if foc:
             Fg = frame_blobs_root( win__[:,:,:,y,x], rV)  # [dert, iY, iX, nY, nX]
-            Fg = vect_root(Fg, rV, rv_t)  # focal dert__ clustering
-            Fg = cross_comp(Fg, rc=frame.olp) or Fg
+            vect_root(Fg, rV,rv_t); Fg.L_=[] # focal dert__ clustering
+            cross_comp(Fg, rc=frame.olp)
         else:
             Fg = agg_frame(1, win__[:,:,:,y,x], wY,wX, rV=1, rv_t=[])  # use global wY,wX in nested call
             if Fg and Fg.L_:  # only after cross_comp(PP_)

@@ -76,9 +76,10 @@ def comp_slice(edge, rV=1, ww_t=None):  # root function
         edge.node_ = PPt
         comp_dP_(edge, mEt)
         edge.link_, dvert, dEt = form_PP_(edge.dP_, fd=1)
+        # not needed:?
         edge.vert = mvert + dvert
         edge.Et = Et = mEt + dEt
-        return Et  # for eval
+    return PPt
 
 def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
 
