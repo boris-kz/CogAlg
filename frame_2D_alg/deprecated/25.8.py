@@ -18,3 +18,8 @@ def comp_slice(edge, rV=1, ww_t=None):  # root function
         edge.vert = mvert + dvert
         edge.Et = Et = mEt + dEt
     return PPt
+
+def rroot(N):  # get top root
+    R = N.root
+    while R.root and R.root.rng > N.rng: N = R; R = R.root
+    return R
