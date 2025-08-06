@@ -119,11 +119,8 @@ def Copy_(N, root=None, init=0):
 
     C = CN(root=root)
     if init:  # init G|C with N
-        if init != 2: C.N_ = [N]  # init G or fi centroid
-        C.nH, C.lH, N.root = [],[],C
-        for l in N.rim:
-            if init>1: N.N_ += [l.N_[0] if l.N_[1] is N else l.N_[1]]  # init centroid
-            else:      N.L_ += [l]  # init G
+        C.N_ = [N]; C.nH, C.lH, N.root = [],[],C
+        if init==1: N.L_ += N.rim  # empty in centroid
     else:
         C.N_,C.L_,C.nH,C.lH, N.root = (list(N.N_),list(N.L_),list(N.nH),list(N.lH), root if root else N.root)
     C.derH  = [lay.copy_() for lay in N.derH]
@@ -467,62 +464,62 @@ def sum2graph(root, node_,link_,long_, Et, olp, rng, fC=0):  # sum node,link att
         graph.Et = np.array([M,D,Et[2]])
 
     # centroid sub-clustering if projected variance:
-    if val_(Et,0, mw = graph.span * 2 * slope(link_), aw = olp + centw) > 0:
-        cluster_C_(graph, node_, olp + centw, fi=node_[0].fi)
+    if val_(Et, mw = graph.span * 2 * slope(link_), aw = olp + centw) > 0:
+        cluster_C_(graph, node_, olp+centw)
         # seed CC_=E_, ex node_?
     return graph
 
-def cluster_C_(root, N_, rc, fi=1, fdeep=0):  # form centroids by clustering exemplar surround, drifting via rims of new member nodes
+def cluster_C_(root, N_, rc, fdeep=0):  # form centroids by clustering exemplar surround, drifting via rims of new member nodes
 
     def comp_C(C, n):
         _,et,_ = base_comp(C,n, rc)
         if fdeep:
-            if val_(Et,1,len(n.derH)-2,rc):
-                comp_H(C.derH, n.derH, n.Et[2]/C.Et[2], Et)
-            for L,l in [(L,l) for L in C.rim for l in n.rim]:
-                if L is l: et += l.Et  # overlap
+            if val_(et,1,len(n.derH)-2,rc):
+                comp_H(C.derH, n.derH, n.Et[2]/C.Et[2], et)
+            for L in C.rim:
+                if L in n.rim: et += L.Et  # overlap
         return et
-
-    _C_ = []; av = ave if fi else avd; _N_ = []
+    _C_, _N_ = [], []
     for N in N_:
         if not N.exe: continue  # exemplars or all
-        C = Copy_(N,root, init=fi+2)  # init centroid
+        C = Copy_(N,root, init=2)  # init centroid
         C._N_ = [n for l in N.rim for n in l.N_ if n is not N]  # core members + surround for comp to N_ mean
         _N_ += C._N_; C.N_ = [N]
         _C_ += [C]
-    # reset per root:
-    for n in set(root.N_+_N_): n.C_, n.vo_, n._C_, n._vo_ = [], [], [], []
-    # recompute C, refine / extend C.N_:
+    # reset:
+    for n in set(root.N_+_N_): n.C_,n.vo_, n._C_,n._vo_ = [],[], [],[]  # aligned pairs
+    # reform C_, refine C.N_s, which may extend beyond root:
     while True:
-        C_, ET,olp, Dv,Do, Ave = [], np.zeros(3),0,0,0, av*rc*loopw
-        _Ct_ = [[c, c.Et[1-fi]/c.Et[2], c.olp] for c in _C_]
+        C_, ET,olp, Dv,Do = [], np.zeros(3),0,0,0; Ave = ave * rc * loopw
+        _Ct_ = [[c, c.Et[0]/c.Et[2], c.olp] for c in _C_]
         for _C,_v,_o in sorted(_Ct_, key=lambda t: t[1]/t[2], reverse=True):
             if _v > Ave*_o:
                 C = sum_N_(_C.N_, root=root, fC=1)  # add olp in N.vo_ to C.olp?
-                _N_,_N__,Et,O, dv,do = [],[], np.zeros(3),0,0,0  # per C
+                _N_,_N__,Et,O, dv,do = [],[], np.zeros(3),0,0,0  # /C
                 for n in _C._N_:  # core + surround
-                    if C in n.C_: continue  # clear/ loop?
+                    if C in n.C_: continue
                     et = comp_C(C,n)
-                    v = val_(et,fi, aw=rc+_o)  # _o: combined _C overlap, update for next loop:
-                    o = np.sum([vo[0] /v for vo in n._vo_ if vo[0] > v])  # overlap = rel n val in stronger Cs, add to et[2]?
-                    vo = np.array([v,o])  # val, overlap per current root C
-                    if et[1-fi] /et[2] > Ave * olp:
-                        n.C_ += [C]; n.vo_ += [vo]; Et+=et; O+=o; _N_ += [n]
-                        _N__ += [_n for l in n.rim for _n in l.N_ if _n is not n]
-                        if C not in n._C_: dv += v; do += o
-                    elif C in n._C_:
-                        __v,__o = n._vo_[n._C_.index(C)]; dv +=__v; do +=__o
-                if Et[1-fi]/Et[2] > Ave*O:
+                    v = et[0]/et[2]; if v==0: v=1e-7
+                    o = np.sum([vo[0] / v for vo in n._vo_ if vo[0] > v])
+                    # overlap = higher-C inclusion vals / C val?
+                    vo = np.array([v,o])  # val,olp / C
+                    if v > Ave * o:
+                        n.C_ += [C]; _N_ += [n]; Et+=et; O+=o; n.vo_ += [vo]  # n.o for convergence eval only?
+                        _N__ += [_n for l in n.rim for _n in l.N_ if _n is not n]  # +|-ls for comp C
+                        if _C not in n._C_: dv += v; do += o  # not in extended _N__
+                    elif _C in n._C_:
+                        __v,__o = n._vo_[n._C_.index(_C)]; dv +=__v; do +=__o
+                if Et[0]/Et[2] > Ave*O:
                     C.Et = Et; C.N_ = list(set(_N_)); C._N_ = list(set(_N__))  # core, surround elements
-                    C_+=[C]; ET+=Et; Dv+=dv; Do+=do  # new incl or excl
+                    C_+=[C]; ET+=Et; Dv+=dv; Do+=do; olp+=O   # new incl or excl
             else: break  # the rest is weaker
-        if Dv > Ave * Do:  # Dv: C_ value change, Do: overlap increases as Cs may expand in each loop?
+        if Dv > Ave * Do:  # value vs. overlap change, or dET,dolp? overlap increases as Cs may expand in each loop?
             _C_ = C_
             for n in root.N_: n._C_ = n.C_; n._vo_= n.vo_; n.C_,n.vo_ = [],[]  # new n.C_s, combine with vo_ in Ct_?
         else:  # converged
             break
-    if val_(ET,fi, aw=olp+rc) > 0:  # no _Et?
-        root.cent_ = set(C_),ET
+    if  ET[0]/ET[2] > Ave*olp:  # no _Et?
+        root.cent_ = (set(C_),ET)
         # cross_comp, low overlap eval in comp_node_?
 
 def slope(link_):  # get ave 2nd rate of change with distance in cluster
@@ -796,7 +793,7 @@ def agg_frame(foc, image, iY, iX, rV=1, rv_t=[], fproj=0):  # search foci within
                     if pFg and val_(pFg.Et, (len(pFg.N_)-1)*Lw, pFg.olp+contw*20):
                         project_focus(PV__, y,x, Fg)  # += proj val in PV__
             # no target proj
-            add_N(frame, Fg, fmerge=1)
+            frame = add_N(frame, Fg, fmerge=1) if frame else Copy_(Fg)
             aw = contw *20 * frame.Et[2] * frame.olp
 
     if frame.N_ and val_(frame.Et, (len(frame.N_)-1)*Lw, frame.olp+loopw*20) > 0:
