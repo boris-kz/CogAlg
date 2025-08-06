@@ -462,9 +462,9 @@ def sum2graph(root, node_,link_,long_, Et, olp, rng, fC=0):  # sum node,link att
         d_,D = centroid_M(graph.derTT[1],ave*olp)
         graph.derTT = np.array([m_,d_])
         graph.Et = np.array([M,D,Et[2]])
-
-    # centroid sub-clustering if projected variance:
-    if val_(Et, mw = graph.span * 2 * slope(link_), aw = olp + centw) > 0:
+    #  proj variance:
+    if val_(Et, fi=0, mw = graph.span * 2 * slope(link_), aw = olp + centw) > 0:
+        # extend cross_comp before or in centroid sub-clustering?:
         cluster_C_(graph, node_, olp+centw)
         # seed CC_=E_, ex node_?
     return graph
