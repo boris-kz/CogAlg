@@ -6,7 +6,11 @@ from frame_blobs import frame_blobs_root, imread, unpack_blob_, comp_pixel, CBas
 from slice_edge import slice_edge, comp_angle
 from comp_slice import comp_slice
 '''
-4-stage agglomeration cycle: generative cross-comp, compressive clustering, filter-adjusting feedback, and code-extending forward. 
+Lower modules start with cross-comp and clustering image pixels, here the initial input is PPs: segments of matching blob slices or Ps.
+
+This is a main module of open-ended dual clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
+It's a recursive 4-stage cycle, forming agglomeration levels: 
+generative cross-comp, compressive clustering, filter-adjusting feedback, code-extending forward (not yet implemented): 
 
 Cross-comp forms Miss, Match: min= shared_quantity for directly predictive params, else inverse deviation of miss=variation, 2 forks:
 rng+: incremental-range cross-comp nodes: edge segments at < max distance, cluster if they match. 
@@ -21,10 +25,10 @@ https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/generi
 Similar to neurons: dendritic input tree and axonal output tree, but with lateral cross-comp and nested param sets per layer.
 
 Feedback of projected match adjusts filters to maximize next match, including coordinate filters that select new inputs.
-(can be refined by cross_comp of co-projected patterns, see "imagination, planning, action" section of part 3 in Readme)
+(initially ffeedback, can be refined by cross_comp of co-projected patterns: "imagination, planning, action" section of part 3)
 
-Forward generates code by cross-comp of function calls and clustering code blocks of past and simulated processes
-or comp out-syntax to in-syntax, the difference should change out-process?
+Forward should generate new code by cross-comp of function calls and clustering code blocks of past and simulated processes
+or by comparing out-syntax to in-syntax, the difference should change out-process (not yet implemented)?
 
 notation:
 prefix  f denotes flag
@@ -188,21 +192,33 @@ def cross_comp(root, rc, fi=1):  # rng+ and der+ cross-comp and clustering
                 lG = cross_comp(CN(N_=L_), rc+contw, fi=0)  # link clustering, +2 der layers
                 if lG: root.lH += [lG]+lG.nH; root.Et+=lG.Et; root.derH+=lG.derH  # new lays
         if mV > 0:
-            nG = Cluster(root, N_, rc+loopw, fi)   # get_exemplars, rng-band, cluster_C_
+            nG = Cluster(root, N_, rc+loopw, fi)  # get_exemplars, rng-band, local cluster_C_
             if nG:
-                if lG: comb_altg_(nG, lG, rc+2)  # both forks are clustered
+                comb_cent_(nG, rc)  # extend cross_comp, global centroid clustering
+                if lG: comb_altg_(nG, lG, rc+2)  # both fork altg_s are clustered
                 if val_(nG.Et,1, (len(nG.N_)-1)*Lw, rc+loopw+nG.rng, Et) > 0:
                     nG = cross_comp(nG, rc+loopw) or nG  # agg+
                 _H = root.nH; root.nH = []
                 nG.nH = _H + [root] + nG.nH  # pack root in Nt.nH, has own L_,lH
                 return nG  # recursive feedback
 
+def comb_cent_(nG, rc):
+
+    cent_, node_, cM = [], [], 0
+    for g in nG.N_:
+        if g.cent_:
+            node_.extend({c.N_ for c in cent_[0]})
+            cent_.extend(g.cent_[0]); cM += g.cent_[1]
+    if cM > ave * rc * loopw:
+        comp_(node_, rc, fC=1)  # extend rims of mo_-reinforced nodes, if not in seen_
+        cluster_C_(nG, cent_,rc)  # use combined cent_ as iN_
+
 def comb_altg_(nG, lG, rc):  # cross_comp contour/background per node:
 
     for Lg in lG.N_:
         altg_ = {n.root for L in Lg.N_ for n in L.N_ if n.root and n.root.root}  # rdn core Gs, exclude frame
         if altg_:
-            altg_ = {(core, rdn) for rdn, core in enumerate(sorted(altg_, key=lambda x: (x.Et[0] / x.Et[2]), reverse=True), start=1)}
+            altg_ = {(core,rdn) for rdn,core in enumerate(sorted(altg_, key=lambda x:(x.Et[0]/x.Et[2]), reverse=True), start=1)}
             Lg.altg_ = [altg_, np.sum([i.Et for i,_ in altg_], axis=0)]
     def R(L):
         if L.root: return L.root if L.root.root is lG else R(L.root)
@@ -221,7 +237,7 @@ def comb_altg_(nG, lG, rc):  # cross_comp contour/background per node:
                 aG = cross_comp(aG, rc) or aG
             Ng.altg_ = (aG.N_,aG.Et)
 
-def comp_(iN_, rc, fi):  # comp pairs of nodes or links within max_dist
+def comp_(iN_, rc, fi=1, fC=0):  # comp pairs of nodes or links within max_dist
 
     N__,L_, ET = [],[], np.zeros(3); rng,olp_,_N_ = 1,[],copy(iN_)
     # frng: range-band?
@@ -236,6 +252,7 @@ def comp_(iN_, rc, fi):  # comp pairs of nodes or links within max_dist
         for Np in Np_:
             _N,N, dy,dx, radii, dist = Np
             (_m,_d,_n), (m,d,n) = _N.Et,N.Et; olp = (_N.olp+N.olp)/2
+            if fC: _m += np.sum([i[0] for i in _N.mo_]); m += np.sum([i[0] for i in N.mo_])  # matches to centroids
             vett = _N.et[1-fi]/_N.et[2] + N.et[1-fi]/_N.et[2]  # partial density?
             mA,dA = comp_angle(_N.angle, N.angle)
             if fi:
@@ -464,12 +481,12 @@ def sum2graph(root, node_,link_,long_, Et, olp, rng, fC=0):  # sum node,link att
         graph.Et = np.array([M,D,Et[2]])
     #  proj variance:
     if val_(Et, fi=0, mw = graph.span * 2 * slope(link_), aw = olp + centw) > 0:
-        # extend cross_comp before or in centroid sub-clustering?:
+        # centroid sub-clustering:
         cluster_C_(graph, node_, olp+centw)
-        # seed CC_=E_, ex node_?
+        # seed CC_=E_, ex node_, then extend cross_comp and cluster_C_-> frame
     return graph
 
-def cluster_C_(root, N_, rc, fdeep=0):  # form centroids by clustering exemplar surround, drifting via rims of new member nodes
+def cluster_C_(root, N_, rc, fdeep=0, fext=0):  # form centroids by clustering exemplar surround, drifting via rims of new member nodes
 
     def comp_C(C, n):
         _,et,_ = base_comp(C,n, rc)
@@ -478,48 +495,48 @@ def cluster_C_(root, N_, rc, fdeep=0):  # form centroids by clustering exemplar 
                 comp_H(C.derH, n.derH, n.Et[2]/C.Et[2], et)
             for L in C.rim:
                 if L in n.rim: et += L.Et  # overlap
-        return et
+        return et[0]/et[2] if et[0]!=0 else 1e-7
+
     _C_, _N_ = [], []
     for N in N_:
         if not N.exe: continue  # exemplars or all
-        C = Copy_(N,root, init=2)  # init centroid
-        C._N_ = [n for l in N.rim for n in l.N_ if n is not N]  # core members + surround for comp to N_ mean
+        C = N if fext else Copy_(N,root, init=2)  # extend or init centroid
+        if fext: C._N_ = [n for _N in C.N_ for l in _N.rim for n in l.N_ if n is not _N and l not in C.L_]  # draft
+        else:    C._N_ = [n for l in N.rim for n in l.N_ if n is not N]  # core members + surround for comp to N_ mean
         _N_ += C._N_; C.N_ = [N]
         _C_ += [C]
     # reset:
-    for n in set(root.N_+_N_): n.C_,n.vo_, n._C_,n._vo_ = [],[], [],[]  # aligned pairs
+    for n in set(root.N_+_N_): n.C_,n.mo_, n._C_,n._mo_ = [],[], [],[]  # aligned pairs
     # reform C_, refine C.N_s, which may extend beyond root:
     while True:
-        C_, ET,olp, Dv,Do = [], np.zeros(3),0,0,0; Ave = ave * rc * loopw
-        _Ct_ = [[c, c.Et[0]/c.Et[2], c.olp] for c in _C_]
-        for _C,_v,_o in sorted(_Ct_, key=lambda t: t[1]/t[2], reverse=True):
-            if _v > Ave*_o:
-                C = sum_N_(_C.N_, root=root, fC=1)  # add olp in N.vo_ to C.olp?
-                _N_,_N__,Et,O, dv,do = [],[], np.zeros(3),0,0,0  # /C
-                for n in _C._N_:  # core + surround
+        C_, cnt,mat,olp, Dm,Do = [],0,0,0,0,0; Ave = ave * rc * loopw
+        _Ct_ = [[c, c.Et[0]/c.Et[2] if c.Et[0] !=0 else 1e-7, c.olp] for c in _C_]
+        for _C,_m,_o in sorted(_Ct_, key=lambda t: t[1]/t[2], reverse=True):
+            if _m > Ave*_o:
+                C = sum_N_(_C.N_, root=root, fC=1)  # add olp in N.mo_ to C.olp?
+                _N_,_N__,M,O,dm,do = [],[],0,0,0,0  # /C
+                for n in _C._N_:  # core+ surround
                     if C in n.C_: continue
-                    et = comp_C(C,n)
-                    v = et[0]/et[2]; if v==0: v=1e-7
-                    o = np.sum([vo[0] / v for vo in n._vo_ if vo[0] > v])
-                    # overlap = higher-C inclusion vals / C val?
-                    vo = np.array([v,o])  # val,olp / C
-                    if v > Ave * o:
-                        n.C_ += [C]; _N_ += [n]; Et+=et; O+=o; n.vo_ += [vo]  # n.o for convergence eval only?
-                        _N__ += [_n for l in n.rim for _n in l.N_ if _n is not n]  # +|-ls for comp C
-                        if _C not in n._C_: dv += v; do += o  # not in extended _N__
+                    m = comp_C(C,n)  # val,olp / C:
+                    o = np.sum([mo[0]/ m for mo in n._mo_ if mo[0]>m])  # overlap = higher-C inclusion vals / current C val
+                    cnt += 1  # count comps per loop
+                    if m > Ave * o:
+                        n.C_+=[C]; _N_+=[n]; M+=m; O+=o; n.mo_ += [np.array([m,o])]  # n.o for convergence eval
+                        _N__ += [_n for l in n.rim for _n in l.N_ if _n is not n and _n in root.N_]  # +|-ls for comp C
+                        if _C not in n._C_: dm += m; do += o  # not in extended _N__
                     elif _C in n._C_:
-                        __v,__o = n._vo_[n._C_.index(_C)]; dv +=__v; do +=__o
-                if Et[0]/Et[2] > Ave*O:
-                    C.Et = Et; C.N_ = list(set(_N_)); C._N_ = list(set(_N__))  # core, surround elements
-                    C_+=[C]; ET+=Et; Dv+=dv; Do+=do; olp+=O   # new incl or excl
+                        __m,__o = n._mo_[n._C_.index(_C)]; dm +=__m; do +=__o
+                if M > Ave * len(_N_) * O:
+                    C.M = M; C.N_ = list(set(_N_)); C._N_ = list(set(_N__))  # core, surround elements
+                    C_+=[C]; mat+=M; olp+=O; Dm+=dm; Do+=do   # new incl or excl
             else: break  # the rest is weaker
-        if Dv > Ave * Do:  # value vs. overlap change, or dET,dolp? overlap increases as Cs may expand in each loop?
+        if Dm > Ave * cnt * Do:  # value vs. overlap change, or dET,dolp? overlap increases as Cs may expand in each loop?
             _C_ = C_
-            for n in root.N_: n._C_ = n.C_; n._vo_= n.vo_; n.C_,n.vo_ = [],[]  # new n.C_s, combine with vo_ in Ct_?
+            for n in root.N_: n._C_ = n.C_; n._mo_= n.mo_; n.C_,n.mo_ = [],[]  # new n.C_s, combine with vo_ in Ct_?
         else:  # converged
             break
-    if  ET[0]/ET[2] > Ave*olp:  # no _Et?
-        root.cent_ = (set(C_),ET)
+    if  mat > Ave * cnt * olp:
+        root.cent_ = (set(C_),mat)
         # cross_comp, low overlap eval in comp_node_?
 
 def slope(link_):  # get ave 2nd rate of change with distance in cluster
@@ -572,6 +589,10 @@ def add_H(H, h, root=0, rev=0, rn=1):  #  layer-wise add|append derH
             if root: root.derTT += lay.derTT*rn; root.Et += lay.Et*rn
     return H
 
+def add_sett(Sett,sett):
+    if Sett: N_,Et = Sett; n_ = sett[0]; N_.update(n_); Et += np.sum([t.Et for t in n_-N_])
+    else:    Sett += [copy(par) for par in sett]  # altg_, Et
+
 def sum_N_(node_, root=None, fC=0):  # form cluster G
 
     G = Copy_(node_[0], root, init = 0 if fC else 1)
@@ -582,10 +603,6 @@ def sum_N_(node_, root=None, fC=0):  # form cluster G
     for L in G.L_:
         if L not in G.L_: G.Et += L.Et; G.L_+=[L]
     return G   # no rim
-
-def add_sett(Sett,sett):
-    if Sett: N_,Et = Sett; n_ = sett[0]; N_.update(n_); Et += np.sum([t.Et for t in n_-N_])
-    else:    Sett += [copy(par) for par in sett]  # altg_, Et
 
 def add_N(N,n, fmerge=0, fC=0):
 
