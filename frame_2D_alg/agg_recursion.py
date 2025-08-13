@@ -130,8 +130,8 @@ def Copy_(N, root=None, init=0):
         C.N_,C.L_,C.nH,C.lH, N.root = (list(N.N_),list(N.L_),list(N.nH),list(N.lH), root if root else N.root)
     C.derH  = [lay.copy_() for lay in N.derH]
     C.derTT = deepcopy(N.derTT)
-    for attr in ['Et', 'baseT','yx','box','angle','rim','altg_','cent_']: setattr(C, attr, copy(getattr(N, attr)))
-    for attr in ['olp','rng', 'fi', 'fin', 'span']: setattr(C, attr, getattr(N, attr))
+    for attr in ['Et', 'baseT','yx','box','angl','rim','altg_','cent_']: setattr(C, attr, copy(getattr(N, attr)))
+    for attr in ['olp','rng', 'fi', 'fin', 'span', 'mang']: setattr(C, attr, getattr(N, attr))
     return C
 
 ave, avd, arn, aI, aveB, aveR, Lw, intw, loopw, centw, contw = 10, 10, 1.2, 100, 100, 3, 5, 2, 5, 10, 15  # value filters + weights
@@ -196,7 +196,7 @@ def cross_comp(root, rc, fi=1):  # rng+ and der+ cross-comp and clustering
             nG = Cluster(root, N_, rc+loopw, fi)  # get_exemplars, rng-band, local cluster_C_
             if nG:
                 if val_(np.sum([g.Et for g in nG.cent_]),1,(len(nG.N_)-1)*Lw, rc+centw+nG.rng, Et) > 0:
-                    cluster_C_(nG, rc)  # cluster nG.cent_
+                    cluster_C_(nG, rc)  # cluster nG.cent_, any rng
                 if lG: comb_altg_(nG,lG, rc+2)  # both fork alt Ns are clustered
                 if val_(nG.Et,1, (len(nG.N_)-1)*Lw, rc+loopw+nG.rng, Et) > 0:
                     nG = cross_comp(nG, rc+loopw) or nG  # agg+
@@ -230,10 +230,10 @@ def comb_altg_(nG, lG, rc):  # cross_comp contour/background per node:
 
 def proj_span(N, dir_vec):  # project N.span in link direction, in proportion to internal collinearity N.mang
 
-    cos_angle = np.dot(N.angl, dir_vec) / (np.linalg.norm(N.angl) * np.linalg.norm(dir_vec))
-    oriented = (1 - N.mang) + (N.mang * 2 * abs(cos_angle))  # from 1/span to 2?
+    cos_proj = np.dot(N.angl, dir_vec) / (np.linalg.norm(N.angl) * np.linalg.norm(dir_vec))  # cos angle = (a⋅b) / (||a||⋅||b||)
+    oriented = (1 - N.mang) + (N.mang * 2 * abs(cos_proj))  # from 1/span to 2?
     #          (1 - N.mang) * N.span + N.mang * (1 + (2 * N.span - 1) * abs(cos_angle)) ?
-    return N.span * oriented  # from 1 to 2*N.span?
+    return N.span * oriented  # from 1 to N.span * len L_?
 
 def comp_(iN_, rc, fi=1, fC=0):  # comp pairs of nodes or links within max_dist
 
@@ -244,7 +244,7 @@ def comp_(iN_, rc, fi=1, fC=0):  # comp pairs of nodes or links within max_dist
         for _N, N in combinations(_N_, r=2):
             if _N in N.seen_ or len(_N.nH) != len(N.nH):  # | root.nH: comp top nodes only
                 continue
-            dy,dx = np.subtract(_N.yx,N.yx); dist = np.hypot(*dy,dx); dy_dx = np.array([dy,dx])
+            dy,dx = np.subtract(_N.yx,N.yx); dist = np.hypot(dy,dx); dy_dx = np.array([dy,dx])
             radii = proj_span(_N, dy_dx) + proj_span(N, dy_dx)  # directionally projected
             Np_ += [(_N,N, dy,dx, radii, dist)]
         N_,Et = [],np.zeros(3)
@@ -260,7 +260,7 @@ def comp_(iN_, rc, fi=1, fC=0):  # comp pairs of nodes or links within max_dist
             max_dist = adist * (radii / aveR) * V
             # min induction distance:
             if max_dist > dist or set(_N.rim) & set(N.rim):  # close or share matching mediators
-                Link = comp_N(_N,N, rc, L_=L_, angle=dy_dx, span=dist, dang=[mA,dA], et=np.array([mA,dA,1]), fdeep = dist < max_dist/2, rng=rng)
+                Link = comp_N(_N,N, rc, L_=L_, angl=dy_dx, span=dist, dang=[mA,dA], et=np.array([mA,dA,1]), fdeep = dist < max_dist/2, rng=rng)
                 if val_(Link.Et, aw=loopw*olp) > 0:
                     Et += Link.Et; olp_ += [olp]  # link.olp is the same with o
                     for n in _N,N:
@@ -274,14 +274,14 @@ def comp_(iN_, rc, fi=1, fC=0):  # comp pairs of nodes or links within max_dist
         else: break
     return N__, L_, ET
 
-def comp_N(_N,N, rc, med=1, L_=None, angle=np.zeros(2), span=None, dang=np.zeros(2), et=np.zeros(3), fdeep=0, rng=1):  # compare links, no angle,span?
+def comp_N(_N,N, rc, med=1, L_=None, angl=np.zeros(2), span=None, dang=np.zeros(2), et=np.zeros(3), fdeep=0, rng=1):  # compare links, no angle,span?
 
     derTT, Et, rn = base_comp(_N,N, rc); fi = N.fi  # -1 if _rev else 1, d = -d if L is reversed relative to _L, obsoleted by sign in angle?
     Et += et  # from comp_angle
     baseT = np.array([*(_N.baseT[:2]+ N.baseT[:2]*rn /2), *dang])
     _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)]); o = (_N.olp+N.olp) / 2
 
-    Link = CN(Et=Et,olp=o, et=_N.et+N.et, N_=[_N,N], baseT=baseT,derTT=derTT, yx=np.add(_N.yx,N.yx)/2,box=box, span=span,angle=angle, rng=rng,med=med, fi=0)
+    Link = CN(Et=Et,olp=o, et=_N.et+N.et, N_=[_N,N], baseT=baseT,derTT=derTT, yx=np.add(_N.yx,N.yx)/2,box=box, span=span,angl=angl, rng=rng,med=med, fi=0)
     Link.derH = [CLay(Et=copy(Et),node_=[_N,N],link_=[Link],derTT=copy(derTT), root=Link)]
     if fdeep:
         if val_(Et,1, len(N.derH)-2, o) > 0 or fi==0:  # else derH is dext,vert
@@ -346,9 +346,13 @@ def base_comp(_N,N, rc, wTT=None):  # from comp Et, Box, baseT, derTT
     md_ *= np.where((_id_<0)!=(id_<0), -1,1)  # match is negative if comparands have opposite sign
     m_ += md_; d_ += dd_
     DerTT = np.array([m_,d_])  # [M,D,n,o, I,G,A,L]
-    Et = np.array([ np.sum(m_ * (wTTf[0] if wTT is None else wTT[0]) * rc), # weigh by feedback, or cross-correlation if comp_C
-                    np.sum(np.abs(d_ * (wTTf[1] if wTT is None else wTT[1]) * rc)),
-                    min(_n, n)])  # shared scope?
+    if wTT is None:  wm_,wd_ = wTTf  # global only
+    else:  # centroid _N: combine, re-norm weights
+        mP = wTTf[0]*wTT[0]; mS = np.sum(mP); wm_ = mP * (8/mS) if mS>0 else np.ones(8)
+        dP = wTTf[1]*wTT[1]; dS = np.sum(dP); wd_ = dP * (8/dS) if dS>0 else np.ones(8)
+    Et = np.array([np.sum(m_* wm_ * rc),
+                   np.sum(np.abs(d_ * wd_ * rc)), # * ffeedback * correlation if comp_C
+                   min(_n, n)])  # shared scope?
     return DerTT, Et, rn
 
 def spec(_spe,spe, rc, Et, dspe=None, fdeep=0):  # for N_|cent_ | altg_
@@ -456,25 +460,35 @@ def cluster(root, iN_, rN_, rc, rng=1):  # flood-fill node | link clusters
         nG.cent_ = cent_
         return nG
 
+def comp_cos(C, n):
+    # draft
+    def wcos(_d, d, w):
+        _wd, wd = _d * w, d * w
+        cos = (_wd @ wd) / (np.linalg.norm(_wd) * np.linalg.norm(wd) + 1e-12)
+        return 0.5 * (cos + 1.0)
+        # [-1,1] -> [0,1]
+    # * wTT from cent_attr?
+    return sum([ wcos(_d, d, w) for _d, d, w in zip(C.derTT[1], n.derTT[1], wTTf[1]) ]) / 8
+
 def cluster_C_(root, rc, fdeep=0):  # form centroids by clustering exemplar surround, drifting via rims of new member nodes
 
     def comp_C(C, n):
-        _,et,_ = base_comp(C,n, rc, C.wTT)
+        M = comp_cos(C,n)
         if fdeep:
-            if val_(et,1,len(n.derH)-2,rc):
-                comp_H(C.derH, n.derH, n.Et[2]/C.Et[2], et)
+            if M * (len(n.derH)-2) > ave*rc:
+                M += comp_H(C.derH, n.derH, n.Et[2]/C.Et[2], C.wTT)  # draft
             for L in C.rim:
-                if L in n.rim: et += L.Et  # overlap
-        return et[0]/et[2] if et[0] != 0 else 1e-7
+                if L in n.rim: M += L.Et[0]  # overlap
+        return M
 
     _C_, _N_ = [], []
     for E in root.cent_:
-        C = cent_attr( Copy_(E,root, init=2), rc); C.N_ = [E]  # rims can't extend beyond root?
-        C._N_ = [n for l in E.rim for n in l.N_ if n is not E]  # core members + surround for comp to N_ mean
+        C = cent_attr( Copy_(E,root, init=2), rc); C.N_ = [E]   # all rims are within root
+        C._N_ = [n for l in E.rim for n in l.N_ if n is not E]  # core members + surround -> comp_C
         _N_ += C._N_; _C_ += [C]
     # reset:
-    for n in set(root.N_+_N_): n.C_,n.mo_, n._C_,n._mo_ = [],[], [],[]  # aligned pairs
-    # reform C_, refine C.N_s, which may extend beyond root:
+    for n in set(root.root.N_+_N_ ): n.C_,n.mo_, n._C_,n._mo_ = [],[], [],[]  # aligned pairs, in cross_comp root
+    # reform C_, refine C.N_s
     while True:
         C_, cnt,mat,olp, Dm,Do = [],0,0,0,0,0; Ave = ave * rc * loopw
         _Ct_ = [[c, c.Et[0]/c.Et[2] if c.Et[0] !=0 else 1e-7, c.olp] for c in _C_]
@@ -504,7 +518,7 @@ def cluster_C_(root, rc, fdeep=0):  # form centroids by clustering exemplar surr
             else: break  # the rest is weaker
         if Dm > Ave * cnt * Do:  # dval vs. dolp, overlap increases as Cs may expand in each loop?
             _C_ = C_
-            for n in root.N_: n._C_ = n.C_; n._mo_= n.mo_; n.C_,n.mo_ = [],[]  # new n.C_s, combine with vo_ in Ct_?
+            for n in root.root.N_: n._C_ = n.C_; n._mo_= n.mo_; n.C_,n.mo_ = [],[]  # new n.C_s, combine with vo_ in Ct_?
         else:  # converged
             break
     if  mat > Ave * cnt * olp:
@@ -513,15 +527,16 @@ def cluster_C_(root, rc, fdeep=0):  # form centroids by clustering exemplar surr
 
 def cent_attr(C, rc):  # weight attr matches | diffs by their match to the sum, recompute to convergence
 
-    wTT = []  # Cs can be fuzzy only to the extent that their weights are different?
-    for derT, wT in zip(C.derTT, wTTf):
+    wTT = []  # Cs can be fuzzy only to the extent that their correlation weights are different?
 
-        _w_ = np.ones(len(derT))
-        val_ = np.abs(derT) * wT  # m|d are signed, but their contribution to mean and w_ is absolute
+    for derT, wT in zip(C.derTT, wTTf):
+        # weigh values by feedback before cross-correlation
+        _w_ = np.ones(8)
+        val_ = np.abs(derT) * wT  # m|d are signed, but their contribution is absolute
         V = np.sum(val_)
         while True:
             mean = max(V / max(np.sum(_w_), 1e-7), 1e-7)
-            inverse_dev_ = np.minimum(val_ / mean, mean / val_)  # rational deviation from mean rm in range 0:1, 1 if m=mean, 0 if one is 0?
+            inverse_dev_ = np.minimum(val_/mean, mean/val_)  # rational deviation from mean rm in range 0:1, if m=mean
             w_ = inverse_dev_ / .5  # 2/ m=mean, 0/ inf max/min, 1 / mid_rng | ave_dev?
             w_ *= 8 / np.sum(w_)  # mean w = 1, M shouldn't change?
             if np.sum(np.abs(w_-_w_)) > ave*rc:
@@ -580,7 +595,7 @@ def sum_H_(Q):  # sum derH in link_|node_, not used
     H = Q[0]; [add_H(H,h) for h in Q[1:]]
     return H
 
-def add_H(H, h, root=0, rev=0, rn=1):  #  layer-wise add|append derH
+def add_H(H, h, root=0, rn=1, rev=0):  #  layer-wise add|append derH
 
     for Lay, lay in zip_longest(H,h):  # different len if lay-selective comp
         if lay:
@@ -619,7 +634,7 @@ def add_N(N,n, fmerge=0, fC=0):
     if n.nH: add_NH(N.nH,n.nH, root=N)
     if n.lH: add_NH(N.lH,n.lH, root=N)
     en,_en = n.Et[2],N.Et[2]; rn = en/_en
-    for Par,par in zip((N.angl,N.baseT,N.derTT,N.Et), (n.angl, n.baseT, n.derTT, n.Et)):
+    for Par,par in zip((N.angl,N.mang,N.baseT,N.derTT,N.Et), (n.angl,n.mang,n.baseT,n.derTT,n.Et)):
         Par += par  # *rn for comp
     if n.derH: add_H(N.derH,n.derH, N, rn)
     if fC: N.olp += np.sum([mo[1] for mo in n._mo_])
@@ -701,7 +716,7 @@ def comp_prj_dH(_N,N, ddH, rn, link, angl, span, dec):  # comp combined int proj
                     link)  # comb proj dHs | comp dH ) comb ddHs?
     # Et+= confirm:
     dddH = comp_H(prj_DH, ddH[1:], rn, link.Et, link.derTT, link)  # ddH[1:] maps to N.derH[1:]
-    add_H(ddH, dddH, link, 0, rn)
+    add_H(ddH, dddH, link, rn)
 
 def project_N_(Fg, yx):
 
