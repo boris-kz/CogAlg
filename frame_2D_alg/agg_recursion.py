@@ -103,8 +103,8 @@ class CN(CBase):
         n.olp = kwargs.get('olp',1)  # overlap to ext Gs, ave in links? separate olp for rim, or internally overlapping?
         n.rim = kwargs.get('rim',[])  # node-external links, rng-nested? set?
         n.derH  = kwargs.get('derH',[])  # sum from L_ or rims
-        n.derTT = kwargs.get('derTT',np.zeros((2,8)))  # sum derH
-        n.baseT = kwargs.get('baseT',np.zeros(4))
+        n.derTT = kwargs.get('derTT',np.zeros((2,8)))  # sum derH -> m_,d_ [M,D,n,o,I,G,A,L]
+        n.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,A not ders
         n.yx    = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
         n.rng   = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
         n.box   = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
@@ -175,10 +175,10 @@ def val_(Et, fi=1, mw=1, aw=1, _Et=np.zeros(3)):  # m,d eval per cluster or cros
 Core process per agg level, as described in top docstring:
 Cross-compare nodes, evaluate incremental-derivation cross-comp of new >ave difference links, recursively.
  
-Select sparse exemplars of strong node types, may covert to sub-centroids, refined & extended by mutual match.
-Connectivity-cluster exemplars or centroids by >ave match links, correlation-cluster links by >ave difference.
-
+Select sparse node exemplars, connectivity-cluster by >ave match links, correlation-cluster links by >ave difference.
 Form complemented clusters (core+contour) for recursive higher-composition cross_comp, reorder by eigenvalues. 
+
+Global centroid clustering from exemplar seeds, sellectively spreading via their rim across connectivity clusters.
 Feedback coords to bottom level or prior-level in parallel pipelines, filter updates in more coarse cycles '''
 
 def cross_comp(root, rc, fi=1):  # rng+ and der+ cross-comp and clustering
@@ -196,7 +196,7 @@ def cross_comp(root, rc, fi=1):  # rng+ and der+ cross-comp and clustering
             nG = Cluster(root, N_, rc+loopw, fi)  # get_exemplars, rng-band, local cluster_C_
             if nG:
                 if val_(np.sum([g.Et for g in nG.cent_]),1,(len(nG.N_)-1)*Lw, rc+centw+nG.rng, Et) > 0:
-                    cluster_C_(nG, rc)  # cluster nG.cent_, any rng
+                    cluster_C_(nG, rc)  # cluster nG.cent_ exemplars, of any rng
                 if lG: comb_altg_(nG,lG, rc+2)  # both fork alt Ns are clustered
                 if val_(nG.Et,1, (len(nG.N_)-1)*Lw, rc+loopw+nG.rng, Et) > 0:
                     nG = cross_comp(nG, rc+loopw) or nG  # agg+
@@ -276,7 +276,7 @@ def comp_(iN_, rc, fi=1, fC=0):  # comp pairs of nodes or links within max_dist
 
 def comp_N(_N,N, rc, med=1, L_=None, angl=np.zeros(2), span=None, dang=np.zeros(2), et=np.zeros(3), fdeep=0, rng=1):  # compare links, no angle,span?
 
-    derTT, Et, rn = base_comp(_N,N, rc); fi = N.fi  # -1 if _rev else 1, d = -d if L is reversed relative to _L, obsoleted by sign in angle?
+    derTT, Et, rn = min_comp(_N,N, rc); fi = N.fi  # -1 if _rev else 1, d = -d if L is reversed relative to _L, obsoleted by sign in angle?
     Et += et  # from comp_angle
     baseT = np.array([*(_N.baseT[:2]+ N.baseT[:2]*rn /2), *dang])
     _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)]); o = (_N.olp+N.olp) / 2
@@ -297,7 +297,7 @@ def comp_N(_N,N, rc, med=1, L_=None, angl=np.zeros(2), span=None, dang=np.zeros(
         n.rim += [Link]; n.et += Et; n.seen_.add(_n)  # or extT += Link?
     return Link
 
-def base_comp(_N,N, rc, wTT=None):  # from comp Et, Box, baseT, derTT
+def min_comp(_N,N, rc):  # from comp Et, Box, baseT, derTT
     """
     pairwise similarity kernel:
     m_ = element‑wise min(shared quantity) / max(total quantity) of eight attributes (sign‑aware)
@@ -314,7 +314,7 @@ def base_comp(_N,N, rc, wTT=None):  # from comp Et, Box, baseT, derTT
     o*=rn; do = _o - o; mo = min(_o,o) / max(_o,o)
     M*=rn; dM = _M - M; mM = min(_M,M) / max(_M,M)
     D*=rn; dD = _D - D; mD = min(_D,D) / max(_D,D)
-    # skip baseT?
+    # comp baseT:
     _I,_G,_Dy,_Dx = _N.baseT; I,G,Dy,Dx = N.baseT  # I, G|D, angle
     I*=rn; dI = _I - I; mI = abs(dI) / aI
     G*=rn; dG = _G - G; mG = min(_G,G) / max(_G,G)
@@ -335,8 +335,8 @@ def base_comp(_N,N, rc, wTT=None):  # from comp Et, Box, baseT, derTT
         dd_ = _id_-id_  # dangle insignificant for nodes
     else:  # comp angle in link Ns
         _dy,_dx = _N.angl; dy, dx = N.angl
-        dot = dy * _dy + dx * _dx  # d_orientation
-        leP = np.hypot(dy, dx) * np.hypot(_dy,_dx)
+        dot = dy * _dy + dx * _dx  # orientation
+        leP = np.hypot(dy,dx) * np.hypot(_dy,_dx)
         cos_da = dot / leP if leP else 1  # keep in [–1,1]
         rot = 1 if dy * _dx - dx * _dy >= 0 else -1  # +1 CW, −1 CCW
         # projected abs diffs * combined input and dangle sign:
@@ -346,14 +346,39 @@ def base_comp(_N,N, rc, wTT=None):  # from comp Et, Box, baseT, derTT
     md_ *= np.where((_id_<0)!=(id_<0), -1,1)  # match is negative if comparands have opposite sign
     m_ += md_; d_ += dd_
     DerTT = np.array([m_,d_])  # [M,D,n,o, I,G,A,L]
-    if wTT is None:  wm_,wd_ = wTTf  # global only
-    else:  # centroid _N: combine, re-norm weights
-        mP = wTTf[0]*wTT[0]; mS = np.sum(mP); wm_ = mP * (8/mS) if mS>0 else np.ones(8)
-        dP = wTTf[1]*wTT[1]; dS = np.sum(dP); wd_ = dP * (8/dS) if dS>0 else np.ones(8)
-    Et = np.array([np.sum(m_* wm_ * rc),
-                   np.sum(np.abs(d_ * wd_ * rc)), # * ffeedback * correlation if comp_C
+    Et = np.array([np.sum(m_* wTTf[0] * rc),
+                   np.sum(np.abs(d_ * wTTf[1] * rc)), # frame ffeedback * correlation
                    min(_n, n)])  # shared scope?
     return DerTT, Et, rn
+    
+def cos_comp(C, N, fdeep=0):  # eval cosine similarity for centroid clustering
+    
+
+    mw_ = wTTf[0] * np.sqrt(C.wTT[0])  # wTT is derTT correlation term from cent_attr, same for base attrs?
+    _M,_D,_n = C.Et; M,D,n = N.Et  # for comp only
+    rn = _n / n  # size ratio, add _o/o?
+    o,_o = N.olp, C.olp
+    _I,_G,_Dy,_Dx = C.baseT; I,G,Dy,Dx = N.baseT  # I, G|D, angle
+    _L,L = (len(C.N_), len(N.N_)) if N.fi else (C.span, N.span)   # dimension, no angl? positive?
+    BaseT = np.array([_M,_D,_n,_o,_I,_G,_L]); wD_ = BaseT * mw_[0,1,2,3,4,5,7]  # exclude angw
+    baseT = np.array([ M, D, n, o, I, G, L]); wd_ = baseT * mw_[0,1,2,3,4,5,7]
+    denom = np.linalg.norm(wD_) * np.linalg.norm(wd_) + 1e-12
+    MT = 0.5 * ((wD_ @ (wd_*rn)) / denom + 1.0)  # [-1,1]→[0,1]
+    # separate:
+    mA,_ = comp_angle((_Dy,_Dx),(Dy*rn,Dx*rn))
+    MT = (MT + (mA * mw_[6] / 7)) / 2  # combine for weighted ave cos?
+    # comp derT:
+    dw_ = wTTf[1] * np.sqrt(C.wTT[1])
+    wD_ = C.derTT[1] * dw_; wd_ = N.derTT[1] * dw_
+    denom = np.linalg.norm(wD_) * np.linalg.norm(wd_) + 1e-12
+    MT += 0.5 * ((wD_ @ (wd_*rn)) / denom + 1.0)  # [-1,1]→[0,1]
+    MT /= 2  # equal-weight ave baseT+derT?
+    if fdeep:
+        if M * (len(n.derH)-2) > ave * ((o+_o)/2):
+            M += comp_H_cos(C.derH, N.derH, N.Et[2]/C.Et[2], C.wTT)  # draft
+        for L in C.rim:
+            if L in N.rim: M += L.Et[0]  # overlap
+    return M
 
 def spec(_spe,spe, rc, Et, dspe=None, fdeep=0):  # for N_|cent_ | altg_
     for _N in _spe:
@@ -460,26 +485,7 @@ def cluster(root, iN_, rN_, rc, rng=1):  # flood-fill node | link clusters
         nG.cent_ = cent_
         return nG
 
-def comp_cos(C, n):
-    # draft
-    def wcos(_d, d, w):
-        _wd, wd = _d * w, d * w
-        cos = (_wd @ wd) / (np.linalg.norm(_wd) * np.linalg.norm(wd) + 1e-12)
-        return 0.5 * (cos + 1.0)
-        # [-1,1] -> [0,1]
-    # * wTT from cent_attr?
-    return sum([ wcos(_d, d, w) for _d, d, w in zip(C.derTT[1], n.derTT[1], wTTf[1]) ]) / 8
-
 def cluster_C_(root, rc, fdeep=0):  # form centroids by clustering exemplar surround, drifting via rims of new member nodes
-
-    def comp_C(C, n):
-        M = comp_cos(C,n)
-        if fdeep:
-            if M * (len(n.derH)-2) > ave*rc:
-                M += comp_H(C.derH, n.derH, n.Et[2]/C.Et[2], C.wTT)  # draft
-            for L in C.rim:
-                if L in n.rim: M += L.Et[0]  # overlap
-        return M
 
     _C_, _N_ = [], []
     for E in root.cent_:
@@ -498,8 +504,8 @@ def cluster_C_(root, rc, fdeep=0):  # form centroids by clustering exemplar surr
                 _N_,_N__, mo_, M,O, dm,do = [],[],[],0,0,0,0  # per C
                 for n in _C._N_:  # core+ surround
                     if C in n.C_: continue
-                    m = comp_C(C,n)  # val,olp / C:
-                    o = np.sum([mo[0]/ m for mo in n._mo_ if mo[0]>m])  # overlap = higher-C inclusion vals / current C val
+                    m = cos_comp(C,n)  # val,olp / C:
+                    o = np.sum([mo[0] /m for mo in n._mo_ if mo[0]>m])  # overlap = higher-C inclusion vals / current C val
                     cnt += 1  # count comps per loop
                     if m > Ave * o:
                         _N_+=[n]; M+=m; O+=o; mo_ += [np.array([m,o])]  # n.o for convergence eval
@@ -544,7 +550,7 @@ def cent_attr(C, rc):  # weight attr matches | diffs by their match to the sum, 
                 _w_ = w_
             else:  break  # weight convergence
         wTT += [_w_]
-    C.wTT = np.array(wTT)  # this is replacing wTTf in centroids
+    C.wTT = np.array(wTT)  # replace wTTf
     return C
 
 def ett(L): return (L.N_[0].et + L.N_[1].et) * intw
@@ -590,6 +596,17 @@ def comp_H(H,h, rn, ET=None, DerTT=None, root=None):  # one-fork derH
             derH += [dlay]; derTT = dlay.derTT; Et += dlay.Et
     if Et[2]: DerTT += derTT; ET += Et
     return derH
+
+def comp_H_cos(H, h, rn, wTT):
+    M = 0
+    dw_ = wTTf[1] * np.sqrt(wTT[1])
+    for Lay, lay in zip_longest(H, h, fillvalue=None):
+        if Lay and lay:
+            wD_ = Lay.derTT[1] * dw_
+            wd_ = lay.derTT[1] * dw_ * rn
+            denom = np.linalg.norm(wD_) * np.linalg.norm(wd_) + 1e-12
+            M += 0.5 * ((wD_ @ wd_) / denom + 1.0)
+    return M
 
 def sum_H_(Q):  # sum derH in link_|node_, not used
     H = Q[0]; [add_H(H,h) for h in Q[1:]]
@@ -819,6 +836,9 @@ def agg_frame(foc, image, iY, iX, rV=1, wTTf=[], fproj=0):  # search foci within
             Fg = agg_frame(1, win__[:,:,:,y,x], wY,wX, rV=1, wTTf=[])  # use global wY,wX in nested call
             if Fg and Fg.L_:  # only after cross_comp(PP_)
                 rV, wTTf = ffeedback(Fg)  # adjust filters
+                Fg = cent_attr(Fg,2)  # compute Fg.wTT: correlation weights in frame derTT?
+                wTTf *= Fg.wTT; wTTf[0] *= 8/np.sum(wTTf[0]); wTTf[1] *= 8/np.sum(wTTf[1])
+                # re-norm weights
         if Fg and Fg.L_:
             if fproj and val_(Fg.Et,1, (len(Fg.N_)-1)*Lw, Fg.olp+loopw*20):
                 pFg = project_N_(Fg, np.array([y,x]))

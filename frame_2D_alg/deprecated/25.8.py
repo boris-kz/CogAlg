@@ -97,3 +97,67 @@ def cluster_C_(root, N_, rc, fdeep=0, fext=0):  # form centroids by clustering e
     if  mat > Ave * cnt * olp:
         root.cent_ = (set(C_),mat)
         # cross_comp, low overlap eval in comp_node_?
+
+def base_comp(_N,N, rc, wTT=None):  # from comp Et, Box, baseT, derTT
+    """
+    pairwise similarity kernel:
+    m_ = element‑wise min(shared quantity) / max(total quantity) of eight attributes (sign‑aware)
+    d_ = element‑wise signed difference after size‑normalisation
+    DerTT = np.vstack([m_,d_])
+    Et[0] = Σ(m_ * wTTf[0])    # total match (≥0) = relative shared quantity
+    Et[1] = Σ(|d_| * wTTf[1])  # total absolute difference (≥0)
+    Et[2] = min(_n, n)        # min accumulation span
+    """
+    _M,_D,_n = _N.Et; M,D,n = N.Et
+    dn = _n - n; mn = min(_n,n) / max(_n,n)  # or multiplicative for ratios: min * rn?
+    rn = _n / n  # size ratio, add _o/o?
+    o, _o = N.olp, _N.olp
+    o*=rn; do = _o - o; mo = min(_o,o) / max(_o,o)
+    M*=rn; dM = _M - M; mM = min(_M,M) / max(_M,M)
+    D*=rn; dD = _D - D; mD = min(_D,D) / max(_D,D)
+    # skip baseT?
+    _I,_G,_Dy,_Dx = _N.baseT; I,G,Dy,Dx = N.baseT  # I, G|D, angle
+    I*=rn; dI = _I - I; mI = abs(dI) / aI
+    G*=rn; dG = _G - G; mG = min(_G,G) / max(_G,G)
+    mA, dA = comp_angle((_Dy,_Dx),(Dy*rn,Dx*rn))  # current angle if CL
+    # comp dimension:
+    if N.fi: # dimension is n nodes
+        _L,L = len(_N.N_), len(N.N_)
+        mL,dL = min(_L,L)/ max(_L,L), _L - L
+    else:  # dimension is distance
+        _L,L = _N.span, N.span   # dist, not cumulative, still positive?
+        mL,dL = min(_L,L)/ max(_L,L), _L - L
+    # comp depth, density:
+    # lenH and ave span, combined from N_ in links?
+    m_,d_ = np.array([[mM,mD,mn,mo,mI,mG,mA,mL], [dM,dD,dn,do,dI,dG,dA,dL]])
+    # comp derTT:
+    id_ = N.derTT[1] * rn; _id_ = _N.derTT[1]  # norm by span
+    if N.fi:
+        dd_ = _id_-id_  # dangle insignificant for nodes
+    else:  # comp angle in link Ns
+        _dy,_dx = _N.angl; dy, dx = N.angl
+        dot = dy * _dy + dx * _dx  # d_orientation
+        leP = np.hypot(dy, dx) * np.hypot(_dy,_dx)
+        cos_da = dot / leP if leP else 1  # keep in [–1,1]
+        rot = 1 if dy * _dx - dx * _dy >= 0 else -1  # +1 CW, −1 CCW
+        # projected abs diffs * combined input and dangle sign:
+        dd_ = np.abs(_id_-id_) * ((1-cos_da)/2) * np.sign(_id_) * np.sign(id_) * rot
+    _a_,a_ = np.abs(_id_),np.abs(id_)
+    md_ = np.divide( np.minimum(_a_,a_), np.maximum.reduce([_a_,a_, np.zeros(8) + 1e-7]))  # rms
+    md_ *= np.where((_id_<0)!=(id_<0), -1,1)  # match is negative if comparands have opposite sign
+    m_ += md_; d_ += dd_
+    DerTT = np.array([m_,d_])  # [M,D,n,o, I,G,A,L]
+    if wTT is None:  wm_,wd_ = wTTf  # global only
+    else:  # centroid _N: combine, re-norm weights
+        mP = wTTf[0]*wTT[0]; mS = np.sum(mP); wm_ = mP * (8/mS) if mS>0 else np.ones(8)
+        dP = wTTf[1]*wTT[1]; dS = np.sum(dP); wd_ = dP * (8/dS) if dS>0 else np.ones(8)
+    Et = np.array([np.sum(m_* wm_ * rc),
+                   np.sum(np.abs(d_ * wd_ * rc)), # * ffeedback * correlation if comp_C
+                   min(_n, n)])  # shared scope?
+    return DerTT, Et, rn
+
+    def comp_cos(C, n):
+        _wd_, wd_ = C.derTT[1] * wTTf[1], n.derTT[1] * wTTf[1]
+        cos_M = (_wd_ @ wd_) / (np.linalg.norm(_wd_) * np.linalg.norm(wd_) + 1e-12)
+        # [-1,1] -> [0,1]:
+        return 0.5 * (cos_M + 1.0)  # * wTT from cent_attr?
