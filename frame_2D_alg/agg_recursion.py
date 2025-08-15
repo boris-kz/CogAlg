@@ -228,14 +228,15 @@ def comb_altg_(nG, lG, rc):  # cross_comp contour/background per node:
                 aG = cross_comp(aG, rc) or aG
             Ng.altg_ = (aG.N_,aG.Et)
 
+# replace with proj_L_:
 def proj_span(N, dir_vec):  # project N.span in link direction, in proportion to internal collinearity N.mang
 
     cos_proj = np.dot(N.angl, dir_vec) / (np.linalg.norm(N.angl) * np.linalg.norm(dir_vec))  # cos angle = (a⋅b) / (||a||⋅||b||)
     oriented = (1 - N.mang) + (N.mang * 2 * abs(cos_proj))  # from 1/span to 2?
-    #          (1 - N.mang) * N.span + N.mang * (1 + (2 * N.span - 1) * abs(cos_angle)) ?
+    #          (1 - N.mang) * N.span + N.mang * (1 + (2 * N.span - 1) * abs(cos_angle)), * elongation?
     return N.span * oriented  # from 1 to N.span * len L_?
 
-def comp_(iN_, rc, fi=1, fC=0):  # comp pairs of nodes or links within max_dist
+def comp_(iN_, rc, fi=1, fC=0, fdeep=0):  # comp pairs of nodes or links within max_dist
 
     N__,L_, ET = [],[], np.zeros(3); rng,olp_,_N_ = 1,[],copy(iN_)
     # frng: range-band?
@@ -246,17 +247,20 @@ def comp_(iN_, rc, fi=1, fC=0):  # comp pairs of nodes or links within max_dist
                 continue
             dy,dx = np.subtract(_N.yx,N.yx); dist = np.hypot(dy,dx); dy_dx = np.array([dy,dx])
             radii = proj_span(_N, dy_dx) + proj_span(N, dy_dx)  # directionally projected
+            # replace radii, vett with pL_tV, computed in main sequence:
             Np_ += [(_N,N, dy,dx, radii, dist)]
         N_,Et = [],np.zeros(3)
         for Np in Np_:
             _N,N, dy,dx, radii, dist = Np
             (_m,_d,_n), (m,d,n) = _N.Et,N.Et; olp = (_N.olp+N.olp)/2  # add directional projection?
             if fC: _m += np.sum([i[0] for i in _N.mo_]); m += np.sum([i[0] for i in N.mo_])  # matches to centroids
-            vett = _N.et[1-fi]/_N.et[2] + N.et[1-fi]/N.et[2]  # density term
+            # vett = _N.et[1-fi]/_N.et[2] + N.et[1-fi]/N.et[2]  # density term
+            pL_tV = proj_L_(_N,N) if fdeep else 0
+            # directional N.L_, N.rim val combination of variable depth, += pL_t of mediated nodes?
             mA,dA = comp_angle(_N.angl, N.angl)
             conf = (_N.mang + N.mang) / 2; mA *= conf; dA *= conf  # N collinearity | angle confidence
-            if fi: V = ((_m + m + mA) * intw + vett) / (ave*(_n+n))
-            else:  V = ((_d + d + mA) * intw + vett) / (avd*(_n+n))
+            if fi: V = ((_m + m + mA) * intw + pL_tV) / (ave*(_n+n))
+            else:  V = ((_d + d + mA) * intw + pL_tV) / (avd*(_n+n))
             max_dist = adist * (radii / aveR) * V
             # min induction distance:
             if max_dist > dist or set(_N.rim) & set(N.rim):  # close or share matching mediators
@@ -352,33 +356,35 @@ def min_comp(_N,N, rc):  # from comp Et, Box, baseT, derTT
     return DerTT, Et, rn
     
 def cos_comp(C, N, fdeep=0):  # eval cosine similarity for centroid clustering
-    
 
-    mw_ = wTTf[0] * np.sqrt(C.wTT[0])  # wTT is derTT correlation term from cent_attr, same for base attrs?
+    mw_ = wTTf[0] * np.sqrt(C.wTT[0]); mW = mw_.sum()  # wTT is derTT correlation term from cent_attr, same for base attrs?
     _M,_D,_n = C.Et; M,D,n = N.Et  # for comp only
-    rn = _n / n  # size ratio, add _o/o?
+    rn = _n/n  # size norm, +_o/o?
     o,_o = N.olp, C.olp
     _I,_G,_Dy,_Dx = C.baseT; I,G,Dy,Dx = N.baseT  # I, G|D, angle
-    _L,L = (len(C.N_), len(N.N_)) if N.fi else (C.span, N.span)   # dimension, no angl? positive?
-    BaseT = np.array([_M,_D,_n,_o,_I,_G,_L]); wD_ = BaseT * mw_[0,1,2,3,4,5,7]  # exclude angw
-    baseT = np.array([ M, D, n, o, I, G, L]); wd_ = baseT * mw_[0,1,2,3,4,5,7]
+    _L,L = (len(C.N_), len(N.N_)) if N.fi else (C.span, N.span)  # dimension, no angl? positive?
+    bw_ = mw_[[0,1,2,3,4,5,7]]; bW = bw_.sum()  # exclude ang w
+    BaseT = np.array([_M,_D,_n,_o,_I,_G,_L]); wD_ = BaseT * bw_
+    baseT = np.array([ M, D, n, o, I, G, L]); wd_ = baseT * bw_ * rn
     denom = np.linalg.norm(wD_) * np.linalg.norm(wd_) + 1e-12
-    MT = 0.5 * ((wD_ @ (wd_*rn)) / denom + 1.0)  # [-1,1]→[0,1]
+    Mb = 0.5 * ((wD_ @ wd_) / denom + 1.0)  # [-1,1]→[0,1]
     # separate:
-    mA,_ = comp_angle((_Dy,_Dx),(Dy*rn,Dx*rn))
-    MT = (MT + (mA * mw_[6] / 7)) / 2  # combine for weighted ave cos?
+    mA,_ = comp_angle((_Dy,_Dx),(Dy*rn, Dx*rn))
+    Mb = (Mb*bW + mA*mw_[6]) / (bW+mw_[6])  # combine for weighted ave cos
     # comp derT:
-    dw_ = wTTf[1] * np.sqrt(C.wTT[1])
-    wD_ = C.derTT[1] * dw_; wd_ = N.derTT[1] * dw_
+    dw_ = wTTf[1] * np.sqrt(C.wTT[1]); dW = dw_.sum()
+    wD_ = C.derTT[1] * dw_; wd_ = N.derTT[1] * dw_ * rn
     denom = np.linalg.norm(wD_) * np.linalg.norm(wd_) + 1e-12
-    MT += 0.5 * ((wD_ @ (wd_*rn)) / denom + 1.0)  # [-1,1]→[0,1]
-    MT /= 2  # equal-weight ave baseT+derT?
+    Md = 0.5 * ((wD_ @ wd_) / denom + 1.0)  # [-1,1]→[0,1]
+    tW = mW + dW
+    MT = (Mb*mW + Md*dW) / (tW + 1e-12)  # weighted baseT + derT
     if fdeep:
-        if M * (len(n.derH)-2) > ave * ((o+_o)/2):
-            M += comp_H_cos(C.derH, N.derH, N.Et[2]/C.Et[2], C.wTT)  # draft
-        for L in C.rim:
-            if L in N.rim: M += L.Et[0]  # overlap
-    return M
+        if MT * tW * (len(N.derH)-2) > ave * ((o+_o)/2):
+            MH = comp_H_cos(C.derH, N.derH, rn, C.wTT)
+            ddW = tW * (dW / mW)  # ders W < inputs W
+            MT = (MT*tW + MH*ddW) / (tW+ddW +1e-12)
+        # add N.rim overlap?
+    return MT
 
 def spec(_spe,spe, rc, Et, dspe=None, fdeep=0):  # for N_|cent_ | altg_
     for _N in _spe:
