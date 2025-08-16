@@ -137,7 +137,7 @@ def Copy_(N, root=None, init=0):
 ave, avd, arn, aI, aveB, aveR, Lw, intw, loopw, centw, contw = 10, 10, 1.2, 100, 100, 3, 5, 2, 5, 10, 15  # value filters + weights
 adist, amed, distw, medw = 10, 3, 2, 2  # cost filters + weights, add alen?
 wM, wD, wN, wO, wI, wG, wA, wL = 10, 10, 20, 20, 1, 1, 20, 20  # der params higher-scope weights = reversed relative estimated ave?
-wTTf = np.ones((2,8))  # fb weights per derTT, adjust in agg+
+mW = dW = 8; wTTf = np.ones((2,8))  # fb weights per derTT, adjust in agg+
 wY = wX = 64; wYX = np.hypot(wY,wX)  # focus dimensions
 '''
 initial PP_ cross_comp and connectivity clustering to initialize focal frame graph, no recursion:
@@ -228,47 +228,55 @@ def comb_altg_(nG, lG, rc):  # cross_comp contour/background per node:
                 aG = cross_comp(aG, rc) or aG
             Ng.altg_ = (aG.N_,aG.Et)
 
-# replace with proj_L_:
-def proj_span(N, dir_vec):  # project N.span in link direction, in proportion to internal collinearity N.mang
+def proj_V(_N, N, angle, fC=0):
 
-    cos_proj = np.dot(N.angl, dir_vec) / (np.linalg.norm(N.angl) * np.linalg.norm(dir_vec))  # cos angle = (a⋅b) / (||a||⋅||b||)
-    oriented = (1 - N.mang) + (N.mang * 2 * abs(cos_proj))  # from 1/span to 2?
-    #          (1 - N.mang) * N.span + N.mang * (1 + (2 * N.span - 1) * abs(cos_angle)), * elongation?
-    return N.span * oriented  # from 1 to N.span * len L_?
+    def proj_L_(L_, int_w=1):
+        v = 0
+        for L in L_:
+            cos = (L.angl @ angle) / (np.hypot(*L.angl) * np.hypot(*angle))  # angl is [dy,dx]
+            mang = (cos + abs(cos)) / 2  # = max(0, cos): 0 at 90°/180°, 1 at 0°
+            m,d,_ = L.Et
+            v += m / (m + d) * mang * int_w * mW  # convert to cosine similarity
+            # proj rim-mediated nodes? no dfork for comp eval? add decay per link.span / l.span?
+        return v
+    V, O = 0, 0
+    for node in _N,N:
+        o = node.olp; O += o
+        m,d,_ = node.et; v = m/(m+d)  # external
+        if v * mW > ave * o: V += proj_L_(node.rim)
+        else:                V += v   # too low for indiv rim proj
+        m,d,_ = node.Et; v = m/(m+d)  # internal
+        if v * mW > ave * o: V += proj_L_(node.L_, intw)  # secondary to rim
+        else:                V += v   # too low for indiv L proj
+    if fC:
+        V += np.sum([i[0] for i in _N.mo_]) + np.sum([i[0] for i in N.mo_])
+        # matches to centroids?
+    return V, O/2
 
-def comp_(iN_, rc, fi=1, fC=0, fdeep=0):  # comp pairs of nodes or links within max_dist
+def comp_(iN_, rc):  # comp pairs of nodes or links within max_dist
 
     N__,L_, ET = [],[], np.zeros(3); rng,olp_,_N_ = 1,[],copy(iN_)
     # frng: range-band?
     while True:  # _vM
-        Np_ = []  # [G pair + co-positionals], for top-nested Ns, unless cross-nesting comp:
+        N_,Et = [],np.zeros(3)
         for _N, N in combinations(_N_, r=2):
             if _N in N.seen_ or len(_N.nH) != len(N.nH):  # | root.nH: comp top nodes only
                 continue
-            dy,dx = np.subtract(_N.yx,N.yx); dist = np.hypot(dy,dx); dy_dx = np.array([dy,dx])
-            radii = proj_span(_N, dy_dx) + proj_span(N, dy_dx)  # directionally projected
-            # replace radii, vett with pL_tV, computed in main sequence:
-            Np_ += [(_N,N, dy,dx, radii, dist)]
-        N_,Et = [],np.zeros(3)
-        for Np in Np_:
-            _N,N, dy,dx, radii, dist = Np
-            (_m,_d,_n), (m,d,n) = _N.Et,N.Et; olp = (_N.olp+N.olp)/2  # add directional projection?
-            if fC: _m += np.sum([i[0] for i in _N.mo_]); m += np.sum([i[0] for i in N.mo_])  # matches to centroids
-            # vett = _N.et[1-fi]/_N.et[2] + N.et[1-fi]/N.et[2]  # density term
-            pL_tV = proj_L_(_N,N) if fdeep else 0
-            # directional N.L_, N.rim val combination of variable depth, += pL_t of mediated nodes?
+            dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)
             mA,dA = comp_angle(_N.angl, N.angl)
-            conf = (_N.mang + N.mang) / 2; mA *= conf; dA *= conf  # N collinearity | angle confidence
-            if fi: V = ((_m + m + mA) * intw + pL_tV) / (ave*(_n+n))
-            else:  V = ((_d + d + mA) * intw + pL_tV) / (avd*(_n+n))
-            max_dist = adist * (radii / aveR) * V
-            # min induction distance:
-            if max_dist > dist or set(_N.rim) & set(N.rim):  # close or share matching mediators
-                Link = comp_N(_N,N, rc, L_=L_, angl=dy_dx, span=dist, dang=[mA,dA], et=np.array([mA,dA,1]), fdeep = dist < max_dist/2, rng=rng)
-                if val_(Link.Et, aw=loopw*olp) > 0:
-                    Et += Link.Et; olp_ += [olp]  # link.olp is the same with o
+            conf = (_N.mang + N.mang) / 2  # N.L_ collinearity or angle confidence mostly for fi=0?
+            mA *= conf; dA *= conf
+            if set(_N.rim) & set(N.rim):
+                fcomp = 1  # share matching mediators? not sure
+            else:
+                V,O = proj_V(_N,N, dy_dx, mW)  # eval Ns proj to a variable depth
+                fcomp = adist * V/O > dist  # min induction
+            if fcomp:
+                Link = comp_N(_N,N, rc, L_=L_, angl=dy_dx, span=dist, et=np.array([mA,dA,1]), rng=rng)
+                if val_(Link.Et, aw=loopw*O) > 0:
+                    Et += Link.Et; olp_ += [O]  # link.olp is the same with o
                     for n in _N,N:
-                        if n not in N_ and val_(n.et, aw=rc+rng-1+loopw+olp) > 0:  # cost+ / rng?
+                        if n not in N_ and val_(n.et, aw=rc+rng-1+loopw+O) > 0:  # cost+ / rng?
                             N_ += [n]  #-> rng+ eval
         if N_:
             N__ += [N_]; ET += Et
@@ -354,7 +362,7 @@ def min_comp(_N,N, rc):  # from comp Et, Box, baseT, derTT
                    np.sum(np.abs(d_ * wTTf[1] * rc)), # frame ffeedback * correlation
                    min(_n, n)])  # shared scope?
     return DerTT, Et, rn
-    
+
 def cos_comp(C, N, fdeep=0):  # eval cosine similarity for centroid clustering
 
     mw_ = wTTf[0] * np.sqrt(C.wTT[0]); mW = mw_.sum()  # wTT is derTT correlation term from cent_attr, same for base attrs?
@@ -367,7 +375,7 @@ def cos_comp(C, N, fdeep=0):  # eval cosine similarity for centroid clustering
     BaseT = np.array([_M,_D,_n,_o,_I,_G,_L]); wD_ = BaseT * bw_
     baseT = np.array([ M, D, n, o, I, G, L]); wd_ = baseT * bw_ * rn
     denom = np.linalg.norm(wD_) * np.linalg.norm(wd_) + 1e-12
-    Mb = 0.5 * ((wD_ @ wd_) / denom + 1.0)  # [-1,1]→[0,1]
+    Mb = ((wD_ @ wd_) / denom + 1) / 2  # [-1,1]→[0,1]
     # separate:
     mA,_ = comp_angle((_Dy,_Dx),(Dy*rn, Dx*rn))
     Mb = (Mb*bW + mA*mw_[6]) / (bW+mw_[6])  # combine for weighted ave cos
@@ -375,7 +383,7 @@ def cos_comp(C, N, fdeep=0):  # eval cosine similarity for centroid clustering
     dw_ = wTTf[1] * np.sqrt(C.wTT[1]); dW = dw_.sum()
     wD_ = C.derTT[1] * dw_; wd_ = N.derTT[1] * dw_ * rn
     denom = np.linalg.norm(wD_) * np.linalg.norm(wd_) + 1e-12
-    Md = 0.5 * ((wD_ @ wd_) / denom + 1.0)  # [-1,1]→[0,1]
+    Md = ((wD_ @ wd_) / denom + 1) / 2
     tW = mW + dW
     MT = (Mb*mW + Md*dW) / (tW + 1e-12)  # weighted baseT + derT
     if fdeep:
@@ -820,7 +828,7 @@ def agg_frame(foc, image, iY, iX, rV=1, wTTf=[], fproj=0):  # search foci within
     if foc: dert__ = image  # focal img was converted to dert__
     else:
         dert__ = comp_pixel(image) # global
-        global ave, Lw, intw, loopw, centw, contw, adist, amed, medw
+        global ave, Lw, intw, loopw, centw, contw, adist, amed, medw, mW, dW
         ave, Lw, intw, loopw, centw, contw, adist, amed, medw = np.array([ave, Lw, intw, loopw, centw, contw, adist, amed, medw]) / rV
         # fb rws: ~rvs
     nY,nX = dert__.shape[-2] // iY, dert__.shape[-1] // iX  # n complete blocks
@@ -843,7 +851,8 @@ def agg_frame(foc, image, iY, iX, rV=1, wTTf=[], fproj=0):  # search foci within
             if Fg and Fg.L_:  # only after cross_comp(PP_)
                 rV, wTTf = ffeedback(Fg)  # adjust filters
                 Fg = cent_attr(Fg,2)  # compute Fg.wTT: correlation weights in frame derTT?
-                wTTf *= Fg.wTT; wTTf[0] *= 8/np.sum(wTTf[0]); wTTf[1] *= 8/np.sum(wTTf[1])
+                wTTf *= Fg.wTT; mW = np.sum(wTTf[0]); dW = np.sum(wTTf[1])  # global?
+                wTTf[0] *= 8/mW; wTTf[1] *= 8/dW  # Fg.wTT is redundant?
                 # re-norm weights
         if Fg and Fg.L_:
             if fproj and val_(Fg.Et,1, (len(Fg.N_)-1)*Lw, Fg.olp+loopw*20):

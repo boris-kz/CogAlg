@@ -161,3 +161,53 @@ def base_comp(_N,N, rc, wTT=None):  # from comp Et, Box, baseT, derTT
         cos_M = (_wd_ @ wd_) / (np.linalg.norm(_wd_) * np.linalg.norm(wd_) + 1e-12)
         # [-1,1] -> [0,1]:
         return 0.5 * (cos_M + 1.0)  # * wTT from cent_attr?
+
+# replace with proj_L_:
+def proj_span(N, dir_vec):  # project N.span in link direction, in proportion to internal collinearity N.mang
+
+    cos_proj = np.dot(N.angl, dir_vec) / (np.linalg.norm(N.angl) * np.linalg.norm(dir_vec))  # cos angle = (a⋅b) / (||a||⋅||b||)
+    oriented = (1 - N.mang) + (N.mang * 2 * abs(cos_proj))  # from 1/span to 2?
+    #          (1 - N.mang) * N.span + N.mang * (1 + (2 * N.span - 1) * abs(cos_angle)), * elongation?
+    return N.span * oriented  # from 1 to N.span * len L_?
+
+def comp_(iN_, rc, fi=1, fC=0, fdeep=0):  # comp pairs of nodes or links within max_dist
+
+    N__,L_, ET = [],[], np.zeros(3); rng,olp_,_N_ = 1,[],copy(iN_)
+    # frng: range-band?
+    while True:  # _vM
+        Np_ = []  # [G pair + co-positionals], for top-nested Ns, unless cross-nesting comp:
+        for _N, N in combinations(_N_, r=2):
+            if _N in N.seen_ or len(_N.nH) != len(N.nH):  # | root.nH: comp top nodes only
+                continue
+            dy,dx = np.subtract(_N.yx,N.yx); dist = np.hypot(dy,dx); dy_dx = np.array([dy,dx])
+            radii = proj_span(_N, dy_dx) + proj_span(N, dy_dx)  # directionally projected
+            # replace radii, vett with pL_tV, computed in main sequence:
+            Np_ += [(_N,N, dy,dx, radii, dist)]
+        N_,Et = [],np.zeros(3)
+        for Np in Np_:
+            _N,N, dy,dx, radii, dist = Np
+            (_m,_d,_n), (m,d,n) = _N.Et,N.Et; olp = (_N.olp+N.olp)/2  # add directional projection?
+            if fC: _m += np.sum([i[0] for i in _N.mo_]); m += np.sum([i[0] for i in N.mo_])  # matches to centroids
+            # vett = _N.et[1-fi]/_N.et[2] + N.et[1-fi]/N.et[2]  # density term
+            pL_tV = proj_L_(_N,N) if fdeep else 0
+            # directional N.L_, N.rim val combination of variable depth, += pL_t of mediated nodes?
+            mA,dA = comp_angle(_N.angl, N.angl)
+            conf = (_N.mang + N.mang) / 2; mA *= conf; dA *= conf  # N collinearity | angle confidence
+            if fi: V = ((_m + m + mA) * intw + pL_tV) / (ave*(_n+n))
+            else:  V = ((_d + d + mA) * intw + pL_tV) / (avd*(_n+n))
+            max_dist = adist * (radii / aveR) * V
+            # min induction distance:
+            if max_dist > dist or set(_N.rim) & set(N.rim):  # close or share matching mediators
+                Link = comp_N(_N,N, rc, L_=L_, angl=dy_dx, span=dist, dang=[mA,dA], et=np.array([mA,dA,1]), fdeep = dist < max_dist/2, rng=rng)
+                if val_(Link.Et, aw=loopw*olp) > 0:
+                    Et += Link.Et; olp_ += [olp]  # link.olp is the same with o
+                    for n in _N,N:
+                        if n not in N_ and val_(n.et, aw=rc+rng-1+loopw+olp) > 0:  # cost+ / rng?
+                            N_ += [n]  #-> rng+ eval
+        if N_:
+            N__ += [N_]; ET += Et
+            if val_(Et, mw=(len(N_)-1)*Lw, aw=loopw * (sum(olp_) if olp_ else 1)) > 0:  # current-rng vM
+                _N_ = N_; rng += 1; olp_ = []  # reset
+            else: break  # low projected rng+ vM
+        else: break
+    return N__, L_, ET
