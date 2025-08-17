@@ -40,7 +40,7 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
         l.nodet = nodet  # e_ in kernels, else replaces _node,node: not used in kernels?
         l.L = 1  # min nodet
         l.vertuple = vertuple  # m_,d_
-        l.angle = angle  # dy,dx between node centers
+        l.angl = angle  # dy,dx between node centers (for PP's internal L_)
         l.span = span  # distance between node centers
         l.yx = yx  # sum node_
         l.Et = Et
@@ -90,7 +90,7 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
         if P.merged: continue
         _prim_ = P.prim; _lrim_ = P.lrim
         if fd: Et= P.Et; L = P.L  # summed vertuple, min L in dP
-        else:  I,G,Dy,Dx,M,D,L = P.latuple; Et = np.array([I+M, G+D])
+        else:  I,G,Dy,Dx,M,D,L = P.latuple; Et = np.array([I+M, G+abs(D)])
         _P_ = {P}; link_ = set()
         vert = np.zeros((2,6))
         while _prim_:
@@ -101,7 +101,7 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
                 _P_.add(_P); link_.add(_link)
                 vert += _link.vertuple
                 if fd: (_M,_D),_L = _P.Et, _P.L
-                else: _I,_G,_Dy,_Dx,_M,_D,_L = _P.latuple; _M,_D = _I+_M, _G+_D
+                else: _I,_G,_Dy,_Dx,_M,_D,_L = _P.latuple; _M,_D = _I+_M, _G+abs(_D)
                 Et += _link.Et + np.array([_M,_D])  # intra-P similarity and variance
                 L += _L  # latuple summation span
                 prim_.update(set(_P.prim) - _P_)
@@ -168,10 +168,10 @@ def sum2PP(P_, dP_, Et):  # sum links in Ps and Ps in PP
             if dP.nodet[0] not in P_ or dP.nodet[1] not in P_: continue  # peripheral link
             link_ += [dP]
             vert += dP.vertuple
-            a = dP.angle; A = np.add(A,a); S += np.hypot(*a)  # span, links are contiguous but slanted
+            a = dP.angl; A = np.add(A,a); S += np.hypot(*a)  # span, links are contiguous but slanted
     else:  # single P PP
         S = P_[0].span if fd else 0  # no distance between nodes
-        A = P_[0].angle if fd else P_[0].latuple[2:4]  # [I, G, Dy, Dx, M, D, L] or zeros?
+        A = P_[0].angl if fd else P_[0].latuple[2:4]  # [I, G, Dy, Dx, M, D, L] or zeros?
     box = [np.inf,np.inf,0,0]
     for P in P_:
         if not fd:  # else summed from P_ nodets on top
@@ -209,7 +209,7 @@ def comp_vert(_i_,i_, rn=.1, dir=1):  # i_ is ds, dir may be -1
     _a_,a_ = np.abs(_i_), np.abs(i_)
     m_ = np.divide( np.minimum(_a_,a_), reduce(np.maximum, [_a_, a_, 1e-7]))  # rms
     m_[(_i_<0) != (d_<0)] *= -1  # m is negative if comparands have opposite sign
-    M = m_ @ w_t[0]; D = d_ @ w_t[1]  # M = sum(m_ * w_t[0]); D = sum(d_ * w_t[1])
+    M = m_ @ w_t[0]; D = np.abs(d_) @ w_t[1]  # M = sum(m_ * w_t[0]); D = sum(d_ * w_t[1])
 
     return np.array([m_,d_]), np.array([M, D])  # Et
 ''' 
