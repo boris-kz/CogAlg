@@ -211,3 +211,94 @@ def comp_(iN_, rc, fi=1, fC=0, fdeep=0):  # comp pairs of nodes or links within 
             else: break  # low projected rng+ vM
         else: break
     return N__, L_, ET
+
+def cos_comp(C, N, fdeep=0):  # eval cosine similarity for centroid clustering
+
+    mw_ = wTTf[0] * np.sqrt(C.wTT[0]); mW = mw_.sum()  # wTT is derTT correlation term from cent_attr, same for base attrs?
+    _M,_D,_n = C.Et; M,D,n = N.Et  # for comp only
+    rn = _n/n  # size norm, +_o/o?
+    o,_o = N.olp, C.olp
+    _I,_G,_Dy,_Dx = C.baseT; I,G,Dy,Dx = N.baseT  # I, G|D, angle
+    _L,L = (len(C.N_), len(N.N_)) if N.fi else (C.span, N.span)  # dimension, no angl? positive?
+    bw_ = mw_[[0,1,2,3,4,5,7]]; bW = bw_.sum()  # exclude ang w
+    BaseT = np.array([_M,_D,_n,_o,_I,_G,_L]); wD_ = BaseT * bw_  # all
+    baseT = np.array([ M, D, n, o, I, G, L]); wd_ = baseT * bw_ * rn
+    denom = np.linalg.norm(wD_) * np.linalg.norm(wd_) + 1e-12
+    Mb = ((wD_ @ wd_) / denom + 1) / 2  # element-wise normalized dot-product, in 0:1
+    # separate:
+    mA,_ = comp_angle((_Dy,_Dx),(Dy*rn, Dx*rn))
+    Mb = (Mb*bW + mA*mw_[6]) / (bW+mw_[6])  # combine for weighted ave cos
+    # comp derT:
+    dw_ = wTTf[1] * np.sqrt(C.wTT[1]); dW = dw_.sum()
+    wD_ = C.derTT[1] * dw_; wd_ = N.derTT[1] * dw_ * rn
+    denom = np.linalg.norm(wD_) * np.linalg.norm(wd_) + 1e-12
+    Md = ((wD_ @ wd_) / denom + 1) / 2
+    tW = mW + dW
+    MT = (Mb*mW + Md*dW) / (tW + 1e-12)  # weighted baseT + derT
+    if fdeep:
+        if MT * tW * (len(N.derH)-2) > ave * ((o+_o)/2):
+            MH = comp_H_cos(C.derH, N.derH, rn, C.wTT)
+            ddW = tW * (dW / mW)  # ders W < inputs W
+            MT = (MT*tW + MH*ddW) / (tW+ddW + 1e-12)
+        # add N.rim overlap?
+    return MT
+
+def min_comp(_N,N, rc):  # from comp Et, Box, baseT, derTT
+    """
+    pairwise similarity kernel:
+    m_ = element‑wise min(shared quantity) / max(total quantity) of eight attributes (sign‑aware)
+    d_ = element‑wise signed difference after size‑normalisation
+    DerTT = np.vstack([m_,d_])
+    Et[0] = Σ(m_ * wTTf[0])    # total match (≥0) = relative shared quantity
+    Et[1] = Σ(|d_| * wTTf[1])  # total absolute difference (≥0)
+    Et[2] = min(_n, n)        # min accumulation span
+    """
+    _M,_D,_n = _N.Et; M,D,n = N.Et
+    dn = _n - n; mn = min(_n,n) / max(_n,n)  # or multiplicative for ratios: min * rn?
+    rn = _n / n  # size ratio, add _o/o?
+    o, _o = N.olp, _N.olp
+    o*=rn; do = _o - o; mo = min(_o,o) / max(_o,o)
+    M*=rn; dM = _M - M; mM = min(_M,M) / max(_M,M)
+    D*=rn; dD = _D - D; mD = min(_D,D) / max(_D,D)
+    # comp baseT:
+    _I,_G,_Dy,_Dx = _N.baseT; I,G,Dy,Dx = N.baseT  # I, G|D, angle
+    I*=rn; dI = _I - I; mI = abs(dI) / aI
+    G*=rn; dG = _G - G; mG = min(_G,G) / max(_G,G)
+    mA, dA = comp_angle((_Dy,_Dx),(Dy*rn,Dx*rn))  # current angle if CL
+    # comp dimension:
+    if N.fi: # dimension is n nodes
+        _L,L = len(_N.N_), len(N.N_)
+        mL,dL = min(_L,L)/ max(_L,L), _L - L
+    else:  # dimension is distance
+        _L,L = _N.span, N.span  # projectable in links?
+        mL,dL = min(_L,L)/ max(_L,L), _L - L
+    # comp depth, density:
+    # lenH and ave span, combined from N_ in links?
+    m_,d_ = np.array([[mM,mD,mn,mo,mI,mG,mA,mL], [dM,dD,dn,do,dI,dG,dA,dL]])
+    # comp derTT:
+    id_ = N.derTT[1] * rn; _id_ = _N.derTT[1]  # norm by span
+    if N.fi:
+        dd_ = _id_-id_  # dangle insignificant for nodes
+    else:  # comp angle in link Ns
+        _dy,_dx = _N.angl; dy, dx = N.angl
+        dot = dy * _dy + dx * _dx  # orientation
+        leP = np.hypot(dy,dx) * np.hypot(_dy,_dx)
+        cos_da = dot / leP if leP else 1  # keep in [–1,1]
+        rot = 1 if dy * _dx - dx * _dy >= 0 else -1  # +1 CW, −1 CCW
+        # projected abs diffs * combined input and dangle sign:
+        dd_ = np.abs(_id_-id_) * ((1-cos_da)/2) * np.sign(_id_) * np.sign(id_) * rot
+    _a_,a_ = np.abs(_id_),np.abs(id_)
+    md_ = np.divide( np.minimum(_a_,a_), np.maximum.reduce([_a_,a_, np.zeros(8) + 1e-7]))  # rms
+    md_ *= np.where((_id_<0)!=(id_<0), -1,1)  # match is negative if comparands have opposite sign
+    m_ += md_; d_ += dd_
+    DerTT = np.array([m_,d_])  # [M,D,n,o, I,G,A,L]
+    Et = np.array([np.sum(m_* wTTf[0] * rc),
+                   np.sum(np.abs(d_ * wTTf[1] * rc)), # frame ffeedback * correlation
+                   min(_n, n)])  # shared scope?
+    return DerTT, Et, rn
+
+def cosv(Et, fi=1):  # convert Et to cosine-like similarity, add aw?
+
+    m, d,_ = Et
+    return m / (m+d) if fi else d / (m+d)  # m is redundant to d?
+
