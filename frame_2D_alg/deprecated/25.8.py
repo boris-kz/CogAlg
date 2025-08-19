@@ -302,3 +302,14 @@ def cosv(Et, fi=1):  # convert Et to cosine-like similarity, add aw?
     m, d,_ = Et
     return m / (m+d) if fi else d / (m+d)  # m is redundant to d?
 
+def comp_H_cos(H, h, rn, wTT):
+    M = 0
+    dw_ = wTTf[1] * np.sqrt(wTT[1])
+    for Lay, lay in zip_longest(H, h, fillvalue=None):
+        if Lay and lay:
+            wD_ = Lay.derTT[1] * dw_
+            wd_ = lay.derTT[1] * dw_ * rn
+            denom = np.linalg.norm(wD_) * np.linalg.norm(wd_) + 1e-12
+            M += 0.5 * ((wD_ @ wd_) / denom + 1.0)
+    return M
+
