@@ -1,9 +1,9 @@
 import numpy as np, weakref
 from copy import copy, deepcopy
-from math import cos   # from functools import reduce
+from math import atan2, cos, floor, pi  # from functools import reduce
 from itertools import zip_longest, combinations, chain, product;  from multiprocessing import Pool, Manager
 from frame_blobs import frame_blobs_root, imread, unpack_blob_, comp_pixel, CBase
-from slice_edge import slice_edge, comp_angle
+from slice_edge import slice_edge
 from comp_slice import comp_slice
 '''
 Lower modules start with cross-comp and clustering image pixels, here the initial input is PPs: segments of matching blob slices or Ps.
@@ -43,11 +43,11 @@ class CLay(CBase):  # layer of derivation hierarchy, subset of CG
     name = "lay"
     def __init__(l, **kwargs):
         super().__init__()
-        l.Et = kwargs.get('Et', np.zeros(3))
+        l.Et = kwargs.get('Et', np.zeros(4))
         l.olp = kwargs.get('olp', 1)  # ave nodet overlap
         l.node_ = kwargs.get('node_', [])  # concat across fork tree
         l.link_ = kwargs.get('link_', [])
-        l.derTT = kwargs.get('derTT', np.zeros((2,10)))  # m_,d_ [M,D,n,o, I,G,A,L], sum across fork tree, centroid_M?
+        l.derTT = kwargs.get('derTT', np.zeros((3,10)))  # m_,d_ [M,D,n,o, I,G,A,L], sum across fork tree, centroid_M?
         # i: lay index in root node_,link_, to revise olp; i_: m,d priority indices in comp node|link H
         # ni: exemplar in node_, trace in both directions?
     def __bool__(l): return bool(l.node_)
@@ -55,7 +55,7 @@ class CLay(CBase):  # layer of derivation hierarchy, subset of CG
     def copy_(lay, rev=0, i=None):  # comp direction may be reversed to -1
 
         if i:  # reuse self
-            C = lay; lay = i; C.node_=copy(i.node_); C.link_ = copy(i.link_); C.derTT=np.zeros((2,8))
+            C = lay; lay = i; C.node_=copy(i.node_); C.link_ = copy(i.link_); C.derTT=np.zeros((3,10))
         else:  # init new C
             C = CLay(node_=copy(lay.node_), link_=copy(lay.link_))
         C.Et = copy(lay.Et)
@@ -81,14 +81,15 @@ class CLay(CBase):  # layer of derivation hierarchy, subset of CG
         i_ = lay.derTT[1] * rn * dir; _i_ = _lay.derTT[1]  # i_ is ds, scale and direction- normalized
         d_ = _i_ - i_
         a_ = np.abs(i_); _a_ = np.abs(_i_)
-        m_ = np.minimum(_a_,a_) / np.maximum.reduce([_a_,a_,np.zeros(10)+ 1e-7])  # match = min/max comparands
+        t_ = np.maximum.reduce([_a_,a_, np.zeros(10)+1e-7])
+        m_ = np.minimum(_a_,a_) / t_  # match = min/max comparands
         m_ *= np.where((_i_<0) != (i_<0), -1,1)  # match is negative if comparands have opposite sign
-        derTT = np.array([m_,d_])
+        derTT = np.array([m_,d_,t_])
+        M = sum(m_* wTTf[0]); D = sum(abs(d_) * wTTf[1]); T = sum(t_*wTTf[0])
+        Et = np.array([M, D, 10, T])  # n compared params = 10
+        if root: root.Et += Et
         node_ = list(set(_lay.node_+ lay.node_))  # concat, or redundant to nodet?
         link_ = _lay.link_ + lay.link_
-        M = sum(m_ * wTTf[0]); D = sum(abs(d_) * wTTf[1])
-        Et = np.array([M, D, 10])  # n compared params = 10
-        if root: root.Et += Et
         return CLay(Et=Et, olp=(_lay.olp+lay.olp*rn)/2, node_=node_, link_=link_, derTT=derTT)
 
 class CN(CBase):
@@ -100,12 +101,12 @@ class CN(CBase):
         n.L_ = kwargs.get('L_',[])  # links if fi else len nodet.N_s?
         n.nH = kwargs.get('nH',[])  # top-down hierarchy of sub-node_s: CN(sum_N_(Nt_))/ lev, with single added-layer derH, empty nH
         n.lH = kwargs.get('lH',[])  # bottom-up hierarchy of L_ graphs: CN(sum_N_(Lt_))/ lev, within each nH lev
-        n.Et = kwargs.get('Et',np.zeros(3))  # sum from L_, cent_?
-        n.et = kwargs.get('et',np.zeros(3))  # sum from rim, altg_?
+        n.Et = kwargs.get('Et',np.zeros(4))  # sum from L_, cent_?
+        n.et = kwargs.get('et',np.zeros(4))  # sum from rim, altg_?
         n.olp = kwargs.get('olp',1)  # overlap to ext Gs, ave in links? separate olp for rim, or internally overlapping?
         n.rim = kwargs.get('rim',[])  # node-external links, rng-nested? set?
         n.derH  = kwargs.get('derH',[])  # sum from L_ or rims
-        n.derTT = kwargs.get('derTT',np.zeros((2,10)))  # sum derH -> m_,d_ [M,D,n,o,G,L,I,S,A,extA]
+        n.derTT = kwargs.get('derTT',np.zeros((3,10)))  # sum derH -> m_,d_ [M,D,n,o,G,L,I,S,A,extA]
         n.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,A not ders
         n.yx    = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
         n.rng   = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
@@ -134,7 +135,7 @@ def Copy_(N, root=None, init=0):
     C.derH  = [lay.copy_() for lay in N.derH]
     C.derTT = deepcopy(N.derTT)
     for attr in ['Et', 'baseT','yx','box','angl','rim','altg_','cent_']: setattr(C, attr, copy(getattr(N, attr)))
-    for attr in ['olp','rng', 'fi', 'fin', 'span']: setattr(C, attr, getattr(N, attr))
+    for attr in ['olp','rng', 'fi', 'fin', 'span', 'mang']: setattr(C, attr, getattr(N, attr))
     return C
 
 ave, avd, arn, aI, aS, aveB, aveR, Lw, intw, loopw, centw, contw = 10, 10, 1.2, 100, 5, 100, 3, 5, 2, 5, 10, 15  # value filters + weights
@@ -160,7 +161,7 @@ def vect_root(Fg, rV=1, wTTf=[]):  # init for agg+:
                 N_ += comp_slice(edge, rV, wTTf)
     Fg.N_ = [PP2N(PP, Fg) for PP in N_]
 
-def val_(Et, fi=1, mw=1, aw=1, _Et=np.zeros(3)):  # m,d eval per cluster or cross_comp
+def val_(Et, fi=1, mw=1, aw=1, _Et=np.zeros(4)):  # m,d eval per cluster or cross_comp
 
     if mw <= 0: return 0
     am = ave * aw  # includes olp, M /= max I | M+D? div comp / mag disparity vs. span norm
@@ -178,10 +179,10 @@ def val_(Et, fi=1, mw=1, aw=1, _Et=np.zeros(3)):  # m,d eval per cluster or cros
 ''' Core process per agg level, as described in top docstring:
 Cross-compare nodes, evaluate incremental-derivation cross-comp of new >ave difference links, recursively.
  
-Select sparse node exemplars, connectivity-cluster by >ave match links, correlation-cluster links by >ave difference.
-Form complemented clusters (core+contour) for recursive higher-composition cross_comp, reorder by eigenvalues. 
+Select exemplar nodes, connectivity-cluster by >ave match links, correlation-cluster links by >ave difference.
+Form complemented (core+contour) clusters for recursive higher-composition cross_comp, reorder by eigenvalues. 
 
-Global centroid clustering from exemplar seeds, sellectively spreading via their rim across connectivity clusters.
+Centroid-cluster nodes, selectively spreading from exemplar seeds via their rim, across connectivity clusters.
 Feedback coords to bottom level or prior-level in parallel pipelines, filter updates in more coarse cycles '''
 
 def cross_comp(root, rc):  # rng+ and der+ cross-comp and clustering
@@ -218,7 +219,7 @@ def comb_altg_(nG, lG, rc):  # cross_comp contour/background per node:
         if L.root: return L.root if L.root.root is lG else R(L.root)
         else:      return None
     for Ng in nG.N_:
-        Et, Rdn, altl_ = np.zeros(3), 0, []  # contour/core clustering
+        Et, Rdn, altl_ = np.zeros(4), 0, []  # contour/core clustering
         LR_ = {R(L) for n in Ng.N_ for L in n.rim}  # lGs, individual rims are too weak
         for LR in LR_:
             if LR and LR.altg_:  # not None, eval Lg.altg_[1]?
@@ -255,10 +256,9 @@ def proj_V(_N, N, angle, dist, fC=0):  # estimate cross-induction between N and 
 
 def comp_(iN_, rc):  # comp pairs of nodes or links within max_dist
 
-    N__,L_, ET = [],[], np.zeros(3); rng,olp_,_N_ = 1,[],copy(iN_)
-    # frng: range-band?
-    while True:  # _vM
-        N_,Et = [],np.zeros(3)
+    N__,L_, ET = [],[], np.zeros(4); rng,olp_,_N_ = 1,[],copy(iN_)
+    while True:  # _vM, rng in rim only?
+        N_,Et = [],np.zeros(4)
         for _N, N in combinations(_N_, r=2):  # sort-> proximity-order ders?
             if _N in N.seen_ or len(_N.nH) != len(N.nH):  # | root.nH: comp top nodes only, or comp depth
                 continue
@@ -286,10 +286,10 @@ def comp_(iN_, rc):  # comp pairs of nodes or links within max_dist
 def comp_N(_N,N, o,rc, L_=None, angl=np.zeros(2), span=None, fdeep=0, rng=1):  # compare links, optional angl,span,dang?
 
     derTT, Et,rn = min_comp(_N,N, rc)  # -1 if _rev else 1, d = -d if L is reversed relative to _L, obsoleted by sign in angle?
-    baseT = (_N.baseT + N.baseT*rn) / 2; L_= len(_N.N_+N.N_)  # not derived
-    _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])  # ext attrs
+    baseT = (_N.baseT+ N.baseT*rn) /2  # not derived
+    yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])  # primary ext attrs
     fi = N.fi
-    Link = CN(Et=Et,olp=o, N_=[_N,N], L=L_, et=_N.et+N.et, baseT=baseT,derTT=derTT, yx=np.add(_N.yx,N.yx)/2,box=box, span=span,angl=angl, rng=rng, fi=0)
+    Link = CN(Et=Et,olp=o, N_=[_N,N], L_=len(_N.N_+N.N_), et=_N.et+N.et, baseT=baseT,derTT=derTT, yx=yx,box=box, span=span,angl=angl, rng=rng, fi=0)
     Link.derH = [CLay(Et=copy(Et), node_=[_N,N],link_=[Link],derTT=copy(derTT), root=Link)]
     if fdeep:
         if val_(Et,1, len(N.derH)-2, o+rc) > 0 or fi==0:  # else derH is dext,vert
@@ -305,29 +305,21 @@ def comp_N(_N,N, o,rc, L_=None, angl=np.zeros(2), span=None, fdeep=0, rng=1):  #
         n.rim += [Link]; n.et += Et; n.seen_.add(_n)  # or extT += Link?
     return Link
 
-def min_comp(_N,N, rc):  # comp extT, baseT, Et, derTT
+def min_comp(_N,N, rc):  # comp Et, baseT, extT, derTT
 
     fi = N.fi
-    _M,_D,_n=_N.Et; _o =_N.olp; _I,_G,_Dy,_Dx =_N.baseT; _L = len(_N.N_) if fi else _N.L_  # len nodet.N_s
-    M, D, n = N.Et;  o = N.olp;  I, G, Dy, Dx = N.baseT;  L = len(N.N_) if fi else N.L_
+    _M,_D,_n,_t =_N.Et; _I,_G,_Dy,_Dx =_N.baseT; _L = len(_N.N_) if fi else _N.L_  # len nodet.N_s
+    M, D, n, t  = N.Et;  I, G, Dy, Dx = N.baseT;  L = len(N.N_) if fi else N.L_
     rn = _n / n  # size ratio, add _o/o?
-    m_,d_,t_ = [],[],[]
-    for _par,par in zip(np.abs([_M,_D,_n,_o,_G,_L]), np.abs([(M,D,n,o,G,L)])):
-        par*=rn; t = _par+par  # all +ve
-        m_ += [min(_par,par) / (t or 1e-7)]; d_ += [(par-par) / (t or 1e-7)]; t_ += [t]
-    # massless m = avd_I|S - dI|S:
-    for _p,p, avd in zip((_I,_N.S), (I,N.S), (aI,aS)):
-        p*=rn; dp =_p-p; d_+= [dp]; m_+= [avd- abs(dp) / max(_p,p, 1e-7)]; t_+= [_p+p]
-    # int,ext angles:
-    mA, dA = comp_angle((_Dy,_Dx),(Dy*rn,Dx*rn))
-    m_ += [mA]; d_ += [dA]
+    m_,d_,t_ = comp(np.abs([_M,_D,_n,_t,_I,_G,[_Dy,_Dx],_L,_N.span]),  # Et, baseT, extT
+                    np.abs([M,D,n,t, [I,aI], G,[Dy, Dx], L, [N.span,aS]]) * rn)
     if (np.any(_N.angl) and np.any(N.angl)) and (_N.mang and N.mang):
-        mA,dA = comp_angle(_N.angl, N.angl*rn)
-        conf = (_N.mang + N.mang*rn) / 2
-        m_ += [mA*conf]; d_ += [dA*conf]  # only affects Et, no rot = 1 if dy * _dx - dx * _dy >= 0 else -1  # +1 CW, −1 CCW, ((1-cos_da)/2) * rot?
-    else: m_+=[0]; d_+=[0]
-    t_ += [1,1]  # angles
-    # newT = [M,D,n,o,G,L,I,S,A,extA], extT: L,S,A, comp depth: len nH?
+        mA,dA = comp_A(_N.angl, N.angl*rn)
+        conf = _N.mang * (N.mang/rn)  # fractional
+        m_ += [mA*conf]  # only affects Et, no rot = 1 if dy * _dx - dx * _dy >= 0 else -1  # +1 CW, −1 CCW, ((1-cos_da)/2) * rot?
+        d_ += [dA*conf]; t_ += [mA +abs(dA)]  
+    else:
+        m_+=[0]; d_+=[0]; t_+= [1]
     _id_ = _N.derTT[1]; id_ = N.derTT[1] * rn
     td_ = _id_+ id_*rn
     dd_ = np.abs(_id_-id_) * np.sign(_id_) * np.sign(id_)
@@ -337,8 +329,36 @@ def min_comp(_N,N, rc):  # comp extT, baseT, Et, derTT
     m_ += md_/td_; d_ += dd_/td_; t_ += td_
     DerTT = np.array([m_,d_,t_])  # [M,D,n,o,G,L,I,S,A,extA]
     wT = wTTf[0] * rc  # frame ffeedback * correlation
-    Et = np.array([np.sum(m_*wT), np.sum(np.abs(d_*wT)), min(_n, n)], np.sum(np.sum(t_*wT)))  # shared scope?
+    Et = np.array([np.sum(m_*wT), np.sum(np.abs(d_*wT)), min(_n,n), np.sum(np.sum(t_*wT))])  # n: shared scope?
     return DerTT, Et, rn
+
+def comp(_pars, pars):
+
+    m_,d_,t_ = [],[],[]
+    for _p, p in zip(_pars, pars):
+        if isinstance(_p, list):
+            mA, dA = comp_A(_p,p)  # mA in 0:1, dA in -.5:.5
+            m_+= [mA]; d_+= [dA]; t_ += [mA+ abs(dA)]
+        elif isinstance(p, list):  # massless I|S avd in p only
+            avd = p[1]; _p=_p[0]; p=p[0]
+            t = max(_p,p,1e-7); t_+= [t]
+            d = _p - p
+            m_+= [avd- abs(d)/t]
+            d_+= [d/t]
+        else:  # massive
+            t = max(_p,p,1e-7); t_+=[t]
+            m_+= [min(_p,p) /t]
+            d_+= [(_p-p) /t]
+    return m_,d_,t_
+
+def comp_A(_A,A):
+
+        dA = atan2(_A) - atan2(A)
+        if   dA > pi: dA -= 2 * pi  # rotate CW
+        elif dA <-pi: dA += 2 * pi  # rotate CCW
+        mA = (cos(dA)+1)/2  # in 0:1
+        dA = dA / (2 * pi)  # in -.5:.5
+        return mA, dA
 
 def spec(_spe,spe, o,rc, Et, dspe=None, fdeep=0):  # for N_|cent_ | altg_
     for _N in _spe:
@@ -432,7 +452,7 @@ def cluster(root, iN_, rN_, rc, rng=1):  # flood-fill node | link clusters
             Seen_.update(set(seen_))
         if N_:
             N_, long_ = list(set(N_)), list(set(long_))
-            Et, olp = np.zeros(3),0  # sum node_:
+            Et, olp = np.zeros(4),0  # sum node_:
             for n in N_:
                 Et += n.et; olp += n.olp  # any fork
             if val_(Et,1, (len(N_)-1)*Lw, rc+olp, root.Et) > 0:
@@ -533,7 +553,7 @@ def sum2graph(root, node_,link_,long_, Et, olp, rng):  # sum node,link attrs in 
     graph.span = dist_.mean()  # node centers distance to graph center
     graph.angl = np.sum([l.angl for l in link_], axis=0)
     if fi and len(link_) > 1:  # else default mang = 1
-        graph.mang = np.sum([comp_angle(graph.angl, l.angl)[0] for l in link_]) / len(link_)
+        graph.mang = np.sum([comp_A(graph.angl, l.angl)[0] for l in link_]) / len(link_)
     graph.yx=yx
     return graph
 
@@ -548,7 +568,7 @@ def slope(link_):  # get ave 2nd rate of change with distance in cluster or fram
 
 def comp_H(H,h, rn, ET=None, DerTT=None, root=None):  # one-fork derH
 
-    derH, derTT, Et = [], np.zeros((2,10)), np.zeros(3)
+    derH, derTT, Et = [], np.zeros((3,10)), np.zeros(4)
     for _lay, lay in zip_longest(H,h):  # selective
         if _lay and lay:
             dlay = _lay.comp_lay(lay, rn, root=root)
@@ -628,11 +648,10 @@ def PP2N(PP, frame):
     P_, link_, verT, latT, A, S, box, yx, Et = PP
     baseT = np.array(latT[:4])
     [mM,mD,mI,mG,mA,mL], [dM,dD,dI,dG,dA,dL] = verT  # re-pack in derTT:
-    derTT = np.array([[mM,mD,mL,1,mI,mG,mA,mL], [dM,dD,dL,1,dI,dG,dA,dL]])
+    derTT = np.array([[mM,mD,mL,1,mI,mG,mA,mL,0,0], [dM,dD,dL,1,dI,dG,dA,dL,0,0]])
     derH = [CLay(node_=P_, link_=link_, derTT=deepcopy(derTT))]
     y,x,Y,X = box; dy,dx = Y-y,X-x
-    extT = [yx, box, S, A]
-    et = np.array([*np.sum([L.Et for L in link_],axis=0), 1]) if link_ else np.array([.0,.0,1.])  # n=1
+    et = np.insert(np.array([*np.sum([L.Et for L in link_],axis=0)]), 2,1) if link_ else np.array([.0,.0,1.,1.])  # n=1
 
     return CN(root=frame, fi=1, Et=Et+et, N_=P_, L_=link_, baseT=baseT, derTT=derTT, derH=derH, box=box, yx=yx, angl=A, span=np.hypot(dy/2,dx/2))
 
@@ -656,7 +675,7 @@ def eval(V, weights):  # conditional progressive eval, with default ave in weigh
     return 1
 
 def val_H(H):
-    derTT = np.zeros((2,10)); Et = np.zeros(3)
+    derTT = np.zeros((3,10)); Et = np.zeros(4)
     for lay in H:
         for fork in lay:
             if fork: derTT += fork.derTT; Et += fork.Et
@@ -674,6 +693,7 @@ def prj_dH(_H, proj, dec):
 
 def comp_prj_dH(_N,N, ddH, rn, link, angl, span, dec):  # comp combined int proj to actual ddH, as in project_N_
 
+    # include prj derTT?
     _cos_da= angl.dot(_N.angl) / (span *_N.span)  # .dot for scalar cos_da
     cos_da = angl.dot(N.angl) / (span * N.span)
     _rdist = span/_N.span
@@ -694,11 +714,11 @@ def project_N_(Fg, yx):
     angle = np.sum([L.angl for L in Fg.L_])
     cos_d = angle.dot(Angle) / (np.hypot(*angle) * Fdist)
     # difference between external and internal angles, *= rdist
-    ET = np.zeros(3); DerTT = np.zeros((2,10))
+    ET = np.zeros(4); DerTT = np.zeros((3,10))
     N_ = []
     for _N in Fg.N_:  # sum _N-specific projections for cross_comp
         if len(_N.derH) < 2: continue
-        M,D,n = _N.Et
+        M,D,n,t = _N.Et
         dec = rdist * (M/(M+D))  # match decay rate, * ddecay for ds?
         prj_H = prj_dH(_N.derH[1:], cos_d * rdist, dec)  # derH[0] is positionals
         prjTT, pEt = val_H(prj_H)  # sum only ds here?

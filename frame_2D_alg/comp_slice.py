@@ -83,14 +83,14 @@ def comp_slice(edge, rV=1, ww_t=None):  # root function
 
 def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
 
-    PPt_ = []; rEt = np.zeros(3); rvert = np.zeros((2,6))
+    PPt_ = []; rEt = np.zeros(4); rvert = np.zeros((2,6))
 
     for P in iP_: P.merged = 0
     for P in iP_:  # dP from link_ if fd
         if P.merged: continue
         _prim_ = P.prim; _lrim_ = P.lrim
         if fd: Et= P.Et; L = P.L  # summed vertuple, min L in dP
-        else:  I,G,Dy,Dx,M,D,L = P.latuple; Et = np.array([I+M, G+abs(D)])
+        else:  I,G,Dy,Dx,M,D,L = P.latuple; Et = np.array([I+M, G+abs(D),sum(P.latuple)])  # t is just sum of latuple here?
         _P_ = {P}; link_ = set()
         vert = np.zeros((2,6))
         while _prim_:
@@ -100,15 +100,15 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
                     continue
                 _P_.add(_P); link_.add(_link)
                 vert += _link.vertuple
-                if fd: (_M,_D),_L = _P.Et, _P.L
-                else: _I,_G,_Dy,_Dx,_M,_D,_L = _P.latuple; _M,_D = _I+_M, _G+abs(_D)
-                Et += _link.Et + np.array([_M,_D])  # intra-P similarity and variance
+                if fd: (_M,_D,_T),_L = _P.Et, _P.L
+                else: _I,_G,_Dy,_Dx,_M,_D,_L = _P.latuple; _M,_D, _T = _I+_M, _G+abs(_D), sum(_P.latuple)
+                Et += _link.Et + np.array([_M,_D, _T])  # intra-P similarity and variance
                 L += _L  # latuple summation span
                 prim_.update(set(_P.prim) - _P_)
                 lrim_.update(set(_P.lrim) - link_)
                 _P.merged = 1
             _prim_, _lrim_ = prim_, lrim_
-        Et = np.array([*Et, L])  # Et + n
+        Et = np.insert(Et,2,L)  # Et = [m, d, n t]
         rEt += Et; rvert += vert
         PPt_ += [sum2PP(list(_P_), list(link_), Et)]
 
@@ -130,7 +130,7 @@ def comp_P_(edge):  # form links from prelinks
 
 def comp_dP_(edge, mEt):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
-    M,_,n = mEt
+    M,_,n,_ = mEt
     rM = M / (ave * n)  # dP D borrows from normalized PP M
     for _dP in edge.dP_: _dP.prim = []; _dP.lrim = []
     for _dP in edge.dP_:
@@ -188,19 +188,19 @@ def comp_latuple(_latuple, latuple, _n,n):  # 0der params, add dir?
 
     _I, _G, _Dy, _Dx, _M, _D, _L = _latuple
     I, G, Dy, Dx, M, D, L = latuple
-    rn = _n / n
+    rn = _n / n; T = 0
 
-    I*=rn; dI = _I - I;  mI = aI - dI / max(_I,I, 1e-7)  # vI = mI - ave
-    G*=rn; dG = _G - G;  mG = min(_G, G) / max(_G,G, 1e-7)  # vG = mG - ave_mG
-    M*=rn; dM = _M - M;  mM = min(_M, M) / max(_M,M, 1e-7)  # vM = mM - ave_mM
-    D*=rn; dD = _D - D;  mD = min(_D, D) / max(_D,D) if _D or D else 1e-7  # may be negative
-    L*=rn; dL = _L - L;  mL = min(_L, L) / max(_L,L)
-    mA, dA = comp_angle((_Dy,_Dx),(Dy,Dx))  # normalized
+    I*=rn; dI = _I - I;  T += _I + I; mI = aI - dI / max(_I,I, 1e-7)  # vI = mI - ave
+    G*=rn; dG = _G - G;  T += _G + G; mG = min(_G, G) / max(_G,G, 1e-7)  # vG = mG - ave_mG
+    M*=rn; dM = _M - M;  T += _M + M; mM = min(_M, M) / max(_M,M, 1e-7)  # vM = mM - ave_mM
+    D*=rn; dD = _D - D;  T += _D + D; mD = min(_D, D) / max(_D,D) if _D or D else 1e-7  # may be negative
+    L*=rn; dL = _L - L;  T += _L + L; mL = min(_L, L) / max(_L,L)
+    mA, dA = comp_angle((_Dy,_Dx),(Dy,Dx)); T += 2  # normalized
 
     d_ = np.array([dM, dD, dI, dG, dA, dL])  # derTT[:3], Et
     m_ = np.array([mM, mD, mI, mG, mA, mL])
     M = sum(m_ * w_t[0]); D = sum(d_ * w_t[1])
-    return np.array([m_,d_]), np.array([M,D])
+    return np.array([m_,d_]), np.array([M,D,T])
 
 def comp_vert(_i_,i_, rn=.1, dir=1):  # i_ is ds, dir may be -1
 
@@ -210,8 +210,9 @@ def comp_vert(_i_,i_, rn=.1, dir=1):  # i_ is ds, dir may be -1
     m_ = np.divide( np.minimum(_a_,a_), reduce(np.maximum, [_a_, a_, 1e-7]))  # rms
     m_[(_i_<0) != (d_<0)] *= -1  # m is negative if comparands have opposite sign
     M = m_ @ w_t[0]; D = np.abs(d_) @ w_t[1]  # M = sum(m_ * w_t[0]); D = sum(d_ * w_t[1])
+    T = sum(_i_) + sum(i_)
 
-    return np.array([m_,d_]), np.array([M, D])  # Et
+    return np.array([m_,d_]), np.array([M, D, T])  # Et
 ''' 
     sequential version:
     md_, dd_ = [],[]

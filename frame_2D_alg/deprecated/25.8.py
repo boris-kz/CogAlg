@@ -313,3 +313,38 @@ def comp_H_cos(H, h, rn, wTT):
             M += 0.5 * ((wD_ @ wd_) / denom + 1.0)
     return M
 
+def min_comp1(_N,N, rc):  # comp extT, baseT, Et, derTT
+
+    fi = N.fi
+    # comp t?
+    _M,_D,_n,_=_N.Et; _o =_N.olp; _I,_G,_Dy,_Dx =_N.baseT; _L = len(_N.N_) if fi else _N.L_  # len nodet.N_s
+    M, D, n,_ = N.Et;  o = N.olp;  I, G, Dy, Dx = N.baseT;  L = len(N.N_) if fi else N.L_
+    rn = _n / n  # size ratio, add _o/o?
+    m_,d_,t_ = [],[],[]
+    for _p,p in zip(np.abs([_M,_D,_n,_o,_G,_L]), np.abs([M,D,n,o,G,L])):
+        p*=rn; t = max(_p,p,1e-7); m_+= [min(_p,p) /t]; d_+= [(p-p) /t]; t_+=[t]
+    # massless I,S: m = avd - d/t:
+    for _p,p, avd in zip((_I,_N.span), (I,N.span), (aI,aS)):
+        p*=rn; t = max(_p,p,1e-7); d=_p-p; d_+=[d]; m_+=[avd- abs(d)/t]; t_+=[t]
+    # int,ext angles:
+    mA, dA = comp_angle((_Dy,_Dx),(Dy*rn,Dx*rn))
+    m_ += [mA]; d_ += [dA]
+    if (np.any(_N.angl) and np.any(N.angl)) and (_N.mang and N.mang):
+        mA,dA = comp_angle(_N.angl, N.angl*rn)
+        conf = (_N.mang + N.mang*rn) / 2
+        m_ += [mA*conf]; d_ += [dA*conf]  # only affects Et, no rot = 1 if dy * _dx - dx * _dy >= 0 else -1  # +1 CW, −1 CCW, ((1-cos_da)/2) * rot?
+    else: m_+=[0]; d_+=[0]
+    t_ += [1,1]  # angles
+    # newT = [M,D,n,o,G,L,I,S,A,extA], extT: L,S,A, comp depth: len nH?
+    _id_ = _N.derTT[1]; id_ = N.derTT[1] * rn
+    td_ = _id_+ id_*rn
+    dd_ = np.abs(_id_-id_) * np.sign(_id_) * np.sign(id_)
+    _a_,a_ = np.abs(_id_),np.abs(id_)
+    md_ = np.divide( np.minimum(_a_,a_), np.maximum.reduce([_a_,a_, np.zeros(10) + 1e-7]))  # rms
+    md_ *= np.where((_id_<0)!=(id_<0), -1,1)  # match is negative if comparands have opposite sign
+    m_ += md_/td_; d_ += dd_/td_; t_ += td_
+    DerTT = np.array([m_,d_,t_])  # [M,D,n,o,G,L,I,S,A,extA]
+    wT = wTTf[0] * rc  # frame ffeedback * correlation
+    Et = np.array([np.sum(m_*wT), np.sum(np.abs(d_*wT)), min(_n,n), np.sum(np.sum(t_*wT))])  # n: shared scope?
+    return DerTT, Et, rn
+
