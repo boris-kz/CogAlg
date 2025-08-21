@@ -78,19 +78,21 @@ class CLay(CBase):  # layer of derivation hierarchy, subset of CG
 
     def comp_lay(_lay, lay, rn, root, dir=1):  # unpack derH trees down to numericals and compare them
 
-        i_ = lay.derTT[1] * rn * dir; _i_ = _lay.derTT[1]  # i_ is ds, scale and direction- normalized
-        d_ = _i_ - i_
-        a_ = np.abs(i_); _a_ = np.abs(_i_)
-        t_ = np.maximum.reduce([_a_,a_, np.zeros(10)+1e-7])
-        m_ = np.minimum(_a_,a_) / t_  # match = min/max comparands
-        m_ *= np.where((_i_<0) != (i_<0), -1,1)  # match is negative if comparands have opposite sign
-        derTT = np.array([m_,d_,t_])
-        M = sum(m_* wTTf[0]); D = sum(abs(d_) * wTTf[1]); T = sum(t_*wTTf[0])
-        Et = np.array([M, D, 10, T])  # n compared params = 10
+        derTT, Et = comp_derT(_lay.derTT[1], lay.derTT[1] * rn * dir)  # is dir still used?
         if root: root.Et += Et
         node_ = list(set(_lay.node_+ lay.node_))  # concat, or redundant to nodet?
         link_ = _lay.link_ + lay.link_
         return CLay(Et=Et, olp=(_lay.olp+lay.olp*rn)/2, node_=node_, link_=link_, derTT=derTT)
+
+def comp_derT(_dT, dT):  # all normalized diffs
+
+    _a_, a_ = np.abs(_dT), np.abs(dT)
+    t_ = np.maximum.reduce([_a_,a_, np.zeros(10)+1e-7])
+    d_ = np.abs(_dT-dT) * np.sign(_dT) * np.sign(dT) / t_  # signed, in 0:1
+    m_ = np.minimum(_a_, a_) / t_  # abs in 0:1
+    m_ *= np.where((_dT < 0) != (dT < 0), -1, 1)  # match is negative if comparands have opposite sign
+    return (np.array([m_, d_, t_]),  # derTT
+            np.array([m_ @ wTTf[0], np.abs(d_) @ wTTf[1], 10, t_ @ wTTf[0]]))  # Et: M, D, n=10, T
 
 class CN(CBase):
     name = "node"
@@ -311,36 +313,33 @@ def min_comp(_N,N, rc):  # comp Et, baseT, extT, derTT
     _M,_D,_n,_t =_N.Et; _I,_G,_Dy,_Dx =_N.baseT; _L = len(_N.N_) if fi else _N.L_  # len nodet.N_s
     M, D, n, t  = N.Et;  I, G, Dy, Dx = N.baseT;  L = len(N.N_) if fi else N.L_
     rn = _n / n  # size ratio, add _o/o?
-    m_,d_,t_ = comp(np.abs([_M,_D,_n,_t,_I,_G,[_Dy,_Dx],_L,_N.span]),  # Et, baseT, extT
-                    np.abs([M,D,n,t, [I,aI], G,[Dy, Dx], L, [N.span,aS]]) * rn)
+    _pars = np.abs(np.array([_M,_D,_n,_t,_I,_G, np.array([_Dy,_Dx]),_L,_N.span], dtype=object)),  # Et, baseT, extT
+    pars  = np.abs(np.array([ M, D, n, t, I, G, np.array([Dy,Dx]), L, N.span], dtype=object)) * rn
+    pars[4] = [pars[4],aI]; pars[8] = [pars[8],aS]  # no avd*rn: d/=t
+    m_,d_,t_ = comp(_pars,pars)
     if (np.any(_N.angl) and np.any(N.angl)) and (_N.mang and N.mang):
         mA,dA = comp_A(_N.angl, N.angl*rn)
         conf = _N.mang * (N.mang/rn)  # fractional
         m_ += [mA*conf]  # only affects Et, no rot = 1 if dy * _dx - dx * _dy >= 0 else -1  # +1 CW, −1 CCW, ((1-cos_da)/2) * rot?
-        d_ += [dA*conf]; t_ += [mA +abs(dA)]  
+        d_ += [dA*conf]; t_ += [mA +abs(dA)]
     else:
-        m_+=[0]; d_+=[0]; t_+= [1]
-    _id_ = _N.derTT[1]; id_ = N.derTT[1] * rn
-    td_ = _id_+ id_*rn
-    dd_ = np.abs(_id_-id_) * np.sign(_id_) * np.sign(id_)
-    _a_,a_ = np.abs(_id_),np.abs(id_)
-    md_ = np.divide( np.minimum(_a_,a_), np.maximum.reduce([_a_,a_, np.zeros(10) + 1e-7]))  # rms
-    md_ *= np.where((_id_<0)!=(id_<0), -1,1)  # match is negative if comparands have opposite sign
-    m_ += md_/td_; d_ += dd_/td_; t_ += td_
-    DerTT = np.array([m_,d_,t_])  # [M,D,n,o,G,L,I,S,A,extA]
-    wT = wTTf[0] * rc  # frame ffeedback * correlation
-    Et = np.array([np.sum(m_*wT), np.sum(np.abs(d_*wT)), min(_n,n), np.sum(np.sum(t_*wT))])  # n: shared scope?
+        m_+=[0]; d_+=[0]; t_+=[1]
+    # 3 x M,D,n,t, I,G,A, L,S,eA:
+    (md_,dd_,td_), (M,D,T) = comp_derT(_N.derTT[1], N.derTT[1] * rn)  # no dir?
+    DerTT = np.array([m_+md_, d_+dd_, t_+td_])
+    Et = np.array([m_@ wTTf[0] +M, np.abs(d_)@ wTTf[1] +D, min(_n,n), t_@ wTTf[0] +T])
+    # n: shared scope?
     return DerTT, Et, rn
 
 def comp(_pars, pars):
 
     m_,d_,t_ = [],[],[]
     for _p, p in zip(_pars, pars):
-        if isinstance(_p, list):
+        if isinstance(_p, np.ndarray):
             mA, dA = comp_A(_p,p)  # mA in 0:1, dA in -.5:.5
             m_+= [mA]; d_+= [dA]; t_ += [mA+ abs(dA)]
         elif isinstance(p, list):  # massless I|S avd in p only
-            avd = p[1]; _p=_p[0]; p=p[0]
+            p, avd = p
             t = max(_p,p,1e-7); t_+= [t]
             d = _p - p
             m_+= [avd- abs(d)/t]
@@ -353,7 +352,7 @@ def comp(_pars, pars):
 
 def comp_A(_A,A):
 
-        dA = atan2(_A) - atan2(A)
+        dA = atan2(*_A) - atan2(*A)
         if   dA > pi: dA -= 2 * pi  # rotate CW
         elif dA <-pi: dA += 2 * pi  # rotate CCW
         mA = (cos(dA)+1)/2  # in 0:1
@@ -464,7 +463,7 @@ def cluster(root, iN_, rN_, rc, rng=1):  # flood-fill node | link clusters
         nG = sum_N_(G_,root); nG.cent_ = cent_
         return nG
 
-def cluster_C_(root, rc):  # form centroids by clustering exemplar surround, drifting via rims of new member nodes
+def cluster_C_(root, rc):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
 
     _C_, _N_ = [], []
     for E in root.cent_.pop():  # replace with C_ in the end
@@ -642,18 +641,18 @@ def extend_box(_box, box):
     y0, x0, yn, xn = box; _y0, _x0, _yn, _xn = _box
     return min(y0,_y0), min(x0,_x0), max(yn,_yn), max(xn,_xn)
 
-# not revised
 def PP2N(PP, frame):
 
     P_, link_, verT, latT, A, S, box, yx, Et = PP
     baseT = np.array(latT[:4])
     [mM,mD,mI,mG,mA,mL], [dM,dD,dI,dG,dA,dL] = verT  # re-pack in derTT:
-    derTT = np.array([[mM,mD,mL,1,mI,mG,mA,mL,0,0], [dM,dD,dL,1,dI,dG,dA,dL,0,0]])
+    mT = np.array([mM,mD,mL,mM+mD, mI,mG,mA, mL,mL/2, 0])  # 0 extA
+    dT = np.array([dM,dD,dL,dM+dD, dI,dG,dA, dL,dL/2, 0])
+    derTT = np.array([mT, dT, mT+dT])
     derH = [CLay(node_=P_, link_=link_, derTT=deepcopy(derTT))]
     y,x,Y,X = box; dy,dx = Y-y,X-x
-    et = np.insert(np.array([*np.sum([L.Et for L in link_],axis=0)]), 2,1) if link_ else np.array([.0,.0,1.,1.])  # n=1
 
-    return CN(root=frame, fi=1, Et=Et+et, N_=P_, L_=link_, baseT=baseT, derTT=derTT, derH=derH, box=box, yx=yx, angl=A, span=np.hypot(dy/2,dx/2))
+    return CN(root=frame, fi=1, Et=Et, N_=P_, L_=link_, baseT=baseT, derTT=derTT, derH=derH, box=box, yx=yx, angl=A, span=np.hypot(dy/2,dx/2))
 
 # not used, make H a centroid of layers, same for nH?
 def sort_H(H, fi):  # re-assign olp and form priority indices for comp_tree, if selective and aligned

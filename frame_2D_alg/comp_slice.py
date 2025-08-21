@@ -2,6 +2,8 @@ import numpy as np
 from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
 from slice_edge import CP, slice_edge, comp_angle
 from functools import reduce
+from math import atan2, cos, floor, pi
+
 '''
 comp_slice traces edge axis by cross-comparing vertically adjacent Ps: horizontal slices across an edge blob.
 These are low-M high-Ma blobs, vectorized into outlines of adjacent flat (high internal match) blobs.
@@ -188,31 +190,52 @@ def comp_latuple(_latuple, latuple, _n,n):  # 0der params, add dir?
 
     _I, _G, _Dy, _Dx, _M, _D, _L = _latuple
     I, G, Dy, Dx, M, D, L = latuple
-    rn = _n / n; T = 0
-
-    I*=rn; dI = _I - I;  T += _I + I; mI = aI - dI / max(_I,I, 1e-7)  # vI = mI - ave
-    G*=rn; dG = _G - G;  T += _G + G; mG = min(_G, G) / max(_G,G, 1e-7)  # vG = mG - ave_mG
-    M*=rn; dM = _M - M;  T += _M + M; mM = min(_M, M) / max(_M,M, 1e-7)  # vM = mM - ave_mM
-    D*=rn; dD = _D - D;  T += _D + D; mD = min(_D, D) / max(_D,D) if _D or D else 1e-7  # may be negative
-    L*=rn; dL = _L - L;  T += _L + L; mL = min(_L, L) / max(_L,L)
-    mA, dA = comp_angle((_Dy,_Dx),(Dy,Dx)); T += 2  # normalized
-
-    d_ = np.array([dM, dD, dI, dG, dA, dL])  # derTT[:3], Et
-    m_ = np.array([mM, mD, mI, mG, mA, mL])
-    M = sum(m_ * w_t[0]); D = sum(d_ * w_t[1])
+    rn = _n / n
+    _pars = np.abs(np.array([_M,_D,_I,_G, np.array([_Dy,_Dx]),_L], dtype=object))
+    pars = np.abs( np.array([M, D, I, G, np.array([Dy,Dx]), L], dtype=object)) * rn
+    pars[2] = [pars[2],aI]  # no avd*rn: d/=t
+    m_,d_,t_ = comp(_pars,pars)
+    M = sum(m_ * w_t[0]); D = sum(d_ * w_t[1]); T = sum(t_ * w_t[0])
     return np.array([m_,d_]), np.array([M,D,T])
 
-def comp_vert(_i_,i_, rn=.1, dir=1):  # i_ is ds, dir may be -1
+def comp(_pars, pars):
+
+    m_,d_,t_ = [],[],[]
+    for _p, p in zip(_pars, pars):
+        if isinstance(_p, np.ndarray):
+            mA, dA = comp_A(_p,p)  # mA in 0:1, dA in -.5:.5
+            m_+= [mA]; d_+= [dA]; t_ += [mA+ abs(dA)]
+        elif isinstance(p, list):  # massless I|S avd in p only
+            p, avd = p
+            t = max(_p,p,1e-7); t_+= [t]
+            d = _p - p
+            m_+= [avd- abs(d)/t]
+            d_+= [d/t]
+        else:  # massive
+            t = max(_p,p,1e-7); t_+=[t]
+            m_+= [min(_p,p) /t]
+            d_+= [(_p-p) /t]
+    return m_,d_,t_
+
+def comp_A(_A,A):
+
+        dA = atan2(*_A) - atan2(*A)
+        if   dA > pi: dA -= 2 * pi  # rotate CW
+        elif dA <-pi: dA += 2 * pi  # rotate CCW
+        mA = (cos(dA)+1)/2  # in 0:1
+        dA = dA / (2 * pi)  # in -.5:.5
+        return mA, dA
+
+def comp_vert(_i_,i_, rn=.1, dir=1):  # i_ is ds, dir may be -1, ~ comp_lay
 
     i_ = i_ * rn  # normalize by compared accum span
-    d_ = (_i_ - i_ * dir)  # np.arrays [I,G,A,M,D,L]
-    _a_,a_ = np.abs(_i_), np.abs(i_)
-    m_ = np.divide( np.minimum(_a_,a_), reduce(np.maximum, [_a_, a_, 1e-7]))  # rms
+    _a_,a_ = np.abs(_i_), np.abs(i_)  # d_ s
+    t_ = np.maximum.reduce([_a_,a_, np.zeros(10)+1e-7])
+    d_ = (_i_- i_*dir) / t_  # np.array d[I,G,A,M,D,L]
+    m_ = np.minimum(_a_,a_) / t_  # in 0:1
     m_[(_i_<0) != (d_<0)] *= -1  # m is negative if comparands have opposite sign
-    M = m_ @ w_t[0]; D = np.abs(d_) @ w_t[1]  # M = sum(m_ * w_t[0]); D = sum(d_ * w_t[1])
-    T = sum(_i_) + sum(i_)
-
-    return np.array([m_,d_]), np.array([M, D, T])  # Et
+    return (np.array([m_,d_,t_]),
+            np.array([m_@ w_t[0], np.abs(d_)@ w_t[1], t_@ w_t[0]]))  # Et
 ''' 
     sequential version:
     md_, dd_ = [],[]
