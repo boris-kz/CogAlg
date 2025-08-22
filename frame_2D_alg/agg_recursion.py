@@ -29,8 +29,8 @@ feedback of projected match adjusts filters to maximize next match, including co
 (initially ffeedback, can be refined by cross_comp of co-projected patterns: "imagination, planning, action" section of part 3)
 
 Deduction:
-feed-forward should generate new code by cross-comp of function calls and clustering code blocks of past and simulated processes:
-meta-code compares out-syntax to in-syntax (mapping to AST), the difference trigger recursion? (not yet implemented)?
+in feedforward, meta-code should extend the code by appending ops that formed new layer of syntax, assuming they can process it? 
+or cross-comp function calls and cluster code blocks of past and simulated processes? (not yet implemented)
 
 notation:
 prefix  f denotes flag
@@ -313,7 +313,7 @@ def min_comp(_N,N, rc):  # comp Et, baseT, extT, derTT
     _M,_D,_n,_t =_N.Et; _I,_G,_Dy,_Dx =_N.baseT; _L = len(_N.N_) if fi else _N.L_  # len nodet.N_s
     M, D, n, t  = N.Et;  I, G, Dy, Dx = N.baseT;  L = len(N.N_) if fi else N.L_
     rn = _n / n  # size ratio, add _o/o?
-    _pars = np.abs(np.array([_M,_D,_n,_t,_I,_G, np.array([_Dy,_Dx]),_L,_N.span], dtype=object)),  # Et, baseT, extT
+    _pars = np.abs(np.array([_M,_D,_n,_t,_I,_G, np.array([_Dy,_Dx]),_L,_N.span], dtype=object))  # Et, baseT, extT
     pars  = np.abs(np.array([ M, D, n, t, I, G, np.array([Dy,Dx]), L, N.span], dtype=object)) * rn
     pars[4] = [pars[4],aI]; pars[8] = [pars[8],aS]  # no avd*rn: d/=t
     m_,d_,t_ = comp(_pars,pars)
@@ -325,7 +325,7 @@ def min_comp(_N,N, rc):  # comp Et, baseT, extT, derTT
     else:
         m_+=[0]; d_+=[0]; t_+=[1]
     # 3 x M,D,n,t, I,G,A, L,S,eA:
-    (md_,dd_,td_), (M,D,T) = comp_derT(_N.derTT[1], N.derTT[1] * rn)  # no dir?
+    (md_,dd_,td_), (M,D,_,T) = comp_derT(_N.derTT[1], N.derTT[1] * rn)  # no dir?
     DerTT = np.array([m_+md_, d_+dd_, t_+td_])
     Et = np.array([m_@ wTTf[0] +M, np.abs(d_)@ wTTf[1] +D, min(_n,n), t_@ wTTf[0] +T])
     # n: shared scope?
@@ -799,7 +799,7 @@ def agg_frame(foc, image, iY, iX, rV=1, wTTf=[], fproj=0):  # search foci within
         PV__[y,x] = -np.inf  # to skip, | separate in__?
         if foc:
             Fg = frame_blobs_root( win__[:,:,:,y,x], rV)  # [dert, iY, iX, nY, nX]
-            vect_root(Fg, rV,wTTf); Fg.L_=[] # focal dert__ clustering
+            vect_root(Fg, rV,wTTf); Fg.L_=[]  # focal dert__ clustering
             cross_comp(Fg, rc=frame.olp)
         else:
             Fg = agg_frame(1, win__[:,:,:,y,x], wY,wX, rV=1, wTTf=[])  # use global wY,wX in nested call
