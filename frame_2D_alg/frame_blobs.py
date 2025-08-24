@@ -77,23 +77,24 @@ class CN(CBase):
         n.L_ = kwargs.get('L_',[])  # links
         n.nH = kwargs.get('nH',[])  # top-down hierarchy of sub-node_s: CN(sum_N_(Nt_))/ lev, with single added-layer derH, empty nH
         n.lH = kwargs.get('lH',[])  # bottom-up hierarchy of L_ graphs: CN(sum_N_(Lt_))/ lev, within each nH lev
-        n.Et = kwargs.get('Et',np.zeros(3))  # sum from L_
-        n.et = kwargs.get('et',np.zeros(3))  # sum from rim
+        n.Et = kwargs.get('Et',np.zeros(4))  # sum from L_
+        n.et = kwargs.get('et',np.zeros(4))  # sum from rim
         n.olp = kwargs.get('olp',1)  # overlap to ext Gs, ave in links? separate olp for rim, or internally overlapping?
         n.med = kwargs.get('med',0)  # = rim nesting for both nodes and links
         n.rim = kwargs.get('rim',[])  # [(_N.N)] for links, [(L,rev,N)], nested with mediation
         n.derH  = kwargs.get('derH',[])  # sum from L_ or rims
-        n.derTT = kwargs.get('derTT',np.zeros((2,8)))  # sum derH
+        n.derTT = kwargs.get('derTT',np.zeros((3,10)))  # sum derH
         n.baseT = kwargs.get('baseT',np.zeros(4))
         n.yx    = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
         n.rng   = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
         n.box   = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
         n.span  = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_) but not additive?
-        n.angle = kwargs.get('angle',np.zeros(2))  # dy,dx
+        n.angl = kwargs.get('angle',np.zeros(2))  # dy,dx
+        n.mang  = kwargs.get('mang',1) # ave match of angles in L_, = identity in links
         n.fin   = kwargs.get('fin',0)  # in cluster, temporary?
         n.root  = kwargs.get('root',[])  # immediate only
         n.cent_ = kwargs.get('cent_',[])  # int centroid Gs, replace/combine N_?
-        n.outn_ = kwargs.get('outn_',[])  # ext contour Gs, replace/combine rim?
+        n.altg_ = kwargs.get('altg_',[])  # ext contour Gs, replace/combine rim?
         # n.fork_tree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.N_)
 

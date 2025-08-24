@@ -132,15 +132,16 @@ def comp_P_(edge):  # form links from prelinks
 def comp_dP_(edge, mEt):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
     M,_,n,_ = mEt
-    rM = M / (ave * n)  # dP D borrows from normalized PP M
+    rM = M/n / ave  # dP D borrows from normalized PP M
     for _dP in edge.dP_: _dP.prim = []; _dP.lrim = []
     for _dP in edge.dP_:
-        if _dP.Et[1] * rM > avd:
+        _,D,_n,_ = _dP.Et
+        if D/_n * rM > avd:
             _P, P = _dP.nodet  # _P is lower
-            rn = len(P.dert_) / len(_P.dert_)
+            rn = n/_n; minn = min(_n,n)
             for dP in P.rim:  # higher links
                 if dP not in edge.dP_: continue  # skip removed node links
-                verT, et = comp_vert(_dP.verT[1], dP.verT[1], rn)
+                verT, et = comp_vert(_dP.verT[1], dP.verT[1], rn, minn)
                 angle = np.subtract(dP.yx,_dP.yx)  # dy,dx of node centers
                 distance = np.hypot(*angle)  # between node centers
                 # up only:
@@ -186,35 +187,47 @@ def sum2PP(P_, dP_, Et):  # sum links in Ps and Ps in PP
     for P in P_: P.root = PPt
     return PPt
 
+def comp_vert(_i_,i_, rn, minn, dir=1):  # i_ is ds, dir may be -1, ~ comp_lay
+
+    i_ = i_ * rn  # normalize by compared accum span
+    _a_,a_ = np.abs(_i_), np.abs(i_)  # d_ s
+    d_ = (_i_- i_*dir)  # np.array d[I,G,A,M,D,L]
+    m_ = np.minimum(_a_,a_)
+    m_[(_i_<0) != (i_<0)] *= -1  # m is negative if comparands have opposite sign  # no np.where?
+    t_ = np.maximum.reduce([_a_,a_, np.zeros(6)+1e-7])  # or signed?  I, G, A, M, D, L
+    return (np.array([m_,d_,t_]),
+            np.array([(m_/t_ +1)/2 @ w_t[0], (d_/t_ +1)/2 @ w_t[1], minn, t_@ w_t[0]]))  # Et
+
 def comp_latuple(_latuple, latuple, _n,n):  # 0der params, add dir?
 
     _I,_G,_Dy,_Dx,_M,_D,_L = _latuple
     I, G, Dy, Dx, M, D, L = latuple
     rn = _n / n
     _pars = np.abs(np.array([_M,_D,_I,_G, np.array([_Dy,_Dx]),_L], dtype=object))
-    pars = np.abs( np.array([M, D, I, G, np.array([Dy,Dx]), L], dtype=object)) * rn
+    pars  = np.abs(np.array([M, D, I, G, np.array([Dy,Dx]), L], dtype=object)) * rn
     pars[2] = [pars[2],aI]  # no avd*rn: d/=t
     m_,d_,t_ = comp(_pars,pars)
     return (np.array([m_,d_,t_]),  # verT
-            np.array([sum(m_* w_t[0]), sum(np.abs(d_)* w_t[1]),  min(L,_L), sum(t_* w_t[0])]))
+            np.array([(m_/t_ +1)/2 @ w_t[0], (d_/t_ +1)/2 @ w_t[1], min(L,_L), t_@ w_t[0]]))  # Et
 
-def comp(_pars, pars):
+def comp(_pars, pars):  # raw inputs or derivatives, norm to 0:1 in eval only
 
     m_,d_,t_ = [],[],[]
     for _p, p in zip(_pars, pars):
         if isinstance(_p, np.ndarray):
-            mA, dA = comp_A(_p,p)  # mA in 0:1, dA in -.5:.5
-            m_+= [mA]; d_+= [dA]; t_ += [mA+ abs(dA)]
+            mA, dA = comp_A(_p,p)  # both in -1:1
+            m_ += [mA]; d_ += [dA]
+            t_ += [1]  # norm already
         elif isinstance(p, list):  # massless I|S avd in p only
             p, avd = p
             d = _p - p; ad = abs(d)
-            t = max(avd,ad,1e-7); t_+= [t]
-            m_ += [(avd-ad) /t]
-            d_ += [d/t]
+            t_ += [max(avd, ad, 1e-7)]
+            m_ += [avd-ad]  # +|-
+            d_ += [d]
         else:  # massive
-            t = max(_p,p,1e-7); t_+=[t]
-            m_ += [(min(_p,p) if _p<0 == p<0 else -min(_p,p)) / t]
-            d_ += [(_p-p) /t]
+            t_ += [max(_p,p,1e-7)]
+            m_ += [(min(_p,p) if _p<0 == p<0 else -min(_p,p))]
+            d_ += [_p - p]
     return np.array(m_), np.array(d_), np.array(t_)
 
 def comp_A(_A,A):
@@ -222,30 +235,8 @@ def comp_A(_A,A):
         dA = atan2(*_A) - atan2(*A)
         if   dA > pi: dA -= 2 * pi  # rotate CW
         elif dA <-pi: dA += 2 * pi  # rotate CCW
-        mA = (cos(dA)+1)/2  # in 0:1
-        dA = dA / (2 * pi)  # in -.5:.5
-        return mA, dA
 
-def comp_vert(_i_,i_, rn=.1, dir=1):  # i_ is ds, dir may be -1, ~ comp_lay
-
-    i_ = i_ * rn  # normalize by compared accum span
-    _a_,a_ = np.abs(_i_), np.abs(i_)  # d_ s
-    t_ = np.maximum.reduce([_a_,a_, np.zeros(6)+1e-7])  # I, G, A, M, D, L
-    d_ = (_i_- i_*dir) / t_  # np.array d[I,G,A,M,D,L]
-    m_ = np.minimum(_a_,a_) / t_  # in 0:1
-    m_[(_i_<0) != (i_<0)] *= -1  # m is negative if comparands have opposite sign
-    return (np.array([m_,d_,t_]),
-            np.array([m_@ w_t[0], np.abs(d_)@ w_t[1], t_@ w_t[0]]))  # Et
-''' 
-    sequential version:
-    md_, dd_ = [],[]
-    for _d, d in zip(_d_,d_):
-        d = d * rn
-        dd_ += [_d - d * dir]
-        md = min(abs(_d),abs(d))
-        md_ += [-md if _d<0 != d<0 else md]  # negate if only one compared is negative
-    md_, dd_ = np.array(md_), np.array(dd_)
-'''
+        return cos(dA), dA/pi  # mA, dA in -1:1
 
 def accum_box(box, y, x):  # extend box with kernel
     y0, x0, yn, xn = box
