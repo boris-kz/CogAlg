@@ -71,7 +71,7 @@ def comp_slice(edge, rV=1, ww_t=None):  # root function
         w_t = [[wM, wD, wI, wG, wA, wL]] * ww_t
         # der weights
     for P in edge.P_:  # add higher links
-        P.verT = np.zeros((3,6))
+        P.verT = np.full((3,6),1e-7)
         P.rim = []; P.lrim = []; P.prim = []
     edge.dP_ = []
     comp_P_(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
@@ -86,7 +86,7 @@ def comp_slice(edge, rV=1, ww_t=None):  # root function
 
 def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
 
-    PPt_ = []; ET = np.zeros(4); VerT = np.zeros((3,6))
+    PPt_ = []; ET = np.full(4,1e-7); VerT = np.full((3,6),1e-7)
 
     for P in iP_: P.merged = 0
     for P in iP_:  # dP from link_ if fd
@@ -95,7 +95,7 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
         if fd: Et = P.Et  # summed verT, min L in dP
         else:  I,G,Dy,Dx,M,D,L = P.latuple; Et = np.array([M, G+abs(D), L, I])
         _P_ = {P}; link_ = set()
-        verT = np.zeros((3,6))
+        verT = np.full((3,6),1e-7)
         while _prim_:
             prim_,lrim_ = set(),set()
             for _P,_link in zip(_prim_,_lrim_):
@@ -162,8 +162,8 @@ def sum2PP(P_, dP_, Et):  # sum links in Ps and Ps in PP
 
     fd = isinstance(P_[0],CdP)
     if fd: latT = np.sum([n.latuple for n in set([n for dP in P_ for n in  dP.nodet])], axis=0)
-    else:  latT = np.zeros(7)
-    verT = np.zeros((3,6))
+    else:  latT = np.full(7,1e-7)
+    verT = np.full((3,6),1e-7)
     link_ = []
     if dP_:  # add uplinks:
         S,A = 0,[0,0]
@@ -191,12 +191,12 @@ def comp_vert(_i_,i_, rn, minn, dir=1):  # i_ is ds, dir may be -1, ~ comp_lay
 
     i_ = i_ * rn  # normalize by compared accum span
     _a_,a_ = np.abs(_i_), np.abs(i_)  # d_ s
-    d_ = (_i_- i_*dir)  # np.array d[I,G,A,M,D,L]
-    m_ = np.minimum(_a_,a_)
-    m_[(_i_<0) != (i_<0)] *= -1  # m is negative if comparands have opposite sign  # no np.where?
-    t_ = np.maximum.reduce([_a_,a_, np.zeros(6)+1e-7])  # or signed?  I, G, A, M, D, L
+    d_ = (_i_- i_*dir)  # dd_
+    m_ = np.minimum(_a_,a_); m_[(_i_<0) != (i_<0)] *= -1  # m is negative if comparands have opposite sign
+    t_ = np.maximum.reduce([_a_,a_, np.full(6,1e-7)])
+    # I, G, A, M, D, L
     return (np.array([m_,d_,t_]),
-            np.array([(m_/t_ +1)/2 @ w_t[0], (d_/t_ +1)/2 @ w_t[1], minn, t_@ w_t[0]]))  # Et
+            np.array([(m_/t_ +1)/2 @ w_t[0], (d_/t_ +2)/4 @ w_t[1], minn, t_@ w_t[0]]))  # Et
 
 def comp_latuple(_latuple, latuple, _n,n):  # 0der params, add dir?
 
