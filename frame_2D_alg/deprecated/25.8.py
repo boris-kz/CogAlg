@@ -348,3 +348,31 @@ def min_comp1(_N,N, rc):  # comp extT, baseT, Et, derTT
     Et = np.array([np.sum(m_*wT), np.sum(np.abs(d_*wT)), min(_n,n), np.sum(np.sum(t_*wT))])  # n: shared scope?
     return DerTT, Et, rn
 
+def cross_comp(root, rc):  # rng+ and der+ cross-comp and clustering
+
+    N_,L_,Et = comp_(root.N_, rc)  # rc: redundancy+olp, lG.N_ is Ls
+    if len(L_) > 1:
+        mV,dV = val_(Et,2, (len(L_)-1)*Lw, rc+loopw); lG = []
+        if dV > 0:
+            if root.L_: root.lH += [sum_N_(root.L_)]  # replace L_ with agg+ L_:
+            root.L_ =L_; root.Et += Et
+            if dV > avd:
+                lG = cross_comp(CN(N_=L_), rc+contw)  # link clustering, +2 der layers
+                if lG: root.lH += [lG]+lG.nH; root.Et+=lG.Et; root.derH+=lG.derH  # new lays
+        if mV > 0:
+            nG = Cluster(root, N_, rc+loopw)  # get_exemplars, rng-band, local cluster_C_
+            if nG:
+                if val_(np.sum([g.Et for g in nG.cent_]),1,(len(nG.N_)-1)*Lw, rc+centw+nG.rng, Et) > 0:
+                    cluster_C_(nG, rc)  # cluster nG.cent_ exemplars, of any rng
+                if lG: comb_altg_(nG,lG, rc+2)  # both fork alt Ns are clustered
+                if val_(nG.Et,1, (len(nG.N_)-1)*Lw, rc+loopw+nG.rng, Et) > 0:
+                    nG = cross_comp(nG, rc+loopw) or nG  # agg+
+                _H = root.nH; root.nH = []
+                nG.nH = _H + [root] + nG.nH  # pack root in Nt.nH, has own L_,lH
+                return nG  # recursive feedback
+
+    # or cent_ per graph?
+    rN_, cent_ = set(),set()
+    for N in irN_:
+        if hasattr(N,"M"): cent_.update(N); rN_.update(N.N_)  # unpack centroids?
+        else: rN_.add(N)
