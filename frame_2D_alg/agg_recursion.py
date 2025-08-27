@@ -53,8 +53,7 @@ class CLay(CBase):  # layer of derivation hierarchy, subset of CG
         # ni: exemplar in node_, trace in both directions?
     def __bool__(l): return bool(l.node_)
 
-    def copy_(lay, rev=0, i=None):  # comp direction may be reversed to -1
-
+    def copy_(lay, rev=0, i=None):  # comp direction may be reversed to -1, currently not used
         if i:  # reuse self
             C = lay; lay = i; C.node_=copy(i.node_); C.link_ = copy(i.link_); C.derTT=np.zeros((3,10))
         else:  # init new C
@@ -90,7 +89,7 @@ def comp_derT(_i_, i_):  # all normalized diffs
     _a_, a_ = np.abs(_i_), np.abs(i_)
     d_ = _i_ - i_  # signed id s
     m_ = np.minimum(_a_,a_); m_[(_i_<0) != (i_<0)] *= -1  # m is negative if comparands have opposite sign
-    t_ = np.maximum.reduce([_a_,a_, np.full(10, eps)])  # or signed max?
+    t_ = np.maximum.reduce([_a_,a_, np.full(10, eps)])  # no signed max?
     return (np.array([m_, d_, t_]),  # derTT
             np.array([(m_/t_ +1)/2 @ wTTf[0], (d_/t_ +2)/4 @ wTTf[1], 10, t_ @ wTTf[0]]))  # Et: M, D, n=10, T
 
@@ -119,7 +118,7 @@ class CN(CBase):
         n.root  = kwargs.get('root', [])  # immediate only
         n.altg_ = kwargs.get('altg_',[])  # ext contour Gs, replace/combine rim?
         n.cent_ = kwargs.get('cent_',[])  # int centroid Gs, replace/combine N_?
-        n.C_    = kwargs.get('C_',set())  # root centroids
+        n.C_    = kwargs.get('C_', [])  # root centroids
         n.fin = kwargs.get('fin',0)  # clustered, temporary
         n.exe = kwargs.get('exe',1)  # exemplar, temporary
         n.seen_ = set()
@@ -133,7 +132,7 @@ def Copy_(N, root=None, init=0):
         C.N_ = [N]; C.nH, C.lH, N.root = [],[],C
         C.L_ = N.rim if N.fi else N.L_
     else:
-        C.N_,C.nH,C.lH, N.root = (list(N.N_),list(N.nH),list(N.lH), root if root else N.root)
+        C.N_,C.nH,C.lH = list(N.N_),list(N.nH),list(N.lH); N.root = root or N.root
         C.L_ = list(N.L_) if N.fi else N.L_
     C.derH  = [lay.copy_() for lay in N.derH]
     C.derTT = deepcopy(N.derTT)
@@ -206,7 +205,7 @@ def cross_comp(root, rc):  # rng+ and der+ cross-comp and clustering
             if nG:
                 if lG: comb_altg_(nG,lG, rc+2)  # both fork alt Ns are clustered
                 if val_(nG.Et,1, (len(nG.N_)-1)*Lw, rc+loopw+nG.rng, Et) > 0:
-                    nG = cross_comp(nG, rc+loopw) or nG  # agg+, -> cross-frame?
+                    nG = cross_comp(nG, rc+loopw) or nG  # agg+, -> cross-frame? cross-comp C_?
                 _H = root.nH; root.nH = []
                 nG.nH = _H + [root] + nG.nH  # pack root in Nt.nH, has own L_,lH
                 return nG  # recursive feedback
@@ -288,8 +287,8 @@ def comp_(iN_, rc):  # comp pairs of nodes or links within max_dist
 
 def comp_N(_N,N, o,rc, L_=None, angl=np.zeros(2), span=None, fdeep=0, rng=1):  # compare links, optional angl,span,dang?
 
-    derTT, Et,rn = min_comp(_N,N, rc)  # -1 if _rev else 1, d = -d if L is reversed relative to _L, obsoleted by sign in angle?
-    baseT = (_N.baseT+ N.baseT*rn) /2  # not derived
+    derTT, Et,rn = min_comp(_N,N)  # -1 if _rev else 1, d = -d if L is reversed relative to _L, obsoleted by sign in angle?
+    baseT = (_N.baseT + N.baseT*rn) /2  # not derived
     yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])  # primary ext attrs
     fi = N.fi
     Link = CN(Et=Et,olp=o, N_=[_N,N], L_=len(_N.N_+N.N_), et=_N.et+N.et, baseT=baseT,derTT=derTT, yx=yx,box=box, span=span,angl=angl, rng=rng, fi=0)
@@ -308,7 +307,7 @@ def comp_N(_N,N, o,rc, L_=None, angl=np.zeros(2), span=None, fdeep=0, rng=1):  #
         n.rim += [Link]; n.et += Et; n.seen_.add(_n)  # or extT += Link?
     return Link
 
-def min_comp(_N,N, rc):  # comp Et, baseT, extT, derTT
+def min_comp(_N,N):  # comp Et, baseT, extT, derTT
 
     fi = N.fi
     _M,_D,_n,_t =_N.Et; _I,_G,_Dy,_Dx =_N.baseT; _L = len(_N.N_) if fi else _N.L_  # len nodet.N_s
@@ -404,8 +403,9 @@ def Cluster(root, N_, rc):  # clustering root
 
     if isinstance(N_[0],CN): Nf_ = N_; N_ = [N_]; Et = root.Et  # nest N_ as rng-banded
     else:                    Nf_ = list(set([N for n_ in N_ for N in n_])); Et = None
-    E_ = get_exemplars(Nf_,rc)
-    if val_(np.sum([g.Et for g in E_]), N_[0].fi, (len(E_)-1)*Lw, rc+centw, Et) > 0:
+
+    E_ = get_exemplars(Nf_,rc)  # from flattened N_
+    if val_(np.sum([g.Et for g in E_]), Nf_[0].fi, (len(E_)-1)*Lw, rc+centw, Et) > 0:
         cluster_C(E_, root, rc)  # any rng
     nG = []
     for rng, rN_ in enumerate(N_, start=1):  # bottom-up rng-banded clustering
@@ -421,13 +421,14 @@ def cluster(root, iN_, rN_, rc, rng=1):  # flood-fill node | link clusters
     def rroot(n):
         if n.root and n.root.rng > n.rng: return rroot(n.root) if n.root.root else n.root
         else:                             return None
+
     G_ = []  # exclusive per fork,ave, only centroids can be fuzzy
     for n in rN_: n.fin = 0
     for N in rN_:  # init
         if not N.exe or N.fin: continue  # exemplars or all N_
         N.fin = 1; seen_,N_,link_,long_ = [],[],[],[]
         if rng==1 or (not N.root or N.root.rng==1):  # not rng-banded, L.root is empty
-            cent_ = N.C_
+            cent_ = N.C_  # cross_comp C_?
             for l in N.rim:
                 seen_ += [l]
                 if l.rng==rng and val_(l.Et+ett(l), aw=rc+1) > 0:
@@ -477,7 +478,7 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
         C._N_ = [n for l in E.rim for n in l.N_ if n is not E]  # core members + surround -> comp_C
         _N_ += C._N_; _C_ += [C]
     # reset:
-    for n in set(root.root.N_+_N_ ): n.C_,n.mo_, n._C_,n._mo_ = [],[], [],[]  # aligned pairs, in cross_comp root
+    for n in set(root.N_+_N_ ): n.C_,n.mo_, n._C_,n._mo_ = [],[], [],[]  # aligned pairs, in cross_comp root
     # reform C_, refine C.N_s
     while True:
         C_, cnt,mat,olp, Dm,Do = [],0,0,0,0,0; Ave = ave * rc * loopw
@@ -493,30 +494,32 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
                     cnt += 1  # count comps per loop
                     if m > Ave * o:
                         _N_+=[n]; M+=m; O+=o; mo_ += [np.array([m,o])]  # n.o for convergence eval
-                        _N__ += [_n for l in n.rim for _n in l.N_ if _n is not n]  # +|-ls for comp C
-                        if _C not in n._C_: dm += m; do += o  # not in extended _N__
+                        _N__ += [_n for l in n.rim for _n in l.N_ if _n is not n]  # +|-Ls
+                        if _C not in n._C_: dm+=m; do+=o  # not in extended _N__
                     elif _C in n._C_:
-                        __m,__o = n._mo_[n._C_.index(_C)]; dm +=__m; do +=__o
+                        __m,__o = n._mo_[n._C_.index(_C)]; dm+=__m; do+=__o
                 if M > Ave * len(_N_) * O:
-                    for n, mo in zip(_N_,mo_): n.mo_ += [mo]; n.C_ += [C]; C.C_ += [n]  # bilateral assign
+                    for n, mo in zip(_N_,mo_): n.mo_+=[mo]; n.C_+=[C]; C.C_+=[n]  # bilateral assign
                     C.M = M; C.N_+= _N_; C._N_= list(set(_N__))  # core, surround elements
-                    C_+=[C]; mat+=M; olp+=O; Dm+=dm; Do+=do   # new incl or excl
+                    C_+=[C]; mat+=M; olp+=O; Dm+=dm; Do+=do  # new incl or excl
                 else:
                     for n in _C._N_:
+                        n.exe = n.Et[0] > 2*ave  # refine exe, Et vals are already normalized, Et[2] no longer needed for eval?
                         for i, c in enumerate(n.C_):
                             if c is _C: n.mo_.pop(i); n.C_.pop(i); break  # remove mo mapping to culled _C
             else: break  # the rest is weaker
         if Dm > Ave * cnt * Do:  # dval vs. dolp, overlap increases as Cs may expand in each loop?
             _C_ = C_
-            for n in root.root.N_: n._C_ = n.C_; n._mo_= n.mo_; n.C_,n.mo_ = [],[]  # new n.C_s, combine with vo_ in Ct_?
+            for n in root.N_: n._C_=n.C_; n._mo_=n.mo_; n.C_,n.mo_ = [],[]  # new n.C_s, combine with vo_ in Ct_?
         else:  # converged
             break
     if  C_:
         C_ = set(C_)
-        for C in C_:
-            for n in C.N_: n.exe = n.m * (C.M/ave) > ave  # draft, node is exemplar if it represents the cluster?
+        for n in [N for C in C_ for N in C.N_]:
+            # exemplar V increased by summed n match to root C * rel C Match:
+            n.exe = n.et[1-n.fi] + np.sum([n.mo_[i][0] * (C.M/(ave * n.mo_[i][0])) for i,C in enumerate(n.C_)]) > ave
+        # cross_comp(C_)?
         root.cent_ = (C_, mat)
-        # cross_comp, low overlap eval in comp_node_?
 
 def cent_attr(C, rc):  # weight attr matches | diffs by their match to the sum, recompute to convergence
 
@@ -634,7 +637,7 @@ def add_N(N,n, fmerge=0, fC=0):
     N.yx = (N.yx*_en + n.yx*en) /(en+_en)
     N.span = max(N.span,n.span)
     N.box = extend_box(N.box, n.box)
-    if hasattr(n,'C_') and hasattr(N,'C_'):
+    if hasattr(n,'mo_') and hasattr(N,'mo_'):
         N.C_ += n.C_; N.mo_ += n.mo_  # not sure
     return N
 
@@ -787,7 +790,10 @@ def project_focus(PV__, y,x, Fg):  # radial accum of projected focus value in PV
         row,col = rim_coords[:,0], rim_coords[:,1]
         PV__[row,col] += pV__  # in-place accum pV to rim
         n += 1
-
+'''
+current process is fixed two-level frame, pipeline, add multi-level, multi-stage expansion:
+each stage merges N_ in current frame, feedback to extend input frame?
+'''
 def agg_frame(foc, image, iY, iX, rV=1, wTTf=[], fproj=0):  # search foci within image, additionally nested if floc
 
     if foc: dert__ = image  # focal img was converted to dert__
