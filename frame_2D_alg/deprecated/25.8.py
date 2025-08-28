@@ -376,3 +376,34 @@ def cross_comp(root, rc):  # rng+ and der+ cross-comp and clustering
     for N in irN_:
         if hasattr(N,"M"): cent_.update(N); rN_.update(N.N_)  # unpack centroids?
         else: rN_.add(N)
+
+def comp_derT(_i_, i_):  # all normalized diffs
+
+    _a_, a_ = np.abs(_i_), np.abs(i_)
+    d_ = _i_ - i_  # signed id s
+    m_ = np.minimum(_a_,a_); m_[(_i_<0) != (i_<0)] *= -1  # m is negative if comparands have opposite sign
+    t_ = np.maximum.reduce([_a_,a_, np.full(10, eps)])  # no signed max?
+    return (np.array([m_, d_, t_]),  # derTT
+            np.array([(m_/t_ +1)/2 @ wTTf[0], (d_/t_ +2)/4 @ wTTf[1], 10, t_ @ wTTf[0]]))  # Et: M, D, n=10, T
+
+def comp(_pars, pars):  # raw inputs or derivatives, norm to 0:1 in eval only
+
+    m_,d_,t_ = [],[],[]
+    for _p, p in zip(_pars, pars):
+        if isinstance(_p, np.ndarray):
+            mA, dA = comp_A(_p,p)  # both in -1:1
+            m_ += [mA]; d_ += [dA]
+            t_ += [2]  # norm already
+        elif isinstance(p, list):  # massless I|S avd in p only
+            p, avd = p
+            d = _p - p; ad = abs(d)
+            t_ += [max(avd, ad, eps)]
+            m_ += [avd-ad]  # +|-
+            d_ += [d]
+        else:  # massive
+            _a,a = abs(_p),abs(p)
+            t_ += [max(_a,a,eps)]
+            m_ += [(min(_a,a) if _p<0 == p<0 else -min(_a,a))]
+            d_ += [_p - p]
+    return np.array(m_), np.array(d_), np.array(t_)
+
