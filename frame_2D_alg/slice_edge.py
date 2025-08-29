@@ -101,7 +101,7 @@ def form_P(P, edge):
             _y,_x,i,g,_gy,_gx = y,x,i,g,gy,gx
 
     P.yx = tuple(np.mean([P.yx_[0], P.yx_[-1]], axis=0))    # new center
-    P.latuple = np.maximum(np.array([I, G, Dy, Dx, M, D, L]), 1e-7)
+    P.latT = np.maximum(np.array([I, G, Dy, Dx, M, D, L]), 1e-7)
 
     return P
 
