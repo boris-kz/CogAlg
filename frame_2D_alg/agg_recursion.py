@@ -76,14 +76,14 @@ class CLay(CBase):  # layer of derivation hierarchy, subset of CG
         Lay.olp = (Lay.olp + lay.olp * rn) /2
         return Lay
 
-    def comp_lay(_lay, lay, rn, root, align=1):  # unpack derH trees down to numericals and compare them
+    def comp_lay(_lay, lay, rn, root):  # unpack derH trees down to numericals and compare them
 
-        derTT, Et = comp_derT(_lay.derTT[1], lay.derTT[1] * rn, align)  # ext A align replaced dir/rev
-        if root: root.Et += Et  # no separate n?
+        derTT = comp_derT(_lay.derTT[1], lay.derTT[1] * rn)  # ext A align replaced dir/rev
+        Et = np.array([derTT[0] @ wTTf[0], derTT[1] @ wTTf[1]])
+        if root: root.Et[:2] += Et  # no separate n
         node_ = list(set(_lay.node_+ lay.node_))  # concat, or redundant to nodet?
         link_ = _lay.link_ + lay.link_
         return CLay(Et=Et, olp=(_lay.olp+lay.olp*rn)/2, node_=node_, link_=link_, derTT=derTT)
-
 
 class CN(CBase):
     name = "node"
@@ -135,7 +135,7 @@ def Copy_(N, root=None, init=0):
 ave, avd, arn, aI, aS, aveB, aveR, Lw, intw, loopw, centw, contw = 10, 10, 1.2, 100, 5, 100, 3, 5, 2, 5, 10, 15  # value filters + weights
 adist, amed, distw, medw = 10, 3, 2, 2  # cost filters + weights, add alen?
 wM, wD, wN, wO, wG, wL, wI, wS, wa, wA = 10, 10, 20, 10, 20, 5, 20, 2, 1, 1  # der params higher-scope weights = reversed relative estimated ave?
-mW = dW = 10; wTTf = np.ones((2,9))  # fb weights per derTT, adjust in agg+
+mW = dW = 9; wTTf = np.ones((2,9))  # fb weights per derTT, adjust in agg+
 wY = wX = 64; wYX = np.hypot(wY,wX)  # focus dimensions
 '''
 initial PP_ cross_comp and connectivity clustering to initialize focal frame graph, no recursion:
@@ -224,7 +224,7 @@ def comb_altg_(nG, lG, rc):  # cross_comp contour/background per node:
             aG = CN(N_=altl_, Et=Et)
             if val_(Et,0,(len(altl_)-1)*Lw, rc+Rdn+loopw) > 0:  # norm by core_ rdn
                 aG = cross_comp(aG, rc) or aG
-            Ng.altg_ = (aG.N_,aG.Et)
+            Ng.altg_ = (set(aG.N_),aG.Et)
 
 def proj_V(_N, N, angle, dist, fC=0):  # estimate cross-induction between N and _N before comp
 
@@ -303,28 +303,29 @@ def min_comp(_N,N):  # comp Et, baseT, extT, derTT
 
     fi = N.fi
     _M,_D,_n =_N.Et; _I,_G,_Dy,_Dx =_N.baseT; _L = len(_N.N_) if fi else _N.L_  # len nodet.N_s
-    M, D, n  = N.Et;  I, G, Dy, Dx = N.baseT;  L = len(N.N_) if fi else N.L_
+    M, D, n  = N.Et; I, G, Dy, Dx = N.baseT; L = len(N.N_) if fi else N.L_
     _pars = np.array([_M,_D,_n,_I,_G, np.array([_Dy,_Dx]),_L,_N.span], dtype=object)  # Et, baseT, extT
     pars = np.array([M,D,n, (I,aI),G, np.array([Dy,Dx]), L,(N.span,aS)], dtype=object)
     rn = _n/n
-    if (np.any(_N.angl) and np.any(N.angl)) and (_N.mang and N.mang):  # valid As
-        mA,dA = comp_A(rn*_N.angl, N.angl)
-        conf = (rn*_N.mang + N.mang) / (1+rn)  # weight each side by rn
-    else: mA = dA = conf = 0
-    align = 0.5 + conf * (mA-0.5)
+    if fi: mA = dA = 0 # skip for now:
+       # if np.hypot(*_N.angl)*_N.mang + np.hypot(*N.angl)*N.mang > ave* wA:  # aligned L_'As, mang *= (len_nH)+fi+1
+       # mang = (rn*_N.mang + N.mang) / (1 + rn)  # ave, weight each side by rn
+       # align = 1 - mang* (1-mA)  # in 0:1, if Ns are aligned and oriented
+    else:
+        mA, dA = comp_A(rn*_N.angl, N.angl)  # single L
     m_, d_ = comp(rn*_pars,pars, mA,dA)  # -> M,D,n, I,G,A, L,S,eA
-    (md_,dd_), (M,D) = comp_derT(rn*_N.derTT[1], N.derTT[1], align)
+    md_,dd_ = comp_derT(rn*_N.derTT[1], N.derTT[1])
     m_+= md_; d_+= dd_
     DerTT = np.array([m_,d_])
-    Et = np.array([m_@wTTf[0] +M, d_@wTTf[1] +D, min(_n,n)])  # include prior M,D; n: shared scope?
+    mAm, mAd = (1, 1) if fi else (mA, 2-mA)
+    Et = np.array([m_* mAm @ wTTf[0], d_* mAd @ wTTf[1], min(_n,n)])  # n: shared scope?
     return DerTT, Et, rn
 
-def comp_derT(_i_, i_, align=1):  # mextA
+def comp_derT(_i_, i_):  # m ext A
 
     m_ = np.minimum(np.abs(_i_), np.abs(i_))  # native vals
     d_ = _i_ - i_  # next comp, from signed _i_,i_
-    return (np.array([m_,d_]),  # derTT,
-            np.array([m_*align @ wTTf[0], np.abs(d_)*(2-align) @ wTTf[1]]))  # Et
+    return np.array([m_,d_])
 
 def comp(_pars, pars, meA=0, deA=0):  # raw inputs or derivatives, norm to 0:1 in eval only
 
@@ -333,7 +334,7 @@ def comp(_pars, pars, meA=0, deA=0):  # raw inputs or derivatives, norm to 0:1 i
         if isinstance(_p, np.ndarray):
             mA, dA = comp_A(_p, p)
             m_ += [mA]; d_ += [dA]
-        elif isinstance(p, list):  # massless I|S avd in p only
+        elif isinstance(p, tuple):  # massless I|S avd in p only
             p, avd = p
             d = _p - p; ad = abs(d)
             m_ += [avd-ad]  # +|- or avd / (avd+ad)?
@@ -395,7 +396,7 @@ def Cluster(root, N_, rc):  # clustering root
 
     F_ = list(set([N for n_ in N_ for N in n_]))  # flat N_
     E_ = get_exemplars(F_,rc)
-    if val_(np.sum([g.Et for g in E_]), F_[0].fi, (len(E_)-1)*Lw, rc+centw, root.Et) > 0:
+    if E_ and val_(np.sum([g.Et for g in E_],axis=0), F_[0].fi, (len(E_)-1)*Lw, rc+centw, root.Et) > 0:
         cluster_C(E_, root, rc)  # any rng, eval root Et instead?
     nG = []
     for rng, rN_ in enumerate(N_, start=1):  # bottom-up rng-banded clustering
@@ -507,7 +508,8 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
         for n in [N for C in C_ for N in C.N_]:
             # exemplar V increased by summed n match to root C * rel C Match:
             n.exe = n.et[1-n.fi] + np.sum([n.mo_[i][0] * (C.M/(ave * n.mo_[i][0])) for i,C in enumerate(n.C_)]) > ave
-        # cross_comp(C_)?
+        # global cross_comp(C_):
+        # comp wTT, min_comp, merge if match, else spectral clustering by diff?
         root.cent_ = (C_, mat)
 
 def cent_attr(C, rc):  # weight attr matches | diffs by their match to the sum, recompute to convergence
@@ -615,7 +617,7 @@ def add_N(N,n, fmerge=0, fC=0):
         n.root=N; N.N_ += [n]
         if not fC: N.L_ += [l for l in n.rim if l.Et[0]>ave] if n.fi else n.L_  # len
     if n.altg_: add_sett(N.altg_,n.altg_)  # ext clusters
-    if n.cent_: add_sett(N.cent_,n.cent_)  # int clusters
+    if n.cent_: N.cent_.update(n.cent_)  # int clusters
     if n.nH: add_NH(N.nH,n.nH, root=N)
     if n.lH: add_NH(N.lH,n.lH, root=N)
     en,_en = n.Et[2],N.Et[2]; rn = en/_en

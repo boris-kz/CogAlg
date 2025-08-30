@@ -71,7 +71,7 @@ def comp_slice(edge, rV=1, ww_t=None):  # root function
         w_t = [[wM, wD, wI, wG, wA, wL]] * ww_t
         # der weights
     for P in edge.P_:  # add higher links
-        P.verT = np.full((3,6),1e-7)
+        P.verT = np.full((2,6),1e-7)
         P.rim = []; P.lrim = []; P.prim = []
     edge.dP_ = []
     comp_P_(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
@@ -86,7 +86,7 @@ def comp_slice(edge, rV=1, ww_t=None):  # root function
 
 def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
 
-    PPt_ = []; ET = np.full(3,1e-7); VerT = np.full((3,6),1e-7)
+    PPt_ = []; ET = np.full(3,1e-7); VerT = np.full((2,6),1e-7)
 
     for P in iP_: P.merged = 0
     for P in iP_:  # dP from link_ if fd
@@ -95,7 +95,7 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
         if fd: Et = P.Et  # summed verT, min L in dP
         else:  I,G,Dy,Dx,M,D,L = P.latT; Et = np.array([M, G+abs(D), L])
         _P_ = {P}; link_ = set()
-        verT = np.full((3,6),1e-7)
+        verT = np.full((2,6),1e-7)
         while _prim_:
             prim_,lrim_ = set(),set()
             for _P,_link in zip(_prim_,_lrim_):
@@ -163,7 +163,7 @@ def sum2PP(P_, dP_, Et):  # sum links in Ps and Ps in PP
     fd = isinstance(P_[0],CdP)
     if fd: latT = np.sum([n.latT for n in set([n for dP in P_ for n in  dP.nodet])], axis=0)
     else:  latT = np.full(7,1e-7)
-    verT = np.full((3,6),1e-7)
+    verT = np.full((2,6),1e-7)
     link_ = []
     if dP_:  # add uplinks:
         S,A = 0,[0,0]
