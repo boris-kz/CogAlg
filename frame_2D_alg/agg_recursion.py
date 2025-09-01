@@ -55,7 +55,7 @@ class CLay(CBase):  # layer of derivation hierarchy, subset of CG
 
     def copy_(lay, rev=0, i=None):  # comp direction may be reversed to -1, currently not used
         if i:  # reuse self
-            C = lay; lay = i; C.node_=copy(i.node_); C.link_ = copy(i.link_); C.derTT=np.zeros((3,9))
+            C = lay; lay = i; C.node_=copy(i.node_); C.link_ = copy(i.link_); C.derTT=np.zeros((2,9))
         else:  # init new C
             C = CLay(node_=copy(lay.node_), link_=copy(lay.link_))
         C.Et = copy(lay.Et)
@@ -195,9 +195,10 @@ def cross_comp(root, rc):  # rng+ and der+ cross-comp and clustering
         if mV > 0:
             nG = Cluster(root, N_, rc+loopw)  # get_exemplars, cluster_C, rng connectivity cluster
             if nG:
-                if lG: comb_altg_(nG,lG, rc+2)  # both fork alt Ns are clustered
+                rc += nG.olp  # incr in cluster_C and cluster_N
+                if lG: rc += 1+lG.olp; comb_altg_(nG,lG, rc)  # both fork alt Ns are clustered
                 if val_(nG.Et,1, (len(nG.N_)-1)*Lw, rc+loopw+nG.rng, Et) > 0:
-                    nG = cross_comp(nG, rc+loopw) or nG  # agg+, -> cross-frame? cross-comp C_?
+                    nG = cross_comp(nG, rc+nG.olp) or nG  # agg+, -> cross-frame? cross-comp C_?
                 _H = root.nH; root.nH = []
                 nG.nH = _H + [root] + nG.nH  # pack root in Nt.nH, has own L_,lH
                 return nG  # recursive feedback
@@ -284,7 +285,7 @@ def comp_N(_N,N, o,rc, L_=None, angl=np.zeros(2), span=None, fdeep=0, rng=1):  #
     yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])  # primary ext attrs
     fi = N.fi
     Link = CN(Et=Et,olp=o, N_=[_N,N], L_=len(_N.N_+N.N_), et=_N.et+N.et, baseT=baseT,derTT=derTT, yx=yx,box=box, span=span,angl=angl, rng=rng, fi=0)
-    Link.derH = [CLay(Et=copy(Et), node_=[_N,N],link_=[Link],derTT=copy(derTT), root=Link)]
+    Link.derH = [CLay(Et=Et[:2], node_=[_N,N],link_=[Link],derTT=copy(derTT), root=Link)]
     if fdeep:
         if val_(Et,1, len(N.derH)-2, o+rc) > 0 or fi==0:  # else derH is dext,vert
             Link.derH += comp_H(_N.derH,N.derH, rn, Et, derTT, Link)  # append
@@ -312,7 +313,9 @@ def min_comp(_N,N):  # comp Et, baseT, extT, derTT
     md_,dd_= comp_derT(rn*_N.derTT[1], N.derTT[1])
     m_+= md_; d_+= dd_
     DerTT = np.array([m_,d_])
-    Et = np.array([m_* (1,mA)[fi] @ wTTf[0], d_* (1,2-mA)[fi] @ wTTf[1], min(_n,n)])  # n: shared scope?
+    t_ = m_+ np.abs(d_) + eps
+    Et = np.array([m_* (1, mA)[fi] / t_ @ wTTf[0],
+                   d_* (1, 2-mA)[fi] / t_ @ wTTf[1], min(_n,n)])  # n: shared scope?
     '''
     if np.hypot(*_N.angl)*_N.mang + np.hypot(*N.angl)*N.mang > ave*wA:  # aligned L_'As, mang *= (len_nH)+fi+1
     mang = (rn*_N.mang + N.mang) / (1+rn)  # ave, weight each side by rn
@@ -333,9 +336,8 @@ def comp(_pars, pars, meA=0, deA=0):  # raw inputs or derivatives, norm to 0:1 i
             m_ += [mA]; d_ += [dA]
         elif isinstance(p, tuple):  # massless I|S avd in p only
             p, avd = p
-            d = _p - p; ad = abs(d)
-            m_ += [avd-ad]  # +|- or avd / (avd+ad)?
-            d_ += [d]
+            m_ += [avd]  # placeholder for avd / (avd+ad), no separate match
+            d_ += [_p - p]
         else:  # massive
             m_ += [min(abs(_p),abs(p))]
             d_ += [_p - p]
@@ -400,11 +402,11 @@ def Cluster(root, N_, rc):  # clustering root
     for rng, rN_ in enumerate(N_, start=1):  # bottom-up rng-banded clustering
         aw = rc*rng +contw
         if rN_ and val_(np.sum([n.Et for n in rN_], axis=0),1, (len(rN_)-1)*Lw, aw) > 0:
-            nG = cluster(root, F_, rN_, aw, rng) or nG
+            nG = cluster_N(root, F_, rN_, aw, rng) or nG
     # top valid nG:
     return nG
 
-def cluster(root, iN_, rN_, rc, rng=1):  # flood-fill node | link clusters
+def cluster_N(root, iN_, rN_, rc, rng=1):  # flood-fill node | link clusters
 
     def rroot(n):
         if n.root and n.root.rng > n.rng: return rroot(n.root) if n.root.root else n.root
@@ -507,15 +509,44 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
             # exemplar V increased by summed n match to root C * rel C Match:
             n.exe = n.et[1-n.fi] + np.sum([n.mo_[i][0] * (C.M/(ave * n.mo_[i][0])) for i,C in enumerate(n.C_)]) > ave
         if mat > ave:
-            xcomp_C_(C_, root)
+            xcomp_C_(C_, root, rc)
         root.cent_ = (C_, mat)
 
-def xcomp_C_(C_, root):  # draft
-    # dC_ = comp_C_: global comp wTT, min_comp, merge if match, else spectral clustering:
-    # ddC_= comp_dC_: sort remaining dCs by comb_D, compare along that new dimension, spatial distances don't matter
-    # dCH = cluster_dC_: similar to cluster(1-fi)?
-    # root.cent_ = CN(N_=C_, L_=dC_, nH=[], lH=dCH, etc?)
-    pass
+def xcomp_C_(C_, root, rc):  # draft
+
+    _dC_ = []
+    for _C, C in combinations(C_, r=2):
+        dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx); olp = (C.olp+_C.olp) / 2
+        _dC_ = [comp_N(_C,C, olp, rc, L_=[], angl=dy_dx, span=dist)]  # add comp wTT?
+    dC_, re_C_ = [], []
+    # from min D:
+    for dC in sorted(dC_, key=lambda dC: dC.Et[1]):
+        _C,C = dC.N_
+        if _C.fin or C.fin: continue  # was merged,
+        # or if C.root: C = C,root: compare C.root set in merging, not compared yet?
+        if val_(dC.Et, fi=0, aw=rc + loopw) < 0:
+            C.fin = 1  # or C.root = _C
+            sum_N_(_C,C); re_C_ += [_C]  # merge centroids, re_C only if we re-compare them, probably not needed
+        else:
+            dC_ += [dC]  # distinct dCs
+    dCt_ = []  # linear (dC,ddC) list
+    _dC = _dC_.pop(0)
+    for dC in _dC_:  # comp remaining dCs in D spectrum, no spatial distance
+        ddC = comp_N(_dC, dC, (dC.olp+_dC.olp)/2, rc)  # += ddC in dC.rim
+        dCt_ += [(_dC,ddC)]; _dC = dC
+    dCt_ += [(_dC, None)]  # no ddC in last dC
+    dCGt_ = []
+    _dC,_ddC = dCt_.pop(0); dC_ = [_dC]; ddC_ = []
+    for dC,ddC in dCt_:
+        if _ddC.Et[0] > ave:  # cluster, maybe simpler
+            dC_ += [dC]; ddC_ += [_ddC]
+        else:
+            dCGt_ += [(dC_,ddC_)]; dC_ = [dC]; ddC_ = []  # term old, init new CGt, or no need for ddC_?
+        _dC, _ddC = dC, ddC
+    dCGt_ += [(dC_, ddC_)]  # last
+
+    root.cent_ = CN(N_=C_, L_=_dC_, lH =[sum_N_([dCGt[0] for dCGt in dCGt_])])  # single level lH, add Et?
+
 
 def cent_attr(C, rc):  # weight attr matches | diffs by their match to the sum, recompute to convergence
 
@@ -594,7 +625,7 @@ def add_H(H, h, root=0, rn=1, rev=0):  #  layer-wise add|append derH
         if lay:
             if Lay: Lay.add_lay(lay, rn)
             else:   H += [lay.copy_(rev)]  # * rn?
-            if root: root.derTT += lay.derTT*rn; root.Et += lay.Et*rn
+            if root: root.derTT += lay.derTT*rn; root.Et[:2] += lay.Et*rn
     return H
 
 def add_sett(Sett,sett):
@@ -657,7 +688,7 @@ def PP2N(PP, frame):
     derTT = np.array([
         np.array([mM,mD,mL, mI,mG,mA, mL,mL/2, eps]), # extA=eps
         np.array([dM,dD,dL, dI,dG,dA, dL,dL/2, eps]) ])
-    derH = [CLay(node_=P_,link_=link_, derTT=deepcopy(derTT))]
+    derH = [CLay(node_=P_,link_=link_, derTT=deepcopy(derTT), Et=np.array([sum(derTT[0]), sum(np.abs(derTT[1]))]) )]
     y,x,Y,X = box; dy,dx = Y-y,X-x
 
     return CN(root=frame, fi=1, Et=Et, N_=P_, L_=link_, baseT=baseT, derTT=derTT, derH=derH, box=box, yx=yx, angl=A, span=np.hypot(dy/2,dx/2))
