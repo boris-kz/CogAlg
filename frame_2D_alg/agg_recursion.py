@@ -64,10 +64,10 @@ class CLay(CBase):  # layer of derivation hierarchy, subset of CG
 
         if not i: return C
 
-    def add_lay(Lay, lay, rev=0, rn=1):  # merge lays, including mlay + dlay
+    def add_lay(Lay, lay, rev=0, rn=1):  # no rev, merge lays, including mlay + dlay
 
         # rev = dir==-1, to sum/subtract numericals in m_,d_
-        for fd, Fork_, fork_ in zip((0,1,0), Lay.derTT, lay.derTT):
+        for fd, Fork_, fork_ in zip((0,1), Lay.derTT, lay.derTT):
             Fork_ += (fork_ * -1 if (rev and fd) else fork_) * rn  # m_| d_| t_
         # concat node_,link_:
         Lay.node_ += [n for n in lay.node_ if n not in Lay.node_]
@@ -79,7 +79,7 @@ class CLay(CBase):  # layer of derivation hierarchy, subset of CG
     def comp_lay(_lay, lay, rn, root):  # unpack derH trees down to numericals and compare them
 
         derTT = comp_derT(_lay.derTT[1], lay.derTT[1] * rn)  # ext A align replaced dir/rev
-        Et = np.array([derTT[0] @ wTTf[0], derTT[1] @ wTTf[1]])
+        Et = np.array([derTT[0] @ wTTf[0], np.abs(derTT[1]) @ wTTf[1]])
         if root: root.Et[:2] += Et  # no separate n
         node_ = list(set(_lay.node_+ lay.node_))  # concat, or redundant to nodet?
         link_ = _lay.link_ + lay.link_
@@ -99,7 +99,7 @@ class CN(CBase):
         n.olp = kwargs.get('olp',1)  # overlap to ext Gs, ave in links? separate olp for rim, or internally overlapping?
         n.rim = kwargs.get('rim',[])  # node-external links, rng-nested? set?
         n.derH  = kwargs.get('derH',[])  # sum from L_ or rims
-        n.derTT = kwargs.get('derTT',np.zeros((2,9)))  # sum derH -> m_,d_ [M,D,n, I,G,A, L,S,eA]
+        n.derTT = kwargs.get('derTT',np.zeros((2,9)))  # sum derH -> m_,d_ [M,D,n, I,G,A, L,S,eA], dertt: comp rims + overlap test?
         n.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,A: not ders
         n.yx    = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
         n.rng   = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
@@ -264,7 +264,7 @@ def comp_Q(iN_, rc):  # comp pairs of nodes or links within max_dist
                 V = proj_V(_N,N, dy_dx, dist)  # eval _N,N cross-induction for comp
                 fcomp = adist * V/olp > dist  # min induction
             if fcomp:
-                Link = comp_N(_N,N, olp, rc, L_=L_, angl=dy_dx, span=dist, rng=rng)
+                Link = comp_N(_N,N, olp, rc, lH=L_, angl=dy_dx, span=dist, rng=rng)
                 if val_(Link.Et, aw=loopw*olp) > 0:
                     Et += Link.Et; olp_ += [olp]  # link.olp is the same with o
                     for n in _N,N:
@@ -313,9 +313,9 @@ def min_comp(_N,N):  # comp Et, baseT, extT, derTT
     md_,dd_= comp_derT(rn*_N.derTT[1], N.derTT[1])
     m_+= md_; d_+= dd_
     DerTT = np.array([m_,d_])
-    t_ = m_+ np.abs(d_) + eps
-    Et = np.array([m_* (1, mA)[fi] /t_ @ wTTf[0],  # norm
-                   d_* (1, 2-mA)[fi] /t_ @ wTTf[1], min(_n,n)])  # n: shared scope?
+    ad_ = np.abs(d_); t_ = m_+ ad_+ eps
+    Et = np.array([m_* (1, mA)[fi] /t_ @ wTTf[0],  # norm, abs?
+                   ad_*(1, 2-mA)[fi] /t_ @ wTTf[1], min(_n,n)])  # n: shared scope?
     '''
     if np.hypot(*_N.angl)*_N.mang + np.hypot(*N.angl)*N.mang > ave*wA:  # aligned L_'As, mang *= (len_nH)+fi+1
     mang = (rn*_N.mang + N.mang) / (1+rn)  # ave, weight each side by rn
@@ -323,6 +323,12 @@ def min_comp(_N,N):  # comp Et, baseT, extT, derTT
     return DerTT, Et, rn
 
 def comp_derT(_i_,i_):
+    '''
+    _a_, a_ = np.abs(_i_), np.abs(i_)
+    d_ = _i_ - i_  # signed id s
+    m_ = np.minimum(_a_,a_); m_[(_i_<0) != (i_<0)] *= -1  # m is negative if comparands have opposite sign
+    t_ = np.maximum.reduce([_a_,a_, np.full(9, eps)])  # no signed max?
+    '''
     m_ = np.minimum(np.abs(_i_), np.abs(i_))  # native vals, probably need to be signed as before?
     d_ = _i_-i_  # for next comp, from signed _i_,i_
     return np.array([m_,d_])
@@ -512,58 +518,38 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
             xcomp_C_(C_, root, rc)
         else: root.cent_ = (C_,mat)  # tuple vs CN?
 
-def xcomp_C_(C_, root, rc):  # draft
+def xcomp_C_(C_, root, rc, first=1):  # draft
 
-    def merged(C): # get final C merge targets
+    def merged(C):  # get final C merge targets
         while C.fin: C = C.root
         return C
-
-    def dC_spectrum(L_):  # PCA on dC.derTT[1]), sort L_ along the principal axis of variation (PC1).
-
-        dert_ = np.array([dC.derTT[1] for dC in L_])  # arr(len(C_),dert), compute deviations from pairwise diffs
-        meanT = np.mean(dert_, axis=0)  # mean attrs
-        mad_T = np.mean( np.abs(dert_-meanT), axis=0)  # 9 MADs
-        norm_ = (dert_ - meanT) / (mad_T + eps)
-        cov_T = np.cov(norm_, rowvar=False)  # 9x9 covariance matrix
-        eig_, eig__ = np.linalg.eigh(cov_T)  # eigenvalues, eigenvectors
-        pc1_i = np.argmax(eig_)
-        pc1_T = eig__[:, pc1_i]  # eigenvector corresponding to the largest eigenvalue
-        proj_ = norm_ @ pc1_T  # sort by projection onto PC1
-        # reorder L_ to minimize ddC.derTT[1] between consecutive dCs:
-        return [L_[i] for i in np.argsort(proj_)]
-
     dC_ = []
     for _C, C in combinations(C_, r=2):
-        dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx); olp = (C.olp+_C.olp) / 2
-        dC_ += [comp_N(_C,C, olp, rc, nH=[], angl=dy_dx, span=dist)]
-        # add comp wTT?
-    L_, lH = [], []
+        if first:
+            dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx); olp = (C.olp+_C.olp) / 2
+            dC_ += [comp_N(_C,C, olp, rc, lH=[], angl=dy_dx, span=dist)]
+            # add comp wTT?
+        else:  # recursion: C_ = L_
+            m_,d_ = comp_derT(_C.derTT[1], C.derTT[1])
+            ad_ = np.abs(d_); t_ = m_+ ad_+ eps
+            Et = np.array([m_/t_ @ wTTf[0], ad_/t_ @ wTTf[1], min(_C.Et[2],C.Et[2])])
+            dC_ += [CN(N_= [_C,C], Et=Et)]
+    L_ = []
     dC_ = sorted(dC_, key=lambda dC: dC.Et[1])  # from min D
     for i, dC in enumerate(dC_):
         if val_(dC.Et, fi=0, aw=rc+loopw) < 0:  # merge centroids, no re-comp: merged is similar
             _C,C = dC.N_; _C,C = merged(_C), merged(C)  # final merges
             if _C is C: continue  # was merged
-            add_N(_C,C, fmerge=1)  # +fin,root
+            add_N(_C,C, fmerge=1, froot=1)  # +fin,root
             C_.remove(C)
-        else:
+        elif first:  # for dCs, no recursion for ddCs
             L_ = dC_[i:]  # distinct dCs
             if L_ and val_(np.sum([l.Et for l in L_], axis=0), fi=0, mw=(len(L_)-1)*Lw, aw=rc+loopw) > 0:
-                for C in C_:
-                    C.dertt = np.sum([l.derTT for l in C.rim]) / len(C.rim)  # ave
-                L_ = dC_spectrum(L_)  # reorder L_ to minimize ddC.derTT[1] between consecutive dCs
-                dCt_ = []
-                for _dC, dC in zip(L_,L_[1:]):  # comp consecutive dCs in D spectrum, not spatial
-                    ddC = comp_N(_dC,dC, (dC.olp+_dC.olp)/2, rc)  # += ddC in dC.rim
-                    dCt_ += [(_dC,ddC)]
-                dCt_ += [(dC,None)]  # no ddC in last dCt
-                seg_, seg = [], []
-                for (_dC,_ddC), (dC,ddC) in zip(dCt_, dCt_[1:]):
-                    if _ddC.Et[0] > ave: seg += [dC]  # pre-cluster, ddCs in rims
-                    else:                seg_ += [seg]; seg = [dC]  # term old, init new G
-                dCG_ = [sum_N_(dC_) for dC_ in seg_+[seg]]  # last
-                lH = [sum_N_(dCG_)]  # single-level lH
+                xcomp_C_(L_, root, rc+1, first=0)  # merge dCs in L_, no ddC_
+                L_ = list({merged(L) for L in L_})
             break
-    root.cent_ = CN(N_=list({merged(C) for C in C_}), L_=L_, lH=lH)  # add Et, + mat?
+    if first:
+        root.cent_ = CN(N_=list({merged(C) for C in C_}), L_= L_)  # add Et, + mat?
 
 
 def cent_attr(C, rc):  # weight attr matches | diffs by their match to the sum, recompute to convergence
@@ -597,11 +583,10 @@ def sum2graph(root, node_,link_,long_,cent_, Et, olp, rng):  # sum node,link att
     graph = CN(root=root, fi=1,rng=rng, N_=node_,L_=link_,cent_=cent_,olp=olp, Et=Et, box=n0.box, baseT=n0.baseT, derTT=n0.derTT)
     graph.hL_ = long_
     n0.root = graph; yx_ = [n0.yx]; fg = fi and isinstance(n0.N_[0],CN)   # not PPs
-    # not revised:
-    Nt = Copy_(n0); DerH = []  #->CN, comb forks: add_N(Nt,Nt.Lt)?
+    Nt = Copy_(n0); DerH = [] # CN, add_N(Nt,Nt.Lt)?
     for N in node_:
         add_H(derH,N.derH,graph); graph.baseT+=N.baseT; graph.derTT+=N.derTT; graph.box=extend_box(graph.box,N.box); yx_+=[N.yx]; N.root = graph
-        if fg: add_N(Nt,N)  # N's root should be point to graph instead of Nt here?
+        if fg: add_N(Nt,N)  # froot = 0
     for L in link_:
         add_H(DerH,L.derH,graph); graph.baseT+=L.baseT; graph.derTT+=L.derTT
     if DerH: add_H(derH,DerH, graph)  # * rn?
@@ -657,13 +642,13 @@ def sum_N_(node_, root=None, fC=0):  # form cluster G
     if fC:
         G.N_= [node_[0]]; G.L_ = [] if G.fi else len(node_)
     for n in node_[1:]:
-        add_N(G,n,0, fC)
+        add_N(G,n,0, fC, froot=1)
     G.olp /= len(node_)
     if not fC and G.fi:
         for L in G.L_: G.Et += L.Et  # avoid redundant Ls in rims
     return G  # no rim
 
-def add_N(N,n, fmerge=0, fC=0):
+def add_N(N,n, fmerge=0, fC=0, froot=0):
 
     if fmerge:  # different in altg_?
         for node in n.N_: node.root=N; N.N_ += [node]
@@ -671,7 +656,8 @@ def add_N(N,n, fmerge=0, fC=0):
     else:
         N.N_ += [n]
         if not fC: N.L_ += [l for l in n.rim if l.Et[0]>ave] if n.fi else n.L_  # len
-    n.fin = 1; n.root = N
+    if froot:
+        n.fin = 1; n.root = N
     if n.altg_: add_sett(N.altg_,n.altg_)  # ext clusters
     if n.cent_: N.cent_.update(n.cent_)  # int clusters, maybe cG?
     if n.nH: add_NH(N.nH,n.nH, root=N)
@@ -693,7 +679,7 @@ def add_NH(H, h, root, rn=1):
 
     for Lev, lev in zip_longest(H, h, fillvalue=None):  # always aligned?
         if lev:
-            if Lev: add_N(Lev,lev)  # lev.root shouldn't be updated to Lev
+            if Lev: add_N(Lev,lev)  # lev.root shouldn't be updated to Lev, so froot = 0
             else:   H += [Copy_(lev, root)]
 
 def extend_box(_box, box):
@@ -879,7 +865,7 @@ def agg_frame(foc, image, iY, iX, rV=1, wTTf=[], fproj=0):  # search foci within
                     if pFg and val_(pFg.Et,1, (len(pFg.N_)-1)*Lw, pFg.olp+contw*20):
                         project_focus(PV__, y,x, Fg)  # += proj val in PV__
             # no target proj
-            frame = add_N(frame, Fg, fmerge=1) if frame else Copy_(Fg)
+            frame = add_N(frame, Fg, fmerge=1, froot=1) if frame else Copy_(Fg)
             aw = contw *20 * frame.Et[2] * frame.olp
 
     if frame.N_ and val_(frame.Et, (len(frame.N_)-1)*Lw, frame.olp+loopw*20) > 0:
