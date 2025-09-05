@@ -50,3 +50,30 @@ def xcomp_C_(C_, root, rc):  # draft
             break
     root.cent_ = CN(N_=list({merged(C) for C in C_}), L_=L_, lH=lH)  # add Et, + mat?
 
+def comp_derT(_i_,i_):
+    m_ = np.minimum(np.abs(_i_), np.abs(i_))  # native vals, probably need to be signed as before?
+    d_ = _i_-i_  # for next comp, from signed _i_,i_
+    return np.array([m_,d_])
+
+def comp(_pars, pars, meA=0, deA=0):  # raw inputs or derivatives, norm to 0:1 in eval only
+
+    m_,d_ = [],[]
+    for _p, p in zip(_pars, pars):
+        if isinstance(_p, np.ndarray):
+            mA, dA = comp_A(_p, p)
+            m_ += [mA]; d_ += [dA]
+        elif isinstance(p, tuple):  # massless I|S avd in p only
+            p, avd = p
+            m_ += [avd]  # placeholder for avd / (avd+ad), no separate match, or keep signed?
+            d_ += [_p - p]
+        else:  # massive
+            m_ += [min(abs(_p),abs(p))]
+            d_ += [_p - p]
+    # add ext A:
+    return np.array(m_+[meA]), np.array(d_+[deA])
+
+def sum_H_(Q):  # sum derH in link_|node_, not used
+    H = [lay.copy_ for lay in Q[0]]
+    for h in Q[1:]: add_H(H,h)
+    return H
+
