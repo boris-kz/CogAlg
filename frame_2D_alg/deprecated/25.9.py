@@ -50,6 +50,39 @@ def xcomp_C_(C_, root, rc):  # draft
             break
     root.cent_ = CN(N_=list({merged(C) for C in C_}), L_=L_, lH=lH)  # add Et, + mat?
 
+def xcomp_C(C_, root, rc, first=1):  # draft
+
+    def merged(C):  # get final C merge targets
+        while C.fin: C = C.root
+        return C
+    dC_ = []
+    for _C, C in combinations(C_, r=2):
+        if first:
+            dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx); olp = (C.olp+_C.olp) / 2
+            dC_ += [comp_N(_C,C, olp, rc, lH=[], angl=dy_dx, span=dist)]
+            # add comp wTT?
+        else:  # recursion: C_ = L_
+            m_,d_ = comp_derT(_C.derTT[1], C.derTT[1])
+            ad_ = np.abs(d_); t_ = m_+ ad_+ eps  # = max comparand
+            Et = np.array([m_/t_ @ wTTf[0], ad_/t_ @ wTTf[1], min(_C.Et[2],C.Et[2])])
+            dC_ += [CN(N_= [_C,C], Et=Et)]
+    L_ = []
+    dC_ = sorted(dC_, key=lambda dC: dC.Et[1])  # from min D
+    for i, dC in enumerate(dC_):
+        if val_(dC.Et, fi=0, aw=rc+loopw) < 0:  # merge centroids, no re-comp: merged is similar
+            _C,C = dC.N_; _C,C = merged(_C), merged(C)  # final merges
+            if _C is C: continue  # was merged
+            add_N(_C,C, fmerge=1, froot=1)  # +fin,root
+            C_.remove(C)
+        elif first:  # for dCs, no recursion for ddCs
+            L_ = dC_[i:]  # distinct dCs
+            if L_ and val_(np.sum([l.Et for l in L_], axis=0), fi=0, mw=(len(L_)-1)*Lw, aw=rc+loopw) > 0:
+                xcomp_C_(L_, root, rc+1, first=0)  # merge dCs in L_, no ddC_
+                L_ = list({merged(L) for L in L_})
+            break
+    if first:
+        root.cent_ = CN(N_=list({merged(C) for C in C_}), L_= L_)  # add Et, + mat?
+
 def comp_derT(_i_,i_):
     m_ = np.minimum(np.abs(_i_), np.abs(i_))  # native vals, probably need to be signed as before?
     d_ = _i_-i_  # for next comp, from signed _i_,i_

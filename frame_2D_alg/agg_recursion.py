@@ -151,7 +151,7 @@ def vect_root(Fg, rV=1, wTTf=[]):  # init for agg+:
     for blob in blob_:
         if not blob.sign and blob.G > aveB:
             edge = slice_edge(blob, rV)
-            if edge.G * ((len(edge.P_) - 1) * Lw) > ave * sum([P.latT[4] for P in edge.P_]):
+            if edge.G * ((len(edge.P_)-1)* Lw) > ave * sum([P.latT[4] for P in edge.P_]):
                 N_ += comp_slice(edge, rV, wTTf)
     Fg.N_ = [PP2N(PP, Fg) for PP in N_]
 
@@ -161,6 +161,7 @@ def val_(Et, fi=1, mw=1, aw=1, _Et=np.zeros(3)):  # m,d eval per cluster or cros
     am = ave * aw  # includes olp, M /= max I | M+D? div comp / mag disparity vs. span norm
     ad = avd * aw  # dval is borrowed from co-projected or higher-scope mval
     m, d, n = Et
+    # m,d may be negative, but deviation is +ve?
     if fi==2: val = np.array([m-am, d-ad]) * mw
     else:     val = (m-am if fi else d-ad) * mw  # m: m/ (m+d), d: d/ (m+d)?
     if _Et[2]:
@@ -341,8 +342,8 @@ def comp(_pars, pars, meA=0, deA=0):  # compute +ve m_, signed d_ from raw input
             m_ += [mA]; d_ += [dA]
         elif isinstance(p, tuple):  # massless I|S avd in p only
             p, avd = p
-            d = [_p- p]; ad = abs(d)
-            m_ += [avd - ad + max(avd,ad)]  # complement
+            d = _p - p; ad = abs(d)
+            m_ += [avd- ad + max(avd,ad)]  # complement
             d_ += [d]
         else:  # massive
             _a,a = abs(_p), abs(p)
@@ -464,8 +465,43 @@ def cluster_N(root, iN_, rN_, rc, rng=1):  # flood-fill node | link clusters
             for l in L_: Et += l.Et
             if val_(Et,1, (len(N_)-1)*Lw, rc+olp, root.Et) > 0:
                 G_ += [sum2graph(root, N_,L_,long_, set(cent_), Et,olp, rng)]
-    if G_:
-        return sum_N_(G_,root)  # nG
+            else:
+                G_ += N_
+    if G_: return sum_N_(G_,root)  # nG
+
+def cluster_n(root, C_, rc, rng=1):  # simplified flood-fill for C_, etc.
+
+    def extend_G(_link_, node_,cent_,link_,seen_):
+        for L in _link_:  # spliced rim
+            for _N in L.N_:
+                if not _N.fin and _N in C_:
+                    node_ += [_N]; cent_ += _N.C_; C.fin = 1
+                    for l in _N.rim:
+                        if l in seen_: continue
+                        if val_(l.Et+ett(l), aw=rc) > 0: link_ += [l]  # l.Et potentiated by density term
+                        seen_ += [l]
+    G_ = []
+    for C in C_: C.fin = 0
+    seen_ = []  # global exclusive?
+    for C in C_:  # form G per remaining C
+        node_,cent_, Link_,link_ = [C],C.cent_[:], [],[]
+        _link_ = [l for l in C.rim if val_(l.Et+ett(l), aw=rc) > 0]
+        while _link_:
+            extend_G(_link_, node_,cent_,link_,seen_)  # select rims to extend G
+            if link_:
+                Link_ += _link_
+                _link_ = list(set(link_) - set(seen_))  # all visited
+            else: break
+        if node_:
+            N_ = list(set(node_)); L_ = list(set(Link_))
+            Et, olp = np.zeros(3), 0
+            for n in N_: olp += n.olp  # from Ns, vs. Et from Ls?
+            for l in L_: Et += l.Et
+            if val_(Et,1, (len(N_)-1)*Lw, rc+olp, root.Et) > 0:
+                G_ += [sum2graph(root, N_,L_,[], set(cent_), Et,olp, rng)]
+            else:
+                G_ += N_
+    if G_: return sum_N_(G_,root)  # nG
 
 def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
 
@@ -516,41 +552,46 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
             # exemplar V increased by summed n match to root C * rel C Match:
             n.exe = n.et[1-n.fi] + np.sum([n.mo_[i][0] * (C.M/(ave * n.mo_[i][0])) for i,C in enumerate(n.C_)]) > ave
         if mat > ave:
-            xcomp_C_(C_, root, rc)
+            root.cent_ = xcomp_C(C_, root, rc)
+            # link-constrained Cs, may be distant and match by different attrs
         else: root.cent_ = (C_,mat)  # tuple vs CN?
 
-def xcomp_C_(C_, root, rc, first=1):  # draft
+def xcomp_C(C_, root, rc, first=1):  # draft
 
     def merged(C):  # get final C merge targets
         while C.fin: C = C.root
         return C
     dC_ = []
     for _C, C in combinations(C_, r=2):
-        if first:
+        if first:  # mfork
             dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx); olp = (C.olp+_C.olp) / 2
             dC_ += [comp_N(_C,C, olp, rc, lH=[], angl=dy_dx, span=dist)]
             # add comp wTT?
-        else:  # recursion: C_ = L_
+        else:   # dfork recursion: C_ = L_
             m_,d_ = comp_derT(_C.derTT[1], C.derTT[1])
             ad_ = np.abs(d_); t_ = m_+ ad_+ eps  # = max comparand
-            Et = np.array([m_/t_ @ wTTf[0], ad_/t_ @ wTTf[1], min(_C.Et[2],C.Et[2])])
-            dC_ += [CN(N_= [_C,C], Et=Et)]
-    L_ = []
+            Et = np.array([m_/t_ @ wTTf[0], ad_/t_ @ wTTf[1], min(_C.Et[2],C.Et[2])])  # signed M?
+            dC = CN(N_= [_C,C], Et=Et); _C.rim += [dC]; C.rim += [dC]; dC_ += [dC]
+    # merge or cluster Cs:
+    L_, cG, lH = [],[],[]
     dC_ = sorted(dC_, key=lambda dC: dC.Et[1])  # from min D
     for i, dC in enumerate(dC_):
         if val_(dC.Et, fi=0, aw=rc+loopw) < 0:  # merge centroids, no re-comp: merged is similar
             _C,C = dC.N_; _C,C = merged(_C), merged(C)  # final merges
             if _C is C: continue  # was merged
-            add_N(_C,C, fmerge=1, froot=1)  # +fin,root
-            C_.remove(C)
-        elif first:  # for dCs, no recursion for ddCs
-            L_ = dC_[i:]  # distinct dCs
-            if L_ and val_(np.sum([l.Et for l in L_], axis=0), fi=0, mw=(len(L_)-1)*Lw, aw=rc+loopw) > 0:
-                xcomp_C_(L_, root, rc+1, first=0)  # merge dCs in L_, no ddC_
-                L_ = list({merged(L) for L in L_})
+            add_N(_C,C, fmerge=1, froot=1); C_.remove(C)  # +fin,root
+        else:
+            L_ = dC_[i:]; C_ = list({merged(c) for c in C_})  # remaining Cs and dCs between them
+            if L_:
+                # ~ cross_comp, reconcile? no recursive cluster_C or agg+?
+                mV,dV = val_(np.sum([l.Et for l in L_], axis=0), fi=2, mw=(len(L_)-1)*Lw, aw=rc+loopw)
+                if dV > 0:
+                    lH = [xcomp_C(L_, root, rc+1, first=0)]  # merge dCs in L_, no ddC_, lH = [lG]?
+                if mV > ave * contw:
+                    cG = cluster_n(root, C_,rc)  # by connectivity between Cs in feature space
             break
     if first:
-        root.cent_ = CN(N_=list({merged(C) for C in C_}), L_= L_)  # add Et, + mat?
+        return cG or CN(N_= C_, L_= L_, lH = lH)  # add Et, + mat?
 
 
 def cent_attr(C, rc):  # weight attr matches | diffs by their match to the sum, recompute to convergence
@@ -571,7 +612,7 @@ def cent_attr(C, rc):  # weight attr matches | diffs by their match to the sum, 
             if np.sum(np.abs(w_-_w_)) > ave*rc:
                 V = np.sum(val_ * w_)
                 _w_ = w_
-            else:  break  # weight convergence
+            else: break  # weight convergence
         wTT += [_w_]
     C.wTT = np.array(wTT)  # replace wTTf
     return C
@@ -637,7 +678,7 @@ def sum_N_(node_, root=None, fC=0):  # form cluster G
 
     G = Copy_(node_[0], root, init = 0 if fC else 1)
     if fC:
-        G.N_= [node_[0]]; G.L_ = [] if G.fi else len(node_)
+        G.N_= [node_[0]]; G.L_ = [] if G.fi else len(node_); G.rim = []
     for n in node_[1:]:
         add_N(G,n,0, fC, froot=1)
     G.olp /= len(node_)
