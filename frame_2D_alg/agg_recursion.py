@@ -112,8 +112,7 @@ class CN(CBase):
         n.cent_ = kwargs.get('cent_',[])  # int centroids, replace/combine N_?
         n.C_    = kwargs.get('C_', [])  # root centroids
         n.fin = kwargs.get('fin',0)  # clustered, temporary
-        n.exe = kwargs.get('exe',1)  # exemplar, temporary
-        n.seen_ = set()
+        n.exe = kwargs.get('exe',0)  # exemplar, temporary
         # n.fork_tree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.N_)
 
@@ -256,7 +255,7 @@ def comp_Q(iN_, rc):  # comp pairs of nodes or links within max_dist
     while True:  # _vM, rng in rim only?
         N_,Et = [],np.zeros(3)
         for _N, N in combinations(_N_, r=2):  # sort-> proximity-order ders?
-            if _N in N.seen_ or len(_N.nH) != len(N.nH):  # | root.nH: comp top nodes only, or comp depth
+            if _N in N.in_ or len(_N.nH) != len(N.nH):  # | root.nH: comp top nodes only, or comp depth
                 continue
             dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx); olp = (N.olp +_N.olp) / 2
             if {l for l in _N.rim if l.Et[0]>ave} & {l for l in N.rim if l.Et[0]>ave}:  # +ve rim
@@ -297,7 +296,7 @@ def comp_N(_N,N, o,rc, lH=None, angl=np.zeros(2), span=None, fdeep=0, rng=1):  #
     if fdeep==2: return Link  # or Et?
     if lH is not None:  lH += [Link]
     for n, _n, rev in zip((N,_N),(_N,N),(0,1)):  # if rim-mediated comp: reverse dir in _N.rim: rev^_rev
-        n.rim += [Link]; n.et += Et; n.seen_.add(_n)
+        n.rim += [Link]; n.et += Et; n.in_.add(_n)
         # dertt +=?
     return Link
 
@@ -329,8 +328,7 @@ def comp_derT(_i_,i_):
     _a_, a_ = np.abs(_i_), np.abs(i_)
     m_ = np.minimum(_a_, a_)
     m_[(_i_<0)!=(i_<0)] *= -1  # negate opposite signs in-place
-    m_ += np.maximum(_a_, a_)  # add complement?
-
+    # m_ += np.maximum(_a_, a_)  # add complement?
     return np.array([m_,d_])
 
 def comp(_pars, pars, meA=0, deA=0):  # compute +ve m_, signed d_ from raw inputs or derivatives
@@ -343,11 +341,11 @@ def comp(_pars, pars, meA=0, deA=0):  # compute +ve m_, signed d_ from raw input
         elif isinstance(p, tuple):  # massless I|S avd in p only
             p, avd = p
             d = _p - p; ad = abs(d)
-            m_ += [avd- ad + max(avd,ad)]  # complement
+            m_ += [avd- ad]  # + complement max(avd,ad)?
             d_ += [d]
         else:  # massive
             _a,a = abs(_p), abs(p)
-            m_ += [(min(_a,a) if _p<0==p<0 else -min(_a,a)) + max(_a,a)]  # +max for all +ve
+            m_ += [min(_a,a) if _p<0==p<0 else -min(_a,a)]  # + complement max(_a,a) for all +ve?
             d_ += [_p - p]
     # add ext A:
     return np.array(m_+[meA]), np.array(d_+[deA])
@@ -389,11 +387,9 @@ def rolp(N, _N_, R=0): # rel V of L_|N.rim overlap with _N_: inhibition|shared z
 def get_exemplars(N_, rc):  # get sparse nodes by multi-layer non-maximum suppression
 
     E_ = set()
-    # stronger-first
-    for rdn, N in enumerate(sorted(N_, key=lambda n: n.et[0]/n.et[2], reverse=True), start=1):
-        # ave *= relV of overlap by stronger-E inhibition zones
+    for rdn, N in enumerate(sorted(N_, key=lambda n: n.et[0]/n.et[2], reverse=True),start=1):  # strong-first
         roV = rolp(N, E_)
-        if val_(N.et,1, aw = rc + rdn + loopw + roV) > 0:  # cost
+        if val_(N.et,1, aw = rc + rdn + loopw + roV) > 0:  # ave *= relV of overlap by stronger-E inhibition zones
             E_.update({n for l in N.rim for n in l.N_ if n is not N and val_(n.Et,1,aw=rc) > 0})  # selective nrim
             N.exe = 1  # in point cloud of focal nodes
         else:
@@ -405,7 +401,7 @@ def Cluster(root, N_, rc):  # clustering root
     F_ = list(set([N for n_ in N_ for N in n_]))  # flat N_
     E_ = get_exemplars(F_,rc)
     if E_ and val_(np.sum([g.Et for g in E_],axis=0), F_[0].fi, (len(E_)-1)*Lw, rc+centw, root.Et) > 0:
-        cluster_C(E_, root, rc)  # any rng, eval root Et instead?
+        cluster_C(E_, root, rc)  # any rng, eval root Et?
     nG = []
     for rng, rN_ in enumerate(N_, start=1):  # bottom-up rng-banded clustering
         aw = rc*rng +contw
@@ -420,78 +416,79 @@ def cluster_N(root, iN_, rN_, rc, rng=1):  # flood-fill node | link clusters
         if n.root and n.root.rng > n.rng: return rroot(n.root) if n.root.root else n.root
         else:                             return None
 
-    G_ = []  # exclusive per fork,ave, only centroids can be fuzzy
-    for n in rN_: n.fin = 0
-    for N in rN_:  # init
-        if not N.exe or N.fin: continue  # exemplars or all N_
-        N.fin = 1; seen_,N_,link_,long_ = [],[],[],[]
-        if rng==1 or (not N.root or N.root.rng==1):  # not rng-banded, L.root is empty
-            cent_ = N.C_  # cross_comp C_?
-            for l in N.rim:
-                seen_ += [l]
-                if l.rng==rng and val_(l.Et+ett(l), aw=rc+1) > 0:
-                    link_+=[l]; N_ += [N]  # l.Et potentiated by density term
-                elif l.rng>rng: long_+=[l]
-        else: # N is rng-banded, cluster top-rng roots
-            n = N; R = rroot(n)
-            if R and not R.fin:
-                N_,link_,long_ = [R], R.L_, R.hL_; R.fin = 1; seen_+=R.link_; cent_ = R.C_
-        Seen_ = set(link_)  # all visited
-        L_ = []
-        while link_:  # extend clustered N_ and L_
-            L_+=link_; _link_=link_; link_=[]; seen_=[]  # global if N-parallel
-            for L in _link_:  # buffer
-                for _N in L.N_:
-                    if _N not in iN_ or _N.fin: continue
-                    if rng==1 or (not _N.root or _N.root.rng==1):  # not rng-banded
-                        N_ += [_N]; cent_ += N.C_; _N.fin = 1
-                        for l in N.rim:
-                            if l in seen_: continue
-                            seen_+=[l]
-                            if l.rng==rng and val_(l.Et+ett(l), aw=rc) > 0: link_+=[l]
-                            elif l.rng>rng: long_ += [l]
-                    else:  # cluster top-rng roots
-                        _n = _N; _R = rroot(_n)
-                        if _R and not _R.fin:
-                            seen_+=_R.link_
-                            if rolp(N, link_, R=1) > ave*rc:
-                                N_+=[_R]; _R.fin=1; _N.fin=1; link_+=_R.link_; long_+=_R.hL_; cent_ += _R.C_
-            link_ = list(set(link_)-Seen_)
-            Seen_.update(set(seen_))
-        if N_:
-            N_, long_ = list(set(N_)), list(set(long_))
-            Et, olp = np.zeros(3), 0
-            for n in N_: olp += n.olp  # from Ns, vs. Et from Ls?
-            for l in L_: Et += l.Et
-            if val_(Et,1, (len(N_)-1)*Lw, rc+olp, root.Et) > 0:
-                G_ += [sum2graph(root, N_,L_,long_, set(cent_), Et,olp, rng)]
-            else:
-                G_ += N_
-    if G_: return sum_N_(G_,root)  # nG
-
-def cluster_n(root, C_, rc, rng=1):  # simplified flood-fill for C_, etc.
-
-    def extend_G(_link_, node_,cent_,link_,seen_):
+    def extend_cluster(_link_, node_, cent_, link_, long_, in_):
         for L in _link_:  # spliced rim
+            if L in in_: continue  # already clustered
+            in_.add(L)
+            for _N in L.N_:
+                if _N not in iN_ or _N.fin: continue
+                if rng==1 or (not _N.root or _N.root.rng==1):  # not rng-banded
+                    node_ += [_N]; cent_ += _N.C_; _N.fin = 1
+                    for l in _N.rim:
+                        if l in in_: continue  # cluster by link+density:
+                        if l.rng==rng and val_(l.Et+ett(l), aw=rc) > 0:
+                            link_ += [l]  # in_.add(l)
+                        elif l.rng > rng: long_ += [l]
+                else:  # cluster top-rng roots
+                    _n = _N; _R = rroot(_n)
+                    if _R and not _R.fin:  # in_.update(_R.L_)
+                        if rolp(N, link_, R=1) > ave * rc:
+                            node_ += [_R]; _R.fin = 1; _N.fin = 1
+                            link_ += _R.L_; long_ += _R.hL_; cent_ += _R.C_
+    G_, in_ = [], set()
+    for n in rN_: n.fin = 0
+    for N in rN_:  # form G per remaining rng N
+        if not N.exe or N.fin: continue
+        node_,cent_,Link_,link_,long_ = [N],[],[],[],[]
+        if rng == 1 or (not N.root or N.root.rng == 1):  # not rng-banded
+            cent_ = N.C_[:]
+            for l in N.rim:
+                if val_(l.Et+ett(l), aw=rc+1) > 0:
+                    if l.rng==rng: _link_ = [l]
+                    elif l.rng > rng: long_ = [l]
+        else:  # N is rng-banded, cluster top-rng roots
+            n = N; R = rroot(n)
+            if R and not R.fin: node_,_link_,long_,cent_ = [R], R.L_[:], R.hL_[:], R.C_[:]; R.fin = 1
+            else: _link_ = []
+        N.fin = 1
+        while _link_:
+            Link_ += _link_  # <- move here, no if guard
+            extend_cluster(_link_, node_, cent_, link_, long_, in_)
+            if link_: _link_ = list(set(link_)); link_ = []  # extended rim
+            else:     break
+        if node_:
+            N_, L_, long_ = list(set(node_)), list(set(Link_)), list(set(long_))
+            Et, olp = np.zeros(3), 0
+            for n in node_: olp += n.olp  # from Ns, vs. Et from Ls?
+            for l in Link_: Et += l.Et
+            if val_(Et, 1, (len(node_)-1)*Lw, rc+olp, root.Et) > 0:
+                G_ += [sum2graph(root, N_,L_, long_, set(cent_), Et, olp, rng)]
+            else:
+                G_ += node_
+    if G_: return sum_N_(G_, root)  # nG
+
+
+def cluster_n(root, C_, rc, rng=1):  # simplified flood-fill for C_, etc, redundant?
+
+    def extend_G(_link_, node_,cent_,link_,in_):
+        for L in _link_:  # spliced rim
+            if L in in_: continue  # already clustered
+            in_.add(L)
             for _N in L.N_:
                 if not _N.fin and _N in C_:
-                    node_ += [_N]; cent_ += _N.C_; C.fin = 1
+                    node_ += [_N]; cent_ += _N.C_; _N.fin = 1
                     for l in _N.rim:
-                        if l in seen_: continue
-                        if val_(l.Et+ett(l), aw=rc) > 0: link_ += [l]  # l.Et potentiated by density term
-                        seen_ += [l]
-    G_ = []
+                        if l in in_: continue  # cluster by link+density:
+                        if val_(l.Et + ett(l), aw=rc) > 0: link_ += [l]  # in_ += [l]
+    G_, in_ = [],set()
     for C in C_: C.fin = 0
-    seen_ = []  # global exclusive?
     for C in C_:  # form G per remaining C
-        node_,cent_, Link_,link_ = [C],C.cent_[:], [],[]
+        node_,cent_,Link_,link_ = [C],C.cent_[:],[],[]
         _link_ = [l for l in C.rim if val_(l.Et+ett(l), aw=rc) > 0]
         while _link_:
-            extend_G(_link_, node_,cent_,link_,seen_)  # select rims to extend G
-            if link_:
-                Link_ += _link_
-                _link_ = list(set(link_) - set(seen_))  # all visited
-            else: break
+            extend_G(_link_, node_, cent_, link_, in_)  # _link_: select rims to extend G
+            if link_: Link_ += _link_; _link_ = list(set(link_)); link_ = []
+            else:     break
         if node_:
             N_ = list(set(node_)); L_ = list(set(Link_))
             Et, olp = np.zeros(3), 0
@@ -547,10 +544,9 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
         else:  # converged
             break
     if  C_:
-        C_ = set(C_)
         for n in [N for C in C_ for N in C.N_]:
             # exemplar V increased by summed n match to root C * rel C Match:
-            n.exe = n.et[1-n.fi] + np.sum([n.mo_[i][0] * (C.M/(ave * n.mo_[i][0])) for i,C in enumerate(n.C_)]) > ave
+            n.exe = n.et[1-n.fi]+ np.sum([n.mo_[i][0] * (C.M / (ave*n.mo_[i][0])) for i, C in enumerate(n.C_)]) > ave
         if mat > ave:
             root.cent_ = xcomp_C(C_, root, rc)
             # link-constrained Cs, may be distant and match by different attrs
@@ -585,7 +581,7 @@ def xcomp_C(C_, root, rc, first=1):  # draft
             if L_:
                 # ~ cross_comp, reconcile? no recursive cluster_C or agg+?
                 mV,dV = val_(np.sum([l.Et for l in L_], axis=0), fi=2, mw=(len(L_)-1)*Lw, aw=rc+loopw)
-                if dV > 0:
+                if first and dV > 0:
                     lH = [xcomp_C(L_, root, rc+1, first=0)]  # merge dCs in L_, no ddC_, lH = [lG]?
                 if mV > ave * contw:
                     cG = cluster_n(root, C_,rc)  # by connectivity between Cs in feature space

@@ -110,3 +110,58 @@ def sum_H_(Q):  # sum derH in link_|node_, not used
     for h in Q[1:]: add_H(H,h)
     return H
 
+def cluster_N(root, iN_, rN_, rc, rng=1):  # flood-fill node | link clusters
+
+    def rroot(n):
+        if n.root and n.root.rng > n.rng: return rroot(n.root) if n.root.root else n.root
+        else:                             return None
+
+    G_ = []  # exclusive per fork,ave, only centroids can be fuzzy
+    for n in rN_: n.fin = 0
+    for N in rN_:  # init
+        if not N.exe or N.fin: continue  # exemplars or all N_
+        N.fin = 1; in_,N_,link_,long_ = [],[],[],[]
+        if rng==1 or (not N.root or N.root.rng==1):  # not rng-banded, L.root is empty
+            cent_ = N.C_  # cross_comp C_?
+            for l in N.rim:
+                in_ += [l]
+                if l.rng==rng and val_(l.Et+ett(l), aw=rc+1) > 0:
+                    link_+=[l]; N_ += [N]  # l.Et potentiated by density term
+                elif l.rng>rng: long_+=[l]
+        else: # N is rng-banded, cluster top-rng roots
+            n = N; R = rroot(n)
+            if R and not R.fin:
+                N_,link_,long_ = [R], R.L_, R.hL_; R.fin = 1; in_+=R.link_; cent_ = R.C_
+        in_ = set(link_)  # all visited
+        L_ = []
+        while link_:  # extend clustered N_ and L_
+            L_+=link_; _link_=link_; link_=[]; in_=[]  # global if N-parallel
+            for L in _link_:  # buffer
+                for _N in L.N_:
+                    if _N not in iN_ or _N.fin: continue
+                    if rng==1 or (not _N.root or _N.root.rng==1):  # not rng-banded
+                        N_ += [_N]; cent_ += N.C_; _N.fin = 1
+                        for l in N.rim:
+                            if l in in_: continue
+                            in_+=[l]
+                            if l.rng==rng and val_(l.Et+ett(l), aw=rc) > 0: link_+=[l]
+                            elif l.rng>rng: long_ += [l]
+                    else:  # cluster top-rng roots
+                        _n = _N; _R = rroot(_n)
+                        if _R and not _R.fin:
+                            in_+=_R.link_
+                            if rolp(N, link_, R=1) > ave*rc:
+                                N_+=[_R]; _R.fin=1; _N.fin=1; link_+=_R.link_; long_+=_R.hL_; cent_ += _R.C_
+            link_ = list(set(link_)-in_)
+            in_.update(set(in_))
+        if N_:
+            N_, long_ = list(set(N_)), list(set(long_))
+            Et, olp = np.zeros(3), 0
+            for n in N_: olp += n.olp  # from Ns, vs. Et from Ls?
+            for l in L_: Et += l.Et
+            if val_(Et,1, (len(N_)-1)*Lw, rc+olp, root.Et) > 0:
+                G_ += [sum2graph(root, N_,L_,long_, set(cent_), Et,olp, rng)]
+            else:
+                G_ += N_
+    if G_: return sum_N_(G_,root)  # nG
+
