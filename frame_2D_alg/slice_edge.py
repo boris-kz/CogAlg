@@ -90,7 +90,7 @@ def form_P(P, edge):
             mangle, dangle = comp_angle((_gy,_gx),(gy,gx))
             if mangle < ave_dangle: break  # terminate P if angle miss
             m = min(_i,i) + min(_g,g) + mangle
-            d = abs(-i-i) + abs(_g-g) + dangle
+            d = abs(_i-i) + abs(_g-g) + dangle
             if m < ave_I + ave_G + ave_dangle: break  # terminate P if total miss, blob should be more permissive than P
             # update P:
             edge.rootd[ky, kx] = P

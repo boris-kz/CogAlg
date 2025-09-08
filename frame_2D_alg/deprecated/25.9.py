@@ -165,3 +165,40 @@ def cluster_N(root, iN_, rN_, rc, rng=1):  # flood-fill node | link clusters
                 G_ += N_
     if G_: return sum_N_(G_,root)  # nG
 
+def xcomp_C(C_, root, rc, first=1):  # draft
+
+    def merged(C):  # get final C merge targets
+        while C.fin: C = C.root
+        return C
+    dC_ = []
+    for _C, C in combinations(C_, r=2):
+        if first:  # mfork
+            dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx); olp = (C.olp+_C.olp) / 2
+            dC_ += [comp_N(_C,C, olp, rc, lH=[], angl=dy_dx, span=dist)]
+            # add comp wTT?
+        else:   # dfork recursion: C_ = L_
+            m_,d_ = comp_derT(_C.derTT[1], C.derTT[1])
+            ad_ = np.abs(d_); t_ = m_+ ad_+ eps  # = max comparand
+            Et = np.array([m_/t_ @ wTTf[0], ad_/t_ @ wTTf[1], min(_C.Et[2],C.Et[2])])  # signed M?
+            dC = CN(N_= [_C,C], Et=Et); _C.rim += [dC]; C.rim += [dC]; dC_ += [dC]
+    # merge or cluster Cs:
+    L_, cG, lH = [],[],[]
+    dC_ = sorted(dC_, key=lambda dC: dC.Et[1])  # from min D
+    for i, dC in enumerate(dC_):
+        if val_(dC.Et, fi=0, aw=rc+loopw) < 0:  # merge centroids, no re-comp: merged is similar
+            _C,C = dC.N_; _C,C = merged(_C), merged(C)  # final merges
+            if _C is C: continue  # was merged
+            add_N(_C,C, fmerge=1, froot=1); C_.remove(C)  # +fin,root
+        else:
+            L_ = dC_[i:]; C_ = list({merged(c) for c in C_})  # remaining Cs and dCs between them
+            if L_:
+                # ~ cross_comp, reconcile? no recursive cluster_C or agg+?
+                mV,dV = val_(np.sum([l.Et for l in L_], axis=0), fi=2, mw=(len(L_)-1)*Lw, aw=rc+loopw)
+                if first and dV > 0:
+                    lH = [xcomp_C(L_, root, rc+1, first=0)]  # merge dCs in L_, no ddC_, lH = [lG]?
+                if mV > ave * contw:
+                    cG = cluster_n(root, C_,rc)  # by connectivity between Cs in feature space
+            break
+    if first:
+        return cG or CN(N_= C_, L_= L_, lH = lH)  # add Et, + mat?
+
