@@ -202,3 +202,6 @@ def xcomp_C(C_, root, rc, first=1):  # draft
     if first:
         return cG or CN(N_= C_, L_= L_, lH = lH)  # add Et, + mat?
 
+    def merged(C):  # get final C merge targets
+        while C.fin: C = C.root
+        return C
