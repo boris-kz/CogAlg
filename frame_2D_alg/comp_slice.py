@@ -68,7 +68,8 @@ def comp_slice(edge, rV=1, ww_t=None):  # root function
     global ave, avd, wM, wD, wI, wG, wA, wL, ave_L, ave_PPm, ave_PPd, w_t
     ave, avd, ave_L, ave_PPm, ave_PPd = np.array([ave, avd, ave_L, ave_PPm, ave_PPd]) / rV  # projected value change
     if np.any(ww_t):
-        w_t = [[wM, wD, wI, wG, wA, wL]] * ww_t
+        iwM, iwD, iwG, iwL, iwI, iwS, iwa, iwA = ww_t[0]
+        w_t[0] = [wM, wD, wI, wG, wA, wL] * np.array([iwM, iwD, iwI, iwG, iwA, iwL])
         # der weights
     for P in edge.P_:  # add higher links
         P.verT = np.full((2,6),1e-7)

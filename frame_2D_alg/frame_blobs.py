@@ -74,27 +74,29 @@ class CN(CBase):
         super().__init__()
         n.fi = kwargs.get('fi', 1)  # if G else 0, fd_: list of forks forming G?
         n.N_ = kwargs.get('N_',[])  # nodes, or ders in links
-        n.L_ = kwargs.get('L_',[])  # links
+        n.L_ = kwargs.get('L_',[])  # links if fi else len nodet.N_s?
         n.nH = kwargs.get('nH',[])  # top-down hierarchy of sub-node_s: CN(sum_N_(Nt_))/ lev, with single added-layer derH, empty nH
         n.lH = kwargs.get('lH',[])  # bottom-up hierarchy of L_ graphs: CN(sum_N_(Lt_))/ lev, within each nH lev
-        n.Et = kwargs.get('Et',np.zeros(3))  # sum from L_
-        n.et = kwargs.get('et',np.zeros(3))  # sum from rim
-        n.olp = kwargs.get('olp',1)  # overlap to ext Gs, ave in links? separate olp for rim, or internally overlapping?
-        n.med = kwargs.get('med',0)  # = rim nesting for both nodes and links
-        n.rim = kwargs.get('rim',[])  # [(_N.N)] for links, [(L,rev,N)], nested with mediation
+        n.Et = kwargs.get('Et',np.zeros(3))  # sum from L_, cent_?
+        n.et = kwargs.get('et',np.zeros(3))  # sum from rim, altg_?
+        n.rc = kwargs.get('rc',1)  # redundancy to ext Gs, ave in links? separate rc for rim, or internally overlapping?
+        n.baseT = kwargs.get('baseT', np.zeros(4))  # I,G,A: not ders
+        n.derTT = kwargs.get('derTT',np.zeros((2,9)))  # sum derH -> m_,d_ [M,D,n, I,G,A, L,S,eA], dertt: comp rims + overlap test?
         n.derH  = kwargs.get('derH',[])  # sum from L_ or rims
-        n.derTT = kwargs.get('derTT',np.zeros((2,9)))  # sum derH
-        n.baseT = kwargs.get('baseT',np.zeros(4))
-        n.yx    = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
-        n.rng   = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
-        n.box   = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
-        n.span  = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_) but not additive?
-        n.angl = kwargs.get('angle',np.zeros(2))  # dy,dx
-        n.mang  = kwargs.get('mang',1) # ave match of angles in L_, = identity in links
-        n.fin   = kwargs.get('fin',0)  # in cluster, temporary?
-        n.root  = kwargs.get('root',[])  # immediate only
-        n.cent_ = kwargs.get('cent_',[])  # int centroid Gs, replace/combine N_?
+        n.yx   = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
+        n.rng  = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
+        n.box  = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
+        n.span = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_) but not additive?
+        n.angl = kwargs.get('angl',np.zeros(2))  # dy,dx, sum from L_
+        n.mang = kwargs.get('mang',1)  # ave match of angles in L_, = identity in links
+        n.rim = kwargs.get('rim',[])  # node-external links, rng-nested? set?
+        n.root  = kwargs.get('root', [])  # immediate
         n.altg_ = kwargs.get('altg_',[])  # ext contour Gs, replace/combine rim?
+        n.C_    = kwargs.get('C_',[])  # int centroids, replace/combine N_?
+        n.R_    = kwargs.get('R_', [])  # root centroids
+        n.fin = kwargs.get('fin',0)  # clustered, temporary
+        n.exe = kwargs.get('exe',0)  # exemplar, temporary
+        n.compared = set()
         # n.fork_tree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.N_)
 

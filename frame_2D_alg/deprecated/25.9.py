@@ -205,3 +205,31 @@ def xcomp_C(C_, root, rc, first=1):  # draft
     def merged(C):  # get final C merge targets
         while C.fin: C = C.root
         return C
+
+    def base_lev(y,x):
+
+        PV__ = np.zeros(Ly,Lx)  # maps to level frame
+        Fg_ = []  # processed lower frames
+        while True:
+            Fg = base_win(y,x)
+            Fg_ += [Fg]
+            if val_(Fg.Et, 1, (len(Fg.N_)-1)*Lw, Fg.rc+loopw+20):
+                # proj, extend lev frame laterally:
+                pFg = project_N_(Fg, np.array([y,x]))
+                if pFg:
+                    pFg = cross_comp(pFg, rc=Fg.rc) or pFg
+                    if val_(pFg.Et, 1, (len(pFg.N_)-1)*Lw, pFg.rc+contw+20):
+                        project_focus(PV__, y, x, Fg)  # += proj val in PV__
+                        y, x = np.unravel_index(PV__.argmax(), PV__.shape)
+                        if PV__[y,x] > ave: y = y*Ly; x=x*Lx
+                        else: break
+                    else: break
+                else: break
+            else: break
+            if Fg_:
+                N_,C_,L_ = [],[],[]
+                for Fg in Fg_:
+                    N_ += Fg.N_; C_ += Fg.C_; L_ += Fg.L_
+                return N_,C_,L_
+
+

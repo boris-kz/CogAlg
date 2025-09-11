@@ -106,11 +106,11 @@ class CN(CBase):
         n.span = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_) but not additive?
         n.angl = kwargs.get('angl',np.zeros(2))  # dy,dx, sum from L_
         n.mang = kwargs.get('mang',1)  # ave match of angles in L_, = identity in links
-        n.rim  = kwargs.get('rim',[])  # node-external links, rng-nested? set?
-        n.altg_ = kwargs.get('altg_',[])  # ext contour Gs, replace/combine rim?
-        n.cent_ = kwargs.get('cent_',[])  # int centroids, replace/combine N_?
-        n.C_    = kwargs.get('C_', [])  # root centroids
+        n.rim = kwargs.get('rim',[])  # node-external links, rng-nested? set?
         n.root  = kwargs.get('root', [])  # immediate
+        n.altg_ = kwargs.get('altg_',[])  # ext contour Gs, replace/combine rim?
+        n.C_    = kwargs.get('C_',[])  # int centroids, replace/combine N_?
+        n.R_    = kwargs.get('R_', [])  # root centroids
         n.fin = kwargs.get('fin',0)  # clustered, temporary
         n.exe = kwargs.get('exe',0)  # exemplar, temporary
         n.compared = set()
@@ -199,7 +199,7 @@ def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering
             nG = Cluster(root, N_, rc, fC)  # get_exemplars, cluster_C, rng connectivity cluster
             if nG:  # batched nH extension
                 rc+=nG.rc  # redundant clustering layers
-                comb_altg_(nG,lG, rc+1)  # assign G contours
+                if lG: comb_altg_(nG,lG, rc+1)  # assign G contours (skip if lG is empty)
                 if val_(nG.Et,1, (len(nG.N_)-1)*Lw, rc+loopw, Et) > 0:
                     nG = cross_comp(nG, rc) or nG  # agg+, -> cross-frame? cross-comp C_?
                 _H = root.nH; root.nH = []
@@ -451,7 +451,7 @@ def cluster_N(root, iN_, rN_, rc, rng=1):  # flood-fill node | link clusters
             for _N in L.N_:
                 if _N not in iN_ or _N.fin: continue
                 if rng==1 or (not _N.root or _N.root.rng==1):  # not rng-banded
-                    node_ += [_N]; cent_ += _N.C_; _N.fin = 1
+                    node_ += [_N]; cent_ += _N.R_; _N.fin = 1
                     for l in _N.rim:
                         if l in in_: continue  # cluster by link+density:
                         if l.rng==rng and val_(l.Et+ett(l), aw=rc) > 0:
@@ -462,21 +462,21 @@ def cluster_N(root, iN_, rN_, rc, rng=1):  # flood-fill node | link clusters
                     if _R and not _R.fin:
                         if rolp(N, link_, R=1) > ave * rc:
                             node_ += [_R]; _R.fin = 1; _N.fin = 1
-                            link_ += _R.L_; long_ += _R.hL_; cent_ += _R.C_
+                            link_ += _R.L_; long_ += _R.hL_; cent_ += _R.R_
     G_, in_ = [], set()
     for n in rN_: n.fin = 0
     for N in rN_:  # form G per remaining rng N
         if not N.exe or N.fin: continue
         node_,cent_,Link_,_link_,long_ = [N],[],[],[],[]
         if rng==1 or (not N.root or N.root.rng==1):  # not rng-banded
-            cent_ = N.C_[:]
+            cent_ = N.R_[:]
             for l in N.rim:
                 if val_(l.Et+ett(l), aw=rc+1) > 0:
                     if l.rng==rng: _link_ += [l]
                     elif l.rng>rng: long_ += [l]
         else:  # N is rng-banded, cluster top-rng roots
             n = N; R = rroot(n)
-            if R and not R.fin: node_,_link_,long_,cent_ = [R], R.L_[:], R.hL_[:], R.C_[:]; R.fin = 1
+            if R and not R.fin: node_,_link_,long_,cent_ = [R], R.L_[:], R.hL_[:], R.R_[:]; R.fin = 1
         N.fin = 1; link_ = []
         while _link_:
             Link_ += _link_
@@ -502,14 +502,14 @@ def cluster_n(root, C_, rc, rng=1):  # simplified flood-fill for C_, etc
             in_.add(L)
             for _N in L.N_:
                 if not _N.fin and _N in C_:
-                    node_ += [_N]; cent_ += _N.C_; _N.fin = 1
+                    node_ += [_N]; cent_ += _N.R_; _N.fin = 1
                     for l in _N.rim:
                         if l in in_: continue  # cluster by link+density:
                         if val_(l.Et + ett(l), aw=rc) > 0: link_ += [l]
     G_, in_ = [],set()
     for C in C_: C.fin = 0
     for C in C_:  # form G per remaining C
-        node_,cent_,Link_,link_ = [C],C.cent_[:],[],[]
+        node_,cent_,Link_,link_ = [C],C.C_[:],[],[]
         _link_ = [l for l in C.rim if val_(l.Et+ett(l), aw=rc) > 0]
         while _link_:
             extend_G(_link_, node_, cent_, link_, in_)  # _link_: select rims to extend G
@@ -534,17 +534,17 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
         C._N_ = [n for l in E.rim for n in l.N_ if n is not E]  # core members + surround -> comp_C
         _N_ += C._N_; _C_ += [C]
     # reset:
-    for n in set(root.N_+_N_ ): n.C_,n.mo_, n._C_,n._mo_ = [],[], [],[]  # aligned pairs, in cross_comp root
+    for n in set(root.N_+_N_ ): n.R_,n.mo_, n._C_,n._mo_ = [],[], [],[]  # aligned pairs, in cross_comp root
     # reform C_, refine C.N_s
     while True:
         C_, cnt,mat,olp, Dm,Do = [],0,0,0,0,0; Ave = ave * (rc+loopw)
         _Ct_ = [[c, c.Et[0]/c.Et[2] if c.Et[0] !=0 else eps, c.rc] for c in _C_]
         for _C,_m,_o in sorted(_Ct_, key=lambda t: t[1]/t[2], reverse=True):
             if _m > Ave * _o:
-                C = cent_attr( sum_N_(_C.N_, root=root, fC=1), rc); C.C_ = []  # C update lags behind N_; non-local C.rc += N.mo_ os?
+                C = cent_attr( sum_N_(_C.N_, root=root, fC=1), rc); C.R_ = []  # C update lags behind N_; non-local C.rc += N.mo_ os?
                 _N_,_N__, mo_, M,O, dm,do = [],[],[],0,0,0,0  # per C
                 for n in _C._N_:  # core+ surround
-                    if C in n.C_: continue
+                    if C in n.R_: continue
                     m = min_comp(C,n)[1][0]  # val,olp / C:
                     o = np.sum([mo[0] /m for mo in n._mo_ if mo[0]>m])  # overlap = higher-C inclusion vals / current C val
                     cnt += 1  # count comps per loop
@@ -555,28 +555,28 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
                     elif _C in n._C_:
                         __m,__o = n._mo_[n._C_.index(_C)]; dm+=__m; do+=__o
                 if M > Ave * len(_N_) * O:
-                    for n, mo in zip(_N_,mo_): n.mo_+=[mo]; n.C_+=[C]; C.C_+=[n]  # bilateral assign
+                    for n, mo in zip(_N_,mo_): n.mo_+=[mo]; n.R_+=[C]; C.R_+=[n]  # bilateral assign
                     C.M = M; C.N_+= _N_; C._N_= list(set(_N__))  # core, surround elements
                     C_+=[C]; mat+=M; olp+=O; Dm+=dm; Do+=do  # new incl or excl
                 else:
                     for n in _C._N_:
                         n.exe = n.Et[0]/n.Et[2] > 2 * ave  # refine exe, Et vals are already normalized, Et[2] no longer needed for eval?
-                        for i, c in enumerate(n.C_):
-                            if c is _C: n.mo_.pop(i); n.C_.pop(i); break  # remove mo mapping to culled _C
+                        for i, c in enumerate(n.R_):
+                            if c is _C: n.mo_.pop(i); n.R_.pop(i); break  # remove mo mapping to culled _C
             else: break  # the rest is weaker
         if Dm > Ave * cnt * Do:  # dval vs. dolp, overlap increases as Cs may expand in each loop?
             _C_ = C_
-            for n in root.N_: n._C_=n.C_; n._mo_=n.mo_; n.C_,n.mo_ = [],[]  # new n.C_s, combine with vo_ in Ct_?
+            for n in root.N_: n._C_=n.R_; n._mo_=n.mo_; n.R_,n.mo_ = [],[]  # new n.R_s, combine with vo_ in Ct_?
         else:  # converged
             break
     if C_:
         for n in [N for C in C_ for N in C.N_]:
             # exemplar V increased by summed n match to root C * rel C Match:
-            n.exe = n.et[1-n.fi]+ np.sum([n.mo_[i][0] * (C.M / (ave*n.mo_[i][0])) for i, C in enumerate(n.C_)]) > ave
+            n.exe = n.et[1-n.fi]+ np.sum([n.mo_[i][0] * (C.M / (ave*n.mo_[i][0])) for i, C in enumerate(n.R_)]) > ave
         if mat > ave:
             cG = cross_comp(sum_N_(C_), rc, fC=1)
             # Cs may be distant, different attrs
-        root.cent_ = [cG.N_ if cG else C_, mat]
+        root.C_ = [cG.N_ if cG else C_, mat]
 
 def cent_attr(C, rc):  # weight attr matches | diffs by their match to the sum, recompute to convergence
 
@@ -681,7 +681,7 @@ def add_N(N,n, fmerge=0, fC=0, froot=0):
     if froot:
         n.fin = 1; n.root = N
     if n.altg_: add_sett(N.altg_,n.altg_)  # ext clusters
-    if n.cent_: add_sett(N.cent_,n.cent_)  # int clusters
+    if n.C_: add_sett(N.C_,n.C_)  # int clusters
     if n.nH: add_NH(N.nH,n.nH, root=N)
     if n.lH: add_NH(N.lH,n.lH, root=N)
     en,_en = n.Et[2],N.Et[2]; rn = en/_en
@@ -694,7 +694,7 @@ def add_N(N,n, fmerge=0, fC=0, froot=0):
     N.span = max(N.span,n.span)
     N.box = extend_box(N.box, n.box)
     if hasattr(n,'mo_') and hasattr(N,'mo_'):
-        N.C_ += n.C_; N.mo_ += n.mo_  # not sure
+        N.R_ += n.R_; N.mo_ += n.mo_  # not sure
     return N
 
 def add_NH(H, h, root, rn=1):
@@ -774,10 +774,10 @@ def comp_prj_dH(_N,N, ddH, rn, link, angl, span, dec):  # comp combined int proj
 def project_N_(Fg, yx):
 
     dy,dx = Fg.yx - yx
-    Fdist = np.hypot(dy,dx)   # external dist
+    Fdist = np.hypot(dy,dx)  # external dist
     rdist = Fdist / Fg.span
     Angle = np.array([dy,dx]) # external angle
-    angle = np.sum([L.angl for L in Fg.L_])
+    angle = np.sum([L.angl for L in Fg.L_], axis=0)
     cos_d = angle.dot(Angle) / (np.hypot(*angle) * Fdist)
     # difference between external and internal angles, *= rdist
     ET = np.zeros(3); DerTT = np.zeros((2,9))
@@ -892,45 +892,72 @@ def agg_frame(foc, image, iY, iX, rV=1, wTTf=[], fproj=0):  # search foci within
         Fn = cross_comp(frame, rc=frame.rc+loopw)
         if Fn: frame.N_=Fn.N_; frame.Et+=Fn.Et  # other frame attrs remain
         # spliced foci cent_:
-        if frame.cent_ and val_(frame.cent_[1], (len(frame.N_)-1)*Lw, frame.rc+centw) > 0:
+        if frame.C_ and val_(frame.C_[1], (len(frame.N_)-1)*Lw, frame.rc+centw) > 0:
             Fc = cross_comp(frame, rc=frame.rc+loopw, fC=1)
-            if Fc: frame.cent_=Fn.N_; frame.Et+=Fn.Et
+            if Fc: frame.C_=Fn.N_; frame.Et+=Fn.Et
         if not foc:
             return frame  # foci are unpacked
 '''
-frame expansion / level: cross_comp lower-frames N_,C_, forward results to next lev, project feedback to scan new lower frames
-draft 
+frame expansion per level: cross_comp lower-window N_,C_, forward results to next lev, project feedback to scan new lower windows
 '''
-def frame_H(image, iY,iX, Ly,Lx, rV=1, wTTf=[]):  # all initial args are set manually
+def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, wTTf=np.ones(10,dtype="float")):  # all initial args are set manually
 
-    def base_frame(img):  # 1st level, higher levels get Fg s
+    def base_win(y,x):  # 1st level, higher levels get Fg s
 
-        Fg = frame_blobs_root( comp_pixel(img), rV)  # dert__
-        vect_root(Fg, rV, wTTf)  # clustering
+        Fg = frame_blobs_root( comp_pixel( image[y:y+Ly, x:x+Lx]), rV)
+        vect_root(Fg, rV, wTTf); Fg.L_=[]  # clustering
         return cross_comp(Fg, rc=frame.rc)
 
-    y,x = iY, iX
-    Fg  = base_frame( image[y: y+Ly, x: x+Lx])
-    lev = []  # init base frames
-    H = [lev]  # frame expansion levels
+    def cross_comp_(N_,C_,L_, rc):  # this needs to work over the whole oWin
+        return CN( N_ = cross_comp(CN(N_=N_), rc),
+                   L_ = cross_comp(CN(N_=L_), rc+1),
+                   C_ = cross_comp(CN(N_=C_), rc+2, fC=1) )
+
+    def extend_lev(y, x, elev, iWin):  # N_,C_,L_ window vs. frame in higher levels
+
+        PV__ = np.zeros(Ly,Lx)  # maps to level window
+        oWin = np.empty((Ly,Lx), dtype=object)  # output Gs?
+        Fg_ = []
+        while True:
+            if elev: Fg = cross_comp_(iWin[y,x], rc=elev)  # cross_comp per N_,C_,L_ in the window?
+            else:    Fg = base_win(y,x)  # 1st level
+            if Fg and val_(Fg.Et,1, (len(Fg.N_)-1)*Lw, Fg.rc+loopw+elev) > 0:
+                Fg_ += [Fg]
+                oWin[y,x] = [Fg.N_,Fg.L_,Fg.C_]
+                pFg = project_N_(Fg, np.array([y,x]))  # proj,extend level in window = Ly**elev, Ly**elev
+                if pFg and val_(pFg.Et,1,(len(pFg.N_)-1)*Lw, pFg.rc+elev) > 0:
+                    project_focus(PV__, y, x, Fg)  # add proj vals into PV__
+                    if not PV__[y, x] > ave: break
+                    PV__[y, x] = 0  # prevent re-selection
+                else: break
+            else: break
+        if Fg_:
+            return oWin
+
+    frame = CN(box=np.array([0,0,Y,X]), yx=np.array([Y//2,X//2]))
+    H = []; elev = 0; win = []
     while True:
-        lev += [Fg]  # extend base frame laterally, single-level:
-        PV__[y, x] = -np.inf  # to skip?
-        if val_(Fg.Et,1, (len(Fg.N_)-1)*Lw, Fg.rc+loopw*20):
-            pFg = project_N_(Fg, np.array([y,x]))
-            if pFg:
-                cross_comp(pFg, rc=Fg.rc)
-                if val_(pFg.Et,1, (len(pFg.N_)-1)*Lw, pFg.rc+contw*20):
-                    project_focus(PV__, y,x, Fg)  # += proj val in PV__
-            y0,yn, x0,xn = np.max(PV__)
-            Fg = image[y0:yn, x0:xn]  # limit to base_frame ** 2
-        else:
-            break
-        # add feedforward and feedback
-        # when the level frame is exhaused, we need to forward it the next level, where the process repeats
+        win = extend_lev(iY, iX, elev, win)
+        H += [win]; elev+=1  # feedforward extends H
+        # add feedback to extend levels beyond their initial window
+
+        global ave, Lw, intw, loopw, centw, contw, adist, amed, medw, mW, dW
+        ave, Lw, intw, loopw, centw, contw, adist, amed, medw = np.array([ave, Lw, intw, loopw, centw, contw, adist, amed, medw]) / rV
+        ''' 
+        N_,C_,L_ = [],[],[]  # need to map these to oWin, possible gaps?
+        for Fg in Fg_:
+             N_ += Fg.N_; C_ += Fg.C_; L_ += Fg.L_
+        return N_,C_,L_       
+        y *= Ly**elev; x *= Ly**elev 
+        rV, wTTf = ffeedback(Fg)  # adjust filters
+        Fg = cent_attr(Fg,2)  # compute Fg.wTT: correlation weights in frame derTT?
+        wTTf *= Fg.wTT; mW = np.sum(wTTf[0]); dW = np.sum(wTTf[1])  # global?
+        wTTf[0] *= 9/mW; wTTf[1] *= 9/dW  # Fg.wTT is redundant?
+        '''
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
 
-    iY,iX = imread('./images/toucan_small.jpg').shape
-    frame = agg_frame(0, image=imread('./images/toucan.jpg'), iY=iY, iX=iX)
+    Y,X = imread('./images/toucan_small.jpg').shape
+    # frame = agg_frame(0, image=imread('./images/toucan.jpg'), iY=Y, iX=X)
+    frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y/2, iX=X/2, Ly=64,Lx=64, Y=Y, X=X, rV=1)
     # search frames ( foci inside image
