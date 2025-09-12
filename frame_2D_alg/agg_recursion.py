@@ -128,7 +128,7 @@ def Copy_(N, root=None, init=0):
         C.L_ = list(N.L_) if N.fi else N.L_
     C.derH  = [lay.copy_() for lay in N.derH]
     C.derTT = deepcopy(N.derTT)
-    for attr in ['Et','baseT','yx','box','angl','rim','altg_','cent_']: setattr(C, attr, copy(getattr(N, attr)))
+    for attr in ['Et','baseT','yx','box','angl','rim','altg_','C_']: setattr(C, attr, copy(getattr(N, attr)))
     for attr in ['rc','rng', 'fi', 'fin', 'span', 'mang']: setattr(C, attr, getattr(N, attr))  # add centroid attrs?
     return C
 
@@ -900,7 +900,7 @@ def agg_frame(foc, image, iY, iX, rV=1, wTTf=[], fproj=0):  # search foci within
 '''
 frame expansion per level: cross_comp lower-window N_,C_, forward results to next lev, project feedback to scan new lower windows
 '''
-def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, wTTf=np.ones(10,dtype="float")):  # all initial args are set manually
+def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, wTTf=np.ones(9,dtype="float")):  # all initial args are set manually
 
     def base_win(y,x):  # 1st level, higher levels get Fg s
 
@@ -908,56 +908,65 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, wTTf=np.ones(10,dtype="float")):  # al
         vect_root(Fg, rV, wTTf); Fg.L_=[]  # clustering
         return cross_comp(Fg, rc=frame.rc)
 
-    def cross_comp_(N_,C_,L_, rc):  # this needs to work over the whole oWin
-        return CN( N_ = cross_comp(CN(N_=N_), rc),
-                   L_ = cross_comp(CN(N_=L_), rc+1),
-                   C_ = cross_comp(CN(N_=C_), rc+2, fC=1) )
+    def cross_comp_(win, rc):  # top-composition xcomp, add margin search extend and splice?
 
-    def extend_lev(y, x, elev, iWin):  # N_,C_,L_ window vs. frame in higher levels
+        n_,l_,c_ = [],[],[]
+        for g in win.flat:
+            if g: n_ += g.N_; l_ += g.L_; c_ += g.C_
 
-        PV__ = np.zeros(Ly,Lx)  # maps to level window
-        oWin = np.empty((Ly,Lx), dtype=object)  # output Gs?
+        nG, lG, cG = cross_comp(CN(N_=n_),rc), cross_comp(CN(N_=l_),rc+1), cross_comp(CN(N_=c_),rc+2,fC=1)
+        Et = np.sum([ g.Et for g in (nG,lG,cG) if g])
+        rc = np.mean([g.rc for g in (nG,lG,cG) if g])
+
+        return CN(Et=Et, rc=rc, N_= nG.N_ if nG else [], L_= lG.N_ if lG else [], C_= cG.N_ if cG else [])
+
+    def expand_lev(iy,ix, elev, win):  # N_,C_,L_ window vs. frame in higher levels
+
+        PV__ = np.zeros([Ly,Lx])  # maps to level window
+        Win = np.empty((Ly,Lx), dtype=object)  # output G__
+        y,x = iy // Ly ** elev, ix // Lx ** elev  # init Win tile coords
         Fg_ = []
         while True:
-            if elev: Fg = cross_comp_(iWin[y,x], rc=elev)  # cross_comp per N_,C_,L_ in the window?
-            else:    Fg = base_win(y,x)  # 1st level
+            if elev: Fg = cross_comp_(win, rc=elev)  # cross_comp per N_,C_,L_ in the window?
+            else:    Fg = base_win(iy,ix)  # level 0
             if Fg and val_(Fg.Et,1, (len(Fg.N_)-1)*Lw, Fg.rc+loopw+elev) > 0:
-                Fg_ += [Fg]
-                oWin[y,x] = [Fg.N_,Fg.L_,Fg.C_]
-                pFg = project_N_(Fg, np.array([y,x]))  # proj,extend level in window = Ly**elev, Ly**elev
+                PV__[y,x] = -np.inf  # skip
+                Win[y,x] = Fg; Fg_ += [Fg]
+                pFg = project_N_(Fg, np.array([y,x]))  # extend lev by feedback in Win
                 if pFg and val_(pFg.Et,1,(len(pFg.N_)-1)*Lw, pFg.rc+elev) > 0:
-                    project_focus(PV__, y, x, Fg)  # add proj vals into PV__
-                    if not PV__[y, x] > ave: break
-                    PV__[y, x] = 0  # prevent re-selection
+                    project_focus(PV__,y,x, Fg)  # add proj vals into PV__
+                    y, x = np.unravel_index(PV__.argmax(),PV__.shape)
+                    if PV__[y,x] > ave:
+                        iy = y* Ly**elev; ix = x* Lx**elev  # new win by feedback to image, scale y,x with elevation
+                        win = frame_H(image, iy,ix, Ly,Lx, Y,X, rV, elev)  # up to current level
+                    else: break
                 else: break
             else: break
-        if Fg_:
-            return oWin
+        if Fg_ and val_(np.sum([g.Et for g in Fg_]),1,(len(Fg_)-1)*Lw, np.mean([g.rc for g in Fg_])+elev) > 0:
+            return Win
+        else: return []
 
-    frame = CN(box=np.array([0,0,Y,X]), yx=np.array([Y//2,X//2]))
-    H = []; elev = 0; win = []
-    while True:
-        win = extend_lev(iY, iX, elev, win)
-        H += [win]; elev+=1  # feedforward extends H
-        # add feedback to extend levels beyond their initial window
-
-        global ave, Lw, intw, loopw, centw, contw, adist, amed, medw, mW, dW
-        ave, Lw, intw, loopw, centw, contw, adist, amed, medw = np.array([ave, Lw, intw, loopw, centw, contw, adist, amed, medw]) / rV
-        ''' 
-        N_,C_,L_ = [],[],[]  # need to map these to oWin, possible gaps?
-        for Fg in Fg_:
-             N_ += Fg.N_; C_ += Fg.C_; L_ += Fg.L_
-        return N_,C_,L_       
-        y *= Ly**elev; x *= Ly**elev 
-        rV, wTTf = ffeedback(Fg)  # adjust filters
-        Fg = cent_attr(Fg,2)  # compute Fg.wTT: correlation weights in frame derTT?
-        wTTf *= Fg.wTT; mW = np.sum(wTTf[0]); dW = np.sum(wTTf[1])  # global?
-        wTTf[0] *= 9/mW; wTTf[1] *= 9/dW  # Fg.wTT is redundant?
-        '''
+    frame = CN(box=np.array([0,0,Y,X]), yx=np.array([Y//2,X//2])); frame.H=[]
+    elev = 0; _win = []
+    while True and elev < max_elev:
+        win = expand_lev(iY,iX, elev, _win)  # fixed focal point
+        if win:
+            frame.H += [win]; _win=win; elev+=1  # feedforward extends H
+        else: break
+    return _win
+''' 
+    global ave, Lw, intw, loopw, centw, contw, adist, amed, medw, mW, dW
+    ave, Lw, intw, loopw, centw, contw, adist, amed, medw = np.array([ave, Lw, intw, loopw, centw, contw, adist, amed, medw]) / rV
+    rV, wTTf = ffeedback(Fg)  # adjust filters
+    Fg = cent_attr(Fg,2)  # compute Fg.wTT: correlation weights in frame derTT?
+    wTTf *= Fg.wTT; mW = np.sum(wTTf[0]); dW = np.sum(wTTf[1])  # global?
+    wTTf[0] *= 9/mW; wTTf[1] *= 9/dW  # Fg.wTT is redundant?
+'''
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
 
     Y,X = imread('./images/toucan_small.jpg').shape
     # frame = agg_frame(0, image=imread('./images/toucan.jpg'), iY=Y, iX=X)
-    frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y/2, iX=X/2, Ly=64,Lx=64, Y=Y, X=X, rV=1)
+    # slicing must use int instead of float
+    frame = frame_H(image=imread('./images/toucan.jpg'), iY=int(Y/2), iX=int(X/2), Ly=64,Lx=64, Y=Y, X=X, rV=1)
     # search frames ( foci inside image
