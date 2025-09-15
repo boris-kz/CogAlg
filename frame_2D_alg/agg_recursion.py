@@ -104,8 +104,8 @@ class CN(CBase):
         n.span = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_) but not additive?
         n.angl = kwargs.get('angl',np.zeros(2))  # dy,dx, sum from L_
         n.mang = kwargs.get('mang',1)  # ave match of angles in L_, =1 in links
-        n.B_ = kwargs.get('B_', [])  # ext boundary Gs, add dB_?
-        n.rB_= kwargs.get('rB_',[])  # reciprocal core clusters, of lower composition?
+        n.B_ = kwargs.get('S_', [])  # excluded boundary Ns, add dB_?
+        n.rB_= kwargs.get('rS_',[])  # reciprocal core clusters, of lower composition?
         n.C_ = kwargs.get('C_', [])  # int centroid Gs, add dC_?
         n.rC_= kwargs.get('rC_',[])  # reciprocal root centroids
         n.nH = kwargs.get('nH', [])  # top-down hierarchy of sub-node_s: CN(sum_N_(Nt_))/ lev, with single added-layer derH, empty nH
@@ -202,9 +202,8 @@ def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering
                 if lG: comb_altg_(nG,lG, rc+2)  # assign boundary
                 if val_(nG.Et,1, (len(nG.N_)-1)*Lw, rc+loopw+2, Et) > 0:
                     nG = cross_comp(nG, rc+2) or nG  # agg+
-                    # root.nH += [nG] + nG.nH?
                 _H = root.nH; root.nH = []
-                nG.nH = _H + [root] + nG.nH  # pack root in Nt.nH, has own L_,lH
+                nG.nH = _H + [root] + nG.nH  # pack root.nH in higher-composition nG.nH, nG has own L_,lH
                 return nG  # recursive feedback, add to root
 
 def comb_altg_(nG, lG, rc):  # cross_comp contour/background per node:
@@ -228,8 +227,8 @@ def comb_altg_(nG, lG, rc):  # cross_comp contour/background per node:
         if altl_:
             aG = CN(N_=altl_, Et=Et)
             if val_(Et,0,(len(altl_)-1)*Lw, rc+Rdn+loopw) > 0:  # norm by core_ rdn
-                aG = cross_comp(aG, rc)
-            Ng.B_ = [list(set(aG.N_)), aG.Et]
+                aG = cross_comp(aG, rc) or aG
+            Ng.B_ = [set(aG.N_), aG.Et]
 
 def proj_V(_N, N, angle, dist, fC=0):  # estimate cross-induction between N and _N before comp
 
@@ -299,9 +298,9 @@ def comp_N(_N,N, olp,rc, lH=None, angl=np.zeros(2), span=None, fdeep=0, rng=1): 
     Link.derH = [CLay(Et=Et[:2], node_=[_N,N],link_=[Link],derTT=copy(derTT), root=Link)]
     if fdeep:
         if val_(Et,1, len(N.derH)-2, olp+rc) > 0 or fi==0:  # else derH is dext,vert
-            Link.derH += comp_H(_N.derH,N.derH, rn, Et, derTT, Link)  # append
+            Link.derH += comp_H(_N.derH,N.derH, rn,Et, derTT, Link)  # append
         if fi:
-            for falt, _N_,N_ in (0,1), (_N.N_,N.N_), (_N.B_,N.B_):  # cent_s overlap, use for cross-ref only?
+            for falt, _N_,N_ in (0,1), (_N.N_,N.N_), (_N.B_,N.B_):  # nodes or boundary, cent_s overlap, use for cross-ref only?
                 if falt: _N_,N_ = _N_[0],N_[0]  # eval Et?
                 if (_N_ and N_) and isinstance(N_[0],CN) and isinstance(_N_[0],CN):  # not PP
                     spec(_N_,N_, olp,rc,Et, Link.lH)  # for dspe?
@@ -495,7 +494,7 @@ def cluster_N(root, iN_, rN_, rc, rng=1):  # flood-fill node | link clusters
                 G_ += N_
     if G_: return sum_N_(G_, root)  # nG
 
-def cluster_n(root, C_, rc, rng=1):  # simplified flood-fill for C_, etc
+def cluster_n(root, C_, rc, rng=1):  # simplified flood-fill, currently for for C_
 
     def extend_G(_link_, node_,cent_,link_,in_):
         for L in _link_:  # spliced rim
@@ -555,7 +554,7 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
                         if _C not in n._C_: dm+=m; do+=o  # not in extended _N__
                     else:
                         if _C in n._C_: __m,__o = n._mo_[n._C_.index(_C)]; dm+=__m; do+=__o
-                        D += abs(d)  # from excluded nodes: selectivity?
+                        D += abs(d)  # distinctive from excluded nodes (silhouette)
                 if M > Ave * len(_N_) * O:
                     for n, mo in zip(_N_,mo_): n.mo_+=[mo]; n.rC_+=[C]; C.rC_+=[n]  # bilateral assign
                     C.M = M; C.N_+= _N_; C._N_= list(set(_N__))  # core, surround elements
@@ -570,15 +569,16 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
             _C_ = C_
             for n in root.N_: n._C_=n.rC_; n._mo_=n.mo_; n.rC_,n.mo_ = [],[]  # new n.rC_s, combine with vo_ in Ct_?
         else:  # converged
-            Et = np.array([mat,dif,cnt])  # draft: included, excluded, compared? or separate n for excluded?
+            Et = np.array([mat,dif,cnt])  # incl M, excl D, all comped | separate ns?
             break
     if C_:
         for n in [N for C in C_ for N in C.N_]:
             # exemplar V increased by summed n match to root C * rel C Match:
             n.exe = n.et[1-n.fi]+ np.sum([n.mo_[i][0] * (C.M / (ave*n.mo_[i][0])) for i, C in enumerate(n.rC_)]) > ave
-        if mat > ave:
+
+        if val_(Et,1, (len(C_)-1)*Lw, rc+olp, root.Et) > 0:
             cG = cross_comp(sum_N_(C_), rc, fC=1)
-            # Cs may be distant, different attrs
+            # distant Cs or with different attrs
         root.C_ = [cG.N_ if cG else C_, Et]
 
 def cent_attr(C, rc):  # weight attr matches | diffs by their match to the sum, recompute to convergence
@@ -670,6 +670,7 @@ def sum_N_(node_, root=None, fC=0):  # form cluster G
         add_N(G,n,0, fC, froot=1)
     G.rc /= len(node_)
     if not fC and G.fi:
+        G.L_ = list(set([L for n in node_ for L in n.L_]))  # n's L should be G's L? Since both of them are internal
         for L in G.L_: G.Et += L.Et  # avoid redundant Ls in rims
     return G  # no rim
 
@@ -683,7 +684,7 @@ def add_N(N,n, fmerge=0, fC=0, froot=0):
         if not fC: N.L_ += [l for l in n.rim if l.Et[0]>ave] if n.fi else n.L_  # len
     if froot:
         n.fin = 1; n.root = N
-    if n.B_: add_sett(N.B_,n.B_)  # boundary: ext clusters
+    if n.B_: add_sett(N.B_,n.B_)  # silhouette: ext clusters
     if n.C_: add_sett(N.C_,n.C_)  # centroids: int clusters
     if n.nH: add_NH(N.nH,n.nH, root=N)
     if n.lH: add_NH(N.lH,n.lH, root=N)
@@ -779,8 +780,7 @@ def project_N_(Fg, yx):
     dy,dx = Fg.yx - yx
     Fdist = np.hypot(dy,dx)  # external dist
     rdist = Fdist / Fg.span
-    Angle = np.array([dy,dx]) # external angle
-    angle = np.sum([L.angl for L in Fg.L_], axis=0)
+    Angle = np.array([dy,dx]); angle = Fg.angle  # external and internal angles
     cos_d = angle.dot(Angle) / (np.hypot(*angle) * Fdist)
     # difference between external and internal angles, *= rdist
     ET = np.zeros(3); DerTT = np.zeros((2,9))
@@ -918,15 +918,16 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, wTTf=np.ones((2,9),dtype="
             if g: n_ += g.N_; l_ += g.L_; c_ += g.C_  # + dC_?
         nG, lG, cG = cross_comp(CN(N_=n_),rc), cross_comp(CN(N_=l_),rc+1), cross_comp(CN(N_=c_),rc+2,fC=1)
 
-        Et = np.sum([g.Et for g in (nG,lG,cG) if g]); rc = np.mean([g.rc for g in (nG,lG,cG) if g])
+        Et = np.sum([g.Et for g in (nG,lG,cG) if g], axis=0)
+        rc = np.mean([g.rc for g in (nG,lG,cG) if g])
 
         return CN(Et=Et, rc=rc, N_= nG.N_ if nG else [], L_= lG.N_ if lG else [], C_= cG.N_ if cG else [])
 
-    def expand_lev(_iy,_ix, elev, Fg):  # seed tile is pixels in 1st lev, Fg in higher levs
+    def expand_lev(_iy,_ix, elev, Fg):  # seed tile is pixels in 1st lev, or Fg in higher levs
 
         tile = np.full((Ly,Lx),None, dtype=object)  # exclude from PV__
         PV__ = np.zeros([Ly,Lx])  # maps to current-level tile
-        Fg_ = []; iy,ix=_iy,_ix; y,x = 31,31  # start @ tile mean
+        Fg_ = []; iy,ix =_iy,_ix; y,x = 31,31  # start at tile mean
         while True:
             if not elev: Fg = base_tile(iy,ix)  # 1st level or cross_comped arg tile
             if Fg and val_(Fg.Et,1, (len(Fg.N_)-1)*Lw, Fg.rc+loopw+elev) > 0:
@@ -937,9 +938,9 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, wTTf=np.ones((2,9),dtype="
                     pv__ = PV__.copy(); pv__[tile!=None] = 0  # exclude processed
                     y, x = np.unravel_index(pv__.argmax(), PV__.shape)
                     if PV__[y,x] > ave:
-                        iy = _iy + (y-31) * Ly**elev - 31  # feedback to full-res image, or expands with elevation?
-                        ix = _ix + (x-31) * Lx**elev - 31  # y0,x0 in next tile, mean = iy,ix
-                        if elev: # feedback to cross_comp proj tile
+                        iy = _iy + (y-31)* Ly**elev  # feedback to shifted coords in full-res image | space:
+                        ix = _ix + (x-31)* Lx**elev  # y0,x0 in projected bottom tile:
+                        if elev:
                             subF = frame_H(image, iy,ix, Ly,Lx, Y,X, rV, elev, wTTf)  # up to current level
                             Fg = subF.nH[-1] if subF else []
                     else: break
@@ -972,5 +973,5 @@ if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.
 
     Y,X = imread('./images/toucan.jpg').shape
     # frame = agg_frame(0, image=imread('./images/toucan.jpg'), iY=Y, iX=X)
-    frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -32, iX=X//2 -32, Ly=64,Lx=64, Y=Y, X=X, rV=1)
+    frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -31, iX=X//2 -31, Ly=64,Lx=64, Y=Y, X=X, rV=1)
     # search frames ( tiles inside image
