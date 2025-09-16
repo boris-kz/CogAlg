@@ -232,4 +232,61 @@ def xcomp_C(C_, root, rc, first=1):  # draft
                     N_ += Fg.N_; C_ += Fg.C_; L_ += Fg.L_
                 return N_,C_,L_
 
+def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
+
+    _C_, _N_, cG = [],[],[]
+    for E in E_:
+        C = cent_attr( Copy_(E,root, init=2), rc); C.N_ = [E]   # all rims are within root
+        C._N_ = [n for l in E.rim for n in l.N_ if n is not E]  # core members + surround -> comp_C
+        _N_ += C._N_; _C_ += [C]
+    # reset:
+    for n in set(root.N_+_N_ ): n.rC_,n.mo_, n._C_,n._mo_ = [],[], [],[]  # aligned pairs, in cross_comp root
+    # reform C_, refine C.N_s
+    while True:
+        C_,cnt,olp, mat,dif, Dm,Do = [],0,0,0,0,0,0; Ave = ave * (rc+loopw)
+        _Ct_ = [[c, c.Et[0]/c.Et[2] if c.Et[0] !=0 else eps, c.rc] for c in _C_]
+        for _C,_m,_o in sorted(_Ct_, key=lambda t: t[1]/t[2], reverse=True):
+            if _m > Ave * _o:
+                C = cent_attr( sum_N_(_C.N_, root=root, fC=1), rc); C.rC_ = []  # C update lags behind N_; non-local C.rc += N.mo_ os?
+                _N_,_N__, mo_, M,D,O,comp, dm,do = [],[],[],0,0,0,0,0,0  # per C
+                for n in _C._N_:  # core+ surround
+                    if C in n.rC_: continue
+                    _,(m,d,_),_ = min_comp(C,n)  # val,olp / C:
+                    o = np.sum([mo[0] /m for mo in n._mo_ if mo[0]>m])  # overlap = higher-C inclusion vals / current C val
+                    comp += 1  # comps per C
+                    if m > Ave * o:
+                        _N_+=[n]; M+=m; O+=o; mo_ += [np.array([m,o])]  # n.o for convergence eval
+                        _N__ += [_n for l in n.rim for _n in l.N_ if _n is not n]  # +|-Ls
+                        if _C not in n._C_: dm+=m; do+=o  # not in extended _N__
+                    else:
+                        if _C in n._C_: __m,__o = n._mo_[n._C_.index(_C)]; dm+=__m; do+=__o
+                        D += abs(d)  # distinctive from excluded nodes (silhouette)
+                mat+=M; dif+=D; olp+=O; cnt+=comp  # from all comps?
+                if M > Ave * len(_N_) * O:
+                    for n, mo in zip(_N_,mo_): n.mo_+=[mo]; n.rC_+=[C]; C.rC_+=[n]  # bilateral assign
+                    C.ET += np.array([M,D,comp])  # C.Et is a comparand
+                    C.N_ += _N_; C._N_ = list(set(_N__))  # core, surround elements
+                    C_ += [C]; Dm+=dm; Do+=do  # new incl or excl
+                else:
+                    for n in _C._N_:
+                        n.exe = n.Et[0]/n.Et[2] > 2 * ave  # refine exe, Et vals are already normalized, Et[2] no longer needed for eval?
+                        for i, c in enumerate(n.rC_):
+                            if c is _C: # remove mo mapping to culled _C
+                                n.mo_.pop(i); n.rC_.pop(i); break
+            else: break  # the rest is weaker
+        if Dm > Ave * cnt * Do:  # dval vs. dolp, overlap increases as Cs may expand in each loop?
+            _C_ = C_
+            for n in root.N_: n._C_=n.rC_; n._mo_=n.mo_; n.rC_,n.mo_ = [],[]  # new n.rC_s, combine with vo_ in Ct_?
+        else:  # converged
+            Et = np.array([mat,dif,cnt])  # incl M, excl D, all comped | separate ns?
+            break
+    if C_:
+        for n in [N for C in C_ for N in C.N_]:
+            # exemplar V increased by summed n match to root C * rel C Match:
+            n.exe = n.et[1-n.fi]+ np.sum([n.mo_[i][0] * (C.M / (ave*n.mo_[i][0])) for i, C in enumerate(n.rC_)]) > ave
+
+        if val_(Et,1,(len(C_)-1)*Lw, rc+olp, root.Et) > 0:
+            cG = cross_comp(sum_N_(C_), rc, fC=1)  # distant Cs or with different attrs
+        root.C_ = [cG.N_ if cG else C_, Et]
+
 
