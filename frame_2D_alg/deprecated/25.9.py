@@ -289,4 +289,23 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
             cG = cross_comp(sum_N_(C_), rc, fC=1)  # distant Cs or with different attrs
         root.C_ = [cG.N_ if cG else C_, Et]
 
+def ffeedback(root):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
 
+    wTTf = np.ones((2,9))  # sum derTT coefs: m_,d_ [M,D,n, I,G,A, L,S,eA]: Et, baseT, extT
+    rM, rD, rVd = 1, 1, 0
+    hLt = sum_N_(root.L_)  # links between top nodes
+    _derTT = np.sum([l.derTT for l in hLt.N_])  # _derTT[np.where(derTT==0)] = eps
+    for lev in reversed(root.nH):  # top-down
+        if not lev.lH: continue
+        Lt = lev.lH[-1]  # dfork
+        _m, _d, _n = hLt.Et; m, d, n = Lt.Et
+        rM += (_m / _n) / (m / n)  # relative higher val, | simple relative val?
+        rD += (_d / _n) / (d / n)
+        derTT = np.sum([l.derTT for l in Lt.N_])  # top link_ is all comp results
+        wTTf += np.abs((_derTT / _n) / (derTT / n))
+        if Lt.lH:  # ddfork only, not recursive?
+            # intra-level recursion in dfork
+            rVd, wTTfd = ffeedback(Lt)
+            wTTf = wTTf + wTTfd
+
+    return rM+rD+rVd, wTTf
