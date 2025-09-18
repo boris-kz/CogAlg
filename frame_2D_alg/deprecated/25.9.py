@@ -309,3 +309,47 @@ def ffeedback(root):  # adjust filters: all aves *= rV, ultimately differential 
             wTTf = wTTf + wTTfd
 
     return rM+rD+rVd, wTTf
+
+class CLay(CBase):  # layer of derivation hierarchy, subset of CG
+    name = "lay"
+    def __init__(l, **kwargs):
+        super().__init__()
+        l.Et = kwargs.get('Et', np.zeros(2))
+        l.rc = kwargs.get('rc', 1)  # ave nodet overlap
+        l.node_ = kwargs.get('node_', [])  # concat across fork tree
+        l.link_ = kwargs.get('link_', [])
+        l.derTT = kwargs.get('derTT', np.zeros((2,9)))  # sum m_,d_ [M,D,n, I,G,A, L,S,eA] across fork tree
+        # i: lay index in root node_,link_, to revise olp; i_: m,d priority indices in comp node|link H
+        # ni: exemplar in node_, trace in both directions?
+    def __bool__(l): return bool(l.node_)
+
+    def copy_(lay, rev=0, i=None):  # comp direction may be reversed to -1, currently not used
+        if i:  # reuse self
+            C = lay; lay = i; C.node_=copy(i.node_); C.link_ = copy(i.link_); C.derTT=np.zeros((2,9))
+        else:  # init new C
+            C = CLay(node_=copy(lay.node_), link_=copy(lay.link_))
+        C.Et = copy(lay.Et)
+        for fd, tt in enumerate(lay.derTT):  # nested array tuples
+            C.derTT[fd] += tt * -1 if (rev and fd) else deepcopy(tt)
+        if not i: return C
+
+    def add_lay(Lay, lay, rev=0, rn=1):  # no rev, merge lays, including mlay + dlay
+
+        # rev = dir==-1, to sum/subtract numericals in m_,d_
+        for fd, Fork_, fork_ in zip((0,1), Lay.derTT, lay.derTT):
+            Fork_ += (fork_ * -1 if (rev and fd) else fork_) * rn  # m_| d_| t_
+        # concat node_,link_:
+        Lay.node_ += [n for n in lay.node_ if n not in Lay.node_]
+        Lay.link_ += lay.link_
+        Lay.Et += lay.Et * rn
+        Lay.rc = (Lay.rc + lay.rc * rn) /2
+        return Lay
+
+    def comp_lay(_lay, lay, rn, root):  # unpack derH trees down to numericals and compare them
+
+        derTT = comp_derT(_lay.derTT[1], lay.derTT[1] * rn)  # ext A align replaced dir/rev
+        Et = np.array([derTT[0] @ wTTf[0], np.abs(derTT[1]) @ wTTf[1]])
+        if root: root.Et[:2] += Et  # no separate n
+        node_ = list(set(_lay.node_+ lay.node_))  # concat, or redundant to nodet?
+        link_ = _lay.link_ + lay.link_
+        return CLay(Et=Et, rc=(_lay.rc+lay.rc*rn)/2, node_=node_, link_=link_, derTT=derTT)
