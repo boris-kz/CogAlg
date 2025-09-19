@@ -353,3 +353,27 @@ class CLay(CBase):  # layer of derivation hierarchy, subset of CG
         node_ = list(set(_lay.node_+ lay.node_))  # concat, or redundant to nodet?
         link_ = _lay.link_ + lay.link_
         return CLay(Et=Et, rc=(_lay.rc+lay.rc*rn)/2, node_=node_, link_=link_, derTT=derTT)
+
+def add_H(H, h, root=0, root_derH_=[], rn=1):  # layer-wise add|append derH
+
+    for Lay, lay in zip_longest(H,h):  # different len if lay-selective comp
+        if lay:
+            if Lay: add_lay(Lay, lay, rn)
+            else:   H += copy_(lay)  # * rn?
+            if root: root.derTT += lay.derTT*rn; root.Et[:2] += lay.Et*rn
+            if root_derH_:
+                DerH, derH = root_derH_
+                DerH.Et += derH.Et * rn
+                DerH.derTT += derH.derTT * rn
+    return H
+
+def comp_H(H,h, rn, ET=None, DerTT=None, root=None):  # one-fork derH
+
+    derH, derTT, Et = [], np.zeros((2,9)), np.zeros(3)
+    for _lay, lay in zip_longest(H,h):  # selective
+        if _lay and lay:
+            dlay = comp_lay(_lay, lay, rn, root=root)
+            derH += [dlay]; derTT = dlay.derTT; Et[:2] += dlay.Et
+    if Et[2]: DerTT += derTT; ET += Et
+    return derH
+

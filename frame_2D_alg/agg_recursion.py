@@ -40,6 +40,7 @@ postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized vars are summed small-case vars
 '''
 eps = 1e-7
+
 class CdH(CBase):  # derivation hierarchy or a layer thereof, subset of CG
     name = "der"
     def __init__(d, **kwargs):
@@ -48,39 +49,37 @@ class CdH(CBase):  # derivation hierarchy or a layer thereof, subset of CG
         d.Et = kwargs.get('Et', np.zeros(2))  # redundant to N.Et and N.derTT in top derH
         d.derTT = kwargs.get('derTT', np.zeros((2,9)))  # m_,d_ [M,D,n, I,G,A, L,S,eA]: single layer or sum derH
         d.root = kwargs.get('root', [])  # to pass Et, derTT?
-        def __bool__(d): return bool(d.H)
+    def __bool__(d): return bool(d.H)
 
-    def copy_(lay, rev=0, i=None):  # comp direction may be reversed to -1, currently not used
-        if i:  # reuse self
-            C = lay; lay = i; C.node_=copy(i.node_); C.link_ = copy(i.link_); C.derTT=np.zeros((2,9))
-        else:  # init new C
-            C = CdH(node_=copy(lay.node_), link_=copy(lay.link_))
-        C.Et = copy(lay.Et)
-        for fd, tt in enumerate(lay.derTT):  # nested array tuples
-            C.derTT[fd] += tt * -1 if (rev and fd) else deepcopy(tt)
-        if not i: return C
+def copy_(dH, i=None, rn=1):
 
-def add_lay(Lay, lay, rev=0, rn=1):  # no rev, merge lays, including mlay + dlay
+    if i: C = dH; lay = i  # reuse self
+    else: C = CdH()
+    C.H = [copy_(d, rn) for d in dH.H]; C.Et = dH.Et * rn; C.derTT=dH.derTT * rn; C.root=dH.root
+    if not i: return C
 
-    # rev = dir==-1, to sum/subtract numericals in m_,d_
-    Lay.Et += lay.Et * rn
-    for fd, Fork_, fork_ in zip((0,1), Lay.derTT, lay.derTT):
-        Fork_ += (fork_ * -1 if (rev and fd) else fork_) * rn  # m_| d_| t_
-    for L, l in zip(Lay.H,lay.H):
-        add_lay(L, l, rev,rn)
-    return Lay
+def add_dH(DH, dH, rn=1):  # rn = n/mean, no rev, merge/append lays
 
-def comp_lay(_lay, lay, rn, root):  # unpack derH trees down to numericals and compare them
+    DH.Et += dH.Et * rn
+    DH.derTT += dH.derTT * rn
+    off_H = []
+    for D, d in zip_longest(DH.H, dH.H):
+        if D and d: add_dH(D, d, rn)
+        elif d: off_H += [copy_(d, rn)]
+    DH.H += off_H
+    return DH
+
+def comp_dH(_dH, dH, rn, root):  # unpack derH trees down to numericals and compare them
 
     H = []
-    if _lay.H and lay.H:  # 2 or more layers each
+    if _dH.H and dH.H:  # 2 or more layers each
         Et = np.zeros(2); derTT = np.zeros((2,9))
-        for L, l in zip(_lay.H, lay.H):
-            dlay = comp_lay(L, l, rn, root)
-            H += [dlay]; Et += dlay.Et; derTT += dlay.derTT
+        for D, d in zip(_dH.H, dH.H):
+            ddH = comp_dH(D, d, rn, root)
+            H += [ddH]; Et += ddH.Et; derTT += ddH.derTT
     else:
-        derTT = comp_derT(_lay.derTT[1], lay.derTT[1] * rn)  # ext A align replaced dir/rev
-        Et = np.array([derTT[0] @ wTTf[0], np.abs(derTT[1]) @ wTTf[1]])
+        derTT = comp_derT(_dH.derTT[1], dH.derTT[1] * rn)  # ext A align replaced dir/rev
+        Et = np.array([np.sum(derTT[0]), np.sum(np.abs(derTT[1]))])
 
     return CdH(H=H, Et=Et, derTT=derTT, root=root)
 
@@ -96,7 +95,7 @@ class CN(CBase):
         n.rc = kwargs.get('rc',1)  # redundancy to ext Gs, ave in links? separate rc for rim, or internally overlapping?
         n.baseT = kwargs.get('baseT', np.zeros(4))  # I,G,A: not ders
         n.derTT = kwargs.get('derTT',np.zeros((2,9)))  # sum derH -> m_,d_ [M,D,n, I,G,A, L,S,eA], dertt: comp rims + overlap test?
-        n.derH  = kwargs.get('derH',[])  # sum from L_ or rims
+        n.derH  = kwargs.get('derH', CdH())  # sum from L_ or rims
         n.rim = kwargs.get('rim', [])  # node-external links, rng-nested? set?
         n.yx  = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
         n.rng = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
@@ -128,7 +127,7 @@ def Copy_(N, root=None, init=0):
         C.N_,C.nH,C.lH = list(N.N_),list(N.nH),list(N.lH); N.root = root or N.root
         C.L_ = list(N.L_) if N.fi else N.L_
         C.fi = N.fi
-    C.derH  = [lay.copy_() for lay in N.derH]
+    if N.derH: C.derH  = copy_(N.derH)
     C.derTT = deepcopy(N.derTT)
     for attr in ['Et','baseT','yx','box','angl','rim','B_','rB_','C_','rC_']: setattr(C, attr, copy(getattr(N, attr)))
     for attr in ['rc','rng', 'fin', 'span', 'mang']: setattr(C, attr, getattr(N, attr))
@@ -219,7 +218,7 @@ def comb_B_(nG, lG, rc):  # cross_comp boundary / background per node:
         if L.root: return L.root if L.root.root is lG else R(L.root)
         else:      return None
     for Ng in nG.N_:
-        Et, Rdn, link_B_ = np.zeros(3), 0, []  # contour/core clustering
+        Et, Rdn, link_B_ = np.zeros(3), 0, []  # core boundary clustering
         LR_ = {R(L) for n in Ng.N_ for L in n.rim}  # lGs for nGs, individual nodes and rims are too weak to bound
         for LR in LR_:
             if LR and LR.rB_:  # not None, eval Lg.B_[1]?
@@ -290,23 +289,26 @@ def comp_Q(iN_, rc, fC):  # comp pairs of nodes or links within max_dist
         else: break
     return N__, L_, ET
 
-# draft:
 def comp_N(_N,N, olp,rc, angl=np.zeros(2), span=None, rng=1, lH=None):  # compare links, optional angl,span,dang?
 
-    derTT, Et, rn = min_comp(_N,N)
+    derTT, Et, rn = base_comp(_N,N)
     baseT = (rn*_N.baseT + N.baseT) / 2  # not new
     yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])  # ext
     fi = N.fi
     Link = CN(Et=Et,rc=olp, N_=[_N,N], L_=len(_N.N_+N.N_), et=_N.et+N.et, baseT=baseT,derTT=derTT, yx=yx,box=box, span=span,angl=angl, rng=rng, fi=0)
     V = val_(Et, aw=olp+rc)
-    if _N.derH and N.derH:  # or V * (1 - 1/ (min(len(N.derH),len(_N.derH)) or eps)) > ave:  # derH rdn to derTT
-        ddH = comp_H(_N.derH, N.derH, rn, Et, derTT, Link)
-        H = [CdH(Et=Et[:2], derTT=copy(derTT), root=Link), *ddH]
-        Link.derH = CdH(H=H, Et=Et[:2], derTT=copy(derTT), root=Link)   # else empty?
-    else:
-        # not updated:
-        m_,d_ = comp_derT(rn*_N.derTT[1], N.derTT[1])  # compress derH-> Lay:
-        Link.derH += [CdH(Et=np.array([np.sum(m_),np.sum(d_)]), node_=[_N,N],link_=[Link],derTT=np.array([m_,d_]), root=Link)]
+    if V > 0:  # |V * (1 - 1/ (min(len(N.derH),len(_N.derH)) or eps)) > ave:  # derH rdn to derTT
+        H = [CdH(Et=Et[:2], derTT=copy(derTT), root=Link)]
+        # add min 2nd layer:
+        if _N.derH and N.derH:
+            dH = comp_dH(_N.derH, N.derH, rn, Link)
+            H += dH.H; dTT = dH.derTT; dEt = dH.Et
+        else:
+            m_,d_ = comp_derT(rn*_N.derTT[1], N.derTT[1])
+            dEt = np.array([np.sum(m_),np.sum(d_)]); dTT = np.array([m_,d_])
+            H += [CdH(Et=dEt, derTT=dTT, root=Link)]
+        Et += dEt; derTT += dTT
+        Link.derH = CdH(H=H, Et=Et[:2], derTT=copy(derTT), root=Link)
     if fi and V > ave * compw:
         for falt, (_n_,n_) in zip((0,1), ((_N.N_,N.N_), (_N.B_,N.B_))):  # nodes|boundary, C_ M,D = overlap,offset vals?
             if falt and _n_ and n_: _n_,n_ = _n_[0],n_[0]  # skip Et
@@ -320,7 +322,7 @@ def comp_N(_N,N, olp,rc, angl=np.zeros(2), span=None, rng=1, lH=None):  # compar
             n.compared.add(_n)
     return Link
 
-def min_comp(_N,N):  # comp Et, baseT, extT, derTT
+def base_comp(_N,N, fC=0):  # comp Et, baseT, extT, derTT
 
     fi = N.fi
     _M,_D,_n =_N.Et; _I,_G,_Dy,_Dx =_N.baseT; _L = len(_N.N_) if fi else _N.L_  # len nodet.N_s
@@ -330,6 +332,9 @@ def min_comp(_N,N):  # comp Et, baseT, extT, derTT
     rn = _n/n
     mA,dA = comp_A(rn*_N.angl, N.angl)  # ext angle
     m_,d_ = comp(rn*_pars,pars, mA,dA)  # -> M,D,n, I,G,A, L,S,eA
+    if fC:
+        dm_,dd_ = comp_derT(rn*_N.derTT[1], N.derTT[1])
+        m_+= dm_; d_+= dd_
     DerTT = np.array([m_,d_])
     ad_ = np.abs(d_); t_ = m_+ ad_+ eps  # max comparand
     Et = np.array([m_* (1, mA)[fi] /t_ @ wTTf[0],  # norm but signed?
@@ -528,7 +533,7 @@ def cluster_n(root, C_, rc, rng=1):  # simplified flood-fill, currently for for 
             for l in L_: Et += l.Et
             if val_(Et,1, (len(N_)-1)*Lw, rc+olp, root.Et) > 0:
                 G_ += [sum2graph(root, N_,L_,[], set(cent_), Et,olp, rng)]
-            elif n.fi:  # this should follow cluster_N? Else we may get a combination of G_ with fi = 1 (from sum2graph) and fi = 0 (recycled link node)
+            elif n.fi:
                 G_ += N_
     if G_: return sum_N_(G_,root)  # nG
 
@@ -551,7 +556,7 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
                 _N_,_N__, mo_, M,D,O,comp, dm,do = [],[],[],0,0,0,0,0,0  # per C
                 for n in _C._N_:  # core+ surround
                     if C in n.rC_: continue
-                    _,(m,d,_),_ = min_comp(C,n)  # val,olp / C:
+                    _,(m,d,_),_ = base_comp(C,n, fC=1)  # val,olp / C:
                     o = np.sum([mo[0] /m for mo in n._mo_ if mo[0]>m])  # overlap = higher-C inclusion vals / current C val
                     comp += 1  # comps per C
                     if m > Ave * o:
@@ -621,13 +626,13 @@ def sum2graph(root, node_,link_,long_,cent_, Et, olp, rng):  # sum node,link att
     graph = CN(root=root, fi=1,rng=rng, N_=node_,L_=link_,cent_=cent_, Et=Et,rc=olp, box=n0.box, baseT=n0.baseT, derTT=n0.derTT)
     graph.hL_ = long_
     n0.root = graph; yx_ = [n0.yx]; fg = fi and isinstance(n0.N_[0],CN)   # not PPs
-    Nt = Copy_(n0); DerH = [] # CN, add_N(Nt,Nt.Lt)?
+    Nt = Copy_(n0); DerH = CdH() # CN, add_N(Nt,Nt.Lt)?
     for N in node_:
-        add_H(derH,N.derH,graph); graph.baseT+=N.baseT; graph.derTT+=N.derTT; graph.box=extend_box(graph.box,N.box); yx_+=[N.yx]; N.root = graph
+        add_dH(derH,N.derH,graph); graph.baseT+=N.baseT; graph.derTT+=N.derTT; graph.box=extend_box(graph.box,N.box); yx_+=[N.yx]; N.root = graph
         if fg: add_N(Nt,N)  # froot = 0
     for L in link_:
-        add_H(DerH,L.derH,graph); graph.baseT+=L.baseT; graph.derTT+=L.derTT
-    if DerH: add_H(derH,DerH, graph)  # * rn?
+        add_dH(DerH,L.derH,graph); graph.baseT+=L.baseT; graph.derTT+=L.derTT
+    if DerH: add_dH(derH,DerH, graph)  # * rn?
     graph.derH = derH
     if fg: graph.nH = Nt.nH + [Nt]  # pack prior top level
     yx = np.mean(yx_, axis=0); dy_,dx_ = (yx_-yx).T; dist_ = np.hypot(dy_,dx_)
@@ -647,26 +652,7 @@ def slope(link_):  # get ave 2nd rate of change with distance in cluster or fram
     # ave d(d_rate) / d(unit_distance):
     return (np.diff(rates) / np.diff(dists)).mean()
 
-def comp_H(H,h, rn, ET=None, DerTT=None, root=None):  # one-fork derH
-
-    derH, derTT, Et = [], np.zeros((2,9)), np.zeros(3)
-    for _lay, lay in zip_longest(H,h):  # selective
-        if _lay and lay:
-            dlay = _lay.comp_lay(lay, rn, root=root)
-            derH += [dlay]; derTT = dlay.derTT; Et[:2] += dlay.Et
-    if Et[2]: DerTT += derTT; ET += Et
-    return derH
-
-def add_H(H, h, root=0, rn=1, rev=0):  # layer-wise add|append derH
-
-    for Lay, lay in zip_longest(H,h):  # different len if lay-selective comp
-        if lay:
-            if Lay: Lay.add_lay(lay, rn)
-            else:   H += [lay.copy_(rev)]  # * rn?
-            if root: root.derTT += lay.derTT*rn; root.Et[:2] += lay.Et*rn
-    return H
-
-def sum_H(H):
+def sum_H(H):  # or add_dH?
     derTT = np.zeros((2,9)); Et = np.zeros(2)
     for lay in H:
         derTT += lay.derTT; Et += lay.Et
@@ -679,16 +665,18 @@ def add_sett(Sett,sett):
 def sum_N_(node_, root=None, fC=0):  # form cluster G
 
     G = Copy_(node_[0], root, init = 2 if fC else 1)
+    ln = len(node_)
     if fC:
-        G.N_= [node_[0]]; G.L_ = [] if G.fi else len(node_); G.rim = []
+        G.N_= [node_[0]]; G.L_ = [] if G.fi else ln; G.rim = []
+    meann = np.mean([n.n for n in node_])
     for n in node_[1:]:
-        add_N(G,n,0, fC, froot=1)
-    G.rc /= len(node_)
+        add_N(G,n, n.n/meann, 0, fC, froot=1)
+    G.rc /= ln; G.mang /= ln
     if not fC and G.fi:
         for L in G.L_: G.Et += L.Et  # avoid redundant Ls in rims
     return G  # no rim
 
-def add_N(N,n, fmerge=0, fC=0, froot=0):
+def add_N(N,n, rn=1, fmerge=0, fC=0, froot=0):  # rn = n.n / mean.n
 
     if fmerge:
         for node in n.N_: node.root=N; N.N_ += [node]
@@ -700,15 +688,13 @@ def add_N(N,n, fmerge=0, fC=0, froot=0):
         n.fin = 1; n.root = N
     if n.B_: add_sett(N.B_,n.B_)  # silhouette: ext clusters
     if n.C_: add_sett(N.C_,n.C_)  # centroids: int clusters
-    if n.nH: add_NH(N.nH,n.nH, root=N)
+    if n.nH: add_NH(N.nH,n.nH, root=N)  # add rn?
     if n.lH: add_NH(N.lH,n.lH, root=N)
-    en,_en = n.Et[2],N.Et[2]; rn = en/_en
     for Par,par in zip((N.angl,N.mang,N.baseT,N.derTT,N.Et), (n.angl,n.mang,n.baseT,n.derTT,n.Et)):
-        Par += par  # *rn for comp
-    if n.derH: add_H(N.derH,n.derH, N, rn)
-    if fC: N.rc += np.sum([mo[1] for mo in n._mo_])
-    else:  N.rc = (N.rc*_en + n.rc*en) / (en+_en)  # ave of aves
-    N.yx = (N.yx*_en + n.yx*en) /(en+_en)
+        Par += par * rn  # rn is n weight in node_
+    if n.derH: add_dH(N.derH,n.derH, rn)
+    N.rc += (np.sum([mo[1] for mo in n._mo_]) if fC else n.rc) * rn
+    N.yx += n.yx * rn
     if N.span and n.span: N.span = max(N.span,n.span)  # skip None
     N.box = extend_box(N.box, n.box)
     if hasattr(n,'mo_') and hasattr(N,'mo_'):
@@ -734,10 +720,9 @@ def PP2N(PP, frame):
     derTT = np.array([
         np.array([mM,mD,mL, mI,mG,mA, mL,mL/2, eps]), # extA=eps
         np.array([dM,dD,dL, dI,dG,dA, dL,dL/2, eps]) ])
-    derH = [CdH(node_=P_,link_=link_, derTT=deepcopy(derTT), Et=np.array([sum(derTT[0]), sum(np.abs(derTT[1]))]) )]
     y,x,Y,X = box; dy,dx = Y-y,X-x
 
-    return CN(root=frame, fi=1, Et=Et, N_=P_, L_=link_, baseT=baseT, derTT=derTT, derH=derH, box=box, yx=yx, angl=A, span=np.hypot(dy/2,dx/2))
+    return CN(root=frame, fi=1, Et=Et, N_=P_, L_=link_, baseT=baseT, derTT=derTT, box=box, yx=yx, angl=A, span=np.hypot(dy/2,dx/2))
 
 # not used, make H a centroid of layers, same for nH?
 def sort_H(H, fi):  # re-assign olp and form priority indices for comp_tree, if selective and aligned
@@ -771,12 +756,13 @@ def comp_prj_dH(_N,N, ddH, rn, link, angl, span, dec):  # comp combined int proj
     cos_da = angl.dot(N.angl) / (span * N.span)
     _rdist = span/_N.span
     rdist  = span/ N.span
-    prj_DH = add_H( prj_dH(_N.derH[1:], _cos_da *_rdist, _rdist*dec),  # derH[0] is positionals (what is positionals means here?)
-                    prj_dH( N.derH[1:], cos_da * rdist, rdist*dec),
-                    link)  # comb proj dHs | comp dH ) comb ddHs?
+    prj_DH = add_dH( prj_dH(_N.derH.H, _cos_da *_rdist, _rdist*dec),
+                      prj_dH( N.derH.H, cos_da * rdist, rdist*dec),
+                      link)  # comb proj dHs | comp dH ) comb ddHs?
     # Et+= confirm:
-    dddH = comp_H(prj_DH, ddH[1:], rn, link.Et, link.derTT, link)  # ddH[1:] maps to N.derH[1:]
-    add_H(ddH, dddH, link, rn)
+    dddH = comp_dH(prj_DH, ddH, rn, link)
+    link.Et += dddH.Et; link.derTT += dddH.derTT
+    add_dH(ddH, dddH, rn)
 
 def project_N_(Fg, yx):
 
@@ -789,10 +775,10 @@ def project_N_(Fg, yx):
     ET = np.zeros(3); DerTT = np.zeros((2,9))
     N_ = []
     for _N in Fg.N_:  # sum _N-specific projections for cross_comp
-        if len(_N.derH) < 2: continue
+        if not _N.derH: continue
         M,D,n = _N.Et
         dec = rdist * (M/(M+D))  # match decay rate, * ddecay for ds?
-        prj_H = prj_dH(_N.derH[1:], cos_d * rdist, dec)
+        prj_H = prj_dH(_N.derH.H, cos_d * rdist, dec)
         prjTT, pEt = sum_H( prj_H)
         pD = pEt[1]*dec; dM = M*dec
         pM = dM - pD * (dM/(ave*n))  # -= borrow, regardless of surprise?
