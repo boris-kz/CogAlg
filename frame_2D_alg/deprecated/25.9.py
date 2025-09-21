@@ -377,3 +377,29 @@ def comp_H(H,h, rn, ET=None, DerTT=None, root=None):  # one-fork derH
     if Et[2]: DerTT += derTT; ET += Et
     return derH
 
+def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering
+
+    if fC: N__, L_, Et = comp_sorted(root.N_,rc)
+    else:  N__, L_, Et = comp_Q(root.N_, rc, fC)  # rc: redundancy+olp, lG.N_ is Ls
+
+    # N__ is flat list if fC=1, list of bands if fC=0
+    if L_ and len(L_) > 1:
+        mV, dV = val_(Et, 2, (len(L_)-1) *Lw, rc+compw); lG = []
+        if dV > 0:
+            if root.fi and root.L_: root.lH += [sum_N_(root.L_)]
+            root.L_ = L_; root.Et += Et
+            if fC < 2 and dV > avd:  # dfork, no comp ddC_
+                lG = cross_comp(CN(N_=L_), rc+compw+1, fC*2)  # batched lH extension
+                if lG: rc+=lG.rc; root.lH+=[lG]+lG.nH; root.Et+=lG.Et; add_dH(root.derH, lG.derH)  # new lays
+        if mV > 0:
+            nG = Cluster(root, N__, rc, fC)  # get_exemplars, cluster_C, rng connectivity cluster
+            if nG:  # batched nH extension
+                rc += nG.rc  # redundant clustering layers
+                if lG:
+                    comb_B_(nG, lG, rc+2); Et += lG.Et  # assign boundary, in feature spectrum if fC
+                if val_(nG.Et, 1, (len(nG.N_)-1)*Lw, rc+compw+2, Et) > 0:
+                    nG = cross_comp(nG, rc+2, fC) or nG
+                root.N_ = nG.N_
+                _H = root.nH; root.nH = []  # nG has own L_,lH
+                nG.nH = _H + [root] + nG.nH  # pack root.nH in higher-composition nG.nH
+                return nG  # update root

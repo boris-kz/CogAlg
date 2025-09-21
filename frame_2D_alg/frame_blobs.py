@@ -68,6 +68,16 @@ class CBase:
 ave  = 30  # base filter, directly used for comp_r fork
 aveR = 10  # for range+, fixed overhead per blob
 
+class CdH(CBase):  # derivation hierarchy or a layer thereof, subset of CG
+    name = "der"
+    def __init__(d, **kwargs):
+        super().__init__()
+        d.H = kwargs.get('H',[])  # was derH/CLay, empty if not nested
+        d.Et = kwargs.get('Et', np.zeros(3))  # redundant to N.Et and N.derTT in top derH
+        d.derTT = kwargs.get('derTT', np.zeros((2,9)))  # m_,d_ [M,D,n, I,G,A, L,S,eA]: single layer or sum derH
+        d.root = kwargs.get('root', [])  # to pass Et, derTT
+    def __bool__(d): return bool(d.H)
+
 class CN(CBase):
     name = "node"
     def __init__(n, **kwargs):
@@ -82,7 +92,7 @@ class CN(CBase):
         n.rc = kwargs.get('rc',1)  # redundancy to ext Gs, ave in links? separate rc for rim, or internally overlapping?
         n.baseT = kwargs.get('baseT', np.zeros(4))  # I,G,A: not ders
         n.derTT = kwargs.get('derTT',np.zeros((2,9)))  # sum derH -> m_,d_ [M,D,n, I,G,A, L,S,eA], dertt: comp rims + overlap test?
-        n.derH  = kwargs.get('derH',[])  # sum from L_ or rims
+        n.derH  = kwargs.get('derH',CdH())  # sum from L_ or rims
         n.yx   = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
         n.rng  = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
         n.box  = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
