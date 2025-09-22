@@ -403,3 +403,8 @@ def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering
                 _H = root.nH; root.nH = []  # nG has own L_,lH
                 nG.nH = _H + [root] + nG.nH  # pack root.nH in higher-composition nG.nH
                 return nG  # update root
+
+def add_sett(Sett,sett):
+    if Sett: N_,Et = Sett; n_ = sett[0]; N_.update(n_); Et += np.sum([t.Et for t in n_-N_])
+    else:    Sett += [copy(par) for par in sett]  # B_, Et
+
