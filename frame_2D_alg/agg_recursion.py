@@ -289,6 +289,40 @@ def comp_Q(iN_, rc, fC):  # comp pairs of nodes or links within max_dist
         else: break
     return N__, L_, ET
 
+def comp_seq(iN_, rc, fC):  # comp consecutive nodes along or links within max_dist
+
+    N_,L_,Et,_N_ = [],[], np.zeros(3),copy(iN_)
+    for N in N_: N._rim = []
+    for _N, N in combinations(_N_, r=2):  # proximity-order for min ders
+        if _N in N.compared: continue
+        dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)
+        L = [dist,dy_dx,_N,N]; N._rim += [L]; _N._rim += [L]
+    oN_,G_ = [],[]
+    for N in N_: N.compared=0
+    for N in N_:
+        for Li in np.argsort([_L[0] for _L in N._rim][:2]):  # two shortest links, one in each direction?
+            dist,dy_dx,_n,n = N._rim[Li]
+            if n in _n.compared: continue  # only one direction may be open?
+            V = proj_V(_n,n, dy_dx, dist)  # eval _N,N cross-induction for comp
+            o = (n.rc+_n.rc) / 2
+            if adist * V/(rc+o) > dist:  # min induction
+                Link = comp_N(_n,n, o,rc, angl=dy_dx, span=dist, lH=L_)
+                if val_(Link.Et, aw=compw+o+rc) > 0:
+                    oN_ += [_n,n]; Et += Link.Et
+        oN_ = list(set(N_))
+    for N in N_: N.root = [N]  # temporary?
+    for N in N_:
+        for L in N.rim:  # 1|2 links per rim
+            if val_(L.Et,aw=contw+rc):
+                nt = L.N_
+                if len(nt) == 2: Gt = nt[0].root if nt[0] is N else nt[0].root; Gt += [N]; N.fin = 1
+            else: N.fin=0  # singleton
+    for N in N_:
+        Gt = N.root
+        if len(Gt) > 1: G = sum_N_(N.root); N.root=G; G_ += [G]
+        else: N.root=[]; N.sub+=1; G_ += [N]  # singleton
+    return G_
+
 def comp_sorted(C_, rc):  # max attr sort to constrain search in 1D, add K attrs and overlap?
 
     L_, ET = [], np.zeros(3)
@@ -315,7 +349,7 @@ def comp_N(_N,N, olp,rc, angl=np.zeros(2), span=None, rng=1, lH=None):  # compar
     fi = N.fi
     Link = CN(Et=Et,rc=olp, N_=[_N,N], L_=len(_N.N_+N.N_), et=_N.et+N.et, baseT=baseT,derTT=derTT, yx=yx,box=box, span=span,angl=angl, rng=rng, fi=0)
     V = val_(Et, aw=olp+rc)
-    if V * (1 - 1/ (min(len(N.derH),len(_N.derH)) or eps)) > ave:  # rdn to derTT, else derH is empty
+    if V * (1 - 1/ (min(len(N.derH.H),len(_N.derH.H)) or eps)) > ave:  # rdn to derTT, else derH is empty
         H = [CdH(Et=Et, derTT=copy(derTT), root=Link)]  # + 2nd | higher layers:
         if _N.derH and N.derH:
             dH = comp_dH(_N.derH, N.derH, rn, Link)
@@ -326,9 +360,9 @@ def comp_N(_N,N, olp,rc, angl=np.zeros(2), span=None, rng=1, lH=None):  # compar
         Et += dEt; derTT += dTT
         Link.derH = CdH(H=H, Et=Et, derTT=derTT, root=Link)  # same as Link Et,derTT
     if fi and V > ave * rc+1 + compw:
-        if N.L_: spec(_N.N_, N.N_, olp,rc, Et, Link.lH)  # skip PP
+        if N.L_: spec(_N.N_, N.N_, olp,rc+1, Et,Link.lH)  # skip PP
         if (_N.B_ and _N.B_[0]) and (N.B_ and N.B_[0]):  # boundary, skip Et
-            spec(_N.B_[0],N.B_[0], olp,rc, Et, Link.lH)  # for dspe; add C_ overlap,offset?
+            spec(_N.B_[0],N.B_[0], olp,rc,Et, Link.lH)  # for dspe; add C_ overlap,offset?
     if lH is not None:
         lH += [Link]
     if span is not None:  # not from spec
@@ -509,12 +543,12 @@ def cluster_N(root, iN_, rN_, rc, rng=1):  # flood-fill node | link clusters
             if link_: _link_ = list(set(link_)); link_ = []  # extended rim
             else:     break
         if node_:
-            N_, L_, long_ = list(set(node_)), list(set(Link_)), list(set(long_))
+            N_, L_, long_, C_ = list(set(node_)), list(set(Link_)), list(set(long_)), list(set(cent_))
             Et, olp = np.zeros(3), 0
             for n in N_: olp += n.rc  # from Ns, vs. Et from Ls?
             for l in L_: Et += l.Et
             if val_(Et, 1, (len(N_)-1)*Lw, rc+olp, root.Et) > 0:
-                G_ += [sum2graph(root, N_,L_, long_, list(set(cent_)), Et, olp, rng)]
+                G_ += [sum2graph(root, N_,L_, [C_,np.sum([c.ET for c in C_],axis=0)] if C_ else [[],np.zeros(3)], long_,Et,olp,rng)]
             elif n.fi:  # L_ is preserved anyway
                 for n in N_: n.sub += 1
                 G_ += N_
@@ -535,19 +569,19 @@ def cluster_n(root, C_, rc, rng=1):  # simplified flood-fill, currently for for 
     G_, in_ = [],set()
     for C in C_: C.fin = 0
     for C in C_:  # form G per remaining C
-        node_,cent_,Link_,link_ = [C],C.C_[:],[],[]
+        node_,cent_,Link_,link_ = [C],C.C_[0][:] if C.C_ else [],[],[]
         _link_ = [l for l in C.rim if val_(l.Et+ett(l), aw=rc) > 0]
         while _link_:
             extend_G(_link_, node_, cent_, link_, in_)  # _link_: select rims to extend G
             if link_: Link_ += _link_; _link_ = list(set(link_)); link_ = []
             else:     break
         if node_:
-            N_= list(set(node_)); L_= list(set(Link_)); C_ = list(set(cent_))
+            N_= list(set(node_)); L_= list(set(Link_)); c_ = list(set(cent_))  # prevent a same name with input C_
             Et, olp = np.zeros(3), 0
             for n in N_: olp += n.rc  # from Ns, vs. Et from Ls?
             for l in L_: Et += l.Et
             if val_(Et,1, (len(N_)-1)*Lw, rc+olp, root.Et) > 0:
-                G_ += [sum2graph(root, N_,L_,[C_,np.sum([c.ET for c in C_])], [],Et,olp, rng)]
+                G_ += [sum2graph(root, N_,L_,[c_,np.sum([c.ET for c in c_],axis=0)] if c_ else [[],np.zeros(3)], [],Et,olp, rng)]
             elif n.fi:
                 G_ += N_
     if G_: return sum_N_(G_,root)  # nG
@@ -559,6 +593,7 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
         C = cent_attr( Copy_(E, root, init=2), rc); C.N_ = [E]  # all rims are within root
         C._N_ = [n for l in E.rim for n in l.N_ if n is not E]  # core members + surround -> comp_C
         _N_ += C._N_; _C_ += [C]
+        for N in C._N_: N.ET = np.zeros(3)  # init, they might be added to rC_ later
     # reset:
     for n in set(root.N_+_N_ ): n.rC_,n.mo_, n._C_,n._mo_ = [],[], [],[]  # aligned pairs, in cross_comp root
     # reform C_, refine C.N_s
@@ -694,7 +729,9 @@ def add_N(N,n, fmerge=0, fC=0, froot=0):  # rn = n.n / mean.n
         N.N_ += [n]; N.L_ += [l for l in n.rim if l.Et[0] > ave]
     if froot:
         n.fin = 1; n.root = N
-    if n.C_: N.C_ = [list(set(N.C_[0]+n.C_[0])), N.C_[1]+n.C_[1]]  # centroids: int cluster
+    if n.C_:
+        if N.C_: N.C_ = [list(set(N.C_[0]+n.C_[0])), N.C_[1]+n.C_[1]]  # centroids: int cluster
+        else:    N.C_ = [copy(n.C_[0]), copy(n.C_[1])]  # init
     # no Fg boundary, margin: Ns of proj max comp dist > distance to nearest frame point, for cross_comp between frames?
     if n.nH: add_nH(N.nH,n.nH, N)
     if n.lH: add_nH(N.lH,n.lH, N)
@@ -901,7 +938,7 @@ def agg_frame(foc, image, iY, iX, rV=1, wTTf=[], fproj=0):  # search foci within
         # spliced foci cent_:
         if frame.C_ and val_(frame.C_[1], (len(frame.N_)-1)*Lw, frame.rc+centw) > 0:
             Fc = cross_comp(frame, rc=frame.rc+compw, fC=1)
-            if Fc: frame.C_=Fn.N_; frame.Et+=Fn.Et
+            if Fc: frame.C_=[Fc.N_, Fc.Et]; frame.Et+=Fc.Et
         if not foc:
             return frame  # foci are unpacked
 '''
@@ -919,7 +956,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, wTTf=np.ones((2,9),dtype="
 
         n_,l_,c_ = [],[],[]
         for g in Fg_:
-            if g: n_ += g.N_; l_ += g.L_; c_ += g.C_  # + dC_?
+            if g: n_ += g.N_; l_ += g.L_; c_ += g.C_[0] if g.C_ else []  # + dC_?
         nG, lG, cG = cross_comp(CN(N_=n_),rc), cross_comp(CN(N_=l_),rc+1), cross_comp(CN(N_=c_),rc+2,fC=1)
 
         Et = np.sum([g.Et for g in (nG,lG,cG) if g], axis=0)
