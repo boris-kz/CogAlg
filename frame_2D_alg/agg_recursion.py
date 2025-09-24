@@ -289,38 +289,37 @@ def comp_Q(iN_, rc, fC):  # comp pairs of nodes or links within max_dist
         else: break
     return N__, L_, ET
 
-def comp_seq(iN_, rc, fC):  # comp consecutive nodes along or links within max_dist
+def comp_seq(N_, rc):  # comp consecutive nodes along each direction in the edge
 
-    N_,L_,Et,_N_ = [],[], np.zeros(3),copy(iN_)
+    L_, Et = [], np.zeros(3)
     for N in N_: N._rim = []
-    for _N, N in combinations(_N_, r=2):  # proximity-order for min ders
+    for _N, N in combinations(N_,r=2):  # get proximity only
         if _N in N.compared: continue
+        N.compared +=[_N]; _N.compared +=[N]
         dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)
         L = [dist,dy_dx,_N,N]; N._rim += [L]; _N._rim += [L]
-    oN_,G_ = [],[]
+    G_ = []
     for N in N_: N.compared=0
     for N in N_:
-        for Li in np.argsort([_L[0] for _L in N._rim][:2]):  # two shortest links, one in each direction?
-            dist,dy_dx,_n,n = N._rim[Li]
-            if n in _n.compared: continue  # only one direction may be open?
-            V = proj_V(_n,n, dy_dx, dist)  # eval _N,N cross-induction for comp
-            o = (n.rc+_n.rc) / 2
-            if adist * V/(rc+o) > dist:  # min induction
-                Link = comp_N(_n,n, o,rc, angl=dy_dx, span=dist, lH=L_)
+        for dir in N._rim:  # _rim should pre-link directions clustered by mA, as in proj_V
+            Li = np.argmin([l[0] for l in dir])
+            dist,dy_dx,_n,n = dir[Li]
+            if n in _n.compared: continue
+            o = n.rc+_n.rc  # V = proj_V(_n,n, dy_dx, dist)  # eval _N,N cross-induction for comp
+            if adist * (val_(n.Et+_n.Et, aw=o) / ave*rc) > dist:  # min induction
+                Link = comp_N(_n,n, o,rc, angl=dy_dx, span=dist)
                 if val_(Link.Et, aw=compw+o+rc) > 0:
-                    oN_ += [_n,n]; Et += Link.Et
-        oN_ = list(set(N_))
-    for N in N_: N.root = [N]  # temporary?
+                    L_ += Link; Et += Link.Et
+        N.Gt = [N]
     for N in N_:
-        for L in N.rim:  # 1|2 links per rim
-            if val_(L.Et,aw=contw+rc):
-                nt = L.N_
-                if len(nt) == 2: Gt = nt[0].root if nt[0] is N else nt[0].root; Gt += [N]; N.fin = 1
-            else: N.fin=0  # singleton
+        for L in N.rim:  # one min dist L per direction
+            if val_(L.Et, aw=contw+rc):
+                nt=L.N_; Gt = nt[0].Gt if nt[0] is N else nt[0].Gt
+                N.fin=1; Gt += [N]
     for N in N_:
-        Gt = N.root
-        if len(Gt) > 1: G = sum_N_(N.root); N.root=G; G_ += [G]
-        else: N.root=[]; N.sub+=1; G_ += [N]  # singleton
+        if len(N.Gt)>1: G = sum_N_(N.Gt); G.root=N.root; N.root=G; G_+=[G]
+        elif not N.fin: N.sub+=1; G_ += [N]  # singleton
+        delattr(N,"Gt")
     return G_
 
 def comp_sorted(C_, rc):  # max attr sort to constrain search in 1D, add K attrs and overlap?
