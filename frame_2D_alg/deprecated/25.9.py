@@ -408,3 +408,58 @@ def add_sett(Sett,sett):
     if Sett: N_,Et = Sett; n_ = sett[0]; N_.update(n_); Et += np.sum([t.Et for t in n_-N_])
     else:    Sett += [copy(par) for par in sett]  # B_, Et
 
+def comp_seq(N_, rc):  # comp consecutive nodes along each direction in the edge
+
+    def cluster_dir(N):
+        rim = []
+        for l in N._rim:
+            if l.span < adist: l.L_ += [l]; l.L_ += [l]  # use L_ as lGt
+        for _l,l in combinations(rim,r=2):
+            if _l in l.compared: continue
+            l.compared.add(l[-2]); _l.compared.add(l)
+            mA,_ = comp_A(_l.angl,l.angl)
+            if mA > 0.5:  # placeholer ama
+                for pre_link in l.L_.pop():  # lGt
+                    l.fin=1; _l.L_ += [l]
+        N._rim = [L.L_ for L in rim if L.L_]
+        # directions
+    Et = np.zeros(3)
+    for N in N_: N._rim = []
+    for _N, N in combinations(N_,r=2):  # get proximity only
+        if _N in N.compared: continue
+        N.compared.add(_N); _N.compared.add(N)
+        dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)
+        L = CN(fi=0, span=dist, angl=dy_dx, N_=[_N,N]); N._rim += [L]; _N._rim += [L]
+    G_ = []
+    for N in N_: N.compared=set(); cluster_dir(N)
+    for N in N_:
+        for dir in N._rim:  # _pre-link directions clustered by mA
+            Li = np.argmin([l.span for l in dir])
+            pL = dir[Li]; _n,n = pL.N_
+            if n in _n.compared: continue
+            o = n.rc+_n.rc  # V = proj_V(_n,n, dy_dx, dist)  # eval _N,N cross-induction for comp
+            if adist * (val_(n.Et+_n.Et, aw=o) / ave*rc) > pL.span:  # min induction
+                Link = comp_N(_n,n, o,rc, angl=pL.angl, span=pL.span)
+                if val_(Link.Et, aw=compw+o+rc) > 0:
+                    Et += Link.Et
+        N.Gt = [N]
+    for N in N_:
+        if N.fin: continue
+        for L in N.rim:  # one min dist L per direction
+            if val_(L.Et, aw = contw+rc):
+                nt=L.N_; _N = nt[0] if nt[0] is N else nt[1]
+                for n in N.Gt.pop():
+                    n.fin=1; _N.Gt += [n]
+                break
+    for N in N_:
+        if N.Gt: G = sum_N_(N.Gt); G.root=N.root; N.root=G; G_+=[G]
+        elif not N.fin: N.sub+=1; G_ += [N]  # singleton
+        delattr(N, 'Gt')
+    return G_
+'''
+if B_:
+    bG = CN(N_=B_, Et=Et)
+    if val_(Et, 0, (len(B_) - 1) * Lw, rc + Rdn + compw) > 0:  # norm by core_ rdn
+        bG = cross_comp(bG, rc) or bG
+    Ng.B_ = [list(set(bG.N_)), bG.Et]
+'''

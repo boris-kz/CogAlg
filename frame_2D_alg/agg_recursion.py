@@ -109,7 +109,7 @@ class CN(CBase):
         n.nH = kwargs.get('nH', [])  # top-down hierarchy of sub-node_s: CN(sum_N_(Nt_))/ lev, with single added-layer derH, empty nH
         n.lH = kwargs.get('lH', [])  # bottom-up hierarchy of L_ graphs: CN(sum_N_(Lt_))/ lev, within each nH lev
         n.root = kwargs.get('root',[])  # immediate
-        n.sub  = 0  # composition relative to top composition graphs
+        n.sub  = 0  # composition depth relative to top composition graphs
         n.fin  = kwargs.get('fin',0)  # clustered, temporary
         n.exe  = kwargs.get('exe',0)  # exemplar, temporary
         n.compared = set()
@@ -152,9 +152,67 @@ def vect_root(Fg, rV=1, wTTf=[]):  # init for agg+:
     for blob in blob_:
         if not blob.sign and blob.G > aveB:
             edge = slice_edge(blob, rV)
-            if edge.G * ((len(edge.P_)-1)* Lw) > ave * sum([P.latT[4] for P in edge.P_]):
-                N_ += comp_slice(edge, rV, wTTf)
+            if edge.G * ((len(edge.P_)-1)*Lw) > ave * sum([P.latT[4] for P in edge.P_]):
+                N_ += comp_slice(edge, rV,wTTf)
     Fg.N_ = [PP2N(PP, Fg) for PP in N_]
+
+def trace_edge(N_, rc):  # cluster contiguous shapes via PPs in edge blobs or link clusters in boundary
+
+    Et = np.zeros(3); L_ = []
+    for N in N_: N._rim = []; N.fin = 0
+    # dist pairs:
+    for _N, N in combinations(N_, r=2):
+        dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx)
+        N._rim += [[dist, dy_dx, _N]]
+        _N._rim +=[[dist, -dy_dx, N]]
+    # comp pairs:
+    compT_ = set()
+    for N in N_:
+        if not N._rim: continue
+        dir_ = []  # [ave_angle, [pre_links]]
+        for pL in N._rim:
+            dist, angl, _N = pL
+            imax = -1; max_mA = -1
+            for i, (Angl, pL_) in enumerate(dir_):
+                mA,_ = comp_A(angl, Angl)
+                if mA > .5 and mA > max_mA:
+                    max_mA = mA; imax = i
+            # dir clustering:
+            if imax != -1:
+                dir_[imax][0] = np.add(dir_[imax][0], angl)  # update Angl
+                dir_[imax][1] += [pL]
+            else:
+                dir_ += [[angl,[pL]]]
+        for Angl, pL_ in dir_:
+            dist, dy_dx, _N = pL_[np.argmin([pL[0] for pL in pL_])]
+            key = tuple(sorted((N.id,_N.id)))
+            if key in compT_: continue
+            compT_.add(key)
+            o = (N.rc + _N.rc) / 2
+            V = proj_V(_N,N, dy_dx, dist)
+            if adist * V/o > dist:  # min induction
+                Link = comp_N(_N,N, o,rc, angl=dy_dx, span=dist)
+                if val_(Link.Et, aw=compw+o+rc) > 0:
+                    L_ += [Link]; Et += Link.Et
+    # floodfill
+    L_ = {L for L in L_ if val_(L.Et, aw=contw+rc) > 0}
+    G_ = []; root = N_[0].root
+    for N in N_:
+        if N.fin: continue
+        N.fin =1; Gt = [N]; _N_ = [N]
+        while _N_:
+            _N = _N_.pop(0)
+            for L in _N.rim:
+                if L in L_:
+                    n = L.N_[0] if L.N_[1] is _N else L.N_[1]
+                    if n in N_ and not n.fin:
+                        n.fin = 1; Gt += [n]; _N_ += [n]
+        if len(Gt) > 1:
+            G = sum_N_(Gt, root=root); G_ += [G]
+        else: N.sub += 1; G_ += [N]
+
+    for N in N_: delattr(N,'_rim'); N.fin = 0
+    return G_, Et
 
 def val_(Et, fi=1, mw=1, aw=1, _Et=np.zeros(3)):  # m,d eval per cluster or cross_comp
 
@@ -218,18 +276,17 @@ def comb_B_(nG, lG, rc):  # cross_comp boundary / background per node:
         if L.root: return L.root if L.root.root is lG else R(L.root)
         else:      return None
     for Ng in nG.N_:
-        Et, Rdn, link_B_ = np.zeros(3), 0, []  # core boundary clustering
+        Et, Rdn, B_ = np.zeros(3), 0, []  # core boundary clustering
         LR_ = {R(L) for n in Ng.N_ for L in n.rim}  # lGs for nGs, individual nodes and rims are too weak to bound
         for LR in LR_:
             if LR and LR.rB_:  # not None, eval Lg.B_[1]?
                 for core, rdn in LR.rB_[0]:  # map contour rdns to core N:
                     if core is Ng:
-                        link_B_ += [LR]; Et += core.Et; Rdn += rdn  # add to Et[2]?
-        if link_B_:
-            bG = CN(N_=link_B_, Et=Et)
-            if val_(Et,0, (len(link_B_)-1)*Lw, rc+Rdn+compw) > 0:  # norm by core_ rdn
-                bG = cross_comp(bG, rc) or bG
-            Ng.B_ = [list(set(bG.N_)), bG.Et]
+                        B_ += [LR]; Et += core.Et; Rdn += rdn  # add to Et[2]?
+        if B_:
+            if val_(Et,0, (len(B_)-1)*Lw, rc+Rdn+compw) > 0:  # norm by core_ rdn
+                B_, Et = trace_edge(B_,rc)
+            Ng.B_ = [B_,Et]
 
 def proj_V(_N, N, angle, dist, fC=0):  # estimate cross-induction between N and _N before comp
 
@@ -288,39 +345,6 @@ def comp_Q(iN_, rc, fC):  # comp pairs of nodes or links within max_dist
             else: break  # low projected rng+ vM
         else: break
     return N__, L_, ET
-
-def comp_seq(N_, rc):  # comp consecutive nodes along each direction in the edge
-
-    L_, Et = [], np.zeros(3)
-    for N in N_: N._rim = []
-    for _N, N in combinations(N_,r=2):  # get proximity only
-        if _N in N.compared: continue
-        N.compared +=[_N]; _N.compared +=[N]
-        dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)
-        L = [dist,dy_dx,_N,N]; N._rim += [L]; _N._rim += [L]
-    G_ = []
-    for N in N_: N.compared=0
-    for N in N_:
-        for dir in N._rim:  # _rim should pre-link directions clustered by mA, as in proj_V
-            Li = np.argmin([l[0] for l in dir])
-            dist,dy_dx,_n,n = dir[Li]
-            if n in _n.compared: continue
-            o = n.rc+_n.rc  # V = proj_V(_n,n, dy_dx, dist)  # eval _N,N cross-induction for comp
-            if adist * (val_(n.Et+_n.Et, aw=o) / ave*rc) > dist:  # min induction
-                Link = comp_N(_n,n, o,rc, angl=dy_dx, span=dist)
-                if val_(Link.Et, aw=compw+o+rc) > 0:
-                    L_ += Link; Et += Link.Et
-        N.Gt = [N]
-    for N in N_:
-        for L in N.rim:  # one min dist L per direction
-            if val_(L.Et, aw=contw+rc):
-                nt=L.N_; Gt = nt[0].Gt if nt[0] is N else nt[0].Gt
-                N.fin=1; Gt += [N]
-    for N in N_:
-        if len(N.Gt)>1: G = sum_N_(N.Gt); G.root=N.root; N.root=G; G_+=[G]
-        elif not N.fin: N.sub+=1; G_ += [N]  # singleton
-        delattr(N,"Gt")
-    return G_
 
 def comp_sorted(C_, rc):  # max attr sort to constrain search in 1D, add K attrs and overlap?
 
@@ -948,8 +972,10 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, wTTf=np.ones((2,9),dtype="
     def base_tile(y,x):  # 1st level, higher levels get Fg s
 
         Fg = frame_blobs_root( comp_pixel( image[y:y+Ly, x:x+Lx]), rV)
-        vect_root(Fg, rV, wTTf); Fg.L_=[]  # clustering
-        return cross_comp(Fg, rc=frame.rc)
+        vect_root(Fg, rV, wTTf); Fg.L_=[]  # form PPs
+        G_, Et = trace_edge(Fg.N_,rc=2)  # cluster PPs in contours
+        Fg.N_= G_; Fg.Et+= Et
+        return cross_comp(Fg, rc=Fg.rc)
 
     def cross_comp_(Fg_, rc):  # top-composition xcomp, add margin search extend and splice?
 
@@ -1001,7 +1027,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, wTTf=np.ones((2,9),dtype="
             if Fg:
                 frame.nH += [Fg]; elev += 1  # forward comped tile
                 if max_elev == 4:  # seed, not from expand_lev
-                    rV, wTTf = ffeedback(Fg)  # set filters
+                    rV,wTTf = ffeedback(Fg)  # set filters
                     Fg = cent_attr(Fg,2)  # set Fg.derTT correlation weights
                     wTTf *= Fg.wTT; mW = np.sum(wTTf[0]); dW = np.sum(wTTf[1])
                     wTTf[0] *= 9/(mW or eps); wTTf[1] *= 9/(dW or eps)
