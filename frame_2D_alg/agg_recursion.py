@@ -156,7 +156,7 @@ def vect_root(Fg, rV=1, wTTf=[]):  # init for agg+:
                 N_ += comp_slice(edge, rV,wTTf)
     Fg.N_ = [PP2N(PP, Fg) for PP in N_]
 
-def trace_edge(N_, rc):  # cluster contiguous shapes via PPs in edge blobs or link clusters in boundary
+def trace_edge(N_, rc):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary / skelleton?
 
     Et = np.zeros(3); L_ = []
     for N in N_: N._rim = []; N.fin = 0
@@ -165,37 +165,33 @@ def trace_edge(N_, rc):  # cluster contiguous shapes via PPs in edge blobs or li
         dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx)
         N._rim += [[dist, dy_dx, _N]]
         _N._rim +=[[dist, -dy_dx, N]]
-    # comp pairs:
-    compT_ = set()
+    cT_ = set()  # comp pairs
     for N in N_:
         if not N._rim: continue
         dir_ = []  # [ave_angle, [pre_links]]
         for pL in N._rim:
             dist, angl, _N = pL
-            imax = -1; max_mA = -1
-            for i, (Angl, pL_) in enumerate(dir_):
+            max_pL_t = []; max_mA = -1
+            for i, pL_t in enumerate(dir_):
+                Angl,pL_ = pL_t
                 mA,_ = comp_A(angl, Angl)
                 if mA > .5 and mA > max_mA:
-                    max_mA = mA; imax = i
-            # dir clustering:
-            if imax != -1:
-                dir_[imax][0] = np.add(dir_[imax][0], angl)  # update Angl
-                dir_[imax][1] += [pL]
-            else:
-                dir_ += [[angl,[pL]]]
-        for Angl, pL_ in dir_:
+                    max_mA = mA; max_pL_t = pL_t
+            if max_pL_t:
+                max_pL_t[0] += angl; max_pL_t[1] += [pL]  # add prelink to cluster
+            else: dir_ += [[angl,[pL]]]  # new link cluster
+        for _,pL_ in dir_:
             dist, dy_dx, _N = pL_[np.argmin([pL[0] for pL in pL_])]
-            key = tuple(sorted((N.id,_N.id)))
-            if key in compT_: continue
-            compT_.add(key)
+            cT = tuple(sorted((N.id,_N.id)))
+            if cT in cT_: continue
+            cT_.add(cT)
             o = (N.rc + _N.rc) / 2
             V = proj_V(_N,N, dy_dx, dist)
             if adist * V/o > dist:  # min induction
                 Link = comp_N(_N,N, o,rc, angl=dy_dx, span=dist)
-                if val_(Link.Et, aw=compw+o+rc) > 0:
+                if val_(Link.Et, aw=contw+o+rc) > 0:
                     L_ += [Link]; Et += Link.Et
-    # floodfill
-    L_ = {L for L in L_ if val_(L.Et, aw=contw+rc) > 0}
+    # flood-fill
     G_ = []; root = N_[0].root
     for N in N_:
         if N.fin: continue
@@ -205,18 +201,17 @@ def trace_edge(N_, rc):  # cluster contiguous shapes via PPs in edge blobs or li
             for L in _N.rim:
                 if L in L_:
                     n = L.N_[0] if L.N_[1] is _N else L.N_[1]
-                    if n in N_ and not n.fin:
-                        n.fin = 1; Gt += [n]; _N_ += [n]
+                    if n in N_ and not n.fin: n.fin = 1; Gt += [n]; _N_ += [n]
         if len(Gt) > 1:
-            G = sum_N_(Gt, root=root); G_ += [G]
-        else: N.sub += 1; G_ += [N]
-
+            G = sum_N_(Gt,root); G_ += [G]
+        else:
+            N.sub += 1; G_ += [N]
     for N in N_: delattr(N,'_rim'); N.fin = 0
     return G_, Et
 
 def val_(Et, fi=1, mw=1, aw=1, _Et=np.zeros(3)):  # m,d eval per cluster or cross_comp
 
-    if mw <= 0: return (0, 0) if fi == 2 else 0
+    if mw <= 0: return (0,0) if fi == 2 else 0
     am = ave * aw  # includes olp, M /= max I | M+D? div comp / mag disparity vs. span norm
     ad = avd * aw  # dval is borrowed from co-projected or higher-scope mval
     m, d, n = Et
@@ -333,7 +328,7 @@ def comp_Q(iN_, rc, fC):  # comp pairs of nodes or links within max_dist
                     fcomp = adist * V/olp > dist  # min induction
                 if fcomp:
                     Link = comp_N(_N,N, olp, rc, angl=dy_dx, span=dist, rng=rng, lH=L_)
-                    if val_(Link.Et, aw=compw+olp) > 0:
+                    if val_(Link.Et, aw=contw+olp) > 0:
                         N_ += [_N,N]; Et += Link.Et; olp_ += [olp]
         N_ = list(set(N_))
         if fC:
@@ -370,7 +365,7 @@ def comp_N(_N,N, olp,rc, angl=np.zeros(2), span=None, rng=1, lH=None):  # compar
     baseT = (rn*_N.baseT + N.baseT) / 2  # not new
     yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])  # ext
     fi = N.fi
-    Link = CN(Et=Et,rc=olp, N_=[_N,N], L_=len(_N.N_+N.N_), et=_N.et+N.et, baseT=baseT,derTT=derTT, yx=yx,box=box, span=span,angl=angl, rng=rng, fi=0)
+    Link = CN(Et=Et,rc=olp, N_=[_N,N], L_=len(_N.N_+N.N_), et=_N.et+N.et, baseT=baseT,derTT=derTT, yx=yx,box=box, span=span, angl=angl, rng=rng, fi=0)
     V = val_(Et, aw=olp+rc)
     if V * (1 - 1/ (min(len(N.derH.H),len(_N.derH.H)) or eps)) > ave:  # rdn to derTT, else derH is empty
         H = [CdH(Et=Et, derTT=copy(derTT), root=Link)]  # + 2nd | higher layers:
@@ -386,12 +381,13 @@ def comp_N(_N,N, olp,rc, angl=np.zeros(2), span=None, rng=1, lH=None):  # compar
         if N.L_: spec(_N.N_, N.N_, olp,rc+1, Et,Link.lH)  # skip PP
         if (_N.B_ and _N.B_[0]) and (N.B_ and N.B_[0]):  # boundary, skip Et
             spec(_N.B_[0],N.B_[0], olp,rc,Et, Link.lH)  # for dspe; add C_ overlap,offset?
+    # dir-> +ve diff:
+    Link.dir = derTT[1] @ wTTf[1] > 0  # to invert angl in comp_A, or compute in comp_Q_fi=0)
     if lH is not None:
         lH += [Link]
     if span is not None:  # not from spec
-        for n, _n, rev in zip((N,_N),(_N,N),(0,1)):  # if rim-mediated comp: reverse dir in _N.rim: rev^_rev
-            n.rim += [Link]; n.et += Et
-            n.compared.add(_n)
+        for n, _n in (_N,N), (N,_N):  # if rim-mediated comp: reverse dir in _N.rim: rev^_rev?
+            n.rim += [Link]; n.et += Et; n.compared.add(_n)
     return Link
 
 def base_comp(_N,N, fC=0):  # comp Et, baseT, extT, derTT
@@ -408,13 +404,15 @@ def base_comp(_N,N, fC=0):  # comp Et, baseT, extT, derTT
         dm_,dd_ = comp_derT(rn*_N.derTT[1], N.derTT[1])
         m_+= dm_; d_+= dd_
     DerTT = np.array([m_,d_])
-    ad_ = np.abs(d_); t_ = m_+ ad_+ eps  # max comparand
-    Et = np.array([m_* (1, mA)[fi] /t_ @ wTTf[0],  # norm but signed?
-                   ad_* (1, 2-mA)[fi] /t_ @ wTTf[1], min(_n,n)])  # shared scope?
+    ad_= np.abs(d_)
+    t_ = m_ + ad_ + eps  # max comparand
+    Et = np.array([m_ * (1, mA)[fi] /t_ @ wTTf[0],  # norm, signed?
+                   ad_* (1, 2-mA)[fi] /t_ @ wTTf[1], min(_n,n)])  # shared?
     '''
     if np.hypot(*_N.angl)*_N.mang + np.hypot(*N.angl)*N.mang > ave*wA:  # aligned L_'As, mang *= (len_nH)+fi+1
     mang = (rn*_N.mang + N.mang) / (1+rn)  # ave, weight each side by rn
     align = 1 - mang* (1-mA)  # in 0:1, weigh mA '''
+
     return DerTT, Et, rn
 
 def comp_derT(_i_,i_):
@@ -442,7 +440,7 @@ def comp(_pars, pars, meA,deA):  # compute m_,d_ from inputs or derivatives
             m_ += [min(_a,a) if _p<0==p<0 else -min(_a,a)]  # + complement max(_a,a) for +ves?
             d_ += [_p - p]
 
-    # or mass in 0:1, m = dir_m * mass + inv_m * (1-mass)?
+    # for general mass in 0:1, m = dir_m * mass + inv_m * (1-mass)?
     return np.array(m_+[meA]), np.array(d_+[deA])
 
 def comp_A(_A,A):
@@ -973,8 +971,8 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, wTTf=np.ones((2,9),dtype="
 
         Fg = frame_blobs_root( comp_pixel( image[y:y+Ly, x:x+Lx]), rV)
         vect_root(Fg, rV, wTTf); Fg.L_=[]  # form PPs
-        G_, Et = trace_edge(Fg.N_,rc=2)  # cluster PPs in contours
-        Fg.N_= G_; Fg.Et+= Et
+        G_,Et = trace_edge(Fg.N_,rc=2)  # cluster PPs in contours
+        Fg.N_ = G_; Fg.Et += Et
         return cross_comp(Fg, rc=Fg.rc)
 
     def cross_comp_(Fg_, rc):  # top-composition xcomp, add margin search extend and splice?
