@@ -156,7 +156,7 @@ def vect_root(Fg, rV=1, wTTf=[]):  # init for agg+:
                 N_ += comp_slice(edge, rV,wTTf)
     Fg.N_ = [PP2N(PP, Fg) for PP in N_]
 
-def trace_edge(N_, rc):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary / skelleton?
+def trace_edge(N_, rc):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary / skeleton?
 
     Et = np.zeros(3); L_ = []
     for N in N_: N._rim = []; N.fin = 0
@@ -175,11 +175,10 @@ def trace_edge(N_, rc):  # cluster contiguous shapes via PPs in edge blobs or lG
             for i, pL_t in enumerate(dir_):
                 Angl,pL_ = pL_t
                 mA,_ = comp_A(angl, Angl)
-                if mA > .5 and mA > max_mA:
-                    max_mA = mA; max_pL_t = pL_t
+                if mA > .5 and mA > max_mA: max_mA = mA; max_pL_t = pL_t
             if max_pL_t:
-                max_pL_t[0] += angl; max_pL_t[1] += [pL]  # add prelink to cluster
-            else: dir_ += [[angl,[pL]]]  # new link cluster
+                max_pL_t[0] += angl; max_pL_t[1] += [pL]  # add prelink
+            else: dir_ += [[copy(angl),[pL]]]  # new link cluster
         for _,pL_ in dir_:
             dist, dy_dx, _N = pL_[np.argmin([pL[0] for pL in pL_])]
             cT = tuple(sorted((N.id,_N.id)))
@@ -191,19 +190,21 @@ def trace_edge(N_, rc):  # cluster contiguous shapes via PPs in edge blobs or lG
                 Link = comp_N(_N,N, o,rc, angl=dy_dx, span=dist)
                 if val_(Link.Et, aw=contw+o+rc) > 0:
                     L_ += [Link]; Et += Link.Et
-    # flood-fill
+    if not N_:
+        return [], Et
     G_ = []; root = N_[0].root
-    for N in N_:
+    for N in N_:  # flood-fill G per seed N
         if N.fin: continue
-        N.fin =1; Gt = [N]; _N_ = [N]
+        N.fin =1; Gt=[N]; _N_=[N]; link_,et,olp = [],np.zeros(3),0
         while _N_:
             _N = _N_.pop(0)
             for L in _N.rim:
                 if L in L_:
                     n = L.N_[0] if L.N_[1] is _N else L.N_[1]
-                    if n in N_ and not n.fin: n.fin = 1; Gt += [n]; _N_ += [n]
+                    if n in N_ and not n.fin:
+                        n.fin = 1; Gt += [n]; _N_ += [n]; link_ += [L]; et += L.Et; olp += L.rc
         if len(Gt) > 1:
-            G = sum_N_(Gt,root); G_ += [G]
+            G_ += [sum2graph(root, Gt,link_,[],[],et,olp,1)]
         else:
             N.sub += 1; G_ += [N]
     for N in N_: delattr(N,'_rim'); N.fin = 0
@@ -305,6 +306,83 @@ def proj_V(_N, N, angle, dist, fC=0):  # estimate cross-induction between N and 
         # project matches to centroids?
     return V
 
+
+def comp_Q1(iN_, rc, fC):  # comp pairs of nodes or links within max_dist
+
+    N__,L_,ET = [],[],np.zeros(3); rng,olp_,_N_ = 1,[],copy(iN_); fang_sel = (fC != 2)
+
+    while True:  # _vM, rng in rim only?
+        N_, Et = [], np.zeros(3)
+        rng_olp_ = []
+        if fC == 2:  # dCs
+            for _N, N in combinations(_N_, r=2):
+                if _N in N.compared or _N.sub != N.sub: continue
+                m_, d_ = comp_derT(_N.derTT[1], N.derTT[1])
+                ad_ = np.abs(d_); t_ = m_ + ad_ + eps  # ~ max comparand
+                et = np.array([m_ / t_ @ wTTf[0], ad_ / t_ @ wTTf[1], min(_N.Et[2], N.Et[2])])  # signed
+                dC = CN(N_=[_N,N], Et=et); L_ += [dC]; Et += et
+                for n in _N, N:
+                    N_ += [n]; n.rim += [dC]; n.et += et
+        else:  # spatial, val NMS
+            for N in _N_: N._pL_ = []
+            for _N, N in combinations(_N_, r=2):
+                if _N in N.compared or _N.sub != N.sub: continue
+                dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx); olp = (N.rc + _N.rc) / 2
+                fcomp = 0; V = 0
+                if fC or ({l for l in _N.rim if l.Et[0] > ave} & {l for l in N.rim if l.Et[0] > ave}):  # has mutual connection
+                    fcomp = 1
+                    if fang_sel and V==0: V = 1  # fill in proj_V
+                if not fcomp:
+                    V = proj_V(_N, N, dy_dx, dist)
+                    if adist * V / olp > dist:
+                        fcomp = 1
+                if fcomp:
+                    N._pL_ += [[V, dist, dy_dx, olp, _N]]
+                    _N._pL_ += [[V, dist, -dy_dx, olp, N]]
+            cT_ = set()  # compared pairs per loop
+            for N in _N_:
+                if not hasattr(N, '_pL_') or not N._pL_: continue
+                _pL_ = []
+                if fang_sel and len(N._pL_) > 1:
+                    dir_ = []  # [Angle, [pL]]
+                    for pL in N._pL_:
+                        V, dist, angl, olp, _N = pL
+                        max_pL_t = None; max_mA = -1
+                        for pL_t in dir_:
+                            Angl, pL_ = pL_t
+                            mA,_ = comp_A(angl, Angl)
+                            if mA > .8 and mA > max_mA: max_mA = mA; max_pL_t = pL_t
+                        if max_pL_t:
+                            max_pL_t[0] += angl; max_pL_t[1] += [pL]
+                        else:
+                            dir_ += [[copy(angl), [pL]]]
+                    for _,pL_ in dir_:
+                        max_pL = _pL_[np.argmax([pL[0] for pL in pL_])]
+                        _pL_ += [max_pL]
+                else:
+                    _pL_ = N._pL_  # compare all pre-filtered links
+                for V, dist, dy_dx, olp, _N in _pL_:
+                    cT = tuple(sorted((N.id,_N.id)))
+                    if cT in cT_: continue
+                    cT_.add(cT)
+                    Link = comp_N(_N, N, olp, rc, angl=dy_dx, span=dist, rng=rng, lH=L_)
+                    if val_(Link.Et, aw=contw + olp) > 0:
+                        N_ += [_N, N]; Et += Link.Et; rng_olp_ += [olp]
+            for N in _N_:
+                if hasattr(N,'_pL_'): delattr(N,'_pL_')
+        N_ = list(set(N_))
+        if fC:
+            N__ = N_; ET = Et; break  # no rng-banding
+        elif N_:
+            N__ += [N_]; ET += Et  # rng+ eval / loop
+            if not fC and val_(Et, mw=(len(N_) - 1) * Lw, aw=compw + (sum(rng_olp_) if rng_olp_ else 1)) > 0:  # current-rng vM
+                _N_ = N_; rng += 1; olp_ = []
+            else:
+                break  # low projected rng+ vM
+        else:
+            break
+    return N__, L_, ET
+
 def comp_Q(iN_, rc, fC):  # comp pairs of nodes or links within max_dist
 
     N__,L_,ET = [],[], np.zeros(3); rng,olp_,_N_ = 1,[],copy(iN_)
@@ -381,8 +459,8 @@ def comp_N(_N,N, olp,rc, angl=np.zeros(2), span=None, rng=1, lH=None):  # compar
         if N.L_: spec(_N.N_, N.N_, olp,rc+1, Et,Link.lH)  # skip PP
         if (_N.B_ and _N.B_[0]) and (N.B_ and N.B_[0]):  # boundary, skip Et
             spec(_N.B_[0],N.B_[0], olp,rc,Et, Link.lH)  # for dspe; add C_ overlap,offset?
-    # dir-> +ve diff:
-    Link.dir = derTT[1] @ wTTf[1] > 0  # to invert angl in comp_A, or compute in comp_Q_fi=0)
+    # dir = +ve diff
+    Link.dir = np.sign(derTT[1] @ wTTf[1])  # to invert angl in comp_A, for canonical links in L_
     if lH is not None:
         lH += [Link]
     if span is not None:  # not from spec
@@ -398,7 +476,7 @@ def base_comp(_N,N, fC=0):  # comp Et, baseT, extT, derTT
     rn = _n/n
     _pars = np.array([_M*rn,_D*rn,_n*rn,_I*rn,_G*rn, np.array([_Dy,_Dx]),_L*rn,_N.span], dtype=object)  # Et, baseT, extT
     pars = np.array([M,D,n, (I,aI),G, np.array([Dy,Dx]), L,(N.span,aS)], dtype=object)
-    mA,dA = comp_A(_N.angl, N.angl)  # ext angle
+    mA,dA = comp_A(_N.angl*_N.dir, N.angl*N.dir)  # ext angle
     m_,d_ = comp(_pars,pars, mA,dA)  # M,D,n, I,G,A, L,S,eA
     if fC:
         dm_,dd_ = comp_derT(rn*_N.derTT[1], N.derTT[1])
@@ -708,8 +786,9 @@ def sum2graph(root, node_,link_,cent_,long_, Et, olp, rng):  # sum node,link att
     yx = np.mean(yx_,axis=0); dy_,dx_ = (yx_-yx).T; dist_ = np.hypot(dy_,dx_)
     graph.span = dist_.mean()  # node centers distance to graph center
     graph.angl = np.sum([l.angl for l in link_], axis=0)
+    graph.dir = np.sign(np.sum([l.dir for l in link_]))
     if fi and len(link_) > 1:  # else default mang = 1
-        graph.mang = np.sum([comp_A(graph.angl, l.angl)[0] for l in link_]) / len(link_)
+        graph.mang = np.sum([ comp_A(graph.angl*graph.dir, l.angl*l.dir)[0] for l in link_]) / len(link_)
     graph.yx=yx
     return graph
 
