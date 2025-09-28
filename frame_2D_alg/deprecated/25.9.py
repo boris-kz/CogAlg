@@ -463,3 +463,41 @@ if B_:
         bG = cross_comp(bG, rc) or bG
     Ng.B_ = [list(set(bG.N_)), bG.Et]
 '''
+
+def comp_Q(iN_, rc, fC):  # comp pairs of nodes or links within max_dist
+
+    N__,L_,ET = [],[], np.zeros(3); rng,olp_,_N_ = 1,[],copy(iN_)
+    while True: # _vM, rng in rim only?
+        N_,Et = [],np.zeros(3)
+        for _N, N in combinations(_N_, r=2):  #| proximity-order for min ders?
+            if _N in N.compared or _N.sub != N.sub:  # same composition, or top only?
+                continue
+            if fC==2: # dCs
+                m_,d_ = comp_derT(_N.derTT[1], N.derTT[1])
+                ad_ = np.abs(d_); t_ = m_+ ad_+ eps  # ~ max comparand
+                et = np.array([m_/t_ @ wTTf[0], ad_/t_ @ wTTf[1], min(_N.Et[2], N.Et[2])])  # signed
+                dC = CN(N_= [_N,N], Et=Et); L_ += [dC]; Et += et
+                for n in _N,N: N_+= [n]; n.rim += [dC]; n.et+=et
+            else:
+                dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx); olp = (N.rc +_N.rc) / 2
+                if fC or ({l for l in _N.rim if l.Et[0]>ave} & {l for l in N.rim if l.Et[0]>ave}):  # +ve
+                    fcomp = 1  # x all Cs, or connected by common match, which means prior bilateral proj eval
+                else:
+                    V = proj_V(_N,N, dy_dx, dist)  # eval _N,N cross-induction for comp
+                    fcomp = adist * V/olp > dist  # min induction
+                if fcomp:
+                    Link = comp_N(_N,N, olp, rc, angl=dy_dx, span=dist, rng=rng, lH=L_)
+                    if val_(Link.Et, aw=contw+olp) > 0:
+                        N_ += [_N,N]; Et += Link.Et; olp_ += [olp]
+        N_ = list(set(N_))
+        if fC:
+            N__ = N_; ET = Et; break  # no rng-banding
+        elif N_:
+            N__ += [N_]; ET += Et  # rng+ eval:
+            if not fC and val_(Et, mw=(len(N_)-1)*Lw, aw= compw+ (sum(olp_) if olp_ else 1)) > 0:  # current-rng vM
+                _N_ = N_; rng += 1; olp_ = []  # reset, for eval only?
+            else: break  # low projected rng+ vM
+        else: break
+    return N__, L_, ET
+
+
