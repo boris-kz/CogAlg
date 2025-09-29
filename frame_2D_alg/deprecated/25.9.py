@@ -500,4 +500,58 @@ def comp_Q(iN_, rc, fC):  # comp pairs of nodes or links within max_dist
         else: break
     return N__, L_, ET
 
+def PP2N(PP, frame):
+
+    P_, link_, verT, latT, A, S, box, yx, Et = PP
+    baseT = np.array(latT[:4])
+    [mM,mD,mI,mG,mA,mL], [dM,dD,dI,dG,dA,dL] = verT  # re-pack in derTT:
+    derTT = np.array([
+        np.array([mM,mD,mL, mI,mG,mA, mL,mL/2, eps]), # extA=eps
+        np.array([dM,dD,dL, dI,dG,dA, dL,dL/2, eps]) ])
+    y,x,Y,X = box; dy,dx = Y-y,X-x
+    G = CN(root=frame, fi=1, Et=Et, N_=P_, baseT=baseT, derTT=derTT, box=box, yx=yx, angl=A, span=np.hypot(dy/2,dx/2))
+    G.dir = np.sign(derTT[1] @ wTTf[1]) # init dir for PP
+    return G
+
+def trace_edge(N_, root, rc):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary / skeleton?
+
+    for N in N_: N.pL_ = []; N.fin = 0
+    L_ = []
+    for _N, N in combinations(N_, r=2):  # dist pairs
+        dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx)
+        N.pL_ += [[dist, dy_dx, _N]]
+        _N.pL_+= [[dist, -dy_dx, N]]
+    cT_ = set()  # comp pairs
+    for N in N_:
+        if not N.pL_: continue
+        if len(N.pL_) > 1: dir_cluster(N)  # not needed if tracing is mediated by shared boundary of the Gs
+        for (dist, dy_dx, _N) in N.pL_:  # nearest pL per direction
+            cT = tuple(sorted((N.id,_N.id)))
+            if cT in cT_: continue
+            cT_.add(cT); o = (N.rc+_N.rc) / 2
+            V = proj_V(_N,N, dy_dx, dist)
+            # use shared B_ instead of dist, edge is contiguous?
+            if adist * V/o > dist:  # min induction
+                Link = comp_N(_N,N, o,rc, angl=dy_dx, span=dist)
+                if val_(Link.Et, aw=contw+o+rc) > 0:
+                    L_ += [Link]; root.Et += Link.Et
+    G_ = []; root = N_[0].root
+    for N in N_:  # flood-fill G per seed N
+        if N.fin: continue
+        N.fin =1; Gt=[N]; _N_=[N]; link_,et,olp = [],np.zeros(3),0
+        while _N_:
+            _N = _N_.pop(0)
+            for L in _N.rim:
+                if L in L_:
+                    n = L.N_[0] if L.N_[1] is _N else L.N_[1]
+                    if n in N_ and not n.fin:
+                        n.fin = 1; Gt += [n]; _N_ += [n]; link_ += [L]; et += L.Et; olp += L.rc
+        if len(Gt) > 1:
+            G_ += [sum2graph(root, Gt,link_,[],[],et,olp,1)]
+        else:
+            N.sub += 1; G_ += [N]
+    for N in N_: delattr(N,'pL_'); N.fin = 0; root.N_+= [N]
+
+
+
 

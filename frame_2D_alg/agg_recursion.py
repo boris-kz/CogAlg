@@ -138,79 +138,6 @@ adist, amed, distw, medw = 10, 3, 2, 2  # cost filters + weights, add alen?
 wM, wD, wN, wG, wL, wI, wS, wa, wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # der params higher-scope weights = reversed relative estimated ave?
 mW = dW = 9; wTTf = np.ones((2,9))  # fb weights per derTT, adjust in agg+
 wY = wX = 64; wYX = np.hypot(wY,wX)  # focus dimensions
-'''
-initial PP_ cross_comp and connectivity clustering to initialize focal frame graph, no recursion:
-'''
-def vect_root(Fg, rV=1, wTTf=[]):  # init for agg+:
-    if np.any(wTTf):
-        global ave, avd, arn, aveB, aveR, Lw, adist, amed, intw, compw, centw, contw, wM, wD, wN, wI, wG, wL,  wS, wa, wA
-        ave, avd, arn, aveB, aveR, Lw, adist, amed, intw, compw, centw, contw = (
-            np.array([ave,avd, arn,aveB,aveR, Lw, adist, amed, intw, compw, centw, contw]) / rV)  # projected value change
-        wTTf = np.multiply([[wM, wD, wN, wI, wG, wL,  wS, wa, wA]], wTTf)  # or dw_ ~= w_/ 2?
-        wTTf = np.delete(wTTf,(2), axis=1)  #-> comp_slice, = np.array([(*wTTf[0][:2],*wTTf[0][4:]),(*wTTf[0][:2],*wTTf[1][4:])])
-    blob_ = unpack_blob_(Fg); N_ = []
-    for blob in blob_:
-        if not blob.sign and blob.G > aveB:
-            edge = slice_edge(blob, rV)
-            if edge.G * ((len(edge.P_)-1)*Lw) > ave * sum([P.latT[4] for P in edge.P_]):
-                N_ += comp_slice(edge, rV,wTTf)
-    Fg.N_ = [PP2N(PP, Fg) for PP in N_]
-
-def dir_cluster(N):
-
-    dir_ = []
-    for pL in N.pL_:
-        angl = pL[1]; max_pL_t = []; max_mA = -1
-        for pL_t in dir_:
-            Angl,_ = pL_t
-            mA,_ = comp_A(angl, Angl)
-            if mA > .8 and mA > max_mA: max_mA = mA; max_pL_t = pL_t
-        if max_pL_t: max_pL_t[0] += angl; max_pL_t[1] += [pL]
-        else:        dir_ += [[copy(angl), [pL]]]  # init dir
-    sel_pL_ = []
-    for _,pL_ in dir_:
-        sel_pL_ += [pL_[ np.argmin([pL[0] for pL in pL_])][1]]  # nearest pL per direction
-    N.pL_ = sel_pL_
-
-def trace_edge(N_, rc):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary / skeleton?
-
-    Et = np.zeros(3); L_ = []
-    for N in N_: N._rim = []; N.fin = 0
-    # dist pairs:
-    for _N, N in combinations(N_, r=2):
-        dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx)
-        N.pL_ += [[dist, dy_dx, _N]]
-        _N.pL_+= [[dist, -dy_dx, N]]
-    cT_ = set()  # comp pairs
-    for N in N_:
-        if not N.pL_: continue
-        if len(N.pL_) > 1: dir_cluster(N)
-        for dist, dy_dx, _N in N.pL_:  # nearest pL per direction
-            cT = tuple(sorted((N.id,_N.id)))
-            if cT in cT_: continue
-            cT_.add(cT); o = (N.rc+_N.rc) / 2
-            V = proj_V(_N,N, dy_dx, dist)
-            if adist * V/o > dist:  # min induction
-                Link = comp_N(_N,N, o,rc, angl=dy_dx, span=dist)
-                if val_(Link.Et, aw=contw+o+rc) > 0:
-                    L_ += [Link]; Et += Link.Et
-    G_ = []; root = N_[0].root
-    for N in N_:  # flood-fill G per seed N
-        if N.fin: continue
-        N.fin =1; Gt=[N]; _N_=[N]; link_,et,olp = [],np.zeros(3),0
-        while _N_:
-            _N = _N_.pop(0)
-            for L in _N.rim:
-                if L in L_:
-                    n = L.N_[0] if L.N_[1] is _N else L.N_[1]
-                    if n in N_ and not n.fin:
-                        n.fin = 1; Gt += [n]; _N_ += [n]; link_ += [L]; et += L.Et; olp += L.rc
-        if len(Gt) > 1:
-            G_ += [sum2graph(root, Gt,link_,[],[],et,olp,1)]
-        else:
-            N.sub += 1; G_ += [N]
-    for N in N_: delattr(N,'pL_'); N.fin = 0
-    return G_, Et
 
 def val_(Et, fi=1, mw=1, aw=1, _Et=np.zeros(3)):  # m,d eval per cluster or cross_comp
 
@@ -283,8 +210,8 @@ def comb_B_(nG, lG, rc):  # cross_comp boundary / background per node:
                         B_ += [LR]; Et += core.Et; Rdn += rdn  # add to Et[2]?
         if B_:
             if val_(Et,0, (len(B_)-1)*Lw, rc+Rdn+compw) > 0:  # norm by core_ rdn
-                B_, Et = trace_edge(B_,rc)
-            Ng.B_ = [B_,Et]
+                trace_edge(B_, lG, rc)
+            Ng.B_ = [lG.N_,lG.Et]
 
 def proj_V(_N, N, angle, dist, fC=0):  # estimate cross-induction between N and _N before comp
 
@@ -345,36 +272,28 @@ def comp_Q(iN_, rc, fC):  # comp pairs of nodes or links within max_dist
             for N in _N_: N.pL_ = []
             for _N, N in combinations(_N_, r=2):
                 if _N in N.compared or _N.sub != N.sub: continue
-                dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx); olp = (N.rc + _N.rc) / 2
-                fcomp = 0
-                if fC or ({l for l in _N.rim if l.Et[0] > ave} & {l for l in N.rim if l.Et[0] > ave}):
-                    fcomp = 1  # x all Cs, or connected by common match, which means prior bilateral proj eval
-                else:
-                    V = proj_V(_N, N, dy_dx, dist)
-                    if adist * V/olp > dist: fcomp = 1
-                if fcomp:
+                dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx)
+                olp = (N.rc+_N.rc) /2
+                if fC or ({l for l in _N.rim if l.Et[0] > ave} & {l for l in N.rim if l.Et[0] > ave}):  # common match: after bilateral proj eval
                     Link = comp_N(_N,N, olp, rc, angl=dy_dx, span=dist, rng=rng, lH=L_)
                     if val_(Link.Et, aw=contw+olp+rc) > 0:
                         N_ += [_N,N]; Et+=Link.Et; o+=olp
-            '''
-            draft:
-                if fcomp and not fC:
-                    N.pL_ += [[dist, dy_dx, olp, _N]]
-                    _N.pL_ += [[dist,-dy_dx, olp, N]]
-            cT_ = set()  # compared pairs per loop
-            for N in _N_:
-                if not fC and len(N.pL_) > 1:
-                    dir_cluster(N, fV=1)  # select max V or min dist pL per direction?
+                else:
+                    V = proj_V(_N, N, dy_dx, dist)  # + eval link dir_cluster?
+                    if adist * V/olp > dist:
+                        N.pL_ += [[dist,dy_dx,olp,_N]]; _N.pL_ += [[dist,-dy_dx,olp,N]]
+            if not fC:  # else compared above
+                cT_ = set()  # compared pairs per loop
+                for N in _N_:
                     for dist, dy_dx, olp, _N in N.pL_:
                         cT = tuple(sorted((N.id,_N.id)))
                         if cT in cT_: continue
                         cT_.add(cT)
                         Link = comp_N(_N, N, olp, rc, angl=dy_dx, span=dist, rng=rng, lH=L_)
                         if val_(Link.Et, aw=contw+rc+olp) > 0:
-                            N_ += [_N, N]; Et += Link.Et; o += olp
-            for N in _N_:
-                delattr(N,'pL_')
-            '''
+                            N_ += [_N,N]; Et+= Link.Et; o+=olp
+                for N in _N_:
+                    delattr(N,'pL_')
         N_ = list(set(N_))
         if fC:
             N__ = N_; ET = Et; break  # no rng-banding
@@ -809,18 +728,6 @@ def extend_box(_box, box):
     y0, x0, yn, xn = box; _y0, _x0, _yn, _xn = _box
     return min(y0,_y0), min(x0,_x0), max(yn,_yn), max(xn,_xn)
 
-def PP2N(PP, frame):
-
-    P_, link_, verT, latT, A, S, box, yx, Et = PP
-    baseT = np.array(latT[:4])
-    [mM,mD,mI,mG,mA,mL], [dM,dD,dI,dG,dA,dL] = verT  # re-pack in derTT:
-    derTT = np.array([
-        np.array([mM,mD,mL, mI,mG,mA, mL,mL/2, eps]), # extA=eps
-        np.array([dM,dD,dL, dI,dG,dA, dL,dL/2, eps]) ])
-    y,x,Y,X = box; dy,dx = Y-y,X-x
-
-    return CN(root=frame, fi=1, Et=Et, N_=P_, baseT=baseT, derTT=derTT, box=box, yx=yx, angl=A, span=np.hypot(dy/2,dx/2))
-
 # not used, make H a centroid of layers, same for nH?
 def sort_H(H, fi):  # re-assign olp and form priority indices for comp_tree, if selective and aligned
 
@@ -959,7 +866,7 @@ def agg_frame(foc, image, iY, iX, rV=1, wTTf=[], fproj=0):  # search foci within
         PV__[y,x] = -np.inf  # to skip?
         if foc:
             Fg = frame_blobs_root( win__[:,:,:,y,x], rV)  # [dert, iY, iX, nY, nX]
-            vect_root(Fg, rV,wTTf); Fg.L_=[]  # focal dert__ clustering
+            vect_edge(Fg, rV,wTTf); Fg.L_=[]  # focal dert__ clustering
             cross_comp(Fg, rc=frame.rc)
         else:
             Fg = agg_frame(1, win__[:,:,:,y,x], wY,wX, rV=1, wTTf=[])  # use global wY,wX in nested call
@@ -990,17 +897,90 @@ def agg_frame(foc, image, iY, iX, rV=1, wTTf=[], fproj=0):  # search foci within
             if Fc: frame.C_=[Fc.N_, Fc.Et]; frame.Et+=Fc.Et
         if not foc:
             return frame  # foci are unpacked
-'''
-frame expansion per level: cross_comp lower-window N_,C_, forward results to next lev, project feedback to scan new lower windows
-'''
+
+
+def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init focal frame graph, no recursion:
+
+    if np.any(wTTf):
+        global ave, avd, arn, aveB, aveR, Lw, adist, amed, intw, compw, centw, contw, wM, wD, wN, wI, wG, wL,  wS, wa, wA
+        ave, avd, arn, aveB, aveR, Lw, adist, amed, intw, compw, centw, contw = (
+            np.array([ave,avd, arn,aveB,aveR, Lw, adist, amed, intw, compw, centw, contw]) / rV)  # projected value change
+        wTTf = np.multiply([[wM, wD, wN, wI, wG, wL,  wS, wa, wA]], wTTf)  # or dw_ ~= w_/ 2?
+        wTTf = np.delete(wTTf,(2), axis=1)  #-> comp_slice, = np.array([(*wTTf[0][:2],*wTTf[0][4:]),(*wTTf[0][:2],*wTTf[1][4:])])
+    Fg = CN()
+    for blob in tile.blob_:
+        if not blob.sign and blob.G > aveB:
+            edge = slice_edge(blob, rV)
+            if edge.G * ((len(edge.P_)-1)*Lw) > ave * sum([P.latT[4] for P in edge.P_]):
+                G_ = []; ET = np.zeros(3)
+                for PPm in comp_slice(edge, rV,wTTf):  # PP_ per edge
+                    P_, link_, B_, verT, latT, A, S, box, yx, Et = PPm
+                    baseT = np.array(latT[:4])
+                    [mM, mD, mI, mG, mA, mL], [dM, dD, dI, dG, dA, dL] = verT  # re-pack in derTT:
+                    derTT = np.array([ np.array([mM, mD, mL, mI, mG, mA, mL, mL / 2, eps]),  # extA=eps
+                                       np.array([dM, dD, dL, dI, dG, dA, dL, dL / 2, eps])])
+                    y,x,Y,X = box; dy,dx = Y-y, X-x
+                    A = [A, np.sign(derTT[1] @ wTTf[1])]  # append angl
+                    PP = CN(root=Fg, fi=1, Et=Et, N_=P_, baseT=baseT, derTT=derTT, box=box, yx=yx, angl=A, span=np.hypot(dy/2, dx/2))
+                    comb_B_(PP, CN(N_=B_), rc=3)
+                    G_ += [PP]; ET += Et
+                if val_(ET, mw=(len(G_)-1)*Lw, aw=2) > 0:
+                    trace_edge(G_, Fg, rc=3)
+    return Fg
+
+def trace_edge(N_, root, rc):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary / skeleton?
+
+    L_ = []; cT_ = set()  # comp pairs
+    for N in N_:
+        for _N in list({rB for B in N.B_ for rB in B.rB_ if rB is not N}):  # _Ns share boundary with N
+            cT = tuple(sorted((N.id,_N.id)))
+            if cT in cT_: continue
+            cT_.add(cT)
+            dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx); o = (N.rc+_N.rc) / 2
+            Link = comp_N(_N,N, o,rc, angl=dy_dx, span=dist)
+            if val_(Link.Et, aw=contw+o+rc) > 0:
+                L_ += [Link]; root.Et += Link.Et
+    G_ = []; root = N_[0].root
+    for N in N_:  # flood-fill G per seed N
+        if N.fin: continue
+        N.fin =1; Gt=[N]; _N_=[N]; link_,et,olp = [],np.zeros(3),0
+        while _N_:
+            _N = _N_.pop(0)
+            for L in _N.rim:
+                if L in L_:
+                    n = L.N_[0] if L.N_[1] is _N else L.N_[1]
+                    if n in N_ and not n.fin:
+                        n.fin = 1; Gt += [n]; _N_ += [n]; link_ += [L]; et += L.Et; olp += L.rc
+        if len(Gt) > 1:
+            G_ += [sum2graph(root, Gt,link_,[],[],et,olp,1)]
+        else: N.sub+=1; G_+=[N]
+
+    for N in N_: N.fin = 0; root.N_+= [N]
+
+def dir_cluster(N):  # get neg links to block projection?
+
+    dir_ = []
+    for pL in N.pL_:
+        angl = pL[1]; max_pL_t = []; max_mA = -1
+        for pL_t in dir_:
+            Angl,_ = pL_t
+            mA,_ = comp_A(angl, Angl)
+            if mA > .8 and mA > max_mA: max_mA = mA; max_pL_t = pL_t
+        if max_pL_t: max_pL_t[0] += angl; max_pL_t[1] += [pL]
+        else:        dir_ += [[copy(angl), [pL]]]  # init dir
+    sel_pL_ = []
+    for _,pL_ in dir_:
+        sel_pL_ += [pL_[ np.argmin([pL[0] for pL in pL_])]]  # nearest pL per direction
+    N.pL_ = sel_pL_
+
+# frame expansion per level: cross_comp lower-window N_,C_, forward results to next lev, project feedback to scan new lower windows
+
 def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, wTTf=np.ones((2,9),dtype="float")):  # all initial args set manually
 
     def base_tile(y,x):  # 1st level, higher levels get Fg s
 
         Fg = frame_blobs_root( comp_pixel( image[y:y+Ly, x:x+Lx]), rV)
-        vect_root(Fg, rV, wTTf); Fg.L_=[]  # form PPs
-        G_,Et = trace_edge(Fg.N_,rc=2)  # cluster PPs in contours
-        Fg.N_ = G_; Fg.Et += Et
+        Fg = vect_edge(Fg, rV, wTTf); Fg.L_=[]  # form, trace PP_
         return cross_comp(Fg, rc=Fg.rc)
 
     def cross_comp_(Fg_, rc):  # top-composition xcomp, add margin search extend and splice?
