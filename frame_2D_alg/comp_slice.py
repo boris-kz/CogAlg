@@ -80,7 +80,7 @@ def comp_slice(edge, rV=1, ww_t=None):  # root function
     if PPt:
         edge.node_ = PPt
         comp_dP_(edge, mEt)
-        edge.link_, dverT, dEt = form_PP_(edge.dP_, fd=1)
+        edge.link_, dverT, dEt = form_PP_(edge.dP_, fd=1)  # separate PPd_ per edge, PPds in
         edge.verT = mverT + dverT
         edge.Et = mEt + dEt
     return PPt
@@ -92,7 +92,7 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
     for P in iP_: P.merged = 0
     for P in iP_:  # dP from link_ if fd
         if P.merged: continue
-        _prim_ = P.prim; _lrim_ = P.lrim
+        _prim_ = P.prim; _lrim_ = P.lrim, B_ = []
         if fd: Et = P.Et  # summed verT, min L in dP
         else:  I,G,Dy,Dx,M,D,L = P.latT; Et = np.array([M, G+abs(D), L])
         _P_ = {P}; link_ = set()
@@ -100,19 +100,21 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
         while _prim_:
             prim_,lrim_ = set(),set()
             for _P,_link in zip(_prim_,_lrim_):
-                if _link.Et[fd] < [ave,avd][fd] or _P.merged:
-                    continue
-                _P_.add(_P); link_.add(_link)
-                verT += _link.verT
-                if fd: _Et = _P.Et
-                else: _I,_G,_Dy,_Dx,_M,_D,_L = _P.latT; _Et = np.array([_M,_G+abs(_D),_L])
-                Et += _Et  # intra-P similarity and variance
-                prim_.update(set(_P.prim) - _P_)
-                lrim_.update(set(_P.lrim) - link_)
-                _P.merged = 1
+                if _P.merged: continue
+                if _link.Et[fd] > [ave,avd][fd]:
+                    _P_.add(_P); link_.add(_link)
+                    verT += _link.verT
+                    if fd: _Et = _P.Et
+                    else: _I,_G,_Dy,_Dx,_M,_D,_L = _P.latT; _Et = np.array([_M,_G+abs(_D),_L])
+                    Et += _Et  # intra-P similarity and variance
+                    prim_.update(set(_P.prim) - _P_)
+                    lrim_.update(set(_P.lrim) - link_)
+                    _P.merged = 1
+                else: B_ += [_link]  # PP boundary-> comb_B
             _prim_, _lrim_ = prim_, lrim_
         ET += Et; VerT += verT
-        PPt_ += [sum2PP(list(_P_), list(link_), Et)]
+        if not fd:  # PPds are accessed as B_ roots
+            PPt_ += [sum2PP(list(_P_), list(link_), list(set(B_)), Et)]
 
     return PPt_, VerT, ET
 
@@ -159,7 +161,7 @@ def convert_to_dP(_P,P, verT, angle, distance, Et):
     link.L = min(_P.latT[-1],P.latT[-1]) if isinstance(_P,CP) else min(_P.L,P.L)  # P is CdP
     return link
 
-def sum2PP(P_, dP_, Et):  # sum links in Ps and Ps in PP
+def sum2PP(P_, dP_, B_, Et):  # sum links in Ps and Ps in PP
 
     fd = isinstance(P_[0],CdP)
     if fd: latT = np.sum([n.latT for n in set([n for dP in P_ for n in  dP.nodet])], axis=0)
@@ -184,7 +186,7 @@ def sum2PP(P_, dP_, Et):  # sum links in Ps and Ps in PP
         for y,x in P.yx_ if isinstance(P, CP) else [P.nodet[0].yx, P.nodet[1].yx]:  # CdP
             box = accum_box(box,y,x)
     y0,x0,yn,xn = box
-    PPt = [P_, link_, verT, latT, A, S, box, np.array([(y0+yn)/2,(x0+xn)/2]), Et]
+    PPt = [P_, link_, B_, verT, latT, A, S, box, np.array([(y0+yn)/2,(x0+xn)/2]), Et]
     for P in P_: P.root = PPt
     return PPt
 
