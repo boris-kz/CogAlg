@@ -217,7 +217,7 @@ def proj_V(_N, N, angle, dist, fC=0):  # estimate cross-induction between N and 
     def proj_L_(L_, int_w=1):
         V = 0
         for L in L_:
-            cos = (L.angl @ angle) / (np.hypot(*L.angl) * np.hypot(*angle))  # angl is [dy,dx]
+            cos = (np.prod(L.angl) @ angle) / np.hypot(*np.prod(L.angl) * np.hypot(*angle))  # angl: [[dy,dx],dir]
             mang = (cos+ abs(cos)) / 2  # = max(0, cos): 0 at 90°/180°, 1 at 0°
             V += L.Et[1-fi] * mang * int_w * mW * (L.span/dist * av)  # decay = link.span / l.span * cosine ave?
             # += proj rim-mediated nodes?
@@ -234,7 +234,7 @@ def proj_V(_N, N, angle, dist, fC=0):  # estimate cross-induction between N and 
         # project matches to centroids?
     return V
 
-def comp_sorted(C_, rc):  # max attr sort to constrain search in 1D, add K attrs and overlap?
+def comp_sorted(C_, rc):  # max attr sort to constrain C_ search in 1D, add K attrs and overlap?
 
     L_, ET = [], np.zeros(3)
     for C in C_: C.compared =set()
@@ -308,7 +308,7 @@ def comp_N(_N,N, olp,rc, A=np.zeros(2), span=None, rng=1, lH=None):  # compare l
     baseT = (rn*_N.baseT + N.baseT) / 2  # not new
     yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])  # ext
     fi = N.fi
-    angl = [A, np.sign(derTT[1] @ wTTf[1])]
+    angl = np.array([A, np.sign(derTT[1] @ wTTf[1])])  # preserve canonic direction
     Link = CN(Et=Et,rc=olp, N_=[_N,N], L_=len(_N.N_+N.N_), et=_N.et+N.et, baseT=baseT,derTT=derTT, yx=yx,box=box, span=span, angl=angl, rng=rng, fi=0)
     V = val_(Et, aw=olp+rc)
     if V * (1 - 1 / (min(len(N.derH.H),len(_N.derH.H)) or eps)) > ave:  # rdn to derTT, else derH is empty
@@ -339,9 +339,9 @@ def base_comp(_N,N, fC=0):  # comp Et, baseT, extT, derTT
     _M,_D,_n =_N.Et; _I,_G,_Dy,_Dx =_N.baseT; _L = len(_N.N_) if fi else _N.L_  # len nodet.N_s, baseT is not needed in links?
     M, D, n  = N.Et; I, G, Dy, Dx = N.baseT; L = len(N.N_) if fi else N.L_
     rn = _n/n
-    _pars = np.array([_M*rn,_D*rn,_n*rn,_I*rn,_G*rn, np.array([_Dy,_Dx]),_L*rn,_N.span], dtype=object)  # Et, baseT, extT
-    pars = np.array([M,D,n, (I,aI),G, np.array([Dy,Dx]), L,(N.span,aS)], dtype=object)
-    mA,dA = comp_A(_N.angl*_N.dir, N.angl*N.dir)  # ext angle
+    _pars = np.array([_M*rn,_D*rn,_n*rn,_I*rn,_G*rn, [_Dy,_Dx],_L*rn,_N.span], dtype=object)  # Et, baseT, extT
+    pars = np.array([M,D,n, (I,aI),G, [Dy,Dx], L,(N.span,aS)], dtype=object)
+    mA,dA = comp_A(np.prod(_N.angl), np.prod(N.angl))  # ext angle
     m_,d_ = comp(_pars,pars, mA,dA)  # M,D,n, I,G,A, L,S,eA
     if fC:
         dm_,dd_ = comp_derT(rn*_N.derTT[1], N.derTT[1])
@@ -352,7 +352,7 @@ def base_comp(_N,N, fC=0):  # comp Et, baseT, extT, derTT
     Et = np.array([m_ * (1, mA)[fi] /t_ @ wTTf[0],  # norm, signed?
                    ad_* (1, 2-mA)[fi] /t_ @ wTTf[1], min(_n,n)])  # shared?
     '''
-    if np.hypot(*_N.angl)*_N.mang + np.hypot(*N.angl)*N.mang > ave*wA:  # aligned L_'As, mang *= (len_nH)+fi+1
+    if np.hypot(*_N.angl[0])*_N.mang + np.hypot(*N.angl[0])*N.mang > ave*wA:  # aligned L_'As, mang *= (len_nH)+fi+1
     mang = (rn*_N.mang + N.mang) / (1+rn)  # ave, weight each side by rn
     align = 1 - mang* (1-mA)  # in 0:1, weigh mA '''
 
@@ -388,7 +388,7 @@ def comp(_pars, pars, meA,deA):  # compute m_,d_ from inputs or derivatives
 
 def comp_A(_A,A):
 
-    dA = atan2(*(_A[0]*_A[1])) - atan2(*(A[0]*A[1]))  # * direction, for all links?
+    dA = atan2(*_A)- atan2(*A)  # * direction
     if   dA > pi: dA -= 2 * pi  # rotate CW
     elif dA <-pi: dA += 2 * pi  # rotate CCW
     '''  or 
@@ -650,10 +650,9 @@ def sum2graph(root, node_,link_,cent_,long_, Et, olp, rng):  # sum node,link att
     if fg: graph.nH = Nt.nH + [Nt]  # pack prior top level
     yx = np.mean(yx_,axis=0); dy_,dx_ = (yx_-yx).T; dist_ = np.hypot(dy_,dx_)
     graph.span = dist_.mean()  # node centers distance to graph center
-    graph.angl = np.sum([l.angl for l in link_], axis=0)
-    graph.dir = np.sign(np.sum([l.dir for l in link_]))
+    graph.angl = np.array([np.sum([l.angl[0] for l in link_],axis=0), np.sign(np.sum([l.angl[1] for l in link_]))])
     if fi and len(link_) > 1:  # else default mang = 1
-        graph.mang = np.sum([ comp_A(graph.angl*graph.dir, l.angl*l.dir)[0] for l in link_]) / len(link_)
+        graph.mang = np.sum([ comp_A(np.prod(graph.angl), np.prod(l.angl))[0] for l in link_]) / len(link_)
     graph.yx=yx
     return graph
 
@@ -687,6 +686,7 @@ def sum_N_(node_, root=None, fC=0):  # form cluster G
 
 def add_N(N,n, fmerge=0, fC=0, froot=0):  # rn = n.n / mean.n
 
+    # N is Fg: margin = Ns of proj max comp dist > distance to nearest frame point, for cross_comp between frames? no B_
     if fmerge:
         for node in n.N_: node.root=N; N.N_ += [node]
         N.L_ += n.L_; N.rim += n.rim  # L is list or len, no L.root assign, rims can't overlap
@@ -697,21 +697,19 @@ def add_N(N,n, fmerge=0, fC=0, froot=0):  # rn = n.n / mean.n
     if n.C_:
         if N.C_: N.C_ = [list(set(N.C_[0]+n.C_[0])), N.C_[1]+n.C_[1]]  # centroids: int cluster
         else:    N.C_ = [copy(n.C_[0]), copy(n.C_[1])]  # init
-    # no Fg boundary, margin: Ns of proj max comp dist > distance to nearest frame point, for cross_comp between frames?
+    if fC:
+        n.rc = np.sum([mo[1] for mo in n._mo_]); N.rC_ += n.rC_; N.mo_ += n.mo_
     if n.nH: add_nH(N.nH,n.nH, N)
     if n.lH: add_nH(N.lH,n.lH, N)
+    _cnt, cnt = N.Et[2], n.Et[2]; Cnt = _cnt+cnt  # to scale contribution of intensive params:
+    A,a = N.angl[0],n.angl[0]; A[:] = (A*_cnt+a*cnt) / Cnt
+    N.mang = (N.mang*_cnt + n.mang*cnt) / Cnt
+    N.span = (N.span*_cnt + n.span*cnt) / Cnt
+    N.rc = (N.rc*_cnt + n.rc*cnt) / Cnt
     for Par,par in zip((N.baseT,N.derTT,N.Et), (n.baseT,n.derTT,n.Et)):
         Par += par  # extensive params scale with cnt
     if n.derH: add_dH(N.derH,n.derH)
-    rc = np.sum([mo[1] for mo in n._mo_]) if fC else n.rc
-    Intensive_,intensive_ = [N.rc,N.yx,N.angl,N.mang,N.span], [rc,n.yx,n.angl,n.mang,n.span]
-    _cnt, cnt = N.Et[2], n.Et[2]; Cnt = _cnt+cnt
-    for i, (Par,par) in enumerate(zip(Intensive_,intensive_)):
-        if np.any(Par) and np.any(par):
-            Intensive_[i] = (Par*_cnt + par*cnt) / Cnt
     N.box = extend_box(N.box, n.box)
-    if hasattr(n,'mo_') and hasattr(N,'mo_'):
-        N.rC_ += n.rC_; N.mo_ += n.mo_  # not sure
     return N
 
 def add_nH(H, h, root):
@@ -770,7 +768,7 @@ def project_N_(Fg, yx):
     dy,dx = Fg.yx - yx
     Fdist = np.hypot(dy,dx)  # external dist
     rdist = Fdist / Fg.span
-    Angle = np.array([dy,dx]); angle = Fg.angl  # external and internal angles
+    Angle = np.array([dy,dx]); angle = Fg.angl[0]  # external and internal angles
     cos_d = angle.dot(Angle) / (np.hypot(*angle) * Fdist)
     # difference between external and internal angles, *= rdist
     ET = np.zeros(3); DerTT = np.zeros((2,9))
@@ -820,7 +818,7 @@ def project_focus(PV__, y,x, Fg):  # radial accum of projected focus value in PV
 
     m,d,n = Fg.Et
     V = (m-ave*n) + (d-avd*n)
-    dy,dx = Fg.angl; a = dy/ max(dx,eps)  # average link_ orientation, projection
+    dy,dx = Fg.angl[0]; a = dy/ max(dx,eps)  # average link_ orientation, projection
     decay = (ave / (Fg.baseT[0]/n)) * (wYX / adist)  # base decay = ave_match / ave_template * rel dist (ave_dist is a placeholder)
     H, W = PV__.shape  # = win__
     n = 1  # radial distance
@@ -908,12 +906,10 @@ def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init foca
             edge = slice_edge(blob, rV)
             if edge.G * ((len(edge.P_)-1)*Lw) > ave * sum([P.latT[4] for P in edge.P_]):
                 PPm_ = comp_slice(edge, rV, wTTf)
-                PPd_ = [PP2N(PP,Fg) for PP in edge.link_]; ET = np.zeros(3)
+                PPd_ = [PP2N(PP,lG) for PP in edge.link_]; ET = np.zeros(3); lG = CN(N_=PPd_)  # lG is PPd.root in comb_B_
                 for PP in PPm_:
-                    N = PP2N(PP,Fg); ET += N.Et; Fg.N_ += [N]
-                comb_B_(Fg, CN(N_=PPd_), rc=2)
-                if val_(ET, mw=(len(Fg.N_)-1)*Lw, aw=2) > 0:
-                    trace_edge(Fg.N_, Fg, rc=2)
+                    N = PP2N(PP, Fg); ET += N.Et; Fg.N_ += [N]
+                comb_B_(Fg, lG, rc=2)  # has trace_edge
     return Fg
 
 def PP2N(PP, root):
@@ -924,7 +920,7 @@ def PP2N(PP, root):
     derTT = np.array([ np.array([mM, mD, mL, mI, mG, mA, mL, mL / 2, eps]),  # extA=eps
                        np.array([dM, dD, dL, dI, dG, dA, dL, dL / 2, eps])])
     y,x,Y,X = box; dy,dx = Y-y, X-x
-    A = [A, np.sign(derTT[1] @ wTTf[1])]  # append angl
+    A = [np.array(A), np.sign(derTT[1] @ wTTf[1])]  # append angl
     PP = CN(root=root, fi=1, Et=Et, N_=P_, baseT=baseT, derTT=derTT, box=box, yx=yx, angl=A, span=np.hypot(dy/2, dx/2))
     for P in PP.N_: P.root = PP  # update root
     return PP
@@ -933,7 +929,7 @@ def trace_edge(N_, root, rc):  # cluster contiguous shapes via PPs in edge blobs
 
     L_ = []; cT_ = set()  # comp pairs
     for N in N_:
-        for _N in list({rB for B in N.B_ for rB in B.rB_ if rB is not N}):  # _Ns share boundary with N
+        for _N in list({rB for rB, rdn in N.rB_[0] if rB is not N}):  # _Ns share boundary with N (each rB is (core, rdn))
             cT = tuple(sorted((N.id,_N.id)))
             if cT in cT_: continue
             cT_.add(cT)
