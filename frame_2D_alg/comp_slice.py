@@ -38,10 +38,10 @@ w_t = np.ones((2,6))
 class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
     name = "dP"
 
-    def __init__(l, nodet, span, angle, yx, Et, verT, latT=None, root=None):
+    def __init__(l, N_, span, angle, yx, Et, verT, latT=None, root=None):
         super().__init__()
 
-        l.nodet = nodet  # e_ in kernels, else replaces _node,node: not used in kernels?
+        l.N_ = N_  # e_ in kernels, else replaces _node,node: not used in kernels?
         l.L = 1  # min nodet
         l.verT = verT  # m_,d_,t_
         l.angl = angle  # dy,dx between node centers (for PP's internal L_)
@@ -52,7 +52,7 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
         l.rim = []
         l.lrim = []
         l.prim = []
-    def __bool__(l): return l.nodet
+    def __bool__(l): return l.N_
 
 def comp_slice_root(frame, rV=1, ww_t=None):
 
@@ -68,7 +68,7 @@ def comp_slice(edge, rV=1, ww_t=None):  # root function
     global ave, avd, wM, wD, wI, wG, wA, wL, ave_L, ave_PPm, ave_PPd, w_t
     ave, avd, ave_L, ave_PPm, ave_PPd = np.array([ave, avd, ave_L, ave_PPm, ave_PPd]) / rV  # projected value change
     if np.any(ww_t):
-        iwM, iwD, iwI, iwG, iwL,  iwS, iwa, iwA = ww_t[0]
+        iwM, iwD, _, iwI, iwG, iwL,  iwS, iwa, iwA = ww_t[0]  # skip N
         w_t[0] = [wM, wD, wI, wG, wA, wL] * np.array([iwM, iwD, iwI, iwG, iwA, iwL])
         # der weights
     for P in edge.P_:  # add higher links
@@ -80,7 +80,7 @@ def comp_slice(edge, rV=1, ww_t=None):  # root function
     if PPt:
         edge.node_ = PPt
         comp_dP_(edge, mEt)
-        edge.link_, dverT, dEt = form_PP_(edge.dP_, fd=1)  # separate PPd_ per edge, PPds in
+        edge.link_, dverT, dEt = form_PP_(edge.dP_, fd=1)  # separate PPd_ per edge
         edge.verT = mverT + dverT
         edge.Et = mEt + dEt
     return PPt
@@ -92,7 +92,7 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
     for P in iP_: P.merged = 0
     for P in iP_:  # dP from link_ if fd
         if P.merged: continue
-        _prim_ = P.prim; _lrim_ = P.lrim, B_ = []
+        _prim_ = P.prim; _lrim_ = P.lrim; B_ = []
         if fd: Et = P.Et  # summed verT, min L in dP
         else:  I,G,Dy,Dx,M,D,L = P.latT; Et = np.array([M, G+abs(D), L])
         _P_ = {P}; link_ = set()
@@ -113,8 +113,7 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
                 else: B_ += [_link]  # PP boundary-> comb_B
             _prim_, _lrim_ = prim_, lrim_
         ET += Et; VerT += verT
-        if not fd:  # PPds are accessed as B_ roots
-            PPt_ += [sum2PP(list(_P_), list(link_), list(set(B_)), Et)]
+        PPt_ += [sum2PP(list(_P_), list(link_), list(set(B_)), Et)]
 
     return PPt_, VerT, ET
 
@@ -140,7 +139,7 @@ def comp_dP_(edge, mEt):  # node_- mediated: comp node.rim dPs, call from form_P
     for _dP in edge.dP_:
         _,D,_n = _dP.Et
         if D/_n * rM > avd:
-            _P, P = _dP.nodet  # _P is lower
+            _P, P = _dP.N_  # _P is lower
             rn = n/_n; minn = min(_n,n)
             for dP in P.rim:  # higher links
                 if dP not in edge.dP_: continue  # skip removed node links
@@ -153,7 +152,7 @@ def comp_dP_(edge, mEt):  # node_- mediated: comp node.rim dPs, call from form_P
 
 def convert_to_dP(_P,P, verT, angle, distance, Et):
 
-    link = CdP(nodet=[_P,P], Et=Et, verT=verT, angle=angle, span=distance, yx=np.add(_P.yx, P.yx)/2)
+    link = CdP(N_=[_P,P], Et=Et, verT=verT, angle=angle, span=distance, yx=np.add(_P.yx, P.yx)/2)
     # Ps are dPs
     _P.verT+= link.verT; P.verT += link.verT
     _P.lrim += [link]; P.lrim += [link]
@@ -164,14 +163,14 @@ def convert_to_dP(_P,P, verT, angle, distance, Et):
 def sum2PP(P_, dP_, B_, Et):  # sum links in Ps and Ps in PP
 
     fd = isinstance(P_[0],CdP)
-    if fd: latT = np.sum([n.latT for n in set([n for dP in P_ for n in  dP.nodet])], axis=0)
+    if fd: latT = np.sum([n.latT for n in set([n for dP in P_ for n in  dP.N_])], axis=0)
     else:  latT = np.full(7,1e-7)
     verT = np.full((2,6),1e-7)
     link_ = []
     if dP_:  # add uplinks:
         S,A = 0,[0,0]
         for dP in dP_:
-            if dP.nodet[0] not in P_ or dP.nodet[1] not in P_: continue  # peripheral link
+            if dP.N_[0] not in P_ or dP.N_[1] not in P_: continue  # peripheral link
             link_ += [dP]
             verT += dP.verT
             a = dP.angl; A = np.add(A,a); S += np.hypot(*a)  # span, links are contiguous but slanted
@@ -183,7 +182,7 @@ def sum2PP(P_, dP_, B_, Et):  # sum links in Ps and Ps in PP
         if not fd:  # else summed from P_ nodets on top
             latT += P.latT
         verT += P.verT
-        for y,x in P.yx_ if isinstance(P, CP) else [P.nodet[0].yx, P.nodet[1].yx]:  # CdP
+        for y,x in P.yx_ if isinstance(P, CP) else [P.N_[0].yx, P.N_[1].yx]:  # CdP
             box = accum_box(box,y,x)
     y0,x0,yn,xn = box
     PPt = [P_, link_, B_, verT, latT, A, S, box, np.array([(y0+yn)/2,(x0+xn)/2]), Et]
@@ -288,9 +287,9 @@ if __name__ == "__main__":
                 raise ValueError(
                     f"link not unique between {_node} and {node}. Duplicated links:\n" +
                     "\n".join([
-                        f"dP.id={dP.id}, _node={dP.nodet[0]}, node={dP.nodet[1]}"
+                        f"dP.id={dP.id}, _node={dP.N_[0]}, node={dP.N_[1]}"
                         for dP in dP_
-                        if dP.nodet[0] is _node and dP.nodet[1] is node
+                        if dP.N_[0] is _node and dP.N_[1] is node
                     ])
                 )
             nodet_set.add((_node.id, node.id))
