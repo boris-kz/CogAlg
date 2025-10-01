@@ -182,35 +182,13 @@ def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering
             if nG:  # batched nH extension
                 rc += nG.rc  # redundant clustering layers
                 if lG:
-                    comb_B_(nG,lG, rc+O+2); Et += lG.Et  # assign boundary, add boundary O?
+                    form_B_(nG,lG, rc+O+2); Et += lG.Et  # assign boundary, O += boundary O or 1?
                 if val_(nG.Et,1, (len(nG.N_)-1)*Lw, O+rc+compw+2, Et) > 0:
                     nG = cross_comp(nG, rc+O+2) or nG  # agg+
                 root.N_ = nG.N_
                 _H = root.nH; root.nH = []  # nG has own L_,lH
                 nG.nH = _H+ [root] + nG.nH  # pack root.nH in higher-composition nG.nH
                 return nG  # update root
-
-def comb_B_(nG, lG, rc):  # cross_comp boundary / background per node:
-
-    for Lg in lG.N_:
-        B_ = {n.root for L in Lg.N_ for n in L.N_ if n.root and n.root.root is not None}  # rdn core Gs, exclude frame
-        if B_:
-            B_ = {(core,rdn) for rdn,core in enumerate(sorted(B_, key=lambda x:(x.Et[0]/x.Et[2]), reverse=True), start=1)}
-            Lg.rB_ = [B_, np.sum([i.Et for i,_ in B_], axis=0)]
-    def R(L):
-        return L.root if L.root is None or L.root.root is lG else R(L.root)
-    for Ng in nG.N_:
-        Et, Rdn, B_ = np.zeros(3), 0, []  # core boundary clustering
-        LR_ = {R(L) for n in Ng.N_ for L in n.rim}  # lGs for nGs, individual nodes and rims are too weak to bound
-        for LR in LR_:
-            if LR and LR.rB_:  # not None, eval Lg.B_[1]?
-                for core, rdn in LR.rB_[0]:  # map contour rdns to core N:
-                    if core is Ng:
-                        B_ += [LR]; Et += core.Et; Rdn += rdn  # add to Et[2]?
-        if B_:
-            if val_(Et,0, (len(B_)-1)*Lw, rc+Rdn+compw) > 0:  # norm by core_ rdn
-                trace_edge(B_, lG, rc)
-            Ng.B_ = [lG.N_, lG.Et]
 
 def proj_V(_N, N, angle, dist, fC=0):  # estimate cross-induction between N and _N before comp
 
@@ -477,7 +455,7 @@ def cluster_N(root, iN_, rN_, rc, rng=1):  # flood-fill node | link clusters
                     node_ += [_N]; cent_ += _N.rC_; _N.fin = 1
                     for l in _N.rim:
                         if l in in_: continue  # cluster by link+density:
-                        if l.rng==rng and val_(l.Et+ett(l), aw=rc) > 0:
+                        if l.rng==rng and val_(ett(l), aw=rc) > 0:
                             link_ += [l]
                         elif l.rng > rng: long_ += [l]
                 else:  # cluster top-rng roots
@@ -494,7 +472,7 @@ def cluster_N(root, iN_, rN_, rc, rng=1):  # flood-fill node | link clusters
         if rng==1 or (not N.root or N.root.rng==1):  # not rng-banded
             cent_ = N.rC_[:]
             for l in N.rim:
-                if val_(l.Et+ett(l), aw=rc+1) > 0:
+                if val_(ett(l), aw=rc+1) > 0:
                     if l.rng==rng: _link_ += [l]
                     elif l.rng>rng: long_ += [l]
         else:  # N is rng-banded, cluster top-rng roots
@@ -529,12 +507,12 @@ def cluster_n(root, C_, rc, rng=1):  # simplified flood-fill, currently for for 
                     node_ += [_N]; cent_ += _N.rC_; _N.fin = 1
                     for l in _N.rim:
                         if l in in_: continue  # cluster by link+density:
-                        if val_(l.Et + ett(l), aw=rc) > 0: link_ += [l]
+                        if val_(ett(l), aw=rc) > 0: link_ += [l]
     G_, in_ = [],set()
     for C in C_: C.fin = 0
     for C in C_:  # form G per remaining C
         node_,cent_,Link_,link_ = [C],C.C_[0][:] if C.C_ else [],[],[]
-        _link_ = [l for l in C.rim if val_(l.Et+ett(l), aw=rc) > 0]
+        _link_ = [l for l in C.rim if val_(ett(l), aw=rc) > 0]
         while _link_:
             extend_G(_link_, node_, cent_, link_, in_)  # _link_: select rims to extend G
             if link_: Link_ += _link_; _link_ = list(set(link_)); link_ = []
@@ -632,28 +610,28 @@ def cent_attr(C, rc):  # weight attr matches | diffs by their match to the sum, 
     C.ET = np.zeros(3)  # init C.ET
     return C
 
-def ett(L): return (L.N_[0].et + L.N_[1].et) * intw
+def ett(L): return (L.N_[0].et + L.N_[1].et - 2 * L.Et) * intw + L.Et  # L.Et is twice included in ett
 
-def sum2graph(root, node_,link_,cent_,long_, Et, olp, rng):  # sum node,link attrs in graph, aggH in agg+ or player in sub+
+def sum2graph(root, N_,L_,C_,long_, Et, olp, rng):  # sum node,link attrs in graph, aggH in agg+ or player in sub+
 
-    n0 = Copy_(node_[0]); derH = copy_(n0.derH); yx_ = [n0.yx]
-    fi = n0.fi; fg = fi and n0.L_   # not PPs
-    graph = CN(root=root, fi=1,rng=rng, N_=node_,L_=link_,C_=cent_, Et=Et,rc=olp, box=n0.box, baseT=n0.baseT, derTT=n0.derTT)
-    graph.hL_ = long_; n0.root = graph
-    Nt = Copy_(n0)  # add_N(Nt,Nt.Lt)?
-    for N in node_:
-        add_dH(derH,N.derH); graph.baseT+=N.baseT; graph.derTT+=N.derTT; graph.box=extend_box(graph.box,N.box); yx_+=[N.yx]; N.root = graph
+    n0 = Copy_(N_[0]); yx_=[n0.yx]; box=n0.box; baseT=n0.baseT; derH=n0.derH; derTT=np.zeros((2,9)); A=np.zeros(2)
+    fi = n0.fi; fg = fi and n0.L_  # not PPs
+    for L in L_:
+        add_dH(derH,L.derH); derTT+=L.derTT; A += L.angl[0]
+    A = np.array([A, np.sign(derTT[1] @ wTTf[1])])  # canonical dir = summed diff sign
+    if fg: Nt = Copy_(n0)  # add_N(Nt,Nt.Lt)?
+    derTT += n0.derTT
+    for N in N_[1:]:
+        add_dH(derH,N.derH); baseT+=N.baseT; derTT+=N.derTT; box=extend_box(box,N.box); yx_+=[N.yx]
         if fg: add_N(Nt,N)  # froot = 0
-    for L in link_:
-        add_dH(derH,L.derH); graph.baseT+=L.baseT; graph.derTT+=L.derTT
-    graph.derH = derH
+    yx = np.mean(yx_,axis=0); dy_,dx_ = (yx_-yx).T; dist_ = np.hypot(dy_,dx_); span=dist_.mean() # node centers distance to graph center
+    graph = CN(root=root, fi=1,rng=rng, N_=N_,L_=L_,C_=C_, Et=Et,rc=olp, baseT=baseT, derTT=derTT, derH=derH, span=span, angl=A, yx=yx)
+    for n in N_: n.root = graph
+    graph.hL_ = long_
     if fg: graph.nH = Nt.nH + [Nt]  # pack prior top level
-    yx = np.mean(yx_,axis=0); dy_,dx_ = (yx_-yx).T; dist_ = np.hypot(dy_,dx_)
-    graph.span = dist_.mean()  # node centers distance to graph center
-    graph.angl = np.array([np.sum([l.angl[0] for l in link_],axis=0), np.sign(np.sum([l.angl[1] for l in link_]))])
-    if fi and len(link_) > 1:  # else default mang = 1
-        graph.mang = np.sum([ comp_A(np.prod(graph.angl), np.prod(l.angl))[0] for l in link_]) / len(link_)
-    graph.yx=yx
+    if fi and len(L_) > 1:  # else default mang = 1
+        graph.mang = np.sum([ comp_A(A, l.angl[0]) for l in L_]) / len(L_)
+        # no direction, the links are internal
     return graph
 
 def slope(link_):  # get ave 2nd rate of change with distance in cluster or frame?
@@ -893,6 +871,28 @@ def agg_frame(foc, image, iY, iX, rV=1, wTTf=[], fproj=0):  # search foci within
         if not foc:
             return frame  # foci are unpacked
 
+def form_B_(nG, lG, rc):  # form and trace edge / boundary / background per node:
+
+    for Lg in lG.N_:
+        B_ = {n.root for L in Lg.N_ for n in L.N_ if n.root and n.root.root is not None}  # rdn core Gs, exclude frame
+        if B_:
+            B_ = {(core,rdn) for rdn,core in enumerate(sorted(B_, key=lambda x:(x.Et[0]/x.Et[2]), reverse=True), start=1)}
+            Lg.rB_ = [B_, np.sum([i.Et for i,_ in B_], axis=0)]
+    def R(L):
+        return L.root if L.root is None or L.root.root is lG else R(L.root)
+    for Ng in nG.N_:
+        Et, Rdn, B_ = np.zeros(3), 0, []  # core boundary clustering
+        LR_ = {R(L) for n in Ng.N_ for L in n.rim}  # lGs for nGs, individual nodes and rims are too weak to bound
+        for LR in LR_:
+            if LR and LR.rB_:  # not None, eval Lg.B_[1]?
+                for core, rdn in LR.rB_[0]:  # map contour rdns to core N:
+                    if core is Ng:
+                        B_ += [LR]; Et += core.Et; Rdn += rdn  # add to Et[2]?
+        if B_:
+            if val_(Et,0, (len(B_)-1)*Lw, rc+Rdn+compw) > 0:  # norm by core_ rdn
+                trace_edge(B_, lG, rc)
+            Ng.B_ = [lG.N_, lG.Et]
+
 def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init focal frame graph, no recursion:
 
     if np.any(wTTf):
@@ -906,10 +906,10 @@ def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init foca
             edge = slice_edge(blob, rV)
             if edge.G * ((len(edge.P_)-1)*Lw) > ave * sum([P.latT[4] for P in edge.P_]):
                 PPm_ = comp_slice(edge, rV, wTTf)
-                PPd_ = [PP2N(PP,lG) for PP in edge.link_]; ET = np.zeros(3); lG = CN(N_=PPd_)  # lG is PPd.root in comb_B_
+                PPd_ = [PP2N(PP,lG) for PP in edge.link_]; ET = np.zeros(3); lG = CN(N_=PPd_)  # lG is PPd.root in form_B_
                 for PP in PPm_:
                     N = PP2N(PP, Fg); ET += N.Et; Fg.N_ += [N]
-                comb_B_(Fg, lG, rc=2)  # has trace_edge
+                form_B_(Fg, lG, rc=2)  # trace_edge
     return Fg
 
 def PP2N(PP, root):
@@ -920,7 +920,7 @@ def PP2N(PP, root):
     derTT = np.array([ np.array([mM, mD, mL, mI, mG, mA, mL, mL / 2, eps]),  # extA=eps
                        np.array([dM, dD, dL, dI, dG, dA, dL, dL / 2, eps])])
     y,x,Y,X = box; dy,dx = Y-y, X-x
-    A = [np.array(A), np.sign(derTT[1] @ wTTf[1])]  # append angl
+    A = np.array([A, np.sign(derTT[1] @ wTTf[1])])  # append angl
     PP = CN(root=root, fi=1, Et=Et, N_=P_, baseT=baseT, derTT=derTT, box=box, yx=yx, angl=A, span=np.hypot(dy/2, dx/2))
     for P in PP.N_: P.root = PP  # update root
     return PP
