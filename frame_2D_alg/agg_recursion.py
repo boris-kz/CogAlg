@@ -29,7 +29,7 @@ feedback of projected match adjusts filters to maximize next match, including co
 (initially ffeedback, can be refined by cross_comp of co-projected patterns: "imagination, planning, action" section of part 3)
 
 Deduction:
-in feedforward, code += [ops] that formed new layer of syntax, extended to process cross-layer diffs, if any? 
+in feedforward, extend code via some version of Abstract Interpretation? 
 or cross-comp function calls and cluster code blocks of past and simulated processes? (not yet implemented)
 
 notation:
@@ -182,10 +182,12 @@ def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering
             if nG:  # batched nH extension
                 rc += nG.rc  # redundant clustering layers
                 if lG:
-                    form_B_(nG,lG, rc+O+2); Et += lG.Et  # assign boundary, O += boundary O or 1?
-                if val_(nG.Et,1, (len(nG.N_)-1)*Lw, O+rc+compw+2, Et) > 0:
-                    nG = cross_comp(nG, rc+O+2) or nG  # agg+
-                root.N_ = nG.N_
+                    form_B__(nG,lG)  # assign boundary per N, O += boundary O or 1?
+                    trace_edge(nG, rc+O+3)  # comp,cluster Ns via their B_ overlap, eval?
+                    root.Et += lG.Et
+                if val_(nG.Et,1, (len(nG.N_)-1)*Lw, rc+O+compw+3, Et) > 0:
+                    nG = cross_comp(nG, rc+O+3) or nG  # agg+
+                root.Et += nG.Et; root.N_ = nG.N_
                 _H = root.nH; root.nH = []  # nG has own L_,lH
                 nG.nH = _H+ [root] + nG.nH  # pack root.nH in higher-composition nG.nH
                 return nG  # update root
@@ -286,7 +288,7 @@ def comp_N(_N,N, olp,rc, A=np.zeros(2), span=None, rng=1, lH=None):  # compare l
     baseT = (rn*_N.baseT + N.baseT) / 2  # not new
     yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])  # ext
     fi = N.fi
-    angl = np.array([A, np.sign(derTT[1] @ wTTf[1])])  # preserve canonic direction
+    angl = np.array([A, np.sign(derTT[1] @ wTTf[1])],dtype=object)  # preserve canonic direction
     Link = CN(Et=Et,rc=olp, N_=[_N,N], L_=len(_N.N_+N.N_), et=_N.et+N.et, baseT=baseT,derTT=derTT, yx=yx,box=box, span=span, angl=angl, rng=rng, fi=0)
     V = val_(Et, aw=olp+rc)
     if V * (1 - 1 / (min(len(N.derH.H),len(_N.derH.H)) or eps)) > ave:  # rdn to derTT, else derH is empty
@@ -302,8 +304,8 @@ def comp_N(_N,N, olp,rc, A=np.zeros(2), span=None, rng=1, lH=None):  # compare l
     if fi and V > ave * rc+1 + compw:
         if N.L_: spec(_N.N_, N.N_, olp, rc+1, Et,Link.lH)  # skip PP
         if (_N.B_ and _N.B_[0]) and (N.B_ and N.B_[0]):  # boundary, skip Et
-            spec(_N.B_[0],N.B_[0], olp,rc,Et, Link.lH)
-            # for dspe; add C_ overlap,offset?
+            spec(_N.B_[0],N.B_[0], olp,rc,Et, Link.lH)  # for dspe
+            # +C_ overlap,offset?
     if lH is not None:
         lH += [Link]
     if span is not None:  # not from spec
@@ -614,24 +616,24 @@ def ett(L): return (L.N_[0].et + L.N_[1].et - 2 * L.Et) * intw + L.Et  # L.Et is
 
 def sum2graph(root, N_,L_,C_,long_, Et, olp, rng):  # sum node,link attrs in graph, aggH in agg+ or player in sub+
 
-    n0 = Copy_(N_[0]); yx_=[n0.yx]; box=n0.box; baseT=n0.baseT; derH=n0.derH; derTT=np.zeros((2,9)); A=np.zeros(2)
+    n0 = Copy_(N_[0]); yx_=[n0.yx]; box=n0.box; baseT=n0.baseT; derH=n0.derH; derTT=np.zeros((2,9)); ang=np.zeros(2)
     fi = n0.fi; fg = fi and n0.L_  # not PPs
     for L in L_:
-        add_dH(derH,L.derH); derTT+=L.derTT; A += L.angl[0]
-    A = np.array([A, np.sign(derTT[1] @ wTTf[1])])  # canonical dir = summed diff sign
+        add_dH(derH,L.derH); derTT+=L.derTT; ang += L.angl[0]
+    A = np.array([ang, np.sign(derTT[1] @ wTTf[1])],dtype=object)  # canonical dir = summed diff sign
     if fg: Nt = Copy_(n0)  # add_N(Nt,Nt.Lt)?
     derTT += n0.derTT
     for N in N_[1:]:
         add_dH(derH,N.derH); baseT+=N.baseT; derTT+=N.derTT; box=extend_box(box,N.box); yx_+=[N.yx]
         if fg: add_N(Nt,N)  # froot = 0
-    yx = np.mean(yx_,axis=0); dy_,dx_ = (yx_-yx).T; dist_ = np.hypot(dy_,dx_); span=dist_.mean() # node centers distance to graph center
+    yx = np.mean(yx_,axis=0); dy_,dx_ = (yx_-yx).T; dist_ = np.hypot(dy_,dx_); span = dist_.mean() # node centers distance to graph center
     graph = CN(root=root, fi=1,rng=rng, N_=N_,L_=L_,C_=C_, Et=Et,rc=olp, baseT=baseT, derTT=derTT, derH=derH, span=span, angl=A, yx=yx)
     for n in N_: n.root = graph
     graph.hL_ = long_
     if fg: graph.nH = Nt.nH + [Nt]  # pack prior top level
     if fi and len(L_) > 1:  # else default mang = 1
-        graph.mang = np.sum([ comp_A(A, l.angl[0]) for l in L_]) / len(L_)
-        # no direction, the links are internal
+        graph.mang = np.sum([ comp_A(ang, l.angl[0]) for l in L_]) / len(L_)
+        # ang is centroid, directionless?
     return graph
 
 def slope(link_):  # get ave 2nd rate of change with distance in cluster or frame?
@@ -727,6 +729,93 @@ def proj_dH(_H, proj, dec):
         H += [lay]
     return H
 
+def agg_frame(foc, image, iY, iX, rV=1, wTTf=[], fproj=0):  # search foci within image, additionally nested if floc
+
+    if foc:
+        dert__ = image  # focal img was converted to dert__
+    else:
+        dert__ = comp_pixel(image)  # global
+        global ave, Lw, intw, compw, centw, contw, adist, amed, medw, mW, dW
+        ave, Lw, intw, compw, centw, contw, adist, amed, medw = np.array([ave, Lw, intw, compw, centw, contw, adist, amed, medw]) / rV
+        # fb rws: ~rvs
+    nY, nX = dert__.shape[-2] // iY, dert__.shape[-1] // iX  # n complete blocks
+    Y, X = nY * iY, nX * iX  # sub-frame dims
+    frame = CN(box=np.array([0, 0, Y, X]), yx=np.array([Y // 2, X // 2]))
+    dert__ = dert__[:, :Y, :X]  # drop partial rows/cols
+    win__ = dert__.reshape(dert__.shape[0], iY, iX, nY, nX).swapaxes(1, 2)  # dert=5, wY=64, wX=64, nY=13, nX=20
+    PV__ = win__[3].sum(axis=(0, 1)) * intw  # init prj_V = sum G, shape: nY=13, nX=20
+    aw = contw * 20
+    while np.max(PV__) > ave * aw:  # max G * int_w + pV, add prj_V foci, only if not foc?
+        # max win index:
+        y, x = np.unravel_index(PV__.argmax(), PV__.shape)
+        PV__[y, x] = -np.inf  # to skip?
+        if foc:
+            Fg = frame_blobs_root(win__[:, :, :, y, x], rV)  # [dert, iY, iX, nY, nX]
+            vect_edge(Fg, rV, wTTf);
+            Fg.L_ = []  # focal dert__ clustering
+            cross_comp(Fg, rc=frame.rc)
+        else:
+            Fg = agg_frame(1, win__[:, :, :, y, x], wY, wX, rV=1, wTTf=[])  # use global wY,wX in nested call
+            if Fg and Fg.L_:  # only after cross_comp(PP_)
+                rV, wTTf = ffeedback(Fg)  # adjust filters
+                Fg = cent_attr(Fg, 2)  # compute Fg.wTT: correlation weights in frame derTT
+                wTTf *= Fg.wTT;
+                mW = np.sum(wTTf[0]);
+                dW = np.sum(wTTf[1])
+                wTTf[0] *= 9 / mW;
+                wTTf[1] *= 9 / dW
+                # re-norm weights
+        if Fg and Fg.L_:
+            if fproj and val_(Fg.Et, 1, (len(Fg.N_) - 1) * Lw, Fg.rc + compw * 20):
+                pFg = project_N_(Fg, np.array([y, x]))
+                if pFg:
+                    cross_comp(pFg, rc=Fg.rc)
+                    if val_(pFg.Et, 1, (len(pFg.N_) - 1) * Lw, pFg.rc + contw * 20):
+                        project_focus(PV__, y, x, Fg)  # += proj val in PV__
+            # no target proj
+            frame = add_N(frame, Fg, fmerge=1, froot=1) if frame else Copy_(Fg)
+            aw = contw * 20 * frame.Et[2] * frame.rc
+
+    if frame.N_ and val_(frame.Et, (len(frame.N_) - 1) * Lw, frame.rc + compw + 20) > 0:
+        # recursive xcomp
+        Fn = cross_comp(frame, rc=frame.rc + compw)
+        if Fn: frame.N_ = Fn.N_; frame.Et += Fn.Et  # other frame attrs remain
+        # spliced foci cent_:
+        if frame.C_ and val_(frame.C_[1], (len(frame.N_) - 1) * Lw, frame.rc + centw) > 0:
+            Fc = cross_comp(frame, rc=frame.rc + compw, fC=1)
+            if Fc: frame.C_ = [Fc.N_, Fc.Et]; frame.Et += Fc.Et
+        if not foc:
+            return frame  # foci are unpacked
+
+def PP2N(PP, root):
+
+    P_, link_, B_, verT, latT, A, S, box, yx, Et = PP
+    baseT = np.array(latT[:4])
+    [mM, mD, mI, mG, mA, mL], [dM, dD, dI, dG, dA, dL] = verT  # re-pack in derTT:
+    derTT = np.array([ np.array([mM, mD, mL, mI, mG, mA, mL, mL / 2, eps]),  # extA=eps
+                       np.array([dM, dD, dL, dI, dG, dA, dL, dL / 2, eps])])
+    y,x,Y,X = box; dy,dx = Y-y, X-x
+    A = np.array([np.array(A), np.sign(derTT[1] @ wTTf[1])], dtype=object)  # append sign
+    PP = CN(root=root, fi=1, Et=Et, N_=P_, baseT=baseT, derTT=derTT, box=box, yx=yx, angl=A, span=np.hypot(dy/2, dx/2))
+    for P in PP.N_: P.root = PP  # update root
+    return PP
+
+def dir_cluster(N):  # get neg links to block projection?
+
+    dir_ = []
+    for pL in N.pL_:
+        angl = pL[1]; max_pL_t = []; max_mA = -1
+        for pL_t in dir_:
+            Angl,_ = pL_t
+            mA,_ = comp_A(angl, Angl)
+            if mA > .8 and mA > max_mA: max_mA = mA; max_pL_t = pL_t
+        if max_pL_t: max_pL_t[0] += angl; max_pL_t[1] += [pL]
+        else:        dir_ += [[copy(angl), [pL]]]  # init dir
+    sel_pL_ = []
+    for _,pL_ in dir_:
+        sel_pL_ += [pL_[ np.argmin([pL[0] for pL in pL_])]]  # nearest pL per direction
+    N.pL_ = sel_pL_
+
 def comp_prj_dH(_N,N, ddH, rn, link, angl, span, dec):  # comp combined int proj to actual ddH, as in project_N_
 
     _cos_da= angl.dot(_N.angl) / (span *_N.span)  # .dot for scalar cos_da
@@ -818,81 +907,6 @@ def project_focus(PV__, y,x, Fg):  # radial accum of projected focus value in PV
         PV__[row,col] += pV__  # in-place accum pV to rim
         n += 1
 
-def agg_frame(foc, image, iY, iX, rV=1, wTTf=[], fproj=0):  # search foci within image, additionally nested if floc
-
-    if foc: dert__ = image  # focal img was converted to dert__
-    else:
-        dert__ = comp_pixel(image) # global
-        global ave, Lw, intw, compw, centw, contw, adist, amed, medw, mW, dW
-        ave, Lw, intw, compw, centw, contw, adist, amed, medw = np.array([ave, Lw, intw, compw, centw, contw, adist, amed, medw]) / rV
-        # fb rws: ~rvs
-    nY,nX = dert__.shape[-2] // iY, dert__.shape[-1] // iX  # n complete blocks
-    Y, X  = nY * iY, nX * iX  # sub-frame dims
-    frame = CN(box=np.array([0,0,Y,X]), yx=np.array([Y//2,X//2]))
-    dert__= dert__[:,:Y,:X]  # drop partial rows/cols
-    win__ = dert__.reshape(dert__.shape[0], iY,iX, nY,nX).swapaxes(1,2)  # dert=5, wY=64, wX=64, nY=13, nX=20
-    PV__  = win__[3].sum( axis=(0,1)) * intw  # init prj_V = sum G, shape: nY=13, nX=20
-    aw = contw * 20
-    while np.max(PV__) > ave * aw:  # max G * int_w + pV, add prj_V foci, only if not foc?
-        # max win index:
-        y,x = np.unravel_index(PV__.argmax(), PV__.shape)
-        PV__[y,x] = -np.inf  # to skip?
-        if foc:
-            Fg = frame_blobs_root( win__[:,:,:,y,x], rV)  # [dert, iY, iX, nY, nX]
-            vect_edge(Fg, rV,wTTf); Fg.L_=[]  # focal dert__ clustering
-            cross_comp(Fg, rc=frame.rc)
-        else:
-            Fg = agg_frame(1, win__[:,:,:,y,x], wY,wX, rV=1, wTTf=[])  # use global wY,wX in nested call
-            if Fg and Fg.L_:  # only after cross_comp(PP_)
-                rV, wTTf = ffeedback(Fg)  # adjust filters
-                Fg = cent_attr(Fg,2)  # compute Fg.wTT: correlation weights in frame derTT
-                wTTf *= Fg.wTT; mW = np.sum(wTTf[0]); dW = np.sum(wTTf[1])
-                wTTf[0] *= 9/mW; wTTf[1] *= 9/dW
-                # re-norm weights
-        if Fg and Fg.L_:
-            if fproj and val_(Fg.Et,1, (len(Fg.N_)-1)*Lw, Fg.rc+compw*20):
-                pFg = project_N_(Fg, np.array([y,x]))
-                if pFg:
-                    cross_comp(pFg, rc=Fg.rc)
-                    if val_(pFg.Et,1, (len(pFg.N_)-1)*Lw, pFg.rc+contw*20):
-                        project_focus(PV__, y,x, Fg)  # += proj val in PV__
-            # no target proj
-            frame = add_N(frame, Fg, fmerge=1, froot=1) if frame else Copy_(Fg)
-            aw = contw *20 * frame.Et[2] * frame.rc
-
-    if frame.N_ and val_(frame.Et, (len(frame.N_)-1)*Lw, frame.rc+compw+20) > 0:
-        # recursive xcomp
-        Fn = cross_comp(frame, rc=frame.rc+compw)
-        if Fn: frame.N_=Fn.N_; frame.Et+=Fn.Et  # other frame attrs remain
-        # spliced foci cent_:
-        if frame.C_ and val_(frame.C_[1], (len(frame.N_)-1)*Lw, frame.rc+centw) > 0:
-            Fc = cross_comp(frame, rc=frame.rc+compw, fC=1)
-            if Fc: frame.C_=[Fc.N_, Fc.Et]; frame.Et+=Fc.Et
-        if not foc:
-            return frame  # foci are unpacked
-
-def form_B_(nG, lG, rc):  # form and trace edge / boundary / background per node:
-
-    for Lg in lG.N_:
-        B_ = {n.root for L in Lg.N_ for n in L.N_ if n.root and n.root.root is not None}  # rdn core Gs, exclude frame
-        if B_:
-            B_ = {(core,rdn) for rdn,core in enumerate(sorted(B_, key=lambda x:(x.Et[0]/x.Et[2]), reverse=True), start=1)}
-            Lg.rB_ = [B_, np.sum([i.Et for i,_ in B_], axis=0)]
-    def R(L):
-        return L.root if L.root is None or L.root.root is lG else R(L.root)
-    for Ng in nG.N_:
-        Et, Rdn, B_ = np.zeros(3), 0, []  # core boundary clustering
-        LR_ = {R(L) for n in Ng.N_ for L in n.rim}  # lGs for nGs, individual nodes and rims are too weak to bound
-        for LR in LR_:
-            if LR and LR.rB_:  # not None, eval Lg.B_[1]?
-                for core, rdn in LR.rB_[0]:  # map contour rdns to core N:
-                    if core is Ng:
-                        B_ += [LR]; Et += core.Et; Rdn += rdn  # add to Et[2]?
-        if B_:
-            if val_(Et,0, (len(B_)-1)*Lw, rc+Rdn+compw) > 0:  # norm by core_ rdn
-                trace_edge(B_, lG, rc)
-            Ng.B_ = [lG.N_, lG.Et]
-
 def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init focal frame graph, no recursion:
 
     if np.any(wTTf):
@@ -905,30 +919,36 @@ def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init foca
         if not blob.sign and blob.G > aveB:
             edge = slice_edge(blob, rV)
             if edge.G * ((len(edge.P_)-1)*Lw) > ave * sum([P.latT[4] for P in edge.P_]):
-                PPm_ = comp_slice(edge, rV, wTTf)
-                PPd_ = [PP2N(PP,lG) for PP in edge.link_]; ET = np.zeros(3); lG = CN(N_=PPd_)  # lG is PPd.root in form_B_
+                PPm_ = comp_slice(edge, rV, wTTf); lG=CN()
+                PPd_ = [PP2N(PP,lG) for PP in edge.link_]; ET = np.zeros(3); lG.N_=PPd_  # lG is PPd.root in form_B_
                 for PP in PPm_:
                     N = PP2N(PP, Fg); ET += N.Et; Fg.N_ += [N]
-                form_B_(Fg, lG, rc=2)  # trace_edge
+                form_B__(Fg, lG)
+                trace_edge(Fg, rc=2)  # contiguous boundary-mediated xcomp,cluster complemented Ns
     return Fg
 
-def PP2N(PP, root):
+def form_B__(nG, lG):  # form and trace edge / boundary / background per node:
 
-    P_, link_, B_, verT, latT, A, S, box, yx, Et = PP
-    baseT = np.array(latT[:4])
-    [mM, mD, mI, mG, mA, mL], [dM, dD, dI, dG, dA, dL] = verT  # re-pack in derTT:
-    derTT = np.array([ np.array([mM, mD, mL, mI, mG, mA, mL, mL / 2, eps]),  # extA=eps
-                       np.array([dM, dD, dL, dI, dG, dA, dL, dL / 2, eps])])
-    y,x,Y,X = box; dy,dx = Y-y, X-x
-    A = np.array([A, np.sign(derTT[1] @ wTTf[1])])  # append angl
-    PP = CN(root=root, fi=1, Et=Et, N_=P_, baseT=baseT, derTT=derTT, box=box, yx=yx, angl=A, span=np.hypot(dy/2, dx/2))
-    for P in PP.N_: P.root = PP  # update root
-    return PP
+    for Lg in lG.N_:  # in frame or blob?
+        B_ = {n.root for L in Lg.N_ for n in L.N_ if n.root and n.root.root is not None}  # rdn core Gs, exclude frame
+        if B_:
+            B_ = {(core,rdn) for rdn,core in enumerate(sorted(B_, key=lambda x:(x.Et[0]/x.Et[2]), reverse=True), start=1)}
+            Lg.rB_ = [B_, np.sum([i.Et for i,_ in B_], axis=0)]  # reciprocal boundary
+    def R(L):
+        return L.root if L.root is None or L.root.root is lG else R(L.root)
+    for Ng in nG.N_:
+        Et, Rdn, B_ = np.zeros(3), 0, []  # core boundary clustering
+        LR_ = {R(L) for n in Ng.N_ for L in n.rim}  # lGs for nGs, individual nodes and rims are too weak to bound
+        for LR in LR_:
+            if LR and LR.rB_:  # not None, eval Lg.B_[1]?
+                for core, rdn in LR.rB_[0]:  # map contour rdns to core N:
+                    if core is Ng:
+                        B_ += [LR]; Et += core.Et; Rdn += rdn  # add to Et[2]?
 
-def trace_edge(N_, root, rc):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary / skeleton?
+def trace_edge(root, rc):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary / skeleton?
 
-    L_ = []; cT_ = set()  # comp pairs
-    for N in N_:
+    N_ = root.N_; L_ = []; cT_ = set()  # comp pairs
+    for N in root.N_:
         for _N in list({rB for rB, rdn in N.rB_[0] if rB is not N}):  # _Ns share boundary with N (each rB is (core, rdn))
             cT = tuple(sorted((N.id,_N.id)))
             if cT in cT_: continue
@@ -937,8 +957,8 @@ def trace_edge(N_, root, rc):  # cluster contiguous shapes via PPs in edge blobs
             Link = comp_N(_N,N, o,rc, A=dy_dx, span=dist)
             if val_(Link.Et, aw=contw+o+rc) > 0:
                 L_ += [Link]; root.Et += Link.Et
-    G_ = []; root = N_[0].root
-    for N in N_:  # flood-fill G per seed N
+    G_ = []
+    for N in N_:  # flood-fill G per seed N, affects Et?
         if N.fin: continue
         N.fin =1; Gt=[N]; _N_=[N]; link_,et,olp = [],np.zeros(3),0
         while _N_:
@@ -950,25 +970,10 @@ def trace_edge(N_, root, rc):  # cluster contiguous shapes via PPs in edge blobs
                         n.fin = 1; Gt += [n]; _N_ += [n]; link_ += [L]; et += L.Et; olp += L.rc
         if len(Gt) > 1:
             G_ += [sum2graph(root, Gt,link_,[],[],et,olp,1)]
-        else: N.sub+=1; G_+=[N]
-
-    for N in N_: N.fin = 0; root.N_+= [N]
-
-def dir_cluster(N):  # get neg links to block projection?
-
-    dir_ = []
-    for pL in N.pL_:
-        angl = pL[1]; max_pL_t = []; max_mA = -1
-        for pL_t in dir_:
-            Angl,_ = pL_t
-            mA,_ = comp_A(angl, Angl)
-            if mA > .8 and mA > max_mA: max_mA = mA; max_pL_t = pL_t
-        if max_pL_t: max_pL_t[0] += angl; max_pL_t[1] += [pL]
-        else:        dir_ += [[copy(angl), [pL]]]  # init dir
-    sel_pL_ = []
-    for _,pL_ in dir_:
-        sel_pL_ += [pL_[ np.argmin([pL[0] for pL in pL_])]]  # nearest pL per direction
-    N.pL_ = sel_pL_
+        else:
+            N.sub += 1; G_ += [N]
+    for N in N_: N.fin = 0
+    root.N_ = G_
 
 # frame expansion per level: cross_comp lower-window N_,C_, forward results to next lev, project feedback to scan new lower windows
 

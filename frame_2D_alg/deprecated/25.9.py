@@ -552,6 +552,27 @@ def trace_edge(N_, root, rc):  # cluster contiguous shapes via PPs in edge blobs
             N.sub += 1; G_ += [N]
     for N in N_: delattr(N,'pL_'); N.fin = 0; root.N_+= [N]
 
+def form_B_(nG, lG, rc):  # form and trace edge / boundary / background per node:
+
+    for Lg in lG.N_:  # in frame or blob?
+        B_ = {n.root for L in Lg.N_ for n in L.N_ if n.root and n.root.root is not None}  # rdn core Gs, exclude frame
+        if B_:
+            B_ = {(core,rdn) for rdn,core in enumerate(sorted(B_, key=lambda x:(x.Et[0]/x.Et[2]), reverse=True), start=1)}
+            Lg.rB_ = [B_, np.sum([i.Et for i,_ in B_], axis=0)]  # reciprocal boundary
+    def R(L):
+        return L.root if L.root is None or L.root.root is lG else R(L.root)
+    for Ng in nG.N_:
+        Et, Rdn, B_ = np.zeros(3), 0, []  # core boundary clustering
+        LR_ = {R(L) for n in Ng.N_ for L in n.rim}  # lGs for nGs, individual nodes and rims are too weak to bound
+        for LR in LR_:
+            if LR and LR.rB_:  # not None, eval Lg.B_[1]?
+                for core, rdn in LR.rB_[0]:  # map contour rdns to core N:
+                    if core is Ng:
+                        B_ += [LR]; Et += core.Et; Rdn += rdn  # add to Et[2]?
+        if B_:
+            if val_(Et,0, (len(B_)-1)*Lw, rc+Rdn+compw) > 0:  # norm by core_ rdn
+                trace_edge(B_, lG, rc)
+            Ng.B_ = [lG.N_, lG.Et]
 
 
 
