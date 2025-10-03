@@ -31,6 +31,7 @@ feedback of projected match adjusts filters to maximize next match, including co
 Deduction:
 in feedforward, extend code via some version of Abstract Interpretation? 
 or cross-comp function calls and cluster code blocks of past and simulated processes? (not yet implemented)
+compression: xcomp+ cluster, and recombination: search in combinatorial space, ~ ffeedback in real space?
 
 notation:
 prefix  f denotes flag
@@ -103,7 +104,7 @@ class CN(CBase):
         n.angl = kwargs.get('angl',np.zeros(2))  # dy,dx, sum from L_
         n.mang = kwargs.get('mang',1)  # ave match of angles in L_, =1 in links
         n.B_ = kwargs.get('B_', [])  # ext boundary Ns, add dB_?
-        n.rB_= kwargs.get('rB_',[])  # reciprocal core clusters
+        n.rB_= kwargs.get('rB_',[])  # reciprocal cores if B_=LL_
         n.C_ = kwargs.get('C_', [])  # int centroid Gs, add dC_?
         n.rC_= kwargs.get('rC_',[])  # reciprocal root centroids
         n.nH = kwargs.get('nH', [])  # top-down hierarchy of sub-node_s: CN(sum_N_(Nt_))/ lev, with single added-layer derH, empty nH
@@ -304,7 +305,8 @@ def comp_N(_N,N, olp,rc, A=np.zeros(2), span=None, rng=1, lH=None):  # compare l
     if fi and V > ave * rc+1 + compw:
         if N.L_: spec(_N.N_, N.N_, olp, rc+1, Et,Link.lH)  # skip PP
         if (_N.B_ and _N.B_[0]) and (N.B_ and N.B_[0]):  # boundary, skip Et
-            spec(_N.B_[0],N.B_[0], olp,rc,Et, Link.lH)  # for dspe
+            _B_ = [_B for _B,_ in _N.B_[0]]; B_ = [B for B,_ in N.B_[0]]  # skip rdn
+            spec(_B_,B_, olp,rc,Et, Link.lH)  # for dspe
             # +C_ overlap,offset?
     if lH is not None:
         lH += [Link]
@@ -751,19 +753,15 @@ def agg_frame(foc, image, iY, iX, rV=1, wTTf=[], fproj=0):  # search foci within
         PV__[y, x] = -np.inf  # to skip?
         if foc:
             Fg = frame_blobs_root(win__[:, :, :, y, x], rV)  # [dert, iY, iX, nY, nX]
-            vect_edge(Fg, rV, wTTf);
-            Fg.L_ = []  # focal dert__ clustering
+            vect_edge(Fg, rV, wTTf); Fg.L_ = []  # focal dert__ clustering
             cross_comp(Fg, rc=frame.rc)
         else:
             Fg = agg_frame(1, win__[:, :, :, y, x], wY, wX, rV=1, wTTf=[])  # use global wY,wX in nested call
             if Fg and Fg.L_:  # only after cross_comp(PP_)
                 rV, wTTf = ffeedback(Fg)  # adjust filters
                 Fg = cent_attr(Fg, 2)  # compute Fg.wTT: correlation weights in frame derTT
-                wTTf *= Fg.wTT;
-                mW = np.sum(wTTf[0]);
-                dW = np.sum(wTTf[1])
-                wTTf[0] *= 9 / mW;
-                wTTf[1] *= 9 / dW
+                wTTf *= Fg.wTT; mW = np.sum(wTTf[0]); dW = np.sum(wTTf[1])
+                wTTf[0] *= 9 / mW; wTTf[1] *= 9 / dW
                 # re-norm weights
         if Fg and Fg.L_:
             if fproj and val_(Fg.Et, 1, (len(Fg.N_) - 1) * Lw, Fg.rc + compw * 20):
@@ -930,10 +928,10 @@ def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init foca
 def form_B__(nG, lG):  # form and trace edge / boundary / background per node:
 
     for Lg in lG.N_:  # in frame or blob?
-        B_ = {n.root for L in Lg.N_ for n in L.N_ if n.root and n.root.root is not None}  # rdn core Gs, exclude frame
-        if B_:
-            B_ = {(core,rdn) for rdn,core in enumerate(sorted(B_, key=lambda x:(x.Et[0]/x.Et[2]), reverse=True), start=1)}
-            Lg.rB_ = [B_, np.sum([i.Et for i,_ in B_], axis=0)]  # reciprocal boundary
+        rB_ = {n.root for L in Lg.N_ for n in L.N_ if n.root and n.root.root is not None}  # rdn core Gs, exclude frame
+        if rB_:
+            rB_ = {(core,rdn) for rdn,core in enumerate(sorted(rB_, key=lambda x:(x.Et[0]/x.Et[2]), reverse=True), start=1)}
+            Lg.rB_ = [rB_, np.sum([i.Et for i,_ in rB_], axis=0)]  # reciprocal boundary
     def R(L):
         return L.root if L.root is None or L.root.root is lG else R(L.root)
     for Ng in nG.N_:
@@ -943,13 +941,14 @@ def form_B__(nG, lG):  # form and trace edge / boundary / background per node:
             if LR and LR.rB_:  # not None, eval Lg.B_[1]?
                 for core, rdn in LR.rB_[0]:  # map contour rdns to core N:
                     if core is Ng:
-                        B_ += [LR]; Et += core.Et; Rdn += rdn  # add to Et[2]?
+                        B_ += [LR]; Et += core.Et; Rdn += rdn
+        Ng.B_ = [B_,Et, Rdn]
 
 def trace_edge(root, rc):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary / skeleton?
 
     N_ = root.N_; L_ = []; cT_ = set()  # comp pairs
     for N in root.N_:
-        for _N in list({rB for rB, rdn in N.rB_[0] if rB is not N}):  # _Ns share boundary with N (each rB is (core, rdn))
+        for _N in list({rB for (B,rdn) in N.B_[0] for (rB,rdn) in B.rB_[0] if rB is not N}):  # _Ns share boundary with N
             cT = tuple(sorted((N.id,_N.id)))
             if cT in cT_: continue
             cT_.add(cT)
@@ -957,21 +956,31 @@ def trace_edge(root, rc):  # cluster contiguous shapes via PPs in edge blobs or 
             Link = comp_N(_N,N, o,rc, A=dy_dx, span=dist)
             if val_(Link.Et, aw=contw+o+rc) > 0:
                 L_ += [Link]; root.Et += Link.Et
-    G_ = []
-    for N in N_:  # flood-fill G per seed N, affects Et?
+    Gt_ = []
+    for N in N_:  # flood-fill G per seed N
         if N.fin: continue
-        N.fin =1; Gt=[N]; _N_=[N]; link_,et,olp = [],np.zeros(3),0
+        N.fin =1; Gt = []; _N_=[N]; n_,l_,et,olp = [],[],np.zeros(3),0
         while _N_:
             _N = _N_.pop(0)
             for L in _N.rim:
                 if L in L_:
                     n = L.N_[0] if L.N_[1] is _N else L.N_[1]
-                    if n in N_ and not n.fin:
-                        n.fin = 1; Gt += [n]; _N_ += [n]; link_ += [L]; et += L.Et; olp += L.rc
-        if len(Gt) > 1:
-            G_ += [sum2graph(root, Gt,link_,[],[],et,olp,1)]
+                    if n in N_:
+                        if n.root is Gt: continue
+                        if n.fin:
+                            _root = n.root; n_+=_root[0]; l_+=_root[1]; et+=_root[2]; olp+=_root[3]; _root[4] = 1
+                            for _n in _root[0]: _n.root = Gt
+                        else:
+                            n.fin=1; _N_ += [n]; n_+=[n]; l_+=[L]; et+=L.Et; olp+=L.rc
+                        n.root = Gt
+        Gt += [n_,l_,et,olp,0]; Gt_ += [Gt]
+    G_= []
+    for n_,l_,et,olp,merged in Gt_:
+        if merged: continue
+        if val_(et, mw=(len(n_)-1)*Lw, aw=rc) > 0:
+            G_ += [sum2graph(root,n_,l_,[],[],et,olp,1)]
         else:
-            N.sub += 1; G_ += [N]
+            for N in n_: N.sub += 1; G_ += [N]
     for N in N_: N.fin = 0
     root.N_ = G_
 
