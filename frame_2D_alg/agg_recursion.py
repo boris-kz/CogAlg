@@ -89,28 +89,28 @@ class CN(CBase):
         super().__init__()
         n.fi = kwargs.get('fi', 1)  # if G else 0, fd_: list of forks forming G?
         n.N_ = kwargs.get('N_',[])  # nodes, or ders in links
-        n.L_ = kwargs.get('L_',[])  # links if fi else len nodet.N_s?
-        n.Et = kwargs.get('Et',np.zeros(3))  # sum from L_, cent_?
-        n.et = kwargs.get('et',np.zeros(3))  # sum from rim, B_?
+        n.L_ = kwargs.get('L_',[])  # internal links if fi else len nodet.N_s?
+        n.Et = kwargs.get('Et',np.zeros(3))  # sum from L_
+        n.rim= kwargs.get('rim',[])  # external links, rng-nested?
+        n.et = kwargs.get('et',np.zeros(3))  # sum from rim
         n.rc = kwargs.get('rc',1)  # redundancy to ext Gs, ave in links? separate rc for rim, or internally overlapping?
         n.baseT = kwargs.get('baseT', np.zeros(4))  # I,G,A: not ders
         n.derTT = kwargs.get('derTT',np.zeros((2,9)))  # sum derH -> m_,d_ [M,D,n, I,G,A, L,S,eA], dertt: comp rims + overlap test?
         n.derH  = kwargs.get('derH', CdH())  # sum from L_ or rims
-        n.rim = kwargs.get('rim',[])  # node-external links, rng-nested? set?
         n.yx  = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
         n.rng = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
         n.box = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
         n.span = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_) but not additive?
         n.angl = kwargs.get('angl',np.zeros(2))  # dy,dx, sum from L_
         n.mang = kwargs.get('mang',1)  # ave match of angles in L_, =1 in links
-        n.B_ = kwargs.get('B_', [])  # ext boundary Ns, add dB_?
+        n.B_ = kwargs.get('B_', [])  # ext boundary Ns: [B_,Et,R], add dB_?
         n.rB_= kwargs.get('rB_',[])  # reciprocal cores if B_=LL_
         n.C_ = kwargs.get('C_', [])  # int centroid Gs, add dC_?
         n.rC_= kwargs.get('rC_',[])  # reciprocal root centroids
         n.nH = kwargs.get('nH', [])  # top-down hierarchy of sub-node_s: CN(sum_N_(Nt_))/ lev, with single added-layer derH, empty nH
         n.lH = kwargs.get('lH', [])  # bottom-up hierarchy of L_ graphs: CN(sum_N_(Lt_))/ lev, within each nH lev
         n.root = kwargs.get('root',None)  # immediate
-        n.sub  = 0  # composition depth relative to top composition graphs
+        n.sub  = 0  # max composition depth relative to top composition graphs
         n.fin  = kwargs.get('fin',0)  # clustered, temporary
         n.exe  = kwargs.get('exe',0)  # exemplar, temporary
         n.compared = set()
@@ -176,15 +176,16 @@ def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering
             if root.fi and root.L_: root.lH += [sum_N_(root.L_)]
             root.L_=L_; root.Et += Et; root.rc+=O
             if fC < 2 and dV > avd:  # dfork, no comp ddC_
-                lG = cross_comp(CN(N_=L_), O+rc+compw+1, fC*2)  # batched lH extension:
-                if lG: rc+=lG.rc; root.lH += [lG]+lG.nH; root.Et+=lG.Et; add_dH(root.derH, lG.derH)  # all new lays
+                lG = cross_comp(CN(N_=L_), O+rc+compw+1, fC*2)
+                if lG: rc+=lG.rc; root.lH += [lG]+lG.nH; root.Et+=lG.Et; add_dH(root.derH, lG.derH)  # lH extension
         if mV > 0:
             nG = Cluster(root, N_, rc+O, fC)  # get_exemplars, cluster_C, rng connectivity cluster
-            if nG:  # batched nH extension
+            if nG:   # batched nH extension
                 rc += nG.rc  # redundant clustering layers
                 if lG:
-                    form_B__(nG,lG)  # assign boundary per N, O += boundary O or 1?
-                    trace_edge(nG, rc+O+3)  # comp,cluster Ns via their B_ overlap, eval?
+                    clust_B__(nG,lG, rc+O+2)  # assign boundary per N, O += B_[-1] |1?
+                    if val_(nG.Et,1,(len(nG.B_[0])-1)*Lw, rc+O+3) > 0: # int B_
+                        trace_edge(nG, rc+O+3, fB_=1)  # comp,cluster Ns via B_
                     root.Et += lG.Et
                 if val_(nG.Et,1, (len(nG.N_)-1)*Lw, rc+O+compw+3, Et) > 0:
                     nG = cross_comp(nG, rc+O+3) or nG  # agg+
@@ -303,11 +304,11 @@ def comp_N(_N,N, olp,rc, A=np.zeros(2), span=None, rng=1, lH=None):  # compare l
         Et += dEt; derTT += dTT
         Link.derH = CdH(H=H, Et=Et, derTT=derTT, root=Link)  # same as Link Et,derTT
     if fi and V > ave * rc+1 + compw:
-        if N.L_: spec(_N.N_, N.N_, olp, rc+1, Et,Link.lH)  # skip PP
-        if (_N.B_ and _N.B_[0]) and (N.B_ and N.B_[0]):  # boundary, skip Et
-            _B_ = [_B for _B,_ in _N.B_[0]]; B_ = [B for B,_ in N.B_[0]]  # skip rdn
-            spec(_B_,B_, olp,rc,Et, Link.lH)  # for dspe
-            # +C_ overlap,offset?
+        if N.L_: spec(_N.N_, N.N_, Et, olp+rc+1,Link.lH)  # skip PP
+        if _N.B_ and N.B_:
+            _B_,_bEt,_bO = _N.B_; B_,bEt,bO = N.B_
+            if val_(_bEt+bEt,1,(min(len(_B_),len(B_))-1)*Lw, bO+bO+rc+compw) > 0:
+                spec(_B_,B_,_bEt+bEt,_bO+bO, Link.lH)  # lH = dspe; spec C_: overlap, offset?
     if lH is not None:
         lH += [Link]
     if span is not None:  # not from spec
@@ -379,11 +380,11 @@ def comp_A(_A,A):
     '''
     return (cos(dA)+1) /2, dA/pi  # mA in 0:1, dA in -1:1
 
-def spec(_spe,spe, olp,rc, Et, dspe=None):  # for N_|B_
+def spec(_spe,spe, Et, olp, dspe=None):  # for N_|B_
     for _N in _spe:
         for N in spe:
             if _N is not N:
-                dN = comp_N(_N, N, olp, rc+1); Et += dN.Et
+                dN = comp_N(_N, N, olp,1); Et += dN.Et
                 if dspe is not None: dspe += [dN]
                 for _l,l in [(_l,l) for _l in _N.rim for l in N.rim]:  # l nested in _l
                     if _l is l: Et += l.Et  # overlap val?
@@ -502,7 +503,7 @@ def cluster_N(root, iN_, rN_, rc, rng=1):  # flood-fill node | link clusters
 
 def cluster_n(root, C_, rc, rng=1):  # simplified flood-fill, currently for for C_
 
-    def extend_G(_link_, node_,cent_,link_,in_):
+    def extend_G(_link_, node_,cent_,link_,b_,in_):
         for L in _link_:  # spliced rim
             if L in in_: continue  # already clustered
             in_.add(L)
@@ -512,14 +513,15 @@ def cluster_n(root, C_, rc, rng=1):  # simplified flood-fill, currently for for 
                     for l in _N.rim:
                         if l in in_: continue  # cluster by link+density:
                         if val_(ett(l), aw=rc) > 0: link_ += [l]
+                        else: b_ += [l]
     G_, in_ = [],set()
     for C in C_: C.fin = 0
     for C in C_:  # form G per remaining C
-        node_,cent_,Link_,link_ = [C],C.C_[0][:] if C.C_ else [],[],[]
+        node_,cent_,Link_,link_,B_,b_ = [C],C.C_[0][:] if C.C_ else [], [],[],[],[]
         _link_ = [l for l in C.rim if val_(ett(l), aw=rc) > 0]
         while _link_:
-            extend_G(_link_, node_, cent_, link_, in_)  # _link_: select rims to extend G
-            if link_: Link_ += _link_; _link_ = list(set(link_)); link_ = []
+            extend_G(_link_, node_, cent_, link_, b_, in_)  # _link_: select rims to extend G
+            if link_: Link_ += _link_; B_ += b_; _link_ = list(set(link_)); link_ = []
             else:     break
         if node_:
             N_= list(set(node_)); L_= list(set(Link_)); c_ = list(set(cent_))  # prevent a same name with input C_
@@ -527,7 +529,7 @@ def cluster_n(root, C_, rc, rng=1):  # simplified flood-fill, currently for for 
             for n in N_: olp += n.rc  # from Ns, vs. Et from Ls?
             for l in L_: Et += l.Et
             if val_(Et,1, (len(N_)-1)*Lw, rc+olp, root.Et) > 0:
-                G_ += [sum2graph(root, N_,L_,[c_,np.sum([c.ET for c in c_],axis=0)] if c_ else [[],np.zeros(3)], [],Et,olp, rng)]
+                G_ += [sum2graph(root, N_,L_,[c_,np.sum([c.ET for c in c_],axis=0)] if c_ else [[],np.zeros(3)],B_, [],Et,olp, rng)]
             elif n.fi:
                 G_ += N_
     if G_: return sum_N_(G_,root)  # nG
@@ -616,7 +618,7 @@ def cent_attr(C, rc):  # weight attr matches | diffs by their match to the sum, 
 
 def ett(L): return (L.N_[0].et + L.N_[1].et - 2 * L.Et) * intw + L.Et  # L.Et is twice included in ett
 
-def sum2graph(root, N_,L_,C_,long_, Et, olp, rng):  # sum node,link attrs in graph, aggH in agg+ or player in sub+
+def sum2graph(root, N_,L_,C_,B_,long_, Et, olp, rng):  # sum node,link attrs in graph, aggH in agg+ or player in sub+
 
     n0 = Copy_(N_[0]); yx_=[n0.yx]; box=n0.box; baseT=n0.baseT; derH=n0.derH; derTT=np.zeros((2,9)); ang=np.zeros(2)
     fi = n0.fi; fg = fi and n0.L_  # not PPs
@@ -629,7 +631,7 @@ def sum2graph(root, N_,L_,C_,long_, Et, olp, rng):  # sum node,link attrs in gra
         add_dH(derH,N.derH); baseT+=N.baseT; derTT+=N.derTT; box=extend_box(box,N.box); yx_+=[N.yx]
         if fg: add_N(Nt,N)  # froot = 0
     yx = np.mean(yx_,axis=0); dy_,dx_ = (yx_-yx).T; dist_ = np.hypot(dy_,dx_); span = dist_.mean() # node centers distance to graph center
-    graph = CN(root=root, fi=1,rng=rng, N_=N_,L_=L_,C_=C_, Et=Et,rc=olp, baseT=baseT, derTT=derTT, derH=derH, span=span, angl=A, yx=yx)
+    graph = CN(root=root, fi=1,rng=rng, N_=N_,L_=L_,C_=C_,B_=B_, Et=Et,rc=olp, baseT=baseT, derTT=derTT, derH=derH, span=span, angl=A, yx=yx)
     for n in N_: n.root = graph
     graph.hL_ = long_
     if fg: graph.nH = Nt.nH + [Nt]  # pack prior top level
@@ -918,37 +920,48 @@ def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init foca
             edge = slice_edge(blob, rV)
             if edge.G * ((len(edge.P_)-1)*Lw) > ave * sum([P.latT[4] for P in edge.P_]):
                 PPm_ = comp_slice(edge, rV, wTTf); lG=CN()
-                PPd_ = [PP2N(PP,lG) for PP in edge.link_]; ET = np.zeros(3); lG.N_=PPd_  # lG is PPd.root in form_B_
+                PPd_ = [PP2N(PP,lG) for PP in edge.link_]; ET = np.zeros(3); lG.N_=PPd_  # lG is PPd.root in clust_B_
                 for PP in PPm_:
                     N = PP2N(PP, Fg); ET += N.Et; Fg.N_ += [N]
-                form_B__(Fg, lG)
-                trace_edge(Fg, rc=2)  # contiguous boundary-mediated xcomp,cluster complemented Ns
+                clust_B__(Fg,lG,2)
+                if val_(ET, mw=(len(Fg.B_[0])-1)*Lw, aw=2) > 0:  # internal B_
+                    trace_edge(Fg, rc=2, fB_= 1)  # contiguous boundary-mediated xcomp,cluster of complemented Ns
     return Fg
 
-def form_B__(nG, lG):  # form and trace edge / boundary / background per node:
+def clust_B__(G, rc):  # form and trace edge / boundary / background per node:
 
-    for Lg in lG.N_:  # in frame or blob?
-        rB_ = {n.root for L in Lg.N_ for n in L.N_ if n.root and n.root.root is not None}  # rdn core Gs, exclude frame
-        if rB_:
-            rB_ = {(core,rdn) for rdn,core in enumerate(sorted(rB_, key=lambda x:(x.Et[0]/x.Et[2]), reverse=True), start=1)}
-            Lg.rB_ = [rB_, np.sum([i.Et for i,_ in rB_], axis=0)]  # reciprocal boundary
-    def R(L):
-        return L.root if L.root is None or L.root.root is lG else R(L.root)
-    for Ng in nG.N_:
-        Et, Rdn, B_ = np.zeros(3), 0, []  # core boundary clustering
-        LR_ = {R(L) for n in Ng.N_ for L in n.rim}  # lGs for nGs, individual nodes and rims are too weak to bound
+    def R(L): return L.root if L.root is None or L.root.root is G else R(L.root)  # G is probably wrong now
+
+    for N in G.N_:
+        Et, Rdn, B_ = np.zeros(3), 0, []  # core boundary clustering, Rdn = stronger cores sharing same B cluster
+        for L in G.B_:  # neg Ls, may be clustered?
+            R = R(L); B_ += [R if R else L]  # increase L,sub?
+
+        # below is not revised:
+
+        LR_ = {R(L) for n in N.N_ for L in n.rim}  # lGs for nGs, individual nodes and rims are too weak to bound
         for LR in LR_:
             if LR and LR.rB_:  # not None, eval Lg.B_[1]?
                 for core, rdn in LR.rB_[0]:  # map contour rdns to core N:
-                    if core is Ng:
+                    if core is N:
                         B_ += [LR]; Et += core.Et; Rdn += rdn
-        Ng.B_ = [B_,Et, Rdn]
+        if B_:
+            N.B_ = [B_,Et,Rdn]
+            if val_(Et,0, (len(B_)-1)*Lw, rc+Rdn+compw) > 0:  # norm by core_ rdn
+                trace_edge(N, rc)
 
-def trace_edge(root, rc):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary / skeleton?
+        rB_ = {n.root for L in Lg.N_ for n in L.N_ if n.root and n.root.root is not None}  # core Gs, exclude frame
+        if rB_:
+            rB_ = {(core,rdn) for rdn,core in enumerate(sorted(rB_, key=lambda x:(x.Et[0]/x.Et[2]), reverse=True), start=1)}
+            Lg.rB_ = [rB_, np.sum([i.Et for i,_ in rB_], axis=0)]  # reciprocal boundary
 
-    N_ = root.N_; L_ = []; cT_ = set()  # comp pairs
+def trace_edge(root, rc, fB_=0):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary / skeleton?
+
+    N_ = root.N_ if fB_ else root.B_[0]  # fB_: root is the boundary, as in vect_edge
+    L_ = []; cT_ = set()  # comp pairs
+    for N in N_: N.rim = []; N.fin = 0  # we need to reset rim and fin since root.N_ might be those recycled nodes
     for N in root.N_:
-        for _N in list({rB for (B,rdn) in N.B_[0] for (rB,rdn) in B.rB_[0] if rB is not N}):  # _Ns share boundary with N
+        for _N in list({rB for B in N.B_[0] for (rB,rdn) in B.rB_[0] if rB is not N}):  # _Ns share boundary with N
             cT = tuple(sorted((N.id,_N.id)))
             if cT in cT_: continue
             cT_.add(cT)
@@ -959,7 +972,7 @@ def trace_edge(root, rc):  # cluster contiguous shapes via PPs in edge blobs or 
     Gt_ = []
     for N in N_:  # flood-fill G per seed N
         if N.fin: continue
-        N.fin =1; Gt = []; _N_=[N]; n_,l_,et,olp = [],[],np.zeros(3),0
+        N.fin=1; _N_=[N]; Gt=[]; N.root=Gt; n_,l_,et,olp = [N],[],np.zeros(3),0
         while _N_:
             _N = _N_.pop(0)
             for L in _N.rim:
