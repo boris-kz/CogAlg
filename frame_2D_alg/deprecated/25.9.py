@@ -530,7 +530,6 @@ def trace_edge(N_, root, rc):  # cluster contiguous shapes via PPs in edge blobs
             if cT in cT_: continue
             cT_.add(cT); o = (N.rc+_N.rc) / 2
             V = proj_V(_N,N, dy_dx, dist)
-            # use shared B_ instead of dist, edge is contiguous?
             if adist * V/o > dist:  # min induction
                 Link = comp_N(_N,N, o,rc, angl=dy_dx, span=dist)
                 if val_(Link.Et, aw=contw+o+rc) > 0:
