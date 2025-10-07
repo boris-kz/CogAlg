@@ -255,93 +255,51 @@ def comp_sorted(C_, rc):  # max attr sort to constrain C_ search in 1D, add K at
     N_ = list({N for L in L_ for N in L.N_})
     return N_, L_, ET
 
-def comp_q(iN_, rc):  # comp pairs of nodes or links if proj_V per dir
+def comp_Q(iN_, rc, fC):
 
-    for i, N in enumerate(iN_):
-        N.pL_ = []
-        for _N in iN_[i:]:  # get unique pairs
-            if _N.sub == N.sub:  # check max dist?
-                dy_dx = _N.yx- N.yx; dist = np.hypot(*dy_dx)  # * angl in comp_A, for canonical links in L_
-                N.pL_ += [[dist,dy_dx,_N]]  # no reciprocal?
-    N_,L_, Et,o = [],[],np.zeros(3),1  # rng=1
-    for N in iN_:
-        if not N.pL_: continue
-        dir_sort(N)  # get rng_ pre-links per direction
-        for dir in N.pL_:
-            for dist,dy_dx,_N in dir:  # enumerate rng?
-                V = proj_V(_N, N, dy_dx, dist)
-                olp = (N.rc + _N.rc) / 2
-                if adist * V/olp > dist:
-                    Link = comp_N(_N,N, olp, rc, A=dy_dx, span=dist, lH=L_)
-                    if val_(Link.Et, aw=olp+rc) > 0:
-                        N_+= [_N,N]; Et+=Link.Et; o+=olp
-                else:
-                    break  # no proj for more distant pairs?
-    return list(set(N_)), L_, Et,o
-
-def dir_sort(N):  # get rng_ pre-links per direction
-
-    dir_ = []
-    for dist, angl, _N in N.pL_:
-        max_dir = None; max_mA = -1
-        for dir in dir_:
-            mA,_ = comp_A(angl, dir[0])
-            if mA > .8 and mA > max_mA:
-                max_mA = mA; max_dir = dir
-        if max_dir: max_dir[1] += angl; max_dir[1] += [[dist,angl,_N]]
-        else:       dir_+= [[copy(angl), [[dist,angl,_N]]]]  # new dir
-    for _,pL_ in dir_:
-        pL_[:] = sorted(pL_, key=lambda x: x[0])  # by distance
-    N.pL_ = dir_
-
-def comp_Q(iN_, rc, fC):  # comp pairs of nodes or links within max_dist
-
-    N__,L_,ET,O = [],[],np.zeros(3),1; rng=1; _N_ = copy(iN_)
-
-    while True:  # _vM, rng in rim only? dir_cluster rng-layered pre-links for base Ns?
-        N_, Et,o = [],np.zeros(3),1
-        for N in _N_: N.pL_ = []
-        for _N, N in combinations(_N_, r=2):
-            if _N in N.compared or _N.sub != N.sub: continue
-            if fC==2:  # dCs
-                m_, d_ = comp_derT(_N.derTT[1], N.derTT[1])
-                ad_ = np.abs(d_); t_ = m_ + ad_ + eps  # ~ max comparand
-                et = np.array([m_ / t_ @ wTTf[0], ad_ / t_ @ wTTf[1], min(_N.Et[2], N.Et[2])])  # signed
-                dC = CN(N_=[_N,N], Et=et); L_ += [dC]; Et += et
-                for n in _N, N:
-                    N_ += [n]; n.rim += [dC]; n.et += et
-            else:  # spatial
-                dy_dx = _N.yx- N.yx; dist = np.hypot(*dy_dx)  # * angl in comp_A, for canonical links in L_
-                olp = (N.rc + _N.rc) / 2
-                if fC or ({l for l in _N.rim if l.Et[0] > ave} & {l for l in N.rim if l.Et[0] > ave}):  # common match, if bilateral proj eval
-                    Link = comp_N(_N,N, olp, rc, A=dy_dx, span=dist, rng=rng, lH=L_)
-                    if val_(Link.Et, aw=contw+olp+rc) > 0:
-                        N_+= [_N,N]; Et+=Link.Et; o+=olp
-                else:
-                    V = proj_V(_N, N, dy_dx, dist)  # or prelink dir_cluster, proj to nearest _N in dir only?
+    N_,L_, Et,o = [],[],np.zeros(3),1
+    if fC:
+        for _N, N in combinations(iN_, r=2):  # no olp for dCs?
+            m_, d_ = comp_derT(_N.derTT[1], N.derTT[1])
+            ad_ = np.abs(d_); t_ = m_ + ad_ + eps  # ~ max comparand
+            et = np.array([m_ / t_ @ wTTf[0], ad_ / t_ @ wTTf[1], min(_N.Et[2], N.Et[2])])  # signed
+            dC = CN(N_=[_N,N], Et=et); L_ += [dC]; Et += et  # add o?
+            for n in _N, N:
+                N_ += [n]; n.rim += [dC]; n.et += et
+    else:  # spatial
+        for i, N in enumerate(iN_):
+            N.pL_ = []
+            for _N in iN_[i+1:]:
+                if _N.sub != N.sub: continue
+                dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx)
+                N.pL_ += [[dist, dy_dx, _N]]
+            N.pL_.sort(key=lambda x: x[0])  # global distance sort
+        for N in iN_:
+            pVt_ = []  # [dist, dy_dx, _N, V]
+            for dist, dy_dx, _N in N.pL_:
+                V = 0  # proj V
+                for _dist,_dy_dx,__N,_V in N.pVt_:
+                    mA,_ = comp_A(dy_dx,_dy_dx)
+                    rdist = _dist/dist  # dist > _dist
+                    V += _V * mA * rdist  # mA in 0:1, or -1:1?
+                if V >= 0:  # tentative
+                    if _N.L_ and N.L_:
+                        V += proj_V(_N,N, dy_dx, dist)
+                        olp = (N.rc + _N.rc) / 2
+                    else: V += 1; olp = 1  # neutral projection for PPs
                     if adist * V/olp > dist:
-                        N.pL_ += [[dist,dy_dx,olp,_N]]; _N.pL_ += [[dist,-dy_dx,olp,N]]
-        if not fC:  # else compared directly above
-            cT_ = set()  # compared pairs per loop
-            for N in _N_:
-                for dist, dy_dx, olp, _N in N.pL_:
-                    cT = tuple(sorted((N.id,_N.id)))
-                    if cT in cT_: continue
-                    cT_.add(cT)
-                    Link = comp_N(_N, N, olp, rc, A=dy_dx, span=dist, rng=rng, lH=L_)
-                    if val_(Link.Et, aw=contw+rc+olp) > 0:
-                        N_+= [_N,N]; Et+= Link.Et; o+=olp
-        for N in _N_:
-            delattr(N,'pL_')
-        N_ = list(set(N_))
-        if fC: N__= N_; ET = Et; break  # no rng-banding
-        elif N_:
-            N__+= [N_]; ET+=Et; O+=o  # rng+ eval / loop
-            if not fC and val_(Et, mw=(len(N_)-1)*Lw, aw=compw+rc+o) > 0:  # current-rng vM
-                _N_ = N_; rng +=1
-            else: break
-        else: break
-    return N__, L_, ET, O
+                        Link = comp_N(_N, N, olp, rc, A=dy_dx, span=dist, lH=L_)
+                        if val_(Link.Et, aw=contw+olp+rc) > 0:
+                            N_ += [_N, N]; Et += Link.Et; o += olp
+                        pVt_ += [[dist, dy_dx, _N, val_(Link.Et, aw=rc+olp)]]
+                        # per compared N
+    sL_ = sorted(L_, key=lambda l: l.span)
+    L_, Lseg = [], [L_[0]]
+    for _L, L in zip(sL_, sL_[1:]):  # segment by ddist:
+        if _L.span - L.span < adist: Lseg += [L]
+        else:  L_ += [Lseg]; Lseg = [L]
+
+    return [list(set(N_))], L_, Et, o
 
 def comp_N(_N,N, olp,rc, A=np.zeros(2), span=None, rng=1, lH=None):  # compare links, optional angl,span,dang?
 
@@ -383,7 +341,7 @@ def base_comp(_N,N, fC=0):  # comp Et, baseT, extT, derTT
     rn = _n/n
     _pars = np.array([_M*rn,_D*rn,_n*rn,_I*rn,_G*rn, [_Dy,_Dx],_L*rn,_N.span], dtype=object)  # Et, baseT, extT
     pars = np.array([M,D,n, (I,aI),G, [Dy,Dx], L,(N.span,aS)], dtype=object)
-    mA,dA = comp_A(np.prod(_N.angl), np.prod(N.angl))  # ext angle
+    mA,dA = comp_A(_N.angl[0]*_N.angl[1], N.angl[0]*N.angl[1])  # ext angle
     m_,d_ = comp(_pars,pars, mA,dA)  # M,D,n, I,G,A, L,S,eA
     if fC:
         dm_,dd_ = comp_derT(rn*_N.derTT[1], N.derTT[1])
@@ -437,7 +395,7 @@ def comp_A(_A,A):
     den = np.hypot(*_A) * np.hypot(*A) + eps
     mA = (_A @ A / den +1) / 2  # cos_da in 0:1, no rot = 1 if dy * _dx - dx * _dy >= 0 else -1  # +1 CW, −1 CCW, ((1-cos_da)/2) * rot?
     '''
-    return (cos(dA)+1) /2, dA/pi  # mA in 0:1, dA in -1:1
+    return (cos(dA)+1) /2, dA/pi  # mA in 0:1, dA in -1:1, or invert dA, may be negative?
 
 def spec(_spe,spe, Et, olp, dspe=None):  # for N_|B_
     for _N in _spe:

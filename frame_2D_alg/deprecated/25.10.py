@@ -84,3 +84,56 @@ def comp_Q(iN_, rc, fC):  # comp pairs of nodes or links within max_dist
         else: break
     return N__, L_, ET, O
 
+def dir_sort(N):  # get rng_ pre-links per direction
+
+    dir_ = []
+    for dist, angl, _N in N.pL_:
+        max_mA =-1; mA_dir = None
+        for dir in dir_:
+            mA,_ = comp_A(angl, dir[0])
+            if mA > .8 and mA > max_mA:
+                max_mA = mA; max_dir = dir
+        if mA_dir: mA_dir[0] += angl; mA_dir[1] += [[dist,angl,_N]]
+        else:      dir_+= [[copy(angl), [[dist,angl,_N]]]]  # new dir
+    for _,pL_ in dir_:
+        pL_[:] = sorted(pL_, key=lambda x: x[0])  # by distance
+    N.pL_ = dir_
+
+def comp_q(iN_, rc, fC):  # comp pairs of nodes or links if proj_V per dir
+
+    N_,L_, Et,o = [],[],np.zeros(3),1
+    if fC:
+        for _N, N in combinations(iN_, r=2):  # no olp for dCs?
+            m_, d_ = comp_derT(_N.derTT[1], N.derTT[1])
+            ad_ = np.abs(d_); t_ = m_ + ad_ + eps  # ~ max comparand
+            et = np.array([m_ / t_ @ wTTf[0], ad_ / t_ @ wTTf[1], min(_N.Et[2], N.Et[2])])  # signed
+            dC = CN(N_=[_N,N], Et=et); L_ += [dC]; Et += et  # add o?
+            for n in _N, N:
+                N_ += [n]; n.rim += [dC]; n.et += et
+    else:   # spatial
+        for i, N in enumerate(iN_):
+            N.pL_ = []
+            for _N in iN_[i:]:  # get unique pairs
+                if _N.sub == N.sub:  # check max dist?
+                    dy_dx = _N.yx- N.yx; dist = np.hypot(*dy_dx)  # * angl in comp_A, for canonical links in L_
+                    N.pL_ += [[dist,dy_dx,_N]]  # no reciprocal
+        for N in iN_:
+            if not N.pL_: continue
+            dir_sort(N)  # get rng_ pre-links per direction
+            for dir in N.pL_:
+                for dist,dy_dx,_N in dir:  # enumerate rng?
+                    V = proj_V(_N, N, dy_dx, dist)
+                    olp = (N.rc + _N.rc) / 2
+                    if adist * V/olp > dist:
+                        Link = comp_N(_N,N, olp, rc, A=dy_dx, span=dist, lH=L_)
+                        if val_(Link.Et, aw=olp+rc) > 0:
+                            N_+= [_N,N]; Et+=Link.Et; o+=olp
+                    else:
+                        break  # distant pre_V = proj_V * mA, ?negative?
+        sL_ = sorted(L_,key=lambda l:l.span)
+        L_, Lseg = [], [L_[0]]
+        for _L,L in zip(L_,L_[1:]):  # segment by ddist:
+            if _L.span-L.span < adist: Lseg += [L]
+            else: L_ += [Lseg]; Lseg =[L]
+
+    return list(set(N_)), L_, Et,o
