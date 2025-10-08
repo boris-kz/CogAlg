@@ -137,3 +137,22 @@ def comp_q(iN_, rc, fC):  # comp pairs of nodes or links if proj_V per dir
             else: L_ += [Lseg]; Lseg =[L]
 
     return list(set(N_)), L_, Et,o
+
+def dir_cluster(N):  # get neg links to block projection?
+
+    dir_ = []
+    for pL in N.pL_:
+        angl = pL[1]; max_pL_t = []; max_mA = -1
+        for pL_t in dir_:
+            Angl,_ = pL_t
+            mA,_ = comp_A(angl, Angl)
+            if mA > .8 and mA > max_mA: max_mA = mA; max_pL_t = pL_t
+        if max_pL_t: max_pL_t[0] += angl; max_pL_t[1] += [pL]
+        else:        dir_ += [[copy(angl), [pL]]]  # init dir
+    sel_pL_ = []
+    for _,pL_ in dir_:
+        sel_pL_ += [pL_[ np.argmin([pL[0] for pL in pL_])]]  # nearest pL per direction
+    N.pL_ = sel_pL_
+
+    rdist = _dist / dist  # dist > _dist
+    V += _V * mA * rdist  # mA in 0:1, symmetrical, but ?
