@@ -130,7 +130,7 @@ class CN(CBase):
         n.nH = kwargs.get('nH', [])  # top-down hierarchy of sub-node_s: CN(sum_N_(Nt_))/ lev, with single added-layer derH, empty nH
         n.lH = kwargs.get('lH', [])  # bottom-up hierarchy of L_ graphs: CN(sum_N_(Lt_))/ lev, within each nH lev
         n.root = kwargs.get('root',None)  # immediate
-        n.sub  = 0  # max composition depth relative to top composition graphs
+        n.sub  = 0  # full composition depth relative to top-composition peers
         n.fin  = kwargs.get('fin',0)  # clustered, temporary
         n.exe  = kwargs.get('exe',0)  # exemplar, temporary
         n.compared = set()
@@ -141,9 +141,10 @@ def Copy_(N, root=None, init=0):
 
     C = CN(root=root)
     if init:  # init G with N
-        C.N_ = [N]; C.nH, C.lH, N.root = [],[],C
+        C.N_ = [N]; C.nH, C.lH = [],[]
         C.L_ = [l for l in N.rim if l.Et[0]>ave] if N.fi else []
-        C.fi = N.fi if init==2 else 1  # G, not centroid
+        if init==2: C.fi = N.fi  # centroid is not root
+        else:       C.fi = 1; N.root = C  # G, not centroid
     else:
         C.N_,C.nH,C.lH = list(N.N_),list(N.nH),list(N.lH); N.root = root or N.root
         C.L_ = list(N.L_) if N.fi else N.L_
@@ -205,8 +206,8 @@ def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering
                 if lG:
                     form_B__(nG,lG, rc+O+2)  # assign boundary per N, O += B_[-1] |1?
                     mv,dv = val_(Et,2,(len(nG.B_[0])-1)*Lw, rc+O+3+contw)
-                    if mv > 0: trace_edge(nG, rc+O+3, fN_=1)  # comp Ns via B_, alt B clustering:
-                    if dv>ave: trace_edge(nG, rc+O+4, fN_=0)  # comp Bs via rB_, = lG with fN_ = 1?
+                    if mv > 0: trace_edge(nG, rc+O+3)  # comp Ns via B_, alt B clustering:
+                    if dv>ave: trace_edge(lG, rc+O+4)  # comp Bs via rB_, = lG with fN_ = 1?
                     root.Et += lG.Et
                 if val_(nG.Et,1, (len(nG.N_)-1)*Lw, rc+O+compw+3, Et) > 0:
                     nG = cross_comp(nG, rc+O+3) or nG  # agg+
@@ -220,7 +221,7 @@ def proj_V(_N, N, angle, dist, fC=0):  # estimate cross-induction between N and 
     def proj_L_(L_, int_w=1):
         V = 0
         for L in L_:
-            cos = (np.prod(L.angl) @ angle) / np.hypot(*np.prod(L.angl) * np.hypot(*angle))  # angl: [[dy,dx],dir]
+            cos = ((L.angl[0]*L.angl[1]) @ angle) / np.hypot(*(L.angl[0]*L.angl[1]) * np.hypot(*angle))  # angl: [[dy,dx],dir]
             mang = (cos+ abs(cos)) / 2  # = max(0, cos): 0 at 90°/180°, 1 at 0°
             V += L.Et[1-fi] * mang * int_w * mW * (L.span/dist * av)  # decay = link.span / l.span * cosine ave?
             # += proj rim-mediated nodes?
@@ -267,32 +268,35 @@ def comp_Q(iN_, rc, fC):
             for n in _N, N:
                 N_ += [n]; n.rim += [dC]; n.et += et
     else:  # spatial
-        for i, N in enumerate(iN_):
+        for i, N in enumerate(iN_):  # get unique pre-links per N, not _N
             N.pL_ = []
             for _N in iN_[i+1:]:
-                if _N.sub != N.sub: continue
+                if _N.sub != N.sub: continue  # not sure
                 dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx)
                 N.pL_ += [[dist, dy_dx, _N]]
             N.pL_.sort(key=lambda x: x[0])  # global distance sort
         for N in iN_:
             pVt_ = []  # [dist, dy_dx, _N, V]
-            for dist, dy_dx, _N in N.pL_:
-                V = 0  # proj V
-                for _dist,_dy_dx,__N,_V in pVt_:
-                    mA, _ = comp_A(dy_dx, _dy_dx)
-                    Ldist = np.hypot(*(_N.yx -__N.yx)) / 2  # between midpoints of pLs
-                    V += _V * mA * (_dist / Ldist)  # * angular * proximity?
+            for dist, dy_dx, _N in N.pL_:  # angl is not canonic in rim?
+                V = 0  # prior L vals projected on curr pL
+                for _dist, _dy_dx, __N, _V in pVt_:
+                    mA, _ = comp_A(dy_dx, _dy_dx)   # mA and rel dist in 0:1:
+                    V += _V * ((mA*wA + _dist/dist *distw) / 2)  # _V decay / ave rel_miss per link attr?
+                    # = (_V * (mA*wA) + _V * (_dist / dist * distw)) / 2
+                    # ldist = np.hypot(*(_N.yx-__N.yx)) / 2  # between link midpoints, also a decay factor?
                 if V >= 0:  # tentative
                     if _N.L_ and N.L_:
                         V += proj_V(_N,N, dy_dx, dist)
-                        olp = (N.rc + _N.rc) / 2
+                        olp = (N.rc+_N.rc) / 2
                     else: V += 1; olp = 1  # neutral projection for PPs
                     if adist * V/olp > dist:
                         Link = comp_N(_N, N, olp, rc, A=dy_dx, span=dist, lH=L_)
                         if val_(Link.Et, aw=contw+olp+rc) > 0:
                             N_ += [_N, N]; Et += Link.Et; o += olp
-                        pVt_ += [[dist, dy_dx, _N, val_(Link.Et, aw=rc+olp)]]
-                        # per compared N
+                        V = val_(Link.Et, aw=rc + olp)  # else keep V
+                else: break
+                pVt_ += [[dist, dy_dx, _N, V]]
+
     return [list(set(N_))], L_, Et, o
 
 def comp_N(_N,N, olp,rc, A=np.zeros(2), span=None, rng=1, lH=None):  # compare links, optional angl,span,dang?
@@ -453,7 +457,7 @@ def Cluster(root, iL_, rc, fC):  # generic root for clustering
         for _L,L in zip(L_, L_[1:]):  # segment by ddist:
             if L.span -_L.span < adist: Lseg += [L]  # or short seg?
             else:                       L__ += [Lseg]; Lseg = [L]
-        L_ += [Lseg]
+        L__ += [Lseg]  # should be L__ here
         for rng, rL_ in enumerate(L__,start=1):  # bottom-up rng-banded clustering
             aw = rc + rng + contw
             if rL_ and val_(np.sum([l.Et for l in rL_], axis=0),1, (len(rL_)-1)*Lw, aw) > 0:
@@ -462,8 +466,7 @@ def Cluster(root, iL_, rc, fC):  # generic root for clustering
 
 def cluster_N(root, rL_, rc, rng=1):  # flood-fill node | link clusters
 
-    def rroot(n):
-        if n.root != root: return rroot(n.root) if n.root.root else n.root
+    def rroot(n): return rroot(n.root) if n.root and n.root!=root else n
 
     def extend_Gt(_link_, node_, cent_, link_, b_, in_):
         for L in _link_:  # spliced rim
@@ -490,7 +493,7 @@ def cluster_N(root, rL_, rc, rng=1):  # flood-fill node | link clusters
     for N in rN_:  # form G per remaining rng N
         if not N.exe or N.fin: continue
         node_,cent_,Link_,_link_,B_ = [N],[],[],[],[]
-        if rng==1 or (not N.root or N.root.rng==1):  # not rng-banded
+        if rng==1 or not N.root or N.root==root:  # not rng-banded
             cent_ = N.rC_[:]  # c_roots
             for l in N.rim:
                 if l in rL_:
@@ -898,15 +901,14 @@ def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init foca
         if not blob.sign and blob.G > aveB:
             edge = slice_edge(blob, rV)
             if edge.G * ((len(edge.P_)-1)*Lw) > ave * sum([P.latT[4] for P in edge.P_]):
-                Bg = CN()
-                PPm_ = comp_slice(edge, rV, wTTf)
-                PPd_ = [PP2N(PP,Bg) for PP in edge.link_]; Et = np.zeros(3)  # lG is PPd.root in clust_B_
+                PPm_ = comp_slice(edge, rV, wTTf); Bg = CN()
+                PPd_ = [PP2N(PP,Bg) for PP in edge.link_]  # lG is PPd.root in clust_B_
                 for PP in PPm_:
-                    N = PP2N(PP,Bg); Et += N.Et; Bg.N_ += [N]
+                    N = PP2N(PP,Bg); Bg.Et += N.Et; Bg.N_ += [N]
                 form_B__(Bg, CN(N_=PPd_),2)
-                if val_(Et, mw=(len(PPm_)-1)*Lw, aw=2) > 0:  # internal B_
-                    trace_edge(Bg, rc=2, fN_=1)  # contiguous boundary-mediated xcomp,cluster of complemented Ns
-                    # trace_edge(Fg, rc=3, fN_=0)?
+                if val_(Bg.Et, mw=(len(PPm_)-1)*Lw, aw=2) > 0:
+                    trace_edge(Bg, rc=2)  # cluster complemented Gs via G.B_
+                    # trace_edge(Bg.lH[0], rc=3): lG.N_?
                 add_N(Fg, Bg, fmerge=1)
     return Fg
 
@@ -925,9 +927,9 @@ def form_B__(G, lG, rc):  # trace edge / boundary / background per node:
             if RL: B_ += [RL]; Et += RL.Et; rdn += RL.rB_.index(N) + 1  # rdn = n stronger cores of RL
         N.B_ = [B_, Et, rdn]
 
-def trace_edge(root, rc, fN_):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary / skeleton?
+def trace_edge(root, rc):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary / skeleton?
 
-    N_ = root.N_ if fN_ else root.B_[0]  # fB_: cluster B_-mediated N_, else rB_-mediated B_
+    N_ = root.N_  # nG: cluster B_-mediated N_, lG: rB_-mediated B_
     L_ = []; cT_ = set()  # comp pairs
     for N in N_: N.fin = 0
     for N in N_:
