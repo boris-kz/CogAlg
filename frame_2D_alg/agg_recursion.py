@@ -130,7 +130,7 @@ class CN(CBase):
         n.nH = kwargs.get('nH', [])  # top-down hierarchy of sub-node_s: CN(sum_N_(Nt_))/ lev, with single added-layer derH, empty nH
         n.lH = kwargs.get('lH', [])  # bottom-up hierarchy of L_ graphs: CN(sum_N_(Lt_))/ lev, within each nH lev
         n.root = kwargs.get('root',None)  # immediate
-        n.sub  = 0  # full composition depth relative to top-composition peers
+        n.sub  = 0  # full-composition depth relative to top-composition peers
         n.fin  = kwargs.get('fin',0)  # clustered, temporary
         n.exe  = kwargs.get('exe',0)  # exemplar, temporary
         n.compared = set()
@@ -156,6 +156,7 @@ def Copy_(N, root=None, init=0):
     return C
 
 ave, avd, arn, aI, aS, aveB, aveR, Lw, intw, compw, centw, contw = 10, 10, 1.2, 100, 5, 100, 3, 5, 2, 5, 10, 15  # value filters + weights
+dec = ave / (ave+avd)  # match decay per unit dist
 adist, amed, distw, medw = 10, 3, 2, 2  # cost filters + weights, add alen?
 wM, wD, wN, wG, wL, wI, wS, wa, wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # der params higher-scope weights = reversed relative estimated ave?
 mW = dW = 9; wTTf = np.ones((2,9))  # fb weights per derTT, adjust in agg+
@@ -168,7 +169,7 @@ def val_(Et, fi=1, mw=1, aw=1, _Et=np.zeros(3)):  # m,d eval per cluster or cros
     ad = avd * aw  # dval is borrowed from co-projected or higher-scope mval
     m, d, n = Et
     # m,d may be negative, but deviation is +ve?
-    if fi==2: val = np.array([m-am, d-ad]) * mw
+    if fi==2: val = np.array([m-am, d-ad]) * mw  # abs ! rel?
     else:     val = (m-am if fi else d-ad) * mw  # m: m/ (m+d), d: d/ (m+d)?
     if _Et[2]:
         _m,_d,_n = _Et
@@ -197,18 +198,16 @@ def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering
             if root.fi and root.L_: root.lH += [sum_N_(root.L_)]
             root.L_=L_; root.Et += Et; root.rc += O
             if fC < 2 and dV > avd:  # may be dC_, no comp ddC_
-                lG = cross_comp(CN(N_=L_), O+rc+compw+1, fC*2)  # global dfork
+                lG = cross_comp(CN(N_=L_), O+rc+compw+1, fC*2)  # trace_edge via rB_|B_
                 if lG: rc+=lG.rc; root.lH += [lG]+lG.nH; root.Et+=lG.Et; add_dH(root.derH, lG.derH)  # lH extension
         if mV > 0:
             nG = Cluster(root, L_, rc+O, fC)  # get_exemplars, cluster_C, rng connectivity cluster
             if nG:  # batched nH extension
                 rc += nG.rc  # redundant clustering layers
                 if lG:
-                    form_B__(nG,lG, rc+O+2)  # assign boundary per N, O += B_[-1] |1?
-                    mv,dv = val_(Et,2,(len(nG.B_[0])-1)*Lw, rc+O+3+contw)
-                    if mv > 0: trace_edge(nG, rc+O+3)  # comp Ns via B_, alt B clustering:
-                    if dv>ave: trace_edge(lG, rc+O+4)  # comp Bs via rB_, = lG with fN_ = 1?
-                    root.Et += lG.Et
+                    root.Et += lG.Et; form_B__(nG, lG, rc+O+2)  # assign boundary per N, O += B_[-1]|1?
+                    if val_(Et,1,(len(nG.N_)-1)*Lw, rc+O+3+contw) > 0:
+                        trace_edge(nG, rc+O+3)  # comp adjacent Ns via B_
                 if val_(nG.Et,1, (len(nG.N_)-1)*Lw, rc+O+compw+3, Et) > 0:
                     nG = cross_comp(nG, rc+O+3) or nG  # agg+
                 root.Et += nG.Et; root.N_ = nG.N_
@@ -234,8 +233,10 @@ def proj_V(_N, N, angle, dist, fC=0):  # estimate cross-induction between N and 
         v = node.Et[1-fi]  # internal, lower weight
         V+= proj_L_(node.L_,intw) if (fi and v*mW > av*node.rc) else v  # empty link L_
     if fC:
-        V += np.sum([i[0] for i in _N.mo_]) + np.sum([i[0] for i in N.mo_])
-        # project matches to centroids?
+        V += np.sum([i[0] for i in _N.mo_]) + np.sum([i[0] for i in N.mo_])  # project matches to centroids?
+    else:
+        V *= dec * (dist / ((_N.span+N.span)/2))
+        # no decay for centroids?
     return V
 
 def comp_sorted(C_, rc):  # max attr sort to constrain C_ search in 1D, add K attrs and overlap?
@@ -281,9 +282,10 @@ def comp_Q(iN_, rc, fC):
                 V = 0  # prior L vals projected on curr pL
                 for _dist, _dy_dx, __N, _V in pVt_:
                     mA, _ = comp_A(dy_dx, _dy_dx)   # mA and rel dist in 0:1:
-                    V += _V * ((mA*wA + _dist/dist *distw) / 2)  # _V decay / ave rel_miss per link attr?
-                    # = (_V * (mA*wA) + _V * (_dist / dist * distw)) / 2
-                    # ldist = np.hypot(*(_N.yx-__N.yx)) / 2  # between link midpoints, also a decay factor?
+                    ldist = np.hypot(*(_N.yx-__N.yx)) /2  # between link midpoints
+                    rdist = ldist / ((_dist+dist) /2)  # relative to ave link, -> decay:
+                    V += _V * (rdist*dec) * ((mA*wA + _dist/dist *distw) / 2)  # = (_V * (mA*wA) + _V * (_dist/dist * distw)) / 2
+                    # _V decay / dist, link ext attr miss?
                 if V >= 0:  # tentative
                     if _N.L_ and N.L_:
                         V += proj_V(_N,N, dy_dx, dist)
@@ -334,16 +336,16 @@ def comp_N(_N,N, olp,rc, A=np.zeros(2), span=None, rng=1, lH=None):  # compare l
 def base_comp(_N,N, fC=0):  # comp Et, baseT, extT, derTT
 
     fi = N.fi
-    _M,_D,_n =_N.Et; _I,_G,_Dy,_Dx =_N.baseT; _L = len(_N.N_) if fi else _N.L_  # len nodet.N_s, baseT is not needed in links?
+    _M,_D,_n =_N.Et; _I,_G,_Dy,_Dx =_N.baseT; _L = len(_N.N_) if fi else _N.L_  # len nodet.N_s, no baseT in links?
     M, D, n  = N.Et; I, G, Dy, Dx = N.baseT; L = len(N.N_) if fi else N.L_
     rn = _n/n
     _pars = np.array([_M*rn,_D*rn,_n*rn,_I*rn,_G*rn, [_Dy,_Dx],_L*rn,_N.span], dtype=object)  # Et, baseT, extT
-    pars = np.array([M,D,n, (I,aI),G, [Dy,Dx], L,(N.span,aS)], dtype=object)
+    pars  = np.array([M,D,n, (I,aI),G, [Dy,Dx], L,(N.span,aS)], dtype=object)
     mA,dA = comp_A(_N.angl[0]*_N.angl[1], N.angl[0]*N.angl[1])  # ext angle
     m_,d_ = comp(_pars,pars, mA,dA)  # M,D,n, I,G,A, L,S,eA
     if fC:
         dm_,dd_ = comp_derT(rn*_N.derTT[1], N.derTT[1])
-        m_+= dm_; d_+= dd_
+        m_+=dm_; d_+=dd_
     DerTT = np.array([m_,d_])
     ad_= np.abs(d_)
     t_ = m_ + ad_ + eps  # max comparand
@@ -920,20 +922,23 @@ def form_B__(G, lG, rc):  # trace edge / boundary / background per node:
 
     def R(L): return L.root if L.root is None or L.root.root is lG else R(L.root)
 
-    for N in G.N_:  # replace boundary Ls with RLs
+    for N in G.N_:
+        if N.sub or not N.B_: continue
         B_, Et, rdn = [], np.zeros(3), 0
-        for L in N.B_:  # neg Ls may be clustered
+        for L in N.B_:  # replace boundary Ls with their roots
             RL = R(L)
             if RL: B_ += [RL]; Et += RL.Et; rdn += RL.rB_.index(N) + 1  # rdn = n stronger cores of RL
         N.B_ = [B_, Et, rdn]
 
 def trace_edge(root, rc):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary / skeleton?
 
-    N_ = root.N_  # nG: cluster B_-mediated N_, lG: rB_-mediated B_
+    N_ = root.N_  # clustering  is rB_|B_-mediated
     L_ = []; cT_ = set()  # comp pairs
     for N in N_: N.fin = 0
     for N in N_:
-        for _N in list({rB for B in N.B_[0] for rB in B.rB_ if rB is not N}):  # _Ns share boundary with N
+        _N_ = list({ [rB for B in N.B_[0] for rB in B.rB_ if rB is not N]
+                    + [B for rB in N.rB_ for B in rB.B_ if B is not N] })
+        for _N in _N_:  # share boundary or cores if lG with N, same val?
             cT = tuple(sorted((N.id,_N.id)))
             if cT in cT_: continue
             cT_.add(cT)
