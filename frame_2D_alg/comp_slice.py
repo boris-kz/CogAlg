@@ -89,9 +89,9 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
 
     PPt_ = []; ET = np.full(3,1e-7); VerT = np.full((2,6),1e-7)
 
-    for P in iP_: P.merged = 0
+    for P in iP_: P.fin = 0
     for P in iP_:  # dP from link_ if fd
-        if P.merged: continue
+        if P.fin: continue
         _prim_ = P.prim; _lrim_ = P.lrim; B_ = []
         if fd: Et = P.Et  # summed verT, min L in dP
         else:  I,G,Dy,Dx,M,D,L = P.latT; Et = np.array([M, G+abs(D), L])
@@ -100,7 +100,7 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
         while _prim_:
             prim_,lrim_ = set(),set()
             for _P,_link in zip(_prim_,_lrim_):
-                if _P.merged: continue
+                if _P.fin: continue
                 if _link.Et[fd] > [ave,avd][fd]:
                     _P_.add(_P); link_.add(_link)
                     verT += _link.verT
@@ -109,7 +109,7 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
                     Et += _Et  # intra-P similarity and variance
                     prim_.update(set(_P.prim) - _P_)
                     lrim_.update(set(_P.lrim) - link_)
-                    _P.merged = 1
+                    _P.fin = 1
                 else: B_ += [_link]  # PP boundary-> comb_B
             _prim_, _lrim_ = prim_, lrim_
         ET += Et; VerT += verT
@@ -177,7 +177,7 @@ def sum2PP(P_, dP_, B_, Et):  # sum links in Ps and Ps in PP
     else:  # single P PP
         S = P_[0].span if fd else 0  # no distance between nodes
         A = P_[0].angl if fd else P_[0].latT[2:4]  # [I, G, Dy, Dx, M, D, L] or zeros?
-    box = [np.inf,np.inf,0,0]
+    box = [np.finf,np.finf,0,0]
     for P in P_:
         if not fd:  # else summed from P_ nodets on top
             latT += P.latT

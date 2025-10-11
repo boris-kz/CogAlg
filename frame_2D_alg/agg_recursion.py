@@ -215,7 +215,7 @@ def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering
                 nG.nH = _H+ [root] + nG.nH  # pack root.nH in higher-composition nG.nH
                 return nG  # update root
 
-def proj_V(_N, N, angle, dist, fC=0):  # estimate cross-induction between N and _N before comp
+def proj_V(_N, N, angle, dist):  # estimate cross-induction between N and _N before comp
 
     def proj_L_(L_, int_w=1):
         V = 0
@@ -232,12 +232,8 @@ def proj_V(_N, N, angle, dist, fC=0):  # estimate cross-induction between N and 
             V+= proj_L_(node.rim) if v*mW > av*node.rc else v  # too low for indiv L proj
         v = node.Et[1-fi]  # internal, lower weight
         V+= proj_L_(node.L_,intw) if (fi and v*mW > av*node.rc) else v  # empty link L_
-    if fC:
-        V += np.sum([i[0] for i in _N.mo_]) + np.sum([i[0] for i in N.mo_])  # project matches to centroids?
-    else:
-        V *= dec * (dist / ((_N.span+N.span)/2))
-        # no decay for centroids?
-    return V
+
+    return V * dec * (dist / ((_N.span+N.span)/2))
 
 def comp_sorted(C_, rc):  # max attr sort to constrain C_ search in 1D, add K attrs and overlap?
 
@@ -259,7 +255,7 @@ def comp_sorted(C_, rc):  # max attr sort to constrain C_ search in 1D, add K at
 
 def comp_Q(iN_, rc, fC):
 
-    N_,L_, Et,o = [],[],np.zeros(3),1
+    N_,L_, Et,olp = [],[],np.zeros(3),1
     if fC:
         for _N, N in combinations(iN_, r=2):  # no olp for dCs?
             m_, d_ = comp_derT(_N.derTT[1], N.derTT[1])
@@ -268,7 +264,7 @@ def comp_Q(iN_, rc, fC):
             dC = CN(N_=[_N,N], Et=et); L_ += [dC]; Et += et  # add o?
             for n in _N, N:
                 N_ += [n]; n.rim += [dC]; n.et += et
-    else:  # spatial
+    else: # spatial
         for i, N in enumerate(iN_):  # get unique pre-links per N, not _N
             N.pL_ = []
             for _N in iN_[i+1:]:
@@ -279,27 +275,24 @@ def comp_Q(iN_, rc, fC):
         for N in iN_:
             pVt_ = []  # [dist, dy_dx, _N, V]
             for dist, dy_dx, _N in N.pL_:  # angl is not canonic in rim?
-                V = 0  # prior L vals projected on curr pL
-                for _dist, _dy_dx, __N, _V in pVt_:
+                O = (N.rc+_N.rc) / 2       # G|PP node induction, if dec is defined per adist:
+                V = proj_V(_N,N, dy_dx, dist) if _N.L_ and N.L_ else val_((_N.Et+N.Et) * (dec** (dist/adist)), aw=rc+O)
+                # + induction of pri L Vs projected on curr pL:
+                for _dist,_dy_dx,__N,_V in pVt_:
                     mA, _ = comp_A(dy_dx, _dy_dx)   # mA and rel dist in 0:1:
                     ldist = np.hypot(*(_N.yx-__N.yx)) /2  # between link midpoints
-                    rdist = ldist / ((_dist+dist) /2)  # relative to ave link, -> decay:
-                    V += _V * (rdist*dec) * ((mA*wA + _dist/dist *distw) / 2)  # = (_V * (mA*wA) + _V * (_dist/dist * distw)) / 2
-                    # _V decay / dist, link ext attr miss?
-                if V >= 0:  # tentative
-                    if _N.L_ and N.L_:
-                        V += proj_V(_N,N, dy_dx, dist)
-                        olp = (N.rc+_N.rc) / 2
-                    else: V += 1; olp = 1  # neutral projection for PPs
-                    if adist * V/olp > dist:
-                        Link = comp_N(_N, N, olp, rc, A=dy_dx, span=dist, lH=L_)
-                        if val_(Link.Et, aw=contw+olp+rc) > 0:
-                            N_ += [_N, N]; Et += Link.Et; o += olp
-                        V = val_(Link.Et, aw=rc + olp)  # else keep V
+                    rdist = ldist / ((_dist+dist)/2)  # relative to ave link, exp decay:
+                    V += _V * (dec** (rdist/adist)) * ((mA*wA + dist/_dist*distw) / (wA+distw))
+                    # _V decay / dist, only partial cancel by link ext attr miss?
+                if V > ave*O:
+                    Link = comp_N(_N,N, O,rc, A=dy_dx, span=dist, lH=L_)
+                    if val_(Link.Et, aw=contw+O+rc) > 0:
+                        N_ += [_N,N]; Et+= Link.Et; olp+=O
+                    V = val_(Link.Et, aw=rc+O)  # else keep V
                 else: break
                 pVt_ += [[dist, dy_dx, _N, V]]
 
-    return [list(set(N_))], L_, Et, o
+    return [list(set(N_))], L_, Et, olp
 
 def comp_N(_N,N, olp,rc, A=np.zeros(2), span=None, rng=1, lH=None):  # compare links, optional angl,span,dang?
 
@@ -785,7 +778,7 @@ def agg_frame(foc, image, iY, iX, rV=1, wTTf=[], fproj=0):  # search foci within
                 if pFg:
                     cross_comp(pFg, rc=Fg.rc)
                     if val_(pFg.Et,1,(len(pFg.N_)-1)*Lw, pFg.rc+contw):
-                        project_focus(PV__, y, x, Fg)  # += proj val in PV__
+                        project_focus(PV__, y,x, Fg)  # += proj val in PV__
             # no target proj
             frame = add_N(frame, Fg, fmerge=1, froot=1) if frame else Copy_(Fg)
             aw *= frame.rc
@@ -801,7 +794,7 @@ def agg_frame(foc, image, iY, iX, rV=1, wTTf=[], fproj=0):  # search foci within
         if not foc:
             return frame  # foci are unpacked
 
-def PP2N(PP, root):
+def PP2N(PP, root):  # update root locally?
 
     P_, link_, B_, verT, latT, A, S, box, yx, Et = PP
     baseT = np.array(latT[:4])
@@ -810,8 +803,8 @@ def PP2N(PP, root):
                        np.array([dM, dD, dL, dI, dG, dA, dL, dL / 2, eps])])
     y,x,Y,X = box; dy,dx = Y-y, X-x
     A = np.array([np.array(A), np.sign(derTT[1] @ wTTf[1])], dtype=object)  # append sign
-    PP = CN(root=root, fi=1, Et=Et, N_=P_, baseT=baseT, derTT=derTT, box=box, yx=yx, angl=A, span=np.hypot(dy/2, dx/2))
-    for P in PP.N_: P.root = PP  # update root
+    PP = CN(root=root, fi=1, Et=Et, N_=P_, B_=B_, baseT=baseT, derTT=derTT, box=box, yx=yx, angl=A, span=np.hypot(dy/2, dx/2))
+    for P in PP.N_: P.root = PP
     return PP
 
 def project_N_(Fg, yx):
@@ -903,14 +896,17 @@ def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init foca
         if not blob.sign and blob.G > aveB:
             edge = slice_edge(blob, rV)
             if edge.G * ((len(edge.P_)-1)*Lw) > ave * sum([P.latT[4] for P in edge.P_]):
-                PPm_ = comp_slice(edge, rV, wTTf); Bg = CN()
-                PPd_ = [PP2N(PP,Bg) for PP in edge.link_]  # lG is PPd.root in clust_B_
-                for PP in PPm_:
-                    N = PP2N(PP,Bg); Bg.Et += N.Et; Bg.N_ += [N]
-                form_B__(Bg, CN(N_=PPd_),2)
-                if val_(Bg.Et, mw=(len(PPm_)-1)*Lw, aw=2) > 0:
-                    trace_edge(Bg, rc=2)  # cluster complemented Gs via G.B_
-                    # trace_edge(Bg.lH[0], rc=3): lG.N_?
+                PPm_ = comp_slice(edge, rV, wTTf); Bg = CN(); lG = CN()
+                for PPm in PPm_:
+                    N=PP2N(PPm,Bg); Bg.Et += N.Et; Bg.N_ += [N]
+                if edge.link_:
+                    for PPd in edge.link_:
+                        N=PP2N(PPd,lG); lG.Et += N.Et; lG.N_ += [N]
+                    Bg.rc += lG.rc; Bg.lH += [lG] + lG.nH; Bg.Et += lG.Et; add_dH(Bg.derH, lG.derH)  # lH extension
+                    form_B__(Bg, lG,2)
+                    if val_(Bg.Et, mw=(len(PPm_)-1)*Lw, aw=2) > 0:
+                        trace_edge(Bg, rc=2)  # cluster complemented Gs via G.B_
+                        # trace_edge(lG, rc=3), separate cross_comp in frame_H?
                 add_N(Fg, Bg, fmerge=1)
     return Fg
 
@@ -936,9 +932,9 @@ def trace_edge(root, rc):  # cluster contiguous shapes via PPs in edge blobs or 
     L_ = []; cT_ = set()  # comp pairs
     for N in N_: N.fin = 0
     for N in N_:
-        _N_ = list({ [rB for B in N.B_[0] for rB in B.rB_ if rB is not N]
-                    + [B for rB in N.rB_ for B in rB.B_ if B is not N] })
-        for _N in _N_:  # share boundary or cores if lG with N, same val?
+        _N_ = [B for rB in N.rB_ for B in rB.B_ if B is not N]
+        if N.B_: _N_ += [rB for B in N.B_[0] for rB in B.rB_ if rB is not N]
+        for _N in list(set(_N_)):  # share boundary or cores if lG with N, same val?
             cT = tuple(sorted((N.id,_N.id)))
             if cT in cT_: continue
             cT_.add(cT)
