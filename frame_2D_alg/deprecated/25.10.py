@@ -156,3 +156,66 @@ def dir_cluster(N):  # get neg links to block projection?
 
     rdist = _dist / dist  # dist > _dist
     V += _V * mA * rdist  # mA in 0:1, symmetrical, but ?
+
+def cross_proj(_N, N, angle, dist):  # estimate cross-induction between N and _N before comp
+
+    def proj_L_(L_, int_w=1):
+        V = 0
+        for L in L_:
+            cos = ((L.angl[0]*L.angl[1]) @ angle) / np.hypot(*(L.angl[0]*L.angl[1]) * np.hypot(*angle))  # angl: [[dy,dx],dir]
+            mang = (cos+ abs(cos)) / 2  # = max(0, cos): 0 at 90°/180°, 1 at 0°
+            V += L.Et[1-fi] * mang * int_w * mW * (L.span/dist * av)  # decay = link.span / l.span * cosine ave?
+            # += proj rim-mediated nodes?
+        return V
+    V = 0; fi = N.fi; av = ave if fi else avd
+    for node in _N,N:
+        if node.et[2]:  # mainly if fi?
+            v = node.et[1-fi]  # external, already weighted?
+            V+= proj_L_(node.rim) if v*mW > av*node.rc else v  # too low for indiv L proj
+        v = node.Et[1-fi]  # internal, lower weight
+        V+= proj_L_(node.L_,intw) if (fi and v*mW > av*node.rc) else v  # empty link L_
+
+    return V * dec * (dist / ((_N.span+N.span)/2))
+
+def comp_Q1(iN_, rc, fC):
+
+    N_,L_, Et,olp = [],[],np.zeros(3),1
+    if fC:
+        for _N, N in combinations(iN_, r=2):  # no olp for dCs?
+            m_, d_ = comp_derT(_N.derTT[1], N.derTT[1])
+            ad_ = np.abs(d_); t_ = m_ + ad_ + eps  # ~ max comparand
+            et = np.array([m_ / t_ @ wTTf[0], ad_ / t_ @ wTTf[1], min(_N.Et[2], N.Et[2])])  # signed
+            dC = CN(N_=[_N,N], Et=et); L_ += [dC]; Et += et  # add o?
+            for n in _N, N:
+                N_ += [n]; n.rim += [dC]; n.et += et
+            L_ = [L_]  # convert to nested, to  enable a same unpacking sequence in Cluster
+    else: # spatial
+        for i, N in enumerate(iN_):  # get unique pre-links per N, not _N
+            N.pL_ = []
+            for _N in iN_[i+1:]:
+                if _N.sub != N.sub: continue  # not sure
+                dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx)
+                N.pL_ += [[dist, dy_dx, _N]]
+            N.pL_.sort(key=lambda x: x[0])  # global distance sort
+        for N in iN_:
+            pVt_ = []  # [dist, dy_dx, _N, V]
+            for dist, dy_dx, _N in N.pL_:  # angl is not canonic in rim?
+                O = (N.rc+_N.rc) / 2       # G|PP node induction, if dec is defined per adist:
+                V = proj_V(_N,N, dy_dx, dist) if _N.L_ and N.L_ else val_((_N.Et+N.Et) * (dec** (dist/adist)), aw=rc+O)
+                # + induction of pri L Vs projected on curr pL:
+                for _dist,_dy_dx,__N,_V in pVt_:
+                    mA, _ = comp_A(dy_dx, _dy_dx)   # mA and rel dist in 0:1:
+                    ldist = np.hypot(*(_N.yx-__N.yx)) /2  # between link midpoints
+                    rdist = ldist / ((_dist+dist)/2)  # relative to ave link, exp decay:
+                    V += _V * (dec** (rdist/adist)) * ((mA*wA + dist/_dist*distw) / (wA+distw))
+                    # _V decay / dist, only partial cancel by link ext attr miss?
+                if V > ave*O:
+                    Link = comp_N(_N,N, O,rc, A=dy_dx, span=dist, lH=L_)
+                    if val_(Link.Et, aw=contw+O+rc) > 0:
+                        N_ += [_N,N]; Et+= Link.Et; olp+=O
+                    V = val_(Link.Et, aw=rc+O)  # else keep V
+                else: break
+                pVt_ += [[dist, dy_dx, _N, V]]
+
+    return list(set(N_)), L_, Et, olp
+

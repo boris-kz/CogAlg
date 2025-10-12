@@ -177,7 +177,7 @@ def sum2PP(P_, dP_, B_, Et):  # sum links in Ps and Ps in PP
     else:  # single P PP
         S = P_[0].span if fd else 0  # no distance between nodes
         A = P_[0].angl if fd else P_[0].latT[2:4]  # [I, G, Dy, Dx, M, D, L] or zeros?
-    box = [np.finf,np.finf,0,0]
+    box = [np.inf,np.inf,0,0]
     for P in P_:
         if not fd:  # else summed from P_ nodets on top
             latT += P.latT

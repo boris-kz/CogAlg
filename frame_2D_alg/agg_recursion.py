@@ -191,7 +191,8 @@ def val_(Et, fi=1, mw=1, aw=1, _Et=np.zeros(3)):  # m,d eval per cluster or cros
 
 def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering
 
-    N_,L_,Et,O = comp_Q(root.N_, rc, fC)  # rc: redundancy+olp, lG.N_ is Ls
+    if fC: N_,L_,Et = comp_C_(root.N_,rc); O = 1  #?
+    else:  N_,L_,Et,O = comp_N_(root.N_,rc)  # rc: redundancy+olp, lG.N_ is Ls
     if len(L_) > 1:
         mV,dV = val_(Et,2,(len(L_)-1)*Lw, O+rc+compw); lG = []
         if dV > 0:
@@ -209,90 +210,91 @@ def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering
                     if val_(Et,1,(len(nG.N_)-1)*Lw, rc+O+3+contw) > 0:
                         trace_edge(nG, rc+O+3)  # comp adjacent Ns via B_
                 if val_(nG.Et,1, (len(nG.N_)-1)*Lw, rc+O+compw+3, Et) > 0:
-                    nG = cross_comp(nG, rc+O+3) or nG  # agg+
+                    nG = cross_comp(nG, rc+O+3) or nG  # agg+, if not fC?
                 root.Et += nG.Et; root.N_ = nG.N_
                 _H = root.nH; root.nH = []  # nG has own L_,lH
                 nG.nH = _H+ [root] + nG.nH  # pack root.nH in higher-composition nG.nH
                 return nG  # update root
 
-def proj_V(_N, N, angle, dist):  # estimate cross-induction between N and _N before comp
+def comp_C_(C_, rc, fall=1):  # max attr sort to constrain C_ search in 1D, add K attrs and overlap?
 
-    def proj_L_(L_, int_w=1):
-        V = 0
-        for L in L_:
-            cos = ((L.angl[0]*L.angl[1]) @ angle) / np.hypot(*(L.angl[0]*L.angl[1]) * np.hypot(*angle))  # angl: [[dy,dx],dir]
-            mang = (cos+ abs(cos)) / 2  # = max(0, cos): 0 at 90°/180°, 1 at 0°
-            V += L.Et[1-fi] * mang * int_w * mW * (L.span/dist * av)  # decay = link.span / l.span * cosine ave?
-            # += proj rim-mediated nodes?
-        return V
-    V = 0; fi = N.fi; av = ave if fi else avd
-    for node in _N,N:
-        if node.et[2]:  # mainly if fi?
-            v = node.et[1-fi]  # external, already weighted?
-            V+= proj_L_(node.rim) if v*mW > av*node.rc else v  # too low for indiv L proj
-        v = node.Et[1-fi]  # internal, lower weight
-        V+= proj_L_(node.L_,intw) if (fi and v*mW > av*node.rc) else v  # empty link L_
-
-    return V * dec * (dist / ((_N.span+N.span)/2))
-
-def comp_sorted(C_, rc):  # max attr sort to constrain C_ search in 1D, add K attrs and overlap?
-
-    L_, ET = [], np.zeros(3)
-    for C in C_: C.compared =set()
-    i = np.argmax(wTTf[0]+wTTf[1])
-    C_ = sorted(C_, key=lambda C: C.derTT[0][i])
-    for j in range( len(C_) - 1):
-        _C = C_[j]; C = C_[j+1]
-        if _C in C.compared: continue
-        olp = (_C.rc+C.rc) / 2
-        dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx)
-        Link = comp_N(_C,C, olp,rc, A=dy_dx, span=dist, rng=1)
-        if val_(Link.Et, aw=compw+olp) > 0:
-            ET += Link.Et
-            L_ += [Link]
-    N_ = list({N for L in L_ for N in L.N_})
-    return N_, L_, ET
-
-def comp_Q(iN_, rc, fC):
-
-    N_,L_, Et,olp = [],[],np.zeros(3),1
-    if fC:
-        for _N, N in combinations(iN_, r=2):  # no olp for dCs?
+    L_,Et = [], np.zeros(3)
+    if fall:
+        for _N, N in combinations(C_, r=2):  # no olp for dCs?
             m_, d_ = comp_derT(_N.derTT[1], N.derTT[1])
             ad_ = np.abs(d_); t_ = m_ + ad_ + eps  # ~ max comparand
             et = np.array([m_ / t_ @ wTTf[0], ad_ / t_ @ wTTf[1], min(_N.Et[2], N.Et[2])])  # signed
             dC = CN(N_=[_N,N], Et=et); L_ += [dC]; Et += et  # add o?
             for n in _N, N:
-                N_ += [n]; n.rim += [dC]; n.et += et
-    else: # spatial
-        for i, N in enumerate(iN_):  # get unique pre-links per N, not _N
-            N.pL_ = []
-            for _N in iN_[i+1:]:
-                if _N.sub != N.sub: continue  # not sure
-                dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx)
-                N.pL_ += [[dist, dy_dx, _N]]
-            N.pL_.sort(key=lambda x: x[0])  # global distance sort
-        for N in iN_:
-            pVt_ = []  # [dist, dy_dx, _N, V]
-            for dist, dy_dx, _N in N.pL_:  # angl is not canonic in rim?
-                O = (N.rc+_N.rc) / 2       # G|PP node induction, if dec is defined per adist:
-                V = proj_V(_N,N, dy_dx, dist) if _N.L_ and N.L_ else val_((_N.Et+N.Et) * (dec** (dist/adist)), aw=rc+O)
-                # + induction of pri L Vs projected on curr pL:
-                for _dist,_dy_dx,__N,_V in pVt_:
-                    mA, _ = comp_A(dy_dx, _dy_dx)   # mA and rel dist in 0:1:
-                    ldist = np.hypot(*(_N.yx-__N.yx)) /2  # between link midpoints
-                    rdist = ldist / ((_dist+dist)/2)  # relative to ave link, exp decay:
-                    V += _V * (dec** (rdist/adist)) * ((mA*wA + dist/_dist*distw) / (wA+distw))
-                    # _V decay / dist, only partial cancel by link ext attr miss?
-                if V > ave*O:
-                    Link = comp_N(_N,N, O,rc, A=dy_dx, span=dist, lH=L_)
-                    if val_(Link.Et, aw=contw+O+rc) > 0:
-                        N_ += [_N,N]; Et+= Link.Et; olp+=O
-                    V = val_(Link.Et, aw=rc+O)  # else keep V
-                else: break
-                pVt_ += [[dist, dy_dx, _N, V]]
+                n.rim += [dC]; n.et += et
+    else:   # sort, select
+        for C in C_: C.compared =set()
+        i = np.argmax(wTTf[0]+wTTf[1])
+        C_ = sorted(C_, key=lambda C: C.derTT[0][i]); out_ = []
+        for j in range( len(C_)-1):
+            _C = C_[j]; C = C_[j+1]
+            if _C in C.compared: continue
+            olp = (_C.rc+C.rc) / 2
+            dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx)
+            Link = comp_N(_C,C, olp,rc, A=dy_dx, span=dist, rng=1)
+            if val_(Link.Et, aw=compw+olp) > 0:
+                Et += Link.Et
+                L_ += [Link]; out_ += [_C,C]
+        C_ = list(set(out_))
+    return C_, L_, Et
 
-    return [list(set(N_))], L_, Et, olp
+def comp_N_(iN_, rc):
+
+    def proj_L_(_N, N, angle, dist):  # estimate cross-induction between N and _N before comp
+
+        V = 0; fi = N.fi; av = ave if fi else avd
+        for edir, node in zip((1,-1),(_N,N)):
+            for L in node.L_:
+                cos = ((L.angl[0] *edir *L.angl[1]) @ angle) / (np.hypot(*L.angl[0]) * np.hypot(*angle))  # angl: [[dy,dx],dir]
+                mang = (cos + abs(cos)) / 2  # = max(0, cos): 0 at 90°/180°, 1 at 0°
+                V += L.Et[1-fi] * mang * intw * mW * (L.span/dist * av)  # decay = link.span / l.span * cosine ave?
+                # not revised
+        return V
+    N_,L_,Et,olp = [],[],np.zeros(3),1
+    # prox prior
+    for i, N in enumerate(iN_):  # get unique pre-links per N, not _N
+        N.pL_ = []
+        for _N in iN_[i+1:]:
+            if _N.sub != N.sub: continue  # not sure
+            dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx)
+            N.pL_ += [[dist, dy_dx, _N]]
+        N.pL_.sort(key=lambda x: x[0])  # global distance sort
+    for N in iN_:
+        pVt_ = []  # [dist, dy_dx, _N, V]
+        specw = 9  # spec cost, different per loop?
+        for dist, dy_dx, _N in N.pL_:  # angl is not canonic in rim?
+            O = (N.rc+_N.rc) / 2; Ave=ave*O; Dec = dec**(dist/adist)  # if dec per adist
+            V = val_((_N.et+N.et) * Dec, aw=rc+O)
+            fcomp = 1 if V>Ave else 0 if V<specw else 2  # uncertainty
+            if fcomp==2:
+                V = 0  # recompute from individual ext Ls
+                for _dist,_dy_dx,__N,_V in pVt_:  # * link ext miss value?
+                    mA, _ = comp_A(dy_dx,_dy_dx)  # mA and rel dist in 0:1:
+                    ldist = np.hypot(*(_N.yx-__N.yx)) /2  # between link midpoints
+                    rdist = ldist / ((_dist+dist)/2)
+                    V += _V * (dec** (rdist/adist)) * ((mA*wA + dist/_dist*distw) / (wA+distw))
+                fcomp = 1 if V>Ave else 0 if V<specw else 2
+                if fcomp==2:
+                    cV = V + val_((_N.Et+N.Et) * intw * Dec, aw=rc+O)
+                    fcomp = 1 if cV>Ave else 0 if cV<specw else 2
+                    if fcomp==2 and _N.L_ and N.L_:  # spec / int L
+                        V += proj_L_(_N,N, dy_dx, dist)  # recompute from individual int Ls
+                    else: V = cV
+                    fcomp = V > Ave  # no further spec
+            if fcomp:
+                Link = comp_N(_N,N, O,rc, A=dy_dx, span=dist, lH=L_)
+                if val_(Link.Et, aw=contw+O+rc) > 0:
+                    N_ += [_N,N]; Et+= Link.Et; olp+=O
+                V = val_(Link.Et, aw=rc+O)  # else keep V
+            else: break
+            pVt_ += [[dist, dy_dx, _N, V]]
+
+    return list(set(N_)), L_, Et, olp
 
 def comp_N(_N,N, olp,rc, A=np.zeros(2), span=None, rng=1, lH=None):  # compare links, optional angl,span,dang?
 
@@ -428,7 +430,7 @@ def Cluster(root, iL_, rc, fC):  # generic root for clustering
     nG = []
     if fC:  # centroids -> primary connectivity clustering
         L_, nG = [], []
-        dC_ = sorted(list({L for L_ in iL_ for L in L_}), key=lambda dC: dC.Et[1])  # from min D
+        dC_ = sorted(list({L for L in iL_}), key=lambda dC: dC.Et[1])  # from min D
         for i, dC in enumerate(dC_):
             if val_(dC.Et, fi=0, aw=rc+compw) < 0:  # merge similar centroids, no recomp
                 _C,C = dC.N_
@@ -444,7 +446,7 @@ def Cluster(root, iL_, rc, fC):  # generic root for clustering
                 break
     else:
         N_ = list({N for L in iL_ for N in L.N_})  # newly connected only
-        E_ = get_exemplars(root.N_, rc)
+        E_ = get_exemplars(N_,rc)
         if E_ and val_(np.sum([g.Et for g in E_],axis=0), N_[0].fi, (len(E_)-1)*Lw, rc+centw, root.Et) > 0:
             cluster_C(E_, root, rc)
         L_ = sorted(iL_, key=lambda l: l.span)
@@ -906,7 +908,7 @@ def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init foca
                     form_B__(Bg, lG,2)
                     if val_(Bg.Et, mw=(len(PPm_)-1)*Lw, aw=2) > 0:
                         trace_edge(Bg, rc=2)  # cluster complemented Gs via G.B_
-                        # trace_edge(lG, rc=3), separate cross_comp in frame_H?
+                        if val_(lG.Et, mw=(len(lG.N_)-1)*Lw, aw=2): trace_edge(lG, rc=3)  # to cross_comp in frame_H?
                 add_N(Fg, Bg, fmerge=1)
     return Fg
 
@@ -921,8 +923,8 @@ def form_B__(G, lG, rc):  # trace edge / boundary / background per node:
     for N in G.N_:
         if N.sub or not N.B_: continue
         B_, Et, rdn = [], np.zeros(3), 0
-        for L in N.B_:  # replace boundary Ls with their roots
-            RL = R(L)
+        for L in N.B_:
+            RL = R(L)  # replace boundary L with its root of the level that contains N in root.rB_?
             if RL: B_ += [RL]; Et += RL.Et; rdn += RL.rB_.index(N) + 1  # rdn = n stronger cores of RL
         N.B_ = [B_, Et, rdn]
 
@@ -932,7 +934,7 @@ def trace_edge(root, rc):  # cluster contiguous shapes via PPs in edge blobs or 
     L_ = []; cT_ = set()  # comp pairs
     for N in N_: N.fin = 0
     for N in N_:
-        _N_ = [B for rB in N.rB_ for B in rB.B_ if B is not N]
+        _N_ = [B for rB in N.rB_ for B in rB.B_[0] if B is not N]
         if N.B_: _N_ += [rB for B in N.B_[0] for rB in B.rB_ if rB is not N]
         for _N in list(set(_N_)):  # share boundary or cores if lG with N, same val?
             cT = tuple(sorted((N.id,_N.id)))
@@ -966,7 +968,7 @@ def trace_edge(root, rc):  # cluster contiguous shapes via PPs in edge blobs or 
         if val_(et, mw=(len(n_)-1)*Lw, aw=rc) > 0:
             G_ += [sum2graph(root,n_,l_,[],[],et,olp,1)]
         else:
-            for N in n_: N.sub += 1; G_ += [N]
+            for N in n_: N.sub += 1; G_ += [N]; N.root = root
     for N in N_: N.fin = 0
     root.N_ = G_
 
