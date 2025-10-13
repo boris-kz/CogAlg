@@ -218,4 +218,29 @@ def comp_Q1(iN_, rc, fC):
                 pVt_ += [[dist, dy_dx, _N, V]]
 
     return list(set(N_)), L_, Et, olp
-
+'''
+    for dist, dy_dx, _N in N.pL_:  # angl is not canonic in rim?
+            O = (N.rc+_N.rc) / 2; Ave=ave*rc*O
+            iV = (_N.Et[0]+N.Et[0]) * dec** (dist/(_N.span+N.span)/2) - Ave
+            eV = (_N.et[0]+N.et[0]) * dec** (dist/adist) - Ave  # we need ave rim span instead of adist
+            V = iV+eV; fcomp = 1 if V>Ave else 0 if V<specw else 2  # uncertainty
+            if fcomp==2:
+                if eV > specw:
+                    eV = 0  # recompute from individual ext Ls
+                    for _dist,_dy_dx,__N,_V in pVt_:  # * link ext miss value?
+                        mA, _ = comp_A(dy_dx,_dy_dx)  # mA and rel dist in 0:1:
+                        ldist = np.hypot(*(_N.yx-__N.yx)) /2  # between link midpoints
+                        rdist = ldist / ((_dist+dist)/2)
+                        eV += _V * (dec** (rdist/adist)) * ((mA*wA + dist/_dist*distw) / (wA+distw))
+                    V = iV+eV; fcomp = 1 if V>Ave else 0 if V<specw else 2
+                if fcomp==2 and N.fi and _N.L_ and N.L_ and iV > specw:  # different specw for L_?
+                    iV = proj_L_(_N,N, dy_dx, dist)  # recompute from individual Ls
+                    V = iV+eV; fcomp = V > 0  # no further spec
+            if fcomp:
+                Link = comp_N(_N,N, O,rc, A=dy_dx, span=dist, lH=L_)
+                if val_(Link.Et, aw=contw+O+rc) > 0:
+                    N_ += [_N,N]; Et+= Link.Et; olp+=O
+                V = val_(Link.Et, aw=rc+O)  # else keep V
+            else: break
+            pVt_ += [[dist, dy_dx, _N, V]]
+'''
