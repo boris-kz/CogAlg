@@ -83,26 +83,6 @@ def comp_dH(_dH, dH, rn, root):  # unpack derH trees down to numericals and comp
 
     return CdH(H=H, Et=Et, derTT=derTT, root=root)
 
-def proj_dH(_H, proj, dec):
-    H = []
-    for _lay in _H:
-        lay = copy_(_lay); lay.derTT[1] *= proj * dec  # proj ds
-        H += [lay]
-    return H
-
-def comp_prj_dH(_N,N, ddH, rn, link, angl, span, dec):  # comp combined int proj to actual ddH, as in project_N_
-
-    _cos_da= angl.dot(_N.angl) / (span *_N.span)  # .dot for scalar cos_da
-    cos_da = angl.dot(N.angl) / (span * N.span)
-    _rdist = span/_N.span
-    rdist  = span/ N.span
-    prj_DH = add_dH( proj_dH(_N.derH.H, _cos_da *_rdist, _rdist*dec),
-                     proj_dH( N.derH.H, cos_da * rdist, rdist*dec))  # comb proj dHs | comp dH ) comb ddHs?
-    # Et+= confirm:
-    dddH = comp_dH(prj_DH, ddH, rn, link)
-    link.Et += dddH.Et; link.derTT += dddH.derTT
-    add_dH(ddH, dddH)
-
 class CN(CBase):
     name = "node"
     def __init__(n, **kwargs):
@@ -116,7 +96,8 @@ class CN(CBase):
         n.rc = kwargs.get('rc',1)  # redundancy to ext Gs, ave in links? separate rc for rim, or internally overlapping?
         n.baseT = kwargs.get('baseT', np.zeros(4))  # I,G,A: not ders
         n.derTT = kwargs.get('derTT',np.zeros((2,9)))  # sum derH -> m_,d_ [M,D,n, I,G,A, L,S,eA], dertt: comp rims + overlap test?
-        n.derH  = kwargs.get('derH', CdH())  # sum from L_ or rims
+        n.derH  = kwargs.get('derH', CdH())  # sum from clustered L_s
+        n.topH  = kwargs.get('topH', CdH())  # sum from terminal L_?
         n.yx  = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
         n.rng = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
         n.box = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
@@ -162,7 +143,7 @@ wM, wD, wN, wG, wL, wI, wS, wa, wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # der param
 mW = dW = 9; wTTf = np.ones((2,9))  # fb weights per derTT, adjust in agg+
 wY = wX = 64; wYX = np.hypot(wY,wX)  # focus dimensions
 
-def val_(Et, fi=1, mw=1, aw=1, _Et=np.zeros(3)):  # m,d eval per cluster or cross_comp
+def val_(Et, fi=1, mw=1, aw=1, _Et=np.zeros(3)):  # m,d eval per cluster, for projection only?
 
     if mw <= 0: return (0,0) if fi == 2 else 0
     am = ave * aw  # includes olp, M /= max I | M+D? div comp / mag disparity vs. span norm
@@ -200,7 +181,7 @@ def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering
             root.L_=L_; root.Et += Et; root.rc += O
             if fC < 2 and dV > avd:  # may be dC_, no comp ddC_
                 lG = cross_comp(CN(N_=L_), O+rc+compw+1, fC*2)  # trace_edge via rB_|B_
-                if lG: rc+=lG.rc; root.lH += [lG]+lG.nH; root.Et+=lG.Et; add_dH(root.derH, lG.derH)  # lH extension
+                if lG: rc+=lG.rc; root.lH += [lG]+lG.nH; root.Et+=lG.Et; add_dH(root.topH, lG.derH)  # lH extension
         if mV > 0:
             nG = Cluster(root, L_, rc+O, fC)  # get_exemplars, cluster_C, rng connectivity cluster
             if nG:  # batched nH extension
@@ -210,7 +191,7 @@ def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering
                     if val_(Et,1,(len(nG.N_)-1)*Lw, rc+O+3+contw) > 0:
                         trace_edge(nG, rc+O+3)  # comp adjacent Ns via B_
                 if val_(nG.Et,1, (len(nG.N_)-1)*Lw, rc+O+compw+3, Et) > 0:
-                    nG = cross_comp(nG, rc+O+3) or nG  # agg+, if not fC?
+                    nG = cross_comp(nG, rc+O+3) or nG  # connect agg+, fC = 0
                 root.Et += nG.Et; root.N_ = nG.N_
                 _H = root.nH; root.nH = []  # nG has own L_,lH
                 nG.nH = _H+ [root] + nG.nH  # pack root.nH in higher-composition nG.nH
@@ -223,11 +204,11 @@ def comp_C_(C_, rc, fall=1):  # max attr sort to constrain C_ search in 1D, add 
         for _N, N in combinations(C_, r=2):  # no olp for dCs?
             m_, d_ = comp_derT(_N.derTT[1], N.derTT[1])
             ad_ = np.abs(d_); t_ = m_ + ad_ + eps  # ~ max comparand
-            et = np.array([m_ / t_ @ wTTf[0], ad_ / t_ @ wTTf[1], min(_N.Et[2], N.Et[2])])  # signed
-            dC = CN(N_=[_N,N], Et=et); L_ += [dC]; Et += et  # add o?
+            et = np.array([m_ / t_ @ wTTf[0], ad_ / t_ @ wTTf[1], min(_N.Et[2],N.Et[2])])  # signed
+            dC = CN(N_=[_N,N], Et=et, span=np.hypot(*_N.yx-N.yx)); L_ += [dC]; Et += et  # add olp?
             for n in _N, N:
                 n.rim += [dC]; n.et += et
-    else:   # sort, select
+    else:   # sort, select, not implemented
         for C in C_: C.compared =set()
         i = np.argmax(wTTf[0]+wTTf[1])
         C_ = sorted(C_, key=lambda C: C.derTT[0][i]); out_ = []
@@ -780,7 +761,7 @@ def agg_frame(foc, image, iY, iX, rV=1, wTTf=[], fproj=0):  # search foci within
                 # re-norm weights
         if Fg and Fg.L_:
             if fproj and val_(Fg.Et,1, (len(Fg.N_)-1)*Lw, Fg.rc+compw):
-                pFg = proj_Fg(Fg, np.array([y, x]))
+                pFg = proj_N(Fg, np.array([y, x]))
                 if pFg:
                     cross_comp(pFg, rc=Fg.rc)
                     if val_(pFg.Et,1,(len(pFg.N_)-1)*Lw, pFg.rc+contw):
@@ -813,35 +794,70 @@ def PP2N(PP, root):  # update root locally?
     for P in PP.N_: P.root = PP
     return PP
 
-def proj_Fg(Fg, yx):
+def proj_N(N, yx, specw):  # recursively specified projection of N to yx, separate proj internal M?
 
-    def proj_N(N):
-        dy, dx = N.yx - yx
-        Ndist = np.hypot(dy, dx)  # external dist
-        rdist = Ndist / N.span
-        Angle = np.array([dy, dx]); angle = N.angl[0] * N.angl[1]  # external and internal angles
-        cos_d = N.angl[0].dot(Angle) / (np.hypot(*angle) * Ndist)  # N-specific alignment, * N.angl[1]?
-        M,D,n = N.Et
-        dec = rdist * (M/(M+D))  # match decay rate, * ddecay for ds?
-        prj_H = proj_dH(N.derH.H, cos_d * rdist, dec)
-        prjTT, pEt = sum_H( prj_H)
-        pD = pEt[1]*dec; dM = M*dec
-        pM = dM - pD * (dM/(ave*n))  # -= borrow, regardless of surprise?
-        return np.array([pM,pD,n]), prjTT, prj_H
+    def proj_dH(_H, cos_d, dec):
+        pH = []
+        for _lay in _H:
+            lay = copy_(_lay)
+            lay.derTT[1] *= cos_d * dec  # proj ds
+            pH += [lay]
+        pTT, pEt = sum_H(pH)
+        pD = pEt[1] * dec; dM = M * dec
+        pM = dM - pD * (dM / (ave * cnt))  # -= borrow, regardless of surprise?
+        pEt = np.array([pM, pD, cnt])
+        return pEt, pTT, pH
 
-    specw = 9
-    ET, DerTT, DerH = proj_N(Fg)
-    pV = val_(ET, mw=len(Fg.N_)*Lw, aw=contw)
-    if pV > ave: return Fg
-    elif pV > specw:
-        ET = np.zeros(3); DerTT = np.zeros((2,9)); N_ = []
-        for N in Fg.N_:  # sum _N-specific projections for cross_comp
-            if N.derH:
-                pEt, prjTT, prj_H = proj_N(N)
-                if val_(pEt, aw=contw):
-                    ET+=pEt; DerTT+=prjTT; N_+= [CN(N_=N.N_,Et=pEt,derTT=prjTT,derH=prj_H,root=CN())]  # same target position?
-        if val_(ET, mw=len(N_)*Lw, aw=contw):
-            return CN(N_=N_,L_=Fg.L_,Et=ET, derTT=DerTT)  # proj Fg, add Prj_H?
+    dy, dx = N.yx - yx
+    Ndist = np.hypot(dy, dx)  # external dist
+    rdist = Ndist / N.span
+    Angle = np.array([dy,dx]); angle = N.angl[0] * N.angl[1]  # external and internal angles
+    cos_d = angle.dot(Angle) / (np.hypot(*angle) * Ndist)  # N-to-yx alignment
+    M, D, cnt = N.Et
+    dec = rdist * (M / (M+D))  # match decay rate, * ddecay for ds?
+    NEt, NTT, NH = proj_dH(N.derH.H, cos_d, dec)
+    iV = val_(NEt, mw=(len(N.N_)-1)*Lw, aw=contw)
+    pEt=copy(NEt); pTT=copy(NTT); pH = copy_(NH)
+    if N.L_:  # terminal, project separately?
+        LEt, LTT, LH = proj_dH(N.topH.H, cos_d, dec)
+        pEt+=LEt; pTT+=LTT; add_dH(pH,LH)  # no adding in cross_comp
+        eV = val_(LEt, mw=(len(N.L_)-1)*Lw, aw=contw)
+    else: eV = 0
+    if iV + eV > ave:
+        return CN(N_=N.N_,L_=N.L_, Et=pEt, derTT=pTT, derH=pH)
+    if eV > specw:  # get L_ eV
+        LEt = np.zeros(3); LTT = np.zeros((2,9)); LH = CdH(); N_ = []
+        for l in N.L_:  # sum L-specific projections
+            lEt, lTT, lH = proj_N(l, yx, specw)  # same as for N?
+            if val_(lEt, aw=contw):
+                LEt+=lEt; LTT+=lTT; add_dH(LH,lH); N_+= [CN(N_=l.N_,Et=lEt,derTT=lTT,derH=lH,root=CN())]  # same target position?
+        eV = val_(LEt, mw=(len(N.L_)-1)*Lw, aw=contw)
+    if iV > specw:  # get N_ iV
+        NEt = np.zeros(3); NTT = np.zeros((2,9)); NH = CdH(); N_ = []
+        for n in N.N_:  # sum _N-specific projections
+            if n.derH:
+                nEt, nTT, nH = proj_N(n, yx, specw)
+                if val_(nEt, aw=contw):
+                    NEt+=nEt; NTT+=nTT; add_dH(NH,nH); N_+= [CN(N_=n.N_,Et=nEt,derTT=nTT,derH=nH,root=CN())]
+        iV = val_(NEt, mw=(len(N.N_)-1)*Lw, aw=contw)
+    # recomputed from individual Ls and Ns:
+    if iV + eV > ave:
+        if N.L_: pEt = NEt+LEt; pTT = NTT+LTT; pH = add_dH(NH,LH)
+        else:    pEt=copy(NEt); pTT=copy(NTT); pH = copy_(NH)
+        return CN(N_=N_,L_=N.L_,Et=pEt,derTT=pTT,derH=pH)
+
+    def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
+        # comp proj MD to actual MD, not used
+        _cos_da = angl.dot(_N.angl) / (span * _N.span)  # .dot for scalar cos_da
+        cos_da = angl.dot(N.angl) / (span * N.span)
+        _rdist = span / _N.span
+        rdist = span / N.span
+        prj_DH = add_dH(proj_dH(_N.derH.H, _cos_da * _rdist, _rdist * dec),
+                        proj_dH(N.derH.H, cos_da * rdist, rdist * dec))  # comb proj dHs | comp dH ) comb ddHs?
+        # Et+= confirm:
+        dddH = comp_dH(prj_DH, ddH, rn, link)
+        link.Et += dddH.Et; link.derTT += dddH.derTT
+        add_dH(ddH, dddH)
 
 def ffeedback(root):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
 
@@ -1011,7 +1027,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, wTTf=np.ones((2,9),dtype="
             if not elev: Fg = base_tile(iy,ix)  # 1st level or cross_comped arg tile
             if Fg and val_(Fg.Et,1, (len(Fg.N_)-1)*Lw, Fg.rc+compw+elev) > 0:
                 tile[y,x] = Fg; Fg_ += [Fg]
-                pFg = proj_Fg(Fg, np.array([y,x]))  # extend lev by feedback within current tile
+                pFg = proj_N(Fg, np.array([y,x]))  # extend lev by feedback within current tile
                 if pFg and val_(pFg.Et,1,(len(pFg.N_)-1)*Lw, pFg.rc+elev) > 0:
                     project_focus(PV__,y,x,Fg)  # PV__+= pV__
                     pv__ = PV__.copy(); pv__[tile!=None] = 0  # exclude processed
@@ -1025,7 +1041,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, wTTf=np.ones((2,9),dtype="
                     else: break
                 else: break
             else: break
-        if Fg_ and val_(np.sum([g.Et for g in Fg_]),1,(len(Fg_)-1)*Lw, np.mean([g.rc for g in Fg_])+elev) > 0:
+        if Fg_ and val_(np.sum([g.Et for g in Fg_],axis=0),1,(len(Fg_)-1)*Lw, np.mean([g.rc for g in Fg_])+elev) > 0:
             return Fg_
 
     global ave, Lw, intw, compw, centw, contw, adist, amed, medw, mW, dW

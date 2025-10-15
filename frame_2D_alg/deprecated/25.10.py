@@ -244,3 +244,46 @@ def comp_Q1(iN_, rc, fC):
             else: break
             pVt_ += [[dist, dy_dx, _N, V]]
 '''
+def proj_Fg(Fg, yx):
+
+    def proj_N(N):
+        dy, dx = N.yx - yx
+        Ndist = np.hypot(dy, dx)  # external dist
+        rdist = Ndist / N.span
+        Angle = np.array([dy, dx]); angle = N.angl[0] * N.angl[1]  # external and internal angles
+        cos_d = N.angl[0].dot(Angle) / (np.hypot(*angle) * Ndist)  # N-specific alignment, * N.angl[1]?
+        M,D,n = N.Et  # add N.et? Because Fg.Et is summed from graph.Et, which summed from link.Et, and it's summed in N.et too
+        dec = rdist * (M/(M+D))  # match decay rate, * ddecay for ds?
+        prj_H = proj_dH(N.derH.H, cos_d * rdist, dec)
+        prjTT, pEt = sum_H( prj_H)
+        pD = pEt[1]*dec; dM = M*dec  # use val_ for any proj?
+        pM = dM - pD * (dM/(ave*n))  # -= borrow, regardless of surprise?
+        return np.array([pM,pD,n]), prjTT, prj_H
+
+    specw = 9
+    ET, DerTT, DerH = proj_N(Fg)
+    pV = val_(ET, mw=len(Fg.N_)*Lw, aw=contw)
+    if pV > ave: return Fg
+    elif pV > specw:
+        ET = np.zeros(3); DerTT = np.zeros((2,9)); N_ = []
+        for N in Fg.N_:  # sum _N-specific projections for cross_comp
+            if N.derH:
+                pEt, prjTT, prj_H = proj_N(N)
+                if val_(pEt, aw=contw):
+                    ET+=pEt; DerTT+=prjTT; N_+= [CN(N_=N.N_,Et=pEt,derTT=prjTT,derH=prj_H,root=CN())]  # same target position?
+        if val_(ET, mw=len(N_)*Lw, aw=contw):
+            return CN(N_=N_,L_=Fg.L_,Et=ET, derTT=DerTT)  # proj Fg, add Prj_H?
+
+def proj_L_(_N, N, angle, dist):  # estimate cross-induction between N and _N before comp
+
+        V = 0;
+        fi = N.fi;
+        av = ave if fi else avd
+        for edir, node in zip((1, -1), (_N, N)):
+            for L in node.L_:
+                cos = ((L.angl[0] * edir * L.angl[1]) @ angle) / (np.hypot(*L.angl[0]) * np.hypot(*angle))  # angl: [[dy,dx],dir]
+                mang = (cos + abs(cos)) / 2  # = max(0, cos): 0 at 90°/180°, 1 at 0°
+                V += L.Et[1 - fi] * mang * intw * mW * (L.span / dist * av)  # decay = link.span / l.span * cosine ave?
+                # not revised
+        return V
+
