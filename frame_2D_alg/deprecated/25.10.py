@@ -274,16 +274,68 @@ def proj_Fg(Fg, yx):
         if val_(ET, mw=len(N_)*Lw, aw=contw):
             return CN(N_=N_,L_=Fg.L_,Et=ET, derTT=DerTT)  # proj Fg, add Prj_H?
 
-def proj_L_(_N, N, angle, dist):  # estimate cross-induction between N and _N before comp
+def comp_N_(iN_, rc):
 
-        V = 0;
-        fi = N.fi;
-        av = ave if fi else avd
-        for edir, node in zip((1, -1), (_N, N)):
+    def proj_L_(_N, N, angle, dist):  # estimate cross-induction between N and _N before comp
+
+        V = 0; fi = N.fi; av = ave if fi else avd
+        for edir, node in zip((1,-1),(_N,N)):
             for L in node.L_:
-                cos = ((L.angl[0] * edir * L.angl[1]) @ angle) / (np.hypot(*L.angl[0]) * np.hypot(*angle))  # angl: [[dy,dx],dir]
+                '''
+                cos = ((L.angl[0] *edir *L.angl[1]) @ angle) / (np.hypot(*L.angl[0]) * np.hypot(*angle))  # angl: [[dy,dx],dir]
                 mang = (cos + abs(cos)) / 2  # = max(0, cos): 0 at 90°/180°, 1 at 0°
-                V += L.Et[1 - fi] * mang * intw * mW * (L.span / dist * av)  # decay = link.span / l.span * cosine ave?
-                # not revised
+                V += L.Et[1-fi] * mang * intw * mW * (L.span/dist * av)  # decay = link.span / l.span * cosine ave?
+                '''
+                dy, dx = L.yx - node.yx
+                Ndist = np.hypot(dy, dx)  # external dist
+                rdist = Ndist / L.span
+                Angle = node.angl[0] * node.angl[1]; angle = L.angl[0] * L.angl[1]  # external and internal angles
+                cos_d = angle.dot(Angle) / (np.hypot(*angle) * Ndist)  # N-to-yx alignment
+                M, D, cnt = L.Et
+                dec = rdist * (M / (M+D))  # match decay rate, * ddecay for ds?
+                NEt, NTT, NH = proj_dH(L.derH.H, cos_d, dec, M, cnt)
+                V += val_(NEt, mw=(len(L.N_)-1)*Lw, aw=contw)
         return V
 
+    def proj_V(_N, N, dist, dy_dx, Ave, specw, pVt_):
+            # _N x N induction
+        iV = (_N.Et[0]+N.Et[0]) * dec**(dist/((_N.span+N.span)/2)) - Ave
+        eV = (_N.et[0]+N.et[0]) * dec**(dist/np.mean([l.span for l in _N.rim+N.rim])) - Ave  # ave rim span
+        V = iV + eV
+        if V > Ave or V < specw: return V
+        if eV > specw:
+            eV = 0
+            for _dist, _dy_dx, __N, _V in pVt_:
+                pN = proj_N(N,_dist,_dy_dx); _pN = proj_N(N,_dist,-_dy_dx)
+                eV += val_(_pN.Et+pN.Et)
+                mA, _ = comp_A(dy_dx, _dy_dx)
+                ldist = np.hypot(*(_N.yx-__N.yx)) /2
+                rdist = ldist / ((_dist + dist) / 2)
+                eV += _V * (dec**(rdist/adist)) * ((mA*wA + dist/_dist*distw) / (wA+distw))
+            V = iV + eV  # specific eV from prox links
+        if V > Ave: return V
+        if N.fi and _N.L_ and N.L_ and iV > specw:
+            V = eV + proj_L_(_N,N, dy_dx, dist)  # specific iV from L_s
+        return V
+
+    N_,L_, Et,olp = [],[], np.zeros(3),1
+    for i, N in enumerate(iN_):  # get unique pre-links per N, not _N, prox prior
+        N.pL_ = []
+        for _N in iN_[i+1:]:
+            if _N.sub != N.sub: continue  # not sure
+            dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx)
+            N.pL_ += [[dist, dy_dx, _N]]
+        N.pL_.sort(key=lambda x: x[0])  # global distance sort
+    for N in iN_:
+        pVt_ = []  # [dist, dy_dx, _N, V]
+        for dist, dy_dx, _N in N.pL_:  # rim angl not canonic
+            O = (N.rc +_N.rc) / 2; Ave = ave * rc * O
+            V = proj_V(_N,N, dist, dy_dx, Ave,2, pVt_)
+            if V > Ave:
+                Link = comp_N(_N,N, O,rc, A=dy_dx, span=dist, lH=L_)
+                if val_(Link.Et, aw=contw+O+rc) > 0:
+                    N_ += [_N, N]; Et += Link.Et; olp += O
+                pVt_ += [[dist, dy_dx, _N, val_(Link.Et, aw=rc+O)]]
+            else:
+                break  # no induction
+    return list(set(N_)), L_, Et, olp

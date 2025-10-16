@@ -88,6 +88,7 @@ class CN(CBase):
     def __init__(n, **kwargs):
         super().__init__()
         n.fi = kwargs.get('fi', 1)  # if G else 0, fd_: list of forks forming G?
+        n.nt = kwargs.get('nt',[])  # nodet, empty if fi
         n.N_ = kwargs.get('N_',[])  # nodes, or ders in links
         n.L_ = kwargs.get('L_',[])  # internal links if fi else len nodet.N_s?
         n.Et = kwargs.get('Et',np.zeros(3))  # sum from L_
@@ -97,7 +98,7 @@ class CN(CBase):
         n.baseT = kwargs.get('baseT', np.zeros(4))  # I,G,A: not ders
         n.derTT = kwargs.get('derTT',np.zeros((2,9)))  # sum derH -> m_,d_ [M,D,n, I,G,A, L,S,eA], dertt: comp rims + overlap test?
         n.derH  = kwargs.get('derH', CdH())  # sum from clustered L_s
-        n.topH  = kwargs.get('topH', CdH())  # sum from terminal L_?
+        n.dLay  = kwargs.get('dLay', CdH())  # sum from terminal L_?
         n.yx  = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
         n.rng = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
         n.box = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
@@ -120,25 +121,24 @@ class CN(CBase):
 
 def Copy_(N, root=None, init=0):
 
-    C = CN(root=root)
+    C = CN(root=root); fi = N.fi
     if init:  # init G with N
         C.N_ = [N]; C.nH, C.lH = [],[]
-        C.L_ = [l for l in N.rim if l.Et[0]>ave] if N.fi else []
-        if init==2: C.fi = N.fi  # centroid is not root
+        C.L_ = [l for l in (N.rim if fi else N.nt[0].rim+N.nt[1].rim) if l.Et[0]>ave]
+        if init==2: C.fi = fi  # centroid is not root
         else:       C.fi = 1; N.root = C  # G, not centroid
     else:
-        C.N_,C.nH,C.lH = list(N.N_),list(N.nH),list(N.lH); N.root = root or N.root
-        C.L_ = list(N.L_) if N.fi else N.L_
-        C.fi = N.fi
+        C.N_,C.L_,C.nH,C.lH = list(N.N_),list(N.L_),list(N.nH),list(N.lH); N.root = root or N.root
+        C.fi = fi
     if N.derH: C.derH  = copy_(N.derH)
     C.derTT = deepcopy(N.derTT)
-    for attr in ['Et','baseT','yx','box','angl','rim','B_','rB_','C_','rC_']: setattr(C, attr, copy(getattr(N, attr)))
+    for attr in ['Et','nt','baseT','yx','box','angl','rim','B_','rB_','C_','rC_']: setattr(C, attr, copy(getattr(N, attr)))
     for attr in ['rc','rng', 'fin', 'span', 'mang']: setattr(C, attr, getattr(N, attr))
     return C
 
 ave, avd, arn, aI, aS, aveB, aveR, Lw, intw, compw, centw, contw = 10, 10, 1.2, 100, 5, 100, 3, 5, 2, 5, 10, 15  # value filters + weights
 dec = ave / (ave+avd)  # match decay per unit dist
-adist, amed, distw, medw = 10, 3, 2, 2  # cost filters + weights, add alen?
+adist, amed, distw, medw, specw = 10, 3, 2, 2, 2  # cost filters + weights, add alen?
 wM, wD, wN, wG, wL, wI, wS, wa, wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # der params higher-scope weights = reversed relative estimated ave?
 mW = dW = 9; wTTf = np.ones((2,9))  # fb weights per derTT, adjust in agg+
 wY = wX = 64; wYX = np.hypot(wY,wX)  # focus dimensions
@@ -181,7 +181,7 @@ def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering
             root.L_=L_; root.Et += Et; root.rc += O
             if fC < 2 and dV > avd:  # may be dC_, no comp ddC_
                 lG = cross_comp(CN(N_=L_), O+rc+compw+1, fC*2)  # trace_edge via rB_|B_
-                if lG: rc+=lG.rc; root.lH += [lG]+lG.nH; root.Et+=lG.Et; add_dH(root.topH, lG.derH)  # lH extension
+                if lG: rc+=lG.rc; root.lH += [lG]+lG.nH; root.Et+=lG.Et; add_dH(root.dLay, lG.derH)  # lH extension
         if mV > 0:
             nG = Cluster(root, L_, rc+O, fC)  # get_exemplars, cluster_C, rng connectivity cluster
             if nG:  # batched nH extension
@@ -191,7 +191,7 @@ def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering
                     if val_(Et,1,(len(nG.N_)-1)*Lw, rc+O+3+contw) > 0:
                         trace_edge(nG, rc+O+3)  # comp adjacent Ns via B_
                 if val_(nG.Et,1, (len(nG.N_)-1)*Lw, rc+O+compw+3, Et) > 0:
-                    nG = cross_comp(nG, rc+O+3) or nG  # connect agg+, fC = 0
+                    nG = cross_comp(nG, rc+O+3) or nG  # connec agg+, fC = 0
                 root.Et += nG.Et; root.N_ = nG.N_
                 _H = root.nH; root.nH = []  # nG has own L_,lH
                 nG.nH = _H+ [root] + nG.nH  # pack root.nH in higher-composition nG.nH
@@ -205,7 +205,7 @@ def comp_C_(C_, rc, fall=1):  # max attr sort to constrain C_ search in 1D, add 
             m_, d_ = comp_derT(_N.derTT[1], N.derTT[1])
             ad_ = np.abs(d_); t_ = m_ + ad_ + eps  # ~ max comparand
             et = np.array([m_ / t_ @ wTTf[0], ad_ / t_ @ wTTf[1], min(_N.Et[2],N.Et[2])])  # signed
-            dC = CN(N_=[_N,N], Et=et, span=np.hypot(*_N.yx-N.yx)); L_ += [dC]; Et += et  # add olp?
+            dC = CN(nt=[_N,N], Et=et, span=np.hypot(*_N.yx-N.yx)); L_ += [dC]; Et += et  # add olp?
             for n in _N, N:
                 n.rim += [dC]; n.et += et
     else:   # sort, select, not implemented
@@ -226,38 +226,23 @@ def comp_C_(C_, rc, fall=1):  # max attr sort to constrain C_ search in 1D, add 
 
 def comp_N_(iN_, rc):
 
-    def proj_L_(_N, N, angle, dist):  # estimate cross-induction between N and _N before comp
-
-        V = 0; fi = N.fi; av = ave if fi else avd
-        for edir, node in zip((1,-1),(_N,N)):
-            for L in node.L_:
-                cos = ((L.angl[0] *edir *L.angl[1]) @ angle) / (np.hypot(*L.angl[0]) * np.hypot(*angle))  # angl: [[dy,dx],dir]
-                mang = (cos + abs(cos)) / 2  # = max(0, cos): 0 at 90°/180°, 1 at 0°
-                V += L.Et[1-fi] * mang * intw * mW * (L.span/dist * av)  # decay = link.span / l.span * cosine ave?
-                # not revised
-        return V
-
-    def proj_V(_N, N, dist, dy_dx, Ave, specw, pVt_):
+    def proj_V(_N, N, dist, Ave, pVt_):
             # _N x N induction
         iV = (_N.Et[0]+N.Et[0]) * dec**(dist/((_N.span+N.span)/2)) - Ave
         eV = (_N.et[0]+N.et[0]) * dec**(dist/np.mean([l.span for l in _N.rim+N.rim])) - Ave  # ave rim span
         V = iV + eV
-        if V > Ave or V < specw: return V
-        if eV > specw:
+        if V > Ave: return V
+        elif eV * ((len(pVt_)-1)*Lw) > specw:  # spec rim, nested spec L_,N_?
             eV = 0
             for _dist, _dy_dx, __N, _V in pVt_:
-                mA, _ = comp_A(dy_dx, _dy_dx)
-                ldist = np.hypot(*(_N.yx-__N.yx)) /2
-                rdist = ldist / ((_dist + dist) / 2)
-                eV += _V * (dec**(rdist/adist)) * ((mA*wA + dist/_dist*distw) / (wA+distw))
-            V = iV + eV  # specific eV from prox links
-        if V > Ave: return V
-        if N.fi and _N.L_ and N.L_ and iV > specw:
-            V = eV + proj_L_(_N,N, dy_dx, dist)  # specific iV from L_s
-        return V
+                pN = proj_N(N,_dist,_dy_dx); _pN = proj_N(N,_dist,-_dy_dx)
+                eV += val_(_pN.Et+pN.Et)
+            return iV+eV
+        else: return V
 
+    # get all-to-all pre-links per N, not _N, prox prior:
     N_,L_, Et,olp = [],[], np.zeros(3),1
-    for i, N in enumerate(iN_):  # get unique pre-links per N, not _N, prox prior
+    for i, N in enumerate(iN_):
         N.pL_ = []
         for _N in iN_[i+1:]:
             if _N.sub != N.sub: continue  # not sure
@@ -268,7 +253,7 @@ def comp_N_(iN_, rc):
         pVt_ = []  # [dist, dy_dx, _N, V]
         for dist, dy_dx, _N in N.pL_:  # rim angl not canonic
             O = (N.rc +_N.rc) / 2; Ave = ave * rc * O
-            V = proj_V(_N,N, dist, dy_dx, Ave,2, pVt_)
+            V = proj_V(_N,N, dist, Ave, pVt_)
             if V > Ave:
                 Link = comp_N(_N,N, O,rc, A=dy_dx, span=dist, lH=L_)
                 if val_(Link.Et, aw=contw+O+rc) > 0:
@@ -283,9 +268,9 @@ def comp_N(_N,N, olp,rc, A=np.zeros(2), span=None, rng=1, lH=None):  # compare l
     derTT, Et, rn = base_comp(_N,N)
     baseT = (rn*_N.baseT + N.baseT) / 2  # not new
     yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])  # ext
-    fi = N.fi
+    fi = not N.nt
     angl = [A, np.sign(derTT[1] @ wTTf[1])]  # preserve canonic direction
-    Link = CN(Et=Et,rc=olp, N_=[_N,N], L_=len(_N.N_+N.N_), et=_N.et+N.et, baseT=baseT,derTT=derTT, yx=yx,box=box, span=span, angl=angl, rng=rng, fi=0)
+    Link = CN(Et=Et,rc=olp, nt=[_N,N], N_=_N.N_+N.N_, L_=_N.L_+N.L_, et=_N.et+N.et, baseT=baseT,derTT=derTT, yx=yx,box=box, span=span, angl=angl, rng=rng)
     V = val_(Et, aw=olp+rc)
     if V * (1 - 1 / (min(len(N.derH.H),len(_N.derH.H)) or eps)) > ave:  # rdn to derTT, else derH is empty
         H = [CdH(Et=Et, derTT=copy(derTT), root=Link)]  # + 2nd | higher layers:
@@ -765,7 +750,7 @@ def agg_frame(foc, image, iY, iX, rV=1, wTTf=[], fproj=0):  # search foci within
                 if pFg:
                     cross_comp(pFg, rc=Fg.rc)
                     if val_(pFg.Et,1,(len(pFg.N_)-1)*Lw, pFg.rc+contw):
-                        project_focus(PV__, y,x, Fg)  # += proj val in PV__
+                        proj_focus(PV__, y,x, Fg)  # += proj val in PV__
             # no target proj
             frame = add_N(frame, Fg, fmerge=1, froot=1) if frame else Copy_(Fg)
             aw *= frame.rc
@@ -794,71 +779,6 @@ def PP2N(PP, root):  # update root locally?
     for P in PP.N_: P.root = PP
     return PP
 
-def proj_N(N, yx, specw):  # recursively specified projection of N to yx, separate proj internal M?
-
-    def proj_dH(_H, cos_d, dec):
-        pH = []
-        for _lay in _H:
-            lay = copy_(_lay)
-            lay.derTT[1] *= cos_d * dec  # proj ds
-            pH += [lay]
-        pTT, pEt = sum_H(pH)
-        pD = pEt[1] * dec; dM = M * dec
-        pM = dM - pD * (dM / (ave * cnt))  # -= borrow, regardless of surprise?
-        pEt = np.array([pM, pD, cnt])
-        return pEt, pTT, pH
-
-    dy, dx = N.yx - yx
-    Ndist = np.hypot(dy, dx)  # external dist
-    rdist = Ndist / N.span
-    Angle = np.array([dy,dx]); angle = N.angl[0] * N.angl[1]  # external and internal angles
-    cos_d = angle.dot(Angle) / (np.hypot(*angle) * Ndist)  # N-to-yx alignment
-    M, D, cnt = N.Et
-    dec = rdist * (M / (M+D))  # match decay rate, * ddecay for ds?
-    NEt, NTT, NH = proj_dH(N.derH.H, cos_d, dec)
-    iV = val_(NEt, mw=(len(N.N_)-1)*Lw, aw=contw)
-    pEt=copy(NEt); pTT=copy(NTT); pH = copy_(NH)
-    if N.L_:  # terminal, project separately?
-        LEt, LTT, LH = proj_dH(N.topH.H, cos_d, dec)
-        pEt+=LEt; pTT+=LTT; add_dH(pH,LH)  # no adding in cross_comp
-        eV = val_(LEt, mw=(len(N.L_)-1)*Lw, aw=contw)
-    else: eV = 0
-    if iV + eV > ave:
-        return CN(N_=N.N_,L_=N.L_, Et=pEt, derTT=pTT, derH=pH)
-    if eV > specw:  # get L_ eV
-        LEt = np.zeros(3); LTT = np.zeros((2,9)); LH = CdH(); N_ = []
-        for l in N.L_:  # sum L-specific projections
-            lEt, lTT, lH = proj_N(l, yx, specw)  # same as for N?
-            if val_(lEt, aw=contw):
-                LEt+=lEt; LTT+=lTT; add_dH(LH,lH); N_+= [CN(N_=l.N_,Et=lEt,derTT=lTT,derH=lH,root=CN())]  # same target position?
-        eV = val_(LEt, mw=(len(N.L_)-1)*Lw, aw=contw)
-    if iV > specw:  # get N_ iV
-        NEt = np.zeros(3); NTT = np.zeros((2,9)); NH = CdH(); N_ = []
-        for n in N.N_:  # sum _N-specific projections
-            if n.derH:
-                nEt, nTT, nH = proj_N(n, yx, specw)
-                if val_(nEt, aw=contw):
-                    NEt+=nEt; NTT+=nTT; add_dH(NH,nH); N_+= [CN(N_=n.N_,Et=nEt,derTT=nTT,derH=nH,root=CN())]
-        iV = val_(NEt, mw=(len(N.N_)-1)*Lw, aw=contw)
-    # recomputed from individual Ls and Ns:
-    if iV + eV > ave:
-        if N.L_: pEt = NEt+LEt; pTT = NTT+LTT; pH = add_dH(NH,LH)
-        else:    pEt=copy(NEt); pTT=copy(NTT); pH = copy_(NH)
-        return CN(N_=N_,L_=N.L_,Et=pEt,derTT=pTT,derH=pH)
-
-    def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
-        # comp proj MD to actual MD, not used
-        _cos_da = angl.dot(_N.angl) / (span * _N.span)  # .dot for scalar cos_da
-        cos_da = angl.dot(N.angl) / (span * N.span)
-        _rdist = span / _N.span
-        rdist = span / N.span
-        prj_DH = add_dH(proj_dH(_N.derH.H, _cos_da * _rdist, _rdist * dec),
-                        proj_dH(N.derH.H, cos_da * rdist, rdist * dec))  # comb proj dHs | comp dH ) comb ddHs?
-        # Et+= confirm:
-        dddH = comp_dH(prj_DH, ddH, rn, link)
-        link.Et += dddH.Et; link.derTT += dddH.derTT
-        add_dH(ddH, dddH)
-
 def ffeedback(root):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
 
     def L_ders(Fg):  # get current-level ders: from L_ only
@@ -884,7 +804,7 @@ def ffeedback(root):  # adjust filters: all aves *= rV, ultimately differential 
         _Et, _derTT = Et, derTT
     return rM+rD+rVd, wTTf
 
-def project_focus(PV__, y,x, Fg):  # radial accum of projected focus value in PV__
+def proj_focus(PV__, y,x, Fg):  # radial accum of projected focus value in PV__
 
     m,d,n = Fg.Et
     V = (m-ave*n) + (d-avd*n)
@@ -909,6 +829,68 @@ def project_focus(PV__, y,x, Fg):  # radial accum of projected focus value in PV
         row,col = rim_coords[:,0], rim_coords[:,1]
         PV__[row,col] += pV__  # in-place accum pV to rim
         n += 1
+
+def proj_H(cH, cos_d, dec):
+
+    pH = CdH()
+    for _lay in cH.H:
+        pTT = np.array([_lay.derTT[0], _lay.derTT[1] * cos_d * dec])
+        pEt = np.array([_lay.Et[0], np.sum(pTT[1]), _lay.Et[2]])  # or _lay Et is recomputed from proj_H:?
+        lay = CdH(H=[proj_H(l, cos_d, dec) for l in _lay.H], Et=pEt, derTT=pTT, root=pH)
+        pH.H += [lay]; pH.Et += pEt; pH.derTT += pTT
+    pD = pH.Et[1]  # already *= dec
+    dM = cH.Et[0] * dec
+    n  = cH.Et[2]
+    pM = dM - pD * (dM / (ave*n))  # -= borrow, scaled by rV of normalized decayed M
+    pH.Et = np.array([pM, pD, n])
+    return pH
+
+def proj_N(N, dist, A):  # recursively specified N projection, rim proj is currently macro in comp_N_?
+
+    rdist = dist / N.span   # internal x external angle:
+    cos_d = (N.angl[0].dot(A) / (np.hypot(*N.angl[0]) * dist)) * N.angl[1]  # N-to-yx alignment
+    M,D,cnt = N.Et
+    dec = rdist * (M / (M+D))  # match decay rate, * ddecay for ds?
+    NH = proj_H(N.derH, cos_d, dec)
+    iV = val_(NH.Et, mw=(len(N.N_)-1)*Lw, aw=contw)
+    pH = copy_(NH)
+    if N.L_:  # from terminal comp
+        LH = proj_H(N.dLay, cos_d, dec); add_dH(pH,LH)
+        eV = val_(LH.Et, mw=(len(N.L_)-1)*Lw, aw=contw)
+    else: eV = 0
+    if iV + eV > ave:
+        return CN(N_=N.N_,L_=N.L_, Et=pH.Et, derTT=pH.derTT, derH=pH)
+    LH,L_,NH,N_ = CdH(),[],CdH(),[]
+    if eV * ((len(N.L_)-1)*Lw) > specw:
+        for l in N.L_:  # sum L-specific projections
+            lA = A - (N.yx-l.yx); ldist = np.hypot(*lA)
+            pl = proj_N(l,ldist,lA)
+            if pl and pl.Et[0] > ave: add_dH(LH,pl.derH); L_+= [pl]  # or diff proj, if D,avd?
+        eV = val_(LH.Et, mw=(len(L_)-1)*Lw, aw=contw)
+    if iV * ((len(N.N_)-1)*Lw) > specw:
+        for n in N.N_:  # sum _N-specific projections
+            if n.derH:
+                nA = A - (N.yx-n.yx); ndist = np.hypot(*nA)
+                pn = proj_N(n,ndist,nA)
+                if pn and pn.Et[0] > ave: add_dH(NH,pn.derH); N_+= [pn]
+        iV = val_(NH.Et, mw=(len(N_)-1)*Lw, aw=contw)
+    if iV + eV > 0:
+        if L_ or N_: pH = add_dH(NH,LH)  # recomputed from individual Ls and Ns
+        return CN(N_=N_,L_=L_, Et=pH.Et, derTT=pH.derTT, derH=pH)
+
+    def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
+        # comp proj dH to actual dH-> surprise, not used
+        # add imagination: cross_comp projected derHs?
+        _cos_da = angl.dot(_N.angl) / (span * _N.span)  # .dot for scalar cos_da
+        cos_da = angl.dot(N.angl) / (span * N.span)
+        _rdist = span / _N.span
+        rdist = span / N.span
+        prj_DH = add_dH(proj_H(_N.derH, _cos_da, _rdist * dec),
+                        proj_H(N.derH, cos_da, rdist * dec))  # comb proj dHs | comp dH ) comb ddHs?
+        # Et+= confirm:
+        dddH = comp_dH(prj_DH, ddH, rn, link)
+        link.Et += dddH.Et; link.derTT += dddH.derTT
+        add_dH(ddH, dddH)
 
 def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init focal frame graph, no recursion:
 
@@ -950,7 +932,7 @@ def form_B__(G, lG, rc):  # trace edge / boundary / background per node:
         for L in N.B_:
             RL = R(L)  # replace boundary L with its root of the level that contains N in root.rB_?
             if RL: B_ += [RL]; Et += RL.Et; rdn += RL.rB_.index(N) + 1  # rdn = n stronger cores of RL
-        N.B_ = [B_, Et, rdn]
+        N.B_ = [B_,Et,rdn]
 
 def trace_edge(root, rc):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary / skeleton?
 
@@ -1027,9 +1009,9 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, wTTf=np.ones((2,9),dtype="
             if not elev: Fg = base_tile(iy,ix)  # 1st level or cross_comped arg tile
             if Fg and val_(Fg.Et,1, (len(Fg.N_)-1)*Lw, Fg.rc+compw+elev) > 0:
                 tile[y,x] = Fg; Fg_ += [Fg]
-                pFg = proj_N(Fg, np.array([y,x]))  # extend lev by feedback within current tile
+                pFg = proj_N(Fg, np.array([y,x]),2)  # extend lev by feedback within current tile
                 if pFg and val_(pFg.Et,1,(len(pFg.N_)-1)*Lw, pFg.rc+elev) > 0:
-                    project_focus(PV__,y,x,Fg)  # PV__+= pV__
+                    proj_focus(PV__,y,x,Fg)  # PV__+= pV__
                     pv__ = PV__.copy(); pv__[tile!=None] = 0  # exclude processed
                     y, x = np.unravel_index(pv__.argmax(), PV__.shape)
                     if PV__[y,x] > ave:
