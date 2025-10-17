@@ -339,3 +339,18 @@ def comp_N_(iN_, rc):
             else:
                 break  # no induction
     return list(set(N_)), L_, Et, olp
+
+def proj_H(cH, cos_d, dec):
+
+    pH = CdH()
+    for _lay in cH.H:
+        pTT = np.array([_lay.derTT[0], _lay.derTT[1] * cos_d * dec])
+        pEt = np.array([_lay.Et[0], np.sum(pTT[1]), _lay.Et[2]])  # or _lay Et is recomputed from proj_H:?
+        lay = CdH(H=[proj_H(l, cos_d, dec) for l in _lay.H], Et=pEt, derTT=pTT, root=pH)
+        pH.H += [lay]; pH.Et += pEt; pH.derTT += pTT
+    pD = pH.Et[1]  # already *= dec
+    dM = cH.Et[0] * dec
+    n  = cH.Et[2]
+    pM = dM - pD * (dM / (ave*n))  # -= borrow, scaled by rV of normalized decayed M
+    pH.Et = np.array([pM, pD, n])
+    return pH
