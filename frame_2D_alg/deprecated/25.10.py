@@ -354,3 +354,48 @@ def proj_H(cH, cos_d, dec):
     pM = dM - pD * (dM / (ave*n))  # -= borrow, scaled by rV of normalized decayed M
     pH.Et = np.array([pM, pD, n])
     return pH
+
+def cross_comp_(Fg_, rc):  # top-composition xcomp, add margin search extend and splice?
+
+        n_,l_,c_ = [],[],[]
+        for g in Fg_:
+            if g: n_ += g.N_; l_ += g.L_; c_ += g.C_[0] if g.C_ else []  # + dC_?
+        nG, lG, cG = cross_comp(CN(N_=n_),rc), cross_comp(CN(N_=l_),rc+1), cross_comp(CN(N_=c_),rc+2,fC=1)
+
+        Et = np.sum([g.Et for g in (nG,lG,cG) if g], axis=0)
+        rc = np.mean([g.rc for g in (nG,lG,cG) if g])
+
+        return CN(Et=Et, rc=rc, N_= nG.N_ if nG else [], L_= lG.N_ if lG else [], C_= cG.N_ if cG else [],
+                  nH=nG.nH if nG else [], lH=lG.nH if lG else [])
+                  # we need to assign nH and lH for feedback too?
+
+def Cluster_F(root, iL_, rc):  # called from cross_comp(Fg_)
+
+    dN_, dL_, dC_ = [], [], []
+    for Link in iL_:  # links between Fgs
+        dN_ += Link.N_; dL_ += Link.L_; dC_ += Link.C_
+    Et = np.zeros(3)
+    N_,L_,C_ = [],[],[]
+    if len(dN_) > 1:
+        nG = cluster_N(root, dN_, rc)
+        if nG:
+            rc+=1; N_ = nG.N_; Et += nG.Et
+            if val_(nG.Et, mw=(len(N_)-1)+Lw, aw=rc) > 0:
+                nG = cross_comp(nG, rc)
+                if nG: rc+=1; N_ = nG.N_; Et += nG.Et
+    if len(dL_) > 1:
+        lG = cluster_N(root, dL_, rc)
+        if lG:
+            rc+=1; L_+= lG.N_; Et += lG.Et
+            if val_(nG.Et, mw=(len(L_)-1)+Lw, aw=rc) > 0:
+                lG = cross_comp(nG, rc)
+                if lG: rc+=1; N_ = nG.N_; Et += nG.Et
+    if len(dC_) > 1:
+        cG = cluster_n(root, dC_, rc)
+        if cG:
+            rc+=1; C_+= cG.N_; Et += cG.Et
+            if val_(cG.Et, mw=(len(C_)-1)+Lw, aw=rc) > 0:
+                cG = cross_comp(cG, rc)
+                if cG: rc+=1; N_ = nG.N_; Et += nG.Et
+
+    return CN(Et=Et,rc=rc, N_=N_,L_=L_,C_=C_, root=root)
