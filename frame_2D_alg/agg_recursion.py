@@ -46,18 +46,16 @@ class CdH(CBase):  # derivation hierarchy or a layer thereof, subset of CG
     name = "der"
     def __init__(d, **kwargs):
         super().__init__()
-        d.H = kwargs.get('H',[])  # was derH/CLay, empty if not nested
-        d.Et = kwargs.get('Et', np.zeros(3))  # redundant to N.Et and N.derTT in top derH
+        d.H = kwargs.get('H',[])  # empty if single layer: redundant to Et,derTT
+        d.Et = kwargs.get('Et',np.zeros(3))  # redundant to root Et, derTT
         d.derTT = kwargs.get('derTT', np.zeros((2,9)))  # m_,d_ [M,D,n, I,G,A, L,S,eA]: single layer or sum derH
         d.root = kwargs.get('root', [])  # to pass Et, derTT
     def __bool__(d): return bool(d.Et[2])  # n>0
 
-def copy_(dH, i=None):
-
-    if i: C = dH; lay = i  # reuse self
-    else: C = CdH()
-    C.H = [copy_(d) for d in dH.H]; C.Et = dH.Et; C.derTT=dH.derTT; C.root=dH.root
-    if not i: return C
+def copy_(dH, root):
+    cH = CdH(Et=copy(dH.Et), derTT=deepcopy(dH.derTT), root=root)
+    cH.H = [copy_(lay, cH) for lay in dH]
+    return cH
 
 def add_dH(DH, dH):  # rn = n/mean, no rev, merge/append lays
 
@@ -66,7 +64,7 @@ def add_dH(DH, dH):  # rn = n/mean, no rev, merge/append lays
     off_H = []
     for D, d in zip_longest(DH.H, dH.H):
         if D and d: add_dH(D, d)
-        elif d:     off_H += [copy_(d)]
+        elif d:     off_H += [copy_(d, DH)]
     DH.H += off_H
     return DH
 
@@ -130,7 +128,7 @@ def Copy_(N, root=None, init=0):
     else:
         C.N_,C.L_,C.nH,C.lH = list(N.N_) if N.fi else N.nt,list(N.L_) if N.fi else N.L_,list(N.nH),list(N.lH); N.root = root or N.root
         C.fi = fi
-    if N.derH: C.derH  = copy_(N.derH)
+    if N.derH: C.derH  = copy_(N.derH,C)
     C.derTT = deepcopy(N.derTT)
     for attr in ['Et','nt','baseT','yx','box','angl','rim','B_','rB_','C_','rC_']: setattr(C, attr, copy(getattr(N, attr)))
     for attr in ['rc','rng', 'fin', 'span', 'mang']: setattr(C, attr, getattr(N, attr))
@@ -180,11 +178,11 @@ def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering
             if root.fi and root.L_: root.lH += [sum_N_(root.L_)]  # or agglomeration root is always Fg?
             root.L_=L_; root.Et += Et; root.rc += O
             if fC < 2 and dV > avd:  # may be dC_, no comp ddC_
-                lG = cross_comp(CN(N_=L_), O+rc+compw+1, fC*2)  # trace_edge via rB_|B_
+                lG = cross_comp(CN(N_=L_,root=root), O+rc+compw+1, fC*2)  # trace_edge via rB_|B_
                 if lG: rc+=lG.rc; root.lH += [lG]+lG.nH; root.Et+=lG.Et; add_dH(root.dLay, lG.derH)  # lH extension
         if mV > 0:
-            nG = Cluster(root, L_, rc+O, fC) if root.root else Cluster_F(root, L_, rc+O)  # root is frame, splice L_ dN_,dL_,dC_
-            # get_exemplars, cluster_C, rng connectivity cluster
+            if root.root: nG = Cluster(root, L_, rc+O, fC)  # fC=0: get_exemplars, cluster_C, rng connect cluster
+            else:         nG = Fcluster(root,L_, rc+O)  # root=frame, splice,cluster L_ dN_,dL_,dC_
             if nG:  # batched nH extension
                 rc += nG.rc  # redundant clustering layers
                 if lG:
@@ -376,7 +374,8 @@ def spec(_spe,spe, Et, olp, dspe=None):  # for N_|B_
         for N in spe:
             if _N is not N:
                 dN = comp_N(_N, N, olp,1); Et += dN.Et
-                if dspe is not None: dspe += [dN]
+                if dspe is not None:
+                    dspe += [dN]  # link_, splice in Fcluster if cross-Fg
                 for _l,l in [(_l,l) for _l in _N.rim for l in N.rim]:  # l nested in _l
                     if _l is l: Et += l.Et  # overlap val?
 
@@ -404,12 +403,13 @@ def get_exemplars(N_, rc):  # get sparse nodes by multi-layer non-maximum suppre
             break  # the rest of N_ is weaker, trace via rims
     return E_
 
-def Cluster(root, iL_, rc, fC):  # generic clustering root
+def Cluster(root, iL_, rc, iC):  # generic clustering root
 
     nG = []
-    if fC:  # primary connectivity clustering of centroids
-        C_, L_, i = [], [], 0
-        if fC < 2:  # merge similar Cs, not dCs, no recomp
+    if iC:
+        # input centroid, base connectivity clustering
+        C_, L_, i = [],[],0
+        if iC < 2:  # merge similar Cs, not dCs, no recomp
             dC_ = sorted(list({L for L in iL_}), key=lambda dC: dC.Et[1])  # from min D
             for i, dC in enumerate(dC_):
                 if val_(dC.Et, fi=0, aw=rc+compw) < 0:  # merge
@@ -427,6 +427,7 @@ def Cluster(root, iL_, rc, fC):  # generic clustering root
             nG = cluster_n(root, C_, rc)  # in feature space
         if not nG: nG = CN(N_=C_,L_=L_)
     else:
+        # input graph, primary centroid clustering
         N_ = list({N for L in iL_ for N in L.nt})  # newly connected only
         E_ = get_exemplars(N_,rc)
         if E_ and val_(np.sum([g.Et for g in E_],axis=0), N_[0].fi, (len(E_)-1)*Lw, rc+centw, root.Et) > 0:
@@ -440,7 +441,8 @@ def Cluster(root, iL_, rc, fC):  # generic clustering root
         for rng, rL_ in enumerate(L__,start=1):  # bottom-up rng-banded clustering
             aw = rc + rng + contw
             if rL_ and val_(np.sum([l.Et for l in rL_], axis=0),1, (len(rL_)-1)*Lw, aw) > 0:
-                nG = cluster_N(root, rL_, aw, rng) or nG  # top valid-rng nG
+                nG = cluster_N(root, rL_, aw, rng) or nG
+                # top valid-rng nG
     return nG
 
 def cluster_N(root, rL_, rc, rng=1):  # flood-fill node | link clusters
@@ -864,7 +866,7 @@ def proj_N(N, dist, A):  # recursively specified N projection, rim proj is curre
     dec = rdist * (M / (M+D))  # match decay rate, * ddecay for ds?
     NH = proj_H(N.derH, cos_d, dec)
     iV = val_(NH.Et, mw=(len(N.N_)-1)*Lw, aw=contw)
-    pH = copy_(NH)
+    pH = copy_(NH, N)
     if N.L_:  # from terminal comp
         LH = proj_H(N.dLay, cos_d, dec); add_dH(pH,LH)
         eV = val_(LH.Et, mw=(len(N.L_)-1)*Lw, aw=contw)
@@ -903,23 +905,22 @@ def proj_N(N, dist, A):  # recursively specified N projection, rim proj is curre
         link.Et += dddH.Et; link.derTT += dddH.derTT
         add_dH(ddH, dddH)
 
-def Cluster_F(root, iL_, rc):  # called from cross_comp(Fg_)
+def Fcluster(root, iL_, rc):  # called from cross_comp(Fg_)
 
     dN_, dL_, dC_ = [], [], []  # spliced from links between Fgs
     for Link in iL_: dN_ += Link.N_; dL_ += Link.L_; dC_ += Link.C_
 
-    Et = np.zeros(3); N_L_C_ = {}
-    for key, diff_, clust_f, fC in ('N_',dN_, cluster_N,0), ('L_',dL_, cluster_N,0),('C_',dC_, cluster_n,1):
-        N_L_C_[key] = []
+    Et = np.zeros(3); N_L_C_ = [[],[],[]]
+    for i, (diff_,clust_f, fC) in enumerate([(dN_,cluster_N,0),(dL_,cluster_N,0),(dC_,cluster_n,1)]):
         if len(diff_) > 1:
             G = clust_f(root, diff_, rc)
             if G:
-                rc+=1; N_L_C_[key] = G.N_; Et += G.Et
+                rc+=1; N_L_C_[i] = G.N_; Et += G.Et
                 if val_(G.Et, mw=(len(G.N_)-1)*Lw, aw=rc) > 0:
                     G = cross_comp(G, rc, fC=fC)
-                    if G: rc+=1; N_L_C_[key] = G.N_; Et += G.Et
-
-    return CN(Et=Et, rc=rc, **N_L_C_, root=root)
+                    if G: rc+=1; N_L_C_[i] = G.N_; Et += G.Et
+    N_,L_,C_=N_L_C_
+    return CN(Et=Et,rc=rc, N_=N_,L_=L_,C_=C_, root=root)
 
 def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init focal frame graph, no recursion:
 
