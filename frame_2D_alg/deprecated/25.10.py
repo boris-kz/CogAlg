@@ -399,3 +399,71 @@ def Cluster_F(root, iL_, rc):  # called from cross_comp(Fg_)
                 if cG: rc+=1; N_ = nG.N_; Et += nG.Et
 
     return CN(Et=Et,rc=rc, N_=N_,L_=L_,C_=C_, root=root)
+
+def spec(_N_,N_, Et, olp, L_=None):  # for N_|B_
+
+    for _N in _N_:
+        for N in N_:
+            if _N is not N:
+                L = comp_N(_N,N, olp, rc=1, fspec=1); Et += L.Et
+                if L_ is not None: L_+=[L]  # splice if Fcluster
+                for _l,l in [(_l,l) for _l in _N.rim for l in N.rim]:  # l nested in _l
+                    if _l is l: Et += l.Et  # overlap val?
+
+def comp_N(_N,N, olp,rc, A=np.zeros(2), span=None, rng=1, lH=None, fspec=0):  # compare links, optional angl,span,dang?
+
+    derTT, Et, rn = base_comp(_N, N); fN = N.root  # not Fg
+    baseT = (rn*_N.baseT+N.baseT) /2  # not new
+    yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])  # ext
+    fi = N.fi
+    angl = [A, np.sign(derTT[1] @ wTTf[1])]  # preserve canonic direction
+    Link = CN(fi=0, Et=Et,rc=olp, nt=[_N,N], N_=_N.N_+N.N_, L_=_N.L_+N.L_, baseT=baseT,derTT=derTT, yx=yx, box=box, span=span, angl=angl, rng=rng)
+    V = val_(Et, aw=olp+rc)
+    if fN and V * (1- 1/(min(len(N.derH.H),len(_N.derH.H)) or eps)) > ave:  # rdn to derTT, else derH is empty
+        H = [CdH(Et=Et, derTT=copy(derTT), root=Link)]  # + 2nd | higher layers:
+        if _N.derH and N.derH:
+            dH = comp_dH(_N.derH, N.derH, rn, Link)
+            H += dH.H; dTT = dH.derTT; dEt = dH.Et
+        else:
+            m_,d_ = comp_derT(rn*_N.derTT[1], N.derTT[1]); dEt = np.array([np.sum(m_),np.sum(d_),min(_N.Et[2],N.Et[2])]); dTT = np.array([m_,d_])
+            H += [CdH(Et=dEt, derTT=dTT, root=Link)]
+        Et += dEt; derTT += dTT
+        Link.derH = CdH(H=H, Et=Et, derTT=derTT, root=Link)  # same as Link Et,derTT
+    if fi and V > ave * (rc+1+compw):
+        rc += olp
+        if N.L_: rc+=1; spec(_N.N_, N.N_, Et, rc, Link.N_)  # if N.L_ to skip PP
+        if fN:  # not Fg
+            if _N.B_ and N.B_:
+                _B_,_bEt,_bO = _N.B_; B_,bEt,bO = N.B_; bO+=_bO+rc
+                if val_(_bEt+bEt,1,(min(len(_B_),len(B_))-1)*Lw, bO+compw) > 0:
+                    rc+=1; spec(_B_,B_, Et, bO, Link.lH)  # lH = dspec; spec C_: overlap,offset?
+        else:
+            # Fg, global C_, -+L_, lower arg rc, splice Link N_,L_,C_ globally, no clustering?
+            if V * (min(len(_N.L_),len(N.L_))-1)*Lw > ave*rc:  # add N.et,olp?
+                rc+=1; spec(_N.L_,N.L_, Et, rc, Link.L_)
+            if _N.C_ and N.C_:
+                _C_,_cEt = _N.C_; C_,cEt = N.C_  # add val_ cEt, no separate olp?
+                if V * (min(len(C_),len(C_))-1)*Lw > ave*rc:
+                    rc+=1; spec(_C_,C_, Et, rc, Link.C_)
+    if lH is not None:
+        lH += [Link]
+    # span,angl in spec?
+    for n, _n in (_N,N), (N,_N):  # if rim-mediated comp: reverse dir in _N.rim: rev^_rev?
+        n.rim += [Link]; n.et += Et; n.compared.add(_n)
+    return Link
+
+def val_(Et, fi=1, mw=1, aw=1, _Et=np.zeros(3)):  # m,d eval per cluster, for projection only?
+
+    if mw <= 0: return (0,0) if fi == 2 else 0
+    am = ave * aw  # includes olp, M /= max I | M+D? div comp / mag disparity vs. span norm
+    ad = avd * aw  # dval is borrowed from co-projected or higher-scope mval
+    m, d, n = Et
+    # m,d may be negative, but deviation is +ve?
+    if fi==2: val = np.array([m-am, d-ad]) * mw  # abs ! rel?
+    else:     val = (m-am if fi else d-ad) * mw  # m: m/ (m+d), d: d/ (m+d)?
+    if _Et[2]:
+        _m,_d,_n = _Et
+        rn =_n/n  # borrow rational deviation of contour if fi else root Et:
+        if fi==2: val *= np.array([_d/ad, _m/am]) * mw * rn
+        else:     val *= (_d/ad if fi else _m/am) * mw * rn
+    return val
