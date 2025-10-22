@@ -467,3 +467,74 @@ def val_(Et, fi=1, mw=1, aw=1, _Et=np.zeros(3)):  # m,d eval per cluster, for pr
         if fi==2: val *= np.array([_d/ad, _m/am]) * mw * rn
         else:     val *= (_d/ad if fi else _m/am) * mw * rn
     return val
+
+def val__(Et, fi=1, mw=1, aw=1, _Et=np.zeros(4)):  # m,d eval per cluster
+
+    if mw <= 0: return (0,0) if fi == 2 else 0
+    m, d, n, t = Et
+    rm = m / t; rd = d / t  # t = np.sum(np.abs(derTT))
+    if _Et[2]:
+        _m,_d,_n,_t = _Et
+        rn = _n / n  # weight of parent's contribution
+        rm = rm * (1-rn) + (_d/_t) * rn  # match borrows from parent diff
+        rd = rd * (1-rn) + (_m/_t) * rn  # diff borrows from parent match
+    vm = rm * mw - ave* aw
+    vd = rd * mw - avd* aw  # raves
+    if fi==1: return vm
+    if fi==0: return vd
+    else:     return vm,vd
+
+def base_comp(_N,N, fC=0):  # comp Et, baseT, extT, derTT
+
+    fi = N.fi
+    _M,_D,_n =_N.Et; _I,_G,_Dy,_Dx =_N.baseT; _L = len(_N.N_)  # len nodet.N_s, no baseT in links?
+    M, D, n  = N.Et; I, G, Dy, Dx = N.baseT; L = len(N.N_)
+    rn = _n/n
+    _pars = np.array([_M*rn,_D*rn,_n*rn,_I*rn,_G*rn, [_Dy,_Dx],_L*rn,_N.span], dtype=object)  # Et, baseT, extT
+    pars  = np.array([M,D,n, (I,aI),G, [Dy,Dx], L,(N.span,aS)], dtype=object)
+    mA,dA = comp_A(_N.angl[0]*_N.angl[1], N.angl[0]*N.angl[1])  # ext angle
+    m_,d_ = comp(_pars,pars, mA,dA)  # M,D,n, I,G,A, L,S,eA
+    if fC:
+        dm_,dd_ = comp_derT(rn*_N.derTT[1], N.derTT[1])
+        m_+=dm_; d_+=dd_
+    DerTT = np.array([m_,d_])
+    ad_= np.abs(d_)
+    t_ = m_ + ad_ + eps  # max comparand
+    Et = np.array([m_ * (1, mA)[fi] /t_ @ wTTf[0],  # norm, signed?
+                   ad_* (1, 2-mA)[fi] /t_ @ wTTf[1], min(_n,n)])  # shared?
+
+class CN(CBase):
+    name = "node"
+    def __init__(n, **kwargs):
+        super().__init__()
+        n.fi  = kwargs.get('fi', 1)  # if G else 0, fd_: list of forks forming G?
+        n.nt  = kwargs.get('nt',[])  # nodet, empty if fi
+        n.N_  = kwargs.get('N_',[])  # nodes, concat in links
+        n.L_  = kwargs.get('L_',[])  # internal links, +|- if failed?
+        n.rim = kwargs.get('rim',[])  # external links, rng-nest?
+        n.Et  = kwargs.get('Et',np.zeros(4))  # sum from L_
+        n.et  = kwargs.get('et',np.zeros(4))  # sum from rim
+        n.rc  = kwargs.get('rc',1)  # redundancy to ext Gs, ave in links? separate rc for rim, or internally overlapping?
+        n.baseT = kwargs.get('baseT', np.zeros(4))  # I,G,A: not ders
+        n.derTT = kwargs.get('derTT',np.zeros((2,9)))  # sum derH -> m_,d_ [M,D,n, I,G,A, L,S,eA], dertt: comp rims + overlap test?
+        n.derH  = kwargs.get('derH', CdH())  # sum from clustered L_s
+        n.dLay  = kwargs.get('dLay', CdH())  # sum from terminal L_, Fg only?
+        n.yx  = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
+        n.rng = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
+        n.box = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
+        n.span = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_) but not additive?
+        n.angl = kwargs.get('angl',[np.zeros(2),0])  # (dy,dx),dir, sum from L_
+        n.mang = kwargs.get('mang',1)  # ave match of angles in L_, =1 in links
+        n.B_ = kwargs.get('B_', [])  # ext boundary | background neg Ls/lG: [B_,Et,R], add dB_?
+        n.rB_= kwargs.get('rB_',[])  # reciprocal cores for lG, vs higher-der lG.B_
+        n.C_ = kwargs.get('C_', [])  # int centroid Gs, add dC_?
+        n.rC_= kwargs.get('rC_',[])  # reciprocal root centroids
+        n.nH = kwargs.get('nH', [])  # top-down hierarchy of sub-node_s: CN(sum_N_(Nt_))/ lev, with single added-layer derH, empty nH
+        n.lH = kwargs.get('lH', [])  # bottom-up hierarchy of L_ graphs: CN(sum_N_(Lt_))/ lev, within each nH lev
+        n.root = kwargs.get('root',None)  # immediate
+        n.sub  = 0  # full-composition depth relative to top-composition peers
+        n.fin  = kwargs.get('fin',0)  # clustered, temporary
+        n.exe  = kwargs.get('exe',0)  # exemplar, temporary
+        n.compared = set()
+        # n.fork_tree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
+    def __bool__(n): return bool(n.N_)
