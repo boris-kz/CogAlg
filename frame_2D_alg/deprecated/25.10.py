@@ -538,3 +538,56 @@ class CN(CBase):
         n.compared = set()
         # n.fork_tree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.N_)
+
+def add_dH(DH, dH):  # rn = n/mean, no rev, merge/append lays
+
+    DH.Et += dH.Et
+    DH.dTT += dH.dTT
+    off_H = []
+    for D, d in zip_longest(DH.H, dH.H):
+        if D and d: add_dH(D, d)
+        elif d:     off_H += [copy_(d, DH)]
+    DH.H += off_H
+    return DH
+
+def comp_dH(_dH, dH, rn, root):  # unpack derH trees down to numericals and compare them
+
+    H = []
+    if _dH.H and dH.H:  # 2 or more layers each, eval rdn to dTT as in comp_N?
+        Et = np.zeros(3); dTT = np.zeros((2,9))
+        for D, d in zip(_dH.H, dH.H):
+            ddH = comp_dH(D,d, rn, root); H += [ddH]; Et += ddH.Et; dTT += ddH.dTT
+    else:
+        dTT = comp_derT(_dH.dTT[1], dH.dTT[1] * rn)  # ext A align replaced dir/rev
+        Et = np.array([np.sum(dTT[0]), np.sum(np.abs(dTT[1])), min([_dH.Et[2],dH.Et[2]])])
+
+    return CdH(H=H, Et=Et, dTT=dTT, root=root)
+
+def sum_H(H):  # use add_dH?
+    dTT = np.zeros((2,9)); Et = np.zeros(3)
+    for lay in H:
+        dTT += lay.dTT; Et += lay.Et
+    return dTT, Et
+
+def sum2graph(root, N_,L_,C_,B_,olp,rng):  # sum node,link attrs in graph, aggH in agg+ or player in sub+
+
+    n0 = Copy_(N_[0]); yx_=[n0.yx]; box=n0.box; baseT=n0.baseT; derH=n0.derH; dTT=np.zeros((2,9)); ang=np.zeros(2)
+    fi = n0.fi; fg = fi and n0.L_  # not PPs
+    for L in L_:
+        add_dH(derH,L.derH); dTT+=L.dTT; ang += L.angl[0]
+    A = np.array([ang, np.sign(dTT[1] @ wTTf[1])],dtype=object)  # canonical dir = summed diff sign
+    if fg: Nt = Copy_(n0)  # add_N(Nt,Nt.Lt)?
+    dTT += n0.dTT
+    for N in N_[1:]:
+        add_dH(derH,N.derH); baseT+=N.baseT; dTT+=N.dTT; box=extend_box(box,N.box); yx_+=[N.yx]
+        if fg: add_N(Nt,N)  # froot = 0
+    yx = np.mean(yx_,axis=0); dy_,dx_ = (yx_-yx).T; dist_ = np.hypot(dy_,dx_); span = dist_.mean() # node centers distance to graph center
+    graph = CN(root=root, fi=1,rng=rng, N_=N_,L_=L_,C_=C_,B_=B_,rc=olp, baseT=baseT, dTT=dTT, derH=derH, span=span, angl=A, yx=yx)
+    for n in N_: n.root = graph
+    if fg: graph.nH = Nt.nH + [Nt]  # pack prior top level
+    if fi and len(L_) > 1:  # else default mang = 1
+        graph.mang = np.sum([ comp_A(ang, l.angl[0]) for l in L_]) / len(L_)
+        # ang is centroid, directionless?
+    graph.M = sum(graph.dTT[0]); graph.D = sum(graph.dTT[1]); graph.n = graph.dTT[2]
+    return graph
+
