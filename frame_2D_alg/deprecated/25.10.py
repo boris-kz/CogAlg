@@ -591,3 +591,33 @@ def sum2graph(root, N_,L_,C_,B_,olp,rng):  # sum node,link attrs in graph, aggH 
     graph.M = sum(graph.dTT[0]); graph.D = sum(graph.dTT[1]); graph.n = graph.dTT[2]
     return graph
 
+def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering
+
+    if fC: N_,L_,dTT = comp_C_(root.N_,rc); O = 0  # no alt rep is formed, cont along maxw attr?
+    else:  N_,L_,dTT,O = comp_N_(root.N_,rc)  # rc: redundancy+olp, lG.N_ is Ls
+    if len(L_) > 1:
+        dV = val_(dTT, O+rc+compw, fi=0, mw=(len(L_)-1)*Lw); lG = []
+        if dV > 0:
+            if root.fi and root.L_: root.lH += [sum_N_(root.L_,rc,root)]  # or agglomeration root is always Fg?
+            root.L_=L_; root.dTT += dTT; root.rc += O
+            if fC < 2 and dV > avd:  # may be dC_, no comp ddC_
+                lG = cross_comp(CN(N_=L_,root=root), O+rc+compw+1, fC*2)  # trace_edge via rB_|B_
+                if lG: rc+=lG.rc; root.lH += [lG]+lG.nH; root.dTT+=lG.dTT; add_dH(root.dLay, lG.derH)  # lH extension
+        if val_(dTT, O+rc+compw, mw=(len(L_)-1)*Lw) > 0:
+            # tentative clust eval, no n.ed:
+            for n in N_: n.em = sum([l.m for l in n.rim]) / len(n.rim)
+            if root.root: nG = Cluster(root, L_, rc+O, fC)  # fC=0: get_exemplars, cluster_C, rng connect cluster
+            else:         nG = Fcluster(root,L_, rc+O)  # root=frame, splice,cluster L'L_,lH_,C_
+            if nG:        # batched nH extension
+                rc+=nG.rc # redundant clustering layers
+                if lG:
+                    form_B__(nG, lG, rc+O+2)  # assign boundary per N, O+=B_[-1]|1?
+                    if val_(dTT, rc+O+3+contw, mw=(len(nG.N_)-1)*Lw) > 0:  # mval
+                        trace_edge(nG, rc+O+3)  # comp adjacent Ns via B_
+                if val_(nG.dTT, rc+O+compw+3, mw=(len(nG.N_)-1)*Lw, _dTT=dTT) > 0:
+                    nG = cross_comp(nG, rc+O+3) or nG  # connec agg+, fC = 0
+                root.dTT += nG.dTT; root.N_ = nG.N_
+                _H = root.nH; root.nH = []  # nG has own L_,lH
+                nG.nH = _H+ [root] + nG.nH  # pack root.nH in higher-composition nG.nH
+                return nG  # update root
+
