@@ -621,3 +621,57 @@ def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering
                 nG.nH = _H+ [root] + nG.nH  # pack root.nH in higher-composition nG.nH
                 return nG  # update root
 
+def Fcluster(root, iL_, rc):  # called from cross_comp(Fg_)
+
+    dN_, dL_, dC_ = [], [], []  # splice specs from links between Fgs within a larger frame
+    for Link in iL_: dN_ += Link.L_; dL_ += Link.lH; dC_ += Link.C_
+
+    dTT = np.zeros((2,9)); N_L_C_ = [[],[],[]]; c=0
+    for i, (link_,clust, fC) in enumerate([(dN_,cluster_N,0),(dL_,cluster_N,0),(dC_,cluster_n,1)]):
+        if link_:
+            G = clust(root, link_, rc)
+            if G:
+                rc+=1; N_L_C_[i] = G.N_; dTT += G.dTT
+                if val_(G.dTT, rc, mw=(len(G.N_)-1)*Lw) > 0:
+                    G = cross_comp(G, rc, fC=fC)
+                    if G: rc+=1; c += G.c; N_L_C_[i] = G.N_; dTT += G.dTT
+    N_,L_,C_ = N_L_C_
+    return CN(dTT=dTT, m=sum(dTT[0]), d=sum(dTT[1]), c=c, rc=rc, N_=N_,L_=L_,C_=C_, root=root)
+
+class CN(CBase):
+    name = "node"
+    def __init__(n, **kwargs):
+        super().__init__()
+        n.fi  = kwargs.get('fi',1)  # if G else 0, fd_: list of forks forming G?
+        n.nt  = kwargs.get('nt',[])  # nodet, empty if fi
+        n.N_  = kwargs.get('N_',[])  # nodes, concat in links
+        n.L_  = kwargs.get('L_',[])  # internal links, +|- if failed?
+        n.rim = kwargs.get('rim',[])  # external links, rng-nest?
+        n.m   = kwargs.get('m',0); n.d = kwargs.get('d',0); n.c = kwargs.get('c',0)   # sum L_ dTT -> rm, rd, content count
+        n.em  = kwargs.get('em',0); n.ed = kwargs.get('ed',0); n.ec  = kwargs.get('ec',0)  # sum rim eTT
+        n.rc  = kwargs.get('rc',1)  # redundancy to ext Gs, ave in links? separate rc for rim, or internally overlapping?
+        n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # sum derH-> m_,d_ [M,D,n, I,G,a, L,S,A], L: dLen, S: dSpan
+        n.eTT = kwargs.get('eTT',np.zeros((2,9)))  # sum rim derH
+        n.derH  = kwargs.get('derH', CdH())  # sum from clustered L_s
+        n.dLay  = kwargs.get('dLay', CdH())  # sum from terminal L_, Fg only?
+        n.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,A: not ders, not in links?
+        n.yx  = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
+        n.rng = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
+        n.box = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
+        n.span = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_), not additive?
+        n.angl = kwargs.get('angl',[np.zeros(2),0])  # (dy,dx),dir, sum from L_
+        n.mang = kwargs.get('mang',1)  # ave match of angles in L_, =1 in links
+        n.B_ = kwargs.get('B_', [])  # ext boundary | background neg Ls/lG: [B_,Et,R], add dB_?
+        n.rB_= kwargs.get('rB_',[])  # reciprocal cores for lG, vs higher-der lG.B_
+        n.C_ = kwargs.get('C_', [])  # int centroid Gs, add dC_?
+        n.rC_= kwargs.get('rC_',[])  # reciprocal root centroids
+        n.nH = kwargs.get('nH', [])  # top-down hierarchy of sub-node_s: CN(sum_N_(Nt_))/ lev, with single added-layer derH, empty nH
+        n.lH = kwargs.get('lH', [])  # bottom-up hierarchy of L_ graphs: CN(sum_N_(Lt_))/ lev, within each nH lev
+        n.root = kwargs.get('root',None)  # immediate
+        n.sub  = 0  # full-composition depth relative to top-composition peers
+        n.fin  = kwargs.get('fin',0)  # clustered, temporary
+        n.exe  = kwargs.get('exe',0)  # exemplar, temporary
+        n.compared = set()
+        # n.fork_tree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
+    def __bool__(n): return bool(n.N_)
+

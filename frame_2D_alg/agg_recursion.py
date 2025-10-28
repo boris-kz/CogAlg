@@ -49,6 +49,7 @@ class CdH(CBase):  # derivation hierarchy or a layer thereof, subset of CG
         d.H = kwargs.get('H',[])  # empty if single layer: redundant to Et,dTT
         d.dTT = kwargs.get('dTT', np.zeros((2,9)))  # m_,d_ [M,D,n, I,G,A, L,S,eA]: single layer or sum derH
         d.root = kwargs.get('root', [])  # to pass dTT
+        # d.depth = 0  # max nesting depth in H
     def __bool__(d): return bool(np.any(d.dTT))  # n>0
 
 def copy_(dH, root):
@@ -82,14 +83,16 @@ class CN(CBase):
     name = "node"
     def __init__(n, **kwargs):
         super().__init__()
-        n.fi  = kwargs.get('fi',1)  # if G else 0, fd_: list of forks forming G?
-        n.nt  = kwargs.get('nt',[])  # nodet, empty if fi
-        n.N_  = kwargs.get('N_',[])  # nodes, concat in links
-        n.L_  = kwargs.get('L_',[])  # internal links, +|- if failed?
-        n.rim = kwargs.get('rim',[])  # external links, rng-nest?
-        n.m   = kwargs.get('m',0); n.d = kwargs.get('d',0); n.c = kwargs.get('c',0)   # sum L_ dTT -> rm, rd, content count
-        n.em  = kwargs.get('em',0); n.ed = kwargs.get('ed',0); n.ec  = kwargs.get('ec',0)  # sum rim eTT
+        n.fi = kwargs.get('fi',1)  # if G else 0, fd_: list of forks forming G?
+        n.nt = kwargs.get('nt',[])  # nodet, empty if fi
+        n.N_ = kwargs.get('N_',[])  # nodes, concat in links
+        n.L_, n.B_, n.C_ = kwargs.get('L_',[]), kwargs.get('B_',[]), kwargs.get('C_',[])  # internal +links, external -links, root centroids
+        n.lG, n.bG, n.cG = kwargs.get('lG',CN()),kwargs.get('bG',CN()),kwargs.get('cG',CN())  # sum roots of L_,B_,C_, lH=lG.nH, cG in Fg only?
+        n.m,  n.d,  n.c  = kwargs.get('m',0), kwargs.get('d',0), kwargs.get('c',0)   # sum L_ dTT -> rm, rd, content count
+        n.em, n.ed, n.ec = kwargs.get('em',0),kwargs.get('ed',0),kwargs.get('ec',0)  # sum rim TT
+        n.rim = kwargs.get('rim', [])  # external links, rng-nest?
         n.rc  = kwargs.get('rc',1)  # redundancy to ext Gs, ave in links? separate rc for rim, or internally overlapping?
+        n.nH  = kwargs.get('nH', [])  # top-down hierarchy of sub-node_s: CN(sum_N_(Nt_))/ lev, with single added-layer derH, empty nH
         n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # sum derH-> m_,d_ [M,D,n, I,G,a, L,S,A], L: dLen, S: dSpan
         n.eTT = kwargs.get('eTT',np.zeros((2,9)))  # sum rim derH
         n.derH  = kwargs.get('derH', CdH())  # sum from clustered L_s
@@ -101,12 +104,6 @@ class CN(CBase):
         n.span = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_), not additive?
         n.angl = kwargs.get('angl',[np.zeros(2),0])  # (dy,dx),dir, sum from L_
         n.mang = kwargs.get('mang',1)  # ave match of angles in L_, =1 in links
-        n.B_ = kwargs.get('B_', [])  # ext boundary | background neg Ls/lG: [B_,Et,R], add dB_?
-        n.rB_= kwargs.get('rB_',[])  # reciprocal cores for lG, vs higher-der lG.B_
-        n.C_ = kwargs.get('C_', [])  # int centroid Gs, add dC_?
-        n.rC_= kwargs.get('rC_',[])  # reciprocal root centroids
-        n.nH = kwargs.get('nH', [])  # top-down hierarchy of sub-node_s: CN(sum_N_(Nt_))/ lev, with single added-layer derH, empty nH
-        n.lH = kwargs.get('lH', [])  # bottom-up hierarchy of L_ graphs: CN(sum_N_(Lt_))/ lev, within each nH lev
         n.root = kwargs.get('root',None)  # immediate
         n.sub  = 0  # full-composition depth relative to top-composition peers
         n.fin  = kwargs.get('fin',0)  # clustered, temporary
@@ -147,32 +144,26 @@ def val_(TT, rc, fi=1, mw=1, rn=.5, _TT=None):  # m,d eval per cluster, rn = n /
 def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering
 
     N_, mL_,mTT, dL_,dTT = comp_C_(root.N_,rc) if fC else comp_N_(root.N_,rc)  # rc: redundancy+olp, lG.N_ is Ls
-    nG, lG = [], []
+    nG, bG = [], []
     if fC< 2 and dL_ and val_(dTT, rc+compw, fi=0, mw=(len(dL_)-1)*Lw) > avd:  # comp dL_|dC_, not ddC_
-        lG = cross_comp(CN(N_=dL_,root=root), rc+compw+1, fC*2)  # trace_edge via rB_|B_
-        if lG:
-            lH = [sum_N_(root.L_,rc,root)] if root.fi and root.L_ else []  # agg+ root is always Fg?
-            lH +=[lG]+lG.nH; dTT += lG.dTT; dLay = add_dH(root.dLay, lG.derH)  # lH extension
+        # trace_edge via B_, no cross_comp(mL_): redundant to nG?
+        bG = cross_comp(CN(N_=dL_, root=root), rc+compw+1, fC*2)
     # cluster mL_:
     if len(mL_) > 1 and val_(mTT, rc+compw, mw=(len(mL_)-1)*Lw) > 0:
         for n in N_: n.em = sum([l.m for l in n.rim]) / len(n.rim)  # tentative before val_
-        if root.root: nG = Cluster(root, mL_, rc, fC)  # fC=0: get_exemplars, cluster_C, rng connect cluster
-        else:         nG = Fcluster(root,mL_, rc)  # root=frame, splice,cluster L'L_,lH_,C_
-        if nG:        # batched nH extension
+        nG = Cluster(root, mL_, rc, fC)  # fC=0: get_exemplars, cluster_C, rng connect cluster
+        if nG:  # batched nH extension
             rc+=nG.rc # redundant clustering layers
-            if lG:
-                form_B__(nG, lG, rc+2)  # assign boundary per N, O+=B_[-1]|1?
+            if bG:
+                form_B__(nG, bG, rc+2)  # assign boundary per N, O+=B_[-1]|1?
                 if val_(mTT, rc+3+contw, mw=(len(nG.N_)-1)*Lw) > 0:  # mval
                     trace_edge(nG, rc+3)  # comp adjacent Ns via B_
             if val_(nG.dTT, rc+compw+3, mw=(len(nG.N_)-1)*Lw, _TT=mTT) > 0:
                 nG = cross_comp(nG, rc+3) or nG  # connec agg+, fC = 0
             nG.nH = root.nH + [root] + nG.nH  # nG.nH is higher composition
-    if lG:
-        if not nG: nG = root
-        nG.dLay = dLay; nG.lH += lH  # append bottom-up
-        lc,nc = lG.c,nG.c; nG.c+=lc  # no scaling
-        Rc = lc/(lc+nc); nG.rc += lG.rc*Rc; nG.dTT += dTT*Rc
-        # += lG.derH or in lH?
+    if bG:
+        if not nG: nG = root  # not sure we can have new boundary without new core?
+        nG.B_ = dL_; nG.bG = bG
     return nG  # replaces root
 
 def comp_C_(C_, rc, _C_=[], fall=1):  # max attr sort to constrain C_ search in 1D, add K attrs and overlap?
@@ -186,6 +177,7 @@ def comp_C_(C_, rc, _C_=[], fall=1):  # max attr sort to constrain C_ search in 
             m_,d_ = dtt; ad_ = np.abs(d_); t_ = m_ + ad_ + eps  # ~ max comparand
             m,d,c = m_/t_ @ wTTf[0], ad_/t_ @ wTTf[1], min(_C.c,C.c)
             dC = CN(nt=[_C,C], m=m, d=d, c=c, dTT=dtt, span=np.hypot(*_C.yx-C.yx))
+            _C.rim += [dC]; C.rim += [dC]
             if   dC.m > ave*(contw+rc) > 0: mL_+=[dC]; mTT+=dC.dTT; out_ += [_C,C]
             elif dC.d > avd*(contw+rc) > 0: dL_+=[dC]; dTT+=dC.dTT  # not in out_?
     else:
@@ -200,8 +192,8 @@ def comp_C_(C_, rc, _C_=[], fall=1):  # max attr sort to constrain C_ search in 
             Link = comp_N(_C,C, rc, A=dy_dx, span=dist, rng=1)  # or use comp_derT?
             if   Link.m > ave*(contw+rc) > 0: mL_+=[Link]; mTT+=Link.dTT; out_ += [_C,C]
             elif Link.d > avd*(contw+rc) > 0: dL_+=[Link]; dTT+=Link.dTT  # not in out_?
-        C_ = list(set(out_))
-    return C_, mL_,mTT, dL_,dTT
+
+    return list(set(out_)), mL_,mTT, dL_,dTT
 
 def comp_N_(iN_, rc, _iN_=[]):
 
@@ -221,7 +213,7 @@ def comp_N_(iN_, rc, _iN_=[]):
             return iV + val_(eTT,rc)
         else: return V
 
-    N_, mL_,mTT,dL_,dTT = [],[],np.zeros((2,9)),[],np.zeros((2,9))
+    N_, L_,mTT,B_,dTT = [],[],np.zeros((2,9)),[],np.zeros((2,9))
     for i, N in enumerate(iN_):  # form unique all-to-all pre-links
         N.pL_ = []
         for _N in _iN_ if _iN_ else iN_[i+1:]:  # optional _iN_ as spec
@@ -236,61 +228,61 @@ def comp_N_(iN_, rc, _iN_=[]):
             V = proj_V(_N,N, dist, Ave, pVt_)
             if V > Ave:
                 Link = comp_N(_N,N, O+rc, A=dy_dx, span=dist)
-                if   Link.m > ave*(contw+rc): mL_+=[Link]; mTT+=Link.dTT; N_ += [_N,N]  # combined CN dTT and L_
-                elif Link.d > avd*(contw+rc): dL_+=[Link]; dTT+=Link.dTT  # no overlap to simplify
-                pVt_ += [[dist, dy_dx, _N, Link.m-ave*rc]]  # for more distant rim eval
+                if   Link.m > ave*(contw+rc): L_+=[Link]; mTT+=Link.dTT; N_ += [_N,N]  # combined CN dTT and L_
+                elif Link.d > avd*(contw+rc): B_+=[Link]; dTT+=Link.dTT  # no overlap to simplify
+                pVt_ += [[dist, dy_dx, _N, Link.m-ave*rc]]  # for distant rim eval
             else:
                 break  # no induction
-    return list(set(N_)), mL_,mTT, dL_,dTT
+    return list(set(N_)), L_,mTT, B_,dTT
 
 def comp_N(_N,N, rc, A=np.zeros(2), span=None, rng=1):  # compare links, optional angl,span,dang?
 
-    dTT,rn = base_comp(_N, N); fN = N.root  # not Fg
+    TT,rn = base_comp(_N, N); Fg = not N.root
     baseT = (rn*_N.baseT+N.baseT) /2  # not new, for fi=0 base_comp
     yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])  # ext
     fi = N.fi
-    angl = [A, np.sign(dTT[1] @ wTTf[1])]  # canonic direction
+    angl = [A, np.sign(TT[1] @ wTTf[1])]  # canonic direction
     Link = CN(fi=0, nt=[_N,N], N_=_N.N_+N.N_, c=min(N.c,_N.c), baseT=baseT, yx=yx, box=box, span=span, angl=angl, rng=rng)
-    V = val_(dTT,rc)
-    if fN and V * (1 - 1/ max(min(len(N.derH.H),len(_N.derH.H)),eps)) > ave:  # rdn to dTT, else derH is empty
-        H = [CdH(dTT=copy(dTT), root=Link)]; rc+=1  # + 2nd | higher layers:
+    V = val_(TT,rc)
+    if not Fg and V * (1 - 1/ max( min(len(N.derH.H),len(_N.derH.H)), eps)) > ave:  # rdn to dTT, else derH is empty
+        H = [CdH(dTT=copy(TT), root=Link)]; rc+=1  # + 2nd | higher layers:
         if _N.derH and N.derH:
-            dH = comp_dH(_N.derH, N.derH, rn, Link); dtt = dH.dTT; H += dH.H
+            dH = comp_dH(_N.derH, N.derH, rn, Link); tt = dH.dTT; H += dH.H
         else:
-            m_,d_ = comp_derT(rn*_N.dTT[1], N.dTT[1]); dtt = np.array([m_,d_]); H += [CdH(dTT=dtt,root=Link)]
-        dTT += dtt; Link.derH = CdH(H=H,dTT=dTT,root=Link)  # same as Link dTT?
-        V = val_(dTT,rc)  # recompute
-    if fi and N.L_: # exclude lGs,PPs
-        # spec / N:
+            m_,d_ = comp_derT(rn*_N.dTT[1], N.dTT[1]); tt = np.array([m_,d_]); H += [CdH(dTT=tt,root=Link)]
+        TT += tt; Link.derH = CdH(H=H,TT=TT,root=Link)  # same as Link dTT?
+        V = val_(TT,rc)  # refine
+    if fi and N.L_:  # exclude lGs, PPs
+        # spec comp x N_,B_,L_,C_ s, tentative:
         if V * (min(len(_N.N_),len(N.N_))-1)*Lw > ave*rc:
-            rc+=1; _, ml_,mtt,dl_,dtt = comp_N_(_N.N_,rc, N.N_)  # cross-nt links only
-            Link.L_ = ml_+dl_; dTT+=mtt+dtt; V=val_(dTT,rc)
-        if fN:  # not Fg
-            if _N.B_ and N.B_:
-                _B_,_btt,_bO = _N.B_; B_,btt,bO = N.B_; bO += _bO+rc; bTT =_btt+btt
-                if val_(bTT, bO+compw, fi=0, mw=(min(len(_B_),len(B_))-1) *Lw) > 0:
-                    rc+=1; _, ml_,mtt,dl_,dtt = comp_N_(_B_,rc, B_)
-                    Link.B_ = ml_+dl_; dTT+=mtt+dtt
-                    # +spec C_: overlap+offset?
-        else:  # Fg: -rc, splice Link L_,lH,C_ in Fcluster:
-            _L_,L_ = _N.L_,_N.L_
-            if V * (min(len(_L_),len(L_))-1)*Lw > ave*rc:  # add N.et,olp?
-                rc+=1; _, ml_,mtt,dl_,dtt = comp_N_(_L_,rc, L_)
-                Link.lH = ml_+dl_; dTT+=mtt+dtt; V=val_(dTT,rc)  # higher links
-            if _N.C_ and N.C_:
-                _C_,_M = _N.C_; C_,M = N.C_  # add val_ cEt
-                if (V+_M+M) * (min(len(C_),len(C_))-1)*Lw  > ave*rc:
-                    rc+=1; _, ml_,mtt,dl_,dtt = comp_C_(C_,rc,_C_)
-                    Link.C_ = ml_+dl_; dTT += mtt+dtt
+            rc+=1; _,ml_,mtt, dl_,dtt = comp_N_(_N.N_,rc, N.N_)  # cross-nt links only
+            Link.L_= ml_+dl_; TT+=mtt+dtt; V=val_(TT,rc)
+        if _N.bG and N.bG:  # boundary roots
+            _B_,_bTT,_O, B_,bTT,O = _N.bG.N_,_N.bG.dTT,_N.bG.rc, N.bG.N_,N.bG.dTT,N.bG.rc; O+=_O+rc; TT = np.min(_bTT+bTT)
+            if val_(bTT, O+compw, fi=0, mw=(min(len(_B_),len(B_))-1)*Lw) > 0:
+                rc+=1; _,ml_,mtt, dl_,dtt = comp_N_(_B_,rc,B_)
+                Link.B_= ml_+dl_; TT+=mtt+dtt
+                # +spec C_: overlap+offset?
+        _L_,L_ = _N.L_,_N.L_
+        if V * (min(len(_L_),len(L_))-1)*Lw > ave*rc:  # add N.et,olp?
+            rc+=1; _,ml_,mtt, dl_,dtt = comp_N_(_L_,rc,L_)
+            Link.lG= ml_+dl_; TT+=mtt+dtt; V=val_(TT,rc)  # higher links
+        # also within Fg, but not between Gs?
+        if Fg and _N.C_ and N.C_:
+            _C_,_M = _N.C_; C_,M = N.C_
+            if (V+_M+M) * (min(len(C_),len(C_))-1)*Lw  > ave*rc:
+                rc+=1; _,ml_,mtt, dl_,dtt = comp_C_(C_,rc,_C_)
+                Link.C_= ml_+dl_; TT+=mtt+dtt
+        # use Link L_,B_,lG,C_ to extend clustering between Fgs in Cluster?
     Link.rc = rc
-    Link.dTT = dTT; Link.m = val_(dTT,rc); Link.d = val_(dTT,rc,fi=0)
+    Link.dTT = TT; Link.m = val_(TT,rc); Link.d = val_(TT,rc,fi=0)
     for n, _n in (_N,N), (N,_N):  # if rim-mediated comp: reverse dir in _N.rim: rev^_rev?
-        n.rim += [Link]; n.eTT += dTT; n.ec += Link.c; n.compared.add(_n)  # or conditional n.eTT / rim later?
+        n.rim += [Link]; n.eTT += TT; n.ec += Link.c; n.compared.add(_n)  # or conditional n.eTT / rim later?
     return Link
 
 def base_comp(_N,N, fC=0):  # comp Et, baseT, extT, dTT
 
-    _M,_D,_c =_N.m,_N.d,_N.c; _I,_G,_Dy,_Dx =_N.baseT; _L = len(_N.N_)  # N_: density of span
+    _M,_D,_c =_N.m,_N.d,_N.c; _I,_G,_Dy,_Dx =_N.baseT; _L = len(_N.N_)  # N_: density within span
     M, D, c  = N.m, N.d, N.c; I, G, Dy, Dx = N.baseT; L = len(N.N_)
     rn = _c/c
     _pars = np.array([_M*rn,_D*rn,_c*rn,_I*rn,_G*rn, [_Dy,_Dx],_L*rn,_N.span], dtype=object)  # Et, baseT, extT
@@ -373,7 +365,7 @@ def get_exemplars(N_, rc):  # get sparse nodes by multi-layer non-maximum suppre
 def Cluster(root, iL_, rc, iC):  # generic clustering root
 
     nG = []
-    if iC:
+    if iC or not root.root:  # input Fg, more distant spec clustering: no exemplars or centroid clustering, not rng-banded?
         # input centroid, base connectivity clustering
         C_, L_, i = [],[],0
         if iC < 2:  # merge similar Cs, not dCs, no recomp
@@ -462,7 +454,7 @@ def cluster_N(root, rL_, rc, rng=1):  # flood-fill node | link clusters
             for n in N_: olp += n.rc  # from Ns, vs. Et from Ls?
             for l in L_: dTT += l.dTT
             if val_(dTT, rc+olp, 1, (len(N_)-1)*Lw, root.dTT) > 0:
-                G_ += [sum_N_(N_, olp, root, L_, [C_,np.sum([c.DTT for c in C_],axis=0)] if C_ else [[],np.zeros(3)], list(set(B_)), rng)]
+                G_ += [sum_N_(N_, olp, root, L_, [C_,np.sum([c.DTT for c in C_],axis=0)] if C_ else [[],np.zeros((2,9))], list(set(B_)), rng)]
             elif n.fi:  # L_ is preserved anyway
                 for n in N_: n.sub += 1
                 G_ += N_
@@ -496,8 +488,8 @@ def cluster_n(root, iC_, rc):  # simplified flood-fill, currently for for C_ onl
             dTT,olp = np.zeros((2,9)), 0
             for n in N_: olp += n.rc  # from Ns, vs. Et from Ls?
             for l in L_: dTT += l.dTT
-            if val_(dTT,rc+olp, mw=(len(N_)-1)*Lw,_dTT=root.dTT) > 0:
-                G_ += [sum_N_(N_, olp, root, L_,[C_,np.sum([c.DTT for c in C_],axis=0)] if C_ else [[],np.zeros(3)],list(set(B_)))]
+            if val_(dTT,rc+olp, mw=(len(N_)-1)*Lw,_TT=root.dTT) > 0:
+                G_ += [sum_N_(N_, olp, root, L_,[C_,np.sum([c.DTT for c in C_],axis=0)] if C_ else [[],np.zeros((2,9))],list(set(B_)))]
             elif n.fi:
                 G_ += N_
     if G_: return sum_N_(G_, rc, root)  # nG
@@ -867,6 +859,8 @@ def proj_N(N, dist, A):  # recursively specified N projection, rim proj is curre
         add_dH(ddH, dddH)
 
 def Fcluster(root, iL_, rc):  # called from cross_comp(Fg_)
+
+    # or form Fg clusters, use Link L_,B_,lG,C_ to extend clustering between Fgs in Cluster?
 
     dN_, dL_, dC_ = [], [], []  # splice specs from links between Fgs within a larger frame
     for Link in iL_: dN_ += Link.L_; dL_ += Link.lH; dC_ += Link.C_
