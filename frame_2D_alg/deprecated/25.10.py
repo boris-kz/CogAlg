@@ -675,3 +675,18 @@ class CN(CBase):
         # n.fork_tree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.N_)
 
+def form_B__(G, lG, rc):  # trace edge / boundary / background per node:
+
+    for Lg in lG.N_:  # form rB_, in Fg?
+        rB_ = {n.root for L in Lg.N_ for n in L.nt if n.root and n.root.root is not None}
+        Lg.rB_ = sorted(rB_, key=lambda x:(x.m/x.c), reverse=True)  # N rdn = index+1
+
+    def R(L): return L.root if L.root is None or L.root.root is lG else R(L.root)
+
+    for N in G.N_:
+        if N.sub or not N.B_: continue
+        B_, dTT, rdn = [], np.zeros((2,9)), 0
+        for L in N.B_:
+            RL = R(L)  # replace boundary L with its root of the level that contains N in root.rB_?
+            if RL: B_+=[RL]; dTT+=RL.dTT; rdn += RL.rB_.index(N)+1  # rdn = n stronger cores of RL
+        N.B_ = [B_,dTT,rdn]
