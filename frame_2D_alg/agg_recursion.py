@@ -46,11 +46,26 @@ class CdH(CBase):  # derivation hierarchy or a layer thereof, subset of CG
     name = "der"
     def __init__(d, **kwargs):
         super().__init__()
-        d.H = kwargs.get('H',[])  # empty if single layer: redundant to Et,dTT
-        d.dTT = kwargs.get('dTT', np.zeros((2,9)))  # m_,d_ [M,D,n, I,G,A, L,S,eA]: single layer or sum derH
+        d.H = kwargs.get('H',[])  # empty if single layer: redundant to dTT
+        d.dTT = kwargs.get('dTT', np.zeros((2,9)))  # m_,d_ [M,D,n, I,G,a, L,S,A]: single layer or sum derH
         d.root = kwargs.get('root', [])  # to pass dTT
         # d.depth = 0  # max nesting depth in H
     def __bool__(d): return bool(np.any(d.dTT))  # n>0
+
+# replace CdH with CnH:
+class CnH(CBase):  # nesting hierarchy or a level thereof
+
+    name = "nH"    # from top-composition = bottom derivation
+    def __init__(n, **kwargs):
+        super().__init__()
+        n.H = kwargs.get('H',[])  # for nesting, empty if single layer: redundant to N_,B_,C_| Nt,Bt,Ct
+        n.rc = kwargs.get('rc',0)  # complement to root.rc, use for ranking
+        n.dTT = kwargs.get('dTT', np.zeros((2, 9)))  # m_,d_ [M,D,n, I,G,a, L,S,A]: single or sum H x N_+L_
+        n.fork_ = kwargs.get('fork_',[])  # 6 forks, each is [N_,m,d,c, rc] or empty
+        n.root = kwargs.get('root', [])  # to pass vals?
+        n.m = kwargs.get('m',0); n.d = kwargs.get('d',0); n.c = kwargs.get('c',0)  # not sure these are needed
+        # n.depth = 0  # max nesting depth in nH
+    def __bool__(n): return bool(n.rc)  # l>0
 
 def copy_(dH, root):
     cH = CdH(dTT=deepcopy(dH.dTT), root=root)  # summed across H
@@ -91,7 +106,7 @@ class CN(CBase):
         n.rim = kwargs.get('rim', [])  # external links, rng-nest?
         n.em,n.ed,n.ec = kwargs.get('em',0),kwargs.get('ed',0),kwargs.get('ec',0)  # sum rim TT
         n.rc = kwargs.get('rc', 1)  # redundancy to ext Gs, ave in links? separate rc for rim, or internally overlapping?
-        n.nH = kwargs.get('nH',[])  # top-down hierarchy of sub-node_s: CN(sum_N_(Nt_))/ lev, with single added-layer derH, empty nH, no nG?
+        n.nH = kwargs.get('nH',CnH())  # top-down node H mapping to bottom-up der H
         n.Bt = kwargs.get('Bt',[])  # B_ roots: [bG_, TT, rdn]
         n.Ct = kwargs.get('Ct',[])  # same, in Fg only?
         n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # sum derH-> m_,d_ [M,D,n, I,G,a, L,S,A], L: dLen, S: dSpan
@@ -359,51 +374,53 @@ def get_exemplars(N_, rc):  # get sparse nodes by multi-layer non-maximum suppre
 
 def Cluster(root, iL_, rc, iC):  # generic clustering root
 
-    def trans_cluster(root, iL_, rc):  # called from cross_comp(Fg_)
+    def trans_cluster(root, iL_, rc):  # called from cross_comp(Fg_), may be more
 
-        dN_, dL_, dC_ = [], [], []  # splice specs from links between Fgs within Fg cluster
+        dN_,dL_,dC_ = [],[],[]  # splice specs from links between Fgs within Fg cluster
         for Link in iL_: dN_ += Link.L_; dL_ += Link.B_; dC_ += Link.C_  # spec sub-links
 
-        N_L_C_ = [[],[],[]]; dTT = np.zeros((2,9)); c=0; nH = []
-        for i, (link_,clust, fC) in enumerate([(dN_,cluster_N,0),(dL_,cluster_N,0),(dC_,cluster_n,1)]):
+        N_,L_,C_ = [],[],[]
+        for f_,link_,clust, fC in [(N_,dN_,cluster_N,0),(L_,dL_,cluster_N,0),(C_,dC_,cluster_n,1)]:
             if link_:
                 G = clust(root, link_, rc)
-                if G:
-                    rc+=1; N_L_C_[i] = G.N_; dTT += G.dTT
-                    if val_(G.dTT, rc, mw=(len(G.N_)-1)*Lw) > 0:
-                        G = cross_comp(G, rc, fC=fC)
-                        if G:
-                            N_L_C_[i] = G.N_; dTT += G.dTT; c += G.c
-                            if i == 0: nH = [G] + G.nH  # pack nH
-        N_,L_,C_ = N_L_C_
-        # sub_N tG via trans-N links: || nG,
-        # sort 3 fork_tG_+ nG by V, rc+=i, may unpack nG, likely if nG is Fg
-        return CN(dTT=dTT, m=sum(dTT[0]), d=sum(dTT[1]), c=c, rc=rc, nH=nH, N_=N_,L_=L_,C_=C_, root=root)
-
+                if G and val_(G.dTT, rc, mw=(len(G.N_)-1)*Lw) > 0:
+                    G = cross_comp(G,rc, fC=fC) or G
+                    f_ += [[G.N_, G.dTT, G.c]]  # forkT
+        # trans-F_, fork = tG_ via trans-N links, || F_
+        return N_,L_,C_
     nG = []
     if iC or not root.root:  # input Fg, no exemplars or centroid clustering, not rng-banded, may call deep_cluster?
         # base connectivity clustering
-        C_, L_, i = [],[],0
+        N_, L_, i = [],[],0
         if iC < 2:  # merge similar Cs, not dCs, no recomp
-            dC_ = sorted(list({L for L in iL_}), key=lambda dC: dC.d)  # from min D
-            for i, dC in enumerate(dC_):
-                if val_(dC.dTT,rc+compw, fi=0) < 0:  # merge
-                    _C, C = dC.nt
-                    if _C is not C:  # not merged
-                        add_N(_C,C, rc, froot=1)  # fin,root.rim
-                        for l in C.rim: l.nt = [_C if n is C else n for n in l.nt]
-                        if C in C_: C_.remove(C)  # if multiple merging
-                        C_ += [_C]
-                else: L_ = dC_[i:]; break
+            link_ = sorted(list({L for L in iL_}), key=lambda link: link.d)  # from min D
+            for i, L in enumerate(link_):
+                if val_(L.dTT,rc+compw, fi=0) < 0:  # merge
+                    _N, N = L.nt
+                    if _N is not N:  # not merged
+                        add_N(_N,N, rc, froot=1)  # fin,root.rim
+                        for l in N.rim: l.nt = [_N if n is N else n for n in l.nt]
+                        if N in N_: N_.remove(N)  # if multiple merging
+                        N_ += [_N]
+                else: L_ = link_[i:]; break
             root.L_ = [l for l in root.L_ if l not in L_]  # cleanup regardless of break
         else: L_ = iL_
-        C_ += list({n for L in L_ for n in L.nt})  # include merged Cs
-        V = val_(root.dTT, rc+contw, mw=(len(C_)-1)*Lw)
+        N_ += list({n for L in L_ for n in L.nt})  # include merged Cs
+        V = val_(root.dTT, rc+contw, mw=(len(N_)-1)*Lw)
         if V > 0:
-            nG = cluster_n(root, C_,rc)  # in feature space if centroids
-            if V > ave * contw:  # higher filter to insert trans-cluster,
-                nG.nH = [trans_cluster(nG, [l for n in nG.N_ for l in n.L_], rc+1)] + nG.nH  # via trans-N links
-        if not nG: nG = CN(N_=C_,L_=L_)
+            nG = cluster_n(root, N_,rc)  # in feature space if centroids, no B_,C_?
+            if V > ave * contw:  # higher filter to insert trans-N link_ clusters
+                tF_ = trans_cluster(nG, [l for n in nG.N_ for l in n.L_], rc+1)
+                fork_ = []
+                # set rc vs priority in) between forks, may unpack nG, likely if nG is Fg, draft:
+                for F,tF in zip((nG.N_,nG.B_,nG.C_), tF_):  # or Bt, Ct from cross_comp?
+                    if F and tF:  # pseudo:
+                        maxF,minF = (F,tF) if F.m > tF.m else (tF,F)
+                        minF.rc += 1; fork_ += [[maxF.m, maxF,minF]]
+                for i in enumerate(sorted(fork_, key=lambda f: f[0])):
+                    fork_[i][1].rc +=i
+                    fork_[i][2].rc +=i
+        if not nG: nG = CN(N_=N_,L_=L_)
     else:
         # primary centroid clustering
         N_ = list({N for L in iL_ for N in L.nt if N.em})  # newly connected only
@@ -422,6 +439,40 @@ def Cluster(root, iL_, rc, iC):  # generic clustering root
                 nG = cluster_N(root, rL_, rc, rng) or nG
                 # top valid-rng nG
     return nG
+
+def cluster_n(root, iC_, rc):  # simplified flood-fill, for C_ or trans_N_
+
+    def extend_G(_link_, node_,cent_,link_,b_,in_):
+        for L in _link_:  # spliced rim
+            if L in in_: continue  # already clustered
+            in_.add(L)
+            for _N in L.nt:
+                if not _N.fin and _N in iC_:
+                    node_ += [_N]; cent_ += _N.C_; _N.fin = 1
+                    for l in _N.rim:
+                        if l in in_: continue  # cluster by link+density:
+                        if Lnt(l) > ave*rc: link_ += [l]
+                        else: b_ += [l]
+    G_, in_ = [], set()
+    for C in iC_: C.fin = 0
+    for C in iC_:  # form G per remaining C
+        node_,link_,L_,B_ = [C],[],[],[]
+        cent_ = C.C_[0][:] if C.C_ else []
+        _L_= [l for l in C.rim if Lnt(l) > ave*rc]  # link+nt eval
+        while _L_:
+            extend_G(_L_, node_, cent_, L_, B_, in_)  # _link_: select rims to extend G:
+            if L_: link_ += L_; _L_ = list(set(L_)); L_ = []
+            else:  break
+        if node_:
+            N_= list(set(node_)); L_= list(set(link_)); C_ = list(set(cent_))
+            dTT,olp = np.zeros((2,9)), 0
+            for n in N_: olp += n.rc  # from Ns, vs. Et from Ls?
+            for l in L_: dTT += l.dTT
+            if val_(dTT,rc+olp, mw=(len(N_)-1)*Lw,_TT=root.dTT) > 0:
+                G_ += [sum_N_(N_,olp,root, L_,C_)]
+            elif n.fi:
+                G_ += N_
+    if G_: return sum_N_(G_, rc, root)  # nG
 
 def cluster_N(root, rL_, rc, rng=1):  # flood-fill node | link clusters
 
@@ -479,40 +530,6 @@ def cluster_N(root, rL_, rc, rng=1):  # flood-fill node | link clusters
                 G_ += N_
     if G_: return sum_N_(G_, rc, root)  # nG, skip attrs in sum_N_?
 
-def cluster_n(root, iC_, rc):  # simplified flood-fill, currently for for C_ only
-
-    def extend_G(_link_, node_,cent_,link_,b_,in_):
-        for L in _link_:  # spliced rim
-            if L in in_: continue  # already clustered
-            in_.add(L)
-            for _N in L.nt:
-                if not _N.fin and _N in iC_:
-                    node_ += [_N]; cent_ += _N.C_; _N.fin = 1
-                    for l in _N.rim:
-                        if l in in_: continue  # cluster by link+density:
-                        if Lnt(l) > ave*rc: link_ += [l]
-                        else: b_ += [l]
-    G_, in_ = [], set()
-    for C in iC_: C.fin = 0
-    for C in iC_:  # form G per remaining C
-        node_,Link_,link_,B_= [C],[],[],[]
-        cent_ = C.C_[0][:] if C.C_ else []
-        _link_= [l for l in C.rim if Lnt(l) > ave*rc]  # link+nt eval
-        while _link_:
-            extend_G(_link_, node_, cent_, link_, B_, in_)  # _link_: select rims to extend G:
-            if link_: Link_ += link_; _link_ = list(set(link_)); link_ = []
-            else:     break
-        if node_:
-            N_= list(set(node_)); L_= list(set(Link_)); C_ = list(set(cent_))
-            dTT,olp = np.zeros((2,9)), 0
-            for n in N_: olp += n.rc  # from Ns, vs. Et from Ls?
-            for l in L_: dTT += l.dTT
-            if val_(dTT,rc+olp, mw=(len(N_)-1)*Lw,_TT=root.dTT) > 0:
-                G_ += [sum_N_(N_, olp, root, L_,[C_,np.sum([c.DTT for c in C_],axis=0)] if C_ else [[],np.zeros((2,9))],list(set(B_)))]
-            elif n.fi:
-                G_ += N_
-    if G_: return sum_N_(G_, rc, root)  # nG
-
 def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
 
     _C_, _N_, cG = [],[],[]
@@ -529,7 +546,7 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
         _Ct_ = [[c, c.m/c.c if c.m !=0 else eps, c.rc] for c in _C_]
         for _C,_m,_o in sorted(_Ct_, key=lambda t: t[1]/t[2], reverse=True):
             if _m > Ave * _o:
-                C = cent_attr( sum_N_(_C.N_, rc, root, fC=1), rc); C.rC_ = []  # C update lags behind N_; non-local C.rc += N.mo_ os?
+                C = cent_attr( sum_N_(_C.N_, rc, root, fC=1), rc); C.R_ = []  # C update lags behind N_; non-local C.rc += N.mo_ os?
                 _N_,_N__, mo_, M,D,O,comp,dTT,dm,do = [],[],[],0,0,0,0,np.zeros((2,9)),0,0  # per C
                 for n in _C._N_:  # core+ surround
                     if C in n.rC_: continue
@@ -547,20 +564,20 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
                 mat+=M; dif+=D; olp+=O; cnt+=comp  # from all comps?
                 DTT += dTT
                 if M > Ave * len(_N_) * O:
-                    for n, mo in zip(_N_,mo_): n.mo_+=[mo]; n.rC_+=[C]; C.rC_+=[n]  # bilateral assign
-                    C.M += M; C.D += D; C.C += comp; C.DTT += dTT  # C.Et is a comparand
+                    for n, mo in zip(_N_,mo_): n.mo_+=[mo]; n.R_+=[C]; C.R_+=[n]  # bilateral assign
+                    C.M += M; C.D += D; C.C += comp; C.DTT += dTT
                     C.N_ += _N_; C._N_ = list(set(_N__))  # core, surround elements
                     C_ += [C]; Dm+=dm; Do+=do  # new incl or excl
                 else:
                     for n in _C._N_:
                         n.exe = n.m/n.c > 2 * ave  # refine exe, Et vals are already normalized, Et[2] no longer needed for eval?
-                        for i, c in enumerate(n.rC_):
+                        for i, c in enumerate(n.R_):
                             if c is _C: # remove mo mapping to culled _C
-                                n.mo_.pop(i); n.rC_.pop(i); break
+                                n.mo_.pop(i); n.R_.pop(i); break
             else: break  # the rest is weaker
         if Dm/Do > Ave:  # dval vs. dolp, overlap increases as Cs may expand in each loop
             _C_ = C_
-            for n in root.N_: n._C_=n.rC_; n._mo_=n.mo_; n.rC_,n.mo_ = [],[]  # new n.rC_s, combine with vo_ in Ct_?
+            for n in root.N_: n._C_=n.R_; n._mo_=n.mo_; n.R__,n.mo_ = [],[]  # new n.rC_s, combine with vo_ in Ct_?
         else:  # converged
             break
     C_ = [C for C in C_ if val_(C.DTT, rc)]  # prune C_
@@ -912,7 +929,7 @@ def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init foca
             edge = slice_edge(blob, rV)
             if edge.G * ((len(edge.P_)-1)*Lw) > ave * sum([P.latT[4] for P in edge.P_]):
                 PPm_ = comp_slice(edge, rV, wTTf)
-                Edge = sum_N_([PP2N(PPm) for PPm in PPm_],1,None)  # increment rc?
+                Edge = sum_N_([PP2N(PPm) for PPm in PPm_],1,None); Edge.L_ = [[]]  # a hack to trigger spec
                 if edge.link_:
                     bG = sum_N_([PP2N(PPd) for PPd in edge.link_],2, Edge)
                     B_,bTT,bO = bG.N_,bG.dTT,bG.rc  # simplify sum_N_?
