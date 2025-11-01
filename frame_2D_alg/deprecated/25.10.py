@@ -690,3 +690,59 @@ def form_B__(G, lG, rc):  # trace edge / boundary / background per node:
             RL = R(L)  # replace boundary L with its root of the level that contains N in root.rB_?
             if RL: B_+=[RL]; dTT+=RL.dTT; rdn += RL.rB_.index(N)+1  # rdn = n stronger cores of RL
         N.B_ = [B_,dTT,rdn]
+
+class CdH(CBase):  # derivation hierarchy or a layer thereof, subset of CG
+    name = "der"
+    def __init__(d, **kwargs):
+        super().__init__()
+        d.H = kwargs.get('H',[])  # empty if single layer: redundant to dTT
+        d.dTT = kwargs.get('dTT', np.zeros((2,9)))  # m_,d_ [M,D,n, I,G,a, L,S,A]: single layer or sum derH
+        d.root = kwargs.get('root', [])  # to pass dTT
+        # d.depth = 0  # max nesting depth in H
+    def __bool__(d): return bool(np.any(d.dTT))  # n>0
+
+
+def comp_N1(_N,N, rc, A=np.zeros(2), span=None, rng=1):  # compare links, optional angl,span,dang?
+
+    TT,rn = base_comp(_N, N); Fg = not N.root
+    baseT = (rn*_N.baseT+N.baseT) /2  # not new, for fi=0 base_comp
+    yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])  # ext
+    fi = N.fi
+    angl = [A, np.sign(TT[1] @ wTTf[1])]  # canonic direction
+    Link = CN(fi=0, nt=[_N,N], N_=_N.N_+N.N_, c=min(N.c,_N.c), baseT=baseT, yx=yx, box=box, span=span, angl=angl, rng=rng)
+    V = val_(TT,rc)
+    if not Fg and V * (1 - 1/ max( min(len(N.derH.H),len(_N.derH.H)), eps)) > ave:  # rdn to dTT, else derH is empty
+        H = [CdH(dTT=copy(TT), root=Link)]; rc+=1  # + 2nd | higher layers:
+        if _N.derH and N.derH:
+            dH = comp_dH(_N.derH, N.derH, rn, Link); tt = dH.dTT; H += dH.H
+        else:
+            m_,d_ = comp_derT(rn*_N.dTT[1], N.dTT[1]); tt = np.array([m_,d_]); H += [CdH(dTT=tt,root=Link)]
+        TT += tt; Link.derH = CdH(H=H,TT=TT,root=Link)  # same as Link dTT?
+        V = val_(TT,rc)  # refine
+    if fi and N.L_:  # exclude lGs, PPs
+        # spec comp x N_,B_,C_ -> trance-N links
+        if V * (min(len(_N.N_),len(N.N_))-1)*Lw > ave*rc:
+            rc+=1; _,ml_,mtt, dl_,dtt = comp_N_(_N.N_,rc, N.N_)  # cross-nt links only
+            Link.L_= ml_+dl_; TT+=mtt+dtt; V=val_(TT,rc)
+        if _N.Bt and N.Bt:  # boundary roots
+            _B_,_tt,_O = _N.Bt; B_,tt,O = N.Bt; O+=_O+rc
+            if min(val_(_tt,_O,0),val_(tt,O,0)) * ((min(len(_B_),len(B_))-1)*Lw) > ave:
+                rc+=1; _,ml_,mtt, dl_,dtt = comp_N_(_B_,rc,B_)
+                Link.B_= ml_+dl_; TT+=mtt+dtt
+        if Fg and _N.Ct and N.Ct:  # centroid roots, also in Fg, overlap only between Gs?
+            _C_,_tt,_O = _N.Ct; C_,tt,O = N.Ct; O+=_O+rc
+            if min(val_(_tt,_O,0),val_(tt,O,0)) * ((min(len(_C_),len(C_))-1)*Lw) > ave:
+                rc+=1; _,ml_,mtt, dl_,dtt = comp_C_(C_,rc,_C_)
+                Link.C_= ml_+dl_; TT+=mtt+dtt
+    Link.rc = rc
+    Link.dTT = TT; Link.m = val_(TT,rc); Link.d = val_(TT,rc,fi=0)
+    for n, _n in (_N,N), (N,_N):  # if rim-mediated comp: reverse dir in _N.rim: rev^_rev?
+        n.rim += [Link]; n.eTT += TT; n.ec += Link.c; n.compared.add(_n)  # or conditional n.eTT / rim later?
+    return Link
+
+def add_H(H, h, root, rc):
+
+    for Lev, lev in zip_longest(H, h, fillvalue=None):  # always aligned?
+        if lev:
+            if Lev: add_N(Lev,lev, rc)  # froot = 0
+            else:   H += [Copy_(lev,rc, root)]
