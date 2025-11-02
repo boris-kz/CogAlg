@@ -42,45 +42,23 @@ capitalized vars are summed small-case vars
 '''
 eps = 1e-7
 
-class CH(CBase):  # nesting hierarchy or a level thereof
-
-    name = "H"    # from top-composition = bottom derivation
-    def __init__(n, **kwargs):
-        super().__init__()
-        n.H = kwargs.get('H',[])  # for nesting, empty if single layer: redundant to N_,B_,C_| Nt,Bt,Ct
-        n.rc = kwargs.get('rc',0)  # complement to root.rc, use for ranking
-        n.dTT = kwargs.get('dTT', np.zeros((2, 9)))  # m_,d_ [M,D,n, I,G,a, L,S,A]: single or sum H x N_+L_
-        n.fork_ = kwargs.get('fork_',[])  # 6 forks, each is [N_,m,d,c, rc] or empty
-        n.root = kwargs.get('root',[])  # to pass vals?
-        n.m = kwargs.get('m',0); n.d = kwargs.get('d',0); n.c = kwargs.get('c',0)  # to set level rc
-        # n.depth = 0  # max nesting depth in H
-    def __bool__(n): return bool(n.rc)  # l>0
-
-def copy_(H, root):
-    cH = CH(dTT=deepcopy(H.dTT), root=root, rc=H.rc, m=H.m,d=H.d,c=H.c)  # summed across H
-    cH.H = [copy_(lay, cH) for lay in H.H]
-    cH.fork_ = [copy(f) for f in cH.fork_]
-    return cH
-
 class CN(CBase):
     name = "node"
     def __init__(n, **kwargs):
         super().__init__()
-        n.fi = kwargs.get('fi',1)  # if G else 0, fd_: list of forks forming G?
+        n.fi = kwargs.get('fi', 1)  # if G else 0, fd_: list of forks forming G?
         n.nt = kwargs.get('nt',[])  # nodet, empty if fi
-        n.N_ = kwargs.get('N_',[])  # nodes, concat in links
-        # replace by fork_?
-        n.L_,n.B_,n.C_,n.R_ = kwargs.get('L_',[]),kwargs.get('B_',[]),kwargs.get('C_',[]),kwargs.get('R_',[])  # mlinks, dlinks, centroids, reciprocal roots
+        n.H  = kwargs.get('H', [])  # top-down node H, mapping to bottom-up der H, empty if single level dTT,forks
+        n.Nt,n.Bt,n.Ct = kwargs.get('Bt',[]), kwargs.get('Bt',[]), kwargs.get('Ct',[])  # roots | fork_: [G_,TT,m,d,c,rdn], empty if H?
+        # nodes, dlinks, centroids, mlinks, reciprocal roots, not in H?
+        n.N_,n.B_,n.C_, n.L_,n.R_ = kwargs.get('N_',[]),kwargs.get('B_',[]),kwargs.get('C_',[]),kwargs.get('L_',[]),kwargs.get('R_',[])
         n.m, n.d, n.c = kwargs.get('m',0), kwargs.get('d',0), kwargs.get('c',0)   # sum L_ dTT -> rm, rd, content count
+        n.rc = kwargs.get('rc', 1)  # redundancy to ext Gs, ave in links? separate rc for rim, or internally overlapping?
         n.rim = kwargs.get('rim', [])  # external links, rng-nest?
         n.em,n.ed,n.ec = kwargs.get('em',0),kwargs.get('ed',0),kwargs.get('ec',0)  # sum rim TT
-        n.rc = kwargs.get('rc', 1)  # redundancy to ext Gs, ave in links? separate rc for rim, or internally overlapping?
-        n.H  = kwargs.get('H',CH())  # top-down node H, mapping to bottom-up der H
-        n.Bt = kwargs.get('Bt',[])  # B_ roots: [bG_, TT, rdn]
-        n.Ct = kwargs.get('Ct',[])  # same, in Fg only?
-        n.lev = kwargs.get('lev',CH())  # current lev from L_?
         n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # sum derH-> m_,d_ [M,D,n, I,G,a, L,S,A], L: dLen, S: dSpan
         n.eTT = kwargs.get('eTT',np.zeros((2,9)))  # sum rim derH
+        n.lev = kwargs.get('lev',CN())  # current, from L_?
         n.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,A: not ders, not in links?
         n.yx  = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
         n.rng = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
@@ -228,8 +206,8 @@ def comp_N(_N,N, rc, A=np.zeros(2), span=None, rng=1):  # compare links, optiona
     angl = [A, np.sign(TT[1] @ wTTf[1])]  # canonic direction
     Link = CN(fi=0, nt=[_N,N], N_=_N.N_+N.N_, c=min(N.c,_N.c), baseT=baseT, yx=yx, box=box, span=span, angl=angl, rng=rng)
     _H,H = _N.H,N.H
-    if (N.root and N.fi and N.L_ and _N.L_ and _H and H  # not Fg or link or PP
-        and val_(TT, rc, mw=(1-min(len(_H.H),len(H.H))* Lw)) < 0):  # rdn to TT
+    # spec if not Fg or link or PP:
+    if N.root and N.fi and N.L_ and _N.L_ and _H and H and val_(TT, rc+ 1/min(len(_H.H),len(H.H))) > 0:  # H/TT rdn = 1/len
         Link.H = comp_H(_H,H, rc,Link, TT) or []  # dLay in sum_N_
     Link.rc = rc
     Link.dTT = TT; Link.m = val_(TT,rc); Link.d = val_(TT,rc,fi=0)
@@ -237,26 +215,25 @@ def comp_N(_N,N, rc, A=np.zeros(2), span=None, rng=1):  # compare links, optiona
         n.rim += [Link]; n.eTT += TT; n.ec += Link.c; n.compared.add(_n)  # or conditional n.eTT / rim later?
     return Link
 
-def comp_H(_H, H, rc, root, TT=None):  # unpack derH trees down to numericals and compare them
+def comp_H(_H, H, rc, root, TT):  # unpack derH trees down to numericals and compare them
 
-    spec = 1  # default if root is CN
-    if TT is None:  # recursive call, else dTT is passed from comp_N, _H.dTT and H.dTT are redundant
-        TT = comp_derT(_H.dTT[1], H.dTT[1]*rc)
-        if not _H.H and H.H and isinstance(root,CH) and val_(TT, rc, mw=(1-min(len(H),len(_H)) *Lw)) < 0:
-            spec = 0  # spec eval for recursive call only, 2 or more levs/H, different Lw for H?
+    TT += comp_derT(_H.dTT[1], H.dTT[1]*rc)  # default comp
     dH = []
-    if spec:
-        for Lev,lev in zip(_H.H, H.H):
+    if val_(TT, rc+ 1/min(len(_H.H),len(H.H))) > 0:
+        if _H.H and H.H:  # >1 levs / H
+            for _lev,lev in zip(_H.H, H.H):
+                comp_H(_lev, lev, rc, root, TT)  # add to dTT only?
+        else:
+            # comp fork_, or one H and one fork_?
             tt = np.zeros((2,9)); fork_ = [[],[],[]]  # or 6?
-            for i, (F,f) in enumerate(zip_longest(Lev, lev)):
+            for i, (F,f) in enumerate(zip((_H.Nt,_H.Bt,_H.Ct), (H.Nt,H.Bt,H.Ct))):
                 if F and f:
-                    # add comp_derT(fork dTTs), spec eval?
                     N_,L_,mTT,B_,dTT = comp_N_(F[0],rc,f[0]) if i<2 else comp_C_(F[0],rc,f[0])
                     fTT = mTT + dTT; tt += fTT
                     fork_[i] = [[N_,fTT]]  # do we need B_,L_ per fork?
             TT += tt; dH += [[fork_,tt]]
             # add fork_,dH sort and rc assign
-    return CH(H=dH, dTT=TT, root=root, rc=rc, m=sum(TT[0]), d=sum(TT[1]), c=min(_H.c, H.c))
+    return CN(H=dH, dTT=TT, root=root, rc=rc, m=sum(TT[0]), d=sum(TT[1]), c=min(_H.c, H.c))
 
 def base_comp(_N,N, fC=0):  # comp Et, baseT, extT, dTT
 
@@ -345,17 +322,15 @@ def Cluster(root, iL_, rc, iC):  # generic clustering root
     def trans_cluster(root, iL_, rc):  # called from cross_comp(Fg_), may be more
 
         dN_,dL_,dC_ = [],[],[]  # splice specs from links between Fgs within Fg cluster
-        for Link in iL_: dN_ += Link.L_; dL_ += Link.B_; dC_ += Link.C_  # spec sub-links
-
+        for Link in iL_: dN_ += Link.L_; dL_ += Link.B_; dC_ += Link.C_
+        # trans-root nlinks
         N_,L_,C_ = [],[],[]
         for f_,link_,clust, fC in [(N_,dN_,cluster_N,0),(L_,dL_,cluster_N,0),(C_,dC_,cluster_n,1)]:
             if link_:
                 G = clust(root, link_, rc)
                 if G:
-                    if val_(G.dTT, rc, mw=(len(G.N_)-1)*Lw) > 0:
-                        G = cross_comp(G,rc, fC=fC) or G
-                    f_[:] = [G.N_, G.dTT, G.m, G.d, G.c, G.rc]  # forkT (THis should be true as long there is G?)
-
+                    if val_(G.dTT, rc, mw=(len(G.N_)-1)*Lw) > 0: G = cross_comp(G,rc, fC=fC) or G
+                    f_[:] = [G.N_, G.dTT, G.m, G.d, G.c, G.rc]
         # trans-F_, fork = tG_ via trans-N links, || F_
         return N_,L_,C_
     nG = []
@@ -381,23 +356,19 @@ def Cluster(root, iL_, rc, iC):  # generic clustering root
             nG = cluster_n(root, N_,rc)  # in feature space if centroids, no B_,C_?
             if V > ave * contw:  # higher filter to insert trans-N link_ clusters
                 tF_ = trans_cluster(nG, [l for n in nG.N_ for l in n.L_], rc+1)
-                fork_ = []
-                # set rc vs priority in) between forks, may unpack nG, likely if nG is Fg, draft:
-                Nt_ = []
+                fork_,Nt_ = [],[]
+                # set rc in)between forks, may unpack nG, esp if nG is Fg:
                 for N_ in (nG.N_, nG.B_, nG.C_):
                     dTT = np.zeros((2,9)); c = 0; rc = 0
-                    for N in N_:
-                        dTT += N.dTT; c += N.c; rc += N.rc
-                    Nt = [N_, dTT, np.sum(dTT[0]), np.sum(dTT[1]), c, rc]
-                    Nt_ += [Nt]
-
+                    for N in N_: dTT += N.dTT; c += N.c; rc += N.rc
+                    Nt_ += [[N_, dTT, np.sum(dTT[0]), np.sum(dTT[1]), c, rc]]
                 for F,tF in zip(Nt_, tF_):  # or Bt, Ct from cross_comp?
-                    if F and tF:  # pseudo:
+                    if F and tF:
                         maxF,minF = (F,tF) if F[2] > tF[2] else (tF,F)  # F[2] is m
-                        minF.rc += 1; fork_ += [[maxF.m, maxF,minF]]
-                for i in enumerate(sorted(fork_, key=lambda f: f[0])):
-                    fork_[i][1].rc +=i
-                    fork_[i][2].rc +=i
+                        minF[-1] += 1; fork_ += [[maxF[2], maxF,minF]]  # F[-1] is rc
+                for i, fork in enumerate(sorted(fork_, key=lambda f: f[0], reverse=True)):  # sort by m
+                    fork[1][-1] += i  # both maxF and minF add the same i as rc?
+                    fork[2][-1] += i
         if not nG: nG = CN(N_=N_,L_=L_)
     else:
         # primary centroid clustering
@@ -603,19 +574,24 @@ def slope(link_):  # get ave 2nd rate of change with distance in cluster or fram
 
 def Lnt(l): return ((l.nt[0].em + l.nt[1].em - l.m*2) * intw / 2 + l.m) / 2  # L.m is twice included in nt.em
 
+def copy_(H, root):  # simplified
+    cH = CN(dTT=deepcopy(H.dTT), root=root, rc=H.rc, m=H.m,d=H.d,c=H.c)  # summed across H
+    cH.H = [copy_(lay,cH) for lay in H.H]
+    cH.F_ = [copy(f) for f in cH.fork_]
+    return cH
+
 def Copy_(N, rc=1, root=None, init=0):
 
     C = CN(root=root, dTT=deepcopy(N.dTT))
     for attr in ['nt', 'baseT', 'box', 'rim', 'B_', 'Bt', 'C_', 'Ct', 'R_']: setattr(C, attr, copy(getattr(N, attr)))
     for attr in ['m','d','c','em','ed','ec','rc','rng','fin','span','mang']: setattr(C, attr, getattr(N, attr))
-    if N.derH: C.derH = copy_(N.derH,C)
     if init:  # new G
-        C.N_ = [N]; C.H,C.lH = [],[]; C.yx = [N.yx]; C.angl = N.angl[0]  # to get mean
+        C.N_ = [N]; C.H = copy(N.H); C.yx = [N.yx]; C.angl = N.angl[0]  # to get mean (H should copy N.H now even with init?)
         if init==1:  # else centroid
             C.L_= [l for l in N.rim if l.m>ave]; N.root = C
             N.em, N.ed = val_(N.eTT,rc), val_(N.eTT,rc,fi=0)
     else:
-        C.N_,C.L_,C.H,C.lH = list(N.N_),list(N.L_),list(N.H),list(N.lH)
+        C.N_,C.L_,C.H = list(N.N_),list(N.L_),copy_(N.H)
         C.angl = N.angl; N.root = root or N.root; C.yx = copy(N.yx); C.fi = N.fi  # else 1
     return C
 
@@ -626,7 +602,7 @@ def sum_N_(N_,rc, root=None, L_=[],C_=[],B_=[], rng=1,fC=0): # sum node,link att
     for N in N_[1:]:
         add_N(G,N, rc, init=1, fC=fC, froot=not fC)  # no need for froot?
     for L in L_:
-        add_H(G.H,L.H, G,rc); ang+=L.angl[0]; G.dTT+=L.dTT  # weight by L.c?
+        add_H(G.H,L.H); ang+=L.angl[0]; G.dTT+=L.dTT  # weight by L.c?
     yx_ = G.yx; yx = np.mean(yx_,axis=0); dy_,dx_ = (yx_-yx).T
     G.yx = yx; G.span = np.hypot(dy_,dx_).mean()  # N centers dist to G center
     G.angl = np.array([ang, np.sign(G.dTT[1] @ wTTf[1])], dtype=object)
@@ -642,7 +618,7 @@ def add_N(N, n, rc, init=0, fC=0, froot=0):  # rn = n.n / mean.n
     for Par,par in zip((N.baseT,N.dTT), (n.baseT,n.dTT)):
         Par += par  # extensive params scale with c?
     N.c += n.c  # cnt / mass
-    if n.H: add_H(N.H,n.H,N,rc)  # redundant?
+    if n.H: add_H(N.H,n.H)  # redundant? Why? we need still n.H?
     N.box = extend_box(N.box, n.box)
     _cnt,cnt = N.c,n.c; Cnt = _cnt+cnt+eps  # weigh contribution of intensive params
     N.mang = (N.mang*_cnt + n.mang*cnt) / Cnt
@@ -673,9 +649,15 @@ def add_H(H, h):  # add rc = n/mean, no rev, merge/append lays
     for Lev,lev in zip_longest(H.H, h.H):
         if Lev and lev: add_H(Lev,lev)
         elif lev:       off_H += [copy_(lev,H)]
-    # 6 [N_,m,d,c, rc] forks
+    # 6 [N_,dTT,m,d,c, rc] forks
     for Fork, fork in zip(H.fork_, h.fork_):
-        for E,e in zip(Fork, fork): E += e
+        Fork[0] += fork[0]  # concatenate m
+        Fork[1] += fork[1]  # add dTT
+        Fork[4] += fork[4]  # add c
+        Fork[5] += fork[5]  # add rc
+        Fork[2] = sum(Fork[1][0])  # recompute m  (would it be the same to sum m?)
+        Fork[3] = sum(Fork[1][1])  # recomptue d
+
     H.H += off_H
     return H
 
@@ -826,7 +808,7 @@ def proj_focus(PV__, y,x, Fg):  # radial accum of projected focus value in PV__
         n += 1
 
 def proj_H(cH, cos_d, dec):
-    pH = CH()
+    pH = CN()
     if cH.H:  # recursion
         for lay in cH.H:
             play = proj_H(lay, cos_d, dec); pH.H += [play]; pH.dTT += play.dTT
@@ -850,7 +832,7 @@ def proj_N(N, dist, A):  # recursively specified N projection, rim proj is curre
     else: eV = 0
     if iV + eV > ave:
         return CN(N_=N.N_,L_=N.L_, dTT=pH.dTT, derH=pH)
-    LH,L_,H,N_ = CH(),[],CH(),[]
+    LH,L_,H,N_ = CN(),[],CN(),[]
     if not N.root and eV * ((len(N.L_)-1)*Lw) > specw:  # only for Fg?
         for l in N.L_:  # sum L-specific projections
             lA = A - (N.yx-l.yx); ldist = np.hypot(*lA)
