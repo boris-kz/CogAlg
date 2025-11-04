@@ -83,27 +83,27 @@ class CN(CBase):
     def __init__(n, **kwargs):
         super().__init__()
         n.fi = kwargs.get('fi', 1)  # if G else 0, fd_: list of forks forming G?
-        n.N_ = kwargs.get('N_',[])  # nodes, or ders in links
-        n.L_ = kwargs.get('L_',[])  # links if fi else len nodet.N_s?
-        n.nH = kwargs.get('nH',[])  # top-down hierarchy of sub-node_s: CN(sum_N_(Nt_))/ lev, with single added-layer derH, empty nH
-        n.lH = kwargs.get('lH',[])  # bottom-up hierarchy of L_ graphs: CN(sum_N_(Lt_))/ lev, within each nH lev
-        n.Et = kwargs.get('Et',np.zeros(3))  # sum from L_, cent_?
-        n.et = kwargs.get('et',np.zeros(3))  # sum from rim, altg_?
-        n.rc = kwargs.get('rc',1)  # redundancy to ext Gs, ave in links? separate rc for rim, or internally overlapping?
-        n.baseT = kwargs.get('baseT', np.zeros(4))  # I,G,A: not ders
-        n.derTT = kwargs.get('derTT',np.zeros((2,9)))  # sum derH -> m_,d_ [M,D,n, I,G,A, L,S,eA], dertt: comp rims + overlap test?
-        n.derH  = kwargs.get('derH',CdH())  # sum from L_ or rims
-        n.yx   = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
-        n.rng  = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
-        n.box  = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
-        n.span = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_) but not additive?
-        n.angl = kwargs.get('angl',np.zeros(2))  # dy,dx, sum from L_
-        n.mang = kwargs.get('mang',1)  # ave match of angles in L_, = identity in links
-        n.rim = kwargs.get('rim',[])  # node-external links, rng-nested? set?
-        n.root  = kwargs.get('root', [])  # immediate
-        n.altg_ = kwargs.get('altg_',[])  # ext contour Gs, replace/combine rim?
-        n.C_    = kwargs.get('C_',[])  # int centroids, replace/combine N_?
-        n.R_    = kwargs.get('R_', [])  # root centroids
+        n.nt = kwargs.get('nt',[])  # nodet, empty if fi
+        n.rc = kwargs.get('rc', 1)  # redundancy to ext Gs, ave in links? separate rc for rim, or internally overlapping?
+        n.H  = kwargs.get('H', [])  # top-down node H, mapping to bottom-up der H, empty if single level dTT,forks:
+        n.Nt,n.Bt,n.Ct = kwargs.get('Bt',[]), kwargs.get('Bt',[]), kwargs.get('Ct',[])  # roots | fork_: [G_,TT,m,d,c,rdn], empty if H
+        # nodes, dlinks, centroids, mlinks, reciprocal roots, not in H
+        n.N_,n.B_,n.C_, n.L_,n.R_ = kwargs.get('N_',[]),kwargs.get('B_',[]),kwargs.get('C_',[]),kwargs.get('L_',[]),kwargs.get('R_',[])
+        n.m, n.d, n.c = kwargs.get('m',0), kwargs.get('d',0), kwargs.get('c',0)   # sum L_ dTT -> rm, rd, content count
+        n.rim = kwargs.get('rim', [])  # external links, rng-nest?
+        n.em, n.ed, n.ec = kwargs.get('em',0),kwargs.get('ed',0),kwargs.get('ec',0)  # sum rim TT
+        n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # sum derH-> m_,d_ [M,D,n, I,G,a, L,S,A], L: dLen, S: dSpan
+        n.eTT = kwargs.get('eTT',np.zeros((2,9)))  # sum rim derH
+        n.lev = CN(lev=[]) if kwargs.get('lev') is None else []  # current, from L_?
+        n.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,A: not ders, not in links?
+        n.yx    = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
+        n.box   = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
+        n.span  = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_), not additive?
+        n.angl  = kwargs.get('angl',[np.zeros(2),0])  # (dy,dx),dir, sum from L_
+        n.mang  = kwargs.get('mang',1)  # ave match of angles in L_, =1 in links
+        n.root  = kwargs.get('root',None)  # immediate
+        n.rng = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
+        n.sub = 0  # full-composition depth relative to top-composition peers
         n.fin = kwargs.get('fin',0)  # clustered, temporary
         n.exe = kwargs.get('exe',0)  # exemplar, temporary
         n.compared = set()
