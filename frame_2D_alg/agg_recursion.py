@@ -51,7 +51,7 @@ class CN(CBase):
         n.rc = kwargs.get('rc', 1)  # redundancy to ext Gs, ave in links? separate rc for rim, or internally overlapping?
         n.H  = kwargs.get('H', [])  # top-down node H, mapping to bottom-up der H, empty if single level dTT,forks:
         n.Nt,n.Bt,n.Ct = kwargs.get('Bt',[]), kwargs.get('Bt',[]), kwargs.get('Ct',[])  # roots | fork_: [G_,TT,m,d,c,rdn], empty if H
-        # nodes, dlinks, centroids: may be in Nt,Bt,Ct; mlinks, reciprocal roots:
+        # nodes, dlinks, centroids (in Nt,Bt,Ct if fork_), mlinks, reciprocal roots:
         n.N_,n.B_,n.C_, n.L_,n.R_ = kwargs.get('N_',[]),kwargs.get('B_',[]),kwargs.get('C_',[]),kwargs.get('L_',[]),kwargs.get('R_',[])
         n.m, n.d, n.c = kwargs.get('m',0), kwargs.get('d',0), kwargs.get('c',0)   # sum L_ dTT -> rm, rd, content count
         n.rim = kwargs.get('rim', [])  # external links, rng-nest?
@@ -115,7 +115,7 @@ def cross_comp(root, rc, fC=0, fT=0):  # rng+ and der+ cross-comp and clustering
         for n in N_: n.em = sum([l.m for l in n.rim]) / len(n.rim)  # tentative before val_
         nG = Cluster(root, mL_, rc, fC)  # fC=0: get_exemplars, cluster_C, rng connect cluster
         if nG:  # batched H extension
-            rc += nG.rc # redundant clustering layers
+            rc += nG.rc  # redundant clustering layers
             if Bt:
                 form_B__(nG, Bt)  # add boundary to N, N to Bg R_s
                 if val_(mTT, rc+3+contw, mw=(len(nG.N_)-1)*Lw) > 0:  # mval
@@ -158,21 +158,21 @@ def comp_C_(C_, rc, _C_=[], fall=1):  # max attr sort to constrain C_ search in 
 
     return list(set(out_)), mL_,mTT, dL_,dTT
 
-def comp_N_(iN_, rc, _iN_=[]):
+def comp_N_(iN_,rc,_iN_=[]):
 
-    def proj_V(_N, N, dist, Ave, pVt_):  # _N x N induction
+    def proj_V(_N,N, dist, Ave, pVt_):  # _N x N induction
 
         iV = (_N.m+N.m)/2 * dec**(dist/((_N.span+N.span)/2)) - Ave
         eV = sum([l.m * dec**(dist/l.span) - Ave for l in _N.rim+N.rim])
         V = iV + eV
-        if V > Ave: return V
+        if abs(V) > Ave: return V  # +|-
         elif eV * ((len(pVt_)-1)*Lw) > specw:  # spec over rim, nested spec N_, not L_
             eTT = np.zeros((2,9))  # comb forks?
             for _dist,_dy_dx,__N,_V in pVt_:
-                pN = proj_N(N,_dist,_dy_dx)
-                if pN: eTT += pN.dTT
-                _pN = proj_N(N,_dist,-_dy_dx)
-                if _pN: eTT += _pN.dTT
+                pTT,pV = proj_N(N,_dist,_dy_dx, rc)
+                if pV>0: eTT += pTT  # +ve only?
+                pTT.pV = proj_N(N,_dist,-_dy_dx, rc)
+                if pV>0: eTT += pTT
             return iV + val_(eTT,rc)
         else: return V
 
@@ -292,7 +292,7 @@ def comp_A(_A,A):
     '''
     return (cos(dA)+1) /2, dA/pi  # mA in 0:1, dA in -1:1, or invert dA, may be negative?
 
-def rolp(N, _N_, R=0): # rel V of L_|N.rim overlap with _N_: iHibition|shared zone, oN_ = list(set(N.N_) & set(_N.N_)), no comp?
+def rolp(N, _N_, R=0): # rel V of L_|N.rim overlap with _N_: inhibition|shared zone, oN_ = list(set(N.N_) & set(_N.N_)), no comp?
 
     n_ = set(N.N_) if R else {n for l in N.rim for n in l.nt if n is not N}  # nrim
     olp_ = n_ & set(_N_)
@@ -309,7 +309,7 @@ def get_exemplars(N_, rc):  # get sparse nodes by multi-layer non-maximum suppre
     E_ = set()
     for rdn, N in enumerate(sorted(N_, key=lambda n:n.em, reverse=True), start=1):  # strong-first
         roV = rolp(N, E_)
-        if N.em > ave * (rc+ rdn+ compw +roV):  # ave *= relV of overlap by stronger-E iHibition zones
+        if N.em > ave * (rc+ rdn+ compw +roV):  # ave *= relV of overlap by stronger-E inhibition zones
             E_.update({n for l in N.rim for n in l.nt if n is not N and N.em > ave*rc})  # selective nrim
             N.exe = 1  # in point cloud of focal nodes
         else:
@@ -356,17 +356,18 @@ def Cluster(root, iL_, rc, iC):  # generic clustering root
                 tF_ = trans_cluster(nG, tL_, rc+1)
                 Ft_ = []  # [[F,tF]]
                 for n_, tF in zip((nG.N_, nG.B_, nG.C_), tF_):
-                    dtt = np.zeros((2,9)); c,rc = 0,0; for n in n_: dtt += n.dTT; c += n.c; rc += n.rc  # if no Fts yet?
+                    dtt = np.zeros((2,9)); c,rc = 0,0  # if no Fts yet?
+                    for n in n_: dtt += n.dTT; c += n.c; rc += n.rc
                     Ft_ += [[N_, dtt, np.sum(dtt[0]), np.sum(dtt[1]), c,rc], tF]  # cis,trans fork pairs
                 mmax_ = []
                 for F,tF in Ft_:  # or Bt, Ct from cross_comp?
                     if F and tF:
                         m,tm = F[2],tF[2]; maxF,minF = (F,tF) if m>tm else (tF,F)
-                        minF[-1] += 1; mmax_+= [max(m,tm)]  # F[-1]: is rc
+                        mmax_+= [max(m,tm)]; minF[-1]+=1  # rc+=rdn
                 sm_ = sorted(mmax_, reverse=True)
-                for m,Ft in zip(mmax_,Ft_): # +rdn in 3 fork pairs
-                    rdn = sm_.index(m); Ft[0][-1] += rdn; Ft[1][-1] += rdn
-        if not nG: nG = CN(N_=N_,L_=L_)
+                for m, Ft in zip(mmax_,Ft_): # +rdn in 3 fork pairs
+                    r = sm_.index(m); Ft[0][-1]+=r; Ft[1][-1]+=r  # rc+=rdn
+        if not nG: nG = sum_N_(N_, rc, root, L_)
     else:
         # primary centroid clustering
         N_ = list({N for L in iL_ for N in L.nt if N.em})  # newly connected only
@@ -420,6 +421,7 @@ def cluster_n(root, iC_, rc):  # simplified flood-fill, for C_ or trans_N_
                 G_ += N_
     if G_: return sum_N_(G_, rc, root)  # nG
 
+# older
 def cluster_N(root, rL_, rc, rng=1):  # flood-fill node | link clusters
 
     def rroot(n): return rroot(n.root) if n.root and n.root!=root else n
@@ -447,14 +449,14 @@ def cluster_N(root, rL_, rc, rng=1):  # flood-fill node | link clusters
     rN_ = {N for L in rL_ for N in L.nt}
     for n in rN_: n.fin = 0
     for N in rN_:  # form G per remaining rng N
-        if N.fin or (root.root and not N.exe): continue  # no exemplars in Fcluster
+        if N.fin or (root.root and not N.exe): continue  # no exemplars in Fg
         node_,cent_,Link_,_link_,B_ = [N],[],[],[],[]
         if rng==1 or not N.root or N.root==root:  # not rng-banded
             cent_ = N.R_[:]  # c_roots
             for l in N.rim:
-                if l in rL_:
+                if l in rL_:  # curr rng
                     if Lnt(l) > ave*rc: _link_ += [l]
-                    else: B_+= [l]  # rng-specific
+                    else: B_ += [l]  # or dval?
         else: # N is rng-banded, cluster top-rng roots
             n = N; R = rroot(n)
             if R and not R.fin: node_,_link_,cent_ = [R], R.L_[:], R.R_[:]; R.fin = 1
@@ -615,7 +617,7 @@ def add_N(N, n, rc, init=0, fC=0, froot=0):  # rn = n.n / mean.n
     for Par,par in zip((N.baseT,N.dTT), (n.baseT,n.dTT)):
         Par += par  # extensive params, scale with c
     _cnt,cnt = N.c,n.c; Cnt = _cnt+cnt
-    # weigh contribution of intensive params
+    # weigh contribution of intensive params:
     add_sub(N, n)  # H or Nt,Bt,Ct
     N.mang = (N.mang*_cnt + n.mang*cnt) / Cnt
     N.span = (N.span*_cnt + n.span*cnt) / Cnt
@@ -625,13 +627,13 @@ def add_N(N, n, rc, init=0, fC=0, froot=0):  # rn = n.n / mean.n
     if init:  # N is G
         n.em, n.ed = val_(n.eTT,rc), val_(n.eTT,rc,fi=0); N.yx += [n.yx]
         N.angl = (N.angl*_cnt + n.angl[0]*cnt) / Cnt  # vect only
-    else: # merge n
+    else:     # merge n
         for node in n.N_: node.root = N; N.N_ += [node]
         A,a = N.angl[0],n.angl[0]; A[:] = (A*_cnt+a*cnt) / Cnt
         N.L_ += n.L_; N.rim += n.rim  # no L.root, rims can't overlap?
-    n.C_ += [C for C in n.C_ if C not in N.C_]  # centroids, separate from Ct, if roots?
-    n.B_ += [B for B in n.B_ if B not in N.B_]  # dlinks, separate from Bt?
-    # if N is Fg: margin = Ns of proj max comp dist > distance to nearest frame point, for cross_comp between frames?
+    n.C_ += [C for C in n.C_ if C not in N.C_]  # centroids, not in root Ct
+    n.B_ += [B for B in n.B_ if B not in N.B_]  # high-diff links, not in root Bt?
+    # if N is Fg: margin = Ns of proj max comp dist > min _Fg point dist: cross_comp Fg_?
     if fC:
         n.rc = np.sum([mo[1] for mo in n._mo_]); N.rC_ += n.rC_; N.mo_ += n.mo_
     if froot: n.fin = 1; n.root = N
@@ -662,12 +664,9 @@ def extend_box(_box, box):
     y0, x0, yn, xn = box; _y0, _x0, _yn, _xn = _box
     return min(y0,_y0), min(x0,_x0), max(yn,_yn), max(xn,_xn)
 
-def sort_H(H, fi):
-    '''
-    for dH | H: assign rc as priority index per composition level for comp_tree, if selective and aligned
-    6 forks per H level: Nt, Bt, Ct / levG N_,B_,C_, trans-clusters tNt, tBt, tCt / spliced link_ L_,B_,C_
-    priority = root.rc-lev.rc or fork.rc
-    '''
+# not used directly
+def sort_H(H, fi):  # lev.rc = complementary to root.rc and priority index in H, if selective and aligned
+
     i_ = []  # priority indices
     for i, lay in enumerate(sorted(H.node_, key=lambda lay: [lay.m, lay.d][fi], reverse=True)):
         di = lay.i - i  # lay index in H
@@ -677,7 +676,7 @@ def sort_H(H, fi):
     if fi:
         H.root.node_ = H.node_
     # more advanced ordering: dH | H as medoid cluster of layers?
-    # nested cent_attr across layers: ?
+    # nested cent_attr across layers?
 
 def eval(V, weights):  # conditional progressive eval, with default ave in weights[0]
     W = 1
@@ -753,39 +752,36 @@ def proj_focus(PV__, y,x, Fg):  # radial accum of projected focus value in PV__
 def proj_sub(N, cos_d, dec, rc, pTT = np.zeros((2,9))):
 
     pTT += np.array([N.dTT[0]*dec, N.dTT[1]*cos_d*dec])  # coarse approximation
-    V = val_(pTT, rc)
-    if V > ave or V < 0: return pTT, V
-    # else refine projection:
+    V = val_(pTT,rc)
+    if abs(V) > ave: return pTT,V  # ave: sym certainty margin proxy
+    # refine projection if not certain:
     if N.H:
         for lev in N.H:
-            pTT, V = proj_sub(lev, cos_d, dec, rc+1, pTT)  # unpack tuple
-            if V > ave or V < 0: return pTT, V
+            pTT,V = proj_sub(lev, cos_d, dec, rc+1, pTT)  # acc pTT
+            if abs(V) > ave: return pTT,V
     else:   # project forks
         for Ft in N.Nt, N.Bt, N.Ct:
             if Ft:
                 if len(Ft) > 2: Ft = [Ft]
                 for fork in Ft:
-                    fTT = fork[1]; pTT += np.array([fTT[0]*dec, fTT[1]*cos_d*dec])
-                    V = val_(pTT, rc)
-                    if V > ave or V < 0: return pTT, V
-    return pTT, V
+                    fTT = fork[1]; pTT += np.array([fTT[0]*dec, fTT[1]*cos_d*dec]); V = val_(pTT, rc)
+                    if abs(V) > ave: return pTT,V
+    return pTT,V
 
-def proj_N(N, dist, A):  # recursively specified N projection, rim proj is currently macro in comp_N_?
+def proj_N(N, dist, A, rc):  # recursively specify N projection val, add pN if comp_pN?
 
     rdist = dist / N.span   # internal x external angle:
     cos_d = (N.angl[0].dot(A) / (np.hypot(*N.angl[0]) * dist)) * N.angl[1]  # N-to-yx alignment
     m,d = N.m,N.d  # tentative
     dec = rdist * (m / (m+d))  # match decay rate, * ddecay for ds?
-    pTT, pV = proj_sub(N, cos_d, dec, N.rc)
-    iV = pV * ((len(N.N_)-1)*Lw) - ave*contw
+    pTT, pV = proj_sub(N, cos_d, dec, N.rc+rc)
+    iV = pV * ((len(N.N_)-1)*Lw) - ave * contw
+    eTT, eV = np.zeros((2,9)), 0
     if N.L_:
-        lTT = np.zeros((2, 9))
         for L in N.L_:  # from terminal comp
-            lTT, lV = proj_sub(L, cos_d, dec, L.rc, lTT)
-        eV = lV * ((len(N.L_)-1)*Lw) - ave*contw
-    else: eV = 0
-    if iV + eV > ave:
-        return CN(N_=N.N_, L_=N.L_, dTT=pTT)
+            eTT,_ = proj_sub(L, cos_d, dec, L.rc, eTT)  # while uncertain?
+        eV = val_(eTT, rc=rc+contw, mw=(len(N.L_)-1)*Lw)  # no _TT
+    return pTT + eTT, iV + eV
 '''
 add comp_prj_nt?
 def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
@@ -803,7 +799,6 @@ def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
     link.m += dddH.m; link.d += dddH.d; link.c += dddH.c; link.dTT += dddH.dTT
     add_H(ddH, dddH)
 '''
-
 def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init focal frame graph, no recursion:
 
     if np.any(wTTf):
@@ -820,8 +815,8 @@ def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init foca
                 Edge = sum_N_([PP2N(PPm) for PPm in PPm_],1,None); Edge.fi = 3
                 if edge.link_:
                     bG = sum_N_([PP2N(PPd) for PPd in edge.link_],2, Edge)
-                    B_,bTT,bO = bG.N_,bG.dTT,bG.rc  # simplify sum_N_?
-                    form_B__(Edge,[B_,bTT,bO])  # adds Edge.Bt
+                    B_, bTT, bc, bO = bG.N_, bG.dTT, bG.c, bG.rc
+                    form_B__(Edge,[B_,bTT,sum(bTT[0]),sum(bTT[1]), bc,bO])  # add Edge.Bt
                     if val_(Edge.dTT,3, mw=(len(PPm_)-1)*Lw) > 0:
                         trace_edge(Edge,3)  # cluster complemented Gs via G.B_
                         if val_(bTT,4, mw=(len(B_)-1)*Lw):
@@ -907,8 +902,8 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, wTTf=np.ones((2,9),dtype="
             if not elev: Fg = base_tile(iy,ix)  # 1st level or cross_comped arg tile
             if Fg and val_(Fg.dTT, Fg.rc+compw+elev, mw=(len(Fg.N_)-1)*Lw) > 0:
                 tile[y,x] = Fg; Fg_ += [Fg]; dy_dx = np.array([Fg.yx[0]-y,Fg.yx[1]-x])
-                pFg = proj_N(Fg, np.hypot(*dy_dx), dy_dx)  # extend lev by feedback within current tile
-                if pFg and val_(pFg.dTT, pFg.rc+elev, mw=(len(pFg.N_)-1)*Lw) > 0:
+                if proj_N(Fg, np.hypot(*dy_dx), dy_dx, elev)[1] > 0: # pV
+                    # extend lev by feedback within current tile:
                     proj_focus(PV__,y,x,Fg)  # PV__+= pV__
                     pv__ = PV__.copy(); pv__[tile!=None] = 0  # exclude processed
                     y, x = np.unravel_index(pv__.argmax(), PV__.shape)
@@ -949,4 +944,4 @@ if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.
     Y,X = imread('./images/toucan.jpg').shape
     # frame = agg_frame(0, image=imread('./images/toucan.jpg'), iY=Y, iX=X)
     frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -31, iX=X//2 -31, Ly=64,Lx=64, Y=Y, X=X, rV=1)
-    # search frames ( tiles inside image, initially should be 4K, or 256K panorama
+    # search frames ( tiles inside image, initially should be 4K, or 256K panorama, won't actually work on toucan
