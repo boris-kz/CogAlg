@@ -358,7 +358,7 @@ def Cluster(root, iL_, rc, iC):  # generic clustering root
                 for n_, tF in zip((nG.N_, nG.B_, nG.C_), tF_):
                     dtt = np.zeros((2,9)); c,rc = 0,0  # if no Fts yet?
                     for n in n_: dtt += n.dTT; c += n.c; rc += n.rc
-                    Ft_ += [[N_, dtt, np.sum(dtt[0]), np.sum(dtt[1]), c,rc], tF]  # cis,trans fork pairs
+                    Ft_ += [[[N_, dtt, np.sum(dtt[0]), np.sum(dtt[1]), c,rc], tF]]  # cis,trans fork pairs
                 mmax_ = []
                 for F,tF in Ft_:  # or Bt, Ct from cross_comp?
                     if F and tF:
@@ -452,14 +452,14 @@ def cluster_N(root, rL_, rc, rng=1):  # flood-fill node | link clusters
         if N.fin or (root.root and not N.exe): continue  # no exemplars in Fg
         node_,cent_,Link_,_link_,B_ = [N],[],[],[],[]
         if rng==1 or not N.root or N.root==root:  # not rng-banded
-            cent_ = N.R_[:]  # c_roots
+            cent_ = [C.root for C in N.C_]
             for l in N.rim:
                 if l in rL_:  # curr rng
                     if Lnt(l) > ave*rc: _link_ += [l]
                     else: B_ += [l]  # or dval?
         else: # N is rng-banded, cluster top-rng roots
             n = N; R = rroot(n)
-            if R and not R.fin: node_,_link_,cent_ = [R], R.L_[:], R.R_[:]; R.fin = 1
+            if R and not R.fin: node_,_link_,cent_ = [R], R.L_[:], R.C_[:]; R.fin = 1
         N.fin = 1; link_ = []
         while _link_:
             Link_ += _link_
@@ -467,12 +467,12 @@ def cluster_N(root, rL_, rc, rng=1):  # flood-fill node | link clusters
             if link_: _link_ = list(set(link_)); link_ = []  # extended rim
             else:     break
         if node_:
-            N_, L_, C_ = list(set(node_)), list(set(Link_)), list(set(cent_))
+            N_, L_, C_, B_ = list(set(node_)), list(set(Link_)), list(set(cent_)), list(set(B_))
             dTT,olp = np.zeros((2,9)), 0
             for n in N_: olp += n.rc  # from Ns, vs. Et from Ls?
             for l in L_: dTT += l.dTT
             if val_(dTT, rc+olp, 1, (len(N_)-1)*Lw, root.dTT) > 0:
-                G_ += [sum_N_(N_, olp, root, L_, [C_,np.sum([c.DTT for c in C_],axis=0)] if C_ else [[],np.zeros((2,9))], list(set(B_)), rng)]
+                G_ += [sum_N_(N_, olp, root, L_, C_, B_, rng)]
             elif n.fi:  # L_ is preserved anyway
                 for n in N_: n.sub += 1
                 G_ += N_
@@ -687,14 +687,14 @@ def eval(V, weights):  # conditional progressive eval, with default ave in weigh
 
 def PP2N(PP):
 
-    P_, link_, B_, verT, latT, A, S, box, yx, Et = PP
+    P_, link_, B_, verT, latT, A, S, box, yx, m, d, c = PP
     baseT = np.array(latT[:4])
     [mM, mD, mI, mG, mA, mL], [dM, dD, dI, dG, dA, dL] = verT  # re-pack in dTT:
     dTT = np.array([ np.array([mM, mD, mL, mI, mG, mA, mL, mL / 2, eps]),  # extA=eps
                      np.array([dM, dD, dL, dI, dG, dA, dL, dL / 2, eps])])
     y,x,Y,X = box; dy,dx = Y+1-y, X+1-x
     A = np.array([np.array(A), np.sign(dTT[1] @ wTTf[1])], dtype=object)  # append sign
-    PP = CN(fi=1, N_=P_,B_=B_, m=Et[0],d=Et[1],c=Et[2], baseT=baseT, dTT=dTT, box=box, yx=yx, angl=A, span=np.hypot(dy/2, dx/2))
+    PP = CN(fi=1, N_=P_,B_=B_, m=m,d=d,c=c, baseT=baseT, dTT=dTT, box=box, yx=yx, angl=A, span=np.hypot(dy/2, dx/2))
     for P in PP.N_: P.root = PP
     return PP
 
@@ -767,7 +767,11 @@ def proj_sub(N, cos_d, dec, rc, pTT = np.zeros((2,9))):
                     fTT = fork[1]; pTT += np.array([fTT[0]*dec, fTT[1]*cos_d*dec]); V = val_(pTT, rc)
                     if abs(V) > ave: return pTT,V
     return pTT,V
-
+'''
+    replace projected match with uncertainty?
+    dec_r = ave_r + (r - ave_r) * (ave_r ** (distance / N.span))
+    uncertainty(d) = 4 * (dec_r(d) - ave_r) * (r - dec_r(d)) / (r - ave_r)²
+'''
 def proj_N(N, dist, A, rc):  # recursively specify N projection val, add pN if comp_pN?
 
     rdist = dist / N.span   # internal x external angle:
