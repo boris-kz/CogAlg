@@ -130,3 +130,27 @@ def proj_N(N, dist, A):  # recursively specified N projection, rim proj is curre
         if L_ or N_: pH = add_H(H,LH)  # recomputed from individual Ls and Ns
         return CN(N_=N_,L_=L_, dTT=pH.dTT, derH=pH)
 
+def comp_sub(_N,N, rc, root, TT):  # unpack node trees down to numericals and compare them
+
+    _H, H = _N.H, N.H; dH,Nt,Bt,Ct = [],[],[],[]; C = 0
+    if _H and H:
+        for _lev,lev in zip(_H, H):
+            C += min(_lev.c, lev.c)
+            TT += comp_derT(_lev.dTT[1], lev.dTT[1]*rc)  # default
+            if val_(TT,rc) > 0:  # sub-recursion
+                dH = comp_sub(_lev,lev, rc,root, TT)
+        c = C / min(len(_H),len(H))
+    else:
+        # comp fork_s, | H[0],fork_?
+        tt = np.zeros((2,9)); dfork_ = [[],[],[]]  # 6 in H only?
+        for i, (F,f) in enumerate(zip((_N.Nt,_N.Bt,_N.Ct), (N.Nt,N.Bt,N.Ct))):
+            if F and f:
+                N_,L_,mTT,B_,dTT = comp_N_(F[0],rc,f[0]) if i<2 else comp_C_(F[0],rc,f[0])
+                fTT = mTT + dTT; tt += fTT
+                dfork_[i] = [N_,fTT,sum(fTT[0]),sum(fTT[1]), min(F[4],f[4]), min(F[5],f[5])]  # + B_,L_ per fork?
+        TT += tt; Nt,Bt,Ct = dfork_; c = min(_N.c,N.c)
+
+    root.c += c  # additive? fork_,dH sort and rc assign in cluster, not link?
+    return CN(H=dH, dTT=TT, Nt=Nt, Bt=Bt, Ct=Ct, root=root, rc=rc, m=sum(TT[0]), d=sum(TT[1]), c=c)
+
+

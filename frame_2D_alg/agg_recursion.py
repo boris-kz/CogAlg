@@ -49,6 +49,7 @@ class CN(CBase):
         n.fi = kwargs.get('fi', 1)  # if G else 0, fd_: list of forks forming G?
         n.nt = kwargs.get('nt',[])  # nodet, empty if fi
         n.rc = kwargs.get('rc', 1)  # redundancy to ext Gs, ave in links? separate rc for rim, or internally overlapping?
+        # under review:
         n.H  = kwargs.get('H', [])  # top-down node H, mapping to bottom-up der H, empty if single level dTT,forks:
         n.Nt,n.Bt,n.Ct = kwargs.get('Bt',[]), kwargs.get('Bt',[]), kwargs.get('Ct',[])  # roots | fork_: [G_,TT,m,d,c,rdn], empty if H
         # nodes, dlinks, centroids (in Nt,Bt,Ct if fork_), mlinks, reciprocal roots:
@@ -204,37 +205,36 @@ def comp_N(_N,N, rc, A=np.zeros(2), span=None, rng=1):  # compare links, optiona
     baseT = (rn*_N.baseT+N.baseT) /2  # not new, for fi=0 base_comp
     yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])  # ext
     angl = [A, np.sign(TT[1] @ wTTf[1])]  # canonic direction
-    Link = CN(fi=0, nt=[_N,N], N_=_N.N_+N.N_, c=min(N.c,_N.c), baseT=baseT, yx=yx, box=box, span=span, angl=angl, rng=rng, rc=rc)
-    # spec if not Fg or link or PP:
-    if ((N.root and N.fi and N.L_ and _N.L_) or N.fi==3)  and val_(TT,rc) > 0:
-        Link.lev = comp_sub(_N,N, rc,Link, TT)  # nested, no Link.H
-    Link.dTT=TT; Link.m = val_(TT,rc); Link.d = val_(TT,rc,fi=0)  # added above
+    Link = CN(fi=0, dTT=TT, nt=[_N,N], N_=_N.N_+N.N_, c=min(N.c,_N.c), baseT=baseT, yx=yx, box=box, span=span, angl=angl, rng=rng, rc=rc)
+    if N.fi==1 and val_(TT,rc) > 0:  # not PP | Fg | link
+        Link.lev = comp_sub(_N,N, rc, Link)  # nested, no Link.H
+        # if N.H and _N.H:        comp_H(_N,N, rc, Link)
+        # elif not (N.H or _N.H): comp_lev(_N,N, rc, Link)  # no mixed comps?
+    Link.m = val_(Link.dTT,rc); Link.d = val_(Link.dTT,rc,fi=0)  # added in comp_sub
     for n, _n in (_N,N), (N,_N):  # if rim-mediated comp: reverse dir in _N.rim: rev^_rev?
         n.rim += [Link]; n.eTT += TT; n.ec += Link.c; n.compared.add(_n)  # or conditional n.eTT / rim later?
     return Link
 
-def comp_sub(_N,N, rc, root, TT):  # unpack node trees down to numericals and compare them
+def comp_sub(_N,N, rc, root):  # unpack node trees down to numericals and compare them
 
-    _H, H = _N.H, N.H; dH,Nt,Bt,Ct = [],[],[],[]; C = 0
+    _H, H = _N.H,N.H; TT = np.zeros((2,9))
     if _H and H:
+        dH = []; C = 0
         for _lev,lev in zip(_H, H):
             C += min(_lev.c, lev.c)
             TT += comp_derT(_lev.dTT[1], lev.dTT[1]*rc)  # default
-            if val_(TT,rc) > 0:  # sub-recursion
-                dH = comp_sub(_lev,lev, rc,root, TT)
-        c = C / min(len(_H),len(H))
+            if val_(TT,rc) > 0:  # sub-recursion:
+                dH += comp_sub(_lev,lev, rc,root)
+        return CN(H=dH, dTT=TT, root=root, rc=rc, m=sum(TT[0]), d=sum(TT[1]), c = C / min(len(_H),len(H)))
     else:
         # comp fork_s, | H[0],fork_?
-        tt = np.zeros((2,9)); dfork_ = [[],[],[]]  # 6 in H only?
+        TT = np.zeros((2,9)); dfork_ = [[],[],[]]  # 6 in H only?
         for i, (F,f) in enumerate(zip((_N.Nt,_N.Bt,_N.Ct), (N.Nt,N.Bt,N.Ct))):
             if F and f:
                 N_,L_,mTT,B_,dTT = comp_N_(F[0],rc,f[0]) if i<2 else comp_C_(F[0],rc,f[0])
-                fTT = mTT + dTT; tt += fTT
-                dfork_[i] = [N_,fTT,sum(fTT[0]),sum(fTT[1]), min(F[4],f[4]), min(F[5],f[5])]  # + B_,L_ per fork?
-        TT += tt; Nt,Bt,Ct = dfork_; c = min(_N.c,N.c)
-
-    root.c += c  # additive? fork_,dH sort and rc assign in cluster, not link?
-    return CN(H=dH, dTT=TT, Nt=Nt, Bt=Bt, Ct=Ct, root=root, rc=rc, m=sum(TT[0]), d=sum(TT[1]), c=c)
+                fTT = mTT + dTT; TT += fTT
+                dfork_[i] = [N_,fTT, sum(fTT[0]),sum(fTT[1]), min(F[4],f[4]), min(F[5],f[5])]  # + B_,L_ per fork?
+        return TT, dfork_
 
 def base_comp(_N,N):  # comp Et, baseT, extT, dTT
 
@@ -459,7 +459,7 @@ def cluster_N(root, rL_, rc, rng=1):  # flood-fill node | link clusters
                     else: B_ += [l]  # or dval?
         else: # N is rng-banded, cluster top-rng roots
             n = N; R = rroot(n)
-            if R and not R.fin: node_,_link_,cent_ = [R], R.L_[:], R.C_[:]; R.fin = 1
+            if R and not R.fin: node_,_link_,cent_ = [R], R.L_[:], [C.root for C in R.C_]; R.fin = 1
         N.fin = 1; link_ = []
         while _link_:
             Link_ += _link_
@@ -694,7 +694,7 @@ def PP2N(PP):
                      np.array([dM, dD, dL, dI, dG, dA, dL, dL / 2, eps])])
     y,x,Y,X = box; dy,dx = Y+1-y, X+1-x
     A = np.array([np.array(A), np.sign(dTT[1] @ wTTf[1])], dtype=object)  # append sign
-    PP = CN(fi=1, N_=P_,B_=B_, m=m,d=d,c=c, baseT=baseT, dTT=dTT, box=box, yx=yx, angl=A, span=np.hypot(dy/2, dx/2))
+    PP = CN(fi=2, N_=P_,B_=B_, m=m,d=d,c=c, baseT=baseT, dTT=dTT, box=box, yx=yx, angl=A, span=np.hypot(dy/2, dx/2))
     for P in PP.N_: P.root = PP
     return PP
 
@@ -749,7 +749,7 @@ def proj_focus(PV__, y,x, Fg):  # radial accum of projected focus value in PV__
         PV__[row,col] += pV__  # in-place accum pV to rim
         n += 1
 
-def proj_sub(N, cos_d, dec, rc, pTT = np.zeros((2,9))):
+def proj_TT(N, cos_d, dec, rc, pTT = np.zeros((2,9))):
 
     pTT += np.array([N.dTT[0]*dec, N.dTT[1]*cos_d*dec])  # coarse approximation
     V = val_(pTT,rc)
@@ -757,7 +757,7 @@ def proj_sub(N, cos_d, dec, rc, pTT = np.zeros((2,9))):
     # refine projection if not certain:
     if N.H:
         for lev in N.H:
-            pTT,V = proj_sub(lev, cos_d, dec, rc+1, pTT)  # acc pTT
+            pTT,V = proj_TT(lev, cos_d, dec, rc+1, pTT)  # acc pTT
             if abs(V) > ave: return pTT,V
     else:   # project forks
         for Ft in N.Nt, N.Bt, N.Ct:
@@ -768,24 +768,22 @@ def proj_sub(N, cos_d, dec, rc, pTT = np.zeros((2,9))):
                     if abs(V) > ave: return pTT,V
     return pTT,V
 '''
-    replace projected match with uncertainty?
+    info gain = proj_m * uncertainty, m = r?
     dec_r = ave_r + (r - ave_r) * (ave_r ** (distance / N.span))
     uncertainty(d) = 4 * (dec_r(d) - ave_r) * (r - dec_r(d)) / (r - ave_r)²
 '''
-def proj_N(N, dist, A, rc):  # recursively specify N projection val, add pN if comp_pN?
+def proj_N(N, dist, A, rc):  # arg rc += N.rc+contw, recursively specify N projection val, add pN if comp_pN?
 
     rdist = dist / N.span   # internal x external angle:
     cos_d = (N.angl[0].dot(A) / (np.hypot(*N.angl[0]) * dist)) * N.angl[1]  # N-to-yx alignment
     m,d = N.m,N.d  # tentative
     dec = rdist * (m / (m+d))  # match decay rate, * ddecay for ds?
-    pTT, pV = proj_sub(N, cos_d, dec, N.rc+rc)
-    iV = pV * ((len(N.N_)-1)*Lw) - ave * contw
-    eTT, eV = np.zeros((2,9)), 0
-    if N.L_:
-        for L in N.L_:  # from terminal comp
-            eTT,_ = proj_sub(L, cos_d, dec, L.rc, eTT)  # while uncertain?
-        eV = val_(eTT, rc=rc+contw, mw=(len(N.L_)-1)*Lw)  # no _TT
-    return pTT + eTT, iV + eV
+    iTT,eTT = np.zeros((2,9)), np.zeros((2,9))  # if separate eval?
+    for L in N.L_+N.B_: pTT,_= proj_TT(L, cos_d, dec, L.rc+rc, iTT)
+    iV = val_(iTT,rc)  # no _TT?
+    for L in N.rim: pTT,_= proj_TT(L, cos_d, dec, L.rc+rc, eTT)
+    eV = val_(eTT, rc)
+    return iTT+eTT, iV+eV
 '''
 add comp_prj_nt?
 def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
