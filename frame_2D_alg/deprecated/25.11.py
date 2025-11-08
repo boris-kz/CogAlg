@@ -153,4 +153,22 @@ def comp_sub(_N,N, rc, root, TT):  # unpack node trees down to numericals and co
     root.c += c  # additive? fork_,dH sort and rc assign in cluster, not link?
     return CN(H=dH, dTT=TT, Nt=Nt, Bt=Bt, Ct=Ct, root=root, rc=rc, m=sum(TT[0]), d=sum(TT[1]), c=c)
 
+def proj_TT(N, cos_d, dec, rc, pTT = np.zeros((2,9))):
 
+    pTT += np.array([N.dTT[0]*dec, N.dTT[1]*cos_d*dec])  # coarse approximation
+    V = val_(pTT,rc)
+    if abs(V) > ave: return pTT,V  # ave: sym certainty margin proxy
+    # refine projection if not certain:
+    if N.H:
+        for lev in N.H:
+            pTT,V = proj_TT(lev, cos_d, dec, rc+1, pTT)  # acc pTT
+            if abs(V) > ave: return pTT,V
+    else:   # project forks
+        for i, Ft in enumerate([N.dTT, N.Bt, N.Ct]):  # N.dTT is summed from N_, add trans-dTT?
+            if Ft:
+                if len(Ft) > 2: Ft = [Ft]
+                for fork in Ft:
+                    fTT = fork.dTT if i else fork
+                    pTT += np.array([fTT[0]*dec, fTT[1]*cos_d*dec]); V = val_(pTT, rc)
+                    if abs(V) > ave: return pTT,V
+    return pTT,V
