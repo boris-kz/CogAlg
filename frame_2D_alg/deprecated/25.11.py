@@ -172,3 +172,71 @@ def proj_TT(N, cos_d, dec, rc, pTT = np.zeros((2,9))):
                     pTT += np.array([fTT[0]*dec, fTT[1]*cos_d*dec]); V = val_(pTT, rc)
                     if abs(V) > ave: return pTT,V
     return pTT,V
+
+def comp_subs1(_N,N, rc, root):  # unpack node trees down to numericals and compare them
+
+    _H, H = _N.H,N.H; TT = np.zeros((2,9))
+    if _H and H:
+        dLev = Cn(dTT=TT, root=root, rc=rc)
+        C = 0
+        for _lev,lev in zip(_H, H):
+            C += min(_lev.c, lev.c)
+            TT += comp_derT(_lev.dTT[1], lev.dTT[1]*rc)  # default
+            if val_(TT,rc) > 0:  # sub-recursion:
+                comp_sub(_lev,lev, rc, dLev)
+        dLev.c = C / min(len(_H),len(H))
+    else:
+        TT = np.zeros((2,9)); dfork_ = [[],[],[]]
+        if N.H: N = N.H[0]  # comp 1st lev only
+        if _N.H: _N = _N.H[0]
+        for i, (F,f) in enumerate(zip((_N.zN_(), _N.Bt,_N.Ct), (N.zN_(), N.Bt,N.Ct))):
+            if F and f:  # N_ is never empty
+                if i: F=F.zN_(); f=f.zN_()  # Bt|Ct
+                N_,L_,mTT,B_,dTT = comp_N_(F,rc,f) if i<2 else comp_C_(F,rc,f)
+                fTT = mTT + dTT; TT += fTT
+                dfork_[i] = Cn(N_=N_,dTT=fTT, m=sum(fTT[0]),d=sum(fTT[1]), c=min(F.c,f.c), rc=min(F.rc,f.rc)) if i else N_
+                # or fork N_ s, Nt for mediated adjacency?
+        dLev = Cn(N_=dfork_[0], Bt=dfork_[1], Ct=dfork_[2], dTT=TT, root=root, rc=rc, c=min(_N.c, N.c))
+
+    dLev.m = sum(TT[0]); dLev.d = sum(TT[1])
+    root.H += [dLev]; root.dTT += TT  # root.m = val_(TT,rc); root.d = val_(TT,rc,fi=0)?
+
+def proj_TT1(L, cos_d, dec, rc, pTT = np.zeros((2,9))):  # always links
+
+    pTT += np.array([L.dTT[0]*dec, L.dTT[1]*cos_d*dec])  # coarse approximation
+    V = val_(pTT,rc)
+    if abs(V) > ave: return pTT,V  # ave: sym certainty margin proxy
+    # refine projection if not certain:
+    if L.H:
+        for lev in L.H:  # or always H in links?
+            pTT,V = proj_TT(lev, cos_d, dec, rc+1, pTT)  # acc pTT
+            if abs(V) > ave: return pTT,V
+    else:   # project forks
+        for i, Ft in enumerate([L.dTT, L.Bt, L.Ct]):  # N.dTT is summed from N_, add trans-dTT?
+            if Ft:
+                if len(Ft) > 2: Ft = [Ft]
+                for fork in Ft:
+                    fTT = fork.dTT if i else fork
+                    pTT += np.array([fTT[0]*dec, fTT[1]*cos_d*dec]); V = val_(pTT, rc)
+                    if abs(V) > ave: return pTT,V
+    return pTT,V
+
+def proj_N1(N, dist, A, rc):  # arg rc += N.rc+contw, recursively specify N projection val, add pN if comp_pN?
+
+    rdist = dist / N.span   # internal x external angle:
+    cos_d = (N.angl[0].dot(A) / (np.hypot(*N.angl[0]) * dist)) * N.angl[1]  # N-to-yx alignment
+    m,d = N.m,N.d  # tentative
+    dec = rdist * (m / (m+d))  # match decay rate, * ddecay for ds?
+    # dec = link.m ** (1 + dist / link.span))
+    # uncertainty = 1 - abs(dec_m - ave)
+
+    iTT, eTT = np.zeros((2,9)), np.zeros((2,9))  # if separate eval?
+    for L in N.L_+ N.B_: pTT,_ = proj_TT(L, cos_d, dec, L.rc+rc, iTT)
+    iV = val_(iTT, rc)  # no _TT?
+    for L in N.rim: pTT,_= proj_TT(L, cos_d, dec, L.rc+rc, eTT)
+    eV = val_(eTT, rc)
+
+    # info gain = (N.dTT[0] @ wTTf[0]) * ave_uncertainty:
+    # val should be cumulative, -= borrow by N.dTT[1] @ wTTf[1]?
+
+    return iTT+eTT, iV+eV  # * uncertainty * N.m?
