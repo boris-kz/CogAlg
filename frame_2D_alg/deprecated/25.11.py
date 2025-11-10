@@ -238,5 +238,29 @@ def proj_N1(N, dist, A, rc):  # arg rc += N.rc+contw, recursively specify N proj
 
     # info gain = (N.dTT[0] @ wTTf[0]) * ave_uncertainty:
     # val should be cumulative, -= borrow by N.dTT[1] @ wTTf[1]?
-
     return iTT+eTT, iV+eV  # * uncertainty * N.m?
+
+def comp_sub(_N,N, rc, root):  # unpack node trees down to numericals and compare them
+
+    _H, H = _N.H,N.H; TT = np.zeros((2,9))
+    if _H and H:
+        dH = []; C = 0
+        for _lev,lev in zip(_H, H):
+            C += min(_lev.c, lev.c)
+            tt = comp_derT(_lev.dTT[1], lev.dTT[1]*rc); TT += tt  # default
+            dlev = Cn(dTT=tt, m=sum(tt[0]), d=sum(tt[1]), root=root, c=min(_lev.c,lev.c), rc=min(_lev.rc,lev.rc))
+            if val_(tt,rc) > 0:  # sub-recursion:
+                comp_sub(_lev,lev, rc, dlev)
+            dH += [dlev]
+    else:
+        dN_,dB_,dC_ = [],[],[]
+        if N.H: N = N.H[0]  # comp 1st lev only
+        if _N.H: _N = _N.H[0]
+        for i, (F,f,dF) in enumerate(zip((_N.zN_(),_N.B_,_N.C_), (N.zN_(),N.B_,N.C_), (dN_,dB_,dC_))):
+            if F and f:  # N_ is never empty
+                N_,L_,mTT,B_,dTT = comp_N_(F,rc,f) if i<2 else comp_C_(F,rc,f)
+                fTT = mTT + dTT; TT += fTT
+                dF[:] = L_  # diffs
+        dH = [Cn(N_=dN_,B_=dB_,C_=dC_, dTT=TT, m=sum(TT[0]), d=sum(TT[1]), root=root, rc=rc, c=min(_N.c, N.c))]
+
+    root.H = dH; root.dTT += TT  # root.m = val_(TT,rc); root.d = val_(TT,rc,fi=0)?
