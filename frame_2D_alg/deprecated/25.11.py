@@ -264,3 +264,10 @@ def comp_sub(_N,N, rc, root):  # unpack node trees down to numericals and compar
         dH = [Cn(N_=dN_,B_=dB_,C_=dC_, dTT=TT, m=sum(TT[0]), d=sum(TT[1]), root=root, rc=rc, c=min(_N.c, N.c))]
 
     root.H = dH; root.dTT += TT  # root.m = val_(TT,rc); root.d = val_(TT,rc,fi=0)?
+
+def copy_(H, root):  # simplified
+    cH = CN(dTT=deepcopy(H.dTT), root=root, rc=H.rc, m=H.m,d=H.d,c=H.c)  # summed across H
+    cH.H = [copy_(lay,cH) for lay in H.H]
+    cH.F_ = [copy(f) for f in cH.fork_]
+    return cH
+
