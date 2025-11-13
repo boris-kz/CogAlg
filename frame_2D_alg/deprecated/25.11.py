@@ -271,3 +271,80 @@ def copy_(H, root):  # simplified
     cH.F_ = [copy(f) for f in cH.fork_]
     return cH
 
+class Cn(CBase):  # light CN for non-locals: H levels, Bt, Ct, nG, Bt?
+    name = "Nt"
+    def __init__(n, **kwargs):
+        super().__init__()
+        n.H = kwargs.get('H', [])  # empty if N_, for nested root H levels
+        n.N_, n.L_ = kwargs.get('N_',[]),kwargs.get('L_',[])  # principals
+        n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # separate N_,L_ TTs?
+        n.m,  n.d, n.c = kwargs.get('m',0), kwargs.get('d',0), kwargs.get('c',0)  # sum dTT
+        n.B_, n.C_, n.R_ = kwargs.get('B_', []), kwargs.get('C_', []), kwargs.get('R_', [])  # sub-forks?
+        n.rc = kwargs.get('rc',1)  # redundancy
+        n.typ = kwargs.get('fi',1)  # for compatibility?
+        n.root = kwargs.get('root', None)  # immediate
+
+    def zN_(n):  # get 1st level N_
+        return n.N_ if n.N_ else n.H[0].zN_()
+    def __bool__(n): return bool(n.c)
+    # is_H(n: Cn) := bool(n.H); is_leaf(n: Cn) := bool(n.N_)
+
+def add_N(N, n, init=0, fC=0, froot=0):  # rn = n.n / mean.n
+
+    for Par,par in zip((N.baseT,N.dTT), (n.baseT,n.dTT)):
+        Par += par  # extensive params, scale with c
+    _cnt,cnt = N.c,n.c; Cnt = _cnt+cnt
+    # weigh contribution of intensive params:
+    # add_sub(N,n, N)  # H or N_?
+    N.mang = (N.mang*_cnt + n.mang*cnt) / Cnt
+    N.span = (N.span*_cnt + n.span*cnt) / Cnt
+    N.rc = (N.rc*_cnt + n.rc*cnt) / Cnt
+    N.box = extend_box(N.box, n.box)
+    N.c += n.c  # cnt / mass
+    if init:  # N is G
+        n.em, n.ed = vt_(n.eTT); N.yx += [n.yx]
+        N.angl = (N.angl*_cnt + n.angl[0]*cnt) / Cnt  # vect only
+    else:     # merge n
+        if N.H:
+            if n.H:
+                for Lev,lev in zip(N.H,n.H): add_N(Lev,lev)
+            else: add_N(N.H[0], sum_N_(n.N_,root=N))
+        else:
+            N.H = [n] + N.H
+        #  for node in n.N_: node.root = N; N.N_ += [node]  not sure
+        A,a = N.angl[0],n.angl[0]; A[:] = (A*_cnt+a*cnt) / Cnt
+        N.L_ += n.L_; N.rim += n.rim  # no L.root, rims can't overlap?
+    n.C_ += [C for C in n.C_ if C not in N.C_]  # centroids, not in root Ct
+    n.B_ += [B for B in n.B_ if B not in N.B_]  # high-diff links, not in root Bt?
+    # if N is Fg: margin = Ns of proj max comp dist > min _Fg point dist: cross_comp Fg_?
+    if fC: n.rc = np.sum([mo[1] for mo in n._mo_]); N.rC_ += n.rC_; N.mo_ += n.mo_
+    else:  N.rc += n.rc
+    if froot: n.fin = 1; n.root = N
+    return N
+
+def add_sub(N,n, root):  # add n.H|n.N_, n.Bt,n.Ct to N, analogous to comp_sub
+
+    N.dTT += n.dTT; N.rc += n.rc; N.c += n.c
+    if n.H:
+        for Lev, lev in zip_longest(N.H,n.H):
+            if Lev and lev: add_sub(Lev,lev, N)
+            elif lev:
+                N.H += [Copy_(lev, N)]
+    else:
+        N.N_ += [n for n in n.N_ if n not in N.N_]  # single lev
+    # add in root?
+    for L_,l_ in zip((N.L_, N.B_, N.R_), (n.L_, n.B_, n.R_)):
+        L_ += [l for l in l_ if l not in L_]
+    ''' 
+    not sure:
+    for Ft, ft in zip((N.Bt, N.Ct), (n.Bt, n.Ct)):
+        if ft:
+            if Ft:
+                for L_,l_ in zip((Ft.N_,Ft.L_,Ft.B_,Ft.R_), (ft.N_,ft.L_,ft.B_,ft.R_)):
+                L_ += [l for l in l_ if l not in L_]
+                Ft.rc += ft.rc; Ft.c += ft.c
+                Ft.dTT += ft.dTT
+                Ft.m = sum(Ft.dTT[0])  # recompute m
+                Ft.d = sum(Ft.dTT[1])  # recompute d
+            else copy
+    '''
