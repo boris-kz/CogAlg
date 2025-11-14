@@ -46,22 +46,21 @@ class CN(CBase):
     def __init__(n, **kwargs):
         super().__init__()
         n.typ = kwargs.get('typ', 0)
-        # 0=t: typ, dTT, H, N_,B_,C_, m,d,c,rc, root: for lev,C, Bt,Ct,Nt: use N_ as R_
-        # 1=L: + nt,rng, yx,box,span,angl, fin,compared
-        # 2=G: + rim, eTT,em,ed,ec, baseT,mang,sub,exe, Nt,Bt,Ct, tNt,tBt,tCt
-        # 3=PP: 2 + skip comp_sub?
-        n.H = kwargs.get('H', [])  # empty if N_:
-        n.N_, n.L_ = kwargs.get('N_',[]), kwargs.get('L_')  # core attrs
-        n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # sum N_ dTT: m_,d_ [M,D,n, I,G,a, L,S,A], separate total,L_ TTs?
+        # 0=t: typ, dTT, m,d,c,rc, root, N_,B_,C_: for eval,C,lev: 1st lev N_ is redundant, use as R_?
+        # 1=L: + nt, L_, rng, yx,box,span,angl, fin,compared, Bt,Ct,Nt from comp nested?
+        # 2=G: + rim, eTT,em,ed,ec, baseT,mang,sub,exe, tNt, tBt, tCt?
+        # 3=PP: =2, skip comp_sub?
+        n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # total forks dTT: m_,d_ [M,D,n, I,G,a, L,S,A]
         n.m,  n.d, n.c = kwargs.get('m',0), kwargs.get('d',0), kwargs.get('c',0)  # sum dTT
         n.rim = kwargs.get('rim',[])  # external links, rng-nest?
         n.eTT = kwargs.get('eTT',np.zeros((2,9)))  # sum rim dTT
         n.em, n.ed, n.ec = kwargs.get('em',0),kwargs.get('ed',0),kwargs.get('ec',0)  # sum eTT
         n.rc  = kwargs.get('rc', 1)  # redundancy to ext Gs, ave in links?
-        n.B_, n.C_ = kwargs.get('B_',[]), kwargs.get('C_',[])  # secondary dlink_,cent_,reciprocal root_
-        n.Bt, n.Ct = kwargs.get('Bt',[]), kwargs.get('Ct',[])  # optional,+ tNt,tBt,tCt no tN_,tB_,tC_?
-        n.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,A: not ders, not in links?
-        n.nt    = kwargs.get('nt',[])  # nodet, links only
+        n.N_, n.B_, n.C_, n.L_ = kwargs.get('N_',[]), kwargs.get('B_',[]), kwargs.get('C_',[]), kwargs.get('L_',[])  # base elements
+        n.Nt, n.Bt, n.Ct, n.Lt = kwargs.get('Nt',[]), kwargs.get('Bt',[]), kwargs.get('Ct',[]), kwargs.get('Lt',[])  # nested elements
+        n.nest  = kwargs.get('nest',0)  # for Ts above, Nt.N_=R_ if nest==0 else H
+        n.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,A: not ders, not in links
+        n.nt    = kwargs.get('nt', [])  # nodet, links only
         n.yx    = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
         n.box   = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
         n.span  = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_), not additive?
@@ -74,6 +73,7 @@ class CN(CBase):
         n.exe = kwargs.get('exe',0)  # exemplar, temporary
         n.compared = set()
         # n.fork_tree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
+    # not needed?:
     def zN_(n):  # get 1st level N_
         return n.N_ if n.N_ else n.H[0].zN_()
     def __bool__(n): return bool(n.N_)
@@ -113,7 +113,7 @@ def val_(TT, rc, fi=1, mw=1, rn=.5, _TT=None):  # m,d eval per cluster, rn = n /
 
 def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering, fT: convert return to tuple
 
-    N_, mL_,mTT, dL_,dTT,_ = comp_C_(root.zN_(),rc) if fC else comp_N_(root.zN_(),rc)  # rc: redundancy+olp, fi=1|0
+    N_, mL_,mTT, dL_,dTT,_ = comp_C_(root.N_,rc) if fC else comp_N_(root.N_,rc)  # rc: redundancy+olp, fi=1|0
     nG, Bt = [], []
     if fC< 2 and dL_ and val_(dTT, rc+compw, fi=0, mw=(len(dL_)-1)*Lw) > avd:  # comp dL_| dC_, not ddC_
         Bt = cross_comp(CN(typ=0, N_=dL_,root=root), rc+compw+1, fC*2)  # trace_edge via nt s?
@@ -132,14 +132,15 @@ def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering, fT: 
             nG.H = root.H + [root] + nG.H  # nG.H is higher composition
         elif Bt:
             nG=root; nG.B_=dL_; nG.Bt=Bt  # new boundary of old core
-
-    return nG  # replace root
+    # replace root:
+    return nG
 
 def form_B__(G, Bt):  # assign boundary / background per node from Bt tuple
 
     for bG in Bt.N_:  # add R_ per boundary graph, in Fg?
         R_ = list({n.root for L in bG.N_ for n in L.nt if n.root and n.root.root is not None}) # core Gs, exclude frame
-        bG.R_ = sorted(R_+[G], key=lambda x:(x.m/x.c), reverse=True)
+        bG.N_ = sorted(R_+[G], key=lambda x:(x.m/x.c), reverse=True)
+        # use bG.N_[0].N_ if bG.nest?
     def R(L):
         return L.root if L.root is None or L.root in Bt.N_ else R(L.root)
 
@@ -150,7 +151,7 @@ def form_B__(G, Bt):  # assign boundary / background per node from Bt tuple
             bG = R(L)  # replace boundary L with its root in bG.N_
             if bG:
                 bG_ +=[bG]; dTT+=bG.dTT; rdn += bG.R_.index(N)+1  # n stronger cores of rB
-                if N not in bG.R_: bG.R_ += [N]  # reciprocal core
+                if N not in bG.N_: bG.N_ += [N]  # reciprocal core
         N.Bt = CN(type=0, N_=bG_,dTT=dTT,m=sum(dTT[0]),d=sum(dTT[1]), c=sum(b.c for b in N.B_),rc=rdn, root=N)  # N_=R_
     G.Bt = Bt
 
@@ -599,32 +600,34 @@ def Copy_(N, rc=1, root=None, init=0):
 
     C = CN(root=root, typ=N.typ, dTT=deepcopy(N.dTT))
     # default attrs:
-    for attr in ['H','N_','L_','m','d','c','B_','C_','R_','rc']: setattr(C, attr, copy(getattr(N, attr)))
+    for attr in ['H','N_','L_','m','d','c','B_','C_','R_','rc']: setattr(C, attr, copy(getattr(N,attr)))
     if N.typ:  # then if N.typ>1?
-        for attr in ['em','ed','ec','rng','fin','span','mang','sub','exe']: setattr(C, attr, getattr(N, attr))
-        for attr in ['nt','baseT','eTT', 'box','rim', 'compared']: setattr(C, attr, copy(getattr(N, attr)))
-        for attr in ['Bt','Ct']: setattr(C, attr, Copy_(getattr(N, attr)) if getattr(N, attr) else [])
+        for attr in ['em','ed','ec','rng','fin','span','mang','sub','exe']: setattr(C,attr, getattr(N,attr))
+        for attr in ['nt','baseT','eTT','box','rim','compared']: setattr(C,attr, copy(getattr(N,attr)))
+        for attr in ['Bt','Ct']: setattr(C,attr, Copy_(getattr(N,attr)) if getattr(N,attr) else [])
         if init: # new G
-            C.N_ = [N]; C.yx = [N.yx]; C.angl = N.angl[0]  # to get mean
+            C.N_ = [N]; C.yx = [N.yx]; C.angl = np.array([copy(N.angl[0]), N.angl[1]],dtype=object)  # to get mean
             if init==1:  # else centroid
                 C.L_= [l for l in N.rim if l.m>ave]; N.root = C
                 N.em, N.ed = val_(N.eTT,rc), val_(N.eTT,rc,fi=0)
+                C.H = [Copy_(N, rc=N.rc, root=C)]; C.H[0].typ=0
         else:
             C.N_,C.L_,C.H = list(N.N_),list(N.L_),[Copy_(lev, rc=lev.rc, root=N) for lev in N.H]
-            C.angl = N.angl; N.root = root or N.root; C.yx = copy(N.yx); C.typ = N.typ  # else 1
+            C.angl = copy(N.angl); N.root = root or N.root; C.yx = copy(N.yx); C.typ = N.typ  # else 1
     return C
 
-def sum_N_(N_,rc, root=None, L_=[],C_=[],B_=[], rng=1,fC=0):  # sum node,link attrs in graph, aggH in agg+ or player in sub+
+def sum_N_(N_, rc, root=None, L_=[], C_=[], B_=[], rng=1, fC=0):
 
-    G = Copy_(N_[0],rc, root, init=fC+1)
-    G.rc=rc; G.rng=rng; G.N_,G.L_,G.C_,G.B_ = N_,L_,C_,B_; ang=np.zeros(2)
-    for N in N_[1:]:
-        add_N(G,N, init=1, fC=fC, froot=not fC)  # no need for froot?
-    Lev = CN(typ=0, root=G)  # sum L.H into Lev
-    for L in L_:
-        for lev in L.H: add_N(Lev,lev)  # combine L.H into Lev
-        G.dTT+=L.dTT; ang+=L.angl[0]
-    G.H += [Lev]  # nested level
+    G = Copy_(N_[0], rc, root, init=fC+1)
+    G.rc = rc; G.rng = rng
+    for Ft, F_, iF_ in zip(('Nt','Bt','Ct','Lt'), ('N_','B_','C_','L_'), (N_,B_,C_,L_)):
+        setattr(G, F_, iF_)
+        if iF_:
+            _Ft = Copy_(iF_[0], rc, root, init=fC+1)  # not sure
+            for F in iF_[1:]: add_N(_Ft, F, init=0, fC=fC, froot=not fC)
+            setattr(G, Ft, _Ft)
+            G.dTT += _Ft.dTT  # add c,rc, weigh by C?
+    ang = G.Lt.angl[0]  # nested level, not sure
     yx_ = G.yx; yx = np.mean(yx_,axis=0); dy_,dx_ = (yx_-yx).T
     G.yx = yx; G.span = np.hypot(dy_,dx_).mean()  # N centers dist to G center
     G.angl = np.array([ang, np.sign(G.dTT[1] @ wTTf[1])], dtype=object)
@@ -634,6 +637,7 @@ def sum_N_(N_,rc, root=None, L_=[],C_=[],B_=[], rng=1,fC=0):  # sum node,link at
     G.m, G.d = vt_(G.dTT)
     return G
 
+# not revised:
 def add_N(N, n, init=0, fC=0, froot=0):  # rn = n.n / mean.n
 
     if froot: n.fin = 1; n.root = N
@@ -644,13 +648,12 @@ def add_N(N, n, init=0, fC=0, froot=0):  # rn = n.n / mean.n
     N.c = (N.c*_cnt)+(n.c*cnt) / Cnt  # cnt / mass, same for centroids?
     n.C_ += [C for C in n.C_ if C not in N.C_]  # centroids, concat regardless
     if init:
-        if n.H: N.H = n.H
-        N.H += [n]  # default, higher G must have H, init with n
+        N.H = [Copy_(n, n.rc,root=N)]  # init? top layer
+        if n.H: N.H += copy(n.H)
     else:  # concat
-        if n.H:  # N.H init above
-            for Lev, lev in zip(N.H, n.H): add_N(Lev, lev)
-        else:
-            add_N(N.H[0], sum_N_(n.N_, rc=n.rc, root=N))
+        add_N(N.H[0],n, init=not N.H[0].H)
+        if n.H:  # N.H init above,
+            for Lev,lev in zip(N.H[1:],n.H): add_N(Lev,lev)
     if N.typ:
         N.eTT += n.eTT
         N.baseT += n.baseT
@@ -661,7 +664,7 @@ def add_N(N, n, init=0, fC=0, froot=0):  # rn = n.n / mean.n
         N.yx += [n.yx]  # weigh by Cnt?
         N.box = extend_box(N.box, n.box)
         for Ft, ft in zip((N.Bt, N.Ct, N.Nt), (n.Bt, n.Ct, N.Nt)):
-            if ft: add_N(Ft,ft)  # Ft maybe empty CN, weigh by Cnt?
+            if ft: add_N(Ft, ft)  # Ft maybe empty CN, weigh by Cnt?
         for L in n.rim:
             if L.m > ave: N.L_ += [L]
             else: N.B_ += [L]
@@ -673,7 +676,7 @@ def extend_box(_box, box):
     return min(y0,_y0), min(x0,_x0), max(yn,_yn), max(xn,_xn)
 
 # not used directly
-def sort_H(H, typ):  # lev.rc = complementary to root.rc and priority index in H, if selective and aligned
+def sort_H(H, fi):  # lev.rc = complementary to root.rc and priority index in H, if selective and aligned
 
     i_ = []  # priority indices
     for i, lay in enumerate(sorted(H.node_, key=lambda lay: [lay.m, lay.d][fi], reverse=True)):
@@ -681,7 +684,7 @@ def sort_H(H, typ):  # lev.rc = complementary to root.rc and priority index in H
         lay.rc += di  # derR - valR
         i_ += [lay.i]
     H.i_ = i_  # H priority indices: node/m | link/d
-    if typ>1:
+    if fi>1:
         H.root.node_ = H.node_
     # more advanced ordering: dH | H as medoid cluster of layers?
     # nested cent_attr across layers?

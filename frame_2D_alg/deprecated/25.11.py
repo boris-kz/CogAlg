@@ -291,35 +291,35 @@ class Cn(CBase):  # light CN for non-locals: H levels, Bt, Ct, nG, Bt?
 
 def add_N(N, n, init=0, fC=0, froot=0):  # rn = n.n / mean.n
 
-    for Par,par in zip((N.baseT,N.dTT), (n.baseT,n.dTT)):
-        Par += par  # extensive params, scale with c
-    _cnt,cnt = N.c,n.c; Cnt = _cnt+cnt
-    # weigh contribution of intensive params:
-    # add_sub(N,n, N)  # H or N_?
-    N.mang = (N.mang*_cnt + n.mang*cnt) / Cnt
-    N.span = (N.span*_cnt + n.span*cnt) / Cnt
-    N.rc = (N.rc*_cnt + n.rc*cnt) / Cnt
-    N.box = extend_box(N.box, n.box)
-    N.c += n.c  # cnt / mass
-    if init:  # N is G
-        n.em, n.ed = vt_(n.eTT); N.yx += [n.yx]
-        N.angl = (N.angl*_cnt + n.angl[0]*cnt) / Cnt  # vect only
-    else:     # merge n
-        if N.H:
-            if n.H:
-                for Lev,lev in zip(N.H,n.H): add_N(Lev,lev)
-            else: add_N(N.H[0], sum_N_(n.N_,root=N))
-        else:
-            N.H = [n] + N.H
-        #  for node in n.N_: node.root = N; N.N_ += [node]  not sure
-        A,a = N.angl[0],n.angl[0]; A[:] = (A*_cnt+a*cnt) / Cnt
-        N.L_ += n.L_; N.rim += n.rim  # no L.root, rims can't overlap?
-    n.C_ += [C for C in n.C_ if C not in N.C_]  # centroids, not in root Ct
-    n.B_ += [B for B in n.B_ if B not in N.B_]  # high-diff links, not in root Bt?
-    # if N is Fg: margin = Ns of proj max comp dist > min _Fg point dist: cross_comp Fg_?
-    if fC: n.rc = np.sum([mo[1] for mo in n._mo_]); N.rC_ += n.rC_; N.mo_ += n.mo_
-    else:  N.rc += n.rc
     if froot: n.fin = 1; n.root = N
+    N.dTT += n.dTT
+    _cnt,cnt = N.c,n.c; Cnt = _cnt+cnt+1  # to weigh contribution of intensive params:
+    if fC: n.rc = np.sum([mo[1] for mo in n._mo_]); N.rC_ += n.rC_; N.mo_ += n.mo_
+    else:  N.rc = (N.rc*_cnt)+(n.rc*cnt) / Cnt
+    N.c = (N.c*_cnt)+(n.c*cnt) / Cnt  # cnt / mass, same for centroids?
+    n.C_ += [C for C in n.C_ if C not in N.C_]  # centroids, concat regardless
+    if init:
+        N.H = [Copy_(n, n.rc,root=N)]  # init? top layer
+        if n.H: N.H += copy(n.H)
+    else:  # concat
+        add_N(N.H[0],n, init=not N.H[0].H)
+        if n.H:  # N.H init above,
+            for Lev,lev in zip(N.H[1:],n.H): add_N(Lev,lev)
+    if N.typ:
+        N.eTT += n.eTT
+        N.baseT += n.baseT
+        N.mang = (N.mang*_cnt + n.mang*cnt) / Cnt
+        N.span = (N.span*_cnt + n.span*cnt) / Cnt
+        N.angl = (N.angl*_cnt + n.angl[0]*cnt) / Cnt  # vect only?
+        A,a = N.angl[0],n.angl[0]; A[:] = (A*_cnt+a*cnt) / Cnt  # not sure
+        N.yx += [n.yx]  # weigh by Cnt?
+        N.box = extend_box(N.box, n.box)
+        for Ft, ft in zip((N.Bt, N.Ct, N.Nt), (n.Bt, n.Ct, N.Nt)):
+            if ft: add_N(Ft, ft)  # Ft maybe empty CN, weigh by Cnt?
+        for L in n.rim:
+            if L.m > ave: N.L_ += [L]
+            else: N.B_ += [L]
+    # if N is Fg: margin = Ns of proj max comp dist > min _Fg point dist: cross_comp Fg_?
     return N
 
 def add_sub(N,n, root):  # add n.H|n.N_, n.Bt,n.Ct to N, analogous to comp_sub
