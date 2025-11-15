@@ -173,33 +173,30 @@ def proj_TT(N, cos_d, dec, rc, pTT = np.zeros((2,9))):
                     if abs(V) > ave: return pTT,V
     return pTT,V
 
-def comp_subs1(_N,N, rc, root):  # unpack node trees down to numericals and compare them
+def comp_sub1(_N,N, rc, root):  # unpack node trees down to numericals and compare them
 
-    _H, H = _N.H,N.H; TT = np.zeros((2,9))
+    _H, H = _N.H,N.H; TT = np.zeros((2,9))  # root comp_derT is in base_comp
     if _H and H:
-        dLev = Cn(dTT=TT, root=root, rc=rc)
-        C = 0
+        dH = []; C=0
         for _lev,lev in zip(_H, H):
-            C += min(_lev.c, lev.c)
-            TT += comp_derT(_lev.dTT[1], lev.dTT[1]*rc)  # default
-            if val_(TT,rc) > 0:  # sub-recursion:
-                comp_sub(_lev,lev, rc, dLev)
-        dLev.c = C / min(len(_H),len(H))
+            tt = comp_derT(_lev.dTT[1], lev.dTT[1])  # default
+            TT+= tt; m,d = vt_(tt); c = min(_lev.c,lev.c); C += c
+            dlev = CN(typ=1, dTT=tt, m=m,d=d,c=c, rc=min(_lev.rc,lev.rc), root=root)
+            if (_lev.N_ or _lev.H) and (lev.N_ or lev.H) and val_(tt,rc) > 0:
+                comp_sub(_lev,lev, rc,dlev)  # sub-recursion adds to dlev
+            dH += [dlev]
     else:
-        TT = np.zeros((2,9)); dfork_ = [[],[],[]]
-        if N.H: N = N.H[0]  # comp 1st lev only
+        if N.H: N = N.H[0]  # comp 1st lev only: same elevation as N_
         if _N.H: _N = _N.H[0]
-        for i, (F,f) in enumerate(zip((_N.zN_(), _N.Bt,_N.Ct), (N.zN_(), N.Bt,N.Ct))):
-            if F and f:  # N_ is never empty
-                if i: F=F.zN_(); f=f.zN_()  # Bt|Ct
-                N_,L_,mTT,B_,dTT = comp_N_(F,rc,f) if i<2 else comp_C_(F,rc,f)
-                fTT = mTT + dTT; TT += fTT
-                dfork_[i] = Cn(N_=N_,dTT=fTT, m=sum(fTT[0]),d=sum(fTT[1]), c=min(F.c,f.c), rc=min(F.rc,f.rc)) if i else N_
-                # or fork N_ s, Nt for mediated adjacency?
-        dLev = Cn(N_=dfork_[0], Bt=dfork_[1], Ct=dfork_[2], dTT=TT, root=root, rc=rc, c=min(_N.c, N.c))
+        N_,L_,mTT,B_,dTT, C = comp_N_(_N.zN_(),rc,N.zN_()); tt = mTT+dTT; m,d = vt_(tt); TT+=tt; root.N_ = L_+B_  # L.N_: trans-links
+        dH = [CN(typ=1, N_=L_+B_,dTT=tt, m=m,d=d,c=C, rc=rc, root=root)]  # ders
+        # no sub-recursion?
+    if _N.B_ and N.B_:  # add in 1st lev only? + Bt,Ct, + tNt,tBt,tCt from trans_cluster?
+        N_,bL_,mTT,bB_,dTT,c = comp_N_(_N.B_,rc, N.B_); tt = mTT+dTT; TT+=tt; C+=c; root.B_ = bL_+bB_
+    if _N.C_ and N.C_:
+        N_,cL_,mTT,cB_,dTT,c = comp_C_(_N.C_,rc, N.C_); tt = mTT+dTT; TT+=tt; C+=c; root.C_ = cL_+cB_
 
-    dLev.m = sum(TT[0]); dLev.d = sum(TT[1])
-    root.H += [dLev]; root.dTT += TT  # root.m = val_(TT,rc); root.d = val_(TT,rc,fi=0)?
+    root.H = dH; root.dTT+=TT; root.c+=C  # root.m = val_(TT,rc); root.d = val_(TT,rc,fi=0)?
 
 def proj_TT1(L, cos_d, dec, rc, pTT = np.zeros((2,9))):  # always links
 
