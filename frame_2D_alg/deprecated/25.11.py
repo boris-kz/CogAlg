@@ -345,3 +345,22 @@ def add_sub(N,n, root):  # add n.H|n.N_, n.Bt,n.Ct to N, analogous to comp_sub
                 Ft.d = sum(Ft.dTT[1])  # recompute d
             else copy
     '''
+def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering, fT: convert return to tuple
+
+    N_, mL_,mTT, dL_,dTT,_ = comp_C_(root.N_,rc) if fC else comp_N_(root.N_,rc)  # rc: redundancy+olp, fi=1|0
+    Bt = CN(typ=0, root=root, N_=dL_)
+    if fC<2 and dL_ and val_(dTT, rc+compw, fi=0, mw=(len(dL_)-1)*Lw) > avd:  # comp dL_| dC_, not ddC_
+        cross_comp(Bt, rc+compw+1, fC*2)  # d fork, trace_edge via nt s
+    # m fork:
+    if len(mL_) > 1 and val_(mTT, rc+compw, mw=(len(mL_)-1)*Lw) > 0:
+        for n in N_: n.em = sum([l.m for l in n.rim]) / len(n.rim)  # tentative before val_
+        if Cluster(root, mL_, rc, fC):  # fC=0: get_exemplars, cluster_C, rng connect cluster, update root in-place
+            rc = root.rc  # include new clustering layers
+            if Bt.Nt:  # add eval?
+                form_B__(root,Bt)  # add boundary to N and N to Bg R_s, no root update
+                if val_(mTT, rc+3+contw, mw=(len(root.N_)-1)*Lw) > 0:  # mval
+                    trace_edge(root,rc+3)  # comp Ns with shared N.Bt
+            if val_(root.dTT, rc+compw+3, mw=(len(root.N_)-1)*Lw, _TT=mTT) > 0:
+                cross_comp(root, rc+3)  # connec agg+, fC = 0
+    if Bt.Nt:  # was clustered
+        root.B_=dL_; root.Bt=Bt; root.dTT+=Bt.dTT  # new boundary
