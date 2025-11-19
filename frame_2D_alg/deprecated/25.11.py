@@ -364,3 +364,45 @@ def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering, fT: 
                 cross_comp(root, rc+3)  # connec agg+, fC = 0
     if Bt.Nt:  # was clustered
         root.B_=dL_; root.Bt=Bt; root.dTT+=Bt.dTT  # new boundary
+
+def comp_N_(iN_,rc,_iN_=[]):
+
+    def proj_V(_N,N, dist, Ave, pVt_):  # _N x N induction
+
+        iV = (_N.m+N.m)/2 * dec**(dist/((_N.span+N.span)/2)) - Ave
+        eV = sum([l.m * dec**(dist/l.span) - Ave for l in _N.rim+N.rim])
+        V = iV + eV
+        if abs(V) > Ave: return V  # +|-
+        elif eV * ((len(pVt_)-1)*Lw) > specw:  # spec over rim, nested spec N_, not L_
+            eTT = np.zeros((2,9))  # comb forks?
+            for _dist,_dy_dx,__N,_V in pVt_:
+                pTT,pV = proj_N(N,_dist,_dy_dx, rc)
+                if pV>0: eTT += pTT  # +ve only?
+                pTT,pV = proj_N(N,_dist,-_dy_dx, rc)
+                if pV>0: eTT += pTT
+            return iV + val_(eTT,rc)
+        else: return V
+
+    N_, L_,mTT,mc, B_,dTT,dc = [],[],np.zeros((2,9)),0, [],np.zeros((2,9)),0
+    for i, N in enumerate(iN_):  # form unique all-to-all pre-links
+        N.pL_ = []
+        for _N in _iN_ if _iN_ else iN_[i+1:]:  # optional _iN_ as spec
+            if _N.sub != N.sub: continue  # or comp x composition?
+            dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)
+            N.pL_ += [[dist, dy_dx, _N]]
+        N.pL_.sort(key=lambda x: x[0])  # proximity prior
+    for N in iN_:
+        pVt_ = []  # [dist, dy_dx, _N, V]
+        for dist, dy_dx, _N in N.pL_:  # rim angl not canonic
+            O = (N.rc +_N.rc) / 2; Ave = ave*rc*O
+            V = proj_V(_N,N, dist, Ave, pVt_)
+            if V > Ave:
+                Link = comp_N(_N,N, O+rc, A=dy_dx, span=dist)
+                if   Link.m > ave*(contw+rc): L_+=[Link]; mTT+=Link.dTT; mc+=Link.c; N_ += [_N,N]  # combined CN dTT and L_
+                elif Link.d > avd*(contw+rc): B_+=[Link]; dTT+=Link.dTT; dc+=Link.c  # no overlap to simplify
+                pVt_ += [[dist, dy_dx, _N, Link.m-ave*rc]]  # for distant rim eval
+            else:
+                break  # no induction
+    return list(set(N_)), L_,mTT,mc, B_,dTT,dc
+
+
