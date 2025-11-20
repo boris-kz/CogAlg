@@ -405,4 +405,22 @@ def comp_N_(iN_,rc,_iN_=[]):
                 break  # no induction
     return list(set(N_)), L_,mTT,mc, B_,dTT,dc
 
+def comp_sub(_N,N, rc, root):  # unpack node trees down to numericals and compare them
+
+    for _F_,F_,dF_ in zip((_N.N_,_N.B_,_N.C_), (N.N_,N.B_,N.C_), ('N_','B_','C_')):  # + tN_,tB_,tC_ from trans_cluster?
+        if _F_ and F_:
+            N_,L_,mTT,mc, B_,dTT,dc = comp_C_(_F_,rc,F_)  # L_,B_ trans-links
+            tt=mTT+dTT; root.dTT+=tt; root.c=mc+dc; setattr(root, dF_, L_+B_)  # +rc, weigh by C?
+    if _N.nest and N.nest:
+        _H, H = _N.Nt.N_,N.Nt.N_  # no comp Bt,Ct: external to N,_N?
+        dH = []; TT=np.zeros((2,9)); C=0
+        for _lev,lev in zip(_H[1:], H[1:]):  # skip redundant 1st lev, must be >1 levels
+            tt = comp_derT(_lev.dTT[1], lev.dTT[1]); m,d = vt_(tt); c= min(_lev.c,lev.c); TT+=tt; C+=c
+            dlev = CN(typ=1, dTT=tt, m=m,d=d,c=c, rc=min(_lev.rc,lev.rc), root=root)
+            if _lev.Nt and _lev.Nt.nest and lev.Nt and lev.Nt.nest and m > ave*rc:
+                comp_sub(_lev,lev, rc,dlev)  # dlev += sub-recursion
+            dH += [dlev]
+        nt = sum_N_(root.N_, rc); nt.N_=[]; root.nest+=1  # root is link, nt is lev0, nest=0
+        root.Nt = sum_N_([nt]+dH, rc,root)  # Nt H
+        root.dTT+=TT; root.c+=C  # update in-place, add rc?
 
