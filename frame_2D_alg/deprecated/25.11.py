@@ -423,4 +423,24 @@ def comp_sub(_N,N, rc, root):  # unpack node trees down to numericals and compar
         nt = sum_N_(root.N_, rc); nt.N_=[]; root.nest+=1  # root is link, nt is lev0, nest=0
         root.Nt = sum_N_([nt]+dH, rc,root)  # Nt H
         root.dTT+=TT; root.c+=C  # update in-place, add rc?
-
+'''
+    def to_cn(n, val, attr):
+        if isinstance(val, list): val = CN(); setattr(n, attr, val)
+        return val
+    @property
+    def Nt(n): return n.to_cn(n._Nt,'_Nt')
+    @Nt.setter
+    def Nt(n, value): n._Nt = value
+    @property
+    def Bt(n): return n.to_cn(n._Bt,'_Bt')
+    @Bt.setter
+    def Bt(n, value): n._Bt = value
+    @property
+    def Ct(n): return n.to_cn(n._Ct,'_Ct')
+    @Ct.setter
+    def Ct(n, value): n._Ct = value
+    @property
+    def Lt(n): return n.to_cn(n._Lt,'_Lt')
+    @Lt.setter
+    def Lt(n, value): n._Lt = value
+'''
