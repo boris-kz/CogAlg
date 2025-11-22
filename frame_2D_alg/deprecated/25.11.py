@@ -378,7 +378,7 @@ def comp_N_(iN_,rc,_iN_=[]):
             for _dist,_dy_dx,__N,_V in pVt_:
                 pTT,pV = proj_N(N,_dist,_dy_dx, rc)
                 if pV>0: eTT += pTT  # +ve only?
-                pTT,pV = proj_N(N,_dist,-_dy_dx, rc)
+                pTT,pV = proj_N(_N,_dist,-_dy_dx, rc)
                 if pV>0: eTT += pTT
             return iV + val_(eTT,rc)
         else: return V
