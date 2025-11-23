@@ -405,7 +405,7 @@ def comp_N_(iN_,rc,_iN_=[]):
                 break  # no induction
     return list(set(N_)), L_,mTT,mc, B_,dTT,dc
 
-def comp_sub(_N,N, rc, root):  # unpack node trees down to numericals and compare them
+def comp_sub1(_N,N, rc, root):  # unpack node trees down to numericals and compare them
 
     for _F_,F_,dF_ in zip((_N.N_,_N.B_,_N.C_), (N.N_,N.B_,N.C_), ('N_','B_','C_')):  # + tN_,tB_,tC_ from trans_cluster?
         if _F_ and F_:
