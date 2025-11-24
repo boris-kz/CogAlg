@@ -642,12 +642,12 @@ def sum_N_(N_,rc, root=None, L_=[],C_=[],B_=[], rng=1, init=1):  # updates root 
         G = root; G.N_ += N_; G.L_ += L_; G.B_ += B_; G.C_ += C_
     H = []  # concat levels
     for N in G.N_:
-        add_N(G,N)
-        for Lev,lev in zip_longest(H, N.Nt.N_):
+        add_N(G,N)  # only attrs not in Nt?
+        for Lev,lev in zip_longest(H, N.Nt.N_, fillvalue=[]):
             if lev:
                 if Lev: Lev += lev.N_
-                else: H += [lev.N_]
-    H = [sum2T( n_, rc, G) for n_ in [G]+H]  # Nt.N_[0] is G.N_
+                else:   H += [lev.N_]
+    H = [sum2T( n_, rc, G) for n_ in [G.N_]+H]  # Nt.N_[0] is G.N_
     G.Nt = sum2T(H, rc, G)
     for nFt, F_ in zip(('Bt','Ct','Lt'), (G.B_,G.C_,G.L_)):  # alt forks
         if F_:
