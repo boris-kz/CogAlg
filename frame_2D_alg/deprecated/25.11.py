@@ -444,3 +444,58 @@ def comp_sub1(_N,N, rc, root):  # unpack node trees down to numericals and compa
     @Lt.setter
     def Lt(n, value): n._Lt = value
 '''
+def sum_N_(N_,rc, root=None, L_=[],C_=[],B_=[], rng=1, init=1):  # updates root if not init
+
+    if init: G = CN(nest=root.nest if root else 1, N_=N_,L_=L_,B_=B_,C_=C_, rc=rc, rng=rng, root=root)  # new cluster
+    else:    G = root; G.dTT=np.zeros((2,9)); G.c=0  # replace all
+    for ft,f_,F_ in zip(('Nt','Bt','Ct','Lt'),('N_','B_','C_','L_'), (N_,B_,C_,L_)):  # add tFs?
+        setattr(G, f_,F_)
+        if F_:
+            F= F_[0]; Ft = Copy_(F, G, init)  # init fork T, composition H = [[N_], Nt.N_]
+            if ft=='Nt' and init: Ft.nest+=1; Ft.N_=[F]; Ft.Nt.N_ = [sum_N_(F.N_,rc,root=Ft.Nt)] + F.Nt.N_  # convert Nt.N_ to deeper H
+            for F in F_[1:]:
+                Ft.N_ += [F]; add_N(Ft, F, rc, merge=ft=='Nt')  # merge Nt H only
+            setattr(G,ft,Ft); root_update(G,Ft)
+    if G.Lt:
+        G.angl = np.array([G.Lt.angl[0], np.sign(G.dTT[1] @ wTTf[1])], dtype=object)  # canonical angle dir = mean diff sign
+    if init:  # root span and position don't change
+        yx_ = np.array([g.yx for g in N_]); yx = yx_.mean(axis=0); dy_,dx_ = (yx_-yx).T
+        G.span = np.hypot(dy_,dx_).mean()  # N centers dist to G center
+        G.yx = yx
+    if N_[0].typ and len(L_) > 1:  # else default mang = 1
+        G.mang = np.mean([comp_A(G.angl[0], l.angl[0])[0] for l in L_])
+    G.m,G.d = vt_(G.dTT)
+    return G
+
+def add_N1(N, n, rc=1, froot=0, merge=0):
+
+    fC = hasattr(n,'mo_')  # centroid
+    if fC and not hasattr(N,'mo_'): N.mo_=[]
+    if froot: n.fin = 1; n.root = N
+    _cnt,cnt = N.c,n.c; C = _cnt+cnt  # to weigh contribution of intensive params
+    if fC: n.rc = np.sum([mo[1] for mo in n._mo_]); N.rC_+=n.rC_; N.mo_+=n.mo_
+    else:  N.rc = (N.rc*_cnt+n.rc*cnt) / C
+    N.dTT = (N.dTT*_cnt + n.dTT*cnt) / C
+    N.C_ += [C for C in n.C_ if C not in N.C_]  # centroids, concat regardless
+    if merge:  # N.Nt.N_= H from sum_N_ init
+        for i, (T,t, T_,t_) in enumerate(zip((N.Nt,N.Bt,N.Ct,N.Lt), (n.Nt,n.Bt,n.Ct,n.Lt), (N.N_,N.B_,N.C_,N.L_), (n.N_,n.B_,n.C_,n.L_))):  # add 'tBt','tCt','tNt'?
+            if i:  # flat Bt,Ct,Lt, also merge?
+                if T and t: T_+=t_; add_N(T,t)
+            else:  # Nt.N_ is H, concat levels in nested add_N:
+                add_N(T.N_[0], sum_N_(t_,rc,root=T.Nt), merge=1)  # n.N_-> N.Nt.N_[0]: top nested level
+                for Lev,lev in zip_longest(T.N_[1:], t.N_):  # t is n.Nt, existing lower levels, may be empty
+                    if Lev and lev: add_N(Lev,lev, rc,merge=1)
+                    elif lev: T.N_ += [lev]  # t is deeper
+    if N.typ:
+        N.eTT  = (N.eTT *_cnt + n.eTT *cnt) / C
+        N.baseT= (N.baseT*_cnt+n.baseT*cnt) / C
+        N.mang = (N.mang*_cnt + n.mang*cnt) / C
+        N.span = (N.span*_cnt + n.span*cnt) / C
+        A,a = N.angl[0],n.angl[0]; A[:] = (A*_cnt+a*cnt) / C  # vect only
+        if isinstance(N.yx, list): N.yx += [n.yx]  # weigh by C?
+        N.box = extend_box(N.box, n.box)
+        for L in n.rim:
+            if L.m > ave: N.L_ += [L]
+            else: N.B_ += [L]
+    # if N is Fg: margin = Ns of proj max comp dist > min _Fg point dist: cross_comp Fg_?
+    return N
