@@ -499,3 +499,59 @@ def add_N1(N, n, rc=1, froot=0, merge=0):
             else: N.B_ += [L]
     # if N is Fg: margin = Ns of proj max comp dist > min _Fg point dist: cross_comp Fg_?
     return N
+
+def sum_N_1(N_,rc, root=None, L_=[],C_=[],B_=[], rng=1, init=1):  # updates root if not init
+
+    if init:  # new cluster
+        N = N_[0]; G = Copy_(N, root,typ=2); G.N_=N_; G.L_,G.B_ = [],[]
+        for N in N_[1:]: add_N(G,N)
+        if N.typ == 3:
+            return G  # shortcut for PP_
+    else:  # extend root
+        G = root; G.N_ += N_; G.L_ += L_; G.B_ += B_; G.C_ += C_
+    yx_,A = [], np.zeros(2)
+    # core forks:
+    for i, (nFt,F_) in enumerate(zip(('Nt','Lt'),(G.N_,G.L_))):
+        Ft = sum2T(F_, rc, G, flat=1)
+        if i: root_update(G,Ft)  # else updated in add_N
+        H = []  # concat levels in core fork H: top-down Nt.N_, bottom-up Lt.N_, both formed in cross_comp
+        for F in F_:
+            if i: A += F.angl[0]  # F is link
+            elif init: yx_ += [F.yx]  # or weigh contributions by c in a add_N?
+            for Lev,lev in zip_longest(H, F.Nt.N_):
+                if lev: (Lev.extend if Lev else H.append)(lev.N_)
+        Ft.N_ = [ sum2T(n_, rc, G) for n_ in [F_]+H]  # recompute H, Nt.N_[0] is G.N_
+        setattr(G,nFt, Ft)
+    # alt forks:
+    for nFt,F_ in zip(('Ct','Bt'),(G.C_,G.B_)):
+        if F_: Ft = sum2T(F_,rc,G); setattr(G,nFt,Ft); root_update(G,Ft)
+    G.angl = np.array([A, np.sign(G.dTT[1] @ wTTf[1])], dtype=object)  # angle dir = mean diff sign
+    if init:  # else same
+        yx_ = np.array(yx_); yx = yx_.mean(axis=0); dy_,dx_ = (yx_-yx).T
+        G.span = np.hypot(dy_,dx_).mean()  # N centers dist to G center
+        G.yx = yx
+    if N_[0].typ==2:  # else default mang = 1
+        G.mang = np.mean([comp_A(G.angl[0], l.angl[0])[0] for l in G.L_])
+    G.m,G.d = vt_(G.dTT)
+    return G
+
+def sum2T(N_, rc, root, TT=None, c=1, flat=0):  # simplified for Ft
+
+    N = N_[0]; Nt = Copy_(N, typ=0); Nt.root = root; fTT = TT is not None
+    if fTT: Nt.dTT=TT; Nt.c=c
+    if flat:  # flatten H level forks
+        Nt.N_=list(N.N_); Nt.L_=list(N.L_); Nt.B_=list(N.B_); Nt.C_=list(N.C_)
+    else:
+        Nt.N_ = N_  # all forks are nested
+    for N in N_[1:]:
+        if flat: Nt.N_+= N.N_; Nt.B_+=N.B_; Nt.C_+=N.C_; Nt.L_+=N.L_
+        if not fTT: Nt.dTT += N.dTT; Nt.c += N.c
+    for nFt,nF_,F_ in zip(('Nt','Bt','Ct','Lt'),('N_','B_','C_','L_'), (Nt.N_, Nt.B_,Nt.C_,Nt.L_)):  # add tFs?
+        if F_:
+            F_[:] = list(set(F_))
+            Ft = sum2T(F_, rc,root, flat=flat); setattr(Nt,nFt,Ft)  # external root update
+    Nt.m, Nt.d = vt_(Nt.dTT)
+    Nt.rc = rc
+    return Nt
+
+
