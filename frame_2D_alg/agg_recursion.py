@@ -194,8 +194,8 @@ def comp_N_(iN_,rc,_iN_=[]):
                 eTT += proj_N(_N,_dist,-_dy_dx, rc)  # reverse direction
         return iTT+eTT
 
-    N_, pL_,L_,mTT,mc, B_,dTT,dc, PTT = [],[],[],np.zeros((2,9)),0, [],np.zeros((2,9)),0, np.zeros((2,9))
-    for i, N in enumerate(iN_):  # form unique all-to-all pre-links
+    N_, pL_,L_,mTT,mc, B_,dTT,dc, dpTT = [],[],[],np.zeros((2,9)),0, [],np.zeros((2,9)),0, np.zeros((2,9))
+    for i, N in enumerate(iN_):  # get unique all-to-all pre-links
         N.pL_ = []
         for _N in _iN_ if _iN_ else iN_[i+1:]:  # optional _iN_ as spec
             if _N.sub != N.sub: continue  # or comp x composition?
@@ -207,20 +207,20 @@ def comp_N_(iN_,rc,_iN_=[]):
         for dist, dy_dx, _N in N.pL_:  # rim angl not canonic
             O = (N.rc +_N.rc) / 2; Ave = ave*rc*O
             pTT = proj_V(_N,N, dist, Ave, pVt_)
-            V,_ = vt_(pTT); PTT+=pTT  # +|-certainty
-            if V > Ave:
+            m,d = vt_(pTT); V= m-Ave  # +|-certainty
+            if V > 0:
                 if abs(V) < ave:  # different ave for projected surprise value, comp in marginal predictability
                     Link = comp_N(_N,N, O+rc, A=dy_dx, span=dist)
                     if   Link.m > ave*(contw+rc): L_+=[Link]; mTT+=Link.dTT; mc+=Link.c; N_ += [_N,N]  # combined CN dTT and L_
                     elif Link.d > avd*(contw+rc): B_+=[Link]; dTT+=Link.dTT; dc+=Link.c  # no overlap to simplify
-                    V = Link.m-Ave  # compute dV | comp_derT: evaluate the quality of projection?
+                    V = Link.m-Ave; dpTT+= pTT-Link.dTT  # prediction error to eval/fit the code?
                 else:
-                    pL = [dist,dy_dx,_N,N,V]; N.prim+=[pL]; _N.prim+=[pL]  # or reuse N.pL_?
-                    pL_ += [pL]  # pre-links to cluster pN_, or use same as as L_?
-                pVt_ += [[dist, dy_dx, _N,V]]  # for distant rim eval, include pL
+                    pL = CN(typ=1, nt=[_N,N], dTT=pTT, m=m, d=d, c=min(N.c,_N.c), angl=dy_dx, span=dist)
+                    pL_+= [pL]; N.prim+=[pL]; _N.prim+=[pL]  # use pre-links in clustering
+                pVt_ += [[dist, dy_dx,_N, V]]  # distant rim eval per L+pL Val
             else:
                 break  # beyond induction range
-    return list(set(N_)), L_,mTT,mc, B_,dTT,dc, pL_  # + PTT for higher-level verification?
+    return list(set(N_)), L_,mTT,mc, B_,dTT,dc, pL_  # + dpTT for code-fitting backprop?
 
 def comp_N(_N,N, rc, A=np.zeros(2), span=None, rng=1):  # compare links, optional angl,span,dang?
 
@@ -323,11 +323,11 @@ def rolp(N, _N_, R=0):  # rel V of L_|N.rim overlap with _N_: inhibition|shared 
     else:
         return 0
 
-def get_exemplars(N_, rc):  # multi-layer non-maximum suppression -> sparse nodes: diffusive centroid clustering seeds
+def get_exemplars(N_, rc):  # multi-layer non-maximum suppression -> sparse seeds for diffusive centroid clustering
 
     E_ = set()
     for rdn, N in enumerate(sorted(N_, key=lambda n:n.em, reverse=True), start=1):  # strong-first
-        roV = rolp(N, E_)
+        roV = rolp(N, E_)  #| olp in proportion to pairwise similarity?
         if N.em > ave * (rc+ rdn+ compw +roV):  # ave *= relV of overlap by stronger-E inhibition zones
             E_.update({n for l in N.rim for n in l.nt if n is not N and N.em > ave*rc})  # selective nrim
             N.exe = 1  # in point cloud of focal nodes
@@ -335,15 +335,6 @@ def get_exemplars(N_, rc):  # multi-layer non-maximum suppression -> sparse node
             break  # the rest of N_ is weaker, trace via rims
     return E_
 
-# probably not needed
-def get_pnode(N, pnode_):
-    for pL in N.prim:
-        _N = pL[2] if pL[3] is N else pL[3]
-        if _N not in pnode_:  # not in existing pnode_
-            pnode_ += [_N]
-            get_pnode(_N, pnode_)  # recursive?
-
-# not updated:
 def Cluster(root, iL_, rc, fC):  # generic clustering root
 
     def trans_cluster(root, iL_,rc):  # called from cross_comp(Fg_), others?
@@ -601,15 +592,13 @@ def Lnt(l): return ((l.nt[0].em + l.nt[1].em - l.m*2) * intw / 2 + l.m) / 2  # L
 
 def Copy_(N, root=None, init=0, typ=None):
 
-    if typ is None: typ = N.typ
+    if typ is None: typ = 2 if init else N.typ  # G.typ = 2
     C = CN(dTT=deepcopy(N.dTT), typ=typ); C.root = root or N.root
-    for attr in ['m','d','c','rc']: setattr(C, attr, copy(getattr(N,attr)))
-    if init: C.N_ = [N]
+    for attr in ['m','d','c','rc']: setattr(C,attr, getattr(N,attr))
+    if init: C.N_ = [N]; C.nest = N.nest+1
     else:
-        if C.typ == N.typ or N.typ==3:
-            C.N_ = N.N_; C.nest = N.nest+1
-            if N.Nt: C.Nt = Copy_(N.Nt, root=C)
-        else: C.N_ = N.Nt.N_; C.nest = N.nest-1  # G->Nt, no Nt.Nt
+        if C.typ == N.typ: C.N_= N.N_; C.nest=N.nest; C.Nt = Copy_(N.Nt,root=C) if N.Nt else N.Nt
+        elif C.typ< N.typ: C.N_= N.Nt.N_; C.nest=N.nest-1  # G->Nt, no Nt.Nt, not init
         C.L_=list(N.L_); C.B_=list(N.B_); C.C_=list(N.C_)  # empty in init G
     if typ:  # then if typ>1?
         C.eTT=deepcopy(N.eTT)
@@ -629,14 +618,14 @@ def sum_Gt(N_, rc, root=None, L_=[],C_=[],B_=[], rng=1, init=1):  # updates root
 
     if not init: N_+=root.N_; L_+=root.L_; B_+=root.B_; C_+=root.C_
 
-    G = sum2T(N_,rc,root, flat=1)  # flatten N.Nt.N_, add_N
-    G.Nt = Copy_(G, G, typ=0); G.rng=rng  # prune G attrs
+    G = sum2T(N_, rc, root); G.rng=rng  # add_N
+    G.Nt = Copy_(G,G, typ=0) # Nt.N_ = N.Nt.N_, already flat, prune G attrs
     # optional:
-    for i, (nFt, nF_, F_) in enumerate(zip(('Lt','Ct','Bt'),('L_','C_','B_'),(L_,C_,B_))):
+    for i, (nFt,nF_,F_) in enumerate(zip(('Lt','Ct','Bt'),('L_','C_','B_'),(L_,C_,B_))):
         if F_:
-            Ft = sum2T(F_,rc,G,flat=i==0); setattr(G,nF_,F_); setattr(G,nFt,Ft); root_update(G,Ft)
+            Ft = sum2T(F_, rc,G,flat=i==0); setattr(G,nF_,F_); setattr(G,nFt,Ft); root_update(G,Ft)
             if i==0:
-                A = np.sum([l.angl[0] for l in L_])  # angle dir = mean diff sign:
+                A = np.sum([l.angl[0] for l in L_],axis=0)  # angle dir = mean diff sign:
                 G.angl = np.array([A, np.sign(G.dTT[1] @ wTTf[1])], dtype=object)
     if init:  # else same
         yx_ = np.array([n.yx for n in N_]); yx = yx_.mean(axis=0); dy_,dx_ = (yx_-yx).T
@@ -652,10 +641,11 @@ def sum2T(N_, rc, root, TT=None, c=1, flat=0, typ=0):  # forms fork or G
     N = N_[0]; fTT = TT is not None
     G = Copy_(N,root, init=1, typ=typ)  # fork: typ=0
     if fTT: G.dTT=TT; G.c=c
-    n_ = list(N.N_)  # alt forks stay nested
-    for N in N_[1:]: add_N(G,N, fTT); n_ += N.N_
-    if flat: G.N_ = n_  # flatten H level forks
-    elif n_: G.Nt.N_.insert(0,sum2T(n_,rc,G))  # add new G.Nt.N_ lev0
+    n_ = list(N.N_)  # flatten core fork, alt forks stay nested
+    for N in N_[1:]: add_N(G,N,fTT); n_ += N.N_
+    if flat: G.N_ = n_  # flatten N_, currently for Lt.N_ only?
+    elif n_ and typ:  # flat new G.Nt.N_ lev0 in G, no Nt.Nt
+        G.Nt.N_.insert(0,sum2T(n_,rc,G, typ=0))
     G.m, G.d = vt_(G.dTT)
     G.rc = rc
     return G
@@ -691,7 +681,6 @@ def extend_box(_box, box):
     y0, x0, yn, xn = box; _y0, _x0, _yn, _xn = _box
     return min(y0,_y0), min(x0,_x0), max(yn,_yn), max(xn,_xn)
 
-# not used directly
 def sort_H(H, fi):  # lev.rc = complementary to root.rc and priority index in H, if selective and aligned
 
     i_ = []  # priority indices
@@ -856,9 +845,9 @@ def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init foca
             edge = slice_edge(blob, rV)
             if edge.G * ((len(edge.P_)-1)*Lw) > ave * sum([P.latT[4] for P in edge.P_]):
                 PPm_ = comp_slice(edge, rV, wTTf)
-                Edge = sum_Gt([PP2N(PPm) for PPm in PPm_],1,None); fE=0
+                Edge = sum_Gt([PP2N(PPm) for PPm in PPm_], rc=1, root=None); fE=0
                 if edge.link_:
-                    bG = sum_Gt([PP2N(PPd) for PPd in edge.link_],2, root=Edge); Edge.Bt = bG
+                    bG = sum_Gt([PP2N(PPd) for PPd in edge.link_], rc=2, root=Edge); Edge.Bt = bG
                     form_B__(Edge)  # add Edge.Bt
                     if val_(Edge.dTT,3, mw=(len(PPm_)-1)*Lw) > 0:
                         fE = trace_edge(Edge,3)  # cluster complemented G x G.B_
