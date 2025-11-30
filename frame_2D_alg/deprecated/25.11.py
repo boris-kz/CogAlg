@@ -535,23 +535,99 @@ def sum_N_1(N_,rc, root=None, L_=[],C_=[],B_=[], rng=1, init=1):  # updates root
     G.m,G.d = vt_(G.dTT)
     return G
 
-def sum2T(N_, rc, root, TT=None, c=1, flat=0):  # simplified for Ft
+class CN(CBase):
+    name = "node"
+    def __init__(n, **kwargs):
+        super().__init__()
+        n.typ = kwargs.get('typ', 0)
+        # 0=T: typ, dTT, m,d,c,rc, root, N_,B_,C_,L_: for eval,C,lev, N_=[] if nest=0
+        # 1=L: + nt, L_, rng, yx,box,span,angl, fin,compared, Bt,Ct,Nt from comp_sub?
+        # 2=G: + rim, eTT,em,ed,ec, baseT,mang,sub,exe, tNt, tBt, tCt?
+        # 3=PP: =2, skip comp_sub?
+        n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # total forks dTT: m_,d_ [M,D,n, I,G,a, L,S,A]
+        n.m,  n.d, n.c = kwargs.get('m',0), kwargs.get('d',0), kwargs.get('c',0)  # sum dTT
+        n.rim = kwargs.get('rim',[])  # external links, rng-nest?
+        n.eTT = kwargs.get('eTT',np.zeros((2,9)))  # sum rim dTT
+        n.em, n.ed, n.ec = kwargs.get('em',0),kwargs.get('ed',0),kwargs.get('ec',0)  # sum eTT
+        n.rc  = kwargs.get('rc', 1)  # redundancy to ext Gs, ave in links?
+        n.N_, n.B_, n.C_, n.L_ = kwargs.get('N_',[]), kwargs.get('B_',[]), kwargs.get('C_',[]), kwargs.get('L_',[])  # base elements
+        n._Nt,n._Bt,n._Ct,n._Lt= kwargs.get('Nt',[]), kwargs.get('Bt',[]), kwargs.get('Ct',[]), kwargs.get('Lt',[])  # nested elements
+        # Nt.N_ = H[1:], empty if not nested or in alt forks
+        n.nest  = kwargs.get('nest',0)  # nesting in H levels? top-down in Nt, bottom-up in alt forks
+        n.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,A: not ders, not in links
+        n.nt    = kwargs.get('nt', [])  # nodet, links only
+        n.yx    = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
+        n.box   = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
+        n.span  = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_), not additive?
+        n.angl  = kwargs.get('angl',[np.zeros(2),0])  # (dy,dx),dir, sum from L_
+        n.mang  = kwargs.get('mang',1)  # ave match of angles in L_, =1 in links
+        n.root  = kwargs.get('root',None)  # immediate
+        n.rng = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
+        n.sub = 0  # full-composition depth relative to top-composition peers
+        n.fin = kwargs.get('fin',0)  # clustered, temporary
+        n.exe = kwargs.get('exe',0)  # exemplar, temporary
+        n.compared = set()
+        n.rB_, n.rC_ = kwargs.get('rB_',[]), kwargs.get('rC_',[])
+        n.tNt, n.tBt, n.tCt = kwargs.get('tNt',[]), kwargs.get('tBt',[]), kwargs.get('tCt',[])
+        n.prim = []  # pre-links, cluster in pL_,pN_?
+        # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
+    def T(n, val, attr):
+        if isinstance(val, list): val = CN(); setattr(n, attr, val)
+        return val
+    # lazy init Nt, Bt, Ct, Lt:
+    @property
+    def Nt(n): return n.T(n._Nt,'_Nt')
+    @Nt.setter
+    def Nt(n, value): n._Nt = value
+    @property
+    def Bt(n): return n.T(n._Bt,'_Bt')
+    @Bt.setter
+    def Bt(n, value): n._Bt = value
+    @property
+    def Ct(n): return n.T(n._Ct,'_Ct')
+    @Ct.setter
+    def Ct(n, value): n._Ct = value
+    @property
+    def Lt(n): return n.T(n._Lt,'_Lt')
+    @Lt.setter
+    def Lt(n, value): n._Lt = value
+    def __bool__(n): return bool(n.c)
 
-    N = N_[0]; Nt = Copy_(N, typ=0); Nt.root = root; fTT = TT is not None
-    if fTT: Nt.dTT=TT; Nt.c=c
-    if flat:  # flatten H level forks
-        Nt.N_=list(N.N_); Nt.L_=list(N.L_); Nt.B_=list(N.B_); Nt.C_=list(N.C_)
-    else:
-        Nt.N_ = N_  # all forks are nested
-    for N in N_[1:]:
-        if flat: Nt.N_+= N.N_; Nt.B_+=N.B_; Nt.C_+=N.C_; Nt.L_+=N.L_
-        if not fTT: Nt.dTT += N.dTT; Nt.c += N.c
-    for nFt,nF_,F_ in zip(('Nt','Bt','Ct','Lt'),('N_','B_','C_','L_'), (Nt.N_, Nt.B_,Nt.C_,Nt.L_)):  # add tFs?
+def sum_Gt(N_, rc, root=None, L_=[],C_=[],B_=[], rng=1, init=1):  # updates root if not init
+
+    if not init: N_+=root.N_; L_+=root.L_; B_+=root.B_; C_+=root.C_
+
+    G = sum2T(N_,rc, root,typ=2); G.rng=rng  # add_N
+    G.Nt = Copy_(G,G,typ=0)  # Nt.N_ = N.Nt.N_, already flat, prune G attrs
+    # optional:
+    for i, (nFt,nF_,F_) in enumerate(zip(('Lt','Ct','Bt'),('L_','C_','B_'),(L_,C_,B_))):
         if F_:
-            F_[:] = list(set(F_))
-            Ft = sum2T(F_, rc,root, flat=flat); setattr(Nt,nFt,Ft)  # external root update
-    Nt.m, Nt.d = vt_(Nt.dTT)
-    Nt.rc = rc
-    return Nt
+            Ft = sum2T(F_, rc,G,flat=i==0); setattr(G,nF_,F_); setattr(G,nFt,Ft); root_update(G,Ft)
+            if i==0:
+                A = np.sum([l.angl[0] for l in L_],axis=0)  # angle dir = mean diff sign:
+                G.angl = np.array([A, np.sign(G.dTT[1] @ wTTf[1])], dtype=object)
+    if init:  # else same
+        yx_ = np.array([n.yx for n in N_]); yx = yx_.mean(axis=0); dy_,dx_ = (yx_-yx).T
+        G.span = np.hypot(dy_,dx_).mean()  # N centers dist to G center
+        G.yx = yx
+    if N_[0].typ==2:  # else default mang = 1
+        G.mang = np.mean([comp_A(G.angl[0], l.angl[0])[0] for l in G.L_])
+    G.m,G.d = vt_(G.dTT)
+    # eval refine: if G.m: compute G.pm, if G.m * G.pm: pL_'comp_N(pL.nt)
+    return G
+
+def sum2T(N_, rc, root, TT=None, c=1, flat=0, typ=0):  # forms fork or G
+
+    N = N_[0]; fTT = TT is not None
+    G = Copy_(N,root, init=1, typ=typ)  # fork: typ=0, no Nt.Nt
+    if fTT: G.dTT=TT; G.c=c
+    n_ = list(N.N_)  # flatten core fork, alt forks stay nested
+    for N in N_[1:]: add_N(G,N,fTT); n_ += N.N_
+    if flat: G.N_=n_  # flatten N_, in Lt only?
+    elif n_ and typ:  # insert flat new G.Nt.N_ lev0 in G:
+        G.Nt.N_.insert(0,sum2T(n_,rc,G, typ=0))
+    G.m, G.d = vt_(G.dTT)
+    G.rc = rc
+    return G
 
 
