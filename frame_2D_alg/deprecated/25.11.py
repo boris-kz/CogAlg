@@ -630,4 +630,56 @@ def sum2T(N_, rc, root, TT=None, c=1, flat=0, typ=0):  # forms fork or G
     G.rc = rc
     return G
 
+def sum2G(N_, rc, root=None, L_=[],C_=[],B_=[], rng=1, init=1):  # updates root if not init
+
+    if not init: N_+=root.N_; L_+=root.L_; B_+=root.B_; C_+=root.C_
+
+    G = add_N_(N_,rc, root); G.rng=rng  # default add_N_
+    # optional:
+    for i, (nFt, nF_, F_) in enumerate(zip(('Lt','Ct','Bt'),('L_','C_','B_'),(L_,C_,B_))):
+        if F_:
+            Ft = add_T_(F_,rc,G); setattr(G,nF_,F_); setattr(G,nFt,Ft); root_update(G,Ft)
+            if i==0:
+                A = np.sum([l.angl[0] for l in L_],axis=0)  # angle dir = mean diff sign:
+                G.angl = np.array([A, np.sign(G.dTT[1] @ wTTf[1])], dtype=object)
+    if init:  # else same
+        yx_ = np.array([n.yx for n in N_]); yx = yx_.mean(axis=0); dy_,dx_ = (yx_-yx).T
+        G.span = np.hypot(dy_,dx_).mean()  # N centers dist to G center
+        G.yx = yx
+    if N_[0].typ==2:  # else default mang = 1
+        G.mang = np.mean([comp_A(G.angl[0], l.angl[0])[0] for l in G.L_])
+    G.m,G.d = vt_(G.dTT)
+    if G.m > ave*specw:
+        L_,pL_= [],[]; [L_.append(L) if L.typ==1 else pL_.append(L) for L in G.L_]
+        if pL_:
+            if G.m * vt_(sum([L.dTT for L in pL_]))[0] > ave*specw:
+                for L in pL_:
+                    link = comp_N(*L.nt, rc, L.angl, L.span, L.rng)
+                    G.Lt.dTT += link.dTT-L.dTT; L_+= [link]  # recompute m,d,c?
+            G.L_ = L_
+    return G
+
+def ffeedback(root):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
+
+    def L_ders(Fg):  # get current-level ders: from L_ only
+        dTT = np.zeros((2,9)); m, d, c = 0, 0, 0
+        for n in Fg.N_:
+            for l in n.L_: m += l.m; d += l.d; c += l.c; dTT += l.dTT
+        return m,d,c,dTT
+
+    wTTf = np.ones((2,9))  # sum dTT weights: m_,d_ [M,D,n, I,G,A, L,S,eA]: Et, baseT, extT
+    rM, rD, rVd = 1,1,0
+    _m, _d, _n, _dTT = L_ders(root)
+    for lev in reversed(root.Nt.N_ if root.Nt.nest else [root]):  # top-down, not lev-selective
+        m ,d ,n, dTT = L_ders(lev)
+        rM += (_m / _n) / (m / n)  # mat,dif change per level
+        rD += (_d / _n) / (d / n)
+        wTTf += np.abs((_dTT /_n) / (dTT / n))
+        if lev.lH:
+            # intra-level recursion in dfork
+            for lH in lev.lH:
+                rvd, wttf = ffeedback(lH)
+                rVd += rvd; wTTf += wttf
+        _m, _d, _n, _dTT = m, d, n, dTT
+    return rM+rD+rVd, wTTf
 
