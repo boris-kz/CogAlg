@@ -27,3 +27,25 @@ def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init foca
     if Edge_:
         return sum2G(Edge_,2,None)
 
+N_, mL_,mTT,mc, dL_,dTT,dc = comp_C_(root.N_,rc) if fC else comp_N_(root.N_,rc); nG_,up = [],0
+# m fork:
+if len(mL_)>1 and val_(mTT, rc+compw, mw=(len(mL_)-1)*Lw) > 0:
+    root.L_= mL_; add_T_(mL_,rc,root,'Lt')  # new ders, no Lt.N_
+    for n in N_: n.em = sum([l.m for l in n.rim]) / len(n.rim)  # pre-val_
+    nG_ = Cluster(root, mL_, rc,fC)  # fC=0: get_exemplars, cluster_C, rng cluster
+    if nG_:  # not N_
+        rc+=1; root.N_=nG_; add_T_(nG_,rc,root,'Nt')
+        if isinstance(root,CF):  # Bt | Ct
+            for n in N_: (n.rC_ if fC else n.rB_).append(*nG_)
+
+def add_T(Ft,ft, root,fH):
+    if fH:  # Nt
+        for Lev,lev in zip_longest(Ft.N_, ft.N_):
+            if lev:  # norm /C?
+                if Lev: Lev.N_+= lev.N_; Lev.dTT+=lev.dTT; Lev.c+=lev.c  # flat
+                else:   root.Nt.N_ += [lev]
+    else:  # alt fork roots:
+        for n in ft.N_:
+            if n not in Ft.N_: n.root=Ft; Ft.N_ += [n]
+    Ft.dTT += ft.dTT
+
