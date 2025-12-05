@@ -139,11 +139,11 @@ def cross_comp(root, rc, fC=0):  # rng+ and der+ cross-comp and clustering, rc=r
     if fC <2 and dL_ and val_(dTT, rc+compw, fi=0, mw=(len(dL_)-1)*Lw) > avd:  # comp dL_|dC_, not ddC_
         root.B_= dL_; add_T_(dL_,rc,root,'Bt')  # new ders
         bG_,rc = cross_comp(root.Bt, rc, fC*2)
-        if bG_: add_T_(bG_,rc,root,'Bt'); form_B__(root)  # add boundary to N and N to Bg R_ s
+        if bG_: add_T_(bG_,rc,root,'Bt'); form_B__(root.N_, bG_)  # add boundary to Ns, N to Bg.rN_
     # recursion:
     if val_(mTT, rc+contw, mw=(len(root.N_)-1)*Lw) > 0:  # mval only
-        up = trace_edge(root,rc); rc+=bool(nG_)  # comp Ns x N.Bt|B_.nt, with/out mfork?
-    if (nG_ or up) and val_(root.dTT, rc+compw, mw=(len(root.N_)-1)*Lw, _TT=mTT) > 0:
+        nG_ = trace_edge(root.N_, rc); rc+=bool(nG_)  # comp Ns x N.Bt|B_.nt, with/out mfork?
+    if nG_ and val_(root.dTT, rc+compw, mw=(len(root.N_)-1)*Lw, _TT=mTT) > 0:
         nG_,rc = cross_comp(root, rc)
         # connect agg+, fC=0
     return nG_,rc
@@ -223,7 +223,7 @@ def comp_N(_N,N, rc, A=np.zeros(2), span=None, rng=1):  # compare links, optiona
     angl = [A, np.sign(TT[1] @ wTTf[1])]  # canonic direction
     m, d = vt_(TT)
     Link = CN(typ=1,nt=[_N,N], dTT=TT,m=m,d=d,c=min(N.c,_N.c), yx=yx,box=box,span=span,angl=angl,rng=rng, rc=rc)
-    if m > ave*rc and _N.typ and N.typ:  # ?PP if called from sub_comp' comp_C_
+    if m > ave*rc and _N.typ and N.typ:  # skip PP if called from sub_comp' comp_C_
         comp_sub(_N,N, rc,Link)  # root_update
     for n, _n in (_N,N),(N,_N):  # if rim-mediated comp: reverse dir in _N.rim: rev^_rev?
         n.rim += [Link]; n.eTT += TT; n.ec += Link.c; n.compared.add(_n)  # or conditional n.eTT / rim later?
@@ -332,7 +332,7 @@ def Cluster(root, iL_, rc, fC):  # generic clustering root
         frc = rc  # trans-G links
         for ft,f_,link_,clust, fC in [('tNt','tN_',dN_,cluster_N,0), ('tBt','tB_',dB_,cluster_N,0), ('tCt','tC_',dC_,cluster_n,1)]:
             if link_:
-                frc += 1  # init trans-fork redundancy, adjust later?
+                frc += 1  # trans-fork redundancy count, then reassign?
                 Ft = add_N_(link_,frc,root); clust(Ft, link_, frc)
                 if val_(Ft.dTT, frc, mw=(len(Ft.N_)-1)*Lw) > 0:
                     cross_comp(Ft, frc, fC=fC)  # unlikely
@@ -604,13 +604,13 @@ def Copy_(N, root=None, init=0, typ=None):
 def sum2G(N_, rc, root=None, L_=[],C_=[],B_=[], rng=1, init=1):  # updates root if not init
 
     if not init: N_+=root.N_; L_+=root.L_; B_+=root.B_; C_+=root.C_
-    G = add_N_(N_,rc,root); G.rng=rng  # default add_N_ -> Nt
+    G = add_N_(N_,rc,root); G.rng=rng  # default add_N_ forms G.Nt
     if L_:
-        G.L_=L_; Lt = add_T_(L_,rc,G,'Lt')  # empty Lt.N_
-        if N_[0].typ:  # update Nt.H[0] if any, init l0.N_ only
+        G.L_=L_; Lt = add_T_(L_,rc,G,'Lt')  # no Lt.N_
+        if N_[0].typ and G.Nt.N_:  # add vals to Nt.H[0], if any:
             l0 = G.Nt.N_[0]; l0.dTT=Lt.dTT; l0.m=Lt.m; l0.d=Lt.d; l0.c=Lt.c
-        A = np.sum([l.angl[0] for l in L_], axis=0)  # angle dir = mean d sign:
-        G.angl = np.array([A, np.sign(G.dTT[1] @ wTTf[1])], dtype=object)
+        A = np.sum([l.angl[0] for l in L_], axis=0)
+        G.angl = np.array([A, np.sign(G.dTT[1] @ wTTf[1])], dtype=object)  # angle dir = d sign
     # alt forks:
     if B_: add_T_(B_,rc,G,'Bt'); G.B_=B_
     if C_: add_T_(C_,rc,G,'Ct'); G.C_=C_
@@ -652,7 +652,7 @@ def add_N(N, n, fTT=0, flat=0):  # flat currently not used
     n.fin = 1; n.root = N; fC = hasattr(n,'mo_')  # centroid
     if fC and not hasattr(N,'mo_'): N.mo_=[]
     _cnt,cnt = N.c,n.c; C=_cnt+cnt; N.c += n.c  # weigh contribution of intensive params
-    if fC: n.rc = np.sum([mo[1] for mo in n._mo_]); N.rN_+=n.rN_; N.mo_+=n.mo_
+    if fC: n.rc = np.sum([mo[1] for mo in n.mo_]); N.rN_+=n.rN_; N.mo_+=n.mo_
     else:  N.rc = (N.rc*_cnt+n.rc*cnt) / C
     if not fTT: N.dTT = (N.dTT*_cnt + n.dTT*cnt) / C
     if n.typ:  # not PP
@@ -835,19 +835,18 @@ def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
     link.m += dddH.m; link.d += dddH.d; link.c += dddH.c; link.dTT += dddH.dTT
     add_H(ddH, dddH)
 '''
-def form_B__(G):  # assign boundary / background per node from Bt, no root update?
+def form_B__(N_,B_):  # assign boundary / background per node from Bt, no root update?
 
-    Bt = G.Bt
-    for bG in Bt.N_:  # add reciprocal N roots per boundary graph, in Fg?
+    for bG in B_:  # add reciprocal N roots per boundary graph, in Fg?
         rN_ = list({n.root for L in bG.N_ for n in L.nt if n.root and n.root.root is not None})  # core Gs, exclude frame
         bG.rN_ = sorted(rN_, key=lambda x:(x.m/x.c), reverse=True)
     def R(L):
         root = L.root
         if root:
-            if root not in Bt.N_ and root.typ!=0: root = R(L.root)  # not PPd
+            if root not in B_ and root.typ!=0: root = R(L.root)  # not PPd
         else: _N = L.nt[0] if L.nt[1] is N else L.nt[1]; root = _N.root  # direct L mediation
         return root
-    for N in G.N_:
+    for N in N_:
         if N.sub or not N.B_: continue
         bG_, dTT, rdn = [], np.zeros((2,9)), 0
         for L in N.B_:
@@ -866,24 +865,24 @@ def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init foca
         ave, avd, arn, aveB, aveR, Lw, adist, amed, intw, compw, centw, contw = (
             np.array([ave,avd, arn,aveB,aveR, Lw, adist, amed, intw, compw, centw, contw]) / rV)  # projected value change
         wTTf = np.multiply([[wM,wD,wc, wI,wG,wa, wL,wS,wA]], wTTf)  # or dw_ ~= w_/ 2?
-    Edge_ = []
-    for blob in tile.N_:
+    blob_ = tile.N_
+    G_, tile.N_ = [],[]  # fill in trace_edge:
+    for blob in blob_:
         if not blob.sign and blob.G > aveB:
             edge = slice_edge(blob, rV)
             if edge.G * ((len(edge.P_)-1)*Lw) > ave * sum([P.latT[4] for P in edge.P_]):
                 PPm_ = comp_slice(edge, rV, wTTf)
-                Edge = sum2G([PP2N(PPm) for PPm in PPm_], rc=1, root=None)
-                [PP2N(PPd) for PPd in edge.link_]  # dP.root=PPd -> PPm boundary:
-                form_B__(Edge)  # form B_,Bt per PPm
-                if val_(Edge.dTT,3, mw=(len(PPm_)-1) *Lw) > 0:
-                    trace_edge(Edge,3)  # cluster complemented G x G.B_, ?Edge.N_=G_, skip up
-                Edge_ += [Edge]  # default?
-    if Edge_:
-        return sum2G(Edge_,2,None)
+                N_ = [PP2N(PPm) for PPm in PPm_]
+                L_ = [PP2N(PPd) for PPd in edge.link_]
+                form_B__(N_, B_=[L for L in L_ if L.d > avd])  # form B_,Bt per PPm
+                if val_(np.sum([n.dTT for n in N_],0),3, mw=(len(PPm_)-1) *Lw) > 0:
+                    G_ = trace_edge(N_,3, tile)  # cluster complemented G x G.B_
+    if G_:  # from trace_edge
+        add_T_(G_,2,tile,'Nt')
+        return tile
 
-def trace_edge(root, rc):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary/skeleton?
+def trace_edge(N_, rc, root=None):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary/skeleton?
 
-    N_ = root.N_  # clustering  is rN_|B_-mediated
     L_ = []; cT_ = set()  # comp pairs
     for N in N_: N.fin = 0
     for N in N_:
@@ -896,7 +895,8 @@ def trace_edge(root, rc):  # cluster contiguous shapes via PPs in edge blobs or 
             dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx); o = (N.rc+_N.rc) / 2
             Link = comp_N(_N,N, o+rc, A=dy_dx, span=dist)
             if val_(Link.dTT, contw+o+rc) > 0:
-                L_+=[Link]; root.dTT+=Link.dTT
+                if root: root.dTT+=Link.dTT
+                L_ += [Link]
     Gt_ = []
     for N in N_:  # flood-fill G per seed N
         if N.fin: continue
@@ -922,9 +922,9 @@ def trace_edge(root, rc):  # cluster contiguous shapes via PPs in edge blobs or 
             else:
                 for N in n_: N.fin=0; N.root=root
     if len(G_) > ave*Lw:
-        root.Nt.N_.insert(0,CF(N_=root.N_,root=root)); root.N_= G_; up=1
-    else: up = 0
-    return up
+        root.Nt.N_.insert(0, CF(N_=N_, root=root))
+    root.N_ = G_ # maybe empty
+    return G_
 
 # frame expansion per level: cross_comp lower-window N_,C_, forward results to next lev, project feedback to scan new lower windows
 
