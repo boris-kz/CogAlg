@@ -49,3 +49,18 @@ def add_T(Ft,ft, root,fH):
             if n not in Ft.N_: n.root=Ft; Ft.N_ += [n]
     Ft.dTT += ft.dTT
 
+def add_N_(N_, rc, root, TT=None, c=1, flat=0):  # forms G of N_|L_
+
+    N = N_[0]; fTT= TT is not None
+    G = Copy_(N, root, init=1, typ=2)
+    if fTT: G.dTT= TT; G.c= c
+    n_ = list(N.N_)  # flatten core fork, alt forks stay nested
+    for N in N_[1:]:
+        add_N(G, N, fTT); n_ += N.N_
+    if flat: G.N_ = n_  # flatten N.N_, or in F.N_ only?
+    else:
+        G.N_ = N_
+        if n_ and N.typ: G.Nt.N_.insert(0, CF(N_=n_,root=G.Nt))  # not PP.P_, + Lt.dTT
+    G.m, G.d = vt_(G.dTT)
+    G.rc = rc
+    return G
