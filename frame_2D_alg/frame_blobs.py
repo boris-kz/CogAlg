@@ -68,34 +68,26 @@ class CBase:
 ave  = 30  # base filter, directly used for comp_r fork
 aveR = 10  # for range+, fixed overhead per blob
 
-class CdH(CBase):  # derivation hierarchy or a layer thereof, subset of CG
-    name = "der"
-    def __init__(d, **kwargs):
-        super().__init__()
-        d.H = kwargs.get('H',[])  # was derH/CLay, empty if not nested
-        d.Et = kwargs.get('Et', np.zeros(3))  # redundant to N.Et and N.derTT in top derH
-        d.derTT = kwargs.get('derTT', np.zeros((2,9)))  # m_,d_ [M,D,n, I,G,A, L,S,eA]: single layer or sum derH
-        d.root = kwargs.get('root', [])  # to pass Et, derTT
-    def __bool__(d): return bool(d.H)
 
 class CN(CBase):
     name = "node"
     def __init__(n, **kwargs):
         super().__init__()
-        n.fi = kwargs.get('fi', 1)  # if G else 0, fd_: list of forks forming G?
-        n.nt = kwargs.get('nt',[])  # nodet, empty if fi
-        n.rc = kwargs.get('rc', 1)  # redundancy to ext Gs, ave in links? separate rc for rim, or internally overlapping?
-        n.H  = kwargs.get('H', [])  # top-down node H, mapping to bottom-up der H, empty if single level dTT,forks:
-        n.Nt,n.Bt,n.Ct = kwargs.get('Bt',[]), kwargs.get('Bt',[]), kwargs.get('Ct',[])  # roots | fork_: [G_,TT,m,d,c,rdn], empty if H
-        # nodes, dlinks, centroids, mlinks, reciprocal roots, not in H
-        n.N_,n.B_,n.C_, n.L_,n.R_ = kwargs.get('N_',[]),kwargs.get('B_',[]),kwargs.get('C_',[]),kwargs.get('L_',[]),kwargs.get('R_',[])
-        n.m, n.d, n.c = kwargs.get('m',0), kwargs.get('d',0), kwargs.get('c',0)   # sum L_ dTT -> rm, rd, content count
-        n.rim = kwargs.get('rim', [])  # external links, rng-nest?
-        n.em, n.ed, n.ec = kwargs.get('em',0),kwargs.get('ed',0),kwargs.get('ec',0)  # sum rim TT
-        n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # sum derH-> m_,d_ [M,D,n, I,G,a, L,S,A], L: dLen, S: dSpan
-        n.eTT = kwargs.get('eTT',np.zeros((2,9)))  # sum rim derH
-        n.lev = CN(lev=[]) if kwargs.get('lev') is None else []  # current, from L_?
-        n.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,A: not ders, not in links?
+        n.typ = kwargs.get('typ', 0)
+        # 1=L: typ,nt,dTT, m,d,c,rc, root,rng,yx,box,span,angl,fin,compared, N_,B_,C_,L_,Nt,Bt,Ct from comp_sub?
+        # 2=G: + rim, eTT, em,ed,ec, baseT,mang,sub,exe, Lt, tNt, tBt, tCt?
+        # 0=PP: if typ: comp_sub?
+        n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # total forks dTT: m_,d_ [M,D,n, I,G,a, L,S,A]
+        n.m,  n.d, n.c = kwargs.get('m',0), kwargs.get('d',0), kwargs.get('c',0)  # sum dTT
+        n.rim = kwargs.get('rim',[])  # external links, rng-nest?
+        n.eTT = kwargs.get('eTT',np.zeros((2,9)))  # sum rim dTT
+        n.em, n.ed, n.ec = kwargs.get('em',0),kwargs.get('ed',0),kwargs.get('ec',0)  # sum eTT
+        n.rc  = kwargs.get('rc', 1)  # redundancy to ext Gs, ave in links?
+        n.N_, n.B_, n.C_, n.L_ = kwargs.get('N_',[]), kwargs.get('B_',[]), kwargs.get('C_',[]), kwargs.get('L_',[])  # base elements
+        n.Nt, n.Bt, n.Ct, n.Lt= kwargs.get('Nt',CF()), kwargs.get('Bt',CF()), kwargs.get('Ct',CF()), kwargs.get('Lt',CF())  # nested elements
+        # Ft is [dTT,m,d,c,rc,N_], N_=H: [[N_,dTT]] in Nt, nest=len(N_)
+        n.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,A: not ders, not in links
+        n.nt    = kwargs.get('nt', [])  # nodet, links only
         n.yx    = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
         n.box   = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
         n.span  = kwargs.get('span',0) # distance in nodet or aRad, comp with baseT and len(N_), not additive?
@@ -103,12 +95,32 @@ class CN(CBase):
         n.mang  = kwargs.get('mang',1)  # ave match of angles in L_, =1 in links
         n.root  = kwargs.get('root',None)  # immediate
         n.rng = kwargs.get('rng',1)  # or med: loop count in comp_node_|link_
-        n.sub = 0  # full-composition depth relative to top-composition peers
+        n.sub = 0  # composition depth relative to top-composition peers?
         n.fin = kwargs.get('fin',0)  # clustered, temporary
         n.exe = kwargs.get('exe',0)  # exemplar, temporary
+        n.rN_ = kwargs.get('rN_',[]) # reciprocal root nG_ for bG | cG, nG has Bt.N_,Ct.N_ instead
+        n.tNt,n.tBt,n.tCt = kwargs.get('tNt',CF()), kwargs.get('tBt',CF()), kwargs.get('tCt',CF())
         n.compared = set()
-        # n.fork_tree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
-    def __bool__(n): return bool(n.N_)
+        # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
+    def __bool__(n): return bool(n.c)
+
+class CF(CBase):
+    name = "fork"
+    def __init__(f, **kwargs):
+        super().__init__()
+        f.m = kwargs.get('m', 0)
+        f.d = kwargs.get('d', 0)
+        f.c = kwargs.get('c', 0)
+        f.rc = kwargs.get('rc', 0)
+        f.N_ = kwargs.get('N_',[])  # H in Nt, empty in Lt, N_ in forks and lev
+        f.dTT  = kwargs.get('dTT',np.zeros((2,9)))
+        f.root = kwargs.get('root',None)
+        # to use as root in cross_comp:
+        f.L_, f.B_, f.C_ = kwargs.get('L_',[]),kwargs.get('B_',[]),kwargs.get('C_',[])
+        # assigned by add_T_ in cross_comp:
+        f.Nt, f.Bt, f.Ct = kwargs.get('Nt',[]),kwargs.get('Bt',[]),kwargs.get('Ct',[])
+    def __bool__(f): return bool(f.c)
+
 
 class CBlob(CBase):
 
