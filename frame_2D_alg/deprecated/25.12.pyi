@@ -64,3 +64,161 @@ def add_N_(N_, rc, root, TT=None, c=1, flat=0):  # forms G of N_|L_
     G.m, G.d = vt_(G.dTT)
     G.rc = rc
     return G
+
+def cluster_n(root, N_, rc):  # simplified flood-fill, for C_ or trans_N_
+
+    def extend_G(_link_, node_,cent_,link_,b_,in_):
+        for L in _link_:  # spliced rim
+            if L in in_: continue  # already clustered
+            in_.add(L)
+            for _N in L.nt:
+                if not _N.fin and _N in N_:
+                    node_ += [_N]; cent_ += _N.C_; _N.fin = 1
+                    for l in _N.rim:
+                        if l in in_: continue  # cluster by link+density:
+                        if Lnt(l) > ave*rc: link_ += [l]
+                        else: b_ += [l]
+    # root attrs:
+    G_,N__,L__,Lt_,TT,lTT,C,lC, in_ = [],[],[],[],np.zeros((2,9)),np.zeros((2,9)),0,0, set()
+    for N in N_: N.fin = 0
+    for N in N_:  # form G / remaining N
+        node_,link_,L_,B_ = [N],[],[],[]
+        cent_ = N.C_
+        _L_= [l for l in N.rim if Lnt(l) > ave*rc]  # link+nt eval
+        while _L_:
+            extend_G(_L_, node_, cent_, L_, B_, in_)  # _link_: select rims to extend G:
+            if L_: link_ += L_; _L_ = list(set(L_)); L_ = []
+            else:  break
+        if node_:
+            N_= list(set(node_)); L_= list(set(link_)); C_ = list(set(cent_))
+            tt,ltt,c,lc,o = np.zeros((2,9)),np.zeros((2,9)),0,0,0
+            for n in N_: tt+=n.dTT; c+=n.c; o+=n.rc  # from Ns, vs. Et from Ls?
+            for l in L_: ltt+=l.dTT; lc+=l.c; o+=l.rc  # combine?
+            if val_(ltt, rc+o,_TT=root.dTT) > 0:  # include singletons?
+                G_ += [sum2G(N_,o,root,L_,C_)]
+                N__+= N_;L__+=L_; Lt_+=[n.Lt for n in N_]; TT+=tt; lTT+ltt; C+=c; lC+=lc
+    if G_ and val_(TT, rc+1, mw=(len(G_)-1)*Lw) > 0:
+        rc += 1
+        root_replace(root,rc, G_,N__,L__,Lt_,TT,lTT,C,lC)
+    return G_, rc
+
+def cluster_N(root, rL_, rc, rng=1):  # flood-fill node | link clusters
+
+    def rroot(n): return rroot(n.root) if n.root and n.root!=root else n
+
+    def extend_Gt(_link_, node_, cent_, link_, b_, in_):
+        for L in _link_:  # spliced rim
+            if L in in_: continue  # already clustered
+            in_.add(L)
+            for _N in L.nt:
+                if _N.fin: continue
+                if not _N.root or _N.root==root or not _N.L_:  # not rng-banded
+                    node_+=[_N]; cent_+=_N.Ct.N_; _N.fin = 1
+                    for l in _N.rim:
+                        if l in in_: continue  # cluster by link+density:
+                        if l in rL_:
+                            if Lnt(l) > ave*rc: link_ += [l]
+                            else: b_ += [l]
+                else:  # cluster top-rng roots
+                    _n = _N; _R = rroot(_n)
+                    if _R and not _R.fin:
+                        if rolp(N, link_, R=1) > ave * rc:
+                            node_ += [_R]; _R.fin = 1; _N.fin = 1
+                            link_ += _R.L_; cent_ += _R.Ct.N_
+    # root attrs:
+    G_,N__,L__,Lt_,TT,lTT,C,lC, in_ = [],[],[],[],np.zeros((2,9)),np.zeros((2,9)),0,0, set()
+    rN_ = {N for L in rL_ for N in L.nt}
+    for n in rN_: n.fin = 0
+    for N in rN_:  # form G per remaining rng N
+        if N.fin or (root.root and not N.exe): continue  # no exemplars in Fg
+        node_,cent_,Link_,_link_,B_ = [N],[],[],[],[]
+        if rng==1 or not N.root or N.root==root:  # not rng-banded
+            cent_ = [C.root for C in N.C_]
+            for l in N.rim:
+                if l in rL_:  # curr rng
+                    if Lnt(l) > ave*rc: _link_ += [l]
+                    else: B_ += [l]  # or dval?
+        else:  # N is rng-banded, cluster top-rng roots
+            n = N; R = rroot(n)
+            if R and not R.fin: node_,_link_,cent_ = [R], R.L_[:], [C.root for C in R.C_]; R.fin = 1
+        N.fin = 1; link_ = []
+        while _link_:
+            Link_ += _link_
+            extend_Gt(_link_, node_, cent_, link_, B_, in_)
+            if link_: _link_ = list(set(link_)); link_ = []  # extended rim
+            else: break
+        if node_:
+            N_,L_,C_,B_ = list(set(node_)),list(set(Link_)),list(set(cent_)),list(set(B_))
+            tt,ltt,c,lc,o = np.zeros((2,9)),np.zeros((2,9)),0,0,0
+            for n in N_: tt+=n.dTT; c+=n.c; o+=n.rc  # from Ns, vs. Et from Ls?
+            for l in L_: ltt+=l.dTT; lc+=l.c; o+=l.rc  # combine?
+            if val_(lTT, rc+o,_TT=root.dTT) > 0:  # include singletons?
+                G_ += [sum2G(N_,o,root, L_,C_)]
+                N__+=N_;L__+=L_; Lt_+=[n.Lt for n in N_]; TT+=tt; lTT+ltt; C+=c; lC+=lc
+    if G_ and val_(TT, rc+1, mw=(len(G_)-1)*Lw) > 0:
+        rc += 1
+        root_replace(root,rc, G_,N__,L__,Lt_,TT,lTT,C,lC)
+    return G_, rc
+
+def Cluster(root, iL_, rc, fC):  # generic clustering root
+
+    def trans_cluster(root, iL_,rc):  # called from cross_comp(Fg_), others?
+
+        dN_,dB_,dC_ = [],[],[]  # splice specs from links between Fgs in Fg cluster
+        for Link in iL_: dN_+= Link.N_; dB_+= Link.B_; dC_+= Link.C_
+        frc = rc  # trans-G links
+        for ft,f_,link_,clust, fC in [('tNt','tN_',dN_,cluster_N,0), ('tBt','tB_',dB_,cluster_N,0), ('tCt','tC_',dC_,cluster_n,1)]:
+            if link_:
+                frc += 1  # trans-fork redundancy count, then reassign?
+                Ft = add_N_(link_,frc,root); clust(Ft, link_, frc)
+                if val_(Ft.dTT, frc, mw=(len(Ft.N_)-1)*Lw) > 0:
+                    cross_comp(Ft, frc, fC=fC)  # unlikely, doesn't add rc?
+                setattr(root,f_,link_); setattr(root, ft, Ft)  # trans-fork_ via trans-G links
+    G_ = []
+    if fC or not root.root:  # base connect via cluster_n, no exemplars or centroid clustering
+        N_, L_, i = [],[],0  # add pL_, pN_ for pre-links?
+        if fC < 2:  # merge similar Cs, not dCs, no recomp
+            link_ = sorted(list({L for L in iL_}), key=lambda link: link.d)  # from min D
+            for i, L in enumerate(link_):
+                if val_(L.dTT,rc+compw, fi=0) < 0:  # merge
+                    _N, N = L.nt
+                    if _N is not N:  # not merged
+                        sum2G(_N.N_,rc, root=N, init=0)  # add_N(_N,N,froot=1, merge=1): merge Cs
+                        for l in N.rim: l.nt = [_N if n is N else n for n in l.nt]
+                        if N in N_: N_.remove(N)  # if multiple merging
+                        N_ += [_N]
+                else: L_ = link_[i:]; break
+            root.L_ = [l for l in root.L_ if l not in L_]  # cleanup regardless of break
+        else: L_ = iL_
+        N_ += list({n for L in L_ for n in L.nt})  # include merged Cs
+        if val_(root.dTT, rc+contw, mw=(len(N_)-1)*Lw) > 0:
+            G_,rc = cluster_N(root, N_, rc, rng=0)  # in feature space if centroids, no B_,C_?
+            if G_:  # no higher root.N_
+                tL_ = [tl for n in root.N_ for l in n.L_ for tl in l.N_]  # trans-links
+                if sum(tL.m for tL in tL_) * ((len(tL_)-1)*Lw) > ave*(rc+contw):  # use tL.dTT?
+                    trans_cluster(root, tL_, rc+1)  # sets tTs
+                    mmax_ = []
+                    for F,tF in zip((root.Nt,root.Bt,root.Ct), (root.tNt,root.tBt,root.tCt)):
+                        if F and tF:
+                            maxF,minF = (F,tF) if F.m>tF.m else (tF,F)
+                            mmax_+= [max(F.m,tF.m)]; minF.rc+=1  # rc+=rdn
+                    sm_ = sorted(mmax_, reverse=True)
+                    for m, (Ft, tFt) in zip(mmax_,((root.Nt, root.tNt),(root.Bt, root.tBt),(root.Ct, root.tCt))): # +rdn in 3 fork pairs
+                        r = sm_.index(m); Ft.rc+=r; tFt.rc+=r  # rc+=rdn
+    else:
+        # primary centroid clustering
+        N_ = list({N for L in iL_ for N in L.nt if N.em})  # newly connected only
+        E_ = get_exemplars(N_,rc)
+        if E_ and val_(np.sum([g.dTT for g in E_],axis=0), rc+centw, mw=(len(E_)-1)*Lw, _TT=root.dTT) > 0:
+            cluster_C(E_,root,rc)  # doesn't add rc?
+        L_ = sorted(iL_, key=lambda l: l.span)
+        L__, Lseg = [], [iL_[0]]
+        for _L,L in zip(L_, L_[1:]):  # segment by ddist:
+            if L.span -_L.span < adist: Lseg += [L]  # or short seg?
+            else: L__ += [Lseg]; Lseg = [L]
+        L__ += [Lseg]
+        for rng, rL_ in enumerate(L__,start=1):  # bottom-up rng-banded clustering
+            rc+= rng + contw
+            if rL_ and sum([l.m for l in rL_]) * ((len(rL_)-1)*Lw) > ave*rc:
+                G_,rc = cluster_N(root, rL_, rc, rng)  # add root_replace
+    return G_,rc
