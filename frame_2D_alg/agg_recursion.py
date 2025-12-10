@@ -334,7 +334,7 @@ def Cluster(root, iL_, rc, fC):  # generic clustering root
         for ft,f_,link_,fC in [('tNt','tN_',dN_,0), ('tBt','tB_',dB_,0), ('tCt','tC_',dC_,1)]:
             if link_:
                 frc += 1  # trans-fork redundancy count, re-assign later?
-                Ft = add_N_(link_,frc,root); cluster_N(Ft, link_, frc, rng=1)  # rng=1 to denote rL_, not sure
+                Ft = add_N_(link_,frc,root); cluster_N(Ft, {n for L in link_ for n in L.nt}, frc)
                 if val_(Ft.dTT, frc, mw=(len(Ft.N_)-1)*Lw) > 0:
                     cross_comp(Ft, frc, fC=fC)  # unlikely, doesn't add rc?
                 setattr(root,f_,link_); setattr(root, ft, Ft)  # trans-fork_ via trans-G links
@@ -374,45 +374,48 @@ def Cluster(root, iL_, rc, fC):  # generic clustering root
         N_ = list({N for L in iL_ for N in L.nt if N.em})  # newly connected only
         E_ = get_exemplars(N_,rc)
         if E_ and val_(np.sum([g.dTT for g in E_],axis=0), rc+centw, mw=(len(E_)-1)*Lw, _TT=root.dTT) > 0:
-            cluster_C(E_,root,rc)  # may call cluster_N internally, doesn't add rc?
-        # rng-banded connectivity clustering:
+            _,rc = cluster_C(E_,root,rc)  # forms root.Ct, may call cross_comp, incr rc
+        # secondary rng-banded connectivity clustering:
         L_ = sorted(iL_, key=lambda l: l.span)
-        L__, Lseg = [], [iL_[0]]
-        for _L,L in zip(L_, L_[1:]):  # segment by ddist:
-            if L.span -_L.span < adist: Lseg += [L]  # or short seg?
-            else: L__ += [Lseg]; Lseg = [L]
-        L__ += [Lseg]
+        L__= []
+        Lseg = [iL_[0]]; _Lseg=Lseg; __L=L_[0]
+        for _L,L in zip(L_, L_[1:]):  # segment by ddist depending on rel ddist, len seg, accum rc?
+            if (L.span-_L.span)/ L.span * (len(Lseg)-1)*Lw > ave * (rc+distw):
+                L__ += [Lseg]; _Lseg = Lseg; Lseg = [L]  # terminate
+            else: Lseg += [L]  # continue
+            __L =_L  # for last seg eval:
+        if (_L.span-__L.span)/_L.span * (len(Lseg+_Lseg)-1)*Lw > ave * (rc+distw):
+            L__ += [Lseg]  # add or merge last seg:
+        else: _Lseg += Lseg
         for rng, rL_ in enumerate(L__,start=1):  # bottom-up rng-banded clustering
             rc+= rng + contw
             if rL_ and sum([l.m for l in rL_]) * ((len(rL_)-1)*Lw) > ave*rc:
-                G_,rc = cluster_N(root, rL_, rc, rng)
+                G_,rc = cluster_N(root, {N for L in rL_ for N in L.nt}, rc, rng)
     return G_,rc
 
 def cluster_N(root, rN_, rc, rng=0):  # flood-fill node | link clusters, flat if rng=1
 
     def rroot(n): return rroot(n.root) if n.root and n.root!=root else n
-
     def extend_Gt(_link_, node_,cent_,link_,b_,in_):
         for L in _link_:  # spliced rim
             if L in in_: continue  # already clustered
             in_.add(L)
             for _N in L.nt:
                 if _N.fin: continue
-                if rng:  # rng-banded, cluster top-rng roots
+                if rng:  # cluster rN_ via top-rng roots
                     _n = _N; _R = rroot(_n)
                     if _R and not _R.fin:
                         if rolp(N, link_, R=1) > ave * rc:
                             node_ += [_R]; _R.fin = 1; _N.fin = 1
                             link_ += _R.L_; cent_ += _R.C_  # C_ is not rng-banded?
                 else:   # flat
-                    if _N in N_ and _N.root or _N.root==root or not _N.L_:
+                    if _N in rN_ and _N.root or _N.root==root or not _N.L_:
                         node_+=[_N]; cent_+=_N.C_; _N.fin = 1
                         for l in _N.rim:
                             if l in in_: continue  # cluster by link+density:
-                            if l in rN_: (_link_ if Lnt(l) > ave*rc else b_).append(l)  # or dval?
+                            (_link_ if Lnt(l) > ave*rc else b_).append(l)  # or dval?
     # root attrs:
     G_,N__,L__,Lt_,TT,lTT,C,lC, in_ = [],[],[],[],np.zeros((2,9)),np.zeros((2,9)),0,0, set()
-    rN_ = {N for L in rN_ for N in L.nt} if rng else rN_  # rN_=rL_ if rng-banded
     for N in rN_: N.fin = 0
     for N in rN_:  # form G per remaining rng N
         if N.fin or (root.root and not N.exe): continue  # no exemplars in Fg
@@ -493,6 +496,7 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
         else:  # converged
             break
     C_ = [C for C in C_ if val_(C.DTT, rc)] # prune C_
+    fC = 0
     if C_:
         for n in [N for C in C_ for N in C.N_]:
             # exemplar V + sum n match_dev to Cs, m * ||C rvals?
@@ -500,8 +504,10 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
         # not revised:
         if val_(DTT, rc+olp,1, (len(C_)-1)*Lw, _TT=root.dTT) > 0:
             Ct = sum2G(C_,rc, root)
-            cross_comp(Ct,rc, fC=1)  # distant Cs, different attr weights?
-            root.C_=C_; root.Ct=Ct; root_update(root, Ct)
+            _,rc = cross_comp(Ct,rc, fC=1)  # distant Cs, different attr weights?
+            root.C_= C_; root.Ct=Ct; root_update(root, Ct)
+            fC = 1
+    return fC, rc
 
 def cent_attr(C, rc):  # weight attr matches | diffs by their match to the sum, recompute to convergence
 
@@ -843,9 +849,8 @@ def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init foca
             edge = slice_edge(blob, rV)
             if edge.G * ((len(edge.P_)-1)*Lw) > ave * sum([P.latT[4] for P in edge.P_]):
                 PPm_ = comp_slice(edge, rV, wTTf)
-                N_ = [PP2N(PPm) for PPm in PPm_]
-                L_ = [PP2N(PPd) for PPd in edge.link_]
-                form_B__(N_, B_=[L for L in L_ if L.d > avd])  # forms B_,Bt per PPm
+                N_ = [PP2N(PPm) for PPm in PPm_]; [PP2N(PPd) for PPd in edge.link_]
+                form_B__(N_, B_=[L for PPm in PPm_ for L in PPm.B_])  # forms PPm.B_,Bt
                 if val_(np.sum([n.dTT for n in N_],0),3, mw=(len(PPm_)-1)*Lw) > 0:
                     trace_edge(N_,3, tile, tT)  # flatten, cluster B_-mediated Gs, init Nt
     if G_:
