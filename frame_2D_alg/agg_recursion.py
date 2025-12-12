@@ -26,16 +26,16 @@ Similar to neurons: dendritic input tree and axonal output tree, but with latera
 
 The fitness function is predictive value of the model, estimated through multiple orders of projection:
 initially summed match, refined by projection in external space and time (combining match with directional diffs),
-then by comparing projected match to actual match, testing the accuracy of cross_comp and clustering process.
- 
+then by comparing projected match to actual match, testing the accuracy of cross_comp and clustering process. 
 And so on, higher orders of projection should be generated recursively from lower-order comparisons.
-Feedback of projected match adjusts filters to maximize next match, including coordinate filters that select new inputs.
-This is currently ffeedback(), to be refined by cross_comp of co-projected patterns: "imagination, planning, action" in part 3
 
-It should also modify the code by adding weights on the blocks according to their contribution to projected match, similar to backprop.
-These weights will decide skipping or recursing over corresponding functions, code sequences, or even operations?   
-Also cross-comp and cluster (compress) code elements and function calls, although coarsely?
-Then search in combinatorial code space?
+Feedback of projected match adjusts filters to maximize next match, including coordinate filters that select new inputs.
+(currently in ffeedback(), to be refined by cross_comp of co-projected patterns: "imagination, planning, action" in part 3)   
+This is similar to backprop, but sparse and weights are only for evals, they don't change the data propagating up the hierarchy.
+
+It should also modify the code by adding weights on code elements according to their contribution to projected match.
+The weights should trigger skipping or recursing over corresponding functions ( blocks ( operations.
+Also cross-comp and cluster (compress) code elements and function calls, real and projected, though much more coarsely that data?
 
 notation:
 prefix  f denotes flag
@@ -97,13 +97,14 @@ class CF(CBase):
         f.Nt, f.Bt, f.Ct = kwargs.get('Nt',[]),kwargs.get('Bt',[]),kwargs.get('Ct',[])
     def __bool__(f): return bool(f.c)
 
-ave = .3  # ave m / unit dist, top of filter specification hierarchy:
-avd = ave*.5; dec = ave / (ave+avd)  # vd= vm/2; match decay / unit dist?
-wM, wD, wc, wG, wL, wI, wS, wa, wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT param weights = reversed relative estimated ave, *= ave|avd?
-arn, aI, aS, aveB, distw, Lw, intw = 1.2, 100, 5, 100, .5,.5,.5  # attr filters, replace all a with w *= ave|avd?
-compw, centw, contw, specw = 5, 10, 15, 10  # process filters, also *= ave|avd?
-mW = dW = 9; wTTf = np.ones((2,9))  # fb weights per dTT, adjust in agg+
-wY = wX =64; wYX = np.hypot(wY,wX)  # focus dimensions
+ave = .3; avd = ave*.5  # ave m,d / unit dist, top of filter specification hierarchy
+wM,wD,wc, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT param root weights = reversed relative estimated ave
+wT = np.array([wM,wD,wc, wG,wI,wa, wL,wS,wA]); wTTf = np.array([wT*ave, wT*avd])
+aveB, distw, Lw, intw = 100, .5,.5,.5  # not-compared attr filters, *= ave|avd?
+compw, centw, contw, specw = 5, 10, 15, 10  # process filters, *= (ave,avd)[fi], cost only now
+mW = dW = 9  # fb weights per dTT, adjust in agg+
+wY = wX = 64; wYX = np.hypot(wY,wX)  # focus dimensions
+decay = ave / (ave+avd)  # match decay / unit dist?
 
 ''' Core process per agg level, as described in top docstring:
 
@@ -122,6 +123,7 @@ def vt_(TT):  # brief val_ to get m, d
 
 def val_(TT, rc, fi=1, mw=1.0, rn=.5, _TT=None):  # m,d eval per cluster, rn = n / (n+_n), .5 for equal weight _dTT?
 
+    # arg wTTf = getattr(G,'wTT', wTTf): from cent_attr if any?
     t_ = np.abs(TT[0]) + np.abs(TT[1])  # not sure about abs m_
     rv = TT[0] / (t_+eps) @ wTTf[0] if fi else TT[1] / (t_+eps) @ wTTf[1]  # fork / total per scalar
     if _TT is not None:
@@ -183,7 +185,7 @@ def comp_N_(iN_, rc, _iN_=[]):
 
     def proj_V(_N,N, dist, Ave, pVt_):  # _N x N induction
 
-        Dec = dec**(dist/((_N.span+N.span)/2))
+        Dec = decay**(dist/((_N.span+N.span)/2))
         iTT = (_N.dTT+N.dTT) * Dec  # includes Lt.dTT, etc
         eTT = (_N.eTT+N.eTT) * Dec  # summed from rim
         if abs( vt_(eTT)[0]) * ((len(pVt_)-1)*Lw) > Ave*specw:  # spec N links
@@ -256,7 +258,7 @@ def base_comp(_N,N):  # comp Et,extT,dTT, baseT if N is G?
     M, D, c = N.m, N.d, N.c; I, G, Dy, Dx = N.baseT; L = len(N.N_)
     rn = _c/c
     _pars = np.array([_M*rn,_D*rn,_c*rn,_I*rn,_G*rn, [_Dy,_Dx],_L*rn,_N.span], dtype=object)  # Et, baseT, extT
-    pars  = np.array([M,D,c, (I,aI),G, [Dy,Dx], L,(N.span,aS)], dtype=object)
+    pars  = np.array([M,D,c, (I,wI),G, [Dy,Dx], L,(N.span,wS)], dtype=object)
     mA,dA = comp_A(_N.angl[0]*_N.angl[1], N.angl[0]*N.angl[1])
     m_,d_ = comp(_pars,pars, mA,dA)  # M,D,n, I,G,a, L,S,A
     dm_,dd_ = comp_derT(rn*_N.dTT[1], N.dTT[1])
@@ -744,13 +746,12 @@ def proj_focus(PV__, y,x, Fg):  # radial accum of projected focus value in PV__
 
     m,d,n = Fg.m, Fg.d, Fg.c
     V = (m-ave*n) + (d-avd*n)
-    dy,dx = Fg.angl[0]; a = dy/ max(dx,eps)  # average link_ orientation, projection
-    Fdist = np.hypot(np.array([y,x]),Fg.yx)
-    decay = ave / (Fg.baseT[0]/n) * (wYX / Fdist)  # unit_decay * rel_dist?
+    dy,dx = Fg.angl[0]; a = dy / max(dx,eps)  # average link_ orientation, projection
+    Dec = decay * (wYX / np.hypot(y-Fg.yx[0], x-Fg.yx[1]))  # unit_decay * rel_dist?
     H, W = PV__.shape  # = win__
     n = 1  # radial distance
     while y-n>=0 and x-n>=0 and y+n<H and x+n<W:  # rim is within frame
-        dec = decay * n
+        dec = Dec * n
         pV__= np.array([
         V * dec * 1.4, V * dec * a, V * dec * 1.4,  # a = aspect = dy/dx, affects axial directions only
         V * dec / a,                V * dec / a,
@@ -825,7 +826,7 @@ def form_B__(N_,B_):  # assign boundary / background per node from Bt, no root u
             bG.rN_ = sorted(rN_, key=lambda x:(x.m/x.c), reverse=True)
     for N in N_:
         if N.sub or not N.B_: continue
-        bG_, dTT, rdn = [], np.zeros((2,9)), 0
+        bG_,dTT, rdn = [],np.zeros((2,9)),0
         for L in N.B_:
             bG = R(L)  # replace boundary L with its root in bG.rN_ if any, else L'_N
             if bG and bG not in bG_:
@@ -835,13 +836,11 @@ def form_B__(N_,B_):  # assign boundary / background per node from Bt, no root u
                 bG_ += [bG]; dTT+=bG.dTT
         N.Bt = CF(N_=bG_, dTT=dTT,m=sum(dTT[0]),d=sum(dTT[1]), c=sum(b.c for b in N.B_),rc=rdn, root=N)
 
-def vect_edge(tile, rV=1, wTTf=[]):  # PP_ cross_comp and floodfill to init focal frame graph, no recursion:
+def vect_edge(tile, rV=1, fwTT=[]):  # PP_ cross_comp and floodfill to init focal frame graph, no recursion:
 
-    if np.any(wTTf):
-        global ave, avd, arn, aveB, Lw, distw, intw, compw, centw, contw, wM,wD,wc, wI,wG,wa, wL,wS,wA
-        ave, avd, arn, aveB, Lw, distw, intw, compw, centw, contw = (
-            np.array([ave,avd,arn,aveB, Lw,distw,intw,compw,centw,contw]) / rV)  # projected value change
-        wTTf = np.multiply([[wM,wD,wc, wI,wG,wa, wL,wS,wA]], wTTf)  # or dw_ ~= w_/ 2?
+    if np.any(fwTT):  # feedback, not fully updated
+        global ave,avd, aveB, Lw,distw,intw, compw,centw,contw,specw, wTTf  # /= projected V change:
+        ave,avd,aveB,Lw,distw,intw,compw,centw,contw,specw,wTTf = (np.array([ave,avd,aveB,Lw,distw,intw,compw,centw,contw,specw,wTTf]) / rV)
     blob_,G_ = tile.N_,[]
     tT = [G_,[],[],[],np.zeros((2,9)),np.zeros((2,9)),0,0]   # [G_,N_,L_,Lt_,TT,lTT,C,lc], fill in trace_edge
     for blob in blob_:
@@ -954,8 +953,8 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, wTTf=np.ones((2,9),dtype="
         if Fg_ and val_(np.sum([g.dTT for g in Fg_],axis=0), np.mean([g.rc for g in Fg_])+elev, mw=(len(Fg_)-1)*Lw) > 0:
             return Fg_
 
-    global ave, Lw, intw, compw, centw, contw, distw, mW, dW
-    ave, Lw, intw, compw, centw, contw, distw = np.array([ave, Lw, intw, compw, centw, contw, distw]) / rV
+    global ave,avd, Lw, intw, compw, centw, contw, distw, mW, dW
+    ave,avd, Lw, intw, compw, centw, contw, distw = np.array([ave,avd, Lw, intw, compw, centw, contw, distw]) / rV
 
     frame = CN(box=np.array([0,0,Y,X]), yx=np.array([Y//2, X//2]))
     Fg=[]; elev=0
