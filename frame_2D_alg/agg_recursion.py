@@ -117,18 +117,20 @@ decay = ave / (ave+avd)  # match decay / unit dist?
 - Forward: extend cross-comp and clustering of top clusters across frames, re-order centroids by eigenvalues.
 - Feedback coords to bottom level or prior-level in parallel pipelines, filter updates in more coarse cycles '''
 
-def vt_(TT):  # brief val_ to get m, d
+def vt_(TT, wTT=None):  # brief val_ to get m, d
+
     m_,d_ = TT; ad_ = np.abs(d_); t_ = m_ + ad_ + eps  # ~ max comparand
-    return m_/t_ @ wTTf[0], ad_/t_ @ wTTf[1]
+    if wTT is None: wTT = wTTf
+    return m_/t_ @ wTT[0], ad_/t_ @ wTT[1]
 
-def val_(TT, rc, fi=1, mw=1.0, rn=.5, _TT=None):  # m,d eval per cluster, rn = n / (n+_n), .5 for equal weight _dTT?
+def val_(TT, rc, fi=1, mw=1.0, rn=.5, _TT=None, wTT=None):  # m,d eval per cluster, rn = n / (n+_n), .5 for equal weight _dTT?
 
-    # arg wTTf = getattr(G,'wTT', wTTf): from cent_attr if any?
     t_ = np.abs(TT[0]) + np.abs(TT[1])  # not sure about abs m_
-    rv = TT[0] / (t_+eps) @ wTTf[0] if fi else TT[1] / (t_+eps) @ wTTf[1]  # fork / total per scalar
+    if wTT is None: wTT = wTTf  # or default wTT = getattr(G,'wTT',wTTf) / cent_attr?
+    rv = TT[0] / (t_+eps) @ wTT[0] if fi else TT[1] / (t_+eps) @ wTT[1]  # fork / total per scalar
     if _TT is not None:
         _t_ = np.abs(_TT[0]) + np.abs(_TT[1])
-        _rv = _TT[0] / (_t_+eps) @ wTTf[0] if fi else _TT[1] / (_t_+eps) @ wTTf[1]
+        _rv = _TT[0] / (_t_+eps) @ wTT[0] if fi else _TT[1] / (_t_+eps) @ wTT[1]
         rv = rv * (1-rn) + _rv * rn  # add borrowed root | boundary alt fork val?
 
     return rv * mw - (ave if fi else avd) * rc
