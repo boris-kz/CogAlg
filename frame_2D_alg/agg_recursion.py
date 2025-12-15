@@ -126,7 +126,6 @@ def vt_(TT, wTT=None):  # brief val_ to get m, d
 def val_(TT, rc, wTT, fi=1, mw=1.0, rn=.5, _TT=None):  # m,d eval per cluster, rn = n / (n+_n), .5 for equal weight _dTT?
 
     t_ = np.abs(TT[0]) + np.abs(TT[1])  # not sure about abs m_
-    if wTT is None: wTT = wTTf  # or default wTT =  / cent_TT?
     rv = TT[0] / (t_+eps) @ wTT[0] if fi else TT[1] / (t_+eps) @ wTT[1]  # fork / total per scalar
     if _TT is not None:
         _t_ = np.abs(_TT[0]) + np.abs(_TT[1])
@@ -134,8 +133,7 @@ def val_(TT, rc, wTT, fi=1, mw=1.0, rn=.5, _TT=None):  # m,d eval per cluster, r
         rv = rv * (1-rn) + _rv * rn  # add borrowed root | boundary alt fork val?
 
     return rv * mw - (ave if fi else avd) * rc
-
-def TTw(G): return getattr(G,'wTT', None) or getattr(G.root,'wTT', None) or wTTf
+def TTw(G): return getattr(G,'wTT',wTTf)
 
 def cross_comp(root, rc, fC=0):  # core function, mediates rng+ and der+ cross-comp and clustering, rc=rdn+olp
 
@@ -312,21 +310,12 @@ def comp_A(_A,A):
     '''
     return (cos(dA)+1) /2, dA/pi  # mA in 0:1, dA in -1:1, or invert dA, may be negative?
 
-def rolp(N, _N_, R=0):  # rel V of L_|N.rim overlap with _N_: inhibition|shared zone, oN_ = list(set(N.N_) & set(_N.N_)), no comp?
-
-    n_ = set(N.N_) if R else {n for l in N.rim for n in l.nt if n is not N}  # nrim
-    olp_ = n_ & _N_
-    if olp_:
-        oTT = np.sum([i.dTT for i in olp_], axis=0)
-        return sum(oTT[0]) / sum(N.dTT[0] if R else N.eTT[0])  # relative M (not rm) of overlap?
-    else:
-        return 0
-
 def get_exemplars(N_, rc):  # multi-layer non-maximum suppression -> sparse seeds for diffusive centroid clustering
 
     E_ = set()
     for rdn, N in enumerate(sorted(N_, key=lambda n:n.em, reverse=True), start=1):  # strong-first
-        roV = rolp(N, E_)  #| olp in proportion to pairwise similarity?
+        oL_ = set(N.rim) & {l for e in E_ for l in e.rim}
+        roV = vt_(sum([l.dTT for l in oL_]))[0] / N.em  # relative rim olp V
         if N.em > ave * (rc+ rdn+ compw +roV):  # ave *= relV of overlap by stronger-E inhibition zones
             E_.update({n for l in N.rim for n in l.nt if n is not N and N.em > ave*rc})  # selective nrim
             N.exe = 1  # in point cloud of focal nodes
@@ -344,7 +333,9 @@ def Cluster(root, iL_, rc, fC):  # generic clustering root
         for ft,f_,link_,fC in [('tNt','tN_',dN_,0), ('tBt','tB_',dB_,0), ('tCt','tC_',dC_,1)]:
             if link_:
                 frc += 1  # trans-fork redundancy count, re-assign later?
-                Ft = sum_N_(link_,frc,root); cluster_N(Ft, {n for L in link_ for n in L.nt}, frc)
+                Ft = sum_N_(link_,frc,root); N_ = {n for L in link_ for n in L.nt}
+                for N in N_: N.exe=1
+                cluster_N(Ft, N_, frc)
                 if val_(Ft.dTT, frc, TTw(root), mw=(len(Ft.N_)-1)*Lw) > 0:
                     cross_comp(Ft, frc, fC=fC)  # unlikely, doesn't add rc?
                 setattr(root,f_,link_); setattr(root, ft, Ft)  # trans-fork_ via trans-G links
@@ -410,7 +401,9 @@ def cluster_N(root, rN_, rc, rng=0):  # flood-fill node | link clusters, flat if
                 if rng:  # cluster rN_ via top-rng roots
                     _R = rroot(_N)
                     if _R and not _R.fin:
-                        if rolp(_N.rim, R.L_, R=1) > ave * rc:  # Gt is not complete?
+                        oL_ = set(_N.rim) & set(link_)
+                        roV = _N.em / vt_(sum([l.dTT for l in oL_]))[0]  # relative rim olp V
+                        if roV > ave * rc:
                             node_ += [_R]; _R.fin = 1; _N.fin = 1
                             link_ += _R.L_; cent_ += _R.C_  # C_ is not rng-banded?
                 else:   # flat
@@ -426,7 +419,7 @@ def cluster_N(root, rN_, rc, rng=0):  # flood-fill node | link clusters, flat if
         if N.fin or (root.root and not N.exe): continue  # no exemplars in Fg
         node_,cent_,Link_,_link_,B_ = [N],[],[],[],[]
         if rng:
-            n = N; R = rroot(n)  # cluster top-rng roots
+            R = rroot(N)  # cluster top-rng roots
             if R and not R.fin: node_,_link_,cent_ = [R], R.L_[:], [C.root for C in R.C_]; R.fin = 1
         else:  # flat
             cent_ = N.C_
@@ -576,8 +569,7 @@ def Copy_(N, root=None, init=0, typ=None):
         for attr in ['nt','baseT','box','rim','compared']: setattr(C,attr, copy(getattr(N,attr)))
         if init:  # new G
             C.yx = [N.yx]; C.angl = np.array([copy(N.angl[0]), N.angl[1]],dtype=object)  # to get mean
-            if init == 1:  # else centroid
-                C.L_= [l for l in N.rim if l.m>ave]; N.root = C; N.em, N.ed = vt_(N.eTT)
+            if init==1: C.L_=[l for l in N.rim if l.m>ave]; N.root=C; N.em,N.ed = vt_(N.eTT); C.fin = 0  # else centroid
         else:
             C.Lt=CopyF_(N.Lt); C.Bt=CopyF_(N.Bt); C.Ct=CopyF_(N.Ct)  # empty in init G
             C.angl = copy(N.angl); C.yx = copy(N.yx)
@@ -772,11 +764,11 @@ def proj_focus(PV__, y,x, Fg):  # radial accum of projected focus value in PV__
         PV__[row,col] += pV__  # in-place accum pV to rim
         n += 1
 
-def proj_TT(L, cos_d, dist, rc, pTT, fdec=0, frec=0):  # accumulate link pTT with iTT or eTT internally
+def proj_TT(L, cos_d, dist, rc, pTT, wTT, fdec=0, frec=0):  # accumulate link pTT with iTT or eTT internally
 
     dec = dist if fdec else ave ** (1 + dist / L.span)  # ave: match decay rate / unit distance
     TT = np.array([L.dTT[0] * dec, L.dTT[1] * cos_d * dec])
-    cert = abs(val_(TT,rc) - ave)  # approximation
+    cert = abs(val_(TT,rc,wTT) - ave)  # approximation
     if cert > ave:
         pTT+=TT; return  # certainty margin = ave
     if not frec:  # non-recursive
@@ -791,9 +783,9 @@ def proj_N(N, dist, A, rc):  # arg rc += N.rc+contw, recursively specify N proje
 
     cos_d = (N.angl[0].dot(A) / (np.hypot(*N.angl[0]) * dist)) * N.angl[1]  # internal x external angle alignment
     iTT, eTT = np.zeros((2,9)), np.zeros((2,9))
-
-    for L in N.L_+N.B_: proj_TT(L, cos_d, dist, L.rc+rc, iTT)  # accum TT internally
-    for L in N.rim:     proj_TT(L, cos_d, dist, L.rc+rc, eTT)
+    wTT = TTw(N)
+    for L in N.L_+N.B_: proj_TT(L, cos_d, dist, L.rc+rc, iTT, wTT)  # accum TT internally
+    for L in N.rim:     proj_TT(L, cos_d, dist, L.rc+rc, eTT, wTT)
     pTT = iTT + eTT  # projected int,ext links, work the same?
 
     return pTT  # val_(N.dTT,rc) * (1- val_(iTT+eTT, rc))  # info_gain = N.m * average link uncertainty, should be separate
@@ -842,9 +834,10 @@ def form_B__(N_,B_):  # assign boundary / background per node from Bt, no root u
 
 def vect_edge(tile, rV=1, wTT=None):  # PP_ cross_comp and floodfill to init focal frame graph, no recursion:
 
-    # if wTT is not None: # more detailed feedback than rV, not implemented
     global ave,avd, aveB, Lw,distw,intw, compw,centw,contw,specw, wTTf  # /= projected V change:
-    ave,avd,aveB,Lw,distw,intw,compw,centw,contw,specw,wTTf = (np.array([ave,avd,aveB,Lw,distw,intw,compw,centw,contw,specw,wTTf],dtype=object) / rV)
+    if wTT is None: wTTf /= rV
+    else:           wTTf = wTT  # detailed feedback
+    ave,avd,aveB,Lw,distw,intw,compw,centw,contw,specw = (np.array([ave,avd,aveB,Lw,distw,intw,compw,centw,contw,specw]) / rV)
     blob_,G_ = tile.N_,[]
     tT = [G_,[],[],[],np.zeros((2,9)),np.zeros((2,9)),0,0]   # [G_,N_,L_,Lt_,TT,lTT,C,lc], fill in trace_edge
     for blob in blob_:
@@ -854,7 +847,7 @@ def vect_edge(tile, rV=1, wTT=None):  # PP_ cross_comp and floodfill to init foc
                 PPm_ = comp_slice(edge, rV, wTTf)
                 N_ = [PP2N(PPm) for PPm in PPm_]; [PP2N(PPd) for PPd in edge.link_]
                 form_B__(N_, B_=[L for PPm in N_ for L in PPm.B_])  # forms PPm.B_,Bt
-                if val_(np.sum([n.dTT for n in N_],0),3, mw=(len(PPm_)-1)*Lw) > 0:
+                if val_(np.sum([n.dTT for n in N_],0), 3, TTw(tile), mw=(len(PPm_)-1)*Lw) > 0:
                     trace_edge(N_,3, tile, tT)  # flatten, cluster B_-mediated Gs, init Nt
     if G_:
         root_replace(tile,1, *tT)  # updates tile.wTT
@@ -902,7 +895,7 @@ def trace_edge(N_, rc, root, tT=[]):  # cluster contiguous shapes via PPs in edg
                 G_ += [sum2G(n_,rc,root,l_,dTT=tt,c=c)]  # include singletons
             else:
                 for N in n_: N.fin=0; N.root=root
-    if val_(TT, rc+1, mw=1 if tT else (len(G_)-1)*Lw) > 0:
+    if val_(TT, rc+1, TTw(root), mw=1 if tT else (len(G_)-1)*Lw) > 0:
         rc += 1
         if tT:  # concat in tile tuple in vect_edge, ext root_replace
             for i, par in enumerate((G_,N_,L_,Lt_,TT,lTT,C,lc)): tT[i] += par
@@ -911,7 +904,9 @@ def trace_edge(N_, rc, root, tT=[]):  # cluster contiguous shapes via PPs in edg
 
 def root_replace(root, rc, G_, N_,L_,Lt_, TT,lTT,c,lc):
 
-    root.N_= G_; root.dTT=TT+lTT; root.c=c+lc; cent_TT(root, root.rc)
+    root.N_= G_; root.dTT=TT+lTT; root.c=c+lc
+    root.rc= rc  # not sure
+    if hasattr(root, 'wTT'): cent_TT(root, root.rc)
     sum2T(G_,rc, root,'Nt', TT, c)  # no root_update
     sum2T(L_,rc, root,'Lt',lTT,lc); root.m,root.d = vt_(root.dTT)
     lTT, lc = np.zeros((2,9)),0  # reset for top nested lev
@@ -935,12 +930,12 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, wTTf=np.ones((2,9),dtype="
         PV__ = np.zeros([Ly,Lx])  # maps to current-level tile
         Fg_ = []; iy,ix =_iy,_ix; y,x = 31,31  # start at tile mean
         while True:
-            if not elev:
-                Fg = base_tile(iy,ix)  # 1st level or cross_comped arg tile
-            if Fg and val_(Fg.dTT, Fg.rc+compw+elev, mw=(len(Fg.N_)-1)*Lw) > 0:
-                tile[y,x] = Fg; Fg_ += [Fg]; dy_dx = np.array([Fg.yx[0]-y,Fg.yx[1]-x])
+            if not elev: Fg = base_tile(iy,ix)  # 1st level or previously cross_comped arg tile
+            if Fg and val_(Fg.dTT, Fg.rc+compw+elev, Fg.wTT, mw=(len(Fg.N_)-1)*Lw) > 0:
+                tile[y,x] = Fg; Fg_+=[Fg]
+                dy_dx = np.array([Fg.yx[0]-y,Fg.yx[1]-x])
                 pTT = proj_N(Fg, np.hypot(*dy_dx), dy_dx, elev)
-                if 1- abs(val_(pTT, rc=elev) > ave):  # search in marginal predictability
+                if 0< val_(pTT, elev, TTw(Fg)) < ave:  # search in marginal +ve predictability?
                     # extend lev by feedback within current tile:
                     proj_focus(PV__,y,x,Fg)  # PV__+= pV__
                     pv__ = PV__.copy(); pv__[tile!=None] = 0  # exclude processed

@@ -222,3 +222,14 @@ def Cluster(root, iL_, rc, fC):  # generic clustering root
             if rL_ and sum([l.m for l in rL_]) * ((len(rL_)-1)*Lw) > ave*rc:
                 G_,rc = cluster_N(root, rL_, rc, rng)  # add root_replace
     return G_,rc
+
+def rolp(N, _N_, R=0):  # rel V of L_|N.rim overlap with _N_: inhibition|shared zone, oN_ = list(set(N.N_) & set(_N.N_)), no comp?
+
+    n_ = {n for l in (N.L_ if R else N.rim) for n in l.nt if n is not N}  # nrim
+    olp_ = n_ and _N_
+    if olp_:
+        oT = np.sum([o.dTT[0] for o in olp_], axis=0)
+        return sum(oT[0]) / (sum(N.Lt.dTT[0] if R else N.eTT[0]))  # relative M (not rm) of overlap?
+    else:
+        return 0
+
