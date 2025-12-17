@@ -233,3 +233,25 @@ def rolp(N, _N_, R=0):  # rel V of L_|N.rim overlap with _N_: inhibition|shared 
     else:
         return 0
 
+def sum2T(T_, rc, root, nF, TT=None, c=1):  # N_ -> fork T
+
+    T = T_[0]; fV = TT is None
+    F = CF(root=root); T.root=F  # no L_,B_,C_,Nt,Bt,Ct yet
+    if fV: F.dTT=T.dTT; F.c=T.c
+    else:  F.dTT=TT; F.c=c
+    for T in T_[1:]: add_T(F,T, nF,fV)
+    F.m, F.d = vt_(F.dTT,rc)
+    F.rc=rc; setattr(root, nF,F)
+    root_update(root, F)
+    if nF in ('Bt','Ct'): F.N_ = list(T_);  # else external N_, Nt.N_ insert, no Lt,N_
+    return F
+
+def add_T(F,T, nF, fV=1):
+    if nF=='Nt' and F.N_:
+        F.N_[0].N_ += T.N_  # top level = flattened T.N_s
+        for Lev,lev in zip_longest(F.N_[1:], T.Nt.N_):  # deeper levels
+            if lev:
+                if Lev: Lev.N_+=lev.N_; Lev.dTT+=lev.dTT; Lev.c+=lev.c
+                else:   F.N_ += [CopyF_(lev, root=F)]
+    T.root=F
+    if fV: F.dTT+=T.dTT; F.c+=T.c

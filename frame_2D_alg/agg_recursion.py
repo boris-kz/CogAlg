@@ -54,9 +54,10 @@ class CN(CBase):
         # 2=G: + rim, eTT, em,ed,ec, baseT,mang,sub,exe, Lt, tNt, tBt, tCt?
         # 0=PP: if typ: comp_sub?
         n.m,  n.d, n.c = kwargs.get('m',0), kwargs.get('d',0), kwargs.get('c',0)  # sum forks to borrow
+        n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # Nt+Lt dTT: m_,d_ [M,D,n, I,G,a, L,S,A]
         n.rim = kwargs.get('rim',[])  # external links, rng-nest?
         n.em, n.ed, n.ec = kwargs.get('em',0),kwargs.get('ed',0),kwargs.get('ec',0)  # sum dTT
-        n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # sum rim dTT: m_,d_ [M,D,n, I,G,a, L,S,A]
+        n.eTT = kwargs.get('eTT',np.zeros((2,9)))  # sum rim dTT
         n.rc  = kwargs.get('rc', 1)  # redundancy to ext Gs, ave in links?
         n.N_, n.B_, n.C_, n.L_ = kwargs.get('N_',[]), kwargs.get('B_',[]), kwargs.get('C_',[]), kwargs.get('L_',[])  # base elements
         n.Nt, n.Bt, n.Ct, n.Lt= kwargs.get('Nt',CF()), kwargs.get('Bt',CF()), kwargs.get('Ct',CF()), kwargs.get('Lt',CF())  # nested elements
@@ -251,7 +252,7 @@ def comp_sub(_N,N, rc, root):  # unpack node trees down to numericals and compar
         Rc += 1  # deeper levels are redundant
         tt = comp_derT(_lev.dTT[1],lev.dTT[1]); m,d = vt_(tt,rc)
         oN_= set(_lev.N_) & set(lev.N_)  # intersect, or offset, or comp_len?
-        dlev = CF(N_=oN_, dTT=tt, m=m,d=d, c=min(_lev.c,lev.c), rc=min(_lev.rc,lev.rc), root=root)  # min: only shared elements are compared
+        dlev = CF(N_=oN_, nF='Nt', dTT=tt, m=m,d=d, c=min(_lev.c,lev.c), rc=min(_lev.rc,lev.rc), root=root)  # min: only shared elements are compared
         root.Nt.N_ += [dlev]  # root:link, nt.N_:derH
         root_update(root.Nt, dlev)  # recursive
 
@@ -564,8 +565,8 @@ def Copy_(N, root=None, init=0, typ=None):
     else:
         if C.typ==N.typ: C.N_=list(N.N_); C.Nt = CopyF_(N.Nt,root=C) if N.Nt else N.Nt
         C.L_=list(N.L_); C.B_=list(N.B_); C.C_=list(N.C_)  # empty in init G
-    if typ:  # then if typ>1?
-        for attr in ['em','ed','ec','rng','fin','span','mang','sub','exe']: setattr(C,attr, getattr(N,attr))
+    if typ:
+        for attr in ['rng','fin','span','mang','sub','exe']: setattr(C,attr, getattr(N,attr))
         for attr in ['nt','baseT','box','rim','compared']: setattr(C,attr, copy(getattr(N,attr)))
         if init:  # new G
             C.yx = [N.yx]; C.angl = np.array([copy(N.angl[0]), N.angl[1]],dtype=object)  # to get mean
@@ -573,7 +574,9 @@ def Copy_(N, root=None, init=0, typ=None):
         else:
             C.Lt=CopyF_(N.Lt); C.Bt=CopyF_(N.Bt); C.Ct=CopyF_(N.Ct)  # empty in init G
             C.angl = copy(N.angl); C.yx = copy(N.yx)
-        if hasattr(N,'mo_'): C.mo_ = deepcopy(N.mo_)
+        if typ > 1:
+            C.eTT = deepcopy(N.eTT); C.em,C.ed,C.ec = N.em,N.ed,N.ec
+            if hasattr(N,'mo_'): C.mo_ = deepcopy(N.mo_)
     return C
 
 def sum2G(N_, rc, root=None, L_=[],C_=[],B_=[], dTT=None,c=1, rng=1, init=1):  # updates root if not init
@@ -586,9 +589,6 @@ def sum2G(N_, rc, root=None, L_=[],C_=[],B_=[], dTT=None,c=1, rng=1, init=1):  #
             l0 = G.Nt.N_[0]; l0.dTT=Lt.dTT; l0.m=Lt.m; l0.d=Lt.d; l0.c=Lt.c  # vals must be level-specific
         A = np.sum([l.angl[0] for l in L_], axis=0)
         G.angl = np.array([A, np.sign(G.dTT[1] @ wTTf[1])], dtype=object)  # angle dir = d sign
-    # alt forks:
-    if B_: sum2T(B_,rc,G,'Bt'); G.B_=B_
-    if C_: sum2T(C_,rc,G,'Ct'); G.C_=C_
     if init:  # else same ext
         yx_ = np.array([n.yx for n in N_]); yx = yx_.mean(axis=0); dy_,dx_ = (yx_-yx).T
         G.span = np.hypot(dy_,dx_).mean()  # N centers dist to G center
@@ -604,14 +604,19 @@ def sum2G(N_, rc, root=None, L_=[],C_=[],B_=[], dTT=None,c=1, rng=1, init=1):  #
                     link = comp_N(*L.nt, rc, L.angl[0], L.span, L.rng)
                     G.Lt.dTT+= link.dTT-L.dTT; L_+=[link]  # recompute m,d,c?
             G.L_ = L_
+    # alt forks:
+    if B_: sum2T(B_,rc,G,'Bt'); G.B_=B_
+    if C_: sum2T(C_,rc,G,'Ct'); G.C_=C_
     return G
 
 def sum_N_(N_, rc, root, TT=None, c=1, flat=0):  # forms G of N_|L_
 
+    for n in N_:  # batch sum root_updates per N here too?
+        n.m, n.d = vt_(n.dTT,rc)
     N = N_[0]; fTT= TT is not None
     lTT,lc = (N.Lt.dTT, N.Lt.c) if N.Lt else (np.zeros((2,9)),0)
     G = Copy_(N, root, init=1, typ=2)
-    if fTT: G.dTT= TT; G.c= c
+    if fTT: G.dTT= TT; G.c= c  # Nt.dTT+Lt.dTT?
     n_ = list(N.N_)  # flatten core fork, alt forks stay nested
     for N in N_[1:]:
         add_N(G, N, fTT); n_+= N.N_
@@ -621,8 +626,9 @@ def sum_N_(N_, rc, root, TT=None, c=1, flat=0):  # forms G of N_|L_
         G.N_ = N_
         if n_ and N.typ:  # not PP.P_, + Lt.dTT:
             m,d = vt_(lTT,rc); G.Nt.N_.insert(0, CF(N_=n_,dTT=lTT,m=m,d=d,c=lc,root=G.Nt))
-    G.m,G.d = 0,0
-    for m,d in (vt_(F.dTT, rc) for F in (G.Nt, G.Lt, G.Bt, G.Ct)): G.m += m; G.d += d
+    # core forks:
+    G.m,G.d = vt_(G.Nt.dTT + G.Lt.dTT, rc)  # or summed in add_N?
+    for m,d in (vt_(F.dTT, rc) for F in (G.Bt, G.Ct)): G.m += m; G.d += d  # borrow deviations
     G.rc = rc
     return G
 
@@ -660,29 +666,29 @@ def sum2T(T_, rc, root, nF, TT=None, c=1):  # N_ -> fork T
     F = CF(root=root); T.root=F  # no L_,B_,C_,Nt,Bt,Ct yet
     if fV: F.dTT=T.dTT; F.c=T.c
     else:  F.dTT=TT; F.c=c
-    for T in T_[1:]: add_T(F,T, nF,fV)
+    if nF=='Nt': F.N_ = [T.N_] + list(T.Nt.N_)  # deeper H
+    for T in T_[1:]:
+        T.root = F
+        if fV: F.dTT += T.dTT; F.c += T.c
+        if nF == 'Nt':  # flat Bt,Ct N_, Lt.N_= []
+            F.N_[0] += T.N_  # top level is flattened T.N_s
+            for Lev,lev in zip_longest(F.N_[1:], T.Nt.N_):  # deeper levels
+                if lev:
+                    if Lev: Lev.N_+=lev.N_; Lev.dTT+=lev.dTT; Lev.c+=lev.c
+                    else:   F.N_ += [CopyF_(lev, root=F)]
     F.m, F.d = vt_(F.dTT,rc)
-    F.rc=rc; setattr(root, nF,F)
+    F.rc = rc; setattr(root, nF,F)
+    if nF == 'Nt': n_ = F.N_[0]; dtt = sum([n.dTT for n in n_]); m,d = vt_(dtt,rc); F.N_[0] = CF(N_=n_, dTT=dtt, m=m,d=d, c=sum([n.c for n in n_]))
+    elif nF in ('Bt','Ct'): F.N_ = list(T_)  # no Lt.N_
     root_update(root, F)
-    if nF in ('Bt','Ct'): F.N_ = list(T_);  # else external N_, Nt.N_ insert?
     return F
-
-def add_T(F,T, nF, fV=1):
-    if nF=='Nt' and F.N_:
-        F.N_[0].N_ += T.N_  # top level = flattened T.N_s
-        for Lev,lev in zip_longest(F.N_[1:], T.Nt.N_):  # deeper levels
-            if lev:
-                if Lev: Lev.N_+=lev.N_; Lev.dTT+=lev.dTT; Lev.c+=lev.c
-                else:   F.N_ += [CopyF_(lev, root=F)]
-    T.root=F
-    if fV: F.dTT+=T.dTT; F.c+=T.c
 
 def root_update(root, T):  # value attrs only?
 
     _c,c = root.c,T.c; C = _c+c; root.c = C  # c is not weighted, min(_lev.c,lev.c) if root is link?
     root.rc = (root.rc*_c + T.rc*c) / C
-    if isinstance(root,CF):
-        root.dTT = (root.dTT*_c + T.dTT*c) /C  # merge in fork
+    if isinstance(root,CF) or T.nF=='Nt' or T.nF=='Lt':  # core forks
+        root.dTT = (root.dTT*_c + T.dTT*c) /C
     else:  # borrow alt-fork deviations:
         root.m = (root.m*_c+T.m*c) /C; root.d = (root.d*_c+T.d*c) /C
     if root.root: root_update(root.root, T)   # upward recursion, batch in root?
