@@ -255,3 +255,84 @@ def add_T(F,T, nF, fV=1):
                 else:   F.N_ += [CopyF_(lev, root=F)]
     T.root=F
     if fV: F.dTT+=T.dTT; F.c+=T.c
+
+def sum2G(N_, rc, root=None, L_=[],C_=[],B_=[], dTT=None,c=1, rng=1, init=1):  # updates root if not init
+
+    if not init: N_+=root.N_; L_+=root.L_; B_+=root.B_; C_+=root.C_
+    G = sum_N_(N_,rc,root,dTT,c); G.rng=rng  # default, forms G.Nt
+    if L_:
+        G.L_=L_; Lt = sum2T(L_,rc,G,'Lt')  # no Lt.N_
+        if N_[0].typ and G.Nt.N_:
+            l0 = G.Nt.N_[0]; l0.dTT=Lt.dTT; l0.m=Lt.m; l0.d=Lt.d; l0.c=Lt.c  # vals must be level-specific
+        A = np.sum([l.angl[0] for l in L_], axis=0)
+        G.angl = np.array([A, np.sign(G.dTT[1] @ wTTf[1])], dtype=object)  # angle dir = d sign
+    if init:  # else same ext
+        yx_ = np.array([n.yx for n in N_]); yx = yx_.mean(axis=0); dy_,dx_ = (yx_-yx).T
+        G.span = np.hypot(dy_,dx_).mean()  # N centers dist to G center
+        G.yx = yx
+    if N_[0].typ==2 and G.L_:  # else mang = 1
+        G.mang = np.mean([comp_A(G.angl[0], l.angl[0])[0] for l in G.L_])
+    G.m,G.d = vt_(G.dTT,rc)
+    if G.m > ave*specw:
+        L_,pL_= [],[]; [L_.append(L) if L.typ==1 else pL_.append(L) for L in G.L_]
+        if pL_:
+            if G.m * vt_(sum([L.dTT for L in pL_]),rc)[0] > ave*specw:
+                for L in pL_:
+                    link = comp_N(*L.nt, rc, L.angl[0], L.span, L.rng)
+                    G.Lt.dTT+= link.dTT-L.dTT; L_+=[link]  # recompute m,d,c?
+            G.L_ = L_
+    # alt forks:
+    if B_: sum2T(B_,rc,G,'Bt'); G.B_=B_
+    if C_: sum2T(C_,rc,G,'Ct'); G.C_=C_
+    return G
+
+def sum_N_(N_, rc, root, TT=None, c=1, flat=0):  # forms G of N_|L_
+
+    for n in N_:  # batch sum root_updates per N here too?
+        n.m, n.d = vt_(n.dTT,rc)
+    N = N_[0]; fTT= TT is not None
+    lTT,lc = (N.Lt.dTT, N.Lt.c) if N.Lt else (np.zeros((2,9)),0)
+    G = Copy_(N, root, init=1, typ=2)
+    if fTT: G.dTT= TT; G.c= c  # Nt.dTT+Lt.dTT?
+    n_ = list(N.N_)  # flatten core fork, alt forks stay nested
+    for N in N_[1:]:
+        add_N(G, N, fTT); n_+= N.N_
+        if N.Lt: lTT+=N.Lt.dTT; lc+=N.Lt.c
+    if flat: G.N_ = n_  # flatten N.N_, or in F.N_ only?
+    else:
+        G.N_ = N_
+        if n_ and N.typ:  # not PP.P_, + Lt.dTT:
+            m,d = vt_(lTT,rc); G.Nt.N_.insert(0, CF(N_=n_,dTT=lTT,m=m,d=d,c=lc,root=G.Nt))
+    # core forks:
+    G.m,G.d = vt_(G.Nt.dTT + G.Lt.dTT, rc)  # or summed in add_N?
+    for m,d in (vt_(F.dTT, rc) for F in (G.Bt, G.Ct)): G.m += m; G.d += d  # borrow deviations
+    G.rc = rc
+    return G
+
+def add_N(N, n, fTT=0, flat=0):  # flat currently not used
+
+    n.fin = 1; n.root = N; fC = hasattr(n,'mo_')  # centroid
+    if fC and not hasattr(N,'mo_'): N.mo_=[]
+    _cnt,cnt = N.c,n.c; C=_cnt+cnt; N.c += n.c  # weigh contribution of intensive params
+    if fC: n.rc = np.sum([mo[1] for mo in n.mo_]); N.rN_+=n.rN_; N.mo_+=n.mo_
+    else:  N.rc = (N.rc*_cnt+n.rc*cnt) / C
+    if not fTT: N.dTT = (N.dTT*_cnt + n.dTT*cnt) / C
+    if n.typ:  # not PP
+        for i, (T,t,F_,f_) in enumerate(zip((N.Nt,N.Lt,N.Bt,N.Ct), (n.Nt,n.Lt,n.Bt,n.Ct), (N.N_,N.L_,N.B_,N.C_), (n.N_,n.L_,n.B_,n.C_))):
+            if f_:  # add 'tBt','tCt','tNt'?
+                if flat: F_ += f_  # else stays nested, current default
+                if i: T.N_ += [t]
+                else:
+                    for Lev,lev in zip_longest(T.N_, t.N_, fillvalue=None):
+                        if lev:  # norm /C?
+                            if Lev is None: N.Nt.N_ += [lev]
+                            else: Lev.N_ += lev.N_; Lev.dTT+=lev.dTT; Lev.c+=lev.c  # flat
+        N.span = (N.span*_cnt + n.span*cnt) / C
+        A,a = N.angl[0],n.angl[0]; A[:] = (A*_cnt+a*cnt) / C  # vect only
+        if isinstance(N.yx, list): N.yx += [n.yx]  # weigh by C?
+    if N.typ>1: # nodes
+        N.baseT = (N.baseT*_cnt+n.baseT*cnt) / C
+        N.mang = (N.mang*_cnt + n.mang*cnt) / C
+        N.box = extend_box(N.box, n.box)
+    # if N is Fg: margin = Ns of proj max comp dist > min _Fg point dist: cross_comp Fg_?
+    return N

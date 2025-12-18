@@ -335,7 +335,7 @@ def Cluster(root, iL_, rc, fC):  # generic clustering root
         for ft,f_,link_,fC in [('tNt','tN_',dN_,0), ('tBt','tB_',dB_,0), ('tCt','tC_',dC_,1)]:
             if link_:
                 frc += 1  # trans-fork redundancy count, re-assign later?
-                Ft = sum_N_(link_,frc,root); N_ = {n for L in link_ for n in L.nt}
+                Ft = sum2T(link_,frc,root,ft[1:]); N_ = {n for L in link_ for n in L.nt}
                 for N in N_: N.exe=1
                 cluster_N(Ft, N_, frc)
                 if val_(Ft.dTT, frc, TTw(root), mw=(len(Ft.N_)-1)*Lw) > 0:
@@ -434,12 +434,13 @@ def cluster_N(root, rN_, rc, rng=0):  # flood-fill node | link clusters, flat if
             else: break
         if node_:
             N_,L_,C_,B_ = list(set(node_)),list(set(Link_)),list(set(cent_)),list(set(B_))
-            tt,ltt,c,lc,o = np.zeros((2,9)),np.zeros((2,9)),0,0,0
-            for n in N_: tt+=n.dTT; c+=n.c; o+=n.rc  # from Ns, vs. Et from Ls?
-            for l in L_: ltt+=l.dTT; lc+=l.c; o+=l.rc  # combine?
-            if val_(ltt, rc+o, TTw(root),_TT=root.dTT) > 0:  # include singletons?
-                G_ += [sum2G(N_,o,root, L_,C_)]
-                N__+=N_; L__+=L_; Lt_+=[n.Lt for n in N_]; TT+=tt; lTT+=ltt; C+=c; lC+=lc
+            nt,lt,bt,ct = np.zeros((2,9)),np.zeros((2,9)),np.zeros((2,9)),np.zeros((2,9))
+            nc,lc,bc,cc = 0,0,0,0
+            for F_,tt,c in (N_,nt,nc),(L_,lt,lc),(B_,bt,bc),(C_,ct,cc):
+                for F in F_: tt+=F.dTT; c+=F.c
+            if val_(nt+lt, rc, TTw(root),_TT=root.dTT) + vt_(bt,rc)[0] + vt_(ct,rc)[0] > 0:  # include singletons?
+                G_+= [sum2G(N_,rc,root, Ft=((N_,nt,nc),(L_,lt,lc),(B_,bt,bc),(C_,ct,cc)))]
+                N__+=N_; L__+=L_; Lt_+=[n.Lt for n in N_]; TT+=tt; lTT+=lt; C+=c; lC+=lc
     if G_ and val_(TT, rc+1, TTw(root), mw=(len(G_)-1)*Lw) > 0:
         rc += 1
         root_replace(root,rc, G_,N__,L__,Lt_,TT,lTT,C,lC)
@@ -545,25 +546,25 @@ def slope(link_):  # get ave 2nd rate of change with distance in cluster or fram
 
 def Lnt(l): return ((l.nt[0].em + l.nt[1].em - l.m*2) * intw / 2 + l.m) / 2  # L.m is twice included in nt.em
 
-def CopyF_(F, root=None):
+def CopyF(F, root=None):
 
     C = CF(dTT=deepcopy(F.dTT)); C.root = root or F.root
     for a in ['m','d','c','rc']: setattr(C,a, getattr(F,a))
     for a in ['L_','B_','C_']: setattr(C,a, copy(getattr(F,a)))
-    [setattr(C,a,CopyF_(p,root=C)) for a in ['Nt','Bt','Ct'] if (p:=getattr(F,a))]
+    [setattr(C,a,CopyF(p,root=C)) for a in ['Nt','Bt','Ct'] if (p:=getattr(F,a))]
     if F.N_:
-        if F.name=='Nt': C.N_ = [CopyF_(lev) for lev in F.N_]  # H levs are concat
+        if F.name=='Nt': C.N_ = [CopyF(lev) for lev in F.N_]  # H levs are concat
         else:            C.N_ = copy(F.N_)  # alt roots
     return C
 
 def Copy_(N, root=None, init=0, typ=None):
 
     if typ is None: typ = 2 if init else N.typ  # G.typ = 2
-    C = CN(dTT=deepcopy(N.dTT), typ=typ); C.root = N.root if root is None else root
+    C = CN(dTT=deepcopy(N.dTT),typ=typ); C.root = N.root if root is None else root
     for attr in ['m','d','c','rc']: setattr(C,attr, getattr(N,attr))
     if init: C.N_ = [N]
     else:
-        if C.typ==N.typ: C.N_=list(N.N_); C.Nt = CopyF_(N.Nt,root=C) if N.Nt else N.Nt
+        if C.typ==N.typ: C.N_=list(N.N_); C.Nt = CopyF(N.Nt,root=C) if N.Nt else N.Nt
         C.L_=list(N.L_); C.B_=list(N.B_); C.C_=list(N.C_)  # empty in init G
     if typ:
         for attr in ['rng','fin','span','mang','sub','exe']: setattr(C,attr, getattr(N,attr))
@@ -572,21 +573,31 @@ def Copy_(N, root=None, init=0, typ=None):
             C.yx = [N.yx]; C.angl = np.array([copy(N.angl[0]), N.angl[1]],dtype=object)  # to get mean
             if init==1: C.L_=[l for l in N.rim if l.m>ave]; N.root=C; N.em,N.ed = vt_(N.eTT,N.rc); C.fin = 0  # else centroid
         else:
-            C.Lt=CopyF_(N.Lt); C.Bt=CopyF_(N.Bt); C.Ct=CopyF_(N.Ct)  # empty in init G
+            C.Lt=CopyF(N.Lt); C.Bt=CopyF(N.Bt); C.Ct=CopyF(N.Ct)  # empty in init G
             C.angl = copy(N.angl); C.yx = copy(N.yx)
         if typ > 1:
             C.eTT = deepcopy(N.eTT); C.em,C.ed,C.ec = N.em,N.ed,N.ec
             if hasattr(N,'mo_'): C.mo_ = deepcopy(N.mo_)
     return C
 
-def sum2G(N_, rc, root=None, L_=[],C_=[],B_=[], dTT=None,c=1, rng=1, init=1):  # updates root if not init
+def sum2G(Ft_, rc, root=None, rng=1, init=1):  # updates root if not init
 
-    if not init: N_+=root.N_; L_+=root.L_; B_+=root.B_; C_+=root.C_
-    G = sum_N_(N_,rc,root,dTT,c); G.rng=rng  # default, forms G.Nt
+    N_,ntt,nc = Ft_[0]; L_,ltt,lc = [],np.zeros((2,9)),0; B_,btt,bc = [],np.zeros((2,9)),0; C_,ctt,cc = [],np.zeros((2,9)),0
+    if len(Ft_)>1: L_,ltt,lc = Ft_[1]  # in trace_edge
+    if len(Ft_)>2: (B_,btt,bc),(C_,ctt,cc) = Ft_[2:]  # in cluster_N, Ct: alternative, Bt: complementary?
+    if not init:
+        N_+=root.N_; L_+=root.L_; B_+=root.B_; C_+=root.C_
+        nc+=root.Nt.c; lc+=root.Lt.c; bc+=root.Bt.c; cc+=root.Ct.c
+        ntt+=root.Nt.dTT; ltt+=root.Lt.dTT; btt+=root.Bt.dTT; ctt+=root.Ct.dTT
+    # batch root_updates: n.dTT += update_dTT_?
+    for n in N_: n.m, n.d = vt_(n.dTT,rc)
+    N = N_[0]
+    G = Copy_(N,root, init=1,typ=2)
+    G.N_ = N_; G.dTT=ntt+ltt; G.c=nc+lc; G.rc=rc; G.rng=rng; nt,lt=N.Nt,N.Lt; Ntt=nt.dTT+lt.dTT; Nm,Nd=vt_(Ntt,rc); nt.N_[0]=list(N.N_)
+    G.Nt = CF(N_=[CopyF(lt)]+[N.N_]+N.Nt.N_, dTT=Ntt, m=Nm,d=Nm,c=nt.c+lt.c)  # extend H, init l0 = N.Lt, vals must be level-specific
+    for N in N_[1:]: add_N(G,N)
     if L_:
-        G.L_=L_; Lt = sum2T(L_,rc,G,'Lt')  # no Lt.N_
-        if N_[0].typ and G.Nt.N_:
-            l0 = G.Nt.N_[0]; l0.dTT=Lt.dTT; l0.m=Lt.m; l0.d=Lt.d; l0.c=Lt.c  # vals must be level-specific
+        G.L_ = L_; m,d = vt_(ltt,rc); G.Lt = CF(dTT=ltt,m=m,d=d,c=lc,root=G)  # no Lt.N_
         A = np.sum([l.angl[0] for l in L_], axis=0)
         G.angl = np.array([A, np.sign(G.dTT[1] @ wTTf[1])], dtype=object)  # angle dir = d sign
     if init:  # else same ext
@@ -595,8 +606,8 @@ def sum2G(N_, rc, root=None, L_=[],C_=[],B_=[], dTT=None,c=1, rng=1, init=1):  #
         G.yx = yx
     if N_[0].typ==2 and G.L_:  # else mang = 1
         G.mang = np.mean([comp_A(G.angl[0], l.angl[0])[0] for l in G.L_])
-    G.m,G.d = vt_(G.dTT,rc)
-    if G.m > ave*specw:
+    if G.m > ave * specw:
+        # redundant? or trans-cluster, import from cluster_N instead?
         L_,pL_= [],[]; [L_.append(L) if L.typ==1 else pL_.append(L) for L in G.L_]
         if pL_:
             if G.m * vt_(sum([L.dTT for L in pL_]),rc)[0] > ave*specw:
@@ -604,59 +615,39 @@ def sum2G(N_, rc, root=None, L_=[],C_=[],B_=[], dTT=None,c=1, rng=1, init=1):  #
                     link = comp_N(*L.nt, rc, L.angl[0], L.span, L.rng)
                     G.Lt.dTT+= link.dTT-L.dTT; L_+=[link]  # recompute m,d,c?
             G.L_ = L_
-    # alt forks:
-    if B_: sum2T(B_,rc,G,'Bt'); G.B_=B_
-    if C_: sum2T(C_,rc,G,'Ct'); G.C_=C_
+    G.m,G.d = vt_(G.dTT,rc)
+    def altF(G, f_,ftt,fc, nF,nF_):
+        setattr(G,nF_,f_); m,d = vt_(ftt, rc)
+        setattr(G,nF,CF(dTT=ftt, m=m,d=d,c=fc, root=G))
+        C = G.c + fc; G.c = C  # not weighted, min(_lev.c,lev.c) if root is link?
+        G.m = (G.m*G.c + m*fc) / C; G.d = (G.d*G.c + d*fc) / C
+        # borrow alt-fork deviations
+    if B_: altF(G, B_,btt,bc,'Bt','B_')  # G m,d update
+    if C_: altF(G, C_,ctt,cc,'Ct','C_')
     return G
 
-def sum_N_(N_, rc, root, TT=None, c=1, flat=0):  # forms G of N_|L_
+def add_N(G, N):  # flat currently not used
 
-    for n in N_:  # batch sum root_updates per N here too?
-        n.m, n.d = vt_(n.dTT,rc)
-    N = N_[0]; fTT= TT is not None
-    lTT,lc = (N.Lt.dTT, N.Lt.c) if N.Lt else (np.zeros((2,9)),0)
-    G = Copy_(N, root, init=1, typ=2)
-    if fTT: G.dTT= TT; G.c= c  # Nt.dTT+Lt.dTT?
-    n_ = list(N.N_)  # flatten core fork, alt forks stay nested
-    for N in N_[1:]:
-        add_N(G, N, fTT); n_+= N.N_
-        if N.Lt: lTT+=N.Lt.dTT; lc+=N.Lt.c
-    if flat: G.N_ = n_  # flatten N.N_, or in F.N_ only?
-    else:
-        G.N_ = N_
-        if n_ and N.typ:  # not PP.P_, + Lt.dTT:
-            m,d = vt_(lTT,rc); G.Nt.N_.insert(0, CF(N_=n_,dTT=lTT,m=m,d=d,c=lc,root=G.Nt))
-    # core forks:
-    G.m,G.d = vt_(G.Nt.dTT + G.Lt.dTT, rc)  # or summed in add_N?
-    for m,d in (vt_(F.dTT, rc) for F in (G.Bt, G.Ct)): G.m += m; G.d += d  # borrow deviations
-    G.rc = rc
-    return G
-
-def add_N(N, n, fTT=0, flat=0):  # flat currently not used
-
-    n.fin = 1; n.root = N; fC = hasattr(n,'mo_')  # centroid
+    N.fin = 1; N.root = G; fC = hasattr(N,'mo_')  # centroid
     if fC and not hasattr(N,'mo_'): N.mo_=[]
-    _cnt,cnt = N.c,n.c; C=_cnt+cnt; N.c += n.c  # weigh contribution of intensive params
-    if fC: n.rc = np.sum([mo[1] for mo in n.mo_]); N.rN_+=n.rN_; N.mo_+=n.mo_
-    else:  N.rc = (N.rc*_cnt+n.rc*cnt) / C
-    if not fTT: N.dTT = (N.dTT*_cnt + n.dTT*cnt) / C
-    if n.typ:  # not PP
-        for i, (T,t,F_,f_) in enumerate(zip((N.Nt,N.Lt,N.Bt,N.Ct), (n.Nt,n.Lt,n.Bt,n.Ct), (N.N_,N.L_,N.B_,N.C_), (n.N_,n.L_,n.B_,n.C_))):
-            if f_:  # add 'tBt','tCt','tNt'?
-                if flat: F_ += f_  # else stays nested, current default
-                if i: T.N_ += [t]
-                else:
-                    for Lev,lev in zip_longest(T.N_, t.N_, fillvalue=None):
-                        if lev:  # norm /C?
-                            if Lev is None: N.Nt.N_ += [lev]
-                            else: Lev.N_ += lev.N_; Lev.dTT+=lev.dTT; Lev.c+=lev.c  # flat
-        N.span = (N.span*_cnt + n.span*cnt) / C
-        A,a = N.angl[0],n.angl[0]; A[:] = (A*_cnt+a*cnt) / C  # vect only
-        if isinstance(N.yx, list): N.yx += [n.yx]  # weigh by C?
+    _cnt,cnt = G.c,N.c; C=_cnt+cnt; G.c += N.c  # weigh contribution of intensive params
+    if fC: G.rc = np.sum([mo[1] for mo in N.mo_]); G.rN_+=N.rN_; G.mo_+=N.mo_
+    if N.typ:  # not PP
+        l0 = G.Nt.N_[0]; l0.dTT+=N.Lt.dTT; l0.c+=N.Lt.c  # GH is 2 levs deeper: from N.Lt and N.N_
+        l1 = G.Nt.N_[1]; l1.dTT+=N.dTT; l1.c+=N.c; l1.N_ += N.N_  # flat
+        for Lev,lev in zip_longest(G.Nt.N_[2:], N.Nt.N_, fillvalue=None):
+            if lev:  # norm /C?
+                if Lev is None: N.Nt.N_ += [lev]
+                else: Lev.N_ += lev.N_; Lev.dTT+=lev.dTT; Lev.c+=lev.c  # flat
+        if N.C_:  # flat? L_,B_ stay nested
+            G.C_ += N.C_; G.Ct.dTT += N.Ct.dTT; G.Ct.c += N.Ct.c
+        G.span = (G.span*_cnt + N.span*cnt) / C
+        A,a = G.angl[0],N.angl[0]; A[:] = (A*_cnt+a*cnt) / C  # vect only
+        if isinstance(G.yx, list): G.yx += [N.yx]  # weigh by C?
     if N.typ>1: # nodes
-        N.baseT = (N.baseT*_cnt+n.baseT*cnt) / C
-        N.mang = (N.mang*_cnt + n.mang*cnt) / C
-        N.box = extend_box(N.box, n.box)
+        G.baseT = (G.baseT*_cnt + N.baseT*cnt) / C
+        G.mang = (G.mang*_cnt + N.mang*cnt) / C
+        G.box = extend_box(G.box, N.box)
     # if N is Fg: margin = Ns of proj max comp dist > min _Fg point dist: cross_comp Fg_?
     return N
 
@@ -664,7 +655,7 @@ def sum2T(T_, rc, root, nF, TT=None, c=1):  # N_ -> fork T
 
     T = T_[0]; fV = TT is None
     F = CF(root=root); T.root=F  # no L_,B_,C_,Nt,Bt,Ct yet
-    if fV: F.dTT=T.dTT; F.c=T.c
+    if fV: F.dTT=copy(T.dTT); F.c=T.c
     else:  F.dTT=TT; F.c=c
     if nF=='Nt': F.N_ = [T.N_] + list(T.Nt.N_)  # deeper H
     for T in T_[1:]:
@@ -675,7 +666,7 @@ def sum2T(T_, rc, root, nF, TT=None, c=1):  # N_ -> fork T
             for Lev,lev in zip_longest(F.N_[1:], T.Nt.N_):  # deeper levels
                 if lev:
                     if Lev: Lev.N_+=lev.N_; Lev.dTT+=lev.dTT; Lev.c+=lev.c
-                    else:   F.N_ += [CopyF_(lev, root=F)]
+                    else:   F.N_ += [CopyF(lev, root=F)]
     F.m, F.d = vt_(F.dTT,rc)
     F.rc = rc; setattr(root, nF,F)
     if nF == 'Nt': n_ = F.N_[0]; dtt = sum([n.dTT for n in n_]); m,d = vt_(dtt,rc); F.N_[0] = CF(N_=n_, dTT=dtt, m=m,d=d, c=sum([n.c for n in n_]))
@@ -841,6 +832,7 @@ def form_B__(N_,B_):  # assign boundary / background per node from Bt, no root u
                 rdn += bG.rN_.index(N)+1  # n stronger cores of rB
                 bG_ += [bG]; dTT+=bG.dTT
         N.Bt = CF(N_=bG_, dTT=dTT,m=sum(dTT[0]),d=sum(dTT[1]), c=sum(b.c for b in N.B_),rc=rdn, root=N)
+        root_update(N,dTT)
 
 def vect_edge(tile, rV=1, wTT=None):  # PP_ cross_comp and floodfill to init focal frame graph, no recursion:
 
@@ -877,12 +869,13 @@ def trace_edge(N_, rc, root, tT=[]):  # cluster contiguous shapes via PPs in edg
             cT_.add(cT)
             dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx); Rc = rc+ (N.rc+_N.rc)/2
             Link = comp_N(_N,N, Rc, A=dy_dx, span=dist)
-            if vt_(Link.dTT)[0] >ave*Rc: L_+=[Link]; lTT+=Link.dTT; lc+=Link.c
+            if vt_(Link.dTT)[0] >ave*Rc:
+                L_+=[Link]; lTT+=Link.dTT; lc+=Link.c
     # totals:
-    Gt_,Lt_,TT,C = [],[],np.zeros((2,9)),0  # Lt_: top lev / G?
+    Gt_,Lt_,TT,C,lTT,lC = [],[],np.zeros((2,9)),0,np.zeros((2,9)),0  # Lt_: top lev / G?
     for N in N_:  # flood-fill G per seed N
         if N.fin: continue
-        N.fin=1; _N_=[N]; Gt=[]; N.root=Gt; n_,l_,tt,c = [N],[],np.zeros((2,9)),0  # Gt
+        N.fin=1; _N_=[N]; Gt=[]; N.root=Gt; n_,tt,c, l_,ltt,lc = [N],np.zeros((2,9)),0,[],np.zeros((2,9)),0  # Gt
         while _N_:
             _N = _N_.pop(0)
             for L in _N.rim:
@@ -891,18 +884,18 @@ def trace_edge(N_, rc, root, tT=[]):  # cluster contiguous shapes via PPs in edg
                     if n in N_:
                         if n.root is Gt: continue
                         if n.fin:
-                            _root = n.root; n_+=_root[0]; l_+=_root[1]; tt+=_root[2]; c+=_root[3]; _root[4] = 1; Lt_+=[root.Lt]  # merge n root
+                            _root = n.root; n_+=_root[0];tt+=_root[1];c+=_root[2]; l_+=_root[3];ltt+=_root[4];lc+=root[5]; root[6]=1; Lt_+=[root.Lt]  # merge n root
                             for _n in _root[0]: _n.root = Gt
                         else:
-                            n.fin=1; _N_+=[n]; n_+=[n]; l_+=[L]; TT+=n.dTT; C+=n.c  # add single n
+                            n.fin=1; _N_+=[n]; n_+=[n];TT+=n.dTT;C+=n.c; l_+=[L];lTT+=L.dTT;lC+=L.c  # add single n
                             if n.Lt: Lt_+=[n.Lt]  # skip PPs
                         n.root = Gt
-        Gt += [n_,l_,tt,c,0]; Gt_+=[Gt]; TT+=tt; C+=c
+        Gt += [n_,tt,c, l_,ltt,lc, 0]; Gt_+=[Gt]; TT+=tt; C+=c; lTT+=ltt; lC+=lc
     G_= []
-    for n_,l_, tt,c, merged in Gt_:
+    for n_,tt,c,l_,ltt,lc, merged in Gt_:
         if not merged:
             if vt_(tt,rc)[0] > ave*rc:
-                G_ += [sum2G(n_,rc,root,l_,dTT=tt,c=c)]  # include singletons
+                G_ += [sum2G(((n_,tt,c),(l_,ltt,lc)), rc,root)]  # include singletons
             else:
                 for N in n_: N.fin=0; N.root=root
     if val_(TT, rc+1, TTw(root), mw=1 if tT else (len(G_)-1)*Lw) > 0:
