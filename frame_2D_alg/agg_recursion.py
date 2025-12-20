@@ -167,10 +167,10 @@ def comp_C_(C_, rc,_C_=[], fall=1):  # simplified for centroids, trans-N_s, leve
         pairs = product(C_,_C_) if _C_ else combinations(C_,r=2)  # comp between | within list
         for _C, C in pairs:
             dtt = comp_derT(_C.dTT[1], C.dTT[1]); m,d = vt_(dtt,rc); c = min(_C.c,C.c)
-            dC = CN(nt=[_C,C], m=m,d=d, c=c, dTT=dtt, span=np.hypot(*_C.yx - C.yx))
+            dC = CN(nt=[_C,C], dTT=dtt,m=m,d=d,c=c, span=np.hypot(*_C.yx-C.yx))
             _C.rim += [dC]; C.rim += [dC]
-            if   dC.m > ave*(contw+rc) > 0: L_+=[dC]; mTT+=dC.dTT; mc+=c; N_ += [_C,C]
-            elif dC.d > avd*(contw+rc) > 0: B_+=[dC]; dTT+=dC.dTT; dc+=c  # not in N_?
+            if   dC.m > ave*(contw+rc): L_+=[dC]; mTT+=dC.dTT; mc+=c; N_ += [_C,C]
+            elif dC.d > avd*(contw+rc): B_+=[dC]; dTT+=dC.dTT; dc+=c  # not in N_?
     else:
         # sort, select along eigenvector, may be muli-level, not yet implemented
         for C in C_: C.compared =set()
@@ -180,8 +180,8 @@ def comp_C_(C_, rc,_C_=[], fall=1):  # simplified for centroids, trans-N_s, leve
             if _C in C.compared: continue
             dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx)
             Link = comp_N(_C,C, rc, A=dy_dx, span=dist, rng=1)  # or comp_derT?
-            if   Link.m > ave*(contw+rc) > 0: L_+=[Link]; mTT+=Link.dTT; mc+=Link.c; N_ += [_C,C]
-            elif Link.d > avd*(contw+rc) > 0: B_+=[Link]; dTT+=Link.dTT; dc+=Link.c  # not in out_?
+            if   Link.m > ave*(contw+rc): L_+=[Link]; mTT+=Link.dTT; mc+=Link.c; N_ += [_C,C]
+            elif Link.d > avd*(contw+rc): B_+=[Link]; dTT+=Link.dTT; dc+=Link.c  # not in out_?
 
     return list(set(N_)), L_,mTT,mc, B_,dTT,dc
 
@@ -190,8 +190,8 @@ def comp_N_(iN_, rc, _iN_=[]):
     def proj_V(_N,N, dist, pVt_):  # _N x N induction
 
         Dec = decay**(dist/((_N.span+N.span)/2))
-        iTT = (_N.Lt.dTT + N.Lt.dTT) * Dec
-        eTT = (_N.dTT + N.dTT) * Dec # rim
+        iTT = (_N.dTT + N.dTT) * Dec
+        eTT = (_N.eTT + N.eTT) * Dec # rim
         if abs( vt_(eTT,rc)[0]) * ((len(pVt_)-1)*Lw) > ave*specw:  # spec N links
             eTT = np.zeros((2,9)) # recompute
             for _dist,_dy_dx,__N,_V in pVt_:
@@ -209,18 +209,17 @@ def comp_N_(iN_, rc, _iN_=[]):
         N.pL_.sort(key=lambda x: x[0])  # proximity prior
     for N in iN_:
         pVt_ = []  # [dist, dy_dx, _N, V]
-        for dist, dy_dx, _N in N.pL_:  # rim angl not canonic
-            olp = (N.rc +_N.rc) / 2; rc+=olp
-            pTT = proj_V(_N,N, dist, pVt_)
-            m, d = vt_(pTT,rc)  # +|-match certainty
+        for dist, dy_dx, _N in N.pL_:  # rim angl is not canonic
+            pTT = proj_V(_N,N, dist, pVt_); lrc = rc + (N.rc+_N.rc) / 2
+            m, d = vt_(pTT,lrc)  # +|-match certainty
             if m > 0:
                 if abs(m) < ave:  # different ave for projected surprise value, comp in marginal predictability
-                    Link = comp_N(_N,N, rc, A=dy_dx, span=dist)
+                    Link = comp_N(_N,N, lrc, A=dy_dx, span=dist)
                     if   Link.m > ave: L_+=[Link]; mTT+=Link.dTT; mc+=Link.c; N_ += [_N,N]  # combined CN dTT and L_
                     elif Link.d > avd: B_+=[Link]; dTT+=Link.dTT; dc+=Link.c  # no overlap to simplify
                     m = Link.m; dpTT+= pTT-Link.dTT  # prediction error to fit code
                 else:
-                    pL = CN(typ=-1, nt=[_N,N], dTT=pTT, m=m, d=d, c=min(N.c,_N.c), angl=np.array([dy_dx,1],dtype=object), span=dist)
+                    pL = CN(typ=-1, nt=[_N,N], dTT=pTT,m=m,d=d,c=min(N.c,_N.c), angl=np.array([dy_dx,1],dtype=object),span=dist)
                     L_+= [pL]; N.rim+=[pL]; _N.rim+=[pL]  # same as links in clustering
                 pVt_ += [[dist,dy_dx,_N,m]]  # for next rim eval
             else:
@@ -239,22 +238,6 @@ def comp_N(_N,N, rc, A=np.zeros(2), span=None, rng=1):  # compare links, optiona
     for n, _n in (_N,N),(N,_N):  # if rim-mediated comp: reverse dir in _N.rim: rev^_rev?
         n.rim += [Link]; n.eTT += TT; n.ec += Link.c; n.compared.add(_n)  # or conditional n.eTT / rim later?
     return Link
-
-def comp_sub(_N,N, rc, root):  # unpack node trees down to numericals and compare them
-
-    Rc = rc
-    for _F_,F_,nF_,nFt in zip((_N.N_,_N.B_,_N.C_),(N.N_,N.B_,N.C_), ('N_','B_','C_'),('Nt','Bt','Ct')):  # + tN_,tB_,tC_ from trans_cluster?
-        if _F_ and F_:  # add eval?
-            N_,L_,mTT,mc, B_,dTT,dc = comp_C_(_F_,Rc,F_); dF_= L_+B_  # trans-links, callee comp_N may call deeper comp_sub
-            if dF_:
-                setattr(root,nF_,dF_); setattr(root,nFt, CF(dTT=mTT+dTT, c=mc+dc, root=root));  Rc += 1
-    for _lev,lev in zip(_N.Nt.N_, N.Nt.N_):  # no comp Bt,Ct: external to N,_N
-        Rc += 1  # deeper levels are redundant
-        tt = comp_derT(_lev.dTT[1],lev.dTT[1]); m,d = vt_(tt,rc)
-        oN_= set(_lev.N_) & set(lev.N_)  # intersect, or offset, or comp_len?
-        dlev = CF(N_=oN_, nF='Nt', dTT=tt, m=m,d=d, c=min(_lev.c,lev.c), rc=min(_lev.rc,lev.rc), root=root)  # min: only shared elements are compared
-        root.Nt.N_ += [dlev]  # root:link, nt.N_:derH
-        root_update(root.Nt, dlev)  # recursive
 
 def base_comp(_N,N):  # comp Et,extT,dTT, baseT if N is G?
 
@@ -278,7 +261,6 @@ def comp_derT(_i_,i_):
     d_ = _i_ - i_  # both arrays, no angles or massless params
     m_ = np.minimum( np.abs(_i_), np.abs(i_))
     m_[(_i_<0) != (i_<0)] *= -1  # negate opposite signs in-place
-
     return np.array([m_,d_])
 
 def comp(_pars, pars, meA,deA):  # compute m_,d_ from inputs or derivatives
@@ -297,7 +279,6 @@ def comp(_pars, pars, meA,deA):  # compute m_,d_ from inputs or derivatives
             _a,a = abs(_p), abs(p)
             m_ += [min(_a,a) if (_p<0)==(p<0) else -min(_a,a)]  # + complement max(_a,a) for +ves?
             d_ += [_p - p]
-
     # for general mass in 0:1, m = dir_m * mass + inv_m * (1-mass)?
     return np.array(m_+[meA]), np.array(d_+[deA])
 
@@ -311,6 +292,22 @@ def comp_A(_A,A):
     mA = (_A @ A / den +1) / 2  # cos_da in 0:1, no rot = 1 if dy * _dx - dx * _dy >= 0 else -1  # +1 CW, −1 CCW, ((1-cos_da)/2) * rot?
     '''
     return (cos(dA)+1) /2, dA/pi  # mA in 0:1, dA in -1:1, or invert dA, may be negative?
+
+def comp_sub(_N,N, rc, root):  # unpack node trees down to numericals and compare them
+
+    Rc = rc
+    for _F_,F_,nF_,nFt in zip((_N.N_,_N.B_,_N.C_),(N.N_,N.B_,N.C_), ('N_','B_','C_'),('Nt','Bt','Ct')):  # + tN_,tB_,tC_ from trans_cluster?
+        if _F_ and F_:  # add eval?
+            N_,L_,mTT,mc, B_,dTT,dc = comp_C_(_F_,Rc,F_); dF_= L_+B_  # trans-links, callee comp_N may call deeper comp_sub
+            if dF_:
+                setattr(root,nF_,dF_); setattr(root,nFt, CF(dTT=mTT+dTT,c=mc+dc,root=root)); Rc+=1
+    for _lev,lev in zip(_N.Nt.N_, N.Nt.N_):  # no comp Bt,Ct: external to N,_N
+        Rc += 1  # deeper levels are redundant
+        tt = comp_derT(_lev.dTT[1],lev.dTT[1]); m,d = vt_(tt,rc)
+        oN_= set(_lev.N_) & set(lev.N_)  # intersect, or offset, or comp_len?
+        dlev = CF(N_=oN_, nF='Nt', dTT=tt, m=m,d=d, c=min(_lev.c,lev.c), rc=min(_lev.rc,lev.rc), root=root)  # min: only shared elements are compared
+        root.Nt.N_ += [dlev]  # root:link, nt.N_:derH
+        root_update(root.Nt, dlev)  # recursive
 
 def get_exemplars(N_, rc):  # multi-layer non-maximum suppression -> sparse seeds for diffusive centroid clustering
 
@@ -462,19 +459,18 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
         _Ct_ = [[c, c.m/c.c if c.m !=0 else eps, c.rc] for c in _C_]
         for _C,_m,_o in sorted(_Ct_, key=lambda t: t[1]/t[2], reverse=True):
             if _m > Ave * _o:
-                C = cent_TT( sum2G(((_C.N_,np.sum([N.dTT for N in _C.N_],axis=0),sum([N.c for N in _C.N_])),), rc, root), rc, init=1)
+                C = cent_TT( sum2G([[_C.N_,np.sum([N.dTT for N in _C.N_],axis=0),sum([N.c for N in _C.N_])]], rc, root), rc, init=1)
                 # C update lags behind N_; non-local C.rc += N.mo_ os?
-                _N_,_N__, mo_, M,D,O,comp,dTT,dm,do = [],[],[],0,0,0,0,np.zeros((2,9)),0,0  # per C
+                _N_,_N__,mo_,M,D,O,comp,dTT,dm,do = [],[],[],0,0,0,0,np.zeros((2,9)),0,0  # per C
                 for n in _C._N_:  # core+ surround
                     if C in n.Ct.N_: continue
-                    dtt,_ = base_comp(C,n)  # val,olp / C:
-                    m = sum(dtt[0]); d = sum(dtt[1]); dTT += dtt
-                    o = np.sum([mo[0]/m for mo in n._mo_ if mo[0]>m])  # overlap = higher-C inclusion vals / current C val
-                    comp += 1  # comps per C
-                    if m > Ave * o:
-                        _N_+=[n]; M+=m; O+=o; mo_ += [np.array([m,o])]  # n.o for convergence eval
+                    dtt,_ = base_comp(C,n); comp += 1   # val,olp / C:
+                    m,d = vt_(dtt,rc); dTT += dtt
+                    odm = np.sum([mo[0]-m for mo in n._mo_ if mo[0]>m])  # overlap = higher-C inclusion vals - current C val
+                    if m > 0 and m > Ave * odm:
+                        _N_+=[n]; M+=m; O+=odm; mo_ += [np.array([m,odm])]  # n.o for convergence eval
                         _N__ += [_n for l in n.rim for _n in l.nt if _n is not n]  # +|-Ls
-                        if _C not in n._C_: dm+=m; do+=o  # not in extended _N__
+                        if _C not in n._C_: dm+=m; do+=odm  # not in extended _N__
                     else:
                         if _C in n._C_: __m,__o = n._mo_[n._C_.index(_C)]; dm+=__m; do+=__o
                         D += abs(d)  # distinctive from excluded nodes (background)
@@ -483,7 +479,7 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
                 if M > Ave * len(_N_) * O and val_(dTT, rc+O, TTw(C),1, (len(C.N_)-1)*Lw, _TT=C.dTT):
                     for n, mo in zip(_N_,mo_): n.mo_+=[mo]; n.Ct.N_+=[C]; C.Ct.N_+=[n]  # reciprocal root assign
                     C.M += M; C.D += D; C.C += comp; C.DTT += dTT
-                    C.N_ += _N_; C._N_ = list(set(_N__))  # core, surround elements
+                    C.N_+=_N_; C._N_ = list(set(_N__))  # core, surround elements
                     C_ += [C]; Dm+=dm; Do+=do  # new incl or excl
                 else:
                     for n in _C._N_:
@@ -717,7 +713,7 @@ def PP2N(PP):
                      np.array([dM, dD, dL, dI, dG, dA, dL, dL / 2, eps])])
     y,x,Y,X = box; dy,dx = Y+1-y, X+1-x
     A = np.array([np.array(A), np.sign(dTT[1] @ wTTf[1])], dtype=object)  # append sign
-    PP = CN(typ=0, N_=P_,L_=L_,B_=B_,dTT=dTT,m=m,d=d,c=c, baseT=baseT,box=box,yx=yx,angl=A,span=np.hypot(dy/2,dx/2), root=1)  # set root in trace_edge
+    PP = CN(typ=0, N_=P_,L_=L_,B_=B_,dTT=dTT,m=m,d=d,c=c, baseT=baseT,box=box,yx=yx,angl=A,span=np.hypot(dy/2,dx/2))  # set root in trace_edge
     for P in P_: P.root = PP  # empty Nt, Bt, Ct?
     return PP
 
@@ -833,7 +829,7 @@ def form_B__(N_,B_):  # assign boundary / background per node from Bt, no root u
                 rdn += bG.rN_.index(N)+1  # n stronger cores of rB
                 bG_ += [bG]; dTT+=bG.dTT
         N.Bt = CF(N_=bG_, dTT=dTT,m=sum(dTT[0]),d=sum(dTT[1]), c=sum(b.c for b in N.B_),rc=rdn, root=N)
-        root_update(N,N.Bt)
+        root_update(N, N.Bt)
 
 def vect_edge(tile, rV=1, wTT=None):  # PP_ cross_comp and floodfill to init focal frame graph, no recursion:
 
@@ -888,7 +884,7 @@ def trace_edge(N_, rc, root, tT=[]):  # cluster contiguous shapes via PPs in edg
                             _root = n.root; n_+=_root[0];tt+=_root[1];c+=_root[2]; l_+=_root[3];ltt+=_root[4];lc+=root[5]; root[6]=1; Lt_+=[root.Lt]
                             for _n in _root[0]: _n.root = Gt
                         else:
-                            n.fin=1; _N_+=[n]; n_+=[n];TT+=n.dTT;C+=n.c; l_+=[L];lTT+=L.dTT;lC+=L.c  # add single n
+                            n.fin=1; _N_+=[n]; n_+=[n];TT+=n.dTT;c+=n.c; l_+=[L];lTT+=L.dTT;lC+=L.c  # add single n
                             if n.Lt: Lt_+=[n.Lt]  # skip PPs
                         n.root = Gt
         Gt += [n_,tt,c, l_,ltt,lc, 0]; Gt_+=[Gt]; TT+=tt; C+=c; lTT+=ltt; lC+=lc
