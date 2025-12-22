@@ -236,7 +236,7 @@ def comp_N(_N,N, rc, A=np.zeros(2), span=None, rng=1):  # compare links, optiona
     if m > ave*rc and _N.typ and N.typ:  # skip PP if called from sub_comp' comp_C_
         comp_sub(_N,N, rc,Link)  # root_update
     for n, _n in (_N,N),(N,_N):  # if rim-mediated comp: reverse dir in _N.rim: rev^_rev?
-        n.rim += [Link]; n.eTT += TT; n.ec += Link.c; n.compared.add(_n)  # or conditional n.eTT / rim later?
+        n.rim += [Link]; n.eTT += TT; n.ec += Link.c; n.compared.add(_n)
     return Link
 
 def base_comp(_N,N):  # comp Et,extT,dTT, baseT if N is G?
@@ -390,48 +390,61 @@ def Cluster(root, iL_, rc, fC):  # generic clustering root
 def cluster_N(root, rN_, rc, rng=0):  # flood-fill node | link clusters, flat if rng=1
 
     def rroot(n): return rroot(n.root) if n.root and n.root!=root else n
-    def extend_Gt(_L_,N_,C_,L_,D_,B_,in_):
+    def nt_vt(n,_n):
+        mL_,dL_,M,D = [],[],0,0
+        for l in set(n.rim+_n.rim):
+            if l.m > 0: mL_+=[l]; M+=l.m  # separate match and contrast?
+            elif l.d > 0: dL_+=[l]; D+=l.d
+            return M, D
+            # ret links to cluster?
+    def clust_nt(n,_n, L,N_,_L_,D_,B_,C_):
+        m,d = nt_vt(n,_n)
+        if m > ave*(rc-1):  # cluster by
+            fm=1; N_+=[_n]; C_+=_n.C_; _n.fin = 1; _L_ += [L]
+        else: fm = 0
+        if d > avd * (rc-1):  # contrast value
+            if fm: D_ += [L]  # disparity
+            else:  B_ += [L]  # boundary
+            # exclusive?
+    def extend_Gt(_L_,N_,C_,L_,D_,B_, in_):
         for L in _L_:  # spliced rim
             if L in in_: continue  # already clustered
             in_.add(L)
-            for _N in L.nt:
-                if _N.fin: continue
-                if rng:  # nested, cluster rN_ via top-rng roots
-                    _R = rroot(_N)
-                    if _R and not _R.fin:
-                        oL_ = set(_N.rim) & set(L_); oV = vt_(sum([l.dTT for l in oL_]),rc)[0] if oL_ else eps
-                        roV = _N.em / oV  # relative rim olp V
-                        if roV > ave * rc:
-                            N_ += [_R]; _R.fin = 1; _N.fin = 1
-                            L_ += _R.L_; C_ += _R.C_  # C_ is not rng-banded?
-                else:   # flat
-                    if (_N.root and _N in rN_) or _N.root==root or not _N.L_:  # link has no L_
-                        N_+=[_N]; C_+=_N.C_; _N.fin = 1
-                        for l in _N.rim:
-                            if l in in_: continue  # cluster by link+density:
-                            if Lnt(l) > ave *rc: _L_ += [l]
-                            elif all(l.nt in N_): D_ += [l]  # internal disparity
-                            else:                 B_ += [l]  # boundary, if dval?
-    # root attrs:
+            N,_N = L.nt
+            if _N.fin: continue
+            if rng:  # nested, cluster rN_ via top-rng roots
+                _R = rroot(_N)
+                if _R and not _R.fin:
+                    oL_ = set(_N.rim) & set(L_); oV = vt_(sum([l.dTT for l in oL_]),rc)[0] if oL_ else eps
+                    roV = _N.em / oV  # relative rim olp V
+                    if roV > ave * rc:
+                        N_ += [_R]; _R.fin = 1; _N.fin = 1
+                        L_ += _R.L_; C_ += _R.C_  # C_ is not rng-banded?
+            else:  # flat
+                if (_N.root and _N in rN_) and not _N.in_ or _N.root==root or not _N.L_:  # link has no L_
+                    clust_nt(N,_N, L,N_,_L_,D_,B_,C_)  # same for root above?
+    # root attrs,
+    # need to add D_,D__, Dt?
     G_,N__,L__,Lt_,TT,lTT,C,lC = [],[],[],[],np.zeros((2,9)),np.zeros((2,9)),0,0; in_= set()
     for N in rN_: N.fin = 0
-    for N in rN_:  # form G per remaining rng N
+    _N = rN_[0]
+    for N in rN_[1:]:  # form G per remaining rng N
         if N.fin or (root.root and not N.exe): continue  # no exemplars in Fg
         N_,C_,_L__,_L_,D_,B_ = [N],[],[],[],[],[]
         if rng:
             R = rroot(N)  # cluster top-rng roots
             if R and not R.fin: N_,_L_,C_ = [R], R.L_[:], [C.root for C in R.C_]; R.fin = 1
         else:  # flat
-            C_ = N.C_
-            for l in N.rim: (N_ if Lnt(l) > ave*rc else B_).append(l)  # or dval?
+            L = set(_N.rim) & set(N.rim)[:]  # unpack single L?
+            clust_nt(N,_N, L,N_,_L_,D_,B_,C_)  # same for root above?
         N.fin = 1; L_ = []
         while _L_:
             _L__ += _L_
             extend_Gt(_L_,N_,C_,L_,D_,B_, in_)
-            if L_: _L_ = list(set(L_)); link_ = []  # extended rim
+            if L_: _L_ = list(set(L_)); L_ = []  # extended rim
             else: break
-        if N_:  # add D_ fork to evaluate internal disparity: termination or min-cut criterion? (partial as links are proximity-restricted)
-            Ft_ = (list(set(N_)),np.zeros((2,9)),0), (list(set(_L__)),np.zeros((2,9)),0), (list(set(B_)),np.zeros((2,9)),0), (list(set(C_)),np.zeros((2,9)),0)
+        if N_:
+            Ft_ = [list(set(N_)),np.zeros((2,9)),0], [list(set(_L__)),np.zeros((2,9)),0], [list(set(B_)),np.zeros((2,9)),0], [list(set(C_)),np.zeros((2,9)),0]
             for i, (F_,tt,c) in enumerate(Ft_):
                 for F in F_: tt+= F.dTT; Ft_[i][2] += F.c
             (N_,nt,nc),(L_,lt,lc),(B_,bt,bc),(C_,ct,cc) = Ft_; tt = nt+lt  # core forks
@@ -541,8 +554,6 @@ def slope(link_):  # get ave 2nd rate of change with distance in cluster or fram
     rates = diffs / dists
     # ave d(d_rate) / d(unit_distance):
     return (np.diff(rates) / np.diff(dists)).mean()
-
-def Lnt(l): return ((l.nt[0].em + l.nt[1].em - l.m*2) * intw / 2 + l.m) / 2  # L.m is twice included in nt.em
 
 def CopyF(F, root=None):
 

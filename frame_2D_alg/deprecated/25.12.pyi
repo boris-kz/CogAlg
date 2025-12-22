@@ -336,3 +336,61 @@ def add_N(N, n, fTT=0, flat=0):  # flat currently not used
         N.box = extend_box(N.box, n.box)
     # if N is Fg: margin = Ns of proj max comp dist > min _Fg point dist: cross_comp Fg_?
     return N
+
+def cluster_N1(root, rN_, rc, rng=0):  # flood-fill node | link clusters, flat if rng=1
+
+    def rroot(n): return rroot(n.root) if n.root and n.root!=root else n
+    def extend_Gt(_L_,N_,C_,L_,D_,B_,in_):
+        for L in _L_:  # spliced rim
+            if L in in_: continue  # already clustered
+            in_.add(L)
+            for _N in L.nt:
+                if _N.fin: continue
+                if rng:  # nested, cluster rN_ via top-rng roots
+                    _R = rroot(_N)
+                    if _R and not _R.fin:
+                        oL_ = set(_N.rim) & set(L_); oV = vt_(sum([l.dTT for l in oL_]),rc)[0] if oL_ else eps
+                        roV = _N.em / oV  # relative rim olp V
+                        if roV > ave * rc:
+                            N_ += [_R]; _R.fin = 1; _N.fin = 1
+                            L_ += _R.L_; C_ += _R.C_  # C_ is not rng-banded?
+                else:   # flat
+                    if (_N.root and _N in rN_) or _N.root==root or not _N.L_:  # link has no L_
+                        N_+=[_N]; C_+=_N.C_; _N.fin = 1
+                        for l in _N.rim:
+                            if l in in_: continue  # cluster by link+density:
+                            if Lnt(l) > ave *rc: _L_ += [l]
+                            elif all(l.nt in N_): D_ += [l]  # internal disparity
+                            else:                 B_ += [l]  # boundary, if dval?
+    # root attrs:
+    G_,N__,L__,Lt_,TT,lTT,C,lC = [],[],[],[],np.zeros((2,9)),np.zeros((2,9)),0,0; in_= set()
+    for N in rN_: N.fin = 0
+    for N in rN_:  # form G per remaining rng N
+        if N.fin or (root.root and not N.exe): continue  # no exemplars in Fg
+        N_,C_,_L__,_L_,D_,B_ = [N],[],[],[],[],[]
+        if rng:
+            R = rroot(N)  # cluster top-rng roots
+            if R and not R.fin: N_,_L_,C_ = [R], R.L_[:], [C.root for C in R.C_]; R.fin = 1
+        else:  # flat
+            C_ = N.C_
+            for l in N.rim: (N_ if Lnt(l) > ave*rc else B_).append(l)  # or dval?
+        N.fin = 1; L_ = []
+        while _L_:
+            _L__ += _L_
+            extend_Gt(_L_,N_,C_,L_,D_,B_, in_)
+            if L_: _L_ = list(set(L_)); link_ = []  # extended rim
+            else: break
+        if N_:  # add D_ fork to evaluate internal disparity: termination or min-cut criterion? (partial as links are proximity-restricted)
+            Ft_ = (list(set(N_)),np.zeros((2,9)),0), (list(set(_L__)),np.zeros((2,9)),0), (list(set(B_)),np.zeros((2,9)),0), (list(set(C_)),np.zeros((2,9)),0)
+            for i, (F_,tt,c) in enumerate(Ft_):
+                for F in F_: tt+= F.dTT; Ft_[i][2] += F.c
+            (N_,nt,nc),(L_,lt,lc),(B_,bt,bc),(C_,ct,cc) = Ft_; tt = nt+lt  # core forks
+            if val_(tt, rc, TTw(root),_TT=root.dTT) + vt_(bt,rc)[0] + vt_(ct,rc)[0] > 0:  # include singletons?
+                G_+= [sum2G(((N_,nt,nc),(L_,lt,lc),(B_,bt,bc),(C_,ct,cc)),rc,root)]
+                N__+=N_; L__+=L_; Lt_+=[n.Lt for n in N_]; TT+=tt; lTT+=lt; C+=nc; lC+=lc
+    if G_ and val_(TT, rc+1, TTw(root), mw=(len(G_)-1)*Lw) > 0:
+        rc += 1
+        root_replace(root,rc, G_,N__,L__,Lt_,TT,lTT,C,lC)
+    return G_, rc
+
+    def Lnt(l):   return ((l.nt[0].em + l.nt[1].em - l.m * 2) * intw / 2 + l.m) / 2  # L.m is twice included in nt.em
