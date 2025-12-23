@@ -394,3 +394,72 @@ def cluster_N1(root, rN_, rc, rng=0):  # flood-fill node | link clusters, flat i
     return G_, rc
 
     def Lnt(l):   return ((l.nt[0].em + l.nt[1].em - l.m * 2) * intw / 2 + l.m) / 2  # L.m is twice included in nt.em
+
+def cluster_N2(root, rN_, rc, rng=0):  # flood-fill node | link clusters, flat if rng=1
+
+    def rroot(n): return rroot(n.root) if n.root and n.root!=root else n
+    def nt_vt(n,_n):
+        M, D = 0,0  # exclusive match, contrast
+        for l in set(n.rim+_n.rim):
+            if l.m > 0:   M += l.m
+            elif l.d > 0: D += l.d
+            return M, D
+    def clust_nt(n,_n, L,N_,_L_,D_,B_,C_):
+        m,d = nt_vt(n,_n)
+        if m > ave * (rc-1):  # cluster by combined rim density?
+            fm=1; N_+= [_n]; C_+=_n.C_; _n.fin = 1; _L_ += [L]
+        else: fm = 0
+        if d > avd * (rc-1):  # contrast value, exclusive?
+            if fm: D_ += [L]  # internal disparity
+            else:  B_ += [L]  # boundary
+
+    def extend_Gt(_L_,N_,C_,L_,D_,B_, in_):
+        for L in _L_:  # spliced rim
+            if L in in_: continue  # already evaled
+            N,_N = L.nt; in_.add(L)
+            if  N.fin or _N.fin: continue  # in current clusters
+            if rng:  # nested, cluster rN_ via top-rng roots
+                _R = rroot(_N)
+                if _R and not _R.fin:
+                    oL_ = set(_N.rim) & set(L_); oV = vt_(sum([l.dTT for l in oL_]),rc)[0] if oL_ else eps
+                    roV = _N.em / oV  # relative rim olp V
+                    if roV > ave * rc:
+                        N_ += [_R]; _R.fin = 1; _N.fin = 1
+                        L_ += _R.L_; C_ += _R.C_  # C_ is not rng-banded?
+            else:  # flat
+                if (_N.root and _N in rN_) or _N.root==root or not _N.L_:  # link has no L_
+                    clust_nt(N,_N, L,N_,_L_,D_,B_,C_)  # same for root above?
+    # root attrs
+    G_,N__,L__,Lt_,TT,lTT,C,lC = [],[],[],[],np.zeros((2,9)),np.zeros((2,9)),0,0; in_= set()
+    for N in rN_: N.fin = 0
+    _N = rN_[0]
+    for N in rN_[1:]:  # form G per remaining rng N
+        if N.fin or (root.root and not N.exe): continue  # no exemplars in Fg
+        N_,C_,_L__,_L_,D_,B_ = [N],[],[],[],[],[]
+        if rng:
+            R = rroot(N)  # cluster top-rng roots
+            if R and not R.fin: N_,_L_,C_ = [R], R.L_[:], [C.root for C in R.C_]; R.fin = 1
+        else:  # flat
+            L = list(set(_N.rim) & set(N.rim))  # unpacks single L
+            if L: clust_nt(N, _N, L[0], N_, _L_, D_, B_, C_)  # same for root above?
+        N.fin = 1; L_ = []
+        while _L_:  # frontier links
+            _L__ += _L_
+            extend_Gt(_L_,N_,C_,L_,D_,B_, in_)
+            if L_: _L_ = list(set(L_)); L_ = []  # extended rim
+            else: break
+        if N_:
+            Ft_ = ([list(set(N_)),np.zeros((2,9)),0], [list(set(_L__)),np.zeros((2,9)),0], [list(set(B_)),np.zeros((2,9)),0],
+                   [list(set(C_)),np.zeros((2,9)),0], [list(set(D_)),np.zeros((2,9)),0])
+            for i, (F_,tt,c) in enumerate(Ft_):
+                for F in F_: tt+= F.dTT; Ft_[i][2] += F.c
+            (N_,nt,nc),(L_,lt,lc),(B_,bt,bc),(C_,ct,cc),(D_,dt,dc) = Ft_; tt = nt + lt  # core forks
+            if val_(tt,rc, TTw(root),_TT=root.dTT) + vt_(bt,rc)[0] + vt_(ct,rc)[0] > 0:  # include singletons?
+                G_+= [sum2G(((N_,nt,nc),(L_,lt,lc),(B_,bt,bc),(C_,ct,cc),(D_,dt,dc)), rc,root)]
+                N__+=N_; L__+=L_; Lt_+=[n.Lt for n in N_]; TT+=tt; lTT+=lt; C+=nc; lC+=lc
+    if G_ and val_(TT, rc+1, TTw(root), mw=(len(G_)-1)*Lw) > 0:
+        rc += 1
+        root_replace(root,rc, G_,N__,L__,Lt_,TT,lTT,C,lC)
+        # cross_comp(dL_): differential clustering of intra-G links for G segmentation?
+    return G_, rc
+

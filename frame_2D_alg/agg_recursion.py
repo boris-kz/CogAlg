@@ -187,8 +187,17 @@ def comp_C_(C_, rc,_C_=[], fall=1):  # simplified for centroids, trans-N_s, leve
 
 def comp_N_(iN_, rc, _iN_=[]):
 
-    def proj_V(_N,N, dist, pVt_):  # _N x N induction
+    N_, L_,mTT,mc, B_,dTT,dc, dpTT = [],[],np.zeros((2,9)),0, [],np.zeros((2,9)),0, np.zeros((2,9))
+    # get all-to-all pre-links:
+    for i, N in enumerate(iN_):
+        N.pL_ = []
+        for _N in _iN_ if _iN_ else iN_[i+1:]:  # optional _iN_ as spec
+            if _N.sub != N.sub: continue  # or comp x composition?
+            dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)
+            N.pL_ += [[dist, dy_dx, _N]]
+        N.pL_.sort(key=lambda x: x[0])  # proximity prior
 
+    def proj_V(_N,N, dist, pVt_):  # _N x N induction
         Dec = decay**(dist/((_N.span+N.span)/2))
         iTT = (_N.dTT + N.dTT) * Dec
         eTT = (_N.eTT + N.eTT) * Dec # rim
@@ -198,19 +207,10 @@ def comp_N_(iN_, rc, _iN_=[]):
                 eTT += proj_N(N,_dist,_dy_dx, rc)  # proj N L_,B_,rim, if pV>0: eTT += pTT?
                 eTT += proj_N(_N,_dist,-_dy_dx, rc)  # reverse direction
         return iTT+eTT
-
-    N_, L_,mTT,mc, B_,dTT,dc, dpTT = [],[],np.zeros((2,9)),0, [],np.zeros((2,9)),0, np.zeros((2,9))
-    for i, N in enumerate(iN_):  # get unique all-to-all pre-links
-        N.pL_ = []
-        for _N in _iN_ if _iN_ else iN_[i+1:]:  # optional _iN_ as spec
-            if _N.sub != N.sub: continue  # or comp x composition?
-            dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)
-            N.pL_ += [[dist, dy_dx, _N]]
-        N.pL_.sort(key=lambda x: x[0])  # proximity prior
     for N in iN_:
-        pVt_ = []  # [dist, dy_dx, _N, V]
+        pVt_ = []
         for dist, dy_dx, _N in N.pL_:  # rim angl is not canonic
-            pTT = proj_V(_N,N, dist, pVt_); lrc = rc + (N.rc+_N.rc) / 2
+            pTT = proj_V(_N,N, dist, pVt_); lrc = rc + (N.rc+_N.rc) / 2  # pVt_: [[dist, dy_dx, _N, V]]
             m, d = vt_(pTT,lrc)  # +|-match certainty
             if m > 0:
                 if abs(m) < ave:  # different ave for projected surprise value, comp in marginal predictability
@@ -331,7 +331,7 @@ def Cluster(root, iL_, rc, fC):  # generic clustering root
         for FT in [('tN_','tNt',dN_,0),('tB_','tBt',dB_,0), ('tC_','tCt',dC_,1)]:
             if hasattr(root,FT[0]):
                 f_,ft, tL_,fC = FT; frc += 1  # trans-fork redundancy count, re-assign later?
-                Ft = sum2T(tL_,frc,root,ft[1:]); N_ = {n for L in tL_ for n in L.nt}
+                Ft = sum2T(tL_,frc,root,ft[1:]); N_ = list({n for L in tL_ for n in L.nt})
                 for N in N_: N.exe=1
                 cluster_N(Ft, N_, rc+frc)
                 if val_(Ft.dTT, frc, TTw(root), mw=(len(Ft.N_)-1)*Lw) > 0:
@@ -352,7 +352,7 @@ def Cluster(root, iL_, rc, fC):  # generic clustering root
                         N_ += [_N]
                 else: L_ = link_[i:]; break
         else: L_ = iL_
-        N_ += list({n for L in L_ for n in L.nt})  # include merged Cs
+        N_ = list(set([n for L in L_ for n in L.nt] + N_))  # include merged Cs
         if val_(root.dTT, rc+contw, TTw(root), mw=(len(N_)-1)*Lw) > 0:
             G_,rc = cluster_N(root, N_, rc)  # in feature space if centroids, no B_,C_?
             if G_:  # no higher root.N_
@@ -368,7 +368,7 @@ def Cluster(root, iL_, rc, fC):  # generic clustering root
                     for m, (Ft, tFt) in zip(mmax_,((root.Nt, root.tNt),(root.Bt, root.tBt),(root.Ct, root.tCt))): # +rdn in 3 fork pairs
                         r = sm_.index(m); Ft.rc+=r; tFt.rc+=r  # rc+=rdn
     else:
-        # primary centroid clustering:
+        # primary centroid clustering, after trace_edge?:
         N_ = list({N for L in iL_ for N in L.nt if N.em})  # newly connected only
         E_ = get_exemplars(N_,rc)
         if E_ and val_(np.sum([g.dTT for g in E_],axis=0), rc+centw, TTw(root), mw=(len(E_)-1)*Lw, _TT=root.dTT) > 0:
@@ -384,34 +384,30 @@ def Cluster(root, iL_, rc, fC):  # generic clustering root
         for rng, rL_ in enumerate(L__):  # rng-banded clustering
             rc+= rng + contw
             if rL_ and sum([l.m for l in rL_]) * ((len(rL_)-1)*Lw) > ave*rc:
-                G_,rc = cluster_N(root, {N for L in rL_ for N in L.nt}, rc, rng)
+                G_,rc = cluster_N(root, list({N for L in rL_ for N in L.nt}), rc, rng)
     return G_,rc
 
 def cluster_N(root, rN_, rc, rng=0):  # flood-fill node | link clusters, flat if rng=1
 
     def rroot(n): return rroot(n.root) if n.root and n.root!=root else n
     def nt_vt(n,_n):
-        mL_,dL_,M,D = [],[],0,0
+        M, D = 0,0  # exclusive match, contrast
         for l in set(n.rim+_n.rim):
-            if l.m > 0: mL_+=[l]; M+=l.m  # separate match and contrast?
-            elif l.d > 0: dL_+=[l]; D+=l.d
-            return M, D
-            # ret links to cluster?
-    def clust_nt(n,_n, L,N_,_L_,D_,B_,C_):
+            if l.m > 0:   M += l.m
+            elif l.d > 0: D += l.d
+        return M, D
+    def clust_nt(n,_n, L,N_,_L_,B_,C_):
         m,d = nt_vt(n,_n)
-        if m > ave*(rc-1):  # cluster by
-            fm=1; N_+=[_n]; C_+=_n.C_; _n.fin = 1; _L_ += [L]
-        else: fm = 0
-        if d > avd * (rc-1):  # contrast value
-            if fm: D_ += [L]  # disparity
-            else:  B_ += [L]  # boundary
-            # exclusive?
-    def extend_Gt(_L_,N_,C_,L_,D_,B_, in_):
+        if m > ave * (rc-1):  # cluster by combined rim density?
+            N_+= [_n]; C_+=_n.C_; _n.fin = 1; _L_ += [L]
+        elif d > avd * (rc-1):  # contrast value, exclusive?
+            B_ += [L]  # boundary
+
+    def extend_Gt(_L_,N_,C_,L_,B_, in_):
         for L in _L_:  # spliced rim
-            if L in in_: continue  # already clustered
-            in_.add(L)
-            N,_N = L.nt
-            if _N.fin: continue
+            if L in in_: continue  # already evaled
+            N,_N = L.nt; in_.add(L)
+            if  N.fin or _N.fin: continue  # in current clusters
             if rng:  # nested, cluster rN_ via top-rng roots
                 _R = rroot(_N)
                 if _R and not _R.fin:
@@ -421,39 +417,39 @@ def cluster_N(root, rN_, rc, rng=0):  # flood-fill node | link clusters, flat if
                         N_ += [_R]; _R.fin = 1; _N.fin = 1
                         L_ += _R.L_; C_ += _R.C_  # C_ is not rng-banded?
             else:  # flat
-                if (_N.root and _N in rN_) and not _N.in_ or _N.root==root or not _N.L_:  # link has no L_
-                    clust_nt(N,_N, L,N_,_L_,D_,B_,C_)  # same for root above?
-    # root attrs,
-    # need to add D_,D__, Dt?
+                if (_N.root and _N in rN_) or _N.root==root or not _N.L_:  # link has no L_
+                    clust_nt(N,_N, L,N_,_L_,B_,C_)  # same for root above?
+    # root attrs
     G_,N__,L__,Lt_,TT,lTT,C,lC = [],[],[],[],np.zeros((2,9)),np.zeros((2,9)),0,0; in_= set()
     for N in rN_: N.fin = 0
     _N = rN_[0]
     for N in rN_[1:]:  # form G per remaining rng N
         if N.fin or (root.root and not N.exe): continue  # no exemplars in Fg
-        N_,C_,_L__,_L_,D_,B_ = [N],[],[],[],[],[]
+        N_,C_,_L__,_L_,B_ = [N],[],[],[],[]
         if rng:
             R = rroot(N)  # cluster top-rng roots
             if R and not R.fin: N_,_L_,C_ = [R], R.L_[:], [C.root for C in R.C_]; R.fin = 1
         else:  # flat
-            L = set(_N.rim) & set(N.rim)[:]  # unpack single L?
-            clust_nt(N,_N, L,N_,_L_,D_,B_,C_)  # same for root above?
+            L = list(set(_N.rim) & set(N.rim))  # unpacks single L
+            if L: clust_nt(N,_N, L[0],N_,_L_,B_,C_)  # same for root above?
         N.fin = 1; L_ = []
-        while _L_:
+        while _L_:  # frontier links
             _L__ += _L_
-            extend_Gt(_L_,N_,C_,L_,D_,B_, in_)
+            extend_Gt(_L_,N_,C_,L_,B_, in_)
             if L_: _L_ = list(set(L_)); L_ = []  # extended rim
             else: break
         if N_:
-            Ft_ = [list(set(N_)),np.zeros((2,9)),0], [list(set(_L__)),np.zeros((2,9)),0], [list(set(B_)),np.zeros((2,9)),0], [list(set(C_)),np.zeros((2,9)),0]
+            Ft_ = ([list(set(N_)),np.zeros((2,9)),0], [list(set(_L__)),np.zeros((2,9)),0], [list(set(B_)),np.zeros((2,9)),0], [list(set(C_)),np.zeros((2,9)),0])
             for i, (F_,tt,c) in enumerate(Ft_):
                 for F in F_: tt+= F.dTT; Ft_[i][2] += F.c
-            (N_,nt,nc),(L_,lt,lc),(B_,bt,bc),(C_,ct,cc) = Ft_; tt = nt+lt  # core forks
-            if val_(tt, rc, TTw(root),_TT=root.dTT) + vt_(bt,rc)[0] + vt_(ct,rc)[0] > 0:  # include singletons?
-                G_+= [sum2G(((N_,nt,nc),(L_,lt,lc),(B_,bt,bc),(C_,ct,cc)),rc,root)]
+            (N_,nt,nc),(L_,lt,lc),(B_,bt,bc),(C_,ct,cc) = Ft_; tt = nt + lt  # core forks
+            if val_(tt,rc, TTw(root),_TT=root.dTT) + vt_(bt,rc)[0] + vt_(ct,rc)[0] > 0:  # include singletons?
+                G_+= [sum2G(((N_,nt,nc),(L_,lt,lc),(B_,bt,bc),(C_,ct,cc)), rc,root)]
                 N__+=N_; L__+=L_; Lt_+=[n.Lt for n in N_]; TT+=tt; lTT+=lt; C+=nc; lC+=lc
     if G_ and val_(TT, rc+1, TTw(root), mw=(len(G_)-1)*Lw) > 0:
         rc += 1
         root_replace(root,rc, G_,N__,L__,Lt_,TT,lTT,C,lC)
+        # cross_comp(dL_): differential clustering of intra-G links for G segmentation?
     return G_, rc
 
 def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
@@ -591,7 +587,7 @@ def Copy_(N, root=None, init=0, typ=None):
 
 def sum2G(Ft_, rc, root=None, rng=1, init=1):  # updates root if not init
 
-    N_,ntt,nc = Ft_[0]; L_,ltt,lc = [],np.zeros((2,9)),0; B_,btt,bc = [],np.zeros((2,9)),0; C_,ctt,cc = [],np.zeros((2,9)),0
+    N_,ntt,nc = Ft_[0]; L_,ltt,lc = [],np.zeros((2,9)),0; B_,C_ = [],[]  # init tt,c s if B_
     if len(Ft_)>1: L_,ltt,lc = Ft_[1]  # in trace_edge
     if len(Ft_)>2: (B_,btt,bc),(C_,ctt,cc) = Ft_[2:]  # in cluster_N, Ct: alternative, Bt: complementary?
     if not init:
@@ -602,9 +598,9 @@ def sum2G(Ft_, rc, root=None, rng=1, init=1):  # updates root if not init
     for n in N_: n.m, n.d = vt_(n.dTT,rc)
     N = N_[0]
     G = Copy_(N,root, init=1,typ=2)
-    G.N_ = N_; G.dTT=ntt+ltt; G.c=nc+lc; G.rc=rc; G.rng=rng; nt,lt = N.Nt, N.Lt
-    l0 = CF(N_=list(N.N_), dTT=deepcopy(nt.dTT), m=nt.m,d=nt.d,c=nt.c,root=G.Nt)
-    G.Nt.N_= [l0]+ [CopyF(lev,G.Nt) for lev in nt.N_]; G.Nt.dTT=deepcopy(N.dTT); G.Nt.m=N.m; G.Nt.d=N.d; G.Nt.c=N.c; G.Nt.root=G
+    G.N_ = N_; G.dTT=ntt+ltt; G.c=nc+lc; G.rc=rc; G.rng=rng
+    nt = N.Nt; l0 = CF(N_=list(N.N_), dTT=deepcopy(nt.dTT), m=nt.m,d=nt.d,c=nt.c,root=G.Nt)
+    G.Nt.N_ = [l0]+ [CopyF(lev,G.Nt) for lev in nt.N_]; G.Nt.dTT=deepcopy(N.dTT); G.Nt.m=N.m; G.Nt.d=N.d; G.Nt.c=N.c; G.Nt.root=G
     for N in N_[1:]: add_N(G,N)
     if L_:
         G.L_=L_; m,d = vt_(ltt,rc); G.Lt = CF(dTT=ltt,m=m,d=d,c=lc,root=G)  # no Lt.N_
@@ -632,6 +628,11 @@ def sum2G(Ft_, rc, root=None, rng=1, init=1):  # updates root if not init
         # borrow alt-fork m,d:
     if B_: altF(G, B_,btt,bc,'Bt','B_')
     if C_: altF(G, C_,ctt,cc,'Ct','C_')
+    subV = G.Lt.m * G.Lt.d
+    if subV * ((len(N_)-1)*Lw) > ave * (rc+1) * contw:
+        N_,rc = Cluster(G, L_, rc+1,0)  # divisive sub-clustering
+        if subV * ((len(N_)-1)*Lw) > ave* rc* compw:
+            cross_comp(G, rc,0)
     return G
 
 def add_N(G, N):  # flat currently not used
@@ -816,14 +817,14 @@ def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
     add_H(ddH, dddH)
 '''
 def form_B__(N_,B_):  # assign boundary / background per node from Bt, no root update?
-    def R(L):
-        root=L.root
-        if root:
-            if isinstance(root,CF): root=None  # Bt, not bG
-            elif root.typ!=0: root= R(L.root)  # PPds are not clustered
-        else: _N = L.nt[0] if L.nt[1] is N else L.nt[1]; root = _N.root  # direct L mediation
-        return root
 
+    def R(L):
+        r = L.root
+        if r:
+            if isinstance(r,CF): r=None  # Bt, not bG
+            elif r.typ!=0: r= R(L.root)  # PPds are not clustered
+        else: _N = L.nt[0] if L.nt[1] is N else L.nt[1]; r = _N.root  # direct L mediation
+        return r
     for B in B_:  # bG.rN_ += reciprocal nGs:
         bG = R(B)
         if bG:
