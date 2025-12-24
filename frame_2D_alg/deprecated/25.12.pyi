@@ -463,3 +463,68 @@ def cluster_N2(root, rN_, rc, rng=0):  # flood-fill node | link clusters, flat i
         # cross_comp(dL_): differential clustering of intra-G links for G segmentation?
     return G_, rc
 
+def Cluster1(root, iL_, rc, fC):  # generic clustering root
+
+    def trans_cluster(root, iL_, rc):  # called from cross_comp(Fg_), others?
+
+        dN_,dB_,dC_,frc = [],[],[],0  # splice specs from links between Fgs in Fg cluster
+        for Link in iL_: dN_+= Link.N_; dB_+= Link.B_; dC_+= Link.C_
+        for FT in [('tN_','tNt',dN_,0),('tB_','tBt',dB_,0), ('tC_','tCt',dC_,1)]:
+            if hasattr(root,FT[0]):
+                f_,ft, tL_,fC = FT; frc += 1  # trans-fork redundancy count, re-assign later?
+                Ft = sum2T(tL_,frc,root,ft[1:]); N_ = list({n for L in tL_ for n in L.nt})
+                for N in N_: N.exe=1
+                cluster_N(Ft, N_, rc+frc)
+                if val_(Ft.dTT, frc, TTw(root), mw=(len(Ft.N_)-1)*Lw) > 0:
+                    cross_comp(Ft, rc+frc, fC=fC)  # unlikely, doesn't add rc?
+                setattr(root,f_,link_); setattr(root, ft, Ft)  # trans-fork_ via trans-G links
+    G_ = []
+    if fC or not root.root:  # flat connect_cluster centroids, no exemplars or higher centroid clustering
+        N_, L_, i = [],[],0  # add pL_, pN_ for pre-links?
+        if fC < 2:  # merge similar Cs, not dCs, no recomp
+            link_ = sorted(list({L for L in iL_}), key=lambda link: link.d)  # from min D
+            for i, L in enumerate(link_):
+                if val_(L.dTT, rc+compw, wTTf, fi=0) < 0:
+                    _N, N = L.nt; root.L_.remove(L)  # merge nt, remove link
+                    if _N is not N:  # not yet merged
+                        for n in N.N_: add_N(_N, n); _N.N_ += [n]
+                        for l in N.rim: l.nt = [_N if n is N else n for n in l.nt]
+                        if N in N_: N_.remove(N)
+                        N_ += [_N]
+                else: L_ = link_[i:]; break
+        else: L_ = iL_
+        N_ = list(set([n for L in L_ for n in L.nt] + N_))  # include merged Cs
+        if val_(root.dTT, rc+contw, TTw(root), mw=(len(N_)-1)*Lw) > 0:
+            G_,rc = cluster_N(root, N_, rc)  # in feature space if centroids, no B_,C_?
+            if G_:  # no higher root.N_
+                tL_ = [tl for n in root.N_ for l in n.L_ for tl in l.N_]  # trans-links
+                if sum(tL.m for tL in tL_) * ((len(tL_)-1)*Lw) > ave*(rc+contw):  # use tL.dTT?
+                    trans_cluster(root, tL_, rc+1)  # sets tTs
+                    mmax_ = []
+                    for F,tF in zip((root.Nt,root.Bt,root.Ct), (root.tNt,root.tBt,root.tCt)):
+                        if F and tF:
+                            maxF,minF = (F,tF) if F.m>tF.m else (tF,F)
+                            mmax_+= [max(F.m,tF.m)]; minF.rc+=1  # rc+=rdn
+                    sm_ = sorted(mmax_, reverse=True)
+                    for m, (Ft, tFt) in zip(mmax_,((root.Nt, root.tNt),(root.Bt, root.tBt),(root.Ct, root.tCt))): # +rdn in 3 fork pairs
+                        r = sm_.index(m); Ft.rc+=r; tFt.rc+=r  # rc+=rdn
+    else:
+        # primary centroid clustering, after trace_edge?:
+        N_ = list({N for L in iL_ for N in L.nt if N.em})  # newly connected only
+        E_ = get_exemplars(N_,rc)
+        if E_ and val_(np.sum([g.dTT for g in E_],axis=0), rc+centw, TTw(root), mw=(len(E_)-1)*Lw, _TT=root.dTT) > 0:
+            _,rc = cluster_C(E_,root,rc)  # forms root.Ct, may call cross_comp, incr rc
+        # secondary connectivity clustering:
+        L_ = sorted(iL_, key=lambda l: l.span)  # short first
+        L__ =[]; seg = [L_[0]]
+        for _L,L in zip(L_,L_[1:]):  # optional segment by rel ddist:
+            if (L.span-_L.span) > distw * L.span: L__+=[seg]; seg=[L]  # terminate, init new seg
+            else: seg+=[L]  # continue
+        L__+=[seg]  # last seg
+        if root.Lt.m * ((len(L__)-1)*Lw) < ave*rc: L__=[L_]  # skip nesting
+        for rng, rL_ in enumerate(L__):  # rng-banded clustering
+            rc+= rng + contw
+            if rL_ and sum([l.m for l in rL_]) * ((len(rL_)-1)*Lw) > ave*rc:
+                G_,rc = cluster_N(root, list({N for L in rL_ for N in L.nt}), rc, rng)
+    return G_,rc
+
