@@ -7,7 +7,7 @@ from slice_edge import slice_edge
 from comp_slice import comp_slice
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
-Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is PPs: contiguous segments of matching Ps.
+Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
 Cycles of (generative cross-comp, compressive clustering, filter-adjusting feedback) should form hierarchical model of input stream: 
 
 Cross-comp forms Miss and Match (min: shared_quantity for directly predictive params, else inverse deviation of miss or variation), in 2 forks:
@@ -29,10 +29,10 @@ And so on, higher orders of projection should be generated recursively from lowe
 
 Feedback: projected match adjusts filters (with coord filters selecting new input) to maximize next marginal match.
 (currently in ffeedback(), to be refined by cross_comp of co-projected patterns: "imagination, planning, action" in part 3)   
-This is similar to backprop, but sparse, and weights are only for evals, they don't change the data propagating up the hierarchy.
+Similar to backprop but sparse, and the filters only control operations, it's not weights that directly scale individual parameters.
 
 It should also modify the code by adding weights on code elements according to their contribution to projected match.
-The weights will trigger skipping or recursing over corresponding functions ( blocks ( operations.
+These weights will trigger skipping or recursing over corresponding functions ( blocks ( operations.
 Also cross-comp and cluster (compress) code elements and function calls, real and projected, though much more coarsely than data?
 
 notation:
@@ -50,6 +50,7 @@ class CN(CBase):
         n.typ = kwargs.get('typ', 0)
         # 1=L: typ,nt,dTT, m,d,c,rc, root,rng,yx,box,span,angl,fin,compared, N_,B_,C_,L_,Nt,Bt,Ct from comp_sub?
         # 2=G: + rim, eTT, em,ed,ec, baseT,mang,sub,exe, Lt, tNt, tBt, tCt?
+        # 3=C: + mo_,M,D,C,DTT?
         # 0=PP: if typ: comp_sub?
         n.m,  n.d, n.c = kwargs.get('m',0), kwargs.get('d',0), kwargs.get('c',0)  # sum forks to borrow
         n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # Nt+Lt dTT: m_,d_ [M,D,n, I,G,a, L,S,A]
@@ -59,7 +60,7 @@ class CN(CBase):
         n.rc  = kwargs.get('rc', 1)  # redundancy to ext Gs, ave in links?
         n.N_, n.B_, n.C_, n.L_ = kwargs.get('N_',[]), kwargs.get('B_',[]), kwargs.get('C_',[]), kwargs.get('L_',[])  # base elements
         n.Nt, n.Bt, n.Ct, n.Lt = kwargs.get('Nt',CF()), kwargs.get('Bt',CF()), kwargs.get('Ct',CF()), kwargs.get('Lt',CF())  # nested elements
-        # Ft is [dTT,m,d,c,rc,N_], N_=H: [[N_,dTT]] in Nt, nest=len(N_)
+        # Fork tuple: [N_,dTT,m,d,c,rc], Nt.N_ is H: [N_,dTT] per level, nest=len(N_)
         n.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,A: not ders, in links for simplicity, mostly redundant
         n.nt    = kwargs.get('nt', [])  # nodet, links only
         n.yx    = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
@@ -134,26 +135,27 @@ def val_(TT, rc, wTT, fi=1, mw=1.0, rn=.5, _TT=None):  # m,d eval per cluster, r
 
 def TTw(G): return getattr(G,'wTT',wTTf)
 
-def cross_comp(root, rc, fconn=1):  # core function, mediates rng+ and der+ cross-comp and clustering, rc=rdn+olp
+def cross_comp(root, rc, fcon=1, fder=0):  # core function, mediates rng+ and der+ cross-comp and clustering, rc=rdn+olp
 
-    iN_, mL_,mTT,mc, dL_,dTT,dc = comp_N_(root.N_,rc) if fconn else comp_C_(root.N_,rc); nG_=[]
-    # m fork:
-    if len(mL_)>1 and val_(mTT, rc+compw, TTw(root), mw=(len(mL_)-1)*Lw) > 0:
-        root.L_= mL_; sum2T(mL_,rc,root,'Lt')  # new ders, no Lt.N_
-        for n in iN_: n.em = sum([l.m for l in n.rim]) / len(n.rim)  # pre-val_
-        nG_,rc = Cluster(root, mL_,rc,fconn)  # cluster_N|C, +1 level, sub+ in sum2G
-    # d fork:
-    if fconn and dL_ and val_(dTT, rc+compw, TTw(root), fi=0, mw=(len(dL_)-1)*Lw) > avd:
-        root.B_= dL_; sum2T(dL_,rc,root,'Bt')  # new ders
-        bG_,rc = cross_comp(root.Bt, rc, not fconn)  # comp dL_|dC_, not ddC_?
-        if bG_: sum2T(bG_,rc,root,'Bt')  # replace root Bt
-        form_B__(nG_,bG_, rc)  # add boundary to nGs
-    # recursion:
-    if val_(mTT, rc+connw, TTw(root), mw=(len(root.N_)-1)*Lw) > 0:  # mval only
-        nG_,rc = trace_edge(root.N_,rc,root)  # comp Ns x N.Bt|B_.nt, with/out mfork?
-    if nG_ and val_(root.dTT, rc+compw, TTw(root), mw=(len(root.N_)-1)*Lw, _TT=mTT) > 0:
-        nG_,rc = cross_comp(root, rc)
-        # agg+
+    iN_, mL_,mTT,mc, dL_,dTT,dc = comp_N_(root.N_,rc) if fcon else comp_C_(root.N_,rc); nG_=[]  # nodes else centroids
+    if mL_:
+        # m cluster fork:
+        if val_(mTT, rc+compw, TTw(root), mw=(len(mL_)-1)*Lw) > 0 or fder:  # default for links
+            root.L_= mL_; sum2T(mL_,rc,root,'Lt')  # new ders, no Lt.N_
+            for n in iN_: n.em = sum([l.m for l in n.rim]) / len(n.rim)  # pre-val_
+            nG_,rc = Cluster(root, mL_,rc, fcon,fder)  # cluster_N|C, +1 level, sub+ in sum2G
+    if dL_:
+        # d cross_comp fork
+        if val_(dTT, rc+compw, TTw(root), fi=0, mw=(len(dL_)-1)*Lw) > 0 and not fder:  # no dd fork
+            root.B_ = dL_; sum2T(dL_,rc,root,'Bt')  # new ders
+            bG_,rc = cross_comp(root.Bt, rc, fder=1)  # comp dL_|dC_
+            sum2T(bG_,rc,root,'Bt'); form_B__(nG_,bG_,rc)  # default set root Bt, nG boundary
+    if nG_:
+        # rc incr in Cluster, agg recursion:
+        if val_(mTT, rc+connw, TTw(root), mw=(len(root.N_)-1)*Lw) > 0:  # mval only
+            nG_,rc = trace_edge(root.N_,rc,root)  # comp Ns x N.Bt|B_.nt, with/out mfork?
+        if nG_ and val_(root.dTT, rc+compw, TTw(root), mw=(len(root.N_)-1)*Lw, _TT=mTT) > 0:
+            nG_,rc = cross_comp(root, rc)
     return nG_,rc  # nG_: recursion flag
 
 def comp_C_(C_, rc,_C_=[], fall=1):  # simplified for centroids, trans-N_s, levels
@@ -231,7 +233,7 @@ def comp_N(_N,N, rc, A=np.zeros(2), span=None):  # compare links, optional angl,
     m, d = vt_(TT,rc)
     Link = CN(typ=1,nt=[_N,N], dTT=TT,m=m,d=d,c=min(N.c,_N.c), yx=yx,box=box,span=span,angl=angl, rc=rc, baseT=(_N.baseT+N.baseT)/2)
     if m > ave*rc and _N.typ and N.typ:  # skip PP if called from sub_comp' comp_C_
-        comp_sub(_N,N, rc,Link)  # root_update
+        trans_comp(_N,N, rc,Link)  # cross-comp levs and elements
     for n, _n in (_N,N),(N,_N):  # if rim-mediated comp: reverse dir in _N.rim: rev^_rev?
         n.rim += [Link]; n.eTT += TT; n.ec += Link.c; n.compared.add(_n)
     return Link
@@ -291,12 +293,12 @@ def comp_A(_A,A):
     '''
     return (cos(dA)+1) /2, dA/pi  # mA in 0:1, dA in -1:1, or invert dA, may be negative?
 
-def comp_sub(_N,N, rc, root):  # unpack node trees down to numericals and compare them
+def trans_comp(_N,N, rc, root):  # unpack node trees down to numericals and compare them
 
     Rc = rc
     for _F_,F_,nF_,nFt in zip((_N.N_,_N.B_,_N.C_),(N.N_,N.B_,N.C_), ('N_','B_','C_'),('Nt','Bt','Ct')):  # + tN_,tB_,tC_ from trans_cluster?
         if _F_ and F_:  # eval?
-            N_,L_,mTT,mc, B_,dTT,dc = comp_C_(_F_,Rc,F_); dF_= L_+ B_  # trans-comp, callee comp_N may call deeper comp_sub, batch in root?
+            N_,L_,mTT,mc, B_,dTT,dc = comp_C_(_F_,Rc,F_); dF_= L_+ B_  # callee comp_N may call deeper comp_sub, batch in root?
             if dF_:  # trans-links
                 setattr(root,nF_,dF_); setattr(root,nFt, CF(dTT=mTT+dTT,c=mc+dc,root=root)); Rc+=1
     for _lev,lev in zip(_N.Nt.N_, N.Nt.N_):  # no comp Bt,Ct: external to N,_N
@@ -320,7 +322,7 @@ def get_exemplars(N_, rc):  # multi-layer non-maximum suppression -> sparse seed
             break  # the rest of N_ is weaker, trace via rims
     return E_
 
-def Cluster(root, iL_, rc, fconn=1):  # generic clustering root
+def Cluster(root, iL_, rc, fcon=1, fder=0):  # generic clustering root
 
     def trans_cluster(root, iL_, rc):  # called from cross_comp(Fg_), others?
 
@@ -333,12 +335,12 @@ def Cluster(root, iL_, rc, fconn=1):  # generic clustering root
                 for N in N_: N.exe=1
                 cluster_N(Ft, N_, rc+frc)
                 if val_(Ft.dTT, frc, TTw(root), mw=(len(Ft.N_)-1)*Lw) > 0:
-                    cross_comp(Ft, rc+frc, fconn)  # unlikely, doesn't add rc?
-                setattr(root,f_,link_); setattr(root, ft, Ft)  # trans-fork_ / trans-G links
+                    cross_comp(Ft, rc+frc)  # unlikely, doesn't add rc?
+                setattr(root,f_,tL_); setattr(root, ft, Ft)  # trans-fork_ / trans-G links
     G_ = []
-    if fconn:  # connect-cluster, no exemplars or recursive centroid clustering
-        N_,L_, i = [],[],0  # add pL_, pN_ for pre-links?
-        if fconn == 2:  # merge similar Cs, not dCs, no recomp
+    if fcon:  # connect-cluster, no exemplars or recursive centroid clustering
+        N_,L_,i = [],[],0  # add pL_, pN_ for pre-links?
+        if fcon > 1:  # merge similar Cs, not dCs, no recomp
             link_ = sorted(list({L for L in iL_}), key=lambda link: link.d)  # from min D
             for i, L in enumerate(link_):
                 if val_(L.dTT, rc+compw, wTTf, fi=0) < 0:
@@ -351,8 +353,8 @@ def Cluster(root, iL_, rc, fconn=1):  # generic clustering root
                 else: L_ = link_[i:]; break
         else: L_ = iL_
         N_ = list(set([n for L in L_ for n in L.nt] + N_))  # include merged Cs
-        if val_(root.dTT, rc+connw, TTw(root), mw=(len(N_)-1)*Lw) > 0:
-            G_,rc = cluster_N(root, N_, rc)  # in feature space if centroids, no B_,C_?
+        if val_(root.dTT, rc+connw, TTw(root), mw=(len(N_)-1)*Lw) > 0 or fcon > 1:
+            G_,rc = cluster_N(root, N_,rc, fder)  # in feature space if centroids, no B_,C_?
             if G_:  # no higher root.N_
                 tL_ = [tl for n in root.N_ for l in n.L_ for tl in l.N_]  # trans-links
                 if sum(tL.m for tL in tL_) * ((len(tL_)-1)*Lw) > ave*(rc+connw):  # use tL.dTT?
@@ -375,7 +377,7 @@ def Cluster(root, iL_, rc, fconn=1):  # generic clustering root
         G_,rc = cluster_N(root, list({N for L in iL_ for N in L.nt}), rc+connw)
     return G_,rc
 
-def cluster_N(root, iN_, rc):  # flood-fill node | link clusters, flat
+def cluster_N(root, iN_, rc, fder=0):  # flood-fill node | link clusters, flat
 
     def rroot(n): return rroot(n.root) if n.root and n.root!=root else n
     def nt_vt(n,_n):
@@ -390,35 +392,35 @@ def cluster_N(root, iN_, rc):  # flood-fill node | link clusters, flat
     for N in iN_:  # form G per remaining N
         if N.fin or (root.root and not N.exe): continue  # no exemplars in Fg
         N_=[N]; L_,B_,C_=[],[],[]; N.fin=1  # init G
-        __L_= N.rim; _L_=[]  # spliced rim
+        __L_ = N.rim  # spliced rim
         while __L_:
+            _L_ = []
             for L in __L_: # flood-fill via frontier links
-                if L in in_: continue  # was evaled
-                N,_N = L.nt; in_.add(L)
-                if  N.fin or _N.fin: continue  # in cluster
-                if (_N.root and _N in iN_) or _N.root==root or not _N.L_:  # link has no L_
-                    m,d = nt_vt(N,_N)
+                _N = L.nt[0] if L.nt[1].fin else L.nt[1]; in_.add(L)
+                if not _N.fin and ((_N.root and _N in iN_) or _N.root==root or not _N.L_):  # link has no L_
+                    m,d = nt_vt(*L.nt)
                     if m > ave * (rc-1):  # cluster nt, L,C_ by combined rim density:
-                        N_ += [N,_N]; N.fin =_N.fin =1; _L_ += N.rim+_N.rim  # frontier links, +|-?
+                        N_ += [_N]; _N.fin = 1
                         L_ += [L]; C_ += _N.C_
+                        _L_+= [l for l in _N.rim if l not in in_ and (l.nt[0].fin ^ l.nt[1].fin)]   # new frontier links, +|-?
                     elif d > avd * (rc-1):  # contrast value, exclusive?
                         B_ += [L]
             __L_ = list(set(_L_))
         if N_:
-            Ft_ = ([list(set(N_)),np.zeros((2,9)),0], [list(set(L_)),np.zeros((2,9)),0], [list(set(B_)),np.zeros((2,9)),0,0], [list(set(C_)),np.zeros((2,9)),0,0])
-            for i, (F_,tt,c,rc) in enumerate(Ft_):
+            Ft_ = ([list(set(N_)),np.zeros((2,9)),0,0], [list(set(L_)),np.zeros((2,9)),0,0], [list(set(B_)),np.zeros((2,9)),0,0], [list(set(C_)),np.zeros((2,9)),0,0])
+            for i, (F_,tt,c,r) in enumerate(Ft_):
                 for j, F in enumerate(F_):
                     tt += F.dTT; Ft_[i][2] += F.c
-                    if j>1: Ft_[i][3] += F.rc  # Bt,Ct only: redundant forks?
-            (N_,nt,nc),(L_,lt,lc), (B_,bt,bc,br),(C_,ct,cc,cr) = Ft_
+                    if j>1: Ft_[i][3] += F.rc  # Bt,Ct rdn only?
+            (N_,nt,nc,_),(L_,lt,lc,_), (B_,bt,bc,br),(C_,ct,cc,cr) = Ft_
             tt = nt*nc + lt*lc; c= nc+lc
             if B_: tt += bt*bc*(br/len(B_)); c+=bc
             if C_: tt += ct*cc*(cr/len(C_)); c+=cc
-            if val_(tt, rc, TTw(root), mw=(len(N_)-1)*Lw, _TT=root.dTT)[0] > 0:  # no singles?
-                G_ += [sum2G(((N_,nt,nc),(L_,lt,lc),(B_,bt,bc),(C_,ct,cc)), rc,root)]  # +br,cr?
+            if val_(tt, rc, TTw(root), mw=(len(N_)-1)*Lw, _TT=root.dTT) > 0 or fder:
+                G_ += [sum2G(((N_,nt,nc),(L_,lt,lc),(B_,bt,bc),(C_,ct,cc)), rc,root)]  # br,cr?
                 N__+=N_; L__+=L_; Lt_+=[n.Lt for n in N_]; TT+=tt; nTT+=nt; lTT+=lt; C+=c; nC+=nc; lC+=lc
                 # G.TT * G.c * G.rc?
-    if G_ and val_(TT, rc+1, TTw(root), mw=(len(G_)-1)*Lw) > 0:
+    if fder or (G_ and val_(TT, rc+1, TTw(root), mw=(len(G_)-1)*Lw)):  # include singleton lG
         rc += 1
         root_replace(root,rc, G_,N__,L__,Lt_,TT,nTT,lTT,C,nC,lC)
     return G_, rc
@@ -427,7 +429,7 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
 
     _C_, _N_ = [],[]
     for E in E_:
-        C = cent_TT( Copy_(E, root, init=2), rc, init=1); C.N_ = [E]  # all rims are within root, sequence along max w attr?
+        C = cent_TT( Copy_(E, root, init=2, typ=3), rc, init=1)  # all rims are within root, sequence along max w attr?
         C._N_ = [n for l in E.rim for n in l.nt if n is not E]  # core members + surround -> comp_C
         _N_ += C._N_; _C_ += [C]
         for N in C._N_: N.M, N.D, N.C, N.DTT = 0,0,0,np.zeros((2,9))  # init, they might be added to Ct.N_ later
@@ -473,7 +475,7 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
             for n in root.N_: n._C_=n.Nt.N_; n._mo_=n.mo_; n.Nt.N_,n.mo_ = [],[]  # new n.Ct.N_s, combine with vo_ in Ct_?
         else:  # converged
             break
-    C_ = [C for C in C_ if val_(C.DTT, rc, TTw(C))]; fconn = 0  # prune C_
+    C_ = [C for C in C_ if val_(C.DTT, rc, TTw(C))]; fcon = 0  # prune C_
     if C_:
         for n in [N for C in C_ for N in C.N_]:
             n.exe = (n.D if n.typ==1 else n.M) + np.sum([mo[0]-ave*mo[1] for mo in n.mo_]) - ave
@@ -482,10 +484,10 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
             Ct = sum2T(C_,rc,root, nF='Ct')
             Ct.tNt, Ct.tBt, Ct.tCt = CF(),CF(),CF()
             # re-order C_ along argmax(root.wTT): eigenvector?
-            _,rc = cross_comp(Ct, rc, fconn=2)  # distant Cs, different attr weights, no cross_comp dCs?
+            _,rc = cross_comp(Ct, rc, fcon=2)  # distant Cs, different attr weights, no cross_comp dCs?
             root.C_=C_; root.Ct=Ct; root_update(root,Ct)
-            fconn = 1
-    return  fconn, rc
+            fcon = 1
+    return  fcon, rc
 
 def cent_TT(C, rc, init=0):  # weight attr matches | diffs by their match to the sum, recompute to convergence
 
@@ -534,7 +536,7 @@ def CopyF(F, root=None):
 
 def Copy_(N, root=None, init=0, typ=None):
 
-    if typ is None: typ = 2 if init else N.typ  # G.typ = 2
+    if typ is None: typ = 2 if init<2 else N.typ  # G.typ = 2, C.typ=3
     C = CN(dTT=deepcopy(N.dTT),typ=typ); C.root = N.root if root is None else root
     for attr in ['m','d','c','rc']: setattr(C,attr, getattr(N,attr))
     if init: C.N_ = [N]
@@ -552,7 +554,8 @@ def Copy_(N, root=None, init=0, typ=None):
             C.angl = copy(N.angl); C.yx = copy(N.yx)
         if typ > 1:
             C.eTT = deepcopy(N.eTT); C.em,C.ed,C.ec = N.em,N.ed,N.ec
-            if hasattr(N,'mo_'): C.mo_ = deepcopy(N.mo_)
+            if typ > 2:
+                C.mo_ = deepcopy(getattr(N, 'mo_', []))  # + N,D,C,DTT?
     return C
 
 def sum2G(Ft_, rc, root=None, init=1, fsub=1):  # updates root if not init
@@ -604,7 +607,7 @@ def sum2G(Ft_, rc, root=None, init=1, fsub=1):  # updates root if not init
     if fsub:
         subV = max(G.Lt.m,0) * max(G.Lt.d,0)  # divisive sub-clustering if +ve Match * Variance
         if subV * ((len(N_)-1)*Lw) > ave * (rc+1) * connw:
-            for n in G.N_: n.fin=0  # exe=0?
+            for n in G.N_: n.fin=0; n.exe=1
             _N_,_rc = Cluster(G, L_, rc+1)  # same nodes with higher filter
             if _N_ and subV * ((len(_N_)-1)*Lw) > ave * _rc * compw:
                 cross_comp(G,_rc)  # forms own B_,Bt
@@ -617,7 +620,7 @@ def add_N(G, N):  # flat is currently not used
     _c,c = G.c,N.c; C=_c+c  # weigh contribution of intensive params
     if fC: G.rc = np.sum([mo[1] for mo in N.mo_]); G.rN_+=N.rN_; G.mo_+=N.mo_
     if N.typ:  # not PP
-        G.rN_ += N.rN_  # or only if N is link?
+        G.rN_ += N.rN_  # if N is link| cent?
         l0 = G.Nt.N_[0]; l0.dTT+=N.dTT; l0.c+=N.c; l0.N_ += N.N_  # flatten in new lev
         for Lev,lev in zip_longest(G.Nt.N_[1:], N.Nt.N_, fillvalue=None):
             if lev:  # norm /C?
@@ -638,7 +641,7 @@ def add_N(G, N):  # flat is currently not used
 def sum2T(T_, rc, root, nF, TT=None, c=1):  # N_ -> fork T
 
     T = T_[0]; fV = TT is None
-    F = CF(root=root); T.root=F  # no L_,B_,C_,Nt,Bt,Ct yet
+    F = CF(root=root, nF=nF); T.root=F  # no L_,B_,C_,Nt,Bt,Ct yet
     if fV: F.dTT=copy(T.dTT); F.c=T.c
     else:  F.dTT=TT; F.c=c
     if nF=='Nt': F.N_ = ([T.N_] + list(T.Nt.N_)) if T.N_ else []  # deeper H
@@ -703,6 +706,9 @@ def PP2N(PP):
     A = np.array([np.array(A), np.sign(dTT[1] @ wTTf[1])], dtype=object)  # append sign
     PP = CN(typ=0, N_=P_,L_=L_,B_=B_,dTT=dTT,m=m,d=d,c=c, baseT=baseT,box=box,yx=yx,angl=A,span=np.hypot(dy/2,dx/2))  # set root in trace_edge
     for P in P_: P.root = PP  # empty Nt, Bt, Ct?
+    if hasattr(P,'nt'):  # PPd, assign rN_:
+        for dP in P_:
+            for P in dP.nt: PP.rN_ += [P.root]  # PPm
     return PP
 
 def ffeedback(root):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
@@ -821,7 +827,7 @@ def vect_edge(tile, rV=1, wTT=None):  # PP_ cross_comp and floodfill to init foc
     else:           wTTf = wTT  # detailed feedback
     ave,avd,aveB,Lw,distw,intw,compw,centw,connw,specw = (np.array([ave,avd,aveB,Lw,distw,intw,compw,centw,connw,specw]) / rV)
     blob_,G_ = tile.N_,[]
-    tT = [G_,[],[],[],np.zeros((2,9)),np.zeros((2,9)),0,0]   # [G_,N_,L_,Lt_,TT,lTT,C,lc], fill in trace_edge
+    tT = [G_,[],[],[],np.zeros((2,9)),np.zeros((2,9)),np.zeros((2,9)),0,0,0]   # [G_,N_,L_,Lt_,TT,nTT,lTT,C,nc,lc], fill in trace_edge
     for blob in blob_:
         if not blob.sign and blob.G > aveB:
             edge = slice_edge(blob, rV)
@@ -853,10 +859,10 @@ def trace_edge(N_, rc, root, tT=[]):  # cluster contiguous shapes via PPs in edg
             if vt_(Link.dTT)[0] >ave*Rc:
                 L_+=[Link]; lTT+=Link.dTT; lc+=Link.c
     # totals:
-    Gt_,Lt_,TT,C,lTT,lC = [],[],np.zeros((2,9)),0,np.zeros((2,9)),0  # Lt_: top lev / G?
+    Gt_,Lt_,TT,nTT,lTT,C,nC,lC = [],[],np.zeros((2,9)),np.zeros((2,9)),np.zeros((2,9)),0,0,0  # Lt_: top lev / G?
     for N in N_:  # flood-fill G per seed N
         if N.fin: continue
-        N.fin=1; _N_=[N]; Gt=[]; N.root=Gt; n_,tt,c, l_,ltt,lc = [N],np.zeros((2,9)),0,[],np.zeros((2,9)),0  # Gt
+        N.fin=1; _N_=[N]; Gt=[]; N.root=Gt; n_,ntt,nc, l_,ltt,lc = [N],np.zeros((2,9)),0,[],np.zeros((2,9)),0  # Gt
         while _N_:
             _N = _N_.pop(0)
             for L in _N.rim:
@@ -865,13 +871,13 @@ def trace_edge(N_, rc, root, tT=[]):  # cluster contiguous shapes via PPs in edg
                     if n in N_:
                         if n.root is Gt: continue
                         if n.fin:  # merge n root
-                            _root = n.root; n_+=_root[0];tt+=_root[1];c+=_root[2]; l_+=_root[3];ltt+=_root[4];lc+=root[5]; root[6]=1; Lt_+=[root.Lt]
+                            _root = n.root; n_+=_root[0];ntt+=_root[1];nc+=_root[2]; l_+=_root[3];ltt+=_root[4];lc+=root[5]; root[6]=1; Lt_+=[root.Lt]
                             for _n in _root[0]: _n.root = Gt
                         else:
-                            n.fin=1; _N_+=[n]; n_+=[n];tt+=n.dTT;c+=n.c; l_+=[L];ltt+=L.dTT;lc+=L.c  # add single n
+                            n.fin=1; _N_+=[n]; n_+=[n];ntt+=n.dTT;nc+=n.c; l_+=[L];ltt+=L.dTT;lc+=L.c  # add single n
                             if n.Lt: Lt_+=[n.Lt]  # skip PPs
                         n.root = Gt
-        Gt += [n_,tt,c, l_,ltt,lc, 0]; Gt_+=[Gt]; TT+=tt; C+=c; lTT+=ltt; lC+=lc
+        Gt += [n_,ntt,nc, l_,ltt,lc, 0]; Gt_+=[Gt]; TT+=ntt+ltt; C+=nc+lc; lTT+=ltt; lC+=lc
     G_= []
     for n_,tt,c,l_,ltt,lc,merged in Gt_:
         if not merged:
@@ -882,16 +888,16 @@ def trace_edge(N_, rc, root, tT=[]):  # cluster contiguous shapes via PPs in edg
     if val_(TT, rc+1, TTw(root), mw=1 if tT else (len(G_)-1)*Lw) > 0:
         rc += 1
         if tT:  # concat in tile tuple in vect_edge, ext root_replace
-            for i, par in enumerate((G_,N_,L_,Lt_,TT,lTT,C,lc)): tT[i] += par
-        else: root_replace(root, rc, G_,N_,L_,Lt_,TT,lTT,C,lc)
+            for i, par in enumerate((G_,N_,L_,Lt_,TT,nTT,lTT,C,nC,lC)): tT[i] += par
+        else: root_replace(root, rc, G_,N_,L_,Lt_,TT,nTT,lTT,C,nC,lC)
     return G_, rc
 
-def root_replace(root, rc, G_, N_,L_,Lt_, TT,lTT,c,lc):
+def root_replace(root, rc, G_, N_,L_,Lt_,TT,nTT,lTT,C,nc,lc):
 
-    root.N_= G_; root.dTT=TT+lTT; root.c=c+lc
-    root.rc= rc  # not sure
+    root.N_= G_; root.dTT=TT; root.c=C
+    root.rc = rc  # not sure
     if hasattr(root, 'wTT'): cent_TT(root, root.rc)
-    sum2T(G_,rc, root,'Nt', TT, c)
+    sum2T(G_,rc, root,'Nt',nTT,nc)
     sum2T(L_,rc, root,'Lt',lTT,lc)
     lTT,lc = np.zeros((2,9)),0  # reset for top nested lev
     for Lt in Lt_: lTT+=Lt.dTT; lc+=Lt.c
