@@ -528,3 +528,25 @@ def Cluster1(root, iL_, rc, fC):  # generic clustering root
                 G_,rc = cluster_N(root, list({N for L in rL_ for N in L.nt}), rc, rng)
     return G_,rc
 
+def cross_comp(root, rc, fcon=1, fder=0):  # core function, mediates rng+ and der+ cross-comp and clustering, rc=rdn+olp
+
+    iN_, mL_,mTT,mc, dL_,dTT,dc = comp_N_(root.N_,rc) if fcon else comp_C_(root.N_,rc); nG_=[]  # nodes else centroids
+    if mL_:
+        # m cluster fork:
+        if val_(mTT, rc+compw, TTw(root), mw=(len(mL_)-1)*Lw) > 0 or fder:  # default for links
+            root.L_= mL_; sum2T(mL_,rc,root,'Lt')  # new ders, no Lt.N_
+            for n in iN_: n.em = sum([l.m for l in n.rim]) / len(n.rim)  # pre-val_
+            nG_,rc = Cluster(root, mL_,rc, fcon,fder)  # cluster_N|C, +1 level, sub+ in sum2G
+    if dL_:
+        # d cross_comp fork
+        if val_(dTT, rc+compw, TTw(root), fi=0, mw=(len(dL_)-1)*Lw) > 0 and not fder:  # no dd fork
+            root.B_ = dL_; sum2T(dL_,rc,root,'Bt')  # new ders
+            bG_,rc = cross_comp(root.Bt, rc, fder=1)  # comp dL_|dC_
+            sum2T(bG_,rc,root,'Bt'); form_B__(nG_,bG_,rc)  # default set root Bt, nG boundary
+    if nG_:
+        # rc incr in Cluster, agg recursion:
+        if val_(mTT, rc+connw, TTw(root), mw=(len(root.N_)-1)*Lw) > 0:  # mval only
+            nG_,rc = trace_edge(root.N_,rc,root)  # comp Ns x N.Bt|B_.nt, with/out mfork?
+        if nG_ and val_(root.dTT, rc+compw, TTw(root), mw=(len(root.N_)-1)*Lw, _TT=mTT) > 0:
+            nG_,rc = cross_comp(root, rc)
+    return nG_,rc  # nG_: recursion flag
