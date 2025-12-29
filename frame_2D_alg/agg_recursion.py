@@ -48,10 +48,10 @@ class CN(CBase):
     def __init__(n, **kwargs):
         super().__init__()
         n.typ = kwargs.get('typ', 0)
-        # 1=L: typ,nt,dTT, m,d,c,rc, root,rng,yx,box,span,angl,fin,compared, N_,B_,C_,L_,Nt,Bt,Ct from comp_sub?
-        # 2=G: + rim, eTT, em,ed,ec, baseT,mang,sub,exe, Lt, tNt, tBt, tCt?
-        # 3=C: + mo_,M,D,C,DTT?
-        # 0=PP: if typ: comp_sub?
+        # 0=PP: block trans_comp, etc?
+        # 1= L: typ,nt,dTT, m,d,c,rc, root,rng,yx,box,span,angl,fin,compared, N_,B_,C_,L_,Nt,Bt,Ct from comp_sub?
+        # 2= G: + rim, eTT, em,ed,ec, baseT,mang,sub,exe, Lt, tNt, tBt, tCt?
+        # 3= C: + mo_,M,D,C,DTT?
         n.m,  n.d, n.c = kwargs.get('m',0), kwargs.get('d',0), kwargs.get('c',0)  # sum forks to borrow
         n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # Nt+Lt dTT: m_,d_ [M,D,n, I,G,a, L,S,A]
         n.rim = kwargs.get('rim',[])  # external links, rng-nest?
@@ -120,9 +120,9 @@ def vt_(TT, rc=1, wTT=None):  # brief val_ to get m, d
 
     m_,d_ = TT; ad_ = np.abs(d_); t_ = m_ + ad_ + eps  # ~ max comparand
     if wTT is None: wTT = wTTf
-    return m_/t_ @ wTT[0] - ave*rc, ad_/t_ @ wTT[1] - avd*rc
+    return m_/t_ @ wTT[0] - ave*rc, ad_/t_ @ wTT[1] - avd*rc  # norm by co-derived variance
 
-def val_(TT, rc, wTT, fi=1, mw=1.0, rn=.5, _TT=None):  # m,d eval per cluster, rn = n / (n+_n), .5 for equal weight _dTT?
+def val_(TT, rc, wTT, fi=1, mw=1.0, rn=.5, _TT=None):  # m,d eval per cluster, rn = n/(n+_n), .5: equal-weight _dTT?
 
     t_ = np.abs(TT[0]) + np.abs(TT[1])  # not sure about abs m_
     rv = TT[0] / (t_+eps) @ wTT[0] if fi else TT[1] / (t_+eps) @ wTT[1]  # fork / total per scalar
@@ -137,21 +137,22 @@ def TTw(G): return getattr(G,'wTT',wTTf)
 
 def cross_comp(root, rc, fcon=1, fder=0):  # core function, mediates rng+ and der+ cross-comp and clustering, rc=rdn+olp
 
-    iN_, mL_,mTT,mc, dL_,dTT,dc = comp_N_(root.N_,rc) if fcon else comp_C_(root.N_,rc); nG_=[]  # nodes else centroids
-    if mL_:
-        # m cluster fork:
-        if val_(mTT, rc+compw, TTw(root), mw=(len(mL_)-1)*Lw) > 0 or fder:  # default for links
-            root.L_ = mL_; sum2T(mL_,rc,root,'Lt')  # new ders, no Lt.N_
+    iN_, L_,TT,c = comp_N_((root.N_,root.B_)[fder], rc) if fcon else comp_C_(root.N_,rc); nG_=[]  # nodes else centroids
+    if L_:
+        if val_(TT, rc+compw, TTw(root), mw=(len(L_)-1)*Lw) > 0 or fder:  # default for links
+            root.L_=L_; sum2T(L_,rc,root,'Lt')  # new ders, no Lt.N_
             # root.B_, Bt if clustered
             for n in iN_: n.em = sum([l.m for l in n.rim]) / len(n.rim)  # pre-val_
-            nG_,rc = Cluster(root, mL_,rc, fcon,fder)  # cluster_N|C, 1 level, sub+ in sum2G
-            for G in nG_:
-                if G.Bt.d > avd* rc* compw:
-                    lg_,rc = trace_edge(G.B_, rc, G)  # contiguous L.nt-mediated cross_comp
+            nG_,rc = Cluster(root, L_,rc, fcon,fder)  # cluster_N|C level, sub+ in sum2G
+            if not fder:  # no ddfork
+                for G in nG_:  # nested dfork
+                    if G.Bt and G.Bt.d > avd * rc * compw:
+                        lg_,_rc = cross_comp(G, rc, fder=1)  # proximity-prior comp B_
+                        if lg_: sum2T(lg_,_rc, G,'Bt')  # in cross_comp?
         # agg+:
-        if nG_ and val_(mTT, rc+connw, TTw(root), mw=(len(nG_)-1)*Lw) > 0:  # mval only
+        if nG_ and val_(TT, rc+connw, TTw(root), mw=(len(nG_)-1)*Lw) > 0:  # mval only
             nG_,rc = trace_edge(root.N_,rc,root)  # comp Ns x N.Bt|B_.nt, with/out mfork?
-        if nG_ and val_(root.dTT, rc+compw, TTw(root), mw=(len(root.N_)-1)*Lw, _TT=mTT) > 0:
+        if nG_ and val_(root.dTT, rc+compw, TTw(root), mw=(len(root.N_)-1)*Lw, _TT=TT) > 0:
             nG_,rc = cross_comp(root, rc)
     return nG_,rc  # nG_: recursion flag
 
