@@ -550,3 +550,68 @@ def cross_comp(root, rc, fcon=1, fder=0):  # core function, mediates rng+ and de
         if nG_ and val_(root.dTT, rc+compw, TTw(root), mw=(len(root.N_)-1)*Lw, _TT=mTT) > 0:
             nG_,rc = cross_comp(root, rc)
     return nG_,rc  # nG_: recursion flag
+
+def comp_N_(iN_, rc, _iN_=[]):
+
+    N_, L_,mTT,mc, B_,dTT,dc, dpTT = [],[],np.zeros((2,9)),0, [],np.zeros((2,9)),0, np.zeros((2,9))
+    # get all-to-all pre-links:
+    for i, N in enumerate(iN_):
+        N.pL_ = []
+        for _N in _iN_ if _iN_ else iN_[i+1:]:  # optional _iN_ as spec
+            if _N.sub != N.sub: continue  # or comp x composition?
+            dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)
+            N.pL_ += [[dist, dy_dx, _N]]
+        N.pL_.sort(key=lambda x: x[0])  # proximity prior
+
+    def proj_V(_N,N, dist, pVt_):  # _N x N induction
+        Dec = decay**(dist/((_N.span+N.span)/2))
+        iTT = (_N.dTT + N.dTT) * Dec
+        eTT = (_N.eTT + N.eTT) * Dec # rim
+        if abs( vt_(eTT,rc)[0]) * ((len(pVt_)-1)*Lw) > ave*specw:  # spec N links
+            eTT = np.zeros((2,9)) # recompute
+            for _dist,_dy_dx,__N,_V in pVt_:
+                eTT += proj_N(N,_dist,_dy_dx, rc)  # proj N L_,B_,rim, if pV>0: eTT += pTT?
+                eTT += proj_N(_N,_dist,-_dy_dx, rc)  # reverse direction
+        return iTT+eTT
+    for N in iN_:
+        pVt_ = []
+        for dist, dy_dx, _N in N.pL_:  # rim angl is not canonic
+            pTT = proj_V(_N,N, dist, pVt_); lrc = rc + (N.rc+_N.rc) / 2  # pVt_: [[dist, dy_dx, _N, V]]
+            m, d = vt_(pTT,lrc)  # +|-match certainty
+            if m > 0:
+                if abs(m) < ave:  # different ave for projected surprise value, comp in marginal predictability
+                    Link = comp_N(_N,N, lrc, A=dy_dx, span=dist)
+                    if   Link.m > ave: L_+=[Link]; mTT+=Link.dTT; mc+=Link.c; N_ += [_N,N]  # combined CN dTT and L_
+                    elif Link.d > avd: B_+=[Link]; dTT+=Link.dTT; dc+=Link.c  # no overlap to simplify
+                    m = Link.m; dpTT+= pTT-Link.dTT  # prediction error to fit code
+                else:
+                    pL = CN(typ=-1, nt=[_N,N], dTT=pTT,m=m,d=d,c=min(N.c,_N.c), angl=np.array([dy_dx,1],dtype=object),span=dist)
+                    L_+= [pL]; N.rim+=[pL]; _N.rim+=[pL]  # same as links in clustering
+                pVt_ += [[dist,dy_dx,_N,m]]  # for next rim eval
+            else:
+                break  # beyond induction range
+    return list(set(N_)), L_,mTT,mc, B_,dTT,dc  # + dpTT for code-fitting backprop?
+
+def form_B__(G_,Bg_, rc):  # assign boundary / background per node from Bt, no root update?
+
+    for G in G_:
+        if G.sub or not G.B_: continue
+        bG_,dTT, rdn = [],np.zeros((2,9)),0
+        for bG in Bg_:  # same level as G
+            oB_ = set(bG.N_) & set(G.B_)  # shared links
+            if oB_:  # add eval?
+                bG_ += [bG]; dTT+=bG.dTT
+                for r, rN in enumerate(bG.rN_):
+                    if rN is G:
+                        rdn += r+1; break  # n stronger cores of rB
+        m, d = vt_(dTT,rc)
+        G.Bt = CF(N_=bG_,dTT=dTT,m=m,d=d, c=sum(b.c for b in G.B_), rc=rc+rdn, root=G)
+        root_update(G, G.Bt)
+
+        def R(L):
+        r = L.root
+        if isinstance(r,CF) or r.typ==0: return None  # root is Bt or PPd, not clustered
+        elif r.root:                     return R(r.root)
+        else:                            return r  # top lG?
+
+
