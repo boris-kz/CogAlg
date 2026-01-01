@@ -291,17 +291,17 @@ def comp_A(_A,A):
 
 def trans_comp(_N,N, rc, root):  # unpack node trees down to numericals and compare them
 
-    Rc = rc
     for _F_,F_,nF_,nFt in zip((_N.N_,_N.B_,_N.C_),(N.N_,N.B_,N.C_), ('N_','B_','C_'),('Nt','Bt','Ct')):  # + tN_,tB_,tC_ from trans_cluster?
         if _F_ and F_:  # eval?
-            N_,dF_,TT,c,_,_ = comp_C_(_F_,Rc,F_)  # callee comp_N may call deeper comp_sub, batch in root?
-            if dF_:  # trans-links, match only
-                setattr(root, nF_,dF_); setattr(root,nFt, CF(dTT=TT,c=c,root=root)); Rc+=1
+            N_,dF_,TT,c,_,_ = comp_C_(_F_,rc,F_)  # callee comp_N may call deeper comp_sub, batch in root?
+            if dF_:  # matching trans-links only
+                setattr(root, nF_,dF_); setattr(root,nFt, CF(dTT=TT,c=c,root=root))
+                rc += 1  # default fork redundancy?
     for _lev,lev in zip(_N.Nt.N_, N.Nt.N_):  # no comp Bt,Ct: external to N,_N
-        Rc += 1  # deeper levels are redundant
+        rc += 1  # deeper levels are redundant
         tt = comp_derT(_lev.dTT[1],lev.dTT[1]); m,d = vt_(tt,rc)
         oN_= set(_lev.N_) & set(lev.N_)  # intersect, or offset, or comp_len?
-        dlev = CF(N_=oN_, nF='Nt', dTT=tt, m=m,d=d,c=min(_lev.c,lev.c),rc=min(_lev.rc,lev.rc), root=root)  # min: only shared elements are compared
+        dlev = CF(N_=oN_, nF='Nt', dTT=tt, m=m,d=d,c=min(_lev.c,lev.c),rc=rc, root=root)  # min: only shared elements are compared
         root.Nt.N_ += [dlev]  # root:link, nt.N_:derH
         root_update(root.Nt, dlev)  # root is Link
 
@@ -309,18 +309,23 @@ def Cluster(root, iL_, rc, fcon=1, fL=0):  # generic clustering root
 
     def trans_cluster(root, iL_, rc):  # called from cross_comp(Fg_), others?
 
-        dN_,dB_,dC_,frc = [],[],[],0  # splice specs from links between Fgs in Fg cluster
-        for Link in iL_:
-            dN_+= Link.N_; dB_+= Link.B_; dC_+= Link.C_
-        for FT in ('tN_','tNt',dN_,0), ('tB_','tBt',dB_,0), ('tC_','tCt',dC_,1):
-            if hasattr(root,FT[0]):
-                f_,ft, tL_,fC = FT; frc += 1  # fork redundancy count, re-assign later?
-                Ft = sum2T(tL_,frc, root,ft); N_ = list({n for L in tL_ for n in L.nt})
+        Ft_,tN_,tB_,tC_= [],[],[],[]  # splice trans-links from +ve links, skip redundant centroids?:
+        for Link in iL_: tN_+= Link.N_; tB_+= Link.B_; tC_+= Link.C_
+        for tL_, nF in (tN_,'Nt'), (tB_,'Bt'), (tC_,'Ct'):
+            if tL_:
+                Ft = sum2T(tL_,rc, root.Lt, nF, fset=0)  # updates root too
+                N_ = list({n for L in tL_ for n in L.nt})
                 for N in N_: N.exe=1
-                cluster_N(Ft, N_, rc+frc)
-                if val_(Ft.dTT, frc, TTw(root), (len(Ft.N_)-1)*Lw) > 0:
-                    cross_comp(Ft, rc+frc)  # unlikely, doesn't add rc?
-                setattr(root,f_,tL_)  # trans-fork_ per trans-G link
+                cluster_N(Ft, N_,rc)
+                if val_(Ft.dTT, rc, TTw(root), (len(Ft.N_)-1)*Lw) > 0:
+                    cross_comp(Ft, rc)  # unlikely, doesn't add rc?
+                Ft_ += [Ft]; rc += 1  # default fork redundancy
+            else: Ft_ += [[]]
+        root.Lt.N_ = Ft_  # single level for now
+        ''' 
+        if recursive trans_comp:
+        for lev in zip_longest(Link.Nt.N_, Link.Bt.N_, Link.Ct.N_):  # each fork.N_ is H
+            tF_ += [lev]  # Lt.N_ is trans-H '''
 
     def get_exemplars(N_, rc):  # multi-layer non-maximum suppression -> sparse seeds for diffusive centroid clustering
         E_ = set()
@@ -636,7 +641,7 @@ def add_N(G, N):  # flat is currently not used
     # if N is Fg: margin = Ns of proj max comp dist > min _Fg point dist: cross_comp Fg_?
     return N
 
-def sum2T(T_, rc, root, nF, TT=None, c=1):  # N_ -> fork T
+def sum2T(T_, rc, root, nF, TT=None, c=1, fset=1):  # N_ -> fork T
 
     T = T_[0]; fV = TT is None
     F = CF(root=root, nF=nF); T.root=F  # no L_,B_,C_,Nt,Bt,Ct yet
@@ -646,17 +651,17 @@ def sum2T(T_, rc, root, nF, TT=None, c=1):  # N_ -> fork T
     for T in T_[1:]:
         T.root = F
         if fV: F.dTT += T.dTT; F.c += T.c
-        if nF=='Nt':  # flat Bt,Ct N_, Lt.N_= []
-            F.N_[0] += T.N_  # top level is flattened T.N_s
+        if nF=='Nt' and F.N_:  # N_=H
+            F.N_[0] += T.N_  # top level is flattened T.N_, in Nt only?
             for Lev,lev in zip_longest(F.N_[1:], T.Nt.N_):  # deeper levels
                 if lev:
                     if Lev: Lev.N_+=lev.N_; Lev.dTT+=lev.dTT; Lev.c+=lev.c
                     else:   F.N_ += [CopyF(lev, root=F)]
     F.m, F.d = vt_(F.dTT,rc); F.rc = rc
-    setattr(root, nF,F)
-    if nF in ('Nt','tNt'):  # no Lt.N_
+    if fset: setattr(root,nF, F)
+    if nF=='Nt' and F.N_:
         n_ = F.N_[0]; dtt = sum([n.dTT for n in n_]); m,d = vt_(dtt,rc); F.N_[0] = CF(N_=n_,dTT=dtt,m=m,d=d, c=sum([n.c for n in n_]))
-    elif nF in ('Bt','Ct','tBt','tCt'): F.N_ = list(T_)
+    else: F.N_ = list(T_)
     root_update(root, F)
     return F
 
@@ -789,7 +794,7 @@ def vect_edge(tile, rV=1, wTT=None):  # PP_ cross_comp and floodfill to init foc
     ave,avd,aveB,Lw,distw,intw,compw,centw,connw,specw = (np.array([ave,avd,aveB,Lw,distw,intw,compw,centw,connw,specw]) / rV)
     blob_,G_ = tile.N_,[]
     tT = [G_,[],[],[],np.zeros((2,9)),np.zeros((2,9)),np.zeros((2,9)),0,0,0]
-           # N_,L_,Lt_,TT,nTT,lTT,C,nc,lc, fill in trace_edge
+           # N_,L_,Lt_,TT,nTT,lTT,C,nc,lc / trace_edge
     def PP2N(PP):
         P_,L_,B_,verT,latT,A,S,box,yx, m,d,c = PP
         baseT = np.array(latT[:4])

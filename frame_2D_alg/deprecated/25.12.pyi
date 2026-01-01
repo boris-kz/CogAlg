@@ -614,4 +614,19 @@ def form_B__(G_,Bg_, rc):  # assign boundary / background per node from Bt, no r
         elif r.root:                     return R(r.root)
         else:                            return r  # top lG?
 
+    def trans_cluster(root, iL_, rc):  # called from cross_comp(Fg_), others?
+
+        dN_,dB_,dC_ = [],[],[]  # splice specs from links between Fgs in Fg cluster
+        for Link in iL_:
+            dN_+= Link.N_; dB_+= Link.B_; dC_+= Link.C_
+        for tL_,nf_,nft,fC in (dN_,'tN_','tNt',0), (dB_,'tB_','tBt',0), (dC_,'tC_','tCt',1):
+            if tL_:
+                Ft = sum2T(tL_,rc, root,nft); N_ = list({n for L in tL_ for n in L.nt})
+                for N in N_: N.exe=1
+                cluster_N(Ft, N_,rc)  # default fork redundancy
+                if val_(Ft.dTT, rc, TTw(root), (len(Ft.N_)-1)*Lw) > 0:
+                    cross_comp(Ft, rc)  # unlikely, doesn't add rc?
+                setattr(root,nf_, tL_)
+                rc += 1
+
 
