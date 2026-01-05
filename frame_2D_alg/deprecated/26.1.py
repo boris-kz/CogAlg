@@ -194,3 +194,18 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
             fcon = 1
     return  fcon, rc
 
+    def merge_C_(_L_):  # for similar centroids only, they are not supposed to be local
+        N_,xN_,L_ = [],[],[]
+        _L_ = sorted( set(_L_), key=lambda link: link.d)  # from min D
+        for i, L in enumerate(_L_):
+            if val_(L.dTT, rc+nw, wTTf,fi=0) < 0:
+                _N, N = L.nt
+                if _N is N or N in xN_: continue  # not yet merged
+                for n in N.N_: add_N(_N, n); _N.N_ += [n]
+                for l in N.rim: l.nt = [_N if n is N else n for n in l.nt]
+                N_ += [_N]; xN_+=[N]
+                if N in N_: N_.remove(N)
+            else: L_ = _L_[i:]; break
+        if xN_: root.N_ = set(root.N_) - set(xN_);
+        return list(set(N_)), L_
+
