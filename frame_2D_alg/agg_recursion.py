@@ -14,9 +14,15 @@ Cross-comp forms Miss and Match (min: shared_quantity for directly predictive pa
 rng+: incremental-range cross-comp nodes: edge segments at < max distance, cluster if they match. 
 der+: incremental-derivation cross-comp links, from node cross-comp, if abs_diff * relative_adjacent_match
 
-Clustering is compressively grouping the elements, by direct similarity to centroids or transitive similarity in graphs, in 2 forks:
-nodes: connectivity clustering / >ave M, progressively reducing overlap by exemplar selection, centroid clustering, floodfill.
-links: correlation clustering if >ave D, forming contours that complement adjacent connectivity clusters.
+Clustering compressively groups the elements into compositional hierarchy, initially by pair-wise similarity / density:
+nodes are connectivity clustered, progressively reducing overlap by exemplar selection, centroid clustering, floodfill.
+links are correlation clustered, forming contours that complement adjacent connectivity clusters.
+Each composition cycle goes through <=4 stages as the clusters expand, shifting from connectivity to centroid-based:
+
+- start with exemplars and extend via their rim, initially density-based as there is no significant cluster yet (cluster_N) 
+- add centroid similarity to inclusion criterion if >min cluster value, in proportion to the value, with cross-cluster overlap
+- refine whole cluster according to updated centroid if >min centroid-similarity weighting + overlap (cluster_C)
+- refine whole frame as fully-connected two-layer (clusters,nodes) EM, if >min global overlap, prune for next cycle (cluster_C_par)
 
 That forms hierarchical graph representation: dual tree of down-forking elements: node_H, and up-forking clusters: root_H:
 https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/generic%20graph.drawio.png
@@ -141,16 +147,13 @@ def cross_comp(root, rc, fL=0):  # core function mediating recursive rng+ and de
     if L_:
         for n in iN_: n.em, n.ed = vt_(np.sum([l.dTT for l in n.rim],axis=0), rc)
         cr = cd/ (c+cd) *.5  # dfork borrow ratio, .5 for one direction
-        fcon = fL or bool(root.root) or mdecay(L_)>decay  # conditional spec, must cluster B_?
-        if val_(TT, rc+(centw,connw)[fcon], TTw(root), (len(L_)-1)*Lw,1, TTd,cr) > 0 or fL:
+        if val_(TT, rc+connw, TTw(root), (len(L_)-1)*Lw,1, TTd,cr) > 0 or fL:
             root.L_ = L_
             sum2T(L_,rc,root,'Lt')  # new ders, root.B_,Bt if G
             E_ = get_exemplars({N for L in L_ for N in L.nt if N.em}, rc)  # exemplar N_| C_
-            if fcon:
-                nG_,rc = cluster_N(root, E_,rc, fL)  # form Bt, sub+ in sum2G
-            else:  # centroid clustering if sub+ & dm/ddist, but cluster_C_par is global?
-                nG_,rc = cluster_C(root, E_,rc)
-        if nG_ and val_(root.dTT, rc+(cw,nw)[fcon], TTw(root), (len(root.N_)-1)*Lw,1, TTd,cr) > 0:
+            nG_,rc = cluster_N(root, E_,rc, fL)  # form Bt, sub+ in sum2G,
+            # call deeper clustering internally?
+        if nG_ and val_(root.dTT, rc+nw, TTw(root), (len(root.N_)-1)*Lw,1, TTd,cr) > 0:
             nG_,rc = cross_comp(root,rc)  # agg+
     # nG_: recursion flag:
     return nG_,rc
@@ -496,7 +499,21 @@ def cluster_C(root, E_, rc):  # form centroids by clustering exemplar surround v
             root.C_=C_; root.Ct=Ct; root_update(root,Ct)
     return C_, rc
 
-def cluster_C_par(_C_,N_):  # C_= exemplars, N_= root.N_
+def cluster_C_par(_C_,N_):  # C_= exemplars, N_= root.N_, switch from cluster_C if global overlap >min
+
+    def sum2C(N_,_C, i):  # fuzzy sum params used in base_comp
+
+        c_, rc_, dTT_, baseT_, span_, yx_ = zip(*[(n.c, n.rc, n.dTT, n.baseT, n.span, n.yx)] for n in N_)
+        icoef_ = [(N.m_[i] / (ave*N.o_[i])) * (_C.m / C_L) for N in N_]
+        # N_incl *= C_val: pre-selection by likely final survival, to skip post-prune selection?
+        c_ = [c * ic for c,ic in zip(c_,icoef_)]
+        tot = sum(c_); Par_ = []
+        for par_ in rc_, dTT_, baseT_, span_, yx_:
+            Par_.append(sum([p * c for p,c in zip(par_,c_)]))
+        C = CN(N_=N_, c=tot, typ=3)
+        C.rc, C.dTT, C.baseT, C.span, C.yx = [P / tot for P in Par_]
+        C.m, C.d = vt_(C.dTT, C.rc)
+        return C
 
     for C in _C_:  # fixed while training, then prune if weak C.v
         C.N_ = N_  # soft assign all Ns per C
@@ -506,43 +523,16 @@ def cluster_C_par(_C_,N_):  # C_= exemplars, N_= root.N_
     while True:
         for N in N_:
             N.m_, N.d_, N.r_ = zip(*[vt_(base_comp(C,N)[0]) + (C.rc,) for C in _C_])  # include C.rc
-            N.o_ = np.argsort(np.argsort(N.m_)[::-1])  # rank of each C_[i] = rdn of C in C_
+            N.o_ = np.argsort(np.argsort(N.m_)[::-1]) + 1  # rank of each C_[i] = rdn of C in C_
             M += sum(N.m_)
         C_ = []
         for i, _C in enumerate(_C_):
             n_ = sorted(N_, key=lambda n: n.m_[i], reverse=True)
-            C = Copy_(n_[0],init=1,typ=3)  # start with _C medoid?
-            for N in n_[1:]:
-                icoef = (N.m_[i]- ave*N.o_[i]) * (_C.m / C_L)  # N_incl * C_val: likely final survival?
-                add2C(C, N, icoef)  # soft assign: + (*N) * inclusion coef
-            C_ += [C]  # updated with new icoefs and _C.m
+            C_ += [sum2C(n_,_C, i)]  # update with new icoefs,_C.m
         if abs(M-_M) < ave*centw:
             break  # convergence
-        _M = M
-    return [C for C in C_ if C.M > ave*C.rc]  # add C.N_ pruning
-
-# draft by GPT:
-def add2C(C, N, coef=1):  # fuzzy add: update only params used in base_comp, don't touch N
-
-    if coef <= 0: return  # keep c positive (treat coef<=0 as exclusion / inhibition upstream)
-    _c,c = C.c, N.c*coef; Cc = _c + c
-    C.dTT = (C.dTT*_c + N.dTT*c) / Cc
-    C.baseT = (C.baseT*_c + N.baseT*c) / Cc
-    C.span  = (C.span*_c  + N.span*c) / Cc
-    C.mang  = (C.mang*_c  + N.mang*c) / Cc
-    A,a = C.angl[0], N.angl[0]; A[:] = (A*_c + a*c) / Cc
-    if isinstance(C.yx, list): C.yx = np.array(C.yx[0], float)  # Copy_(init>=2) sets yx=[N.yx]
-    C.box = extend_box(C.box, N.box)
-    C.rc = (C.rc*_c + N.rc*c) / Cc
-    C.yx = (C.yx*_c + N.yx*c) / Cc
-    C.c = Cc; C.N_ += [N]  # len(C.N_) is used in base_comp as density proxy
-
-def fin_C(C, rc=1):  # finalize centroid after add_Nf
-
-    if isinstance(C.yx, list): C.yx = np.array(C.yx[0], float)
-    dir = np.sign(C.dTT[1] @ wTTf[1]); C.angl[1] = dir if dir else 1
-    C.m, C.d = vt_(C.dTT, rc)
-    return C
+        _M = M; _C_ = C_
+    return [C for C in C_ if C.m > ave*C.rc]  # add C.N_ pruning
 
 def cent_TT(C, rc, init=0):  # weight attr matches | diffs by their match to the sum, recompute to convergence
 

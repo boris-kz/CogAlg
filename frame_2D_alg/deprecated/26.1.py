@@ -194,7 +194,7 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
             fcon = 1
     return  fcon, rc
 
-    def merge_C_(_L_):  # for similar centroids only, they are not supposed to be local
+def merge_C_(_L_):  # for similar centroids only, they are not supposed to be local
         N_,xN_,L_ = [],[],[]
         _L_ = sorted( set(_L_), key=lambda link: link.d)  # from min D
         for i, L in enumerate(_L_):
@@ -208,4 +208,25 @@ def cluster_C(E_, root, rc):  # form centroids by clustering exemplar surround v
             else: L_ = _L_[i:]; break
         if xN_: root.N_ = set(root.N_) - set(xN_);
         return list(set(N_)), L_
+
+def cross_comp1(root, rc, fL=0):  # core function mediating recursive rng+ and der+ cross-comp and clustering, rc=rdn+olp
+
+    N_ = (root.N_,root.B_)[fL]; nG_ = []
+    iN_, L_,TT,c,TTd,cd = comp_N_(N_,rc) if N_[0].typ<3 else comp_C_(N_,rc, fC=1)  # nodes | centroids
+    if L_:
+        for n in iN_: n.em, n.ed = vt_(np.sum([l.dTT for l in n.rim],axis=0), rc)
+        cr = cd/ (c+cd) *.5  # dfork borrow ratio, .5 for one direction
+        fcon = fL or bool(root.root) or mdecay(L_)>decay  # conditional spec, must cluster B_?
+        if val_(TT, rc+(centw,connw)[fcon], TTw(root), (len(L_)-1)*Lw,1, TTd,cr) > 0 or fL:
+            root.L_ = L_
+            sum2T(L_,rc,root,'Lt')  # new ders, root.B_,Bt if G
+            E_ = get_exemplars({N for L in L_ for N in L.nt if N.em}, rc)  # exemplar N_| C_
+            if fcon:
+                nG_,rc = cluster_N(root, E_,rc, fL)  # form Bt, sub+ in sum2G
+            else:  # centroid clustering if sub+ & dm/ddist, but cluster_C_par is global?
+                nG_,rc = cluster_C(root, E_,rc)
+        if nG_ and val_(root.dTT, rc+(cw,nw)[fcon], TTw(root), (len(root.N_)-1)*Lw,1, TTd,cr) > 0:
+            nG_,rc = cross_comp(root,rc)  # agg+
+    # nG_: recursion flag:
+    return nG_,rc
 
