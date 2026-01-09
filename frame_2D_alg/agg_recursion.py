@@ -19,9 +19,9 @@ nodes are connectivity clustered, progressively reducing overlap by exemplar sel
 links are correlation clustered, forming contours that complement adjacent connectivity clusters.
 Each composition cycle goes through <=4 stages as the clusters expand, shifting from connectivity to centroid-based:
 
-- start with exemplars and extend via their rim, initially density-based as there is no significant cluster yet (cluster_N) 
-- add centroid similarity to inclusion criterion if >min cluster value, in proportion to the value, with cross-cluster overlap
-- refine whole cluster according to updated centroid if >min centroid-similarity weighting + overlap (cluster_C)
+- start with exemplars and cluster via their rim, density-based while the cluster is not significant (cluster_N) 
+- add centroid similarity to inclusion criterion in proportion to cluster value, if >min cluster value, clusters overlap
+- refine whole cluster according to updated centroid if >min centroid-similarity weighting (cluster_C)
 - refine whole frame as fully-connected two-layer (clusters,nodes) EM, if >min global overlap, prune for next cycle (cluster_C_par)
 
 That forms hierarchical graph representation: dual tree of down-forking elements: node_H, and up-forking clusters: root_H:
@@ -121,7 +121,7 @@ decay = ave / (ave+avd)  # match decay / unit dist?
 - Forward: extend cross-comp and clustering of top clusters across frames, re-order centroids by eigenvalues.
 - Feedback coords to bottom level or prior-level in parallel pipelines, filter updates in more coarse cycles '''
 
-def vt_(TT, rc=1, wTT=None):  # brief val_ to get m, d
+def vt_(TT, rc=0, wTT=None):  # brief val_ to get m,d, rc=0 to return raw vals
 
     m_,d_= TT; ad_ = np.abs(d_); t_ = m_ + ad_ + eps  # ~ max comparand
     if wTT is None: wTT = wTTf
@@ -151,8 +151,8 @@ def cross_comp(root, rc, fL=0):  # core function mediating recursive rng+ and de
             root.L_ = L_
             sum2T(L_,rc,root,'Lt')  # new ders, root.B_,Bt if G
             E_ = get_exemplars({N for L in L_ for N in L.nt if N.em}, rc)  # exemplar N_| C_
-            nG_,rc = cluster_N(root, E_,rc, fL)  # form Bt, sub+ in sum2G,
-            # call deeper clustering internally?
+            nG_,rc = cluster_N(root, E_,rc,fL)  # form Bt, sub+ in sum2G,
+            # call cent clustering internally
         if nG_ and val_(root.dTT, rc+nw, TTw(root), (len(root.N_)-1)*Lw,1, TTd,cr) > 0:
             nG_,rc = cross_comp(root,rc)  # agg+
     # nG_: recursion flag:
@@ -186,7 +186,7 @@ def comp_C_(C_, rc,_C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
                     if c in C_: C_.remove(c)
                 else: L_ = L_[i:]; break
     else:
-        # consecutive or distance-constrained cross_comp along eigenvector
+        # consecutive or distance-constrained cross_comp along eigenvector, or original yx in sub+?
         for C in C_: C.compared=set()
         C_ = sorted(C_, key=lambda C: C.dTT[0][np.argmax(wTTf[0])])  # max weight defines eigenvector
         for j in range( len(C_)-1):
@@ -208,6 +208,7 @@ def comp_N_(iN_, rc, _iN_=[]):  # incremental-distance cross_comp, max dist depe
             dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)
             N.pL_ += [[dist, dy_dx, _N]]
         N.pL_.sort(key=lambda x: x[0])  # proximity prior
+        # we need to test compared here?
 
     def proj_V(_N,N, dist, pVt_):  # _N x N induction
         Dec = decay**(dist/((_N.span+N.span)/2))
@@ -276,7 +277,6 @@ def comp_derT(_i_,i_):
     d_ = _i_ - i_  # both arrays, no angles or massless params
     m_ = np.minimum( np.abs(_i_), np.abs(i_))
     m_[(_i_<0) != (i_<0)] *= -1  # negate opposite signs in-place
-
     return np.array([m_,d_])
 
 def comp(_pars, pars, meA,deA):  # compute m_,d_ from inputs or derivatives
@@ -337,6 +337,18 @@ def trans_comp(_N,N, rc, root):  # unpack node trees down to numericals and comp
         root.Nt.N_ += [dlev]  # root:link, nt.N_:derH
         root_update(root.Nt, dlev)  # root is Link
 
+def get_exemplars(N_, rc):  # multi-layer non-maximum suppression -> sparse seeds for diffusive clustering, cluster_N too?
+    E_ = set()
+    for rdn, N in enumerate(sorted(N_, key=lambda n:n.em, reverse=True), start=1):  # strong-first
+        oL_ = set(N.rim) & {l for e in E_ for l in e.rim}
+        roV = ((vt_(np.sum([l.dTT for l in oL_], axis=0), rc)[0] if oL_ else 0) if oL_ else 0) / (N.em or eps)  # relative rim olp V
+        if N.em * N.c > ave * (rc+rdn+nw+ roV):  # ave *= rV of overlap by stronger-E inhibition zones
+            E_.update({n for l in N.rim for n in l.nt if n is not N and N.em > ave*rc})  # selective nrim
+            N.exe = 1  # in point cloud of focal nodes
+        else:
+            break  # the rest of N_ is weaker, trace via rims
+    return E_
+
 def cluster_N(root, _N_, rc, fL=0):  # flood-fill node | link clusters, flat, replace iL_ with E_?
 
     def trans_cluster(root, iL_, rc):  # connectivity only?
@@ -369,7 +381,7 @@ def cluster_N(root, _N_, rc, fL=0):  # flood-fill node | link clusters, flat, re
 
     G_, N_,L_ = [],[],[]  # add prelink pL_,pN_? include merged Cs, in feature space for Cs
     if _N_ and (val_(root.dTT, rc+connw, TTw(root), mw=(len(_N_)-1)*Lw) > 0 or fL):
-        for N in _N_: N.fin = 0
+        for N in _N_: N.fin=0; N.exe=1  # not sure
         G_, N__,L__,Lt_ = [],[],[],[]; TT,nTT,lTT = np.zeros((2,9)),np.zeros((2,9)),np.zeros((2,9)); C,nC,lC = 0,0,0; in_= set()  # root attrs
         for N in _N_:  # form G per remaining N
             if N.fin or (root.root and not N.exe): continue  # no exemplars in Fg
@@ -422,18 +434,6 @@ def cluster_N(root, _N_, rc, fL=0):  # flood-fill node | link clusters, flat, re
                 for m, (Ft, tFt) in zip(mmax_,((root.Nt,tNt),(root.Bt,tBt),(root.Ct,tCt))): # +rdn in 3 fork pairs
                     r = sm_.index(m); Ft.rc+=r; tFt.rc+=r  # rc+=rdn
     return G_, rc
-
-def get_exemplars(N_, rc):  # multi-layer non-maximum suppression -> sparse seeds for diffusive clustering, cluster_N too?
-    E_ = set()
-    for rdn, N in enumerate(sorted(N_, key=lambda n:n.em, reverse=True), start=1):  # strong-first
-        oL_ = set(N.rim) & {l for e in E_ for l in e.rim}
-        roV = ((vt_(np.sum([l.dTT for l in oL_], axis=0), rc)[0] if oL_ else 0) if oL_ else 0) / (N.em or eps)  # relative rim olp V
-        if N.em * N.c > ave * (rc+rdn+nw+ roV):  # ave *= rV of overlap by stronger-E inhibition zones
-            E_.update({n for l in N.rim for n in l.nt if n is not N and N.em > ave*rc})  # selective nrim
-            N.exe = 1  # in point cloud of focal nodes
-        else:
-            break  # the rest of N_ is weaker, trace via rims
-    return E_
 
 def cluster_C(root, E_, rc):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
 
@@ -499,15 +499,15 @@ def cluster_C(root, E_, rc):  # form centroids by clustering exemplar surround v
             root.C_=C_; root.Ct=Ct; root_update(root,Ct)
     return C_, rc
 
-def cluster_C_par(_C_,N_):  # C_= exemplars, N_= root.N_, switch from cluster_C if global overlap >min
+def cluster_C_par(_C_,N_):  # C_ formed in cluster_C, N_= root.N_, switch from cluster_C if global overlap >min
 
     def sum2C(N_,_C, i):  # fuzzy sum params used in base_comp
 
-        c_, rc_, dTT_, baseT_, span_, yx_ = zip(*[(n.c, n.rc, n.dTT, n.baseT, n.span, n.yx)] for n in N_)
+        c_, rc_, dTT_, baseT_, span_, yx_ = zip(*[(n.c, n.rc, n.dTT, n.baseT, n.span, n.yx) for n in N_])
         icoef_ = [(N.m_[i] / (ave*N.o_[i])) * (_C.m / C_L) for N in N_]
-        # N_incl *= C_val: pre-selection by likely final survival, to skip post-prune selection?
-        c_ = [c * ic for c,ic in zip(c_,icoef_)]
-        tot = sum(c_); Par_ = []
+        # N_incl *= C_val: pre-selection by likely survival, avoid post-prune eval?
+        c_ = [c * max(ic, 0) for c,ic in zip(c_,icoef_)]
+        tot = sum(c_)+eps; Par_ = []
         for par_ in rc_, dTT_, baseT_, span_, yx_:
             Par_.append(sum([p * c for p,c in zip(par_,c_)]))
         C = CN(N_=N_, c=tot, typ=3)
@@ -522,17 +522,22 @@ def cluster_C_par(_C_,N_):  # C_= exemplars, N_= root.N_, switch from cluster_C 
     C_L = len(_C_)
     while True:
         for N in N_:
-            N.m_, N.d_, N.r_ = zip(*[vt_(base_comp(C,N)[0]) + (C.rc,) for C in _C_])  # include C.rc
+            N.m_,N.d_,N.r_ = zip(*[vt_(base_comp(C,N)[0]) + (C.rc,) for C in _C_])
             N.o_ = np.argsort(np.argsort(N.m_)[::-1]) + 1  # rank of each C_[i] = rdn of C in C_
             M += sum(N.m_)
         C_ = []
         for i, _C in enumerate(_C_):
-            n_ = sorted(N_, key=lambda n: n.m_[i], reverse=True)
-            C_ += [sum2C(n_,_C, i)]  # update with new icoefs,_C.m
-        if abs(M-_M) < ave*centw:
-            break  # convergence
-        _M = M; _C_ = C_
-    return [C for C in C_ if C.m > ave*C.rc]  # add C.N_ pruning
+            C_ += [sum2C(N_,_C, i)]  # update with new icoefs,_C.m
+        if abs(M-_M) > ave * centw:
+            _M = M; M = 0; _C_ = C_
+        else: break  # convergence
+    _C_,i_ = [], []
+    for i, C in enumerate(C_):
+        if C.m > ave* C.rc: C.N_ = [n for n in C.N_ if n.m_[i] * C.m > ave * n.o_[i]]; _C_ += [C]; i_ += [1]
+        else: i_ += [0]
+    for N in N_:
+        for Cv_ in N.m_,N.d_,N.r_: Cv_[:] = [Cv for Cv, i in zip(Cv_,i_) if i]
+    return C_
 
 def cent_TT(C, rc, init=0):  # weight attr matches | diffs by their match to the sum, recompute to convergence
 
@@ -572,7 +577,7 @@ def mdecay(L_):
     L_ = sorted(L_, key=lambda l: l.span)
     dm_ = np.diff([l.m/l.c for l in L_])
     ddist_ = np.diff([l.span for l in L_])
-    return (dm_ / (ddist_ + eps)).mean()  # dm/ddist
+    return - (dm_ / (ddist_ + eps)).mean()  # dm/ddist
 
 def CopyF(F, root=None):
 
@@ -655,12 +660,12 @@ def sum2G(Ft_, tt,c,rc, root=None, init=1, typ=2, fsub=1):  # updates root if no
         for C in C_: C.rN_ += [G]
     G.rN_= sorted(G.rN_,key=lambda x: (x.m/x.c), reverse=True)  # only if lG?
     if fsub:
-        subV = max(G.Lt.m,0) * max(G.Lt.d,0)  # divisive sub-clustering if +ve Match * Variance
-        if subV * ((len(N_)-1)*Lw) > (ave+avd) * (rc+1) * connw:
-            for n in G.N_: n.fin=0; n.exe=1
-            _N_,_rc = cluster_N(G,L_, rc+1)  # same nodes, higher filter, optional cluster_C?
-            if _N_ and subV * ((len(_N_)-1)*Lw) > ave * _rc * nw:
-                cross_comp(G,_rc)  # forms own B_,Bt
+        if G.Lt.m * G.Lt.d * ((len(N_)-1)*Lw) > ave * avd * (rc+1) * cw:  # sub+ if Match * Variance
+            N_,L_,TTm,m,TTd,d = comp_N_(G.N_, rc+1)  # full | extented internal comp, skip compared?
+            V = m - ave*(rc+1)
+            if mdecay(L_)> decay:
+                if V > ave*centw: cluster_C(G, N_, rc+1)  # divisive centroid clustering of same nodes
+            elif V > ave * connw: cluster_N(G, N_, rc+1)  # divisive connect clustering with higher filter
     return G
 
 def add_N(G, N, coef=1):  # flat is currently not used
