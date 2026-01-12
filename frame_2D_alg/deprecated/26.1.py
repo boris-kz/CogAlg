@@ -230,3 +230,96 @@ def cross_comp1(root, rc, fL=0):  # core function mediating recursive rng+ and d
     # nG_: recursion flag:
     return nG_,rc
 
+class CN(CBase):
+    name = "node"
+    def __init__(n, **kwargs):
+        super().__init__()
+        n.typ = kwargs.get('typ', 0)
+        # 0=PP: block trans_comp, etc?
+        # 1= L: typ,nt,dTT, m,d,c,rc, root,rng,yx,box,span,angl,fin,compared, N_,B_,C_,L_,Nt,Bt,Ct from comp_sub?
+        # 2= G: + rim, eTT, em,ed,ec, baseT,mang,sub,exe, Lt, tNt, tBt, tCt?
+        # 3= C: + m_,o_,M,D,C, DTT?
+        n.m,  n.d, n.c = kwargs.get('m',0), kwargs.get('d',0), kwargs.get('c',0)  # sum forks to borrow
+        n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # Nt+Lt dTT: m_,d_ [M,D,n, I,G,a, L,S,A]
+        n.rim = kwargs.get('rim',[])  # external links, rng-nest?
+        n.em, n.ed, n.ec = kwargs.get('em',0),kwargs.get('ed',0),kwargs.get('ec',0)  # sum dTT
+        n.eTT = kwargs.get('eTT',np.zeros((2,9)))  # sum rim dTT
+        n.rc  = kwargs.get('rc', 1)  # redundancy to ext Gs, ave in links?
+        n.Nt, n.Bt, n.Ct, n.Lt = kwargs.get('Nt',CF()), kwargs.get('Bt',CF()), kwargs.get('Ct',CF()), kwargs.get('Lt',CF())
+        # Fork tuple: [N_,dTT,m,d,c,rc,nF,root], N_ may be H: [N_,dTT] per level, nest=len(N_)
+        n.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,A: not ders, in links for simplicity, mostly redundant
+        n.nt    = kwargs.get('nt', [])  # nodet, links only
+        n.yx    = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
+        n.box   = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
+        n.span  = kwargs.get('span',1) # distance in nodet or aRad, comp with baseT and len(N_), not additive?
+        n.angl  = kwargs.get('angl',[np.zeros(2),0])  # (dy,dx),dir, sum from L_
+        n.mang  = kwargs.get('mang',1)  # ave match of angles in L_, =1 in links
+        n.root  = kwargs.get('root',None)  # immediate
+        n.sub = 0 # composition depth relative to top-composition peers?
+        n.fin = kwargs.get('fin',0)  # clustered, temporary
+        n.exe = kwargs.get('exe',0)  # exemplar, temporary
+        n.rN_ = kwargs.get('rN_',[]) # reciprocal root nG_ for bG | cG, nG has Bt.N_,Ct.N_ instead
+        n.compared = set()
+        # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
+    @property
+    def N_(n): return n.Nt.N_[-1].N_ if (n.Nt.N_ and isinstance(n.Nt.N_[0],CF)) else n.Nt.N_
+    @N_.setter
+    def N_(n, n_):
+        if n.Nt.N_ and isinstance(n.Nt.N_[0],CF): n.Nt.N_[-1].N_ = n_
+        else: n.Nt.N_ = n_
+    @property
+    def L_(n): return n.Lt.N_[-1].N_ if (n.Lt.N_ and isinstance(n.Lt.N_[0],CF)) else n.Lt.N_
+    @L_.setter
+    def L_(n, n_):
+        if n.Lt.N_ and isinstance(n.Lt.N_[0],CF): n.Lt.N_[-1].N_ = n_
+        else: n.Lt.N_ = n_
+    @property
+    def B_(n): return n.Bt.N_[-1].N_ if (n.Bt.N_ and isinstance(n.Bt.N_[0],CF)) else n.Bt.N_
+    @B_.setter
+    def B_(n, n_):
+        if n.Bt.N_ and isinstance(n.Bt.N_[0],CF): n.Bt.N_[-1].N_ = n_
+        else: n.Bt.N_ = n_
+    @property
+    def C_(n): return n.Ct.N_[-1].N_ if (n.Ct.N_ and isinstance(n.Ct.N_[0],CF)) else n.Ct.N_
+    @C_.setter
+    def C_(n, n_):
+        if n.Ct.N_ and isinstance(n.Ct.N_[0],CF): n.Lt.N_[-1].N_ = n_
+        else: n.Ct.N_ = n_
+
+class CF_:
+    def __init__(s, attr): s.Ft = attr
+    def oN_(s,o):
+        ft = getattr(o, s.Ft)
+        return (ft.N_[-1],'N_') if (ft.N_ and isinstance(ft.N_[0],CF)) else (ft,'N_')
+    def __get__(s, o, c):
+        if o is None: return s
+        _ft,ft = s.oN_(o); return getattr(_ft,ft)
+    def __set__(s, o, v):
+        N_,Ft = s.oN_(o); setattr(N_,Ft, v)
+
+class CN(CBase):
+    name = "node"
+    N_,L_,B_,C_ = CF_('Nt'), CF_('Lt'), CF_('Bt'), CF_('Ct')  # n.Ft.N_[-1] if n.Ft.N_ and isinstance(n.Ft.N_[-1],CF) else n.Ft.N_
+
+    def __init__(n, **kwargs):
+        super().__init__()
+        n.typ = kwargs.get('typ', 0)
+        n.Nt, n.Bt, n.Ct, n.Lt = (kwargs.get(fork,CF()) for fork in ('Nt','Bt','Ct','Lt'))
+
+
+class CF_:  # to get fork N_
+    def __init__(s, attr): s.Ft = attr
+
+    def ret_N_(s, o):
+        ft = getattr(o, s.Ft)
+        return (ft.N_[-1], 'N_') if (ft.N_ and isinstance(ft.N_[-1], CF)) else (ft, 'N_')
+
+    def __get__(s, o, c):
+        if o is None: return s
+        _ft, ft = s.ret_N_(o);
+        return getattr(_ft, ft)
+
+    def __set__(s, o, v):
+        N_, Ft = s.ret_N_(o);
+        setattr(N_, Ft, v)
+
