@@ -4,7 +4,7 @@ from math import atan2, cos, floor, pi  # from functools import reduce
 from itertools import zip_longest, combinations, chain, product  # from multiprocessing import Pool, Manager
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
-from comp_slice import comp_slice
+from comp_slice import comp_slice, w_t
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -17,12 +17,12 @@ der+: incremental-derivation cross-comp links, from node cross-comp, if abs_diff
 Clustering compressively groups the elements into compositional hierarchy, initially by pair-wise similarity / density:
 nodes are connectivity clustered, progressively reducing overlap by exemplar selection, centroid clustering, floodfill.
 links are correlation clustered, forming contours that complement adjacent connectivity clusters.
-Each composition cycle goes through <=4 stages as the clusters expand, shifting from connectivity to centroid-based:
+Each composition cycle goes through <=4 stages, shifting from connectivity to centroid-based:
 
-- start with exemplars and cluster via their rim, density-based while the cluster is not significant (cluster_N) 
-- add centroid similarity to inclusion criterion in proportion to cluster value, if >min cluster value, clusters overlap
-- refine whole cluster according to updated centroid if >min centroid-similarity weighting (cluster_C)
-- refine whole frame as fully-connected two-layer (clusters,nodes) EM, if >min global overlap, prune for next cycle (cluster_C_par)
+- select sparse exemplars to seed the clusters, top k for parallelization? (get_exemplars),
+- connectivity / density-based agglomerative clustering, followed by divisive clustering (cluster_N), 
+- sequential centroid-based fuzzy clustering with iterative refinement, start in divisive phase (cluster_C),
+- centroid-parallel frame refinement by two-layer EM if >min global overlap, prune for next cycle (cluster_C_par).
 
 That forms hierarchical graph representation: dual tree of down-forking elements: node_H, and up-forking clusters: root_H:
 https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/generic%20graph.drawio.png
@@ -55,8 +55,8 @@ def prop_F_(nF):  # factory function to set property+setter to get,update top-co
         Ft = getattr(N, nF)  # fork tuple Nt, Lt, etc
         return Ft.N_[-1] if (Ft.N_ and isinstance(Ft.N_[0], CF)) else Ft
     def get(N): return getattr(Nf_(N),'N_')
-    def set(N, new_N): setattr(Nf_(N),'N_', new_N)
-    return property(get, set)
+    def set(N, new_N): setattr(Nf_(N),'N_',new_N)
+    return property(get,set)
 
 class CN(CBase):
     name = "node"
@@ -66,8 +66,8 @@ class CN(CBase):
         super().__init__()
         n.typ = kwargs.get('typ', 0)
         # 0=PP: block trans_comp, etc?
-        # 1= L: typ,nt,dTT, m,d,c,rc, root,rng,yx,box,span,angl,fin,compared, N_,B_,C_,L_,Nt,Bt,Ct from comp_sub?
-        # 2= G: + rim, eTT, em,ed,ec, baseT,mang,sub,exe, Lt, tNt, tBt, tCt?
+        # 1= L: typ,nt,dTT, m,d,c,rc, root,rng,yx,box,span,angl,fin,compared, Nt,Bt,Ct from comp_sub?
+        # 2= G: + rim, eTT, em,ed,ec, baseT,mang,sub,exe, Lt, tNt,tBt,tCt packed in fork levels?
         # 3= C: base_comp subset, +m_,d_,r_,o_ in nodes?
         n.m,  n.d, n.c = kwargs.get('m',0), kwargs.get('d',0), kwargs.get('c',0)  # sum forks to borrow
         n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # Nt+Lt dTT: m_,d_ [M,D,n, I,G,a, L,S,A]
@@ -157,7 +157,6 @@ def cross_comp(root, rc, fL=0):  # core function mediating recursive rng+ and de
         for n in iN_: n.em, n.ed = vt_(np.sum([l.dTT for l in n.rim],axis=0), rc)
         cr = cd/ (c+cd) *.5  # dfork borrow ratio, .5 for one direction
         if val_(TT, rc+connw, TTw(root), (len(L_)-1)*Lw,1, TTd,cr) > 0 or fL:
-            root.L_ = L_
             sum2T(L_,rc,root,'Lt')  # new ders, root.B_,Bt if G
             E_ = get_exemplars({N for L in L_ for N in L.nt if N.em}, rc)  # exemplar N_| C_
             nG_,rc = cluster_N(root, E_,rc,fL)  # form Bt,Ct,
@@ -279,24 +278,12 @@ def comp_A(_A,A):
 
 def trans_comp(_N,N, rc, root):  # unpack node trees down to numericals and compare them
 
-    for _F_,F_,nF_,nFt in zip((_N.N_,_N.B_,_N.C_),(N.N_,N.B_,N.C_), ('N_','B_','C_'),('Nt','Bt','Ct')):
+    for _F_,F_,nFt in zip((_N.N_,_N.B_,_N.C_),(N.N_,N.B_,N.C_),('Nt','Bt','Ct')):
         if _F_ and F_:  # eval?
             N_,dF_,TT,c,_,_ = comp_C_(_F_,rc, F_)  # callee comp_N may call deeper trans_comp, batch root_update?
             if dF_:  # match trans-links, !N_?
-                setattr(root, nF_,dF_); setattr(root,nFt, CF(dTT=TT,c=c,root=root,nF=nFt))
-                rc += 1  # default fork redundancy?
-    tFt3_ = []  # form dtFt3H by comp tFt3H:
-    for _Ft3, Ft3 in zip(_N.Lt.N_, N.Lt.N_):  # Lt.N_ is derH of tFt triples
-        tFt3 = []  # dLay of trans-forks
-        for _F_,F_,nFt in zip(_Ft3, Ft3, ('Nt','Bt','Ct')):
-            if _F_ and F_:  # eval?
-                _,dF_,TT,c,_,_= comp_C_(_F_,rc,F_)
-                if dF_: tFt3 += [CF(N_=dF_,dTT=TT,c=c,root=root,nF=nFt)]; rc += 1
-                else: tFt3 += [[]]
-            else: tFt3 += [[]]
-        if any(tFt3): tFt3_ += [tFt3]  # fixed tFt order
-    if tFt3_: root.Lt.N_ += tFt3_  # extend Lt.N_ derH with ders of old Lays, not nested?
-    # node H:
+                setattr(root,nFt, CF(N_=dF_,dTT=TT,c=c,root=root,nF=nFt))
+                rc += 1  # fork redundancy
     for _lev,lev in zip(_N.Nt.N_, N.Nt.N_):  # no comp Bt,Ct: external to N,_N
         rc += 1  # deeper levels are redundant
         tt = comp_derT(_lev.dTT[1],lev.dTT[1]); m,d = vt_(tt,rc)
@@ -551,16 +538,18 @@ def sum2G(Ft_,tt,c,rc, root=None, init=1, typ=None, fsub=1):  # updates root if 
     if not init:
         N_+=root.N_; L_+=root.L_; B_+=root.B_; C_+=root.C_
         nc+=root.Nt.c; lc+=root.Lt.c; bc+=root.Bt.c; cc+=root.Ct.c
-        ntt+=root.Nt.dTT; ltt+=root.Lt.dTT; btt+=root.Bt.dTT; ctt+=root.Ct.dTT  # batch root_updates: n.dTT += update_dTT_?
+        ntt+=root.Nt.dTT; ltt+=root.Lt.dTT; btt+=root.Bt.dTT; ctt+=root.Ct.dTT
+        # batch root_updates: n.dTT += update_dTT_?
     for n in N_: n.m, n.d = vt_(n.dTT,rc)
     N = N_[0]
     if typ is None: typ = N.typ
-    G = Copy_(N,root,init=1,typ=typ); GN_= G.N_; GN_ += N_; G.dTT=tt; G.c=c; G.rc=rc
-    nt = N.Nt; l0 = CF(N_=list(N.N_), dTT=deepcopy(nt.dTT), m=nt.m,d=nt.d,c=nt.c, root=G.Nt)
-    G.Nt.N_ = [l0]+ [CopyF(lev,G.Nt) for lev in nt.N_]; G.Nt.dTT=deepcopy(N.dTT); G.Nt.m=N.m; G.Nt.d=N.d; G.Nt.c=N.c; G.Nt.root=G
-    for N in N_[1:]: add_N(G,N)
+    G = Copy_(N,root,init=1,typ=typ); G.dTT=tt; G.c=c; G.rc=rc
+    G.Nt = sum2F(N_,'Nt',G, coef)
+    m,d = vt_(tt,rc)
+    G.Nt.N_ = [CF(N_=N_,dTT=tt, m=m,d=d,c=c, root=G.Nt)] + G.Nt.N_
+    for N in N_[1:]: add_N(G,N, coef)
     if L_:
-        GL_=G.L_; GL_+=L_; m,d = vt_(ltt,rc); G.Lt = CF(dTT=ltt,m=m,d=d,c=lc,root=G)  # no Lt.N_ yet
+        m,d = vt_(ltt,rc); G.Lt = CF(N_=L_,dTT=ltt,m=m,d=d,c=lc,root=G)  # no Lt.N_ yet
         A = np.sum([l.angl[0] for l in L_], axis=0)
         G.angl = np.array([A, np.sign(G.dTT[1] @ wTTf[1])], dtype=object)  # angle dir = d sign
     if init:  # else same ext
@@ -580,8 +569,8 @@ def sum2G(Ft_,tt,c,rc, root=None, init=1, typ=None, fsub=1):  # updates root if 
                 G.Lt.m, G.Lt.d = vt_(G.Lt.dTT, rc)
             G.L_ = L_
     if B_ and typ > 1 and G.Bt and G.Bt.d > avd * rc * nw:  # no ddfork
-        B_,_rc = cross_comp(G, rc, fL=1)  # comp B_ or Bt.N_ now?
-    if B_: sum2T(B_,G, rc,nF='Bt')  # maybe updated above
+        B_,_rc = cross_comp(G, rc, fL=1)  # comp Bt.N_
+    if B_: sum2T(B_,G, rc,nF='Bt')  # maybe updated above, replace with sum2F?
     if C_: sum2T(C_,G, rc,nF='Ct')  # ? replace:
     if fsub:  # sub+
         if G.Lt.m * G.Lt.d * ((len(N_)-1)*Lw) > ave * avd * (rc+1) * cw:  # sub+ if Match * Variance
@@ -592,20 +581,27 @@ def sum2G(Ft_,tt,c,rc, root=None, init=1, typ=None, fsub=1):  # updates root if 
     G.rN_= sorted(G.rN_, key=lambda x: (x.m/x.c), reverse=True)  # only if lG?
     return G
 
+def sum2F(N_, nF, root, coef):
+    N  = N_[0]
+    Ft = CopyT(N,root)
+    if isinstance(N.Nt.N_[0], CN): Ft.N_ = [Ft.N_]  # nest if flat
+    for N in N_[1:]: add2F(Ft, nF, N, coef)
+    return Ft
+
+def add2F(Ft, nF, N, coef):  # unpack in sum2F?
+    NH = N.Nt.N_ if isinstance(N.Nt.N_[0],CF) else [N.Nt.N_]  # nest if flat, replace Nt with Ft=nF?
+    for Lev,lev in zip_longest(Ft.N_, NH, fillvalue=None):  # G.Nt.N_=H, top-down
+        if lev:
+            if Lev is None: Ft.N_ += [CopyT(lev, root=Ft)]
+            else: Lev.N_ += lev.N_; Lev.dTT+=lev.dTT*coef; Lev.c+=lev.c*coef
+
 def add_N(G, N, coef=1):
 
     N.fin = 1; N.root = G
     _c,c = G.c,N.c*coef; C=_c+c  # weigh contribution of intensive params
     if N.typ==3: G.rc = np.sum([o*coef for o in N.o_]); G.rN_+=N.rN_; G.m_+=N.m_; G.o_+=N.o_  # not sure
     if N.typ:  # not PP
-        G.rN_ += N.rN_  # if N is link| cent?
-        l0 = G.Nt.N_[0]; l0.dTT+=N.dTT*coef; l0.c+=N.c*coef; l0.N_ += N.N_  # flatten in new lev
-        for Lev,lev in zip_longest(G.Nt.N_[1:], N.Nt.N_, fillvalue=None):
-            if lev:  # norm /C?
-                if Lev is None: G.Nt.N_ += [CopyF(lev, root=G.Nt)]
-                else: Lev.N_ += lev.N_; Lev.dTT+=lev.dTT*coef; Lev.c+=lev.c*coef  # flat
-        if N.C_:  # flat? L_,B_ stay nested
-            G.C_ += N.C_; G.Ct.dTT += N.Ct.dTT*coef; G.Ct.c += N.Ct.c*coef
+        if N.C_: G.C_+= N.C_; G.Ct.dTT += N.Ct.dTT*coef; G.Ct.c += N.Ct.c*coef  # flat? L_,B_ stay nested
         G.span = (G.span*_c+N.span*c*coef) / C * coef
         A,a = G.angl[0],N.angl[0]; A[:] = (A*_c+a*c*coef) /C * coef  # vect only
         if isinstance(G.yx, list): G.yx += [N.yx]  # weigh by C?
@@ -616,24 +612,21 @@ def add_N(G, N, coef=1):
     # if N is Fg: margin = Ns of proj max comp dist > min _Fg point dist: cross_comp Fg_?
     return N
 
+# replace with sum2F?
 def sum2T(T_, rc, root, nF, TT=None, c=1, fset=1):  # N_ -> fork T
 
     T = T_[0]; T.rN_+=[root]; fV = TT is None
-    F = CF(root=root, nF=nF); T.root=F  # no L_,B_,C_,Nt,Bt,Ct yet
+    F = CF(N_=T_,root=root, nF=nF); T.root=F  # no L_,B_,C_,Nt,Bt,Ct yet
     if fV: F.dTT=copy(T.dTT); F.c=T.c
     else:  F.dTT=TT; F.c=c
-    if nF=='Nt': F.N_ = ([T.N_] + list(T.Nt.N_)) if T.N_ else []  # deeper H
     for T in T_[1:]:
         T.root = F; T.rN_ += [root]  # reciprocal N per overlapped B|C
+        add2F(F,T, coef)  # need coef
         if fV: F.dTT += T.dTT; F.c += T.c
-        if nF=='Nt' and F.N_:  # N_=H
-            F.N_[0] += T.N_  # top level is flattened T.N_, in Nt only?
-            for Lev,lev in zip_longest(F.N_[1:], T.Nt.N_):  # deeper levels
-                if lev:
-                    if Lev: Lev.N_+=lev.N_; Lev.dTT+=lev.dTT; Lev.c+=lev.c
-                    else:   F.N_ += [CopyF(lev, root=F)]
-    F.m, F.d = vt_(F.dTT,rc); F.rc = rc
-    if fset: setattr(root,nF, F)
+        F.m, F.d = vt_(F.dTT,rc); F.rc = rc
+    if fset:
+        # now we should check if root has existing Ft.N_ levels, and combine their levels?
+        setattr(root,nF, F)
     if nF=='Nt' and F.N_:
         n_ = F.N_[0]; dtt = sum([n.dTT for n in n_]); m,d = vt_(dtt,rc); F.N_[0] = CF(N_=n_,dTT=dtt,m=m,d=d, c=sum([n.c for n in n_]))
     else: F.N_ = list(T_)
@@ -703,14 +696,14 @@ def root_replace(root, rc, G_, N_,L_,Lt_,TT,nTT,lTT,C,nc,lc):
     m,d = vt_(lTT,rc)
     root.Nt.N_.insert(0, CF(N_=N_,dTT=lTT,m=m,d=d,c=lc, root=root))  # top nested level
 
-def CopyF(F, root=None):
+def CopyT(F, root=None):
 
     C = CF(dTT=deepcopy(F.dTT)); C.root = root or F.root
     for a in ['m','d','c','rc']: setattr(C,a, getattr(F,a))
     for a in ['L_','B_','C_']: setattr(C,a, copy(getattr(F,a)))
-    [setattr(C,a,CopyF(p,root=C)) for a in ['Nt','Bt','Ct'] if (p:=getattr(F,a))]
+    [setattr(C,a,CopyT(p,root=C)) for a in ['Nt','Bt','Ct'] if (p:=getattr(F,a))]
     if F.N_:
-        if F.nF=='Nt': C.N_ = [CopyF(lev) for lev in F.N_]  # H levs are concat
+        if F.nF=='Nt': C.N_ = [CopyT(lev) for lev in F.N_]  # H levs are concat
         else:          C.N_ = copy(F.N_)  # alt roots
     return C
 
@@ -719,7 +712,7 @@ def Copy_(N, root=None, init=0, typ=None):
     if typ is None: typ = 2 if init<2 else N.typ  # G.typ = 2, C.typ=3
     C = CN(dTT=deepcopy(N.dTT),typ=typ); C.root = N.root if root is None else root
     for attr in ['m','d','c','rc']: setattr(C,attr, getattr(N,attr))
-    if not init and C.typ==N.typ: C.Nt = CopyF(N.Nt,root=C)
+    if not init and C.typ==N.typ: C.Nt = CopyT(N.Nt,root=C)
     if typ:
         for attr in ['fin','span','mang','sub','exe']: setattr(C,attr, getattr(N,attr))
         for attr in ['nt','baseT','box','rim','compared']: setattr(C,attr, copy(getattr(N,attr)))
@@ -729,7 +722,7 @@ def Copy_(N, root=None, init=0, typ=None):
             if init==1:  # else centroid
                 C.L_=[l for l in N.rim if l.m>ave]; N.root=C; C.fin = 0
         else:
-            C.Lt=CopyF(N.Lt); C.Bt=CopyF(N.Bt); C.Ct=CopyF(N.Ct)  # empty in init G
+            C.Lt=CopyT(N.Lt); C.Bt=CopyT(N.Bt); C.Ct=CopyT(N.Ct)  # empty in init G
             C.angl = copy(N.angl); C.yx = copy(N.yx)
         if typ > 1:
             C.eTT = deepcopy(N.eTT); C.em,C.ed,C.ec = N.em,N.ed,N.ec
@@ -868,7 +861,11 @@ def vect_edge(tile, rV=1, wTT=None):  # PP_ cross_comp and floodfill to init foc
         PP = CN(typ=0, N_=P_,L_=L_,B_=B_,dTT=dTT,m=m,d=d,c=c, baseT=baseT,box=box,yx=yx,angl=A,span=np.hypot(dy/2,dx/2))  # set root in trace_edge
         PP.Nt = CF(dTT=deepcopy(dTT), m=m,d=d,c=c,rc=2, root=PP,nF='Nt')
         PP.Lt = CF(N_=L_, m=m,d=d,c=c,rc=2, root=PP,nF='Lt')
-        PP.Bt = CF(N_=B_, rc=2, root=PP,nF='Bt')  # not sure on m and d
+        m_, d_ = np.zeros(6), np.zeros(6)
+        for B in B_: m_ += B.verT[0]; d_ += B.verT[1];
+        ad_ = np.abs(d_); t_ = m_ + ad_ + eps  # ~ max comparand
+        m = m_/t_ @ w_t[0] - ave*2; d = ad_/t_ @ w_t[1] - avd*2
+        PP.Bt = CF(N_=B_, m=m, d=d, rc=2, root=PP,nF='Bt')
         for P in P_: P.root = PP
         if hasattr(P,'nt'):  # PPd, assign rN_:
             for dP in P_:

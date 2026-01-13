@@ -306,20 +306,42 @@ class CN(CBase):
         n.typ = kwargs.get('typ', 0)
         n.Nt, n.Bt, n.Ct, n.Lt = (kwargs.get(fork,CF()) for fork in ('Nt','Bt','Ct','Lt'))
 
-
 class CF_:  # to get fork N_
     def __init__(s, attr): s.Ft = attr
-
     def ret_N_(s, o):
         ft = getattr(o, s.Ft)
         return (ft.N_[-1], 'N_') if (ft.N_ and isinstance(ft.N_[-1], CF)) else (ft, 'N_')
-
     def __get__(s, o, c):
         if o is None: return s
-        _ft, ft = s.ret_N_(o);
-        return getattr(_ft, ft)
-
+        _ft, ft = s.ret_N_(o); return getattr(_ft, ft)
     def __set__(s, o, v):
-        N_, Ft = s.ret_N_(o);
-        setattr(N_, Ft, v)
+        N_, Ft = s.ret_N_(o); setattr(N_, Ft, v)
+
+def trans_comp(_N,N, rc, root):  # unpack node trees down to numericals and compare them
+
+    for _F_,F_,nF_,nFt in zip((_N.N_,_N.B_,_N.C_),(N.N_,N.B_,N.C_), ('N_','B_','C_'),('Nt','Bt','Ct')):
+        if _F_ and F_:  # eval?
+            N_,dF_,TT,c,_,_ = comp_C_(_F_,rc, F_)  # callee comp_N may call deeper trans_comp, batch root_update?
+            if dF_:  # match trans-links, !N_?
+                setattr(root, nF_,dF_); setattr(root,nFt, CF(dTT=TT,c=c,root=root,nF=nFt))
+                rc += 1  # default fork redundancy?
+    tFt3_ = []  # form dtFt3H by comp tFt3H:
+    for _Ft3, Ft3 in zip(_N.Lt.N_, N.Lt.N_):  # Lt.N_ is derH of tFt triples
+        tFt3 = []  # dLay of trans-forks
+        for _F_,F_,nFt in zip(_Ft3, Ft3, ('Nt','Bt','Ct')):
+            if _F_ and F_:  # eval?
+                _,dF_,TT,c,_,_= comp_C_(_F_,rc,F_)
+                if dF_: tFt3 += [CF(N_=dF_,dTT=TT,c=c,root=root,nF=nFt)]; rc += 1
+                else: tFt3 += [[]]
+            else: tFt3 += [[]]
+        if any(tFt3): tFt3_ += [tFt3]  # fixed tFt order
+    if tFt3_: root.Lt.N_ += tFt3_  # extend Lt.N_ derH with ders of old Lays, not nested?
+    # node H:
+    for _lev,lev in zip(_N.Nt.N_, N.Nt.N_):  # no comp Bt,Ct: external to N,_N
+        rc += 1  # deeper levels are redundant
+        tt = comp_derT(_lev.dTT[1],lev.dTT[1]); m,d = vt_(tt,rc)
+        oN_= set(_lev.N_) & set(lev.N_)  # intersect, or offset, or comp_len?
+        dlev = CF(N_=oN_,nF='Nt',dTT=tt, m=m,d=d,c=min(_lev.c,lev.c),rc=rc,root=root)  # min: only shared elements are compared
+        root.Nt.N_ += [dlev]  # root:link, nt.N_:derH
+        root_update(root.Nt, dlev)  # root is Link
 
