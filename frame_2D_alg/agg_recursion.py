@@ -50,9 +50,9 @@ capitalized vars are summed small-case vars
 '''
 eps = 1e-7
 
-def prop_F_(nF):  # factory function to set property+setter to get,update top-composition fork.N_
+def prop_F_(F):  # factory function to set property+setter to get,update top-composition fork.N_
     def Nf_(N):  # CN instance
-        Ft = getattr(N, nF)  # fork tuple Nt, Lt, etc
+        Ft = getattr(N, F)  # Nt| Lt| Bt| Ct
         return Ft.N_[-1] if (Ft.N_ and isinstance(Ft.N_[0], CF)) else Ft
     def get(N): return getattr(Nf_(N),'N_')
     def set(N, new_N): setattr(Nf_(N),'N_',new_N)
@@ -94,6 +94,7 @@ class CN(CBase):
 
 class CF(CBase):
     name = "fork"
+    N_, L_, B_, C_ = prop_F_('Nt'), prop_F_('Lt'), prop_F_('Bt'), prop_F_('Ct')
     def __init__(f, **kwargs):
         super().__init__()
         f.N_ = kwargs.get('N_',[])  # may be nested as H, empty in Lt
@@ -104,10 +105,8 @@ class CF(CBase):
         f.rc = kwargs.get('rc', 0)
         f.nF = kwargs.get('nF','')  # 'Nt','Lt','Bt','Ct'?
         f.root = kwargs.get('root',None)
-        # to use as root in cross_comp:
-        f.L_, f.B_, f.C_ = kwargs.get('L_',[]),kwargs.get('B_',[]),kwargs.get('C_',[])
         # assigned by sum2T in cross_comp:
-        f.Nt, f.Bt, f.Ct = kwargs.get('Nt',[]),kwargs.get('Bt',[]),kwargs.get('Ct',[])
+        f.Nt, f.Bt, f.Ct, f.Lt = (kwargs.get(fork,CF()) for fork in ('Nt','Bt','Ct','Lt'))
     def __bool__(f): return bool(f.c)
 
 ave = .3; avd = ave*.5  # ave m,d / unit dist, top of filter specification hierarchy
@@ -157,7 +156,7 @@ def cross_comp(root, rc, fL=0):  # core function mediating recursive rng+ and de
         for n in iN_: n.em, n.ed = vt_(np.sum([l.dTT for l in n.rim],axis=0), rc)
         cr = cd/ (c+cd) *.5  # dfork borrow ratio, .5 for one direction
         if val_(TT, rc+connw, TTw(root), (len(L_)-1)*Lw,1, TTd,cr) > 0 or fL:
-            sum2T(L_,rc,root,'Lt')  # new ders, root.B_,Bt if G
+            sum2F(L_,'Lt',root)  # new ders, root.B_,Bt if G
             E_ = get_exemplars({N for L in L_ for N in L.nt if N.em}, rc)  # exemplar N_| C_
             nG_,rc = cluster_N(root, E_,rc,fL)  # form Bt,Ct,
             # 3-fork sub+ in sum2G
@@ -353,7 +352,7 @@ def cluster_N(root, _N_, rc, fL=0):  # flood-fill node | link clusters, flat, re
         for Link in iL_: tN_+= Link.N_; tB_+= Link.B_; tC_+= Link.C_
         for tL_, nF in (tN_,'Nt'), (tB_,'Bt'), (tC_,'Ct'):
             if tL_:
-                Ft = sum2T(tL_,rc, root.Lt, nF, fset=0)  # updates root too
+                Ft = sum2F(tL_,nF,root.Lt,fset=0)  # updates root too
                 N_ = list({n for L in tL_ for n in L.nt})
                 for N in N_: N.exe=1
                 cluster_N(Ft, N_,rc)
@@ -482,11 +481,11 @@ def cluster_C(root, E_, rc):  # form centroids by clustering exemplar surround v
             n.exe = (n.D if n.typ==1 else n.M) + np.sum([mo[0]-ave*mo[1] for mo in n.mo_]) - ave
             # exemplar V + sum n match_dev to Cs, m * ||C rvals?
         if val_(DTT, rc+olp, TTw(root), (len(C_)-1)*Lw) > 0:
-            Ct = sum2T(C_,rc,root, nF='Ct')
+            Ct = sum2F(C_,'Ct',root)
             Ct.tNt,Ct.tBt,Ct.tCt = CF(),CF(),CF()
             _,rc = cross_comp(Ct, rc)  # all distant Cs, re-order C_ along argmax(root.wTT): eigenvector?
             root.C_=C_; root.Ct=Ct; root_update(root,Ct)
-            Nt = sum2T(C_,rc,root, nF='Nt'); root.N_ = C_; root_update(root,Nt)
+            Nt = sum2F(C_,'Nt',root); root.N_ = C_; root_update(root,Nt)
     return C_, rc
 
 def cluster_C_par(_C_,N_):  # C_ formed in cluster_C, N_= root.N_, switch from cluster_C if global overlap >min
@@ -540,16 +539,14 @@ def sum2G(Ft_,tt,c,rc, root=None, init=1, typ=None, fsub=1):  # updates root if 
         nc+=root.Nt.c; lc+=root.Lt.c; bc+=root.Bt.c; cc+=root.Ct.c
         ntt+=root.Nt.dTT; ltt+=root.Lt.dTT; btt+=root.Bt.dTT; ctt+=root.Ct.dTT
         # batch root_updates: n.dTT += update_dTT_?
-    for n in N_: n.m, n.d = vt_(n.dTT,rc)
     N = N_[0]
     if typ is None: typ = N.typ
-    G = Copy_(N,root,init=1,typ=typ); G.dTT=tt; G.c=c; G.rc=rc
-    G.Nt = sum2F(N_,'Nt',G, coef)
-    m,d = vt_(tt,rc)
-    G.Nt.N_ = [CF(N_=N_,dTT=tt, m=m,d=d,c=c, root=G.Nt)] + G.Nt.N_
-    for N in N_[1:]: add_N(G,N, coef)
+    m, d = vt_(tt, rc)
+    G = Copy_(N,root,init=1,typ=typ); G.dTT=tt; G.m=m; G.d=d; G.c=c; G.rc=rc
+    G.Nt = sum2F(N_,'Nt',G, ntt, nc)
+    for N in N_[1:]: add_N(G,N, coef=N.c/c)  # sum not-CF vars only?
     if L_:
-        m,d = vt_(ltt,rc); G.Lt = CF(N_=L_,dTT=ltt,m=m,d=d,c=lc,root=G)  # no Lt.N_ yet
+        G.Lt = sum2F(L_,'Lt',G, ltt,lc)
         A = np.sum([l.angl[0] for l in L_], axis=0)
         G.angl = np.array([A, np.sign(G.dTT[1] @ wTTf[1])], dtype=object)  # angle dir = d sign
     if init:  # else same ext
@@ -570,8 +567,8 @@ def sum2G(Ft_,tt,c,rc, root=None, init=1, typ=None, fsub=1):  # updates root if 
             G.L_ = L_
     if B_ and typ > 1 and G.Bt and G.Bt.d > avd * rc * nw:  # no ddfork
         B_,_rc = cross_comp(G, rc, fL=1)  # comp Bt.N_
-    if B_: sum2T(B_,G, rc,nF='Bt')  # maybe updated above, replace with sum2F?
-    if C_: sum2T(C_,G, rc,nF='Ct')  # ? replace:
+    if B_: sum2F(B_,'Bt',G, rc)  # maybe updated above, replace with sum2F?
+    if C_: sum2F(C_,'Ct',G, rc)  # ? replace:
     if fsub:  # sub+
         if G.Lt.m * G.Lt.d * ((len(N_)-1)*Lw) > ave * avd * (rc+1) * cw:  # sub+ if Match * Variance
             V = G.m - ave * (rc+1)
@@ -581,21 +578,31 @@ def sum2G(Ft_,tt,c,rc, root=None, init=1, typ=None, fsub=1):  # updates root if 
     G.rN_= sorted(G.rN_, key=lambda x: (x.m/x.c), reverse=True)  # only if lG?
     return G
 
-def sum2F(N_, nF, root, coef):
-    N  = N_[0]
-    Ft = CopyT(N,root)
-    if isinstance(N.Nt.N_[0], CN): Ft.N_ = [Ft.N_]  # nest if flat
-    for N in N_[1:]: add2F(Ft, nF, N, coef)
+def sum2F(F_, nF, root, TT=None, C=0, fset=1):
+
+    if not C: C = sum([n.c for n in F_]); TT = np.sum([n.dTT for n in F_])  # no *= cr?
+    m, d = vt_(TT)
+    Ft = CF(nF=nF, c=C, dTT=TT, m=m, d=d, root=root)
+    F = F_[0]; H = isinstance(F_.N_[0],CF); cr=F.c/C
+    if H: NH = [CopyT(lev,Ft,cr*(lev.c/F.c)) for lev in F.N_]  # else n__:
+    else: n__= F.N_[:]; tt = F.eTT*cr; c = F.ec  # sum from F.rim or same as TT,C?
+    for F in F_[1:]:
+        cr = F.c/C
+        if H:
+            for Lev, lev in zip_longest(F.N_,NH, fillvalue=None):  # G.Nt.N_=H, top-down
+                if lev:
+                    if Lev is None: Ft.N_ += [CopyT(lev,Ft,cr)]
+                    else: Lev.N_ += lev.N_; Lev.dTT += lev.dTT*cr*(lev.c/F.c); Lev.c += lev.c
+        else:
+            for N in F.N_: n__+= N.N_; tt+= N.dTT*cr; c+=N.c
+            # concat N_s
+    Ft.N_ = NH if H else [CF(N_= list(set(n__)), dTT=tt,m=m,d=d,c=C,root=root)]  # nest if flat?
+    Ft.N_.insert(0, CF(N_=F_,dTT=TT, m=m,d=d,c=C,root=root))  # new top lev
+    if fset:
+        setattr(root, nF, Ft); root_update(root, Ft)
     return Ft
 
-def add2F(Ft, nF, N, coef):  # unpack in sum2F?
-    NH = N.Nt.N_ if isinstance(N.Nt.N_[0],CF) else [N.Nt.N_]  # nest if flat, replace Nt with Ft=nF?
-    for Lev,lev in zip_longest(Ft.N_, NH, fillvalue=None):  # G.Nt.N_=H, top-down
-        if lev:
-            if Lev is None: Ft.N_ += [CopyT(lev, root=Ft)]
-            else: Lev.N_ += lev.N_; Lev.dTT+=lev.dTT*coef; Lev.c+=lev.c*coef
-
-def add_N(G, N, coef=1):
+def add_N(G, N, coef=1):  # sum not-CF vars only?
 
     N.fin = 1; N.root = G
     _c,c = G.c,N.c*coef; C=_c+c  # weigh contribution of intensive params
@@ -611,29 +618,6 @@ def add_N(G, N, coef=1):
         G.box = extend_box(G.box, N.box)
     # if N is Fg: margin = Ns of proj max comp dist > min _Fg point dist: cross_comp Fg_?
     return N
-
-# replace with sum2F?
-def sum2T(T_, rc, root, nF, TT=None, c=1, fset=1):  # N_ -> fork T
-
-    T = T_[0]; T.rN_+=[root]; fV = TT is None
-    F = CF(N_=T_,root=root, nF=nF); T.root=F  # no L_,B_,C_,Nt,Bt,Ct yet
-    if fV: F.dTT=copy(T.dTT); F.c=T.c
-    else:  F.dTT=TT; F.c=c
-    for T in T_[1:]:
-        T.root = F; T.rN_ += [root]  # reciprocal N per overlapped B|C
-        add2F(F,T, coef)  # need coef
-        if fV: F.dTT += T.dTT; F.c += T.c
-        F.m, F.d = vt_(F.dTT,rc); F.rc = rc
-    if fset:
-        # now we should check if root has existing Ft.N_ levels, and combine their levels?
-        setattr(root,nF, F)
-    if nF=='Nt' and F.N_:
-        n_ = F.N_[0]; dtt = sum([n.dTT for n in n_]); m,d = vt_(dtt,rc); F.N_[0] = CF(N_=n_,dTT=dtt,m=m,d=d, c=sum([n.c for n in n_]))
-    else: F.N_ = list(T_)
-    # setattr(G, nF,CF(N_=T_,dTT=btt, m=m,d=d,c=bc, root=G))
-    # setattr(G, 'B_' if nT=='Bt' else 'C_', T_)?
-    root_update(root, F)
-    return F
 
 def cent_TT(C, rc, init=0):  # weight attr matches | diffs by their match to the sum, recompute to convergence
 
@@ -686,25 +670,25 @@ def root_update(root, T):  # value attrs only?
 
 def root_replace(root, rc, G_, N_,L_,Lt_,TT,nTT,lTT,C,nc,lc):
 
-    root.N_= G_; root.dTT=TT; root.c=C
+    root.dTT=TT; root.c=C
     root.rc = rc  # not sure
     if hasattr(root,'wTT'): cent_TT(root, root.rc)
-    sum2T(G_,rc, root,'Nt',nTT,nc)
-    sum2T(L_,rc, root,'Lt',lTT,lc)
-    lTT,lc = np.zeros((2,9)),0  # reset for top nested lev
+    sum2F(G_,'Nt',root, nTT,nc)
+    sum2F(L_,'Lt',root, lTT,lc)
+    lTT, lc = np.zeros((2,9)), 0  # reset for top nested lev
     for Lt in Lt_: lTT+=Lt.dTT; lc+=Lt.c
     m,d = vt_(lTT,rc)
     root.Nt.N_.insert(0, CF(N_=N_,dTT=lTT,m=m,d=d,c=lc, root=root))  # top nested level
 
-def CopyT(F, root=None):
+def CopyT(F, root=None, cr=1):  # F = CF|CN
 
-    C = CF(dTT=deepcopy(F.dTT)); C.root = root or F.root
-    for a in ['m','d','c','rc']: setattr(C,a, getattr(F,a))
-    for a in ['L_','B_','C_']: setattr(C,a, copy(getattr(F,a)))
-    [setattr(C,a,CopyT(p,root=C)) for a in ['Nt','Bt','Ct'] if (p:=getattr(F,a))]
-    if F.N_:
-        if F.nF=='Nt': C.N_ = [CopyT(lev) for lev in F.N_]  # H levs are concat
-        else:          C.N_ = copy(F.N_)  # alt roots
+    C = CF(dTT = F.dTT*cr, root = root or F.root)
+    for nA in ['m','d','c','rc']: setattr(C,nA, getattr(F,nA))
+    for nF in ['Nt','Bt','Ct']:
+        if sub_F:=getattr(F,nF):
+            if isinstance(sub_F.N_[0],CF):
+                C.N_ = [CopyT(lev,cr) for lev in F.N_]  # H
+            else: C.N_ = copy(F.N_)  # flat
     return C
 
 def Copy_(N, root=None, init=0, typ=None):
@@ -879,7 +863,7 @@ def vect_edge(tile, rV=1, wTT=None):  # PP_ cross_comp and floodfill to init foc
                 nG_ = [PP2N(PPm) for PPm in PPm_]
                 for PPd in edge.link_: PP2N(PPd)
                 for nG in nG_:
-                    if nG.B_: sum2T([B.root for B in nG.B_],2,nG,'Bt')
+                    if nG.B_: sum2F([B.root for B in nG.B_],'Bt',nG,1)
                 if val_(np.sum([n.dTT for n in nG_],0),3, TTw(tile), (len(PPm_)-1)*Lw) > 0:
                     G_, rc = trace_edge(nG_,3, tile, tT)  # flatten, cluster B_-mediated Gs, init Nt (we need to return G_)?
     if G_:

@@ -345,3 +345,27 @@ def trans_comp(_N,N, rc, root):  # unpack node trees down to numericals and comp
         root.Nt.N_ += [dlev]  # root:link, nt.N_:derH
         root_update(root.Nt, dlev)  # root is Link
 
+def add2F(Ft, nF, N, coef):  # unpack in sum2F?
+    NH = N.Nt.N_ if isinstance(N.Nt.N_[0],CF) else [N.Nt.N_]  # nest if flat, replace Nt with Ft=nF?
+    for Lev,lev in zip_longest(Ft.N_, NH, fillvalue=None):  # G.Nt.N_=H, top-down
+        if lev:
+            if Lev is None: Ft.N_ += [CopyT(lev, root=Ft)]
+            else: Lev.N_ += lev.N_; Lev.dTT+=lev.dTT*coef; Lev.c+=lev.c*coef
+
+def root_replace(root, rc, G_, N_,L_,Lt_,TT,nTT,lTT,C,nc,lc):
+
+    root.dTT=TT; root.c=C
+    root.rc =rc  # not sure
+    if hasattr(root,'wTT'): cent_TT(root, root.rc)
+    sum2F(L_,'Lt', root,1,lTT,lc)
+    lTT,lc = np.zeros((2,9)),0  # reset for top nested lev
+    for Lt in Lt_: lTT+=Lt.dTT; lc+=Lt.c
+    m,d = vt_(lTT,rc)
+    _lev_ = []  # existing levels
+    if root.Nt.N_:
+        if isinstance(root.Nt.N_[0], CF):   _lev_ = root.Nt.N_[:]  # existing levels
+        elif isinstance(root.Nt.N_[0], CN): _lev_ = sum2F(root.Nt.N_,'Nt',root, fset=0)  # create level from Ns
+    l0 = CF(N_=N_,dTT=lTT,m=m,d=d,c=lc, root=root)  # l0
+    l1 = sum2F(G_,'Nt', root,nTT,nc,fset=0)  # l1
+    root.Nt.N_ = [l1, l0] + _lev_
+
