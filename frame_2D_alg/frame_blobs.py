@@ -69,13 +69,13 @@ ave  = 30  # base filter, directly used for comp_r fork
 aveR = 10  # for range+, fixed overhead per blob
 
 
-def prop_F_(nF):  # factory function to set property+setter to get,update top-composition fork.N_
+def prop_F_(F):  # factory function to set property+setter to get,update top-composition fork.N_
     def Nf_(N):  # CN instance
-        Ft = getattr(N, nF)  # fork tuple Nt, Lt, etc
-        return Ft.N_[-1] if (Ft.N_ and isinstance(Ft.N_[0], CF)) else Ft
+        Ft = getattr(N, F)  # Nt| Lt| Bt| Ct
+        return Ft.N_[0] if (Ft.N_ and isinstance(Ft.N_[0], CF)) else Ft
     def get(N): return getattr(Nf_(N),'N_')
-    def set(N, new_N): setattr(Nf_(N),'N_', new_N)
-    return property(get, set)
+    def set(N, new_N): setattr(Nf_(N),'N_',new_N)
+    return property(get,set)
 
 class CN(CBase):
     name = "node"
@@ -85,8 +85,8 @@ class CN(CBase):
         super().__init__()
         n.typ = kwargs.get('typ', 0)
         # 0=PP: block trans_comp, etc?
-        # 1= L: typ,nt,dTT, m,d,c,rc, root,rng,yx,box,span,angl,fin,compared, N_,B_,C_,L_,Nt,Bt,Ct from comp_sub?
-        # 2= G: + rim, eTT, em,ed,ec, baseT,mang,sub,exe, Lt, tNt, tBt, tCt?
+        # 1= L: typ,nt,dTT, m,d,c,rc, root,rng,yx,box,span,angl,fin,compared, Nt,Bt,Ct from comp_sub?
+        # 2= G: + rim, eTT, em,ed,ec, baseT,mang,sub,exe, Lt, tNt,tBt,tCt packed in fork levels?
         # 3= C: base_comp subset, +m_,d_,r_,o_ in nodes?
         n.m,  n.d, n.c = kwargs.get('m',0), kwargs.get('d',0), kwargs.get('c',0)  # sum forks to borrow
         n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # Nt+Lt dTT: m_,d_ [M,D,n, I,G,a, L,S,A]
@@ -111,9 +111,9 @@ class CN(CBase):
         n.compared = set()
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
 
-
 class CF(CBase):
     name = "fork"
+    # N_, L_, B_, C_ = prop_F_('Nt'), prop_F_('Lt'), prop_F_('Bt'), prop_F_('Ct')
     def __init__(f, **kwargs):
         super().__init__()
         f.N_ = kwargs.get('N_',[])  # may be nested as H, empty in Lt
@@ -124,10 +124,8 @@ class CF(CBase):
         f.rc = kwargs.get('rc', 0)
         f.nF = kwargs.get('nF','')  # 'Nt','Lt','Bt','Ct'?
         f.root = kwargs.get('root',None)
-        # to use as root in cross_comp:
-        f.L_, f.B_, f.C_ = kwargs.get('L_',[]),kwargs.get('B_',[]),kwargs.get('C_',[])
         # assigned by sum2T in cross_comp:
-        f.Nt, f.Bt, f.Ct = kwargs.get('Nt',[]),kwargs.get('Bt',[]),kwargs.get('Ct',[])
+        # f.Nt, f.Bt, f.Ct, f.Lt = (kwargs.get(fork,CF()) for fork in ('Nt','Bt','Ct','Lt'))
     def __bool__(f): return bool(f.c)
 
 
