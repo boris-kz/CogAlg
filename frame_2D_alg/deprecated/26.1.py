@@ -369,3 +369,82 @@ def root_replace(root, rc, G_, N_,L_,Lt_,TT,nTT,lTT,C,nc,lc):
     l1 = sum2F(G_,'Nt', root,nTT,nc,fset=0)  # l1
     root.Nt.N_ = [l1, l0] + _lev_
 
+def cluster_N1(root, _N_, rc, fL=0):  # flood-fill node | link clusters, flat, replace iL_ with E_?
+
+    def trans_cluster(root, iL_, rc):  # connectivity only?
+
+        tN_,tB_,tC_ = [],[],[]  # splice trans-links from +ve links, skip redundant centroids?
+        for Link in iL_: tN_+= Link.N_; tB_+= Link.B_; tC_+= Link.C_
+        for tL_, nF in (tN_,'Nt'), (tB_,'Bt'), (tC_,'Ct'):
+            if tL_:
+                Ft = sum2F(tL_,nF,root.Lt,fset=0)  # updates root
+                N_ = list({n for L in tL_ for n in L.nt})
+                for N in N_: N.exe=1
+                cluster_N(Ft, N_,rc)
+                if val_(Ft.dTT, rc, TTw(root), (len(Ft.N_)-1)*Lw) > 0:
+                    cross_comp(Ft, rc)  # unlikely, doesn't add rc?
+                setattr(root, nF, Ft); rc+=1  # or append F_?
+        ''' 
+        if recursive trans_comp:
+        for lev in zip_longest(Link.Nt.N_, Link.Bt.N_, Link.Ct.N_):  # each fork.N_ is H
+            tF_ += [lev]  # Lt.N_ is trans-H 
+        '''
+    def rroot(n): return rroot(n.root) if n.root and n.root!=root else n
+    def nt_vt(n,_n):
+        M, D = 0,0  # exclusive match, contrast
+        for l in set(n.rim+_n.rim):
+            if l.m > 0:   M += l.m
+            elif l.d > 0: D += l.d
+        return M, D
+
+    G_, N_,L_ = [],[],[]  # add prelink pL_,pN_? include merged Cs, in feature space for Cs
+    if _N_ and (val_(root.dTT, rc+connw, TTw(root), mw=(len(_N_)-1)*Lw) > 0 or fL):
+        for N in _N_: N.fin=0; N.exe=1  # not sure
+        G_, L__= [],[]; TT,nTT,lTT = np.zeros((2,9)),np.zeros((2,9)),np.zeros((2,9)); C,nC,lC = 0,0,0; in_= set()  # root attrs
+        for N in _N_: # form G per remaining N
+            if N.fin or (root.root and not N.exe): continue  # no exemplars in Fg
+            N_=[N]; L_,B_,C_=[],[],[]; N.fin=1  # init G
+            __L_ = N.rim  # spliced rim
+            while __L_:
+                _L_ = []
+                for L in __L_:  # flood-fill via frontier links
+                    _N = L.nt[0] if L.nt[1].fin else L.nt[1]; in_.add(L)
+                    if not _N.fin and _N in _N_:
+                        m,d = nt_vt(*L.nt)
+                        if m > ave * (rc-1):  # cluster nt, L,C_ by combined rim density:
+                            N_ += [_N]; _N.fin = 1
+                            L_ += [L]; C_ += _N.C_
+                            _L_+= [l for l in _N.rim if l not in in_ and (l.nt[0].fin ^ l.nt[1].fin)]   # new frontier links, +|-?
+                        elif d > avd * (rc-1):  # contrast value, exclusive?
+                            B_ += [L]
+                __L_ = list(set(_L_))
+            if N_:
+                Ft_ = ([list(set(N_)),np.zeros((2,9)),0,0], [list(set(L_)),np.zeros((2,9)),0,0], [list(set(B_)),np.zeros((2,9)),0,0], [list(set(C_)),np.zeros((2,9)),0,0])
+                for i, (F_,tt,c,r) in enumerate(Ft_):
+                    for F in F_:
+                        tt += F.dTT; Ft_[i][2] += F.c
+                        if i>1: Ft_[i][3] += F.rc  # define Bt,Ct rc /= ave node rc?
+                (N_,nt,nc,_),(L_,lt,lc,_),(B_,bt,bc,br),(C_,ct,cc,cr) = Ft_
+                c = nc + lc + bc*br + cc*cr
+                tt = (nt*nc + lt*lc + bt*bc*br + ct*cc*cr) / c
+                if val_(tt,rc, TTw(root), (len(N_)-1)*Lw) > 0 or fL:
+                    G_ = [sum2G(((N_,nt,nc),(L_,lt,lc),(B_,bt,bc),(C_,ct,cc)), tt,c, rc,root)]  # calls sub+/ 3 forks, br,cr?
+                    L__+=L_; TT+=tt; nTT+=nt; lTT+=lt; C+=c; nC+=nc; lC+=lc
+                    # G.TT * cr * rcr?
+        if G_ and (fL or val_(TT, rc+1, TTw(root), (len(G_)-1)*Lw)):  # include singleton lGs
+            rc += 1
+            root_replace(root,rc, TT,C, G_,nTT,nC,L__,lTT,lC)
+        if G_:  # top root.N_
+            tL_ = [tl for n in root.N_ for l in n.L_ for tl in l.N_]  # trans-links
+            if sum(tL.m for tL in tL_) * ((len(tL_)-1)*Lw) > ave*(rc+connw):  # use tL.dTT?
+                trans_cluster(root, tL_, rc+1)  # sets tTs
+                mmax_ = []
+                for F,tF in zip((root.Nt,root.Bt,root.Ct), (root.Lt.N_[-1])):
+                    if F and tF:
+                        maxF,minF = (F,tF) if F.m>tF.m else (tF,F)
+                        mmax_+= [max(F.m,tF.m)]; minF.rc+=1  # rc+=rdn
+                sm_ = sorted(mmax_, reverse=True)
+                tNt, tBt, tCt = root.Lt.N_[-1]
+                for m, (Ft, tFt) in zip(mmax_,((root.Nt,tNt),(root.Bt,tBt),(root.Ct,tCt))): # +rdn in 3 fork pairs
+                    r = sm_.index(m); Ft.rc+=r; tFt.rc+=r  # rc+=rdn
+    return G_, rc
