@@ -448,3 +448,29 @@ def cluster_N1(root, _N_, rc, fL=0):  # flood-fill node | link clusters, flat, r
                 for m, (Ft, tFt) in zip(mmax_,((root.Nt,tNt),(root.Bt,tBt),(root.Ct,tCt))): # +rdn in 3 fork pairs
                     r = sm_.index(m); Ft.rc+=r; tFt.rc+=r  # rc+=rdn
     return G_, rc
+
+def trans_cluster(root, rc):  # may create nested levs, re-order in sort_H?
+
+    for lev in root.Lt.N_:  # Lt.N_ = H, nested in trans_comp
+        for Ft, nF in [[getattr(lev,nF), nF] for nF in ('Nt','Bt','Ct')]:
+            if Ft and isinstance(Ft.N_[0],CF):
+                H = []
+                for i, lev in enumerate(getattr(root,nF).N_[1:]): # deeper levs only
+                    if isinstance(lev, CN):  # lev was converted to CN in trans_comp
+                        _N_ = list({n for t in lev.N_ for n in t.nt})  # trans_links
+                        for n in _N_: n.exe = 1
+                        t_,rc = cluster_N(root,_N_,rc+i-1,nF=nF,lev=i); T_=[]  # or merge n.roots, this is not agg+?
+                        if t_:
+                            if val_(lev.dTT, rc, TTw(root), (len(t_)-1) * Lw) > 0:
+                                T_,_ = cross_comp(lev, rc)  # nest, root_update
+                            lev.N_ = T_ or t_  # no other changes?
+                    H += [lev]; rc += 1
+
+def slope(link_):  # get ave 2nd rate of change with distance in cluster or frame?
+
+    Link_ = sorted(link_, key=lambda x: x.span)
+    dists = np.array([l.span for l in Link_])
+    diffs = np.array([l.d/l.c for l in Link_])
+    rates = diffs / dists
+    return (np.diff(rates) / np.diff(dists)).mean()  # ave d(d_rate) / d(unit_distance)
+
