@@ -20,9 +20,9 @@ links are correlation clustered, forming contours that complement adjacent conne
 Each composition cycle goes through <=4 stages, shifting from connectivity to centroid-based:
 
 - select sparse exemplars to seed the clusters, top k for parallelization? (get_exemplars),
-- connectivity / density-based agglomerative clustering, followed by divisive clustering (cluster_N), 
+- connectivity/ density-based agglomerative clustering, followed by divisive clustering (cluster_N), 
 - sequential centroid-based fuzzy clustering with iterative refinement, start in divisive phase (cluster_C),
-- centroid-parallel frame refinement by two-layer EM if >min global overlap, prune for next cycle (cluster_C_par).
+- centroid-parallel frame refinement by two-layer EM if min global overlap, prune, next cros_comp cycle (cluster_P).
 
 That forms hierarchical graph representation: dual tree of down-forking elements: node_H, and up-forking clusters: root_H:
 https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/generic%20graph.drawio.png
@@ -161,23 +161,23 @@ def cross_comp(root, rc, fL=0):  # core function mediating recursive rng+ and de
         if nG_ and val_(root.dTT, rc+nw, TTw(root), (len(root.N_)-1)*Lw,1, TTd,cr) > 0:
             nG_,rc = cross_comp(root,rc)
             for nG in nG_:
-                if isinstance(nG.Lt.N_[0],CF):  # LH top lev=CF, deeper levs maybe CN formed in trans_comp, eval per fork?
+                if isinstance(nG.Lt.N_[0],CF):  # LH: top lev= links, deeper levs = trans_links
                     trans_cluster(nG, rc)  # merge trans_link- connected Gs, from sub+ and agg+
     return nG_,rc   # nG_ is recursion flag
 
-def trans_cluster(root, rc):  # may create nested levs, re-order in sort_H?
+def trans_cluster(root, rc):  # trans_links mediate re-order in sort_H?
 
-    def rroot(n): return rroot(n.root) if n.root and n.root != root.root else n
+    def rroot(n): return rroot(n.root) if n.root and n.root != root else n  # root is nG
 
-    for lev in root.Lt.N_[1:]:  # Lt.N_=H, may be nested in trans_comp
-        if isinstance(lev,CN):  # was trans_comped
-            for tL in lev.N_:  # trans_link
-                for Ft, nF in [[getattr(tL,nF), nF] for nF in ('Nt','Bt','Ct')]:
-                    if Ft:
-                        for F in Ft.N_:  # flat fork trans_link_
-                            _root = rroot(F.nt[0]); root = rroot(F.nt[1])
-                            add_N(_root,root)  # add nesting if diff elev, also add forks?
+    for lev in root.Lt.N_[1:]:  # Lt.N_= H, may be nested in trans_comp
+        for tL in lev.N_:  # trans_link
+            for Ft, nF in [[getattr(tL,nF), nF] for nF in ('Nt','Bt','Ct')]:
+                if Ft:
+                    for F in Ft.N_:  # flat fork trans_link_s
+                        _rrt = rroot(F.nt[0]); rrt = rroot(F.nt[1])
+                        if _rrt is not rrt: add_N(_rrt, rrt)  # merge new roots, nest / ddepth, also add forks?
         # reval rc, not revised
+        '''
         tL_ = [tL for n in root.N_ for l in n.L_ for tL in l.N_]  # trans-links
         if sum(tL.m for tL in tL_) * ((len(tL_)-1)*Lw) > ave*(rc+connw):  # use tL.dTT?
             mmax_ = []
@@ -189,6 +189,7 @@ def trans_cluster(root, rc):  # may create nested levs, re-order in sort_H?
             tNt, tBt, tCt = root.Lt.N_[-1]
             for m, (Ft, tFt) in zip(mmax_,((root.Nt,tNt),(root.Bt,tBt),(root.Ct,tCt))): # +rdn in 3 fork pairs
                 r = sm_.index(m); Ft.rc+=r; tFt.rc+=r  # rc+=rdn
+        '''
 
 def comp_N_(iN_, rc, _iN_=[]):  # incremental-distance cross_comp, max dist depends on prior match
 
@@ -267,17 +268,17 @@ def comp_F_(_F_,F_,nF, rc, root):  # root is link, unpack node trees down to num
     else:
         for _lev,lev in zip(_F_,F_):
             rc += 1  # deeper levels are redundant
-            tt = comp_derT(_lev.dTT[1],lev.dTT[1]); m,d = vt_(tt,rc)
+            TT = comp_derT(_lev.dTT[1],lev.dTT[1]); C = 1  # min per dTT?
             _sN_,sN_ = set(_lev.N_), set(lev.N_)
-            iN_ = _sN_ & sN_; _oN_ = _sN_-sN_; oN_ = sN_-_sN_  # intersect, offsets in lev
-            dN_ = []; Cx = CN  # lev=CN if oN_ is compared?
-            for n in iN_: m += n.m  # pure match
-            if m > ave:  # nested comp eval
+            iN_ = list(_sN_ & sN_)  # intersect = match
+            for n in iN_: TT += n.dTT; C += n.c; rc += n.rc
+            _oN_= _sN_-sN_; oN_= sN_-_sN_; dN_= []
+            if _oN_ and oN_:
                 for _n,n in product(_oN_,oN_):
-                    comp_n(_n,n, TTm,TTd,cm,cd,rc, dN_); nm,nd= vt_(TTm,rc); m+=nm; d+=nd
-            else: dN_ = list(_oN_)+list(oN_); Cx = CF  # keep not-compared offsets?
-            L_ += [Cx(N_=dN_,dTT=tt, m=m,d=d, c=min(_lev.c,lev.c), rc=rc,root=root)]  # L_ = H
-    if L_: setattr(root,nF, sum2F(L_,nF,root,TTm,cm, fCF=0,))  # root is Link or trans_link
+                    cm,_ = comp_n(_n,n, TTm,TTd,cm,cd,rc, dN_)  # comp offsets, rc += n.rc?
+            TT += TTm; m,d = vt_(TT,rc); C += cm
+            L_ += [CF(nF='tF',N_=dN_, dTT=TT,m=m,d=d,c=C, rc=rc/(len(dN_+iN_)+1), root=root)]  # L_ = H
+    if L_: setattr(root,nF, sum2F(L_,nF,root,TTm,cm, fCF=0))  # root is Link or trans_link
 
 def base_comp(_N,N):  # comp Et, baseT, extT, dTT
 
@@ -420,7 +421,7 @@ def cluster_N(root, _N_, rc, fL=0):  # flood-fill node | link clusters, flat, re
                 c = nc + lc + bc*br + cc*cr
                 tt = (nt*nc + lt*lc + bt*bc*br + ct*cc*cr) / c
                 if val_(tt,rc, TTw(root), (len(N_)-1)*Lw) > 0 or fL:
-                    G_ = [sum2G(((N_,nt,nc),(L_,lt,lc),(B_,bt,bc),(C_,ct,cc)), tt,c, rc,root)]  # calls sub+/ 3 forks, br,cr?
+                    G_ += [sum2G(((N_,nt,nc),(L_,lt,lc),(B_,bt,bc),(C_,ct,cc)), tt,c, rc,root)]  # calls sub+/ 3 forks, br,cr?
                     L__+=L_; TT+=tt; nTT+=nt; lTT+=lt; C+=c; nC+=nc; lC+=lc
                     # G.TT * cr * rcr?
         if G_ and (fL or val_(TT, rc+1, TTw(root), (len(G_)-1)*Lw)):  # include singleton lGs
@@ -589,15 +590,15 @@ def sum2G(Ft_,tt,c,rc, root=None, init=1, typ=None, fsub=1):  # updates root if 
 def sum2F(F_, nF, root, TT=None, C=0, fset=1, fCF=1):
 
     def add_F(F,f, cr):
-        F.N_+=f.N_; F.dTT+=f.dTT*cr; F.c+=f.c; F.rc+=cr  # ->ave cr?
+        F.N_+=f.N_; F.dTT+=f.dTT*cr; F.c+=f.c; F.rc+=cr  # -> ave cr?
     if not C:
         C = sum([n.c for n in F_]); TT = np.sum([n.dTT for n in F_], axis=0)  # *= cr?
-    NH =[]; m,d= vt_(TT); F = F_[0]
+    NH =[]; m,d= vt_(TT)
     if fCF: Ft = CF(nF=nF,dTT=TT,m=m,d=d,c=C,root=root)
     else:   Ft = CN(dTT=TT,m=m,d=d,c=C,root=root); Ft.nF = nF
-    if F.N_:
-        L1 = CF(nF=nF,root=Ft)
-        for F in F_:
+    L1 = CF(nF=nF,root=Ft)  # new first level
+    for F in F_:
+        if F.N_:
             cr = F.c / C
             if isinstance(F.N_[0],CF):  # G.Nt.N_=H, top-down, eval sort_H?
                 if NH:
@@ -608,10 +609,10 @@ def sum2F(F_, nF, root, TT=None, C=0, fset=1, fCF=1):
                 else: NH = [CopyT(lev,Ft,cr*(lev.c/F.c)) for lev in F.N_]
             else:
                 for N in F.N_: add_F(L1, N, cr)  # concat N_s, deeper than TT,C
-        if L1: L1.rc /= len(L1.N_)
-        if NH:  # any nested F
-            if L1: add_F(NH[0], L1, cr=1)  # same rc?
-        else: NH = [L1]
+    if L1: L1.rc /= len(L1.N_)
+    if NH:  # any nested F
+        if L1: add_F(NH[0], L1, cr=1)  # same rc?
+    else: NH = [L1]
     Ft.N_ = [CF(N_=F_,dTT=TT, m=m,d=d,c=C,root=root)] + NH if NH else F_  # add top lev
     if fset:
         setattr(root, nF,Ft); root_update(root, Ft)
@@ -725,7 +726,7 @@ def sort_H(H, fi):  # lev.rc = complementary to root.rc and priority index in H,
         lay.rc += di  # derR - valR
         i_ += [lay.i]
     H.i_ = i_  # H priority indices: node/m | link/d
-    if fi>1:
+    if fi > 1:
         H.root.node_ = H.node_
     # more advanced ordering: dH | H as medoid cluster of layers, nested cent_TT across layers?
 

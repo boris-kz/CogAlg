@@ -474,3 +474,22 @@ def slope(link_):  # get ave 2nd rate of change with distance in cluster or fram
     rates = diffs / dists
     return (np.diff(rates) / np.diff(dists)).mean()  # ave d(d_rate) / d(unit_distance)
 
+def comp_F_(_F_,F_,nF, rc, root):  # root is link, unpack node trees down to numericals and compare them
+
+    L_,TTm,cm,TTd,cd = [],np.zeros((2,9)),0,np.zeros((2,9)),0
+    if isinstance(F_[0],CN):
+        for _N, N in product(F_,_F_):
+            if _N is N: dtt = np.array([N.dTT[1], np.zeros(9)]); TTm += dtt; cm=1; cd=0  # overlap is pure match
+            else:       cm,cd = comp_n(_N,N, TTm,TTd,cm,cd,rc,L_)
+    else:
+        for _lev,lev in zip(_F_,F_):
+            rc += 1  # deeper levels are redundant
+            tt = comp_derT(_lev.dTT[1],lev.dTT[1]); m,d = vt_(tt,rc)
+            _sN_,sN_ = set(_lev.N_), set(lev.N_)
+            iN_ = _sN_ & sN_; _oN_= _sN_-sN_; oN_= sN_-_sN_; dN_=[]  # intersect, offsets in lev
+            for n in iN_: m += n.m  # all match, not in dN_?
+            if _oN_ and oN_ and m > ave:  # offset comp:
+                for _n,n in product(_oN_,oN_): comp_n(_n,n, TTm,TTd,cm,cd,rc, dN_); nm,nd= vt_(TTm,rc); m+=nm; d+=nd
+            L_ += [CF(nF='tF',N_=dN_,dTT=tt,m=m,d=d,c=min(_lev.c,lev.c),rc=rc,root=root)]
+            # L_ = H
+    if L_: setattr(root,nF, sum2F(L_,nF,root,TTm,cm, fCF=0))  # root is Link or trans_link
