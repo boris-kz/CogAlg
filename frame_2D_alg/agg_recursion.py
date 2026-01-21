@@ -161,22 +161,32 @@ def cross_comp(root, rc, fL=0):  # core function mediating recursive rng+ and de
         if nG_ and val_(root.dTT, rc+nw, TTw(root), (len(root.N_)-1)*Lw,1, TTd,cr) > 0:
             nG_,rc = cross_comp(root,rc)
             for nG in nG_:
-                if isinstance(nG.Lt.N_[0],CF):  # LH: top lev= links, deeper levs = trans_links
-                    trans_cluster(nG, rc)  # merge trans_link- connected Gs, from sub+ and agg+
+                if isinstance(nG.Lt.N_[0],CF):  # Lt.N_=H,[1:] = globally spliced trans_links
+                    trans_cluster(nG, rc)  # merge trans_link- connected Gs, from sub+ + agg+
     return nG_,rc   # nG_ is recursion flag
 
 def trans_cluster(root, rc):  # trans_links mediate re-order in sort_H?
 
     def rroot(n): return rroot(n.root) if n.root and n.root != root else n  # root is nG
-
-    for lev in root.Lt.N_[1:]:  # Lt.N_= H, may be nested in trans_comp
-        for tL in lev.N_:  # trans_link
-            for Ft, nF in [[getattr(tL,nF), nF] for nF in ('Nt','Bt','Ct')]:
-                if Ft:
-                    for F in Ft.N_:  # flat fork trans_link_s
-                        _rrt = rroot(F.nt[0]); rrt = rroot(F.nt[1])
-                        if _rrt is not rrt: add_N(_rrt, rrt)  # merge new roots, nest / ddepth, also add forks?
-        # reval rc, not revised
+    FH_ = [[],[],[]]
+    for L in root.Lt.N_:  # base links
+        for FH,Ft in zip(FH_, (L.Lt,L.Bt,L.Ct)):  # L.Lt maps to N.Nt, else conflict with Lt.N_
+            for Lev,lev in zip_longest(FH, Ft.N_):  # default H?
+                if lev:
+                    if Lev: Lev += lev.N_  # concat, sum2F later
+                    else:   FH += [list(lev.N_)]
+    # flat Lt.N_
+    for FH, nF in zip(FH_, ('Lt','Bt','Ct')):  # spliced trans-forks, Lt maps to Nt
+        if FH:  # merge Lt.fork.nt.roots
+            for lev in reversed(FH):  # bottom-up to get incrementally higher roots
+                for tL in lev:  # trans_link
+                    rt0 = tL.nt[0].root; rt1 = tL.nt[1].root; fmerge=1  # same lev?
+                    if rt0 is rt1: continue
+                    if rt0 is root or rt1 is root: fmerge=0  # append vs. merge?
+                    add_N(rt0, rt1, fmerge)  # if fmerge: rt0 should be higher?
+            # set tFt:
+            FH = [sum2F(n_,nF,getattr(root.Lt,nF)) for n_ in FH]; sum2F(FH,nF, root.Lt)
+       # reval rc, not revised
         '''
         tL_ = [tL for n in root.N_ for l in n.L_ for tL in l.N_]  # trans-links
         if sum(tL.m for tL in tL_) * ((len(tL_)-1)*Lw) > ave*(rc+connw):  # use tL.dTT?
@@ -258,27 +268,28 @@ def comp_n(_N,N, TTm,TTd,cm,cd,rc, L_,N_=None):
     elif link.d > avd*(connw+rc): TTd+=dtt; cd+=link.c  # not in N_
     return cm,cd
 
-def comp_F_(_F_,F_,nF, rc, root):  # root is link, unpack node trees down to numericals and compare them
+def comp_F_(_F_,F_,nF, rc, root):  # root is nG, unpack node trees down to numericals and compare them
 
-    L_,TTm,cm,TTd,cd = [],np.zeros((2,9)),0,np.zeros((2,9)),0
+    L_,TTm,C,TTd,Cd = [],np.zeros((2,9)),0,np.zeros((2,9)),0; Rc=cc=0  # comp count
     if isinstance(F_[0],CN):
         for _N, N in product(F_,_F_):
-            if _N is N: dtt = np.array([N.dTT[1], np.zeros(9)]); TTm += dtt; cm=1; cd=0  # overlap is pure match
-            else:       cm,cd = comp_n(_N,N, TTm,TTd,cm,cd,rc,L_)
+            if _N is N: dtt = np.array([N.dTT[1], np.zeros(9)]); TTm += dtt; C=1; Cd=0  # overlap is pure match
+            else:       cm,cd = comp_n(_N,N, TTm,TTd,C,Cd,rc,L_); C+=cm; Cd+=cd
+            Rc+=_N.rc+N.rc; cc += 1
     else:
-        for _lev,lev in zip(_F_,F_):
-            rc += 1  # deeper levels are redundant
-            TT = comp_derT(_lev.dTT[1],lev.dTT[1]); C = 1  # min per dTT?
+        for _lev,lev in zip(_F_,F_):  # L_ = H
+            rc += 1; lRc=lcc=0  # deeper levels are redundant
+            TT = comp_derT(_lev.dTT[1],lev.dTT[1]); lRc+=1; lC=lcc=1  # min per dTT?
             _sN_,sN_ = set(_lev.N_), set(lev.N_)
             iN_ = list(_sN_ & sN_)  # intersect = match
-            for n in iN_: TT += n.dTT; C += n.c; rc += n.rc
+            for n in iN_: TT+=n.dTT; lC+=n.c; lRc+=n.rc; lcc+=1
             _oN_= _sN_-sN_; oN_= sN_-_sN_; dN_= []
-            if _oN_ and oN_:
-                for _n,n in product(_oN_,oN_):
-                    cm,_ = comp_n(_n,n, TTm,TTd,cm,cd,rc, dN_)  # comp offsets, rc += n.rc?
-            TT += TTm; m,d = vt_(TT,rc); C += cm
-            L_ += [CF(nF='tF',N_=dN_, dTT=TT,m=m,d=d,c=C, rc=rc/(len(dN_+iN_)+1), root=root)]  # L_ = H
-    if L_: setattr(root,nF, sum2F(L_,nF,root,TTm,cm, fCF=0))  # root is Link or trans_link
+            for _n,n in product(_oN_,oN_):
+                cm,_ = comp_n(_n,n, TTm,TTd,C,Cd,rc, dN_); lRc+=_n.rc+n.rc; lC+=cm; lcc+=1  # comp offsets
+            TT += TTm; m,d = vt_(TT,rc); C+=lC; Rc+=lRc; cc+=lcc
+            L_ += [CF(nF='tF',N_=dN_, dTT=TT,m=m,d=d,c=lC, rc=lRc/lcc, root=root)]
+    # temp root is Link, then splice in G in sum2G
+    if L_: setattr(root,nF, sum2F(L_,nF,root,TTm,C, fCF=0))  # pass Rc/cc?
 
 def base_comp(_N,N):  # comp Et, baseT, extT, dTT
 
@@ -589,14 +600,13 @@ def sum2G(Ft_,tt,c,rc, root=None, init=1, typ=None, fsub=1):  # updates root if 
 
 def sum2F(F_, nF, root, TT=None, C=0, fset=1, fCF=1):
 
-    def add_F(F,f, cr):
-        F.N_+=f.N_; F.dTT+=f.dTT*cr; F.c+=f.c; F.rc+=cr  # -> ave cr?
+    def add_F(F,f, cr, fmerge=1):
+        F.N_.extend(f.N_) if fmerge else F.N_.append(N); F.dTT+=f.dTT*cr; F.c+=f.c; F.rc+=cr  # -> ave cr?
     if not C:
         C = sum([n.c for n in F_]); TT = np.sum([n.dTT for n in F_], axis=0)  # *= cr?
     NH =[]; m,d= vt_(TT)
     if fCF: Ft = CF(nF=nF,dTT=TT,m=m,d=d,c=C,root=root)
     else:   Ft = CN(dTT=TT,m=m,d=d,c=C,root=root); Ft.nF = nF
-    L1 = CF(nF=nF,root=Ft)  # new first level
     for F in F_:
         if F.N_:
             cr = F.c / C
@@ -608,12 +618,10 @@ def sum2F(F_, nF, root, TT=None, C=0, fset=1, fCF=1):
                             else: add_F(Lev,lev, cr*(lev.c/F.c))
                 else: NH = [CopyT(lev,Ft,cr*(lev.c/F.c)) for lev in F.N_]
             else:
-                for N in F.N_: add_F(L1, N, cr)  # concat N_s, deeper than TT,C
-    if L1: L1.rc /= len(L1.N_)
-    if NH:  # any nested F
-        if L1: add_F(NH[0], L1, cr=1)  # same rc?
-    else: NH = [L1]
-    Ft.N_ = [CF(N_=F_,dTT=TT, m=m,d=d,c=C,root=root)] + NH if NH else F_  # add top lev
+                L1 = sum2F([n for n in F.N_], nF, F)  # L1.rc /= len(L1.N_)?
+                if NH: add_F(NH[0], L1, cr)
+                else:  NH = [[L1]]
+    Ft.N_ = ([CF(N_=F_,dTT=TT, m=m,d=d,c=C,root=root)] + NH) if NH else F_  # add top lev
     if fset:
         setattr(root, nF,Ft); root_update(root, Ft)
     return Ft
@@ -687,6 +695,7 @@ def CopyT(F, root=None, cr=1):  # F = CF|CN
     C = CF(dTT=F.dTT * cr, root=root or F.root)
     for nF in ['Nt','Bt','Ct']:
         if sub_F:=getattr(F,nF):
+            if not sub_F.N_: continue
             if isinstance(sub_F.N_[0],CN): C.N_ = copy(F.N_)
             else: C.N_ = [CopyT(lev,cr) for lev in F.N_]
     return C
