@@ -1,7 +1,7 @@
 import numpy as np
 from copy import copy, deepcopy
-from math import atan2, cos, floor, pi  # from functools import reduce
-from itertools import zip_longest, combinations, chain, product  # from multiprocessing import Pool, Manager
+from math import atan2, cos, pi  # from functools import reduce
+from itertools import zip_longest, combinations, product  # from multiprocessing import Pool, Manager
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
@@ -22,7 +22,7 @@ Each composition cycle goes through <=4 stages, shifting from connectivity to ce
 - select sparse exemplars to seed the clusters, top k for parallelization? (get_exemplars),
 - connectivity/ density-based agglomerative clustering, followed by divisive clustering (cluster_N), 
 - sequential centroid-based fuzzy clustering with iterative refinement, start in divisive phase (cluster_C),
-- centroid-parallel frame refinement by two-layer EM if min global overlap, prune, next cros_comp cycle (cluster_P).
+- centroid-parallel frame refine by two-layer EM if min global overlap, prune for next cros_comp cycle (cluster_P).
 
 That forms hierarchical graph representation: dual tree of down-forking elements: node_H, and up-forking clusters: root_H:
 https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/generic%20graph.drawio.png
@@ -50,7 +50,7 @@ capitalized vars are summed small-case vars
 '''
 eps = 1e-7
 
-def prop_F_(F):  # factory function to set property+setter to get,update top-composition fork.N_
+def prop_F_(F):  # factory function to set property+setter to get and update top-composition fork.N_
     def Nf_(N):  # CN instance
         Ft = getattr(N, F)  # Nt| Lt| Bt| Ct
         return Ft.N_[0] if (Ft.N_ and isinstance(Ft.N_[0], CF)) else Ft
@@ -75,7 +75,7 @@ class CN(CBase):
         n.em, n.ed, n.ec = kwargs.get('em',0),kwargs.get('ed',0),kwargs.get('ec',0)  # sum dTT
         n.eTT = kwargs.get('eTT',np.zeros((2,9)))  # sum rim dTT
         n.rc  = kwargs.get('rc', 1)  # redundancy to ext Gs, ave in links?
-        n.Nt, n.Bt, n.Ct, n.Lt = (kwargs.get(fork,CF()) for fork in ('Nt','Bt','Ct','Lt'))
+        n.Nt, n.Bt, n.Ct, n.Lt = (kwargs.get(fork,CF()) for fork in ('Nt','Bt','Ct','Lt'))  # L.Lt is trans_link forks
         # Fork tuple: [N_,dTT,m,d,c,rc,nF,root], N_ may be H: [N_,dTT] per level, nest=len(N_)
         n.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,A: not ders, in links for simplicity, mostly redundant
         n.nt    = kwargs.get('nt', [])  # nodet, links only
@@ -175,7 +175,7 @@ def trans_cluster(root, rc):  # trans_links mediate re-order in sort_H?
                 if lev:
                     if Lev: Lev += lev.N_  # concat for sum2F
                     else:   FH += [list(lev.N_)]
-    # merge fork tL.nt roots,tL_ spliced from links
+    # merge tL_ nt roots
     for FH, nF in zip(FH_, ('Nt','Bt','Ct')):
         if FH:  # merge Lt.fork.nt.roots
             for lev in reversed(FH):  # bottom-up to get incrementally higher roots
@@ -287,9 +287,9 @@ def comp_F_(_F_,F_,nF, rc, root):  # root is nG, unpack node trees down to numer
             for _n,n in product(_oN_,oN_):
                 cm,_ = comp_n(_n,n, TTm,TTd,C,Cd,rc, dN_); lRc+=_n.rc+n.rc; lC+=cm; lcc+=1  # comp offsets
             TT += TTm; m,d = vt_(TT,rc); C+=lC; Rc+=lRc; cc+=lcc
-            L_ += [CF(nF='tF',N_=dN_, dTT=TT,m=m,d=d,c=lC, rc=lRc/lcc, root=root)]
-    # temp root is Link, then splice in G in sum2G
-    if L_: setattr(root,nF, sum2F(L_,nF,root,TTm,C, fCF=0))  # pass Rc/cc?
+            L_ += [CF(N_=dN_,nF='tF',dTT=TT,m=m,d=d,c=lC, rc=lRc/lcc, root=root)]
+
+    if L_: setattr(root,nF, sum2F(L_,nF,root,TTm, C, Rc/cc))
 
 def base_comp(_N,N):  # comp Et, baseT, extT, dTT
 
@@ -598,26 +598,28 @@ def sum2G(Ft_,tt,c,rc, root=None, init=1, typ=None, fsub=1):  # updates root if 
     G.rN_= sorted(G.rN_, key=lambda x: (x.m/x.c), reverse=True)  # only if lG?
     return G
 
-def sum2F(F_, nF, root, TT=None, C=0, fset=1, fCF=1):  # add sub-forks merge?
+def sum2F(N_, nF, root, TT=np.zeros((2,9)), C=0, Rc=0, fset=1, fCF=1):  # always sum to Ft?
 
-    if not C:
-        C = sum([n.c for n in F_]); TT = np.sum([n.dTT for n in F_], axis=0)  # *= cr?
-    NH =[]; m,d= vt_(TT)
-    if fCF: Ft = CF(nF=nF,dTT=TT,m=m,d=d,c=C,root=root)
-    else:   Ft = CN(dTT=TT,m=m,d=d,c=C,root=root); Ft.nF = nF
-    for F in F_:
-        if F.N_:
-            cr = F.c / C
-            if isinstance(F.N_[0],CF):  # G.Nt.N_=H, top-down, eval sort_H?
-                if NH:
-                    for Lev, lev in zip_longest(NH, F.N_):
-                        if lev:
+    nH, NH = [],[]
+    for N in N_:
+        ft = getattr(N, nF)
+        if ft.N_:
+            if not C: TT += ft.dTT; C += ft.c; Rc += ft.rc
+            if isinstance(ft.N_[0], CF):  # Ft.N_=H, top-down, eval sort_H?
+                if nH:
+                    for Lev,lev in zip_longest(nH, reversed(ft.N_)):  # align bottom-up
+                        if lev.N_:
                             if Lev: Lev += lev.N_
-                            else:   NH += [lev.N_]
-                else: NH = [lev.N_ for lev in F.N_]
-            elif NH: NH[0] += F.N_  # flat levs
-            else:    NH = [F.N_]
-    Ft.N_ = [sum2F(N_,nF,root=Ft) for N_ in NH] if NH else F_  # add cr in sum2F: lev.rc /= len(lev.N_)?
+                            else:   nH += [lev.N_[:]]
+                else: nH = [lev.N_[:] for lev in N.N_]
+            elif NH:  nH[0] += ft.N_  # flat
+            else:     nH = [ft.N_[:]]
+    m,d = vt_(TT)
+    Cx = CF if fCF else CN
+    Ft = Cx(nF=nF, dTT=TT,m=m,d=d,c=C, rc=Rc/len(N_), root=root)
+    for n_ in reversed(nH):
+        NH += [sum2F(n_,nF, Ft)]  # always nested above
+    Ft.N_ = [CF(N_=N_,nF=nF,dTT=TT,m=m,d=d,c=C,root=Ft)] + NH  # add top level
     if fset:
         setattr(root, nF,Ft); root_update(root, Ft)
     return Ft
@@ -643,20 +645,32 @@ def add_N(G, N, coef=1, merge=0):  # sum Fts if merge
 
 def add_F(F,f, cr=1, merge=1):
 
-    cc = F.c / f.c
-    H = isinstance(F.N_[0],CF)  # flag for splicing
+    cc = F.c / f.c  # * cr?
+    F.dTT+= f.dTT*cc; m,d = vt_(F.dTT,F.rc); F.m=m; F.d=d
+    F.rc = (F.rc+ f.rc*cc)/ 2
+    F.c += f.c
+    FH = isinstance(F.N_[0],CF); fH=isinstance(f.N_[0],CF)
     if merge:
         if hasattr(F,'Nt'): merge_f(F,f, cc)
-        else: F.N_.extend(f.N_)
-    else: F.N_.append(f)
-    F.dTT+=f.dTT*cc*cr; F.c+=f.c; F.rc+=cr  # -> ave cr?
+        else:
+            if FH: F.N_ += f.N_ if fH else [f]
+            else:  F.N_ = [F] + f.N_ if fH else [f]
+        if FH or fH:
+            if FH and not fH:   f.N_ = [CopyF(f)]
+            elif fH and not FH: F.N_ = [CopyF(F)]
+            for Lev,lev in zip(reversed(f.N_), reversed(f.N_)):  # align bottom-up
+                if lev:
+                    if Lev: add_F(Lev, lev, cr, merge=1)
+                    else:   F.N_.append(CopyF(lev,root=F))
+        else:
+           F.N_.extend(f.N_)
+    else:
+        F.N_.append(f)
 
 def merge_f(N,n, cc=1):
-
     for Ft, ft in zip((N.Nt, N.Bt, N.Ct, N.Lt), (n.Nt, n.Bt, n.Ct, n.Lt)):
         if ft:
-            if Ft: add_F(Ft, ft, (n.rc + n.rc*cc) / 2)  # ft*cc
-            else:  setattr(N, ft.nF, CopyF(ft))  # not needed?
+            add_F(Ft, ft, (n.rc + n.rc*cc) / 2)  # ft*cc?
             root_update(N, ft)
 
 def cent_TT(C, rc, init=0):  # weight attr matches | diffs by their match to the sum, recompute to convergence
@@ -707,13 +721,8 @@ def root_replace(root, rc, TT,C, N_,nTT,nc,L_,lTT,lc):
     sum2F(L_,'Lt',root, lTT,lc)
 
 def CopyF(F, root=None, cr=1):  # F = CF|CN
-
-    C = CF(dTT=F.dTT * cr, root=root or F.root)
-    for nF in ['Nt','Bt','Ct']:
-        if sub_F:=getattr(F,nF):
-            if not sub_F.N_: continue
-            if isinstance(sub_F.N_[0],CN): C.N_ = copy(F.N_)
-            else: C.N_ = [CopyF(lev,cr) for lev in F.N_]
+    C = CF(dTT=F.dTT * cr, m=F.m, d=F.d, c=F.c, root=root or F.root)
+    C.N_ = [CopyF(N) if isinstance(N,CF) else Copy_(N) for N in F.N_]
     return C
 
 def Copy_(N, root=None, init=0, typ=None):
@@ -725,6 +734,7 @@ def Copy_(N, root=None, init=0, typ=None):
     if typ:
         for attr in ['fin','span','mang','sub','exe']: setattr(C,attr, getattr(N,attr))
         for attr in ['nt','baseT','box','rim','compared']: setattr(C,attr, copy(getattr(N,attr)))
+        for attr in ['Nt','Lt','Bt','Ct']: setattr(C,attr, CopyF(getattr(N,attr)))
         if init:  # new G
             C.rim = []; C.em = C.ed = 0
             C.yx = [N.yx]; C.angl = np.array([copy(N.angl[0]), N.angl[1]],dtype=object)  # to get mean
@@ -887,7 +897,7 @@ def vect_edge(tile, rV=1, wTT=None):  # PP_ cross_comp and floodfill to init foc
                 nG_ = [PP2N(PPm) for PPm in PPm_]
                 for PPd in edge.link_: PP2N(PPd)
                 for nG in nG_:
-                    if nG.B_: sum2F([B.root for B in nG.B_],'Bt',nG,1)
+                    if nG.B_: sum2F([B.root for B in nG.B_],'Bt',nG,fset=1)
                 if val_(np.sum([n.dTT for n in nG_],0),3, TTw(tile), (len(PPm_)-1)*Lw) > 0:
                     G_, rc = trace_edge(nG_,3, tile, tT)  # flatten, cluster B_-mediated Gs, init Nt (we need to return G_)?
     if G_:

@@ -493,3 +493,14 @@ def comp_F_(_F_,F_,nF, rc, root):  # root is link, unpack node trees down to num
             L_ += [CF(nF='tF',N_=dN_,dTT=tt,m=m,d=d,c=min(_lev.c,lev.c),rc=rc,root=root)]
             # L_ = H
     if L_: setattr(root,nF, sum2F(L_,nF,root,TTm,cm, fCF=0))  # root is Link or trans_link
+
+def add_F(F,f, cr=1, merge=1):
+
+    cc = F.c / f.c
+    H = isinstance(F.N_[0],CF)  # flag for splicing
+    if merge:
+        if hasattr(F,'Nt'): merge_f(F,f, cc)
+        else: F.N_.extend(f.N_)
+    else: F.N_.append(f)
+    F.dTT+=f.dTT*cc*cr; F.c+=f.c; F.rc+=cr  # -> ave cr?
+
