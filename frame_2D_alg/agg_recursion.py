@@ -180,12 +180,13 @@ def trans_cluster(root, rc):  # trans_links mediate re-order in sort_H?
         if FH:  # merge Lt.fork.nt.roots
             for lev in reversed(FH):  # bottom-up to get incrementally higher roots
                 for tL in lev:  # trans_link
-                    rt0 = tL.nt[0].root; rt1 = tL.nt[1].root; merge=1  # same lev?
+                    rt0 = tL.nt[0].root; rt1 = tL.nt[1].root
                     if rt0 is rt1: continue
-                    if rt0 is root or rt1 is root: merge=0  # append vs merge?
-                    add_N(rt0, rt1, merge)  # if merge: rt0 should be higher?
+                    merge = rt0 is root == rt1 is root  # else append
+                    if not merge and rt0 is root: rt0,rt1 = rt1,rt0  # concat in higher G if not equal?
+                    add_N(rt0, rt1, merge)
             # set tFt:
-            FH = [sum2F(n_,nF,getattr(root.Lt,nF)) for n_ in FH]; sum2F(FH,nF, root.Lt)
+            FH = [sum2F(n_,nF,getattr(root.Lt, nF)) for n_ in FH]; sum2F(FH, nF, root.Lt)
        # reval rc, not revised
         '''
         tL_ = [tL for n in root.N_ for l in n.L_ for tL in l.N_]  # trans-links
@@ -598,28 +599,26 @@ def sum2G(Ft_,tt,c,rc, root=None, init=1, typ=None, fsub=1):  # updates root if 
     G.rN_= sorted(G.rN_, key=lambda x: (x.m/x.c), reverse=True)  # only if lG?
     return G
 
-def sum2F(N_, nF, root, TT=np.zeros((2,9)), C=0, Rc=0, fset=1, fCF=1):  # always sum to Ft?
+def sum2F(N_,nF, root, TT=np.zeros((2,9)), C=0, Rc=0, fset=1, fCF=1):  # always sum to Ft?
 
-    nH, NH = [],[]
-    for N in N_:
-        ft = getattr(N, nF)
-        if ft.N_:
-            if not C: TT += ft.dTT; C += ft.c; Rc += ft.rc
-            if isinstance(ft.N_[0], CF):  # Ft.N_=H, top-down, eval sort_H?
+    nH = []
+    for F in N_:  # fork-specific N_
+        if F.N_:
+            if not C: TT += F.dTT; C += F.c; Rc += F.rc
+            if isinstance(F.Nt.N_[0],CF):  # H, top-down, eval sort_H?
                 if nH:
-                    for Lev,lev in zip_longest(nH, reversed(ft.N_)):  # align bottom-up
-                        if lev.N_:
+                    for Lev,lev in zip_longest(nH, reversed(F.Nt.N_)):  # align bottom-up
+                        if lev and lev.N_:
                             if Lev: Lev += lev.N_
                             else:   nH += [lev.N_[:]]
-                else: nH = [lev.N_[:] for lev in N.N_]
-            elif NH:  nH[0] += ft.N_  # flat
-            else:     nH = [ft.N_[:]]
+                else: nH = [lev.N_[:] for lev in F.Nt.N_]
+            elif nH:  nH[0] += F.N_  # flat
+            else:     nH = [F.N_[:]]
     m,d = vt_(TT)
     Cx = CF if fCF else CN
     Ft = Cx(nF=nF, dTT=TT,m=m,d=d,c=C, rc=Rc/len(N_), root=root)
-    for n_ in reversed(nH):
-        NH += [sum2F(n_,nF, Ft)]  # always nested above
-    Ft.N_ = [CF(N_=N_,nF=nF,dTT=TT,m=m,d=d,c=C,root=Ft)] + NH  # add top level
+    nH = [sum2F(n_,nF, Ft) for n_ in reversed(nH)]  # rev, nested above
+    Ft.N_ = [CF(N_=N_,nF=nF,dTT=TT,m=m,d=d,c=C,root=Ft)] + nH  # + top level
     if fset:
         setattr(root, nF,Ft); root_update(root, Ft)
     return Ft
@@ -645,25 +644,25 @@ def add_N(G, N, coef=1, merge=0):  # sum Fts if merge
 
 def add_F(F,f, cr=1, merge=1):
 
-    cc = F.c / f.c  # * cr?
+    def sum_H(H,h, cr, root):  # reverse to align bottom-up:
+        for Lev,lev in zip(reversed(H), reversed(h)):
+            if lev:
+                if Lev: add_F(Lev, lev, cr, merge=1)
+                else:   H.append(CopyF(lev, root))
+        return reversed(H)
+    # cc *= cr?
+    cc = F.c / f.c
     F.dTT+= f.dTT*cc; m,d = vt_(F.dTT,F.rc); F.m=m; F.d=d
-    F.rc = (F.rc+ f.rc*cc)/ 2
-    F.c += f.c
-    FH = isinstance(F.N_[0],CF); fH=isinstance(f.N_[0],CF)
+    F.rc = (F.rc+ f.rc*cc)/ 2; F.c += f.c
     if merge:
         if hasattr(F,'Nt'): merge_f(F,f, cc)
         else:
-            if FH: F.N_ += f.N_ if fH else [f]
-            else:  F.N_ = [F] + f.N_ if fH else [f]
-        if FH or fH:
-            if FH and not fH:   f.N_ = [CopyF(f)]
-            elif fH and not FH: F.N_ = [CopyF(F)]
-            for Lev,lev in zip(reversed(f.N_), reversed(f.N_)):  # align bottom-up
-                if lev:
-                    if Lev: add_F(Lev, lev, cr, merge=1)
-                    else:   F.N_.append(CopyF(lev,root=F))
-        else:
-           F.N_.extend(f.N_)
+            fH = isinstance(F.N_[0], CF);   fh = isinstance(f.N_[0], CF)
+            H = F.N_ if fH else [CopyF(F)]; h = f.N_ if fh else [CopyF(f)]
+            if fH or fh:
+                F.N_ = sum_H(H,h, cr,F)  # only for Fts
+            else:
+                F.N_.extend(f.N_)  # always for levs
     else:
         F.N_.append(f)
 
