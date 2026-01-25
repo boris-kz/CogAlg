@@ -116,17 +116,6 @@ mW = dW = 9  # fb weights per dTT, adjust in agg+
 wY = wX = 64; wYX = np.hypot(wY,wX)  # focus dimensions
 decay = ave / (ave+avd)  # match decay / unit dist?
 
-''' Core process per agg level, as described in top docstring:
-
-- Cross-comp nodes, evaluate incremental-derivation cross-comp of new >ave difference links, recursively. 
-- Select exemplar nodes, links, centroid-cluster their rim nodes, selectively spreading out within a frame. 
-
-- Connectivity-cluster select exemplars/centroids by >ave match links, correlation-cluster links by >ave diff.
-- Form complemented (core+contour) clusters for recursive higher-composition cross_comp. 
-
-- Forward: extend cross-comp and clustering of top clusters across frames, re-order centroids by eigenvalues.
-- Feedback coords to bottom level or prior-level in parallel pipelines, filter updates in more coarse cycles '''
-
 def vt_(TT, rc=0, wTT=None):  # brief val_ to get m,d, rc=0 to return raw vals
 
     m_,d_= TT; ad_ = np.abs(d_); t_ = m_ + ad_ + eps  # ~ max comparand
@@ -141,11 +130,23 @@ def val_(TT, rc, wTT, mw=1.0,fi=1, _TT=None,cr=.5):  # m,d eval per cluster, cr 
         _t_ = np.abs(_TT[0]) + np.abs(_TT[1])
         _rv = _TT[0] / (_t_+eps) @ wTT[0] if fi else _TT[1] / (_t_+eps) @ wTT[1]
         rv  = rv * (1-cr) + _rv * cr  # + borrowed alt fork val, cr: d count ratio, must be passed with _TT?
-
-    return rv * mw - (ave if fi else avd) * rc
+    return rv*mw - (ave if fi else avd) * rc
 
 def TTw(G): return getattr(G,'wTT',wTTf)
 
+''' agg cycle:
+- Cross-comp nodes, evaluate incremental-derivation cross-comp of new >ave difference links, recursively. 
+- Select exemplars
+
+- Connectivity-cluster select exemplars/centroids by >ave match links, correlation-cluster links by >ave diff,
+- Form complemented (core+contour) clusters -> divisive sub-clustering, higher-composition cross_comp. 
+
+- Centroid-cluster from exemplars, spreading via their rim within a frame, increasing overlap between centroids.
+- Switch to globally parallel EM-like fuzzy centroid refining if overlap makes lateral expansion less efficient.
+
+- Forward: extend cross-comp and clustering of top clusters across frames, re-order centroids by eigenvalues.
+- Feedback coords to bottom level or prior-level in parallel pipelines, filter updates in more coarse cycles 
+'''
 def cross_comp(root, rc, fL=0):  # core function mediating recursive rng+ and der+ cross-comp and clustering, rc=rdn+olp
 
     N_ = (root.N_,root.B_)[fL]; nG_ = []
@@ -277,20 +278,21 @@ def comp_F_(_F_,F_,nF, rc, root):  # root is nG, unpack node trees down to numer
             if _N is N: dtt = np.array([N.dTT[1], np.zeros(9)]); TTm += dtt; C=1; Cd=0  # overlap is pure match
             else:       cm,cd = comp_n(_N,N, TTm,TTd,C,Cd,rc,L_); C+=cm; Cd+=cd
             Rc+=_N.rc+N.rc; cc += 1
+        if L_: setattr(root,nF, sum2F(L_,nF,root,TTm, C, Rc/cc))
     else:
         for _lev,lev in zip(_F_,F_):  # L_ = H
             rc += 1  # deeper levels are redundant
-            TT = comp_derT(_lev.dTT[1],lev.dTT[1]); lRc= lC= lcc= 1  # min per dTT?
+            lTT = comp_derT(_lev.dTT[1],lev.dTT[1]); lRc= lC= lcc= 1  # min per dTT?
             _sN_,sN_ = set(_lev.N_), set(lev.N_)
             iN_ = list(_sN_ & sN_)  # intersect = match
-            for n in iN_: TT+=n.dTT; lC+=n.c; lRc+=n.rc; lcc+=1
+            for n in iN_: lTT+=n.dTT; lC+=n.c; lRc+=n.rc; lcc+=1
             _oN_= _sN_-sN_; oN_= sN_-_sN_; dN_= []
             for _n,n in product(_oN_,oN_):
-                cm,_ = comp_n(_n,n, TTm,TTd,C,Cd,rc, dN_); lRc+=_n.rc+n.rc; lC+=cm; lcc+=1  # comp offsets
-            TT += TTm; m,d = vt_(TT,rc); C+=lC; Rc+=lRc; cc+=lcc
-            L_ += [CF(N_=dN_,nF='tF',dTT=TT,m=m,d=d,c=lC, rc=lRc/lcc, root=root)]
-
-    if L_: setattr(root,nF, sum2F(L_,nF,root,TTm, C, Rc/cc))
+                cm,_ = comp_n(_n,n, lTT,TTd,C,Cd,rc, dN_); lRc+=_n.rc+n.rc; lC+=cm; lcc+=1  # comp offsets
+            rc=lRc/lcc; m,d = vt_(lTT,rc); TTm += lTT; C+=lC; Rc+=lRc; cc+=lcc
+            L_ += [CF(N_=dN_,nF='tF',dTT=lTT,m=m,d=d,c=lC,rc=rc, root=root)]
+        if L_:
+            rc=Rc/cc; m,d = vt_(TTm,rc); setattr(root,nF, CF(N_=L_,nF='tF',dTT=TTm,m=m,d=d,c=C,rc=rc, root=root))
 
 def base_comp(_N,N):  # comp Et, baseT, extT, dTT
 
@@ -564,7 +566,8 @@ def sum2G(Ft_,tt,c,rc, root=None, init=1, typ=None, fsub=1):  # updates root if 
     if typ is None: typ = N.typ
     m, d = vt_(tt, rc)
     G = Copy_(N,root,init=1,typ=typ); G.dTT=tt; G.m=m; G.d=d; G.c=c; G.rc=rc
-    G.Nt = sum2F(N_,'Nt',G, ntt, nc)
+    if typ: G.Nt = sum2F(N_,'Nt',G, ntt, nc)
+    else:   m,d=vt_(ntt,rc); G.Nt = CF(N_=N_,nF='tF',dTT=ntt,m=m,d=d,c=nc,rc=rc,root=root)  # pack PP_
     for N in N_[1:]: add_N(G,N, coef=N.c/c)  # sum not-CF vars only?
     if L_:
         G.Lt = sum2F(L_,'Lt',G,ltt,lc)
@@ -595,29 +598,28 @@ def sum2G(Ft_,tt,c,rc, root=None, init=1, typ=None, fsub=1):  # updates root if 
             V = G.m - ave * (rc+1)
             if mdecay(L_) > decay:
                 if V > ave*centw: cluster_C(G,N_,rc+1)  # cent cluster: N_->Ct.N_, higher than G.C_
-            elif V > ave*connw: cluster_N(G,N_,rc+1)  # conn cluster/ higher filter: N_->Nt.N_ | N_
+            elif V > ave*connw: cluster_N(G,N_,rc+1)  # conn cluster/ higher filter: N_-> Nt.N_| N_
     G.rN_= sorted(G.rN_, key=lambda x: (x.m/x.c), reverse=True)  # only if lG?
     return G
 
 def sum2F(N_,nF, root, TT=np.zeros((2,9)), C=0, Rc=0, fset=1, fCF=1):  # always sum to Ft?
 
-    nH = []
+    nH = []  # old H: unpack,concat,resum existing node levels, then sum,append new lev from N_
     for F in N_:  # fork-specific N_
-        if F.N_:
-            if not C: TT += F.dTT; C += F.c; Rc += F.rc
-            if isinstance(F.Nt.N_[0],CF):  # H, top-down, eval sort_H?
-                if nH:
-                    for Lev,lev in zip_longest(nH, reversed(F.Nt.N_)):  # align bottom-up
-                        if lev and lev.N_:
-                            if Lev: Lev += lev.N_
-                            else:   nH += [lev.N_[:]]
-                else: nH = [lev.N_[:] for lev in F.Nt.N_]
-            elif nH:  nH[0] += F.N_  # flat
-            else:     nH = [F.N_[:]]
+        if not C: TT += F.dTT; C += F.c; Rc += F.rc
+        if isinstance(F.Nt.N_[0],CF):  # H, top-down, eval sort_H?
+            if nH:
+                for Lev,lev in zip_longest(nH, reversed(F.Nt.N_)):  # align bottom-up
+                    if lev and lev.N_:
+                        if Lev: Lev += lev.N_
+                        else:   nH += [lev.N_[:]]
+            else: nH = [[list(lev.N_)] for lev in F.Nt.N_]
+        elif nH:  nH[0] += F.N_  # flat
+        else:     nH = [list(F.N_)]
     m,d = vt_(TT)
     Cx = CF if fCF else CN
     Ft = Cx(nF=nF, dTT=TT,m=m,d=d,c=C, rc=Rc/len(N_), root=root)
-    nH = [sum2F(n_,nF, Ft) for n_ in reversed(nH)]  # rev, nested above
+    nH = [sum2F(n_,nF, Ft) for n_ in reversed(nH)]  # reversed flat n_s
     Ft.N_ = [CF(N_=N_,nF=nF,dTT=TT,m=m,d=d,c=C,root=Ft)] + nH  # + top level
     if fset:
         setattr(root, nF,Ft); root_update(root, Ft)
@@ -644,12 +646,12 @@ def add_N(G, N, coef=1, merge=0):  # sum Fts if merge
 
 def add_F(F,f, cr=1, merge=1):
 
-    def sum_H(H,h, cr, root):  # reverse to align bottom-up:
-        for Lev,lev in zip(reversed(H), reversed(h)):
+    def sum_H(H, h, cr, root):  # reverse to align bottom-up:
+        for Lev,lev in zip_longest(reversed(H),reversed(h)):
             if lev:
                 if Lev: add_F(Lev, lev, cr, merge=1)
                 else:   H.append(CopyF(lev, root))
-        return reversed(H)
+        return list(reversed(H))
     # cc *= cr?
     cc = F.c / f.c
     F.dTT+= f.dTT*cc; m,d = vt_(F.dTT,F.rc); F.m=m; F.d=d
@@ -657,7 +659,7 @@ def add_F(F,f, cr=1, merge=1):
     if merge:
         if hasattr(F,'Nt'): merge_f(F,f, cc)
         else:
-            fH = isinstance(F.N_[0], CF);   fh = isinstance(f.N_[0], CF)
+            fH = isinstance(F.N_[0],CF); fh = isinstance(f.N_[0],CF)
             H = F.N_ if fH else [CopyF(F)]; h = f.N_ if fh else [CopyF(f)]
             if fH or fh:
                 F.N_ = sum_H(H,h, cr,F)  # only for Fts
