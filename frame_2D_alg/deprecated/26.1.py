@@ -504,3 +504,43 @@ def add_F(F,f, cr=1, merge=1):
     else: F.N_.append(f)
     F.dTT+=f.dTT*cc*cr; F.c+=f.c; F.rc+=cr  # -> ave cr?
 
+def trans_cluster1(tFt, root, rc):  # trans_links mediate re-order in sort_H?
+
+    def rroot(n): return rroot(n.root) if n.root and n.root != root else n  # root is nG
+    FH_ = [[],[],[]]
+    for tL in tFt.N_:  # splice from base links
+        for FH,Ft in zip(FH_, (getattr(L,'tNt',[]),getattr(L,'tBt',[]),getattr(L,'tCt',[]))):  # trans_links
+            if not Ft: continue
+            for Lev,lev in zip_longest(FH, Ft.N_):  # always H?
+                if lev:
+                    if Lev: Lev += lev.N_  # concat for sum2F
+                    else:   FH += [list(lev.N_)]
+    # merge tL_ nt roots:
+    for FH, nF in zip(FH_, ('tNt','tBt','tCt')):
+        if FH:  # merge Lt.fork.nt.roots
+            for lev in reversed(FH):  # bottom-up to get incrementally higher roots
+                for tL in lev:  # trans_link
+                    rt0 = tL.nt[0].root; rt1 = tL.nt[1].root
+                    if rt0 is rt1: continue
+                    merge = rt0 is root == rt1 is root  # else append
+                    if not merge and rt0 is root: rt0,rt1 = rt1,rt0  # concat in higher G
+                    add_N(rt0, rt1, merge)
+            # set tFt:
+            if not hasattr(root, nF): setattr(root, nF, CF(nF=nF))  # init root.tFt
+            FH = [sum2F(n_,nF,getattr(root, nF)) for n_ in FH]; sum2F(FH, nF, root)
+
+        ''' reval rc:
+        tL_ = [tL for n in root.N_ for l in n.L_ for tL in l.N_]  # trans-links
+        if sum(tL.m for tL in tL_) * ((len(tL_)-1)*Lw) > ave*(rc+connw):  # use tL.dTT?
+            mmax_ = []
+            for F,tF in zip((root.Nt,root.Bt,root.Ct), (root.Lt.N_[-1])):
+                if F and tF:
+                    maxF,minF = (F,tF) if F.m>tF.m else (tF,F)
+                    mmax_+= [max(F.m,tF.m)]; minF.rc+=1  # rc+=rdn
+            sm_ = sorted(mmax_, reverse=True)
+            tNt, tBt, tCt = root.Lt.N_[-1]
+            for m, (Ft, tFt) in zip(mmax_,((root.Nt,tNt),(root.Bt,tBt),(root.Ct,tCt))): # +rdn in 3 fork pairs
+                r = sm_.index(m); Ft.rc+=r; tFt.rc+=r  # rc+=rdn
+        '''
+
+
