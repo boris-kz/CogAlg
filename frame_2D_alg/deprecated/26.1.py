@@ -542,5 +542,10 @@ def trans_cluster1(tFt, root, rc):  # trans_links mediate re-order in sort_H?
             for m, (Ft, tFt) in zip(mmax_,((root.Nt,tNt),(root.Bt,tBt),(root.Ct,tCt))): # +rdn in 3 fork pairs
                 r = sm_.index(m); Ft.rc+=r; tFt.rc+=r  # rc+=rdn
         '''
+def root_replace(root, rc, TT,C, N_,nTT,nc,L_):
 
+    root.dTT=TT; root.c=C; root.rc = rc  # not sure
+    if hasattr(root,'wTT'): cent_TT(root, root.rc)
+    sum2F(N_,'Nt',root, nTT,nc)
+    sum2f(L_,'Lt',root)
 
