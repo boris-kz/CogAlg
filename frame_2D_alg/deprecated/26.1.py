@@ -549,3 +549,14 @@ def root_replace(root, rc, TT,C, N_,nTT,nc,L_):
     sum2F(N_,'Nt',root, nTT,nc)
     sum2f(L_,'Lt',root)
 
+
+def rroot(n):
+    return rroot(n.root) if n.root and n.root != Ft else n  # root is nG
+
+def F2N(f):
+
+        F = CN(dTT=f.dTT, Lt=f.Lt, m=f.m, d=f.d, c=f.c, rc=f.rc, root=f.root, typ=4)
+        F.nF = f.nF
+        setattr(f.root, f.nF, F)  # CN Ft
+        for N in f.N_: N.root = F; F.Nt.N_ += [N]  # the rest of Nt is redundant
+        return F
