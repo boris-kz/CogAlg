@@ -560,3 +560,53 @@ def F2N(f):
         setattr(f.root, f.nF, F)  # CN Ft
         for N in f.N_: N.root = F; F.Nt.N_ += [N]  # the rest of Nt is redundant
         return F
+
+def sum2F(N_,nF, root, TT=np.zeros((2,9)), C=0, Rc=0, fset=1, fCF=1):  # -> Ft
+
+    H = []  # unpack,concat,resum existing node'levs, sum,append to new N_'lev
+    for F in N_:  # fork-specific N_
+        if not C: TT += F.dTT; C += F.c; Rc += F.rc
+        if isinstance(F.Nt.N_[0],CF):  # H, top-down, eval sort_H?
+            if H:
+                for Lev,lev in zip_longest(H, reversed(F.Nt.N_)):  # align bottom-up
+                    if lev and lev.N_:
+                        if Lev: Lev += lev.N_
+                        else:   H += [list(lev.N_)]
+            else: H = [list(lev.N_) for lev in F.Nt.N_]
+        elif H: H[0] += F.N_  # flat
+        else:   H = [list(F.N_)]
+    m,d = vt_(TT); rc = Rc/len(N_); Cx = (CN,CF)[fCF]
+    Ft = Cx(dTT=TT,m=m,d=d,c=C,rc=rc,root=root)
+    Ft.nF = nF  # splice N_ H:
+    if H: Ft.N_ = [CF(N_=N_,nF=nF,dTT=TT,m=m,d=d,c=C,rc=rc,root=Ft)] + [sum2f(n_,nF,Ft) for n_ in reversed(H)]
+    else: Ft.N_ = N_
+    if fset: root_update(root, Ft)
+    return Ft
+
+def comp_F_(_F_,F_,nF, rc, root):  # root is nG, unpack node trees down to numericals and compare them
+
+    L_,TTm,C,TTd,Cd = [],np.zeros((2,9)),0,np.zeros((2,9)),0; Rc=cc=0  # comp count
+    if isinstance(F_[0],CN):
+        for _N, N in product(F_,_F_):
+            if _N is N: dtt = np.array([N.dTT[1], np.zeros(9)]); TTm += dtt; C=1; Cd=0  # overlap is pure match
+            else:       cm,cd = comp_n(_N,N, TTm,TTd,C,Cd,rc,L_); C+=cm; Cd+=cd
+            Rc+=_N.rc+N.rc; cc += 1
+        if L_: sum2f(L_,nF,root)  # always flat tFt
+    else:
+        for _lev,lev in zip(_F_,F_):  # L_ = H, lev = [nt,ct]
+            rc += 1  # deeper levels are redundant, also Cts?
+            # for _ft,ft in zip(_lev,lev):
+            lTT = comp_derT(_lev.dTT[1],lev.dTT[1]); lRc= lC= lcc= 1  # min per dTT?
+            _sN_,sN_ = set(_lev.N_), set(lev.N_)
+            iN_ = list(_sN_ & sN_)  # intersect = match
+            for n in iN_: lTT+=n.dTT; lC+=n.c; lRc+=n.rc; lcc+=1
+            _oN_= _sN_-sN_; oN_= sN_-_sN_; dN_= []
+            for _n,n in product(_oN_,oN_):
+                cm,_ = comp_n(_n,n, lTT,TTd,C,Cd,rc, dN_)  # comp offsets
+                lRc += _n.rc+n.rc; lC+=cm; lcc+=1
+            lRc /= len(dN_); m,d = vt_(lTT,lRc)
+            L_ += [CF(N_=dN_,nF='tF',root=root,dTT=lTT,m=m,d=d,c=lC,rc=lRc)]
+            TTm+= lTT; C+=lC; Rc+=lRc; cc+=lcc
+        if L_:
+            Rc/=cc; m,d=vt_(TTm,Rc); setattr(root,nF,CF(N_=L_,nF=nF,dTT=TTm,m=m,d=d,c=C,rc=Rc,root=root))
+
