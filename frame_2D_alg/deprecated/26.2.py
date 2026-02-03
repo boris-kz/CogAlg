@@ -46,3 +46,45 @@ def comp_F_(_F_,F_,nF, rc, root):  # root is nG, unpack node trees down to numer
         if L_:
             Rc/=cc; m,d=vt_(TTm,Rc); setattr(root,nF, CF(N_=L_,nF=nF,dTT=TTm,m=m,d=d,c=C,rc=Rc,root=root))
 
+def sum2F(N_,nF, root, TT=np.zeros((2,9)), C=0, Rc=0, fset=1, fCF=0):  # -> Ft
+
+    H = []; ff = nF=='Nt'  # unpack,concat,resum existing node'levs, sum,append to new N_'lev
+    for F in N_:  # fork N_, lev = [nt,ct], if Nt only?
+        if not F.N_: continue
+        if not C: TT += F.dTT; C += F.c; Rc += F.rc
+        if isinstance(F.Nt.N_[0], CN):
+            if H: (H[-1][0] if ff else H[-1]).extend(F.N_)  # flat
+            else: H = [[list(F.N_),[]]] if ff else [list(F.N_)]
+        else:  # H aligned bottom-up
+            if H:
+                for Lev,lev in zip_longest(H, F.Nt.N_):
+                    if lev:
+                        if Lev:
+                            for _ft,ft in zip_longest(Lev if ff else [Lev], lev if ff else [lev]):
+                                if ft: _ft += ft.N_  #  concat nt,ct
+                        else: H += [[list(ft.N_) for ft in lev] if ff else list(lev.N_)]
+            else:
+                H = [[(list(ft.N_) if ft else []) for ft in lev] if ff else list(lev.N_) for lev in F.Nt.N_]
+    m,d = vt_(TT); rc = Rc/len(N_); Cx = (CN,CF)[fCF]
+    Ft = Cx(dTT=TT,m=m,d=d,c=C,rc=rc,root=root)
+    Ft.nF = nF  # splice N_ H:
+    if H:
+        Ft.N_ = [[(sum2f(n_,nF,Ft) if n_ else CF()) for n_ in lev] if ff else sum2f(lev,nF,Ft) for lev in H]  # skip empty list
+        topNt = CF(N_=N_,nF=nF,dTT=TT,m=m,d=d,c=C,rc=rc,root=Ft)
+        Ft.N_+= [[topNt,CF()]] if ff else [topNt]
+    else:
+        Ft.N_ = N_  # no C_ in lev0: init fsub=0?
+    if fset:
+        root_update(root, Ft)
+        if not fCF: Ft.Nt.c = Ft.c  # init only?
+    return Ft
+
+def sub_comp(_N, N, rc, Link):  # root is nG, unpack node trees down to numericals and compare them
+
+    if _N.Nt and N.Nt:  # trans-root comp
+        Nt_,Ct_= zip(*N.Nt.N_); _Nt_,_Ct_= zip(*_N.Nt.N_)
+        for _Ft, Ft, nF in zip((_Nt_,Nt_), (_Ct_,Ct_), ('Nt','Ct')):
+            rc += 1
+            comp_Ft(_Ft, Ft, nF, rc, Link)  # deeper trans_comp in comp_n, unpack|reref levs?
+    if _N.Bt and N.Bt:
+        comp_Ft(_N.Bt, N.Bt, 'Bt', rc + 1, Link)
