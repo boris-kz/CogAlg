@@ -51,13 +51,10 @@ capitalized vars are summed small-case vars
 eps = 1e-7
 
 def prop_F_(F):  # factory function, sets property+setter to get and update top-composition fork.N_
-    def Nf_(N):  # CN Nt | Lt | Bt
-        Ft = getattr(N,'Nt' if F=='Ct' else F)
-        if not Ft: return Ft
-        elif F=='Nt': return Ft.N_[-1][0]
-        elif F=='Ct': return Ft.N_[-1][1]
-        else:  # Lt | Bt
-            return Ft.N_[-1] if (Ft.N_ and isinstance(Ft.N_[0], CF)) else Ft
+    def Nf_(N):  # CN Nt | Lt | Bt | Ct
+        Ft = getattr(N,F)
+        if Ft: return Ft.N_ if Ft.typ==4 else Ft.N_[-1]
+        else:  return Ft
     def get(N): return getattr(Nf_(N),'N_')
     def set(N, new_N): setattr(Nf_(N),'N_',new_N)
     return property(get,set)
@@ -72,7 +69,7 @@ class CN(CBase):
         # 1= L: typ,nt,dTT, m,d,c,rc, root,rng,yx,box,span,angl,fin,compared, Nt,Bt,Ct from comp_sub, tNt,tBt,tCt from comp_F_
         # 2= G: + rim, eTT, em,ed,ec, baseT,mang,sub,exe
         # 3= Cn: + m_,d_,r_,o_ in C.rN_
-        # 4= Ft: + Lt, nF, Ct instead of Nt if flat N_
+        # 5= Ft if nested, Lt, nF, Ct if flat Nt.lev
         n.m,  n.d, n.c = kwargs.get('m',0), kwargs.get('d',0), kwargs.get('c',0)  # sum forks to borrow
         n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # Nt+Lt dTT: m_,d_ [M,D,n, I,G,a, L,S,A]
         n.rim = kwargs.get('rim',[])  # external links, rng-nest?
@@ -80,7 +77,7 @@ class CN(CBase):
         n.eTT = kwargs.get('eTT',np.zeros((2,9)))  # sum rim dTT
         n.rc  = kwargs.get('rc', 1)  # redundancy to ext Gs, ave in links?
         n.Nt, n.Bt, n.Lt = ((kwargs.get(fork) if fork in kwargs else CN(root=n,Nt=CF(),Bt=CF(),Lt=CF()) for fork in ('Nt','Bt','Lt')))
-        # Fork tuples, N_ may be H: [N_,dTT] levs, nest=len(N_), L.Lt is empty till comp L, convert to tFs?
+        # ini fork tuples, ->CN with nesting, L.Lt if comp L, Ct in CF only?
         n.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,A: not ders, in links for simplicity, mostly redundant
         n.nt    = kwargs.get('nt', [])  # nodet, links only
         n.yx    = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
@@ -97,18 +94,20 @@ class CN(CBase):
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.c)
 
-class CF(CBase):
+class CF(CBase):  # if flat N_, nF, and no forks?
     name = "fork"
     def __init__(f, **kwargs):
         super().__init__()
         f.nF = kwargs.get('nF','')  # 'Nt','Lt','Bt','Ct'
         f.N_ = kwargs.get('N_',[])  # may be nested as H?
         f.Lt = kwargs.get('Lt',[])  # from cross_comp
+        f.Ct = kwargs.get('Ct',[])  # if flat Nt.lev
         f.dTT= kwargs.get('dTT',np.zeros((2,9)))
         f.m  = kwargs.get('m', 0)
         f.d  = kwargs.get('d', 0)
         f.c  = kwargs.get('c', 0)
         f.rc = kwargs.get('rc',0)
+        f.typ = 4
         f.root = kwargs.get('root',None)
     def __bool__(f): return bool(f.c)
 
@@ -248,14 +247,20 @@ def sub_comp(_N, N, rc, Link):  # root is nG, unpack node trees down to numerica
 def comp_Ft(_Ft, Ft, nF, rc, root):  # root is nG, unpack node trees down to numericals and compare them
 
     L_,TTm,C,TTd,Cd = [],np.zeros((2,9)),0,np.zeros((2,9)),0; Rc=cc=0  # comp count
-    # add eval for nested levs and Ct:
-    for _N, N in product(_Ft.N_,Ft.N_):  # top lev, spec eval in comp_n:
+    # need a review:
+    if Ft.typ <5 or _Ft.typ <5:
+        N_ = Ft.N_ if Ft.typ <5 else Ft.Nt.N_[0].N_  # if different level, get the first level of nested level?
+        _N_ = _Ft.N_ if _Ft.typ <5 else _Ft.Nt.N_[0].N_
+    else:
+        N_ = Ft.N_; _N_ = Ft.N_  # for nested level, it will be retrieved via prop_F
+
+    for _N, N in product(_N_,N_):  # top lev, spec eval in comp_n:
         if _N is N: dtt = np.array([N.dTT[1], np.zeros(9)]); TTm += dtt; C=1; Cd=0  # overlap is pure match
         else:       cm,cd = comp_n(_N,N, TTm,TTd,C,Cd,rc,L_); C+=cm; Cd+=cd
         Rc += _N.rc+N.rc; cc += 1  # not edited
     if L_:
-        if Ft.N_[0].typ > 3: # N_=H, lev.typ=5 if nested
-            for _lev,lev in zip( reversed(_Ft.N_[:-1]), reversed(Ft.N_[:-1])):  # top-1 - down
+        if Ft.typ > 4 and _Ft.typ >4: # N_=H, lev.typ=5 if nested (only if both are nested with levels)
+            for _lev,lev in zip(reversed(_Ft.Nt.N_[:-1]),reversed(Ft.Nt.N_[:-1])):  # top-1 - down
                 TTm += comp_derT(_lev.dTT[1],lev.dTT[1]); C+=min(_lev.c,lev.c)  # lrc?
         sum2F(L_,'t'+nF, root, TTm,C, rc, fCF=1)  # rc is wrong
         # Rc/=cc; m,d=vt_(TTm,Rc); setattr(root,nF, CF(N_=L_,nF=nF,dTT=TTm,m=m,d=d,c=C,rc=Rc,root=root))
@@ -430,7 +435,7 @@ def cluster_N(Ft, _N_, rc):  # flood-fill node | link clusters, flat, replace iL
                         m,d = nt_vt(*L.nt)
                         if m > ave * (rc-1):  # cluster nt, L,C_ by combined rim density:
                             N_ += [_N]; _N.fin = 1
-                            L_ += [L]; C_ += _N.C_
+                            L_ += [L]; C_ += _N.rN_
                             _L_+= [l for l in _N.rim if l not in in_ and (l.nt[0].fin ^ l.nt[1].fin)]   # new frontier links, +|-?
                         elif d > avd * (rc-1): B_ += [L]  # contrast value, exclusive?
                 __L_ = list(set(_L_))
@@ -571,7 +576,9 @@ def sum2G(Ft_,tt,c,rc, root=None, init=1, typ=None, fsub=1):  # updates root if 
     for N in N_[1:]:
         add_N(G,N, coef=N.c/c)  # skips forks
     if N.typ: sum2F(N_,'Nt',G,ntt,nc)
-    else:     m,d = vt_(ntt,nr); G.Nt = CF(N_=[[sum2f(N_,'Nt',G.Nt),CF()]],nF='Nt',dTT=ntt,m=m,d=d,c=nc,rc=nr,root=G)
+    else:
+        m,d = vt_(ntt,nr); lev0 = CF(N_=N_,nF='Nt',dTT=ntt,m=m,d=d,c=nc,rc=nr,root=G)
+        G.Nt = CN(N_=[lev0], dTT=deepcopy(ntt),m=m,d=d,c=nc,rc=nr,root=G.Nt,nF='Nt',typ=4)  # PP
     if len(Ft_) > 1:  # from trace_edge
         L_,_,ltt,lc,lr = Ft_[1]
         if init:  # else same ext
@@ -614,7 +621,7 @@ def add_N(G, N, coef=1, merge=0):  # sum Fts if merge
     _c,c = G.c,N.c*coef; C=_c+c  # weigh contribution of intensive params
     if hasattr(G, 'm_'): G.rc = np.sum([o*coef for o in N.o_]); G.rN_+=N.rN_; G.m_+=N.m_; G.o_+=N.o_  # not sure
     if N.typ:  # not PP| Cent
-        if N.C_: G.C_+= N.C_; G.Ct.dTT += N.Ct.dTT*coef; G.Ct.c += N.Ct.c*coef  # flat? L_,B_ stay nested
+        if N.rN_: G.C_+= N.rN_; G.Ct.dTT += N.Ct.dTT*coef; G.Ct.c += N.Ct.c*coef  # flat? L_,B_ stay nested
         G.span = (G.span*_c+N.span*c*coef) / C * coef
         A,a = G.angl[0],N.angl[0]; A[:] = (A*_c+a*c*coef) /C * coef  # vect only
         if isinstance(G.yx, list): G.yx += [N.yx]  # weigh by C?
@@ -640,7 +647,7 @@ def sum2F(N_,nF, root, TT=np.zeros((2,9)), C=0, Rc=0, fset=1, fCF=0):  # -> Ft
     for F in N_:  # fork N_, lev=Nt
         if not F.N_: continue
         if not C: TT += F.dTT; C += F.c; Rc += F.rc
-        if F.N_[0].typ < 4:  # flat N_,| test/lev?
+        if F.N_[0].typ==4:  # flat N_,| test/lev?
             if H: H[-1] += F.N_
             else: H = [list(F.N_)]
         else:
@@ -651,7 +658,7 @@ def sum2F(N_,nF, root, TT=np.zeros((2,9)), C=0, Rc=0, fset=1, fCF=0):  # -> Ft
                         else: H += [list(lev.N_)]
             else: H = [list(lev.N_) for lev in F.Nt.N_]
     m,d = vt_(TT); rc = Rc/len(N_); Cx = (CN,CF)[fCF]
-    Ft = Cx(dTT=TT,m=m,d=d,c=C,rc=rc,root=root)
+    Ft = Cx(dTT=TT,m=m,d=d,c=C,rc=rc,root=root,typ=4 if fCF else 5); Ft.nF = nF
     Ft.nF = nF
     if H: Ft.N_ = [sum2f(lev,nF,Ft) for lev in H] + [CF(N_=N_,nF=nF,dTT=TT,m=m,d=d,c=C,rc=rc,root=Ft)]  # top lev
     else: Ft.N_ = N_  # no C_ in lev0: init fsub=0?
@@ -727,7 +734,9 @@ def root_update(root, Ft, ini=1):
         root.dTT = (root.dTT*_c + Ft.dTT*c) /C
     else:  # borrow alt-fork deviations:
         root.m = (root.m*_c+Ft.m*c) /C; root.d = (root.d*_c+Ft.d*c) /C
-    if ini: setattr(root, Ft.nF, Ft)
+    if ini:
+        if root.typ==4: root.Nt = sum2F(root.N_,root.nF,root, fCF=0)  # convert to CN, add nesting
+        setattr(root, Ft.nF, Ft)
     if root.root: root_update(root.root, Ft, ini=0)   # upward recursion, batch in root?
 
 def CopyF(F, root=None, cr=1):  # F = CF|CN

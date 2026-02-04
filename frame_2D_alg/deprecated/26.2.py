@@ -88,3 +88,31 @@ def sub_comp(_N, N, rc, Link):  # root is nG, unpack node trees down to numerica
             comp_Ft(_Ft, Ft, nF, rc, Link)  # deeper trans_comp in comp_n, unpack|reref levs?
     if _N.Bt and N.Bt:
         comp_Ft(_N.Bt, N.Bt, 'Bt', rc + 1, Link)
+
+def prop_F_(F):  # factory function, sets property+setter to get and update top-composition fork.N_
+    def Nf_(N):  # CN Nt | Lt | Bt
+        Ft = getattr(N,'Nt' if F=='Ct' else F)
+        if not Ft: return Ft
+        elif F=='Nt': return Ft.N_[-1][0]
+        elif F=='Ct': return Ft.N_[-1][1]
+        else:  # Lt | Bt
+            return Ft.N_[-1] if (Ft.N_ and isinstance(Ft.N_[0], CF)) else Ft
+    def get(N): return getattr(Nf_(N),'N_')
+    def set(N, new_N): setattr(Nf_(N),'N_',new_N)
+    return property(get,set)
+
+def comp_Ft(_Ft, Ft, nF, rc, root):  # root is nG, unpack node trees down to numericals and compare them
+
+    L_,TTm,C,TTd,Cd = [],np.zeros((2,9)),0,np.zeros((2,9)),0; Rc=cc=0  # comp count
+    # add eval for nested levs and Ct:
+    for _N, N in product(_Ft.N_,Ft.N_):  # top lev, spec eval in comp_n:
+        if _N is N: dtt = np.array([N.dTT[1], np.zeros(9)]); TTm += dtt; C=1; Cd=0  # overlap is pure match
+        else:       cm,cd = comp_n(_N,N, TTm,TTd,C,Cd,rc,L_); C+=cm; Cd+=cd
+        Rc += _N.rc+N.rc; cc += 1  # not edited
+    if L_:
+        if Ft.N_[0].typ > 3: # N_=H, lev.typ=5 if nested
+            for _lev,lev in zip( reversed(_Ft.N_[:-1]), reversed(Ft.N_[:-1])):  # top-1 - down
+                TTm += comp_derT(_lev.dTT[1],lev.dTT[1]); C+=min(_lev.c,lev.c)  # lrc?
+        sum2F(L_,'t'+nF, root, TTm,C, rc, fCF=1)  # rc is wrong
+        # Rc/=cc; m,d=vt_(TTm,Rc); setattr(root,nF, CF(N_=L_,nF=nF,dTT=TTm,m=m,d=d,c=C,rc=Rc,root=root))
+
