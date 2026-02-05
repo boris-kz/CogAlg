@@ -53,7 +53,7 @@ eps = 1e-7
 def prop_F_(F):  # factory function, sets property+setter to get and update top-composition fork.N_
     def Nf_(N):  # CN Nt | Lt | Bt | Ct
         Ft = getattr(N,F)
-        if Ft: return Ft.N_ if Ft.typ==4 else Ft.N_[-1]
+        if Ft: return Ft if Ft.typ==4 else Ft.N_[-1]
         else:  return Ft
     def get(N): return getattr(Nf_(N),'N_')
     def set(N, new_N): setattr(Nf_(N),'N_',new_N)
@@ -61,7 +61,8 @@ def prop_F_(F):  # factory function, sets property+setter to get and update top-
 
 class CN(CBase):
     name = "node"
-    N_, L_, C_, B_ = prop_F_('Nt'), prop_F_('Lt'), prop_F_('Ct'), prop_F_('Bt')
+    N_,C_, B_,L_ = prop_F_('Nt'),prop_F_('Ct'), prop_F_('Bt'), prop_F_('Lt')
+    # ext| int- defined nodes, ext|int- defining links, Lt/Ft, Ct/lev, Bt/G
     def __init__(n, **kwargs):
         super().__init__()
         n.typ = kwargs.get('typ', 0)
@@ -99,8 +100,8 @@ class CF(CBase):  # if flat N_, nF, and no forks?
     def __init__(f, **kwargs):
         super().__init__()
         f.nF = kwargs.get('nF','')  # 'Nt','Lt','Bt','Ct'
-        f.N_ = kwargs.get('N_',[])  # may be nested as H?
-        f.Lt = kwargs.get('Lt',[])  # from cross_comp
+        f.N_ = kwargs.get('N_',[])  # flat, CN if nested
+        f.Lt = kwargs.get('Lt',[])  # from Ft cross_comp
         f.Ct = kwargs.get('Ct',[])  # if flat Nt.lev
         f.dTT= kwargs.get('dTT',np.zeros((2,9)))
         f.m  = kwargs.get('m', 0)
@@ -247,23 +248,26 @@ def sub_comp(_N, N, rc, Link):  # root is nG, unpack node trees down to numerica
 def comp_Ft(_Ft, Ft, nF, rc, root):  # root is nG, unpack node trees down to numericals and compare them
 
     L_,TTm,C,TTd,Cd = [],np.zeros((2,9)),0,np.zeros((2,9)),0; Rc=cc=0  # comp count
-    # need a review:
-    if Ft.typ <5 or _Ft.typ <5:
-        N_ = Ft.N_ if Ft.typ <5 else Ft.Nt.N_[0].N_  # if different level, get the first level of nested level?
-        _N_ = _Ft.N_ if _Ft.typ <5 else _Ft.Nt.N_[0].N_
-    else:
-        N_ = Ft.N_; _N_ = Ft.N_  # for nested level, it will be retrieved via prop_F
 
-    for _N, N in product(_N_,N_):  # top lev, spec eval in comp_n:
-        if _N is N: dtt = np.array([N.dTT[1], np.zeros(9)]); TTm += dtt; C=1; Cd=0  # overlap is pure match
+    for _N, N in product(_Ft.N_,Ft.N_):  # top lev, direct or via prop_F if nest->CN, spec eval in comp_n:
+        if _N is N: dtt = np.array([N.dTT[1], np.zeros(9)]); TTm += dtt; C=1; Cd=0  # overlap: pure match
         else:       cm,cd = comp_n(_N,N, TTm,TTd,C,Cd,rc,L_); C+=cm; Cd+=cd
-        Rc += _N.rc+N.rc; cc += 1  # not edited
+        Rc += _N.rc+N.rc; cc += 1
     if L_:
-        if Ft.typ > 4 and _Ft.typ >4: # N_=H, lev.typ=5 if nested (only if both are nested with levels)
-            for _lev,lev in zip(reversed(_Ft.Nt.N_[:-1]),reversed(Ft.Nt.N_[:-1])):  # top-1 - down
-                TTm += comp_derT(_lev.dTT[1],lev.dTT[1]); C+=min(_lev.c,lev.c)  # lrc?
-        sum2F(L_,'t'+nF, root, TTm,C, rc, fCF=1)  # rc is wrong
-        # Rc/=cc; m,d=vt_(TTm,Rc); setattr(root,nF, CF(N_=L_,nF=nF,dTT=TTm,m=m,d=d,c=C,rc=Rc,root=root))
+        lev0 = sum2F(L_,'t'+nF, root,TTm,C,Rc,fCF=1)  # root_update
+        dH = [lev0]  # always nested?
+        if Ft.typ!=4 or _Ft.typ!=4:
+            N_ = [Ft] if Ft.typ==4 else Ft.N_; _N_ = [_Ft] if _Ft.typ==4 else _Ft.N_
+            # N_->H, top-1- down:
+            for _lev,lev in zip(reversed(_N_[:-1]),reversed(N_[:-1])):  # remove reverse, always top-down?
+                ltt = comp_derT(_lev.dTT[1],lev.dTT[1]); lc = min(_lev.c,lev.c)
+                lrc = (_lev.rc+lev.rc)/2; m,d=vt_(ltt,lrc)
+                dlev = CF(dTT=ltt,m=m,d=d,c=lc,rc=lrc, nF='tCt',root=root)
+                if _lev.Ct and lev.Ct:
+                    comp_Ft(_lev.Ct,lev.Ct,'Ct', rc, root=dlev)  # set dlev.Ct, root_update
+                dH += [dlev]; Rc+=lrc
+                # top-down?
+        root_update(root, CN(N_=dH, nF=nF, root=root, dTT=deepcopy(TTm),c=C, rc=Rc/len(dH), typ=5))  # no sum2F: higher levs are redundant?
 
 def base_comp(_N,N):  # comp Et, baseT, extT, dTT
 
@@ -513,8 +517,7 @@ def cluster_C(Ft, E_, rc):  # form centroids by clustering exemplar surround via
             root = Ft.root
             Ct = sum2f(C_,'Ct',root)
             cross_comp(Ct,rc)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
-            root_update(Ft,Ct)  # Nt|Ct priority eval?
-            root.Nt.N_[-1][1] = Ct
+            root_update(Ft,Ct)  # Nt|Ct priority eval?  (nesting should be default here for Ct?)
     return C_, rc
 
 def cluster_P(_C_,N_,rc):  # Parallel centroid refining, _C_ from cluster_C, N_= root.N_, if global val*overlap > min
@@ -575,10 +578,10 @@ def sum2G(Ft_,tt,c,rc, root=None, init=1, typ=None, fsub=1):  # updates root if 
     G = Copy_(N,root,init=1,typ=typ); G.dTT=tt; G.m=m; G.d=d; G.c=c; G.rc=rc
     for N in N_[1:]:
         add_N(G,N, coef=N.c/c)  # skips forks
-    if N.typ: sum2F(N_,'Nt',G,ntt,nc)
+    if N.typ: sum2F(N_,'Nt',G,ntt,nc,fCF=N.Nt.typ!=5)
     else:
         m,d = vt_(ntt,nr); lev0 = CF(N_=N_,nF='Nt',dTT=ntt,m=m,d=d,c=nc,rc=nr,root=G)
-        G.Nt = CN(N_=[lev0], dTT=deepcopy(ntt),m=m,d=d,c=nc,rc=nr,root=G.Nt,nF='Nt',typ=4)  # PP
+        G.Nt = CN(dTT=deepcopy(ntt),m=m,d=d,c=nc,rc=nr,root=G.Nt,nF='Nt',typ=4); G.Nt.N_=[lev0]  # PP
     if len(Ft_) > 1:  # from trace_edge
         L_,_,ltt,lc,lr = Ft_[1]
         if init:  # else same ext
@@ -611,7 +614,7 @@ def sum2G(Ft_,tt,c,rc, root=None, init=1, typ=None, fsub=1):  # updates root if 
             V = G.m - ave * (rc+1)  # cent|conn divisive clustering:
             if mdecay(G.L_) > decay:
                 if V>ave*centw: cluster_C(G.Nt, N_,rc+1)  # cent cluster: N_->Ct.N_, higher than G.C_
-            elif V > ave*connw: cluster_N(G.Nt, N_,rc+1)  # conn cluster/ rc+1: N_-> Nt.N_| N_
+            elif V > ave*connw: cluster_N(G.Nt, N_,rc+1)  # conn cluster/ rc+1: N_-> Nt.N_| N_  (update typ = 5 for nested structure)
     G.rN_= sorted(G.rN_, key=lambda x: (x.m/x.c), reverse=True)  # only if lG?
     return G
 
@@ -647,7 +650,7 @@ def sum2F(N_,nF, root, TT=np.zeros((2,9)), C=0, Rc=0, fset=1, fCF=0):  # -> Ft
     for F in N_:  # fork N_, lev=Nt
         if not F.N_: continue
         if not C: TT += F.dTT; C += F.c; Rc += F.rc
-        if F.N_[0].typ==4:  # flat N_,| test/lev?
+        if F.typ==4:  # flat N_
             if H: H[-1] += F.N_
             else: H = [list(F.N_)]
         else:
@@ -657,8 +660,8 @@ def sum2F(N_,nF, root, TT=np.zeros((2,9)), C=0, Rc=0, fset=1, fCF=0):  # -> Ft
                         if Lev: Lev += lev.N_  # keep lev nesting if any, separate concat for lev.Ct.N_?
                         else: H += [list(lev.N_)]
             else: H = [list(lev.N_) for lev in F.Nt.N_]
-    m,d = vt_(TT); rc = Rc/len(N_); Cx = (CN,CF)[fCF]
-    Ft = Cx(dTT=TT,m=m,d=d,c=C,rc=rc,root=root,typ=4 if fCF else 5); Ft.nF = nF
+    m,d = vt_(TT); rc = Rc/len(N_)
+    Ft = (CN,CF)[fCF](dTT=TT,m=m,d=d,c=C,rc=rc,root=root,typ=4 if fCF else 5); Ft.nF = nF
     Ft.nF = nF
     if H: Ft.N_ = [sum2f(lev,nF,Ft) for lev in H] + [CF(N_=N_,nF=nF,dTT=TT,m=m,d=d,c=C,rc=rc,root=Ft)]  # top lev
     else: Ft.N_ = N_  # no C_ in lev0: init fsub=0?
@@ -735,7 +738,10 @@ def root_update(root, Ft, ini=1):
     else:  # borrow alt-fork deviations:
         root.m = (root.m*_c+Ft.m*c) /C; root.d = (root.d*_c+Ft.d*c) /C
     if ini:
-        if root.typ==4: root.Nt = sum2F(root.N_,root.nF,root, fCF=0)  # convert to CN, add nesting
+        if root.Nt.typ==4:
+            ft0 = root.Nt; N_ = [ft0] + [sum2f(Ft.N_)] if Ft.typ ==4 else Ft.N_
+            dTT = ft0.dTT + Ft.dTT; c = ft0.c + Ft.c; rc = ft0.rc + Ft.rc; m, d = vt_(dTT,rc)
+            Ft = CN(typ=5,N_=N_,dTT=dTT,m=m,d=d,c=c,rc=rc,root=root); Ft.nF = ft0.nF  # convert to CN, add nesting
         setattr(root, Ft.nF, Ft)
     if root.root: root_update(root.root, Ft, ini=0)   # upward recursion, batch in root?
 
