@@ -90,16 +90,18 @@ def sub_comp(_N, N, rc, Link):  # root is nG, unpack node trees down to numerica
         comp_Ft(_N.Bt, N.Bt, 'Bt', rc + 1, Link)
 
 def prop_F_(F):  # factory function, sets property+setter to get and update top-composition fork.N_
-    def Nf_(N):  # CN Nt | Lt | Bt
-        Ft = getattr(N,'Nt' if F=='Ct' else F)
-        if not Ft: return Ft
-        elif F=='Nt': return Ft.N_[-1][0]
-        elif F=='Ct': return Ft.N_[-1][1]
-        else:  # Lt | Bt
-            return Ft.N_[-1] if (Ft.N_ and isinstance(Ft.N_[0], CF)) else Ft
+    def Nf_(N):  # CN Nt | Lt | Bt | Ct
+        Ft = getattr(N,F)
+        if Ft: return Ft if Ft.typ==4 else Ft.Nt.N_[-1]  # or Ft.N_?
+        else:  return Ft
     def get(N): return getattr(Nf_(N),'N_')
     def set(N, new_N): setattr(Nf_(N),'N_',new_N)
     return property(get,set)
+
+class CN(CBase):
+    name = "node"
+    N_,C_, B_,L_ = prop_F_('Nt'),prop_F_('Ct'), prop_F_('Bt'), prop_F_('Lt')
+    # ext| int- defined nodes, ext|int- defining links, Lt/Ft, Ct/lev, Bt/G
 
 def comp_Ft(_Ft, Ft, nF, rc, root):  # root is nG, unpack node trees down to numericals and compare them
 
