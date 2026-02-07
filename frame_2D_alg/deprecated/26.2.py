@@ -98,6 +98,12 @@ def prop_F_(F):  # factory function, sets property+setter to get and update top-
     def set(N, new_N): setattr(Nf_(N),'N_',new_N)
     return property(get,set)
 
+def prop_F_(F):  # factory function, sets property+setter to get and update top-composition fork.N_
+    def Nf_(N): return getattr(N,F).N_
+    def get(N): return getattr(Nf_(N),'N_')
+    def set(N, new_N): setattr(Nf_(N),'N_',new_N)
+    return property(get,set)
+
 class CN(CBase):
     name = "node"
     N_,C_, B_,L_ = prop_F_('Nt'),prop_F_('Ct'), prop_F_('Bt'), prop_F_('Lt')
@@ -117,4 +123,45 @@ def comp_Ft(_Ft, Ft, nF, rc, root):  # root is nG, unpack node trees down to num
                 TTm += comp_derT(_lev.dTT[1],lev.dTT[1]); C+=min(_lev.c,lev.c)  # lrc?
         sum2F(L_,'t'+nF, root, TTm,C, rc, fCF=1)  # rc is wrong
         # Rc/=cc; m,d=vt_(TTm,Rc); setattr(root,nF, CF(N_=L_,nF=nF,dTT=TTm,m=m,d=d,c=C,rc=Rc,root=root))
+
+def sum2F_old(N_,nF, root, TT=np.zeros((2,9)), C=0, Rc=0, fset=1, fCF=0):  # -> Ft
+
+    H = []  # unpack,concat,resum existing node'levs, sum,append to new N_'lev
+    for F in N_:  # fork N_, lev=Nt
+        if not F.N_: continue
+        if not C: TT += F.dTT; C += F.c; Rc += F.rc
+        if F.Nt.typ==4:  # flat N_
+            if H: H[-1] += F.N_
+            else: H = [list(F.N_)]
+        else:
+            if H:  # aligned bottom-up?
+                for Lev,lev in zip_longest(H, F.Nt.Nt.N_):
+                    if lev:
+                        if Lev: Lev += lev.N_  # keep lev nesting if any, separate concat for lev.Ct.N_?
+                        else: H += [list(lev.N_)]
+            else: H = [list(lev.N_) for lev in F.Nt.Nt.N_]
+    m,d = vt_(TT); rc = Rc/len(N_)
+    Ft = (CN,CF)[fCF](dTT=TT,m=m,d=d,c=C,rc=rc,root=root,typ=4 if fCF else 5); Ft.nF = nF
+    if not fCF: Ft.Nt = CF(typ=5)
+    if H: Ft.N_ = [sum2f(lev,nF,Ft) for lev in H] + [CF(N_=N_,nF=nF,dTT=TT,m=m,d=d,c=C,rc=rc,root=Ft)]  # top lev
+    else: Ft.N_ = N_  # no C_ in lev0: init fsub=0?
+    if fset:
+        root_update(root, Ft)
+        if not fCF: Ft.Nt.c = Ft.c  # init only?
+    return Ft
+
+def comp_N(_N,N, rc, A=np.zeros(2), span=None):  # compare links, optional angl,span,dang?
+
+    TT,_ = base_comp(_N, N)
+    yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])  # ext
+    angl = [A, np.sign(TT[1] @ wTTf[1])]  # canonic direction
+    m, d = vt_(TT,rc)
+    Link = CN(typ=1,exe=1, nt=[_N,N], dTT=TT,m=m,d=d,c=min(N.c,_N.c),rc=rc, yx=yx,box=box,span=span,angl=angl, baseT=(_N.baseT+N.baseT)/2)
+    if m > ave * nw:
+        for _Ft,Ft,nF in zip((_N.Nt,_N.Ct,_N.Bt), (N.Nt,N.Ct,N.Bt), ('Nt','Ct','Bt')):
+            if _Ft and Ft:  # add eval?
+                rc+=1; comp_Ft(_Ft,Ft, nF,rc,Link)
+    for n, _n in (_N,N), (N,_N):  # if rim-mediated comp: reverse dir in _N.rim: rev^_rev?
+        n.rim += [Link]; n.eTT += TT; n.ec += Link.c; n.compared.add(_n)
+    return Link
 
