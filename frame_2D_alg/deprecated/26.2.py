@@ -164,4 +164,11 @@ def comp_N(_N,N, rc, A=np.zeros(2), span=None):  # compare links, optional angl,
     for n, _n in (_N,N), (N,_N):  # if rim-mediated comp: reverse dir in _N.rim: rev^_rev?
         n.rim += [Link]; n.eTT += TT; n.ec += Link.c; n.compared.add(_n)
     return Link
-
+'''
+                if not hasattr(G, nF): setattr(G, nF, CF(nF=nF))  # init root.tFt
+                FH=[]; dTT=np.zeros((2,9)); c=0; rc=0
+                for n_ in _FH:
+                    tlev = sum2F(n_, nF, getattr(G, nF)); FH+=[tlev]; dTT+=tlev.dTT; c+=tlev.c; rc+=tlev.rc
+                rc/= len(FH); m,d = vt_(dTT,rc)
+                setattr(G,nF, CF(N_=FH,dTT=dTT,r=r,rc=rc,m=m,d=d,root=G))
+                '''
