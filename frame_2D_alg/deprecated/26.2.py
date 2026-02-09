@@ -172,3 +172,26 @@ def comp_N(_N,N, rc, A=np.zeros(2), span=None):  # compare links, optional angl,
                 rc/= len(FH); m,d = vt_(dTT,rc)
                 setattr(G,nF, CF(N_=FH,dTT=dTT,r=r,rc=rc,m=m,d=d,root=G))
                 '''
+def trans_cluster(G): # trans_links mediate re-order in sort_H?
+        FH_ = [[],[],[]]  # draft:
+        for L in G.L_:    # splice trans_links from base links
+            for FH, Ft in zip(FH_, (getattr(L,'tNt',[]),getattr(L,'tBt',[]),getattr(L,'tCt',[]))):
+                if Ft:
+                    if isinstance(Ft.N_[0], CF):
+                        for Lev, lev in zip_longest(FH, Ft.N_):
+                            if lev:
+                                if Lev: Lev += lev.N_  # concat for sum2F
+                                else: FH[:] = [copy(lev.N_)]
+                            else:  FH += [list(lev.N_)]
+                    else:          FH[0] += Ft.N_
+        # merge tL_ nt root G|C?
+        for FH, nF in zip(FH_, ('tNt','tBt','tCt')):
+            if FH:  # merge Lt.fork.nt.roots
+                for lev in reversed(FH):  # bottom-up to get incrementally higher roots
+                    for tL in lev:  # trans_link
+                        rt0 = tL.nt[0].root.root; rt1 = tL.nt[1].root.root  # merge Ft.Gs?
+                        if rt0 != rt1: add_N(rt0, rt1, merge=1)  # concat in higher G
+                # set tFt:
+                if not hasattr(G,nF): setattr(G,nF, CF(nF=nF))  # init root.tFt
+                setattr(G,nF, sum2f( [sum2f(n_, nF, getattr(G,nF)) for n_ in FH], nF, G))
+
