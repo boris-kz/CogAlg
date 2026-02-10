@@ -195,3 +195,15 @@ def trans_cluster(G): # trans_links mediate re-order in sort_H?
                 if not hasattr(G,nF): setattr(G,nF, CF(nF=nF))  # init root.tFt
                 setattr(G,nF, sum2f( [sum2f(n_, nF, getattr(G,nF)) for n_ in FH], nF, G))
 
+def root_update(root, Ft, ini=1):
+
+    _c,c = root.c,Ft.c; C = _c+c; root.c = C  # c is not weighted, min(_lev.c,lev.c) if root is link?
+    root.rc = (root.rc*_c + Ft.rc*c) / C
+    if isinstance(root,CF) or (hasattr(Ft,'nF') and (Ft.nF=='Nt' or Ft.nF=='Lt')):  # core forks
+        root.dTT = (root.dTT*_c + Ft.dTT*c) /C
+    else:  # borrow alt-fork deviations:
+        root.m = (root.m*_c+Ft.m*c) /C; root.d = (root.d*_c+Ft.d*c) /C
+    if ini:
+        setattr(root,'t'+Ft.nF if ini==2 else Ft.nF, Ft)
+    if root.root: root_update(root.root, Ft, ini=0)
+    # upward recursion, we need to batch in root.fb_?

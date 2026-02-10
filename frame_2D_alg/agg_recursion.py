@@ -86,11 +86,10 @@ class CN(CBase):
         n.sub = 0  # composition depth relative to top-composition peers?
         n.fin = kwargs.get('fin',0)  # clustered, temporary
         n.exe = kwargs.get('exe',0)  # exemplar, temporary
-        n.rN_ = kwargs.get('rN_',[]) # reciprocal root nG_ for bG | cG, nG has Bt.N_,Ct.N_ instead
+        n.rN_ = kwargs.get('rN_',[]) # reciprocal root nG_ for bG|cG, nG has Bt.N_,Ct.N_ instead?
         n.compared = set()
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.c)
-
 
 class CF(CBase):  # Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int- defining links, Lt/Ft, Ct/lev, Bt/G
     name = "fork"
@@ -157,7 +156,7 @@ def cross_comp(Ft, rc, nF='Nt'):  # core function mediating recursive rng+ and d
             E_ = get_exemplars({N for L in L_ for N in L.nt if N.em}, rc)  # N|C?
             G_,rc = cluster_N(Ft, E_,rc)  # form Bt, trans_cluster, sub+ in sum2G
             if G_:
-                Ft = sum2F(G_,nF, Ft)
+                Ft = sum2F(G_,nF, Ft.root)
                 if val_(Ft.dTT, rc+nw, TTw(Ft), (len(N_)-1)*Lw,1, TTd,cr) > 0:
                     G_,rc = cross_comp(Ft,rc,nF)  # agg+,trans-comp
     return G_,rc  # G_ is recursion flag?
@@ -198,7 +197,7 @@ def comp_N_(iN_, rc, _iN_=[]):  # incremental-distance cross_comp, max dist depe
                     dpTT += pTT-dTT  # prediction error to fit code, not implemented
                 else:
                     pL = CN(typ=-1, nt=[_N,N], dTT=pTT,m=m,d=d,c=min(N.c,_N.c), rc=lrc, angl=np.array([dy_dx,1],dtype=object),span=dist)
-                    L_+= [pL]; N.rim+=[pL]; N_+=pL.nt; _N.rim+=[pL]; TTm+=pTT; cm+=pL.c  # same as links in clustering, pack L.nt as N_?
+                    L_+= [pL]; N.rim+=[pL]; N_+=pL.nt; _N.rim+=[pL]; TTm+=pTT; cm+=pL.c  # same as links in clustering, L.N_=nt?
                 pVt_ += [[dist,dy_dx,_N,m]]  # for next rim eval
             else:
                 break  # beyond induction range
@@ -224,13 +223,16 @@ def comp_N(_N,N, rc, full=1, A=np.zeros(2),span=None):
         box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
         angl = [A, np.sign(TT[1] @ wTTf[1])]
         Link.yx=yx; Link.box=box; Link.span=span; Link.angl=angl; Link.baseT= (_N.baseT+N.baseT)/2
-    if m > ave * nw:
-        dH,tt,C,Rc = comp_H(_N.Nt, N.Nt, Link)  # tentative H comp
-        if m + vt_(tt,Rc[0]/C) > ave * nw:
-            Link.H = dH  # other vals are tentative?
+    if N.typ and m > ave*nw:
+        dH,tt,C,Rc = comp_H(_N.Nt, N.Nt, Link)  # tentative comp
+        if m + vt_(tt,Rc/C)[0] > ave * nw:
+            Link.H = dH  # hm,hd are temporary placeholders
             for _Ft, Ft, tnF in zip((_N.Nt,_N.Ct,_N.Bt), (N.Nt,N.Ct,N.Bt), ('tNt','tCt','tBt')):
                 if _Ft and Ft:
                     rc+=1; comp_Ft(_Ft,Ft, tnF,rc,Link)  # sub-comps
+    else:
+        # not updated:
+        root_update(N.root, Link)  # terminal comp with all lower trans-comp vals
     for n, _n in (_N,N),(N,_N):
             n.rim+=[Link]; n.eTT+=TT; n.ec+=Link.c; n.compared.add(_n)  # or all comps are unique?
     return Link
@@ -246,10 +248,8 @@ def comp_Ft(_Ft, Ft, tnF, rc, root):  # root is nG, unpack node trees down to nu
             tL = comp_N(_N,N, rc,full=0)
             if tL.m > ave * (connw+rc): TTm += tL.dTT; C+=tL.c; Rc+=tL.rc; L_+=[tL]
             elif tL.d > avd*(connw+rc): TTd += tL.dTT; Cd+=tL.c
-    if L_:
-        Rc /= L_
-        if val_(TTm,Rc,mw=(len(L_)-1)*Lw) > 0:
-            root_update(root, CF(N_=L_,nF=tnF, root=root,dTT=deepcopy(TTm),c=C,rc=Rc))  # all lower trans-comp vals
+    tF = getattr(root,tnF)
+    cr = C/tF.c; tF.c+=C; tF.dTT+= TTm*cr; tF.rc+=Rc/C * cr
 
 def base_comp(_N,N):  # comp Et, baseT, extT, dTT
 
@@ -371,17 +371,13 @@ def cluster_N(Ft, _N_, rc):  # flood-fill node | link clusters, flat, replace iL
         tF_ = [[],[],[]]  # draft:
         for L in G.L_:    # splice trans_links from base links
             for tL_, Ft in zip(tF_, (getattr(L,'tNt',[]),getattr(L,'tBt',[]),getattr(L,'tCt',[]))):
-                tL_ += Ft.N_  # flat
+                if Ft: tL_ += Ft.N_  # flat
         # merge tL nt Gs|Cs, not Bs?
         for tL_, nF in zip(tF_, ('tNt','tBt','tCt')):
             for tL in tL_:  # merge trans_link.nt.roots
-                rt0 = tL.nt[0].root; rt1 = tL.nt[1].root  # CNs?
+                rt0 = tL.nt[0].root.root; rt1 = tL.nt[1].root.root  # CNs
                 if rt0 != rt1: add_N(rt0, rt1, merge=1)  # concat in higher G
-
-        # this is simply extending currect Gs, no new attrs are needed?
-        # if not hasattr(G,nF): setattr(G,nF, CF(nF=nF))  # init root.tFt
-        # setattr(G,nF, sum2f( [sum2f(n_, nF, getattr(G,nF)) for n_ in FH], nF, G))
-            ''' reset rc:
+        ''' reset rc:
             tL_ = [tL for n in root.N_ for l in n.L_ for tL in l.N_]  # trans-links
             if sum(tL.m for tL in tL_) * ((len(tL_)-1)*Lw) > ave*(rc+connw):  # use tL.dTT?
                 mmax_ = []
@@ -393,7 +389,7 @@ def cluster_N(Ft, _N_, rc):  # flood-fill node | link clusters, flat, replace iL
                 tNt, tBt, tCt = root.Lt.N_[-1]
                 for m, (Ft, tFt) in zip(mmax_,((root.Nt,tNt),(root.Bt,tBt),(root.Ct,tCt))): # +rdn in 3 fork pairs
                     r = sm_.index(m); Ft.rc+=r; tFt.rc+=r  # rc+=rdn
-            '''
+        '''
     G_ = []  # add prelink pL_,pN_? include merged Cs, in feature space for Cs
     if _N_ and val_(Ft.dTT, rc+connw, TTw(Ft), mw=(len(_N_)-1)*Lw) > 0:  #| fL?
         for N in _N_: N.fin=0; N.exe=1  # not sure
@@ -488,7 +484,8 @@ def cluster_C(Ft, E_, rc):  # form centroids by clustering exemplar surround via
             root = Ft.root
             Ct = sum2F(C_,'Ct',root, fset=0, fCF=0)
             cross_comp(Ct,rc)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
-            root_update(root,Ct)  # Nt|Ct priority eval?
+            setattr(root,'Ct', Ct)
+            # root_update(root,Ct)  # no update, redundant? Nt|Ct priority eval?
     return C_, rc
 
 def cluster_P(_C_,N_,rc):  # Parallel centroid refining, _C_ from cluster_C, N_= root.N_, if global val*overlap > min
@@ -547,16 +544,17 @@ def sum2G(Ft_,tt,c,rc, root=None, init=1, typ=None, fsub=1):  # updates root if 
     m,d = vt_(tt,rc)
     if typ is None: typ = N.typ
     G = Copy_(N,root,init=1,typ=typ); G.dTT=tt; G.m=m; G.d=d; G.c=c; G.rc=rc
-    for N in N_[1:]:  add_N(G,N, coef=N.c/c)  # skips forks
-    sum2F(N_,'Nt',G,ntt,nc,nr)  # we need to parse nr too?
-    if len(Ft_) > 1:  # from trace_edge
+    for N in N_[1:]:
+        add_N(G,N, coef=N.c/c)  # skips forks
+    Nt = sum2F(N_,'Nt',G,ntt,nc,nr)
+    if len(Ft_) > 1:  # get Lt, starting from trace_edge
         L_,_,ltt,lc,lr = Ft_[1]
         if init:  # else same ext
             yx_ = np.array([n.yx for n in N_]); G.yx = yx = yx_.mean(axis=0); dy_,dx_ = (yx_-yx).T
             G.span = np.hypot(dy_,dx_).mean()  # N centers dist to G center
         else: L_+=root.L_; ltt+=root.Lt.dTT; lc+=root.Lt.c
         m, d = vt_(ltt,lr)
-        G.Lt = CF(N_=L_,nF='Lt',root=G.Nt,TT=ltt,m=m,d=d,c=lc,rc=lr)
+        Nt.Lt = CF(N_=L_,nF='Lt',root=G.Nt,TT=ltt,m=m,d=d,c=lc,rc=lr)  # Nt only?
         A = np.sum([l.angl[0] for l in L_], axis=0) if L_ else np.zeros(2)
         G.angl = np.array([A, np.sign(G.dTT[1] @ wTTf[1])], dtype=object)  # angle dir = d sign
     if N_[0].typ==2 and G.L_:  # else mang = 1
@@ -573,9 +571,10 @@ def sum2G(Ft_,tt,c,rc, root=None, init=1, typ=None, fsub=1):  # updates root if 
             G.L_ = L_
     if len(Ft_) > 2:  # from cluster_N
         B_,_,btt,bc,br = Ft_[2]; m,d = vt_(btt,br)
-        Bt = CN(root=G,TT=btt,m=m,d=d,c=bc,rc=br); Bt.nF='Bt'; Bt.Nt.N_ = [B_]
+        Bt = CN(root=G,TT=btt,m=m,d=d,c=bc,rc=br); Bt.nF='Bt'; Bt.Nt.N_ = B_
         if typ!=1 and d > avd*br*nw:  # no ddfork
             cross_comp(Bt,bc,'Bt')
+        G.Bt = Bt
     if fsub:
         if G.Lt.m * G.Lt.d * ((len(N_)-1)*Lw) > ave*avd * (rc+1) * cw:  # Variance * borrowed Match?
             V = G.m - ave * (rc+1)  # cent|conn divisive clustering:
@@ -609,7 +608,9 @@ def sum2f(n_, nF,root):
     tt, c, rc = np.zeros((2,9)),0,0
     for n in n_: tt+=n.dTT; rc+=n.rc; c+=n.c
     rc /= len(n_); m,d = vt_(tt,rc)
-    return CF(N_=n_,nF=nF,dTT=tt,m=m,d=d,c=c,rc=rc,root=root)
+    Ft = CF(N_=n_,nF=nF,dTT=tt,m=m,d=d,c=c,rc=rc,root=root)
+    for n in n_:  n.root = Ft
+    return Ft
 
 def sum2F(N_, nF, root, TT=np.zeros((2,9)), C=0, Rc=0, fset=1, fCF=1):  # -> CF/CN
     def sum_H(N_, Ft):
@@ -626,10 +627,12 @@ def sum2F(N_, nF, root, TT=np.zeros((2,9)), C=0, Rc=0, fset=1, fCF=1):  # -> CF/
         TT = np.zeros((2,9)); C = 0; Rc = 0
         for n in N_: TT += n.dTT; C += n.c; Rc += n.rc
     rc = (Rc/len(N_)) if N_ else 1; m,d = vt_(TT,rc)
-    Ft = (CN,CF)[fCF](nF=nF, dTT=TT,m=m,d=d,c=C,rc=rc,root=root); Ft.N_=N_  # root Bt|Ct ->CN
+    Ft = (CN,CF)[fCF](nF=nF, dTT=TT,m=m,d=d,c=C,rc=rc,root=root)  # root Bt|Ct ->CN
+    for N in N_: Ft.N_ += [N]; N.root = Ft
     sum_H(N_,Ft)  # Ft.H = sum lower levels
     if fset:
-        root_update(root, Ft, ini=2 if nF[0]=='t' else 1)
+        setattr(root, Ft.nF, Ft)
+        # root_update(root, Ft, ini=2 if nF[0]=='t' else 1)
     return Ft
 
 def add_F(F,f, cr=1, merge=1):
@@ -652,7 +655,7 @@ def merge_f(N,n, cc=1):
     for Ft, ft in zip((N.Nt, N.Bt, N.Lt), (n.Nt, n.Bt, n.Lt)):
         if ft:
             add_F(Ft, ft, (n.rc + n.rc*cc) / 2)  # ft*cc?
-            root_update(N, Ft, ini=0)  # should be update based on the merged Ft here?
+            setattr(N, Ft.nF, Ft)  # not sure about N.root update
 
 def cent_TT(C, rc):  # weight attr matches | diffs by their match to the sum, recompute to convergence
 
@@ -684,22 +687,25 @@ def mdecay(L_):  # slope function
     ddist_ = np.diff([l.span for l in L_])
     return -(dm_ / (ddist_ + eps)).mean()  # -dm/ddist
 
-def root_update(root, Ft, ini=1):
+def root_update(root):
 
-    _c,c = root.c,Ft.c; C = _c+c; root.c = C  # c is not weighted, min(_lev.c,lev.c) if root is link?
-    root.rc = (root.rc*_c + Ft.rc*c) / C
-    if isinstance(root,CF) or (hasattr(Ft,'nF') and (Ft.nF=='Nt' or Ft.nF=='Lt')):  # core forks
-        root.dTT = (root.dTT*_c + Ft.dTT*c) /C
-    else:  # borrow alt-fork deviations:
-        root.m = (root.m*_c+Ft.m*c) /C; root.d = (root.d*_c+Ft.d*c) /C
-    if ini:
-        setattr(root,'t'+Ft.nF if ini==2 else Ft.nF, Ft)
-    if root.root: root_update(root.root, Ft, ini=0)   # upward recursion, batch in root?
+    for ft_, nF,i in zip(root.fb_T, ('Nt','Ct'),(0,1)):
+        Ft = CF(nF=nF, root=root)
+        C = sum([ft.c if ft else 0 for ft in ft_])
+        for ft in ft_:
+            if ft: cr = ft.c/C; Ft.dTT += ft.dTT*cr; Ft.rc += ft.rc*cr
+        if Ft:
+            Ft.m,Ft.d = vt_(Ft.dTT,Ft.rc); Ft.c = C
+            setattr(root,'t'+nF, Ft)
+            if root.root: root.root.fb_T[i] += [Ft]
+        elif root.root: root.root.fb_T[i] += [[]]
+    root.fb_T = [[],[]]
+    if root.root and len(root.root.fb_T[0]) == len(root.root.N_):
+        root_update(root.root)
 
 def CopyF(F, root=None, cr=1):  # F = CF
     C = CF(dTT=F.dTT * cr, m=F.m, d=F.d, c=F.c, root=root or F.root)
     C.N_ = [Copy_(N,root=C) for N in F.N_]  # flat
-    # (do we need to copy the CN in Ft.N_? Or just shallow cipy list? If shallow copy, we need to change N_'s root?)
     return C
 
 def Copy_(N, root=None, init=0, typ=None):
