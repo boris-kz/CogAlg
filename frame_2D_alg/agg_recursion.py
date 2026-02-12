@@ -57,8 +57,11 @@ def prop_F_(F):  # factory function to get and update top-composition fork.N_
 
 class CN(CBase):
     name = "node"
-    N_,C_, B_,L_ = prop_F_('Nt'),prop_F_('Ct'), prop_F_('Bt'), prop_F_('Lt')
-    # ext| int- defined nodes, ext|int- defining links, Lt/Ft, Ct/lev, Bt/G
+    N_,C_,B_ = prop_F_('Nt'),prop_F_('Ct'),prop_F_('Bt')  # ext| int- defined nodes, ext|int- defining links, Lt/Ft, Ct/lev, Bt/G
+    @property
+    def L_(N): return N.Nt.Lt.N_
+    @L_.setter
+    def L_(N,v): N.Nt.Lt.N_ = v
     def __init__(n, **kwargs):
         super().__init__()
         n.typ = kwargs.get('typ', 0)
@@ -88,7 +91,7 @@ class CN(CBase):
         n.rN_ = kwargs.get('rN_',[]) # reciprocal root nG_ for bG|cG, nG has Bt.N_,Ct.N_ instead?
         n.compared = set()
         n.nF = kwargs.get('nF', 'Nt')  # to set attr in root_update
-        n.fb_T = kwargs.get('fb_T_', [[],[],[]])
+        n.fb_T = kwargs.get('fb_T_', [[],[]])
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.c)
 
@@ -151,11 +154,11 @@ def cross_comp(Ft, rc, nF='Nt'):  # core function mediating recursive rng+ and d
     N_, G_ = Ft.N_, []  # N_|B_|C_, rc=rdn+olp
     iN_,L_,TT,c,TTd,cd = comp_N_(N_,rc) if N_[0].typ else comp_C_(N_,rc, fC=1)  # nodes | links | centroids
     if L_:
-        if L_: root_update(Ft.root)
         for n in iN_: n.em, n.ed = vt_(np.sum([l.dTT for l in n.rim],axis=0), rc)
         cr = cd / (c+cd) * .5  # dfork borrow ratio, .5 for one direction
         if val_(TT, rc+connw,TTw(Ft),(len(L_)-1)*Lw,1,TTd,cr) > 0:
-            Ft.Lt = sum2f(L_,'Lt',Ft.root)  # int L_,ext B_
+            Ft.Lt = sum2f(L_,'Lt', Ft)  # G.L_=Nt.Lt.N_
+            root_update(Ft)  # batched L_fb_-> Ft
             E_ = get_exemplars({N for L in L_ for N in L.nt if N.em}, rc)  # N|C?
             G_,rc = cluster_N(Ft, E_,rc)  # form Bt, trans_cluster, sub+ in sum2G
             if G_:
@@ -186,6 +189,7 @@ def comp_N_(iN_, rc, _iN_=[]):  # incremental-distance cross_comp, max dist depe
         return iTT+eTT
 
     N_,L_,TTm,cm,TTd,cd = [],[],np.zeros((2,9)),0,np.zeros((2,9)),0; dpTT=np.zeros((2,9))  # no c?
+    root = N_[0].root.root.Lt
     for N in iN_:
         pVt_ = []
         for dist, dy_dx, _N in N.pL_:  # rim angl is not canonic
@@ -193,7 +197,7 @@ def comp_N_(iN_, rc, _iN_=[]):  # incremental-distance cross_comp, max dist depe
             m, d = vt_(pTT,lrc)  # +|-match certainty
             if m > 0:
                 if abs(m) < ave * nw:  # different ave for projected surprise value, comp in marginal predictability
-                    Link = comp_N(_N,N, lrc, A=dy_dx, span=dist)
+                    Link = comp_N(_N,N, lrc, A=dy_dx, span=dist)  # L.root assigned in sum2f?
                     dTT, m,d,c = Link.dTT,Link.m,Link.d,Link.c
                     if   m > ave: TTm+=dTT; cm+=c; L_+=[Link]; N_+=[_N,N]  # combined CN dTT and L_
                     elif d > avd: TTd+=dTT; cd+=c  # no overlap to simplify
@@ -217,6 +221,22 @@ def comp_N(_N,N, rc, full=1, A=np.zeros(2),span=None, rL=[]):
             tt+=ltt; C+=lc; Rc += lrc
         return dH,tt,C,Rc
 
+    def comp_Ft(_Ft, Ft, tnF, rc, Link):  # root is nG, unpack node trees down to numericals and compare them
+
+        L_=[]; TT=np.zeros((2,9)); C= Rc= 0
+        for _N, N in product(_Ft.N_,Ft.N_):  # top lev, direct or via prop_F if nest->CN, spec eval in comp_n:
+            if _N is N:
+                dtt= np.array([N.dTT[1],np.zeros(9)]); TT+=dtt; C+=1  # overlap = pure match, not weighted?
+            else:
+                L = comp_N(_N,N, rc,full=0, rL=Link)  # trans-links
+                if L.m > ave * (connw+rc):
+                    L_+= [L]; TT+=L.dTT*L.c; Rc+=L.rc*L.c; C+=L.c
+        if C:
+            tF = getattr(Link, tnF); _c = tF.c; C+=_c; tF.c = C
+            tF.dTT = dTT = (tF.dTT*_c +TT) / C
+            tF.rc = rc = (tF.rc *_c +Rc) / C
+            tF.m, tF.d = vt_(dTT,rc)
+
     TT = base_comp(_N,N)[0] if full else comp_derT(_N.dTT[1],N.dTT[1])
     m,d = vt_(TT,rc)
     Link = CN(typ=1,exe=1, nt=[_N,N], dTT=TT,m=m,d=d,c=min(N.c,_N.c),rc=rc)
@@ -226,7 +246,7 @@ def comp_N(_N,N, rc, full=1, A=np.zeros(2),span=None, rL=[]):
         yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
         box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
         angl = [A, np.sign(TT[1] @ wTTf[1])]
-        Link.yx=yx; Link.box=box; Link.span=span; Link.angl=angl; Link.baseT= (_N.baseT+N.baseT)/2
+        Link.yx=yx; Link.box=box; Link.span=span; Link.angl=angl; Link.baseT=(_N.baseT+N.baseT)/2
     else: Link.root = rL
     if N.typ and m > ave*nw:
         dH,tt,C,Rc = comp_H(_N.Nt, N.Nt, Link)  # tentative comp
@@ -236,7 +256,7 @@ def comp_N(_N,N, rc, full=1, A=np.zeros(2),span=None, rL=[]):
                 if _Ft and Ft:
                     rc+=1; comp_Ft(_Ft,Ft, tnF,rc, Link)  # sub-comps
     elif not full:
-        # terminal sub-comp, rL is root_Link, Link is tL + sub-tL layers
+        # terminal sub-comp, rL:root_L, Link is tL + sub-tL layers, batched feedback
         rL.fb_T[0] += [add_F(Link.tNt,Link.tBt, fB=1) if Link.tNt else []]
         rL.fb_T[1] += [Link.tCt if Link.tCt else []]
         if len(rL.fb_T[0]) == len(rL.N_):
@@ -244,21 +264,6 @@ def comp_N(_N,N, rc, full=1, A=np.zeros(2),span=None, rL=[]):
     for n, _n in (_N,N),(N,_N):
         n.rim+=[Link]; n.eTT+=TT; n.ec+=Link.c; n.compared.add(_n)  # or all comps are unique?
     return Link
-
-def comp_Ft(_Ft, Ft, tnF, rc, Link):  # root is nG, unpack node trees down to numericals and compare them
-
-    TTm,C, TTd,Cd = np.zeros((2,9)),0, np.zeros((2,9)),0
-    L_=[]; Rc=0
-    for _N, N in product(_Ft.N_,Ft.N_):  # top lev, direct or via prop_F if nest->CN, spec eval in comp_n:
-        if _N is N:
-            dtt = np.array([N.dTT[1], np.zeros(9)]); TTm += dtt; C += 1  # overlap: pure match
-        else:   # form trans-links:
-            tL = comp_N(_N,N, rc,full=0, rL=Link)
-            if tL.m > ave * (connw+rc): TTm += tL.dTT; C+=tL.c; Rc+=tL.rc; L_+=[tL]
-            elif tL.d > avd*(connw+rc): TTd += tL.dTT; Cd+=tL.c
-    if C:
-        tF = getattr(Link,tnF)
-        cr = C/tF.c; tF.c+=C; tF.dTT+= TTm*cr; tF.rc+=Rc/C * cr
 
 def base_comp(_N,N):  # comp Et, baseT, extT, dTT
 
@@ -700,21 +705,21 @@ def mdecay(L_):  # slope function
     ddist_ = np.diff([l.span for l in L_])
     return -(dm_ / (ddist_ + eps)).mean()  # -dm/ddist
 
-def root_update(root):
+def root_update(rL):
 
-    for ft_, nF,i in zip(root.fb_T, ('Nt','Ct'),(0,1)):
+    for ft_, nF,i in zip(rL.fb_T, ('Nt','Ct'),(0,1)):
         C = sum([ft.c if ft else 0 for ft in ft_])
         if C:
-            Ft = CF(nF=nF, c=C, root=root)
+            Ft = CF(nF=nF, c=C, root=rL)
             for ft in ft_:
                 if ft: cr = ft.c/C; Ft.dTT += ft.dTT*cr; Ft.rc += ft.rc*cr
             Ft.m,Ft.d = vt_(Ft.dTT,Ft.rc)
-            setattr(root,'t'+nF, Ft)
-            if root.root: root.root.fb_T[i] += [Ft]
-        elif root.root: root.root.fb_T[i] += [[]]
-    root.fb_T = [[],[]]
-    if root.root and len(root.root.fb_T[0]) == len(root.root.N_):
-        root_update(root.root)
+            setattr(rL,'t'+nF, Ft)
+            if rL.root: rL.root.fb_T[i] += [Ft]
+        elif rL.root: rL.root.fb_T[i] += [[]]
+    rL.root.fb_T = [[],[]]
+    if rL.root and len(rL.root.fb_T[0]) == len(rL.root.N_):
+        root_update(rL.root)
 
 def CopyF(F, root=None, cr=1):  # F = CF
     C = CF(dTT=F.dTT * cr, m=F.m, d=F.d, c=F.c, root=root or F.root)

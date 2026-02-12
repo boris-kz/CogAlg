@@ -207,3 +207,18 @@ def root_update(root, Ft, ini=1):
         setattr(root,'t'+Ft.nF if ini==2 else Ft.nF, Ft)
     if root.root: root_update(root.root, Ft, ini=0)
     # upward recursion, we need to batch in root.fb_?
+
+def comp_Ft1(_Ft, Ft, tnF, rc, Link):  # root is nG, unpack node trees down to numericals and compare them
+
+    TTm,C, TTd,Cd = np.zeros((2,9)),0, np.zeros((2,9)),0
+    L_=[]; Rc=0
+    for _N, N in product(_Ft.N_,Ft.N_):  # top lev, direct or via prop_F if nest->CN, spec eval in comp_n:
+        if _N is N:
+            dtt = np.array([N.dTT[1], np.zeros(9)]); TTm += dtt; C += 1  # overlap: pure match
+        else:   # form trans-links:
+            tL = comp_N(_N,N, rc,full=0, rL=Link)
+            if tL.m > ave * (connw+rc): TTm += tL.dTT; C+=tL.c; Rc+=tL.rc; L_+=[tL]  # weigh by cr = C/tF.c
+            elif tL.d > avd*(connw+rc): TTd += tL.dTT; Cd+=tL.c
+    if C:
+        tF = getattr(Link,tnF)
+        cr = C/tF.c; tF.c+=C; tF.dTT+= TTm*cr; tF.rc+= Rc/C * cr
