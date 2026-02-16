@@ -208,17 +208,71 @@ def root_update(root, Ft, ini=1):
     if root.root: root_update(root.root, Ft, ini=0)
     # upward recursion, we need to batch in root.fb_?
 
-def comp_Ft1(_Ft, Ft, tnF, rc, Link):  # root is nG, unpack node trees down to numericals and compare them
+def comp_N1(_N,N, rc, full=1, A=np.zeros(2),span=None, rL=[]):
 
-    TTm,C, TTd,Cd = np.zeros((2,9)),0, np.zeros((2,9)),0
-    L_=[]; Rc=0
-    for _N, N in product(_Ft.N_,Ft.N_):  # top lev, direct or via prop_F if nest->CN, spec eval in comp_n:
-        if _N is N:
-            dtt = np.array([N.dTT[1], np.zeros(9)]); TTm += dtt; C += 1  # overlap: pure match
-        else:   # form trans-links:
-            tL = comp_N(_N,N, rc,full=0, rL=Link)
-            if tL.m > ave * (connw+rc): TTm += tL.dTT; C+=tL.c; Rc+=tL.rc; L_+=[tL]  # weigh by cr = C/tF.c
-            elif tL.d > avd*(connw+rc): TTd += tL.dTT; Cd+=tL.c
-    if C:
-        tF = getattr(Link,tnF)
-        cr = C/tF.c; tF.c+=C; tF.dTT+= TTm*cr; tF.rc+= Rc/C * cr
+    def comp_H(_Nt,Nt, Link):
+        dH, tt,C,Rc = [],np.zeros((2,9)),0,0
+        for _lev,lev in zip(reversed([_Nt]+_Nt.H),reversed([Nt]+Nt.H)):  # or always top-down?
+            ltt = comp_derT(_lev.dTT[1],lev.dTT[1]); lc = min(_lev.c,lev.c)
+            lrc = (_lev.rc+lev.rc)/2; m,d=vt_(ltt,lrc)
+            dH += [CF(dTT=ltt,m=m,d=d,c=lc,rc=lrc,root=Link)]
+            tt+=ltt; C+=lc; Rc += lrc
+        return dH,tt,C,Rc
+
+    def link_update(rL):
+        for ft_,nF,i in zip(rL.fb_T, ('Nt','Ct'),(0,1)):
+            C = sum([ft.c if ft else 0 for ft in ft_])
+            if C:
+                Ft = CF(nF='t'+nF, c=C, root=rL)
+                for ft in ft_:
+                    if ft: cr = ft.c/C; Ft.dTT += ft.dTT*cr; Ft.rc += ft.rc*cr; Ft.N_ += ft.N_  # trans-links
+                Ft.m,Ft.d = vt_(Ft.dTT,Ft.rc)
+                setattr(rL,'t'+nF, Ft)
+                if rL.root: rL.root.fb_T[i] += [Ft]
+            elif rL.root: rL.root.fb_T[i] += [[]]
+        if rL.root:
+            rL.root.fb_T = [[], []]
+            if len(rL.root.fb_T[0]) == len(rL.root.N_):
+                link_update(rL.root)
+
+    def comp_Ft(_Ft, Ft, tnF, rc, Link):  # root is nG, unpack node trees down to numericals and compare them
+
+        L_=[]; TT=np.zeros((2,9)); C= Rc= 0
+        for _N, N in product(_Ft.N_,Ft.N_):  # top lev, direct or via prop_F if nest->CN, spec eval in comp_n:
+            if _N is N:
+                dtt= np.array([N.dTT[1],np.zeros(9)]); TT+=dtt; C+=1  # overlap = pure match, not weighted?
+            else:
+                L = comp_N(_N,N, rc,full=0, rL=Link)  # trans-links
+                if L.m > ave * (connw+rc):
+                    L_+= [L]; TT+=L.dTT*L.c; Rc+=L.rc*L.c; C+=L.c
+        if C:
+            tF = getattr(Link, tnF); tF.N_+= L_; _c=tF.c; C+=_c; tF.c=C
+            tF.dTT = dTT = (tF.dTT*_c +TT) / C
+            tF.rc = rc = (tF.rc *_c +Rc) / C;  tF.m,tF.d = vt_(dTT,rc)
+
+    TT = base_comp(_N,N)[0] if full else comp_derT(_N.dTT[1],N.dTT[1])
+    m,d = vt_(TT,rc)
+    Link = CN(typ=1,exe=1, nt=[_N,N], dTT=TT,m=m,d=d,c=min(N.c,_N.c),rc=rc)
+    Link.tNt,Link.tCt,Link.tBt = CF(nF='tNt',root=Link),CF(nF='tCt',root=Link),CF(nF='tBt',root=Link)  # typ 1 only
+    if N.typ and m > ave*nw:
+        dH,tt,C,Rc = comp_H(_N.Nt, N.Nt, Link)  # tentative comp
+        if m + vt_(tt,Rc/C)[0] > ave * nw:
+            Link.H = dH  # hm,hd are temporary placeholders
+            for _Ft, Ft, tnF in zip((_N.Nt,_N.Ct,_N.Bt), (N.Nt,N.Ct,N.Bt), ('tNt','tCt','tBt')):
+                if _Ft and Ft:
+                    rc+=1; comp_Ft(_Ft,Ft, tnF,rc, Link)  # sub-comps
+    if full:
+        if span is None: span = np.hypot(*_N.yx - N.yx)
+        yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
+        box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
+        angl = [A, np.sign(TT[1] @ wTTf[1])]
+        Link.yx=yx; Link.box=box; Link.span=span; Link.angl=angl; Link.baseT=(_N.baseT+N.baseT)/2
+    else:
+        Link.root = rL  # terminal sub-comp, rL:root_L, Link: tL+ sub-tL layers, batched feedback
+        rL.fb_T[0] += [Link.tNt if Link.tNt else []]
+        rL.fb_T[1] += [Link.tBt if Link.tBt else []]  # not sure
+        rL.fb_T[2] += [Link.tCt if Link.tCt else []]
+        link_update(rL)
+    for n, _n in (_N,N),(N,_N):
+        n.rim+=[Link]; n.eTT+=TT; n.ec+=Link.c; n.compared.add(_n)  # or all comps are unique?
+    return Link
