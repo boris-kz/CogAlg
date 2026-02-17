@@ -275,4 +275,22 @@ def comp_N1(_N,N, rc, full=1, A=np.zeros(2),span=None, rL=[]):
         link_update(rL)
     for n, _n in (_N,N),(N,_N):
         n.rim+=[Link]; n.eTT+=TT; n.ec+=Link.c; n.compared.add(_n)  # or all comps are unique?
+
     return Link
+
+def up_update(rL, rnF):  # upward recursion
+
+        tNt = sum2f(rL.tNt.fb_,'tNt',rL) if rL.tNt.fb_ else []; rL.tNt.fb_ = []
+        tBt = sum2f(rL.tBt.fb_,'tBt',rL) if rL.tBt.fb_ else []; rL.tBt.fb_ = []
+        tCt = sum2f(rL.tCt.fb_,'tCt',rL) if rL.tCt.fb_ else []; rL.tCt.fb_ = []
+        if tBt:  # tNt is never empty?
+            tNt.typ = tBt.typ = 0
+            tNt = comp_N(tNt, tBt, rL.rc, full=0, rL=rL,rnF=rnF)
+        if tCt:
+            tCt.typ = 0  # no further conversion?
+            tNt = comp_N(tNt, tCt, rL.rc, full=0, rL=rL,rnF=rnF)
+        getattr(rL.root, rnF).fb_ += [tNt]  # combined FtT
+        if all([len(F.fb_) == len(F.N_) for F in (rL.tNt, rL.tBt, rL.tCt)]):
+            link_update(rL.root, rnF)
+
+

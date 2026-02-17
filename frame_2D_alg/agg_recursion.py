@@ -215,37 +215,30 @@ def comp_N_(iN_, rc, _iN_=[]):  # incremental-distance cross_comp, max dist depe
 
 def comp_N(_N,N, rc, full=1, A=np.zeros(2),span=None, rL=None, rnF=None):
 
-    def comp_H(_Nt,Nt, Link):
+    def comp_H(_Nt,Nt, Link):  # tentative pre-comp
+
         dH, tt,C,Rc = [],np.zeros((2,9)),0,0
-        for _lev,lev in zip(reversed([_Nt]+_Nt.H),reversed([Nt]+Nt.H)):  # or always top-down?
-            ltt = comp_derT(_lev.dTT[1],lev.dTT[1]); lc = min(_lev.c,lev.c)
+        for _lev,lev in zip([_Nt]+_Nt.H, [Nt]+Nt.H):  # should be top-down
+            ltt = comp_derT(_lev.dTT[1],lev.dTT[1]); lc= min(_lev.c,lev.c)
             lrc = (_lev.rc+lev.rc)/2; m,d = vt_(ltt,lrc)
             dH += [CF(dTT=ltt,m=m,d=d,c=lc,rc=lrc,root=Link)]
             tt += ltt; C+=lc; Rc+=lrc
-        return dH,tt,C, rc+ Rc/len(dH) * C/rL.c  # same norm for tt?
+        return dH,tt,C, rc+ Rc/len(dH) * (C/Link.c)  # same norm for tt?
 
-    def link_update(rL, rnF):
-        FtT = []
-        for ft_,nF in zip((rL.tNt.fb_, rL.tBt.fb_, rL.tCt.fb_), ('tNt','tBt','tCt')):
+    def link_update(L):
+        for nF in ('tNt', 'tBt', 'tCt'):
+            ft_ = getattr(L, nF).fb_
             if ft_:
-                C = sum([ft.c if ft else 0 for ft in ft_])  # or no empty fts?
-                tL_,tt,c,rc = [],np.zeros((2,9)),0,0
+                C = sum([ft.c if ft else 0 for ft in ft_])
+                tL_, tt, c, rc = [], np.zeros((2, 9)), 0, 0
                 for ft in ft_:
-                    if ft: tL_+= ft.N_; cr = ft.c/C; tt += ft.dTT*cr; rc += ft.rc*cr
-                m, d = vt_(tt,rc)
-                FtT += [CF(N_=tL_,nF=nF,dTT=tt,m=m,d=d,c=c,rc=rc)]
-            else: FtT += [[]]
-        up_update(FtT, rL, rnF)
-
-    def up_update(FtT, rL, rnF):  # upward recursion
-        if any(FtT) and rL.root:  # empty in top Link
-            getattr(rL.root, rnF).fb_ += [FtT]
-            if all([len(F.fb_)==len(F.N_) for F in (rL.root.tNt, rL.root.tBt, rL.root.tCt)]):  # feedback is complete
-                # Lf = comp(L.Nt,L.Bt), Lff = comp_N(Lf,L.Ct)
-                # comb Lff into rnF?
-                link_update(rL.root, rnF)  # target fork
+                    if ft: tL_ += ft.N_; cr = ft.c / C; tt += ft.dTT * cr; rc += ft.rc * cr
+                m, d = vt_(tt, rc)
+                setattr(L, nF, CF(N_=tL_, nF=nF, dTT=tt, m=m, d=d, c=C, rc=rc, root=L))
+            getattr(L, nF).fb_ = []
 
     def comp_Ft(_Ft, Ft, tnF, rc, Link):  # root is nG, unpack node trees down to numericals and compare them
+    # replace with comp_N_(_Ft, Ft, rc), add option for overlap and tnF
 
         L_=[]; TT=np.zeros((2,9)); C= Rc= 0
         for _N, N in product(_Ft.N_,Ft.N_):  # top lev, direct or via prop_F if nest->CN, spec eval in comp_n:
@@ -257,29 +250,36 @@ def comp_N(_N,N, rc, full=1, A=np.zeros(2),span=None, rL=None, rnF=None):
         if C:
             cr = C / Link.c
             rc += Rc*cr; m,d = vt_(TT, rc)
-            return CF(N_=L_,nF=tnF,dTT=TT,m=m,d=d,c=C,rc=rc)
+            tFt = CF(N_=L_,nF=tnF,dTT=TT,m=m,d=d,c=C,rc=rc,root=Link)
+            getattr(Link,tnF).fb_ += [tFt]
+            return tFt
 
     TT = base_comp(_N,N)[0] if full else comp_derT(_N.dTT[1],N.dTT[1])
     m,d = vt_(TT,rc)
-    Link = CN(typ=1,exe=1, nt=[_N,N], dTT=TT,m=m,d=d,c=min(N.c,_N.c),rc=rc)
-    Link.tNt, Link.tCt, Link.tBt = CF(nF='tNt',root=Link),CF(nF='tCt',root=Link),CF(nF='tBt',root=Link)  # typ 1 only
+    L = CN(typ=1, nt=[_N,N], dTT=TT,m=m,d=d,c=min(N.c,_N.c),rc=rc,root=rL, exe=1)
+    L.tNt, L.tCt, L.tBt = CF(nF='tNt',root=L),CF(nF='tCt',root=L),CF(nF='tBt',root=L)  # typ 1
     if N.typ and m > ave*nw:
-        dH,tt,C,Rc = comp_H(_N.Nt, N.Nt, Link)  # tentative comp
+        dH,tt,C,Rc = comp_H(_N.Nt, N.Nt, L)  # tentative comp
         rc=Rc; FtT = []
         if m + vt_(tt,Rc/C)[0] > ave * nw:
-            for _Ft, Ft, tnF in zip((_N.Nt,_N.Ct,_N.Bt), (N.Nt,N.Ct,N.Bt), ('tNt','tCt','tBt')):
+            if N.typ==1:
+                for n,_n in product(_N.nt, N.nt):
+                    getattr(L,'tNt').fb_ += [comp_N(n,_n,rc)]  # sub-comp for links
+            for _Ft, Ft, tnF in zip((_N.Nt,_N.Ct,_N.Bt), (N.Nt,N.Ct,N.Bt), ('tNt','tCt','tBt')):  # all empty in link
                 if _Ft and Ft:  # add eval?
-                    rc+=1; FtT += [comp_Ft(_Ft,Ft, tnF,rc, Link)]  # fork sub-comp
-            up_update(FtT, Link, rnF)
+                    rc+=1; FtT += [comp_Ft(_Ft,Ft, tnF,rc, L)]  # fork sub-comp
+            link_update(L)
+            if L.tBt: L.tNt = comp_N(L.tNt, L.tBt, rc, full=0, rL=L, rnF='tNt')  # L.tBt.typ = L.tNt.typ = 0
+            if L.tCt: L.tNt = comp_N(L.tNt, L.tCt, rc, full=0, rL=L, rnF='tNt')  # L.tCt.typ = L.tNt.typ = 0
     if full:
         if span is None: span = np.hypot(*_N.yx - N.yx)
         yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
         box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
         angl = [A, np.sign(TT[1] @ wTTf[1])]
-        Link.yx=yx; Link.box=box; Link.span=span; Link.angl=angl; Link.baseT=(_N.baseT+N.baseT)/2
+        L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.baseT=(_N.baseT+N.baseT)/2
     for n, _n in (_N,N),(N,_N):
-        n.rim+=[Link]; n.eTT+=TT; n.ec+=Link.c; n.compared.add(_n)  # or all comps are unique?
-    return Link
+        n.rim+=[L]; n.eTT+=TT; n.ec+=L.c; n.compared.add(_n)  # or all comps are unique?
+    return L
 
 def base_comp(_N,N):  # comp Et, baseT, extT, dTT
 
@@ -527,7 +527,7 @@ def cluster_P(_C_,N_,rc):  # Parallel centroid refining, _C_ from cluster_C, N_=
             N.m_,N.d_,N.r_ = map(list,zip(*[vt_(base_comp(C,N)[0]) + (C.rc,) for C in _C_]))  # distance-weight match?
             N.o_= np.argsort(np.argsort(N.m_)[::-1]) + 1  # rank of each C_[i] = rdn of C in C_
             dM += sum(abs(_m-m) for _m,m in zip(N._m_,N.m_))
-            dO += sum(abs(_o-o) for _o,o in zip(N._o_,N.m_))
+            dO += sum(abs(_o-o) for _o,o in zip(N._o_,N.o_))
             M += sum(N.m_)
             O += sum(N.m_)
         C_ = [sum2C(N_,_C, i) for i, _C in enumerate(_C_)]  # update with new coefs, _C.m, N->C refs
@@ -553,9 +553,8 @@ def sum2C(N_,_C, _Ci=None):  # fuzzy sum params used in base_comp
     for N in N_:
         Ci = N.rN_.index(_C) if _Ci is None else _Ci
         ccoef_ += [N._m_[Ci] / (ave* N._o_[Ci]) * _C.m]  # *_C.m: proj survival, vs post-prune eval?
-        c_ = [c * max(cc, 0) for c,cc in zip_longest(c_,ccoef_, fillvalue=1)]
-        # we need to use zip_longest and fillvalue with 1, else c_ will be pruned to single element when ccoef stats with a single element
         if _Ci is not None: N._m_,N._d_,N._r_ = N.m_,N.d_,N.r_  # from cluster_P
+    c_ = [c * max(cc,0) for c,cc in zip_longest(c_,ccoef_, fillvalue=1)]  # this should be here? why we need to recompute all cs in the loop?
     tot = sum(c_)+eps; Par_ = []
     for par_ in rc_, dTT_, baseT_, span_, yx_:
         Par_.append(sum([p * c for p,c in zip(par_,c_)]))
@@ -750,7 +749,7 @@ def Copy_(N, root=None, init=0, typ=None):
 
 def extend_box(_box, box):
     y0, x0, yn, xn = box; _y0, _x0, _yn, _xn = _box
-    return min(y0,_y0), min(x0,_x0), max(yn,_yn), max(xn,_xn)
+    return np.array((min(y0,_y0), min(x0,_x0), max(yn,_yn), max(xn,_xn)))
 
 def sort_H(H, fi):  # lev.rc = complementary to root.rc and priority index in H, if selective and aligned
 
@@ -899,8 +898,8 @@ def vect_edge(tile, rV=1, wTT=None):  # PP_ cross_comp and floodfill to init foc
                     G_,TT,C = trace_edge(N_,G_,TT,C, 3,tile)  # flatten, cluster B_-mediated Gs, init Nt
     if G_:
         setattr(tile,'Nt', sum2F(G_,'Nt',tile,TT,C,Rc=1))  # update tile.wTT?
-        tile.dTT = TT; tile.c = C; tile.rc = sum([G.rc for G in G_])  # we need to sum tile's param manually now?
-        if vt_(tile.dTT)[0] > ave:
+        tile.dTT = TT; tile.c = C
+        if vt_(TT)[0] > ave:
             return tile
 
 def trace_edge(N_,_G_,_TT,_C, rc,root):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary/skeleton?
