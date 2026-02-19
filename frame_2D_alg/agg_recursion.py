@@ -155,8 +155,8 @@ def TTw(G): return getattr(G,'wTT',wTTf)
 '''
 def cross_comp(Ft, rc, nF='Nt'):  # core function mediating recursive rng+ and der+ cross-comp and clustering
 
-    N_, G_, root = Ft.N_, [], Ft.root  # N_|B_|C_, rc=rdn+olp
-    iN_,L_,TT,c,TTd,cd = comp_N_(N_,rc) if N_[0].typ else comp_C_(N_,rc, fC=1)  # nodes | links | centroids
+    N_, G_, root = Ft.N_, [], Ft.root  # rc=rdn+olp, comp N_|B_|C_: nodes| links| centroids:
+    iN_,L_,TT,c,TTd,cd = comp_N_(N_,combinations(N_,2),rc) if N_[0].typ else comp_C_(N_,rc, fC=1)
     if L_:
         for n in iN_: n.em, n.ed = vt_(np.sum([l.dTT for l in n.rim],axis=0), rc)
         cr = cd / (c+cd) * .5  # dfork borrow ratio, .5 for one direction
@@ -171,41 +171,41 @@ def cross_comp(Ft, rc, nF='Nt'):  # core function mediating recursive rng+ and d
                     G_,rc = cross_comp(Ft,rc,nF)  # agg+,trans-comp
     return G_,rc  # G_ is recursion flag?
 
-def comp_N_(iN_, rc, tnF=None, rL=None):  # incremental-distance cross_comp, max dist depends on prior match
+def comp_N_(iN_,pairs, rc, tnF=None, rL=None):  # incremental-distance cross_comp, max dist depends on prior match
 
     N_,L_,TTm,cm,TTd,cd, Rc = [],[],np.zeros((2,9)),0,np.zeros((2,9)),0,0; dpTT=np.zeros((2,9))  # no c?
-    for i, N in enumerate(iN_):  # get all-to-all pre-links
-        N.pL_ = []
-        for _N in iN_[i+1:]:  # optional _iN_ as spec (we no longer need that _iN_?)
-            # if _N.sub != N.sub: continue  # or comp x composition?  This is no longer useful?
-            if N is _N: dtt= np.array([N.dTT[1],np.zeros(9)]); TTm+=dtt; cm+=1  # overlap = unit match, no miss
-            else:
-                dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)
-                N.pL_ += [[dist, dy_dx, _N]]
+    for N in iN_: N.pL_ = []  # init
+    for _N, N in pairs:  # get all-to-all pre-links
+        if _N.sub != N.sub: continue  # or comp x composition?
+        if N is _N: dtt= np.array([N.dTT[1],np.zeros(9)]); TTm+=dtt; cm+=1  # overlap = unit match, no miss
+        else:
+            dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)
+            N.pL_+= [[dist,dy_dx,_N]]; _N.pL_+= [[dist,-dy_dx,N]]
         N.pL_.sort(key=lambda x: x[0])  # proximity prior, test compared?
 
-    def proj_V(_N,N, dist, pVt_):  # _N x N induction
-        Dec = decay**(dist/((_N.span+N.span)/2))
+    def proj_V(_N,N, dist, pVt_, dec):  # _N x N induction
+        Dec = dec or decay ** ((dist/((_N.span+N.span)/2)))
         iTT = (_N.dTT + N.dTT) * Dec
-        eTT = (_N.eTT + N.eTT) * Dec # rim
+        eTT = (_N.eTT + N.eTT) * Dec  # rim
         if abs( vt_(eTT,rc)[0]) * ((len(pVt_)-1)*Lw) > ave*specw:  # spec N links
             eTT = np.zeros((2,9)) # recompute
             for _dist,_dy_dx,__N,_V in pVt_:
-                eTT += proj_N(N,_dist,_dy_dx, rc)  # proj N L_,B_,rim, if pV>0: eTT += pTT?
-                eTT += proj_N(_N,_dist,-_dy_dx, rc)  # reverse direction
+                eTT += proj_N(N,_dist, _dy_dx, rc, dec)  # proj N L_,B_,rim, if pV>0: eTT += pTT?
+                eTT += proj_N(_N,_dist,-_dy_dx, rc, dec)  # reverse direction
         return iTT+eTT
 
     for N in iN_:
-        pVt_ = []
+        pVt_ = []  # [[dist, dy_dx, _N, V]]
         for dist, dy_dx, _N in N.pL_:  # rim angl is not canonic
-            pTT = proj_V(_N,N, dist, pVt_); lrc = rc + (N.rc+_N.rc) / 2  # pVt_: [[dist, dy_dx, _N, V]]
-            m, d = vt_(pTT,lrc)  # +|-match certainty
+            pTT = proj_V(_N,N, dist, pVt_, rL.m if rL else decay** (dist/((_N.span+N.span)/2)))
+            lrc = rc + (N.rc+_N.rc) / 2
+            m,d = vt_(pTT, lrc)  # +|-match certainty
             if m > 0:
                 if abs(m) < ave * nw:  # different ave for projected surprise value, comp in marginal predictability
-                    Link = comp_N(_N,N, lrc, full=not tnF, A=dy_dx, span=dist, rL=rL, rnF=tnF)
+                    Link = comp_N(_N,N, lrc, full=not tnF, A=dy_dx, span=dist, rL=rL)
                     dTT,m,d,c,rc = Link.dTT,Link.m,Link.d,Link.c,Link.rc
-                    if   m > ave: TTm+=dTT; cm+=c; Rc+=rc; L_+=[Link]; N_+=[_N,N]  # combined CN dTT and L_ add *c|cr
-                    elif d > avd: TTd+=dTT; cd+=c  # no overlap to simplify
+                    if   m > ave: TTm+=dTT*c; cm+=c; Rc+=rc*c; L_+=[Link]; N_+=[_N,N]  # combined CN dTT and L_ add *c|cr
+                    elif d > avd: TTd+=dTT*c; cd+=c  # no overlap to simplify
                     dpTT += pTT-dTT  # prediction error to fit code, not implemented
                 else:
                     pL = CN(typ=-1, nt=[_N,N], dTT=pTT,m=m,d=d,c=min(N.c,_N.c), rc=lrc, angl=np.array([dy_dx,1],dtype=object),span=dist)
@@ -214,14 +214,14 @@ def comp_N_(iN_, rc, tnF=None, rL=None):  # incremental-distance cross_comp, max
             else:
                 break  # beyond induction range
     if tnF and cm:
-        cr = cm / rL.c; rc += Rc*cr; m,d = vt_(TTm, rc)
+        cr = cm / rL.c; Rc /= cm; rc += Rc*cr; m,d = vt_(TTm, rc)
         tFt = CF(N_=L_,nF=tnF,dTT=TTm,m=m,d=d,c=cm,rc=rc,root=rL)
         getattr(rL,tnF).fb_ += [tFt]
         return tFt
 
     return list(set(N_)), L_,TTm,cm,TTd,cd  # + dpTT for code-fitting backprop?
 
-def comp_N(_N,N, rc, full=1, A=np.zeros(2),span=None, rL=None, rnF=None):
+def comp_N(_N,N, rc, full=1, A=np.zeros(2),span=None, rL=None):
 
     def comp_H(_Nt,Nt, Link):  # tentative pre-comp
 
@@ -234,44 +234,45 @@ def comp_N(_N,N, rc, full=1, A=np.zeros(2),span=None, rL=None, rnF=None):
         return dH,tt,C, rc+ Rc/len(dH) * (C/Link.c)  # same norm for tt?
 
     def link_update(L):
-        for nF in ('tNt', 'tBt', 'tCt'):
-            ft_ = getattr(L, nF).fb_
+        for ft_, nF in zip((L.tNt.fb_,L.tBt.fb_,L.tCt.fb_), ('tNt','tBt','tCt')):
             if ft_:
                 C = sum([ft.c if ft else 0 for ft in ft_])
-                tL_, tt, c, rc = [], np.zeros((2, 9)), 0, 0
+                tL_,tt,rc = [],np.zeros((2,9)),0
                 for ft in ft_:
-                    if ft: tL_ += ft.N_; cr = ft.c / C; tt += ft.dTT * cr; rc += ft.rc * cr
+                    if ft: tL_ += ft.N_; cr = ft.c / C; tt += ft.dTT*cr; rc += ft.rc*cr
                 m, d = vt_(tt, rc)
-                setattr(L, nF, CF(N_=tL_, nF=nF, dTT=tt, m=m, d=d, c=C, rc=rc, root=L))
-            getattr(L, nF).fb_ = []
+                setattr(L, nF, CF(N_=tL_,nF=nF,dTT=tt,m=m,d=d,c=C,rc=rc,root=L)); ft_[:]=[]
 
     TT = base_comp(_N,N)[0] if full else comp_derT(_N.dTT[1],N.dTT[1])
     m,d = vt_(TT,rc)
-    L = CN(typ=1, nt=[_N,N], dTT=TT,m=m,d=d,c=min(N.c,_N.c),rc=rc,root=rL, exe=1)
-    L.tNt, L.tCt, L.tBt = CF(nF='tNt',root=L),CF(nF='tCt',root=L),CF(nF='tBt',root=L)  # typ 1
+    ff = isinstance(_N,CF); fff = ff and isinstance(_N.N_[0],CF)  # comp_Ft -> L.N_= [Nt,Bt] | [Nt,Bt,Ct]
+    if ff: L = CF(typ=1, N_=[*_N.N_,N] if fff else[_N,N], dTT=TT,m=m,d=d,c=min(N.c,_N.c),rc=rc,root=rL)
+    else:  L = CN(typ=1, nt=[_N,N], dTT=TT, m=m, d=d, c=min(N.c,_N.c), rc=rc, root=rL, exe=1)
+    L.tNt, L.tCt, L.tBt = CF(nF='tNt',root=L),CF(nF='tCt',root=L),CF(nF='tBt',root=L)
     if N.typ and m > ave*nw:
         dH,tt,C,Rc = comp_H(_N.Nt, N.Nt, L)  # tentative comp
         rc=Rc; FtT = []
         if m + vt_(tt,Rc/C)[0] > ave * nw:
             if N.typ==1:
                 for n,_n in product(_N.nt, N.nt):
-                    getattr(L,'tNt').fb_ += [comp_N(n,_n,rc)]  # sub-comp for links
+                    L.tNt.fb_ += [comp_N(n,_n,rc)]  # sub-comp for links
             for _Ft, Ft, tnF in zip((_N.Nt,_N.Ct,_N.Bt), (N.Nt,N.Ct,N.Bt), ('tNt','tCt','tBt')):  # all empty in link
                 if _Ft and Ft:  # add eval?
-                    rc+=1; FtT += [comp_N_(_Ft.N_+Ft.N_,rc,tnF, L)]  # fork sub-comp
+                    rc += 1  # fork sub-comp:
+                    FtT += [comp_N_(_Ft.N_+Ft.N_, product(_Ft.N_,Ft.N_), rc,tnF,L)]
             link_update(L)
+            # python batches updates bottom-up
             L.tBt.typ = L.tNt.typ = L.tCt.typ = 0  # skip comp_H, Fts
-            if L.tBt: L.tNt = comp_N(L.tNt, L.tBt, rc, full=0, rL=L, rnF='tNt')  # L.tBt.typ = L.tNt.typ = 0
-            if L.tCt: L.tNt = comp_N(L.tNt, L.tCt, rc, full=0, rL=L, rnF='tNt')  # L.tCt.typ = L.tNt.typ = 0
+            if L.tBt: L.tNt = comp_N(L.tNt, L.tBt, rc, full=0, rL=L)  # L.tBt.typ = L.tNt.typ = 0
+            if L.tCt: L.tNt = comp_N(L.tNt, L.tCt, rc, full=0, rL=L)  # L.tCt.typ = L.tNt.typ = 0
     if full:
         if span is None: span = np.hypot(*_N.yx - N.yx)
         yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
         box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
         angl = [A, np.sign(TT[1] @ wTTf[1])]
         L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.baseT=(_N.baseT+N.baseT)/2
-
-    if isinstance(N, CN):  # no links between tFts
-        for n, _n in (_N,N),(N,_N):
+    if not ff:
+        for n, _n in (_N,N),(N,_N):  # no links between tFts
             n.rim+=[L]; n.eTT+=TT; n.ec+=L.c; n.compared.add(_n)  # or all comps are unique?
     return L
 
@@ -392,15 +393,15 @@ def cluster_N(Ft, _N_, rc):  # flood-fill node | link clusters, flat, replace iL
         return M, D
 
     def trans_cluster(G): # trans_links mediate re-order in sort_H?
-        tF_ = [[],[],[]]  # draft:
-        for L in G.L_:    # splice trans_links from base links
-            for tL_, Ft in zip(tF_, (getattr(L,'tNt',[]),getattr(L,'tBt',[]),getattr(L,'tCt',[]))):
-                if Ft: tL_ += Ft.N_  # flat
         # merge tL nt Gs|Cs, not Bs?
-        for tL_, nF in zip(tF_, ('tNt','tBt','tCt')):
-            for tL in tL_:  # merge trans_link.nt.roots
-                rt0 = tL.nt[0].root.root; rt1 = tL.nt[1].root.root  # CNs
-                if rt0 != rt1: add_N(rt0, rt1, merge=1)  # concat in higher G
+        # draft:
+        for L in G.L_:
+            for tL, nF in zip((L.tNt.N_,L.tBt.N_L.tCt.N_), ('tNt','tBt','tCt')):
+                for tFt in tL.N_:  # merge trans_link.nt.roots
+                    for tl in tFt.N_:  # combined Ft
+                        rt0 = tl.root.root; rt1 = tl[1].root.root  # CNs
+                        if rt0 != rt1: add_N(rt0, rt1, merge=1)
+                        # concat in higher G
         ''' reset rc:
             tL_ = [tL for n in root.N_ for l in n.L_ for tL in l.N_]  # trans-links
             if sum(tL.m for tL in tL_) * ((len(tL_)-1)*Lw) > ave*(rc+connw):  # use tL.dTT?
@@ -598,6 +599,7 @@ def sum2G(Ft_,tt,c,rc, root=None, init=1, typ=None, fsub=1):  # updates root if 
         G.mang = np.mean([comp_A(G.angl[0], l.angl[0])[0] for l in G.L_])
     G.Nt = Nt  # Nt vals are pre-summed in Gt
     G.m, G.d = vt_(G.dTT,rc)
+    G.sub = N.sub+1 if G.L_ else N.sub  # remain the same sub value for singleton
     if len(Ft_) > 2:  # from cluster_N
         B_,_,btt,bc,br = Ft_[2]; m, d = vt_(btt,br)
         Bt = CN(dTT=btt,m=m,d=d,c=bc,rc=br,root=G); Bt.N_=B_; Bt.nF='Bt' # use as root:
@@ -809,9 +811,9 @@ def proj_focus(PV__, y,x, Fg):  # radial accum of projected focus value in PV__
         PV__[row,col] += pV__  # in-place accum pV to rim
         n += 1
 
-def proj_TT(L, cos_d, dist, rc, pTT, wTT, fdec=0, frec=0):  # accumulate link pTT with iTT or eTT internally, L may be N?
+def proj_TT(L, cos_d, dist, rc, pTT, wTT, fdec=0, frec=0, dec=1):  # accumulate link pTT with iTT or eTT internally, L may be N?
 
-    dec = dist if fdec else ave ** (1 + dist / L.span)  # ave: match decay rate / unit distance
+    dec = dist if fdec else ave ** (1 + (dist * dec) / L.span)  # not fully revised, ave = match decay rate / unit distance
     TT = np.array([L.dTT[0] * dec, L.dTT[1] * cos_d * dec])
     cert = abs(val_(TT,rc,wTT) - ave)  # approximation
     if cert > ave:
@@ -825,13 +827,13 @@ def proj_TT(L, cos_d, dist, rc, pTT, wTT, fdec=0, frec=0):  # accumulate link pT
         if TT is not None:
             pTT += np.array([TT[0] * dec, TT[1] * cos_d * dec])
 
-def proj_N(N, dist, A, rc):  # arg rc += N.rc+connw, recursively specify N projection val, add pN if comp_pN?
+def proj_N(N, dist, A, rc, dec=1):  # arg rc += N.rc+connw, recursively specify N projection val, add pN if comp_pN?
 
     cos_d = (N.angl[0].dot(A) / (np.hypot(*N.angl[0]) * dist + eps)) * N.angl[1]  # internal x external angle alignment
     iTT, eTT = np.zeros((2,9)), np.zeros((2,9))
     wTT = TTw(N)
-    for L in N.L_+N.B_: proj_TT(L, cos_d, dist, L.rc+rc, iTT, wTT)  # accum TT internally
-    for L in N.rim:     proj_TT(L, cos_d, dist, L.rc+rc, eTT, wTT)
+    for L in N.L_+N.B_: proj_TT(L, cos_d, dist, L.rc+rc, iTT, wTT, dec)  # accum TT internally
+    for L in N.rim:     proj_TT(L, cos_d, dist, L.rc+rc, eTT, wTT, dec)
     pTT = iTT + eTT  # projected int,ext links, work the same?
 
     return pTT  # val_(N.dTT,rc) * (1- val_(iTT+eTT, rc))  # info_gain = N.m * average link uncertainty, should be separate

@@ -293,4 +293,14 @@ def up_update(rL, rnF):  # upward recursion
         if all([len(F.fb_) == len(F.N_) for F in (rL.tNt, rL.tBt, rL.tCt)]):
             link_update(rL.root, rnF)
 
-
+def trans_cluster(G): # trans_links mediate re-order in sort_H?
+        tF_ = [[],[],[]]  # draft:
+        for L in G.L_:    # splice trans_links from base links
+            for tL_, Ft in zip(tF_, (getattr(L,'tNt',[]),getattr(L,'tBt',[]),getattr(L,'tCt',[]))):
+                if Ft: tL_ += Ft.N_  # flat
+        # merge tL nt Gs|Cs, not Bs?
+        for tL_, nF in zip(tF_, ('tNt','tBt','tCt')):
+            for tL in tL_:  # merge trans_link.nt.roots
+                # tL.nt[i].N_[0].root.root: N_:[Nt,rBt,rCt]?
+                rt0 = tL.nt[0].root.root; rt1 = tL.nt[1].root.root  # CNs
+                if rt0 != rt1: add_N(rt0, rt1, merge=1)
