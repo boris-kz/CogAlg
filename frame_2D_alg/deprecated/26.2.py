@@ -106,8 +106,61 @@ def prop_F_(F):  # factory function, sets property+setter to get and update top-
 
 class CN(CBase):
     name = "node"
-    N_,C_, B_,L_ = prop_F_('Nt'),prop_F_('Ct'), prop_F_('Bt'), prop_F_('Lt')
-    # ext| int- defined nodes, ext|int- defining links, Lt/Ft, Ct/lev, Bt/G
+    N_,C_,B_ = prop_F_('Nt'),prop_F_('Ct'),prop_F_('Bt')  # ext|int- defined nodes,links, Lt/Ft, Ct/lev, Bt/G
+    @property
+    def L_(N):
+        if isinstance(N.Nt.Lt, list): N.Nt.Lt =CF(root=N.Nt)
+        return N.Nt.Lt.N_
+    @L_.setter
+    def L_(N,v):
+        if isinstance(N.Nt.Lt, list): N.Nt.Lt =CF(root=N.Nt)
+        N.Nt.Lt.N_ = v
+    def __init__(n, **kwargs):
+        super().__init__()
+        n.typ = kwargs.get('typ', 0)
+        # 0= PP: block trans_comp, etc?
+        # 1= L:  typ,nt,dTT, m,d,c,rc, root,rng,yx,box,span,angl,fin,compared, Nt,Bt,Ct from comp_sub, tNt,tBt,tCt from comp_F_
+        # 2= G:  + rim, eTT, em,ed,ec, baseT,mang,sub,exe
+        # 3= Cn: + m_,d_,r_,o_ in C.rN_
+        n.m,  n.d, n.c = kwargs.get('m',0), kwargs.get('d',0), kwargs.get('c',0)  # sum forks to borrow
+        n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # Nt+Lt dTT: m_,d_ [M,D,n, I,G,a, L,S,A]
+        n.rim = kwargs.get('rim',[])  # external links, rng-nest?
+        n.em, n.ed, n.ec = kwargs.get('em',0),kwargs.get('ed',0),kwargs.get('ec',0)  # sum dTT
+        n.eTT = kwargs.get('eTT',np.zeros((2,9)))  # sum rim dTT
+        n.rc  = kwargs.get('rc', 1)  # redundancy to ext Gs, ave in links?
+        n.Nt,n.Bt,n.Ct,n.Lt = ((kwargs.get(fork) if fork in kwargs else CF(root=n) for fork in ('Nt','Bt','Ct','Lt')))
+        # ini fork tuples, ->CN / nesting, L.Lt if comp L, Ct || Nt
+        n.baseT = kwargs.get('baseT',np.zeros(4))  # I,G,A: not ders, in links for simplicity, mostly redundant
+        n.nt    = kwargs.get('nt', [])  # nodet, links only
+        n.yx    = kwargs.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
+        n.box   = kwargs.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
+        n.span  = kwargs.get('span',1) # distance in nodet or aRad, comp with baseT and len(N_), not additive?
+        n.angl  = kwargs.get('angl',[np.zeros(2),0])  # (dy,dx),dir, sum from L_
+        n.mang  = kwargs.get('mang',1)  # ave match of angles in L_, =1 in links
+        n.root  = kwargs.get('root',None)  # immediate
+        n.sub = 0  # composition depth relative to top-composition peers?
+        n.fin = kwargs.get('fin',0)  # clustered, temporary
+        n.exe = kwargs.get('exe',0)  # exemplar, temporary
+        n.rN_ = kwargs.get('rN_',[]) # reciprocal root nG_ for bG|cG, nG has Bt.N_,Ct.N_ instead?
+        n.compared = set()
+        n.nF = kwargs.get('nF', 'Nt')  # to set attr in root_update
+        n.fb_ = kwargs.get('fb_', [])
+        # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
+    def __bool__(n): return bool(n.c)
+
+class CF(CBase):  # Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int- defining links, Lt/Ft, Ct/lev, Bt/G
+    name = "fork"
+    def __init__(f, **kwargs):
+        super().__init__()
+        f.nF = kwargs.get('nF','Nt')
+        f.N_ = kwargs.get('N_',[])  # flat
+        f.H  = kwargs.get('H', [])  # CF levs
+        f.Lt = kwargs.get('Lt',[])  # from Ft cross_comp, Ct is parallel to Nt
+        f.dTT = kwargs.get('dTT',np.zeros((2,9)))
+        f.m, f.d, f.c, f.rc = [kwargs.get(x,0) for x in ('m','d','c','rc')]
+        f.root = kwargs.get('root',None)
+        f.fb_ = kwargs.get('fb_',[])
+    def __bool__(f): return bool(f.c)
 
 def comp_Ft(_Ft, Ft, nF, rc, root):  # root is nG, unpack node trees down to numericals and compare them
 
