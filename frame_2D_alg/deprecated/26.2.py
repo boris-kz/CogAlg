@@ -357,3 +357,61 @@ def trans_cluster(G): # trans_links mediate re-order in sort_H?
                 # tL.nt[i].N_[0].root.root: N_:[Nt,rBt,rCt]?
                 rt0 = tL.nt[0].root.root; rt1 = tL.nt[1].root.root  # CNs
                 if rt0 != rt1: add_N(rt0, rt1, merge=1)
+# partial draft:
+def sum2G(Ft_,tt,c,r, root=None, init=1, typ=None, fsub=1):  # updates root if not init
+
+    Nt = Ft_[0] ; ft_ = [Nt]
+    for ft in zip(Ft_[1:], [[],[],[]]):
+        ft_ += [ft]
+    N_,_,ntt, nc, nr = Nt
+    G = comb_Ft(*Ft_, root, N_)
+    if not init: N_+=root.N_; ntt+=root.Nt.dTT; nc+=root.Nt.c  # add,norm nr? batch root updates?
+    if typ is None: typ = N_[0].typ
+    for N in N_[1:]:
+        add_N(G,N, coef=N.c/c)  # skip forks
+    Nt = sum2F(N_,'Nt',G, ntt, nc, nr)
+    if len(Ft_) > 1 and Ft_[1]:  # Nt.Lt, empty if singleton, starting from trace_edge
+        L_,_,ltt,lc,lr= Ft_[1]
+        if init:  # else same ext
+            yx_ = np.array([n.yx for n in N_]); G.yx=yx= yx_.mean(axis=0); dy_,dx_= (yx_-yx).T
+            G.span = np.hypot(dy_,dx_).mean()  # N centers dist to G center
+        else: L_+=root.L_; ltt+=root.Lt.dTT; lc+=root.Lt.c; lr+=root.Lt.r
+        A = np.sum([l.angl[0] for l in L_], axis=0) if L_ else np.zeros(2)
+        G.angl = np.array([A, np.sign(G.dTT[1] @ wTTf[1])], dtype=object)  # angle dir = d sign
+        m, d = vt_(ltt,lr)
+        Lt = CF(N_=L_,nF='Lt',root=G.Nt,dTT=ltt,m=m,d=d,c=lc,r=lr)  # in Nt only?
+        if m > ave*specw:  # comp typ -1 pre-links
+            L_,pL_= [],[]; [L_.append(L) if L.typ==1 else pL_.append(L) for L in G.L_]
+            if pL_:
+                if sum_vt(pL_,r)[0] > ave * specw:
+                    for L in pL_:
+                        link = comp_N(*L.nt, r, 1, L.angl[0], L.span)  # full = 1
+                        Lt.dTT+= link.dTT-L.dTT; L_+=[link]
+                    Lt.m, Lt.d = vt_(Lt.dTT, r)
+        if fsub and Lt.m * Lt.d * ((len(N_)-1)*Lw) > ave*avd * (r+1) * cw:  # Variance * borrowed Match?
+            V = G.m - ave*(r+1) * connw  # centw-=connw?
+            if V > 0:  # cent|conn divisive clustering:
+                if (mdecay(Lt.N_)- decay) * V > ave*centw:  # comb eval, Lt.N_ is L_, G.L_ is not assigned yet
+                    cluster_C(G.Nt, N_,r+1)  # cent cluster: N_->Ct.N_, higher than G.C_
+                else: cluster_N(G.Nt, N_,r+1)  # conn cluster/ rc+1: N_-> Nt.N_| N_
+        Nt.Lt = Lt
+    else: G.yx = G.yx[0]  # remove list
+    if N_[0].typ==2 and G.L_:  # else mang = 1
+        G.mang = np.mean([comp_A(G.angl[0], l.angl[0])[0] for l in G.L_])
+    G.Nt = Nt  # Nt vals are pre-summed in Gt
+    G.m, G.d = vt_(G.dTT,r)
+    G.sub = N.sub+1 if G.L_ else N.sub  # remain the same sub value for singleton
+    if len(Ft_) > 2:  # from cluster_N
+        B_,_,btt,bc,br = Ft_[2]; m, d = vt_(btt,br)
+        Bt = CN(dTT=btt,m=m,d=d,c=bc,r=br,root=G); Bt.N_=B_; Bt.nF='Bt' # use as root:
+        if typ!=1 and d > avd*br*nw:  # no ddfork
+            cross_comp(Bt, bc,'Bt')
+        Bt.brrw = Bt.m * (root.root.m * (decay * (root.root.span/G.span)))  # trans-Bt contrast is local; subtract from root.m?
+        G.Bt = Bt  # for sub-comp only, doesn't affect G vals?
+    G.rN_ = sorted(G.rN_, key=lambda x: (x.m/x.c), reverse=True)  # if lG?
+    # no Ct yet?
+    return G
+
+
+
+
