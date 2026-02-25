@@ -412,6 +412,25 @@ def sum2G(Ft_,tt,c,r, root=None, init=1, typ=None, fsub=1):  # updates root if n
     # no Ct yet?
     return G
 
+def add_N(G, N, rc=1, merge=0):  # sum Fts if merge
+
+    N.fin = 1; N.root = G
+    if hasattr(G,'m_'): G.r = np.sum([o*rc for o in N.o_]); G.rN_+=N.rN_; G.m_+=N.m_; G.o_+=N.o_  # not sure
+    if N.typ and N.rN_:
+        _c=G.c; c=N.c; C=_c+c; G.c=C  # weigh contribution of intensive params
+        G.dTT = (G.dTT*_c + N.dTT*c) /C; G.r = (G.r*_c + N.r*c) /C
+        G.m,G.d = vt_(G.dTT, G.r)
+        G.C_ += N.rN_; G.Ct.dTT += N.Ct.dTT*rc; G.Ct.c += N.Ct.c*rc; G.Ct.r += N.Ct.r*rc  # for trans-cluster and cluster_C
+    G.span = (G.span*_c+N.span*c*rc) / C
+    A,a = G.angl[0],N.angl[0]; A[:] = (A*_c+a*c*rc) /C  # vect only
+    if isinstance(G.yx, list): G.yx += [N.yx]  # weigh by C?
+    if N.typ > 1:
+        G.baseT = (G.baseT*_c + N.baseT*c*rc) /C
+        G.mang = (G.mang*_c + N.mang*c*rc) /C
+        G.box = extend_box(G.box, N.box)
+    if merge: merge_f(G, N, cc=G.c/N.c)  # if not batched
+    # if N is Fg: margin = Ns of proj max comp dist > min _Fg point dist: cross_comp Fg_?
+    return N
 
 
 
