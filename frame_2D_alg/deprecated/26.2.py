@@ -432,5 +432,79 @@ def add_N(G, N, rc=1, merge=0):  # sum Fts if merge
     # if N is Fg: margin = Ns of proj max comp dist > min _Fg point dist: cross_comp Fg_?
     return N
 
+# draft:
+def add_F(T, Ft, nF, r=1, merge=1):
+
+    G = T.root; Ft.r -= Ft.m > T.m  # lower than T.m by default
+    def sum_H(H, h, r, root):
+        for Lev, lev in zip_longest(H, h):  # bottom-up
+            if lev:
+                if Lev: add_F(Lev, lev, nF, r)
+                else:   H.append(CopyF(lev, root))
+        return list(H)
+    _c = T.c; c = Ft.c; C = _c + c; T.c = C; rc = C / c
+    T.dTT = (T.dTT * _c + Ft.dTT * c) / C
+    T.r = (T.r * _c + Ft.r * c) / C
+    T.m, T.d = vt_(T.dTT, T.r)
+    if merge:
+        for N in Ft.N_:
+            N.fin = 1; N.root = T
+            if hasattr(T,'m_'): T.r = np.sum([o * r for o in N.o_]); T.rN_ += N.rN_; T.m_ += N.m_; T.o_ += N.o_
+            T.C_ += N.rN_
+            T.box = extend_box(T.box, N.box)
+            A, a = T.angl[0], N.angl[0]; A[:] = (A * _c + a * c * r) / C
+            T.span = (T.span * _c + N.span * c * r) / C
+            if N.typ > 1:
+                T.baseT = (T.baseT * _c + N.baseT * c) / C
+                T.mang = (T.mang * _c + N.mang * c) / C
+            if isinstance(T.yx, list): T.yx += [N.yx]
+        if G.typ==2 and G.L_:
+            G.mang = np.mean([comp_A(G.angl[0], l.angl[0])[0] for l in G.L_])
+            G.yx = [n.yx for n in T.N_]
+            if len(T.N_) > 1:
+                yx_ = np.array(G.yx); G.yx = yx_.mean(axis=0); dy_, dx_ = (yx_ - G.yx).T
+                G.span = np.hypot(dy_, dx_).mean()
+            elif T.N_:
+                G.yx = copy(T.N_[0].yx); G.span = T.N_[0].span
+            if nF=='Lt':
+                A = np.sum([l.angl[0] for l in T.N_], axis=0) if T.N_ else np.zeros(2)
+                G.angl = np.array([A, np.sign(G.dTT[1] @ wTTf[1])], dtype=object)
+                if T.m > ave * specw:  # comp typ -1 pre-links
+                    pL_ = [L for L in G.L_ if L.typ!=1]
+                    if pL_ and sum_vt(pL_,r)[0] > ave * specw:
+                        for L in pL_:
+                            link = comp_N(*L.nt,r, 1, L.angl[0], L.span)
+                            T.dTT += link.dTT-L.dTT; G.L_.append(link)
+                        T.m, T.d = vt_(T.dTT, r)
+        if isinstance(Ft, CN): Ft = Ft.Nt  # handling for comb_Ft
+        if T.H and Ft.H:
+            T.H = sum_H(T.H, Ft.H, r, T)
+
+def add_N_pars(T, N, nF, r=1, merge=0):  # draft, sum Fts if merge
+
+    N.fin = 1; N.root = T
+    _,_,_,C,R= sum_vt([T,N],T); r += R
+    if hasattr(T,'m_'): T.r = np.sum([o*r for o in N.o_]); T.rN_+=N.rN_; T.m_+=N.m_; T.o_+=N.o_
+    if N.typ:
+        T.C_ += N.rN_; _c,c = T.c,N.c  # C_ overlaps between Gs
+        if nF != 'Lt':
+            A,a = T.angl[0],N.angl[0]; A[:] = (A*_c+a*c) /C  # vect only
+        T.span = (T.span*_c + N.span*c) / C
+        T.box = extend_box(T.box,N.box)
+        if N.typ > 1:
+            T.baseT = (T.baseT*_c + N.baseT*c) /C
+            T.mang = (T.mang*_c + N.mang*c) /C
+    if isinstance(T.yx, list): T.yx += [N.yx]  # weigh by C?
+    if merge: merge_f(T, N, cc=T.c/N.c)  # if not batched
+    # if N is Fg: margin = Ns of proj max comp dist > min _Fg point dist: cross_comp Fg_?
+
+def vT_(_T,T, root=None):
+    _c = _T.c; c = T.c; C = _c + c
+    R = (_T.r*_c + T.r*c) / C
+    TT = (_T.dTT*_c + T.dTT*c) /C; m,d = vt_(TT,R)
+    if root: root.dTT=TT; root.r=R; root.c=C; root.m=m; root.d=d
+    return R,C, TT, m,d
+
+
 
 
