@@ -505,6 +505,12 @@ def vT_(_T,T, root=None):
     if root: root.dTT=TT; root.r=R; root.c=C; root.m=m; root.d=d
     return R,C, TT, m,d
 
+def merge_f(N,n, cc=1):
+    for Ft, ft in zip((N.Nt, N.Bt, N.Lt), (n.Nt, n.Bt, n.Lt)):
+        if ft:
+            add_F(Ft, ft, (n.r + n.r*cc) / 2)  # ft*cc?
+            setattr(N, Ft.nF, Ft)  # not sure about N.root update
+
 
 
 
