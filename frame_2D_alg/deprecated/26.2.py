@@ -432,8 +432,7 @@ def add_N(G, N, rc=1, merge=0):  # sum Fts if merge
     # if N is Fg: margin = Ns of proj max comp dist > min _Fg point dist: cross_comp Fg_?
     return N
 
-# draft:
-def add_F(T, Ft, nF, r=1, merge=1):
+def _add_F(T, Ft, nF, r=1, merge=1):
 
     G = T.root; Ft.r -= Ft.m > T.m  # lower than T.m by default
     def sum_H(H, h, r, root):
@@ -511,6 +510,44 @@ def merge_f(N,n, cc=1):
             add_F(Ft, ft, (n.r + n.r*cc) / 2)  # ft*cc?
             setattr(N, Ft.nF, Ft)  # not sure about N.root update
 
+def add_F(T, Ft, nF, r=1, merge=1):
+
+    Ft.r -= Ft.m > T.m  # lower than T.m by default
+    T.m,T.d,T.dTT,T.c,T.r = sum_vt([T,Ft])
+    C = T.c; r += T.r
+    def sum_H(H, h, r, root):
+        for Lev,lev in zip_longest(H, h):  # bottom-up
+            if lev:
+                if Lev: add_F(Lev,lev, nF, r)
+                else:   H.append(CopyF(lev, root))
+        return list(H)
+    G = T.root if isinstance(T,CF) else T  # add ext attrs in G from Nt + Lt:
+    if nF =='Lt':  # or abs(typ)==1?
+        L_ = Ft.N_
+        if Ft.m > ave*specw:  # comp typ -1 pre-links
+            L_,pL_ =[],[]; [L_.append(L) if L.typ==1 else pL_.append(L) for L in Ft.N_]
+            if pL_ and sum_vt(pL_,r)[0] > ave*specw:
+                for L in pL_:
+                    link = comp_N(*L.nt, r,1, L.angl[0], L.span); Ft.dTT+= link.dTT-L.dTT; L_+=[link]
+                Ft.m, Ft.d = vt_(Ft.dTT, r)  # + update G?
+        A = np.sum([l.angl[0] for l in L_], axis=0) if L_ else np.zeros(2)
+        G.angl = np.array([A, np.sign(G.dTT[1] @ wTTf[1])], dtype=object)
+        G.mang = np.mean([comp_A(G.angl[0], l.angl[0])[0] for l in G.L_])  # Ls only?
+    elif nF =='Nt':
+        N_ = Ft.N_; yx_ = []
+        T.N_ += N_ if merge else [Ft]  # also merge L_?
+        if isinstance(T, CF) and T.H and Ft.H: T.H = sum_H(T.H,Ft.H, r,T)
+        for N in N_:
+            N.fin = 1; N.root = T; c = N.c
+            if hasattr(T,'m_'): T.r = np.sum([o*T.r for o in N.o_]); T.rN_+=N.rN_; T.m_+=N.m_; T.o_+=N.o_
+            G.C_ += N.rN_  # Ct||Nt;  A,a = G.angl[0],N.angl[0]; A[:]= (A*C+a*c)/C # vect only, if in Nt?
+            G.baseT = (T.baseT*C + N.baseT*c) /C
+            G.box = extend_box(T.box, N.box)
+            yx_ += [N.yx]
+        G.yx = yx = np.mean(yx_, axis=0); dy_,dx_= (np.array(yx_)-yx).T
+        G.span = np.hypot(dy_,dx_).mean() if len(N_)>1 else N.span
+        # if merge?
+    return T
 
 
 
