@@ -549,5 +549,13 @@ def add_F(T, Ft, nF, r=1, merge=1):
         # if merge?
     return T
 
+def sum2f(n_, nF, root, fset=1):
+    m,d, tt,c,r = sum_vt(n_, merge=0, root=getattr(root,nF))
+    Ft = CF(N_=n_,nF=nF, dTT=tt,m=m,d=d,c=c,r=r, root=root)
+    for n in n_: n.root = Ft
+    if fset:
+        setattr(root,nF,Ft)
+        if fset>1: R=root.root; rc=c/(R.c+c); R.dTT+=(tt-R.dTT)*rc; R.r+=(r-R.r)*rc; R.c+=c  # transitive root, if Lt?
+    return Ft
 
 

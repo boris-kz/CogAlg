@@ -152,11 +152,12 @@ def TTw(G): return getattr(G,'wTT',wTTf)
 '''
 def cross_comp(Ft, ir, nF='Nt'):  # core function mediating recursive rng+ and der+ cross-comp and clustering
 
-    N_, G_ = Ft.N_, []  # rc=rdn+olp, comp N_|B_|C_:
+    N_, G_, G = Ft.N_,[],Ft.root  # rc=rdn+olp, comp N_|B_|C_:
     iN_,L_,TT,c,r, TTd,cd = comp_N_(N_,combinations(N_,2),ir) if N_[0].typ else comp_C_(N_,ir,fC=1); r+=ir
     if L_:
         if val_(TT, r+connw,TTw(Ft),(len(L_)-1)*Lw,1,TTd,r) > 0:  # G.L_ = Nt.Lt.N_, flat, additional root +=:
-            sum2f(L_,'Lt',Ft, fset=2)  # update Ft, root
+            m,d,tt,lc,lr = sum_vt(L_,root=getattr(Ft,'Lt'))
+            rc = c/(G.c+c); G.dTT+=(tt-G.dTT)*rc; G.r+=(r-G.r)*rc; G.c+=c  # Ft: transitive root
             E_ = get_exemplars({N for L in L_ for N in L.nt if N.rim.m>ave}, r)  # N|C?
             G_,r = cluster_N(Ft, E_,r)  # form Bt, trans_cluster, sub+ in sum2G
             if G_:
@@ -177,8 +178,7 @@ def comp_N_(iN_, pairs, r, tnF=None, rL=None):  # incremental-distance cross_com
                 eTT += proj_N(N,_dist, _dy_dx, r, dec)  # proj N L_,B_,rim, if pV>0: eTT += pTT?
                 eTT += proj_N(_N,_dist, -_dy_dx, r, dec)  # reverse direction
         return iTT+eTT
-
-    TT, C,R = np.zeros((2,9)),0,0
+    N_, TT, C,R = [], np.zeros((2,9)), 0,0
     for N in iN_: N.pL_ = []  # init
     for _N, N in pairs:  # get all-to-all pre-links
         if _N.sub != N.sub: continue  # or comp x composition?
@@ -186,8 +186,9 @@ def comp_N_(iN_, pairs, r, tnF=None, rL=None):  # incremental-distance cross_com
             tt = np.array([N.dTT[1],np.zeros(9)]); TT+=tt; C+=min(N.c,_N.c); R+= (N.r+_N.r)/2
         else:
             dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)
-            N.pL_+= [[dist,dy_dx,_N]]; _N.pL_+= [[dist,-dy_dx,N]]
-        N.pL_.sort(key=lambda x: x[0]); _N.pL_.sort(key=lambda x: x[0])  # proximity prior, test compared?
+            N.pL_+= [[dist,dy_dx,_N]]; _N.pL_+= [[dist,-dy_dx,N]]; N_ += [N,_N]
+    if not N_: return
+    for N in set(N_): N.pL_.sort(key=lambda x: x[0])  # proximity prior, test compared?
     N_,L_,dpTT, TTd,cd = [],[],np.zeros((2,9)),np.zeros((2,9)),0  # any global use of dLs, rd?
     for N in iN_:
         pVt_ = []  # [[dist, dy_dx, _N, V]]
@@ -207,7 +208,7 @@ def comp_N_(iN_, pairs, r, tnF=None, rL=None):  # incremental-distance cross_com
                 pVt_ += [[dist,dy_dx,_N,m]]  # for next rim eval
             else: break  # beyond induction range
     for N in set(N_):
-        if N.rim: N.rim = sum2f(N.rim.N_,'rim',N)
+        if N.rim: N.rim = sum_vt(N.rim.N_,root=getattr(N,'rim'))
     return list(set(N_)), L_,TT,C,R, TTd,cd  # + dpTT for code-fitting backprop
 
 def comp_N(_N,N, r, full=1, A=np.zeros(2),span=None, rL=None):
@@ -233,7 +234,7 @@ def comp_N(_N,N, r, full=1, A=np.zeros(2),span=None, rL=None):
                     if _Ft and Ft:  # sub-comp
                         r+=1; dFt = comp_F(_Ft,Ft,r,L); getattr(L,tnF).fb_+=[dFt]
             for ft_, nF in zip((L.Nt.fb_,L.Bt.fb_,L.Ct.fb_,L.Lt.fb_),('Nt','Bt','Ct','Lt')):
-                if ft_: sum2f(ft_,nF,getattr(L, nF))  # python-batched bottom-up
+                if ft_: sum_vt(ft_,root=getattr(L,nF))  # python-batched bottom-up
             L.Nt = comb_Ft(L.Nt,L.Lt,L.Bt,L.Ct, L)  # trans-link Fts
     if full:
         if span is None: span = np.hypot(*_N.yx - N.yx)
@@ -245,9 +246,9 @@ def comp_N(_N,N, r, full=1, A=np.zeros(2),span=None, rL=None):
         n.rim.N_+=[L]; n.compared.add(_n)  # or unique comps?
     return L
 
-def comp_F(_F, F, r=0, rL=None):
+def comp_F(_F, F, ir=0, rL=None):
 
-    ddTT = comp_derT(_F.dTT[1], F.dTT[1]); m,d = vt_(ddTT,(_F.r+F.r)/2); r+=(_F.r+F.r)/2
+    ddTT = comp_derT(_F.dTT[1],F.dTT[1]); r=(_F.r+F.r)/2; m,d = vt_(ddTT,r); r+=ir
     dF = CF(dTT=ddTT, m=m,d=d,c=min(_F.c,F.c),r=r)
     if _F.nF == F.nF:  # sub-comp
         _N_,N_=_F.N_,F.N_; nF=F.nF; f= nF=='Lt'
@@ -260,7 +261,7 @@ def comp_F(_F, F, r=0, rL=None):
                 dF.N_ = L_
                 dF.m,dF.d,dF.dTT,dF.c,dF.r = sum_vt([dF,CF(dTT=TT,c=C,r=R)])
                 rL.m,rL.d,rL.dTT,rL.c,rL.r = sum_vt([rL,dF])
-    return dF  # cross-fork N_ empty?
+    return dF # no cross-fork N_?
 
 def base_comp(_N,N):  # comp Et, baseT, extT, dTT
 
@@ -351,7 +352,7 @@ def comp_C_(C_, r,_C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s,
             dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx)
             L_ += [comp_N(_C,C, r,A=dy_dx,span=dist)]  # or comp_derT?
     mL_=[]
-    for N in N_: N.rim = sum2f(N.rim.N_,'rim',N)
+    for N in N_: N.rim = sum_vt(N.rim.N_,root=getattr(N,'rim'))
     TTd,cd,R = np.zeros((2,9)),0,0
     for L in L_:
         if L.m > ave*(connw+r): mL_+= [L]; N_+= L.nt
@@ -552,7 +553,7 @@ def sum2G(ft_, root=None, init=1, typ=None):
     G.typ=typ; r=G.r
     if G.Nt.Lt:  # sub+
         Lt = G.Nt.Lt; L_,lm,ld,lr = Lt.N_,Lt.m,Lt.d,Lt.r
-        if lm*ld* ((len(G.N_)-1)*Lw) > ave*avd* (lr+1)*cw:
+        if lm*ld* ((len(L_)-1)*Lw) > ave*avd* (lr+1)*cw:
             V = lm - ave*(lr+1) * connw
             if V > 0:
                 if (mdecay(L_)-decay) * V > ave*centw: cluster_C(G.Nt, N_,r+1)
@@ -567,29 +568,27 @@ def sum2G(ft_, root=None, init=1, typ=None):
 def comb_Ft(Nt, Lt, Bt, Ct, root, fN=0):  # default Nt
 
     T = CopyF(Nt)
-    if fN:
-        T = CN(Nt=T,dTT=Nt.dTT,c=Nt.c,r=Nt.r,root=root)
-        add_Nt(root if isinstance(root,CN) else root.root, Nt)
-    else:
-        T.N_ = [Nt,Lt,Bt,Ct]; T.root=root  # nested tFt
-        # dLt root: _Nt = T.Nt if fN else Nt?
-    dF_ = []  # trans-links in comp_N or forks in sum2G
+    if fN: T = CN(Nt=T,dTT=Nt.dTT,c=Nt.c,r=Nt.r,root=root); T.Nt.root=T; add_Nt(T,Nt)
+    else: T.N_ = [Nt,Lt,Bt,Ct]; T.root=root  # nested tFt
+    dF_ = []  # comp_N tFs | sum2G dFs
     if Lt: sum_vt([T,Lt],root=T.Nt); add_Lt(T.Nt, Lt); dF_ += [comp_F(T,Lt, T.r,T.Nt)]  # Lt in sum2G, tLt in comp_N
     if Bt: sum_vt([T,Bt],root=T); T.Bt=Bt; dF_ += [comp_F(T,Bt, T.r,root)]  # no ext pars?
     if Ct: sum_vt([T,Ct],root=T); T.Ct=Ct; dF_ += [comp_F(T,Ct, T.r,root)]
     if dF_:
-        T.Lt = sum2f(dF_,'Lt',T)  # cross-fork covariance
+        m,d,tt,c,r = sum_vt(dF_,root=getattr(T,'Lt'))  # cross-fork covariance
+        R=T.root; rc=c/(R.c+c); R.dTT+=(tt-R.dTT)*rc; R.r+=(r-R.r)*rc; R.c+=c  # G
     return T
 
-def add_Nt(G, Nt, merge=1):
+def add_Nt(G, Nt, merge=0):
 
-    if G.H and Nt.H:  # only in Nt, Ct if separate?
-        for Lev,lev in zip_longest(G.H, Nt.H):  # bottom-up
+    if G.Nt.H and Nt.H:  # also Ct if separate?
+        for Lev,lev in zip_longest(G.Nt.H, Nt.H):  # bottom-up
             if lev:
-                if Lev: sum_vt([Lev,lev],root=Lev)
-                else: G.H.append(CopyF(lev, G))
-    N_ = Nt.N_  # G.N_ += N_ if merge else [Nt]  # also merge L_?
-    yx_ = []; C = G.c + Nt.c  # or G is empty?
+                if Lev: sum_vt([Lev,lev], root=Lev,f2=1)
+                else: G.Nt.H.append(CopyF(lev, G))
+    N_ = Nt.N_
+    if merge: G.N_+= N_ if merge<2 else [Nt]  # never 2? also merge L_?
+    yx_ = []; C = G.c + Nt.c  # G is empty?
     for N in N_:
         N.fin = 1; N.root = G; c = N.c
         if hasattr(G,'m_'): G.r = np.sum([o*N.r for o in N.o_]); G.rN_+=N.rN_; G.m_+=N.m_; G.o_+=N.o_
@@ -614,7 +613,7 @@ def add_Lt(Nt, Lt):
     G.mang = np.mean([comp_A(G.angl[0], l.angl[0])[0] for l in G.L_])  # Ls only?
     Nt.Lt  = Lt
 
-def sum_vt(N_, rr=0, rm=0, rd=0, root=None):  # weighted sum of CN|CF list
+def sum_vt(N_, rr=0, rm=0, rd=0, root=None, merge=1, f2=0):  # weighted sum of CN|CF list
 
     C = sum(n.c for n in N_); R = 0; TT = np.zeros((2,9))
     for n in N_:
@@ -622,17 +621,11 @@ def sum_vt(N_, rr=0, rm=0, rd=0, root=None):  # weighted sum of CN|CF list
     m,d = vt_(TT,R+rr)
     m-=rm; d-=rd  # deviations from tentative m,d
     if root:
-        root.dTT=TT; root.r=R; root.c=C; root.m=m; root.d=d; root.N_=N_  # or add?
+        root.dTT=TT; root.r=R; root.c=C; root.m=m; root.d=d
+        if merge:
+            n_ = N_[1].N_ if f2 else N_; root.N_+=n_ # f2: two Ns, merge 2nd into 1st
+            for n in n_: n.root=root
     return m,d, TT, C,R
-
-def sum2f(n_, nF, root, fset=1):
-    m,d, tt,c,r = sum_vt(n_)
-    Ft = CF(N_=n_,nF=nF, dTT=tt,m=m,d=d,c=c,r=r, root=root)
-    for n in n_: n.root = Ft
-    if fset:
-        setattr(root,nF,Ft)
-        if fset>1: R=root.root; rc=c/(R.c+c); R.dTT+=(tt-R.dTT)*rc; R.r+=(r-R.r)*rc; R.c+=c  # transitive root, if Lt?
-    return Ft
 
 def sum2F(N_, nF, root, TT=np.zeros((2,9)), C=0, R=0, fset=1, fCF=1):  # -> CF/CN
 
@@ -646,8 +639,8 @@ def sum2F(N_, nF, root, TT=np.zeros((2,9)), C=0, R=0, fset=1, fCF=1):  # -> CF/C
                     if Lev is not None: Lev += lev.N_
                     else: H += [list(lev.N_)]
         Ft.H = [sum2F(lev, nF, Ft,fset=0) for lev in H] if H else []
-    if not C: m,d,TT,C,R = sum_vt(N_)
-    else:     m,d = vt_(TT,R)
+    if C: m,d = vt_(TT,R)
+    else: m,d,TT,C,R = sum_vt(N_)
     Ft = (CN,CF)[fCF](nF=nF, dTT=TT,m=m,d=d,c=C,r=R, root=root)  # root Bt|Ct ->CN
     for N in N_: Ft.N_ += [N]; N.root = Ft
     sum_H(N_,Ft)  # sum lower levels
@@ -856,7 +849,7 @@ def vect_edge(tile, rV=1, wTT=None):  # PP_ cross_comp and floodfill to init foc
                 N_ = [PP2N(PPm) for PPm in PPm_]
                 for PPd in edge.link_: PP2N(PPd)
                 for N in N_:
-                    if N.B_: N.Bt = sum2f([B.root for B in N.B_],'Bt',N)
+                    if N.B_: N.Bt = sum_vt([B.root for B in N.B_], root=getattr(N,'Bt'))
                 if val_(sum_vt(N_)[2], 3, TTw(tile), (len(PPm_)-1)*Lw) > 0:
                     G_,TT,C = trace_edge(N_,G_,TT,C,3,tile)  # flatten, cluster B_-mediated Gs, init Nt
     if G_:
