@@ -848,8 +848,17 @@ def vect_edge(tile, rV=1, wTT=None):  # PP_ cross_comp and floodfill to init foc
                 PPm_ = comp_slice(edge, rV, wTTf)
                 N_ = [PP2N(PPm) for PPm in PPm_]
                 for PPd in edge.link_: PP2N(PPd)
+                # Fix 2: assign rN_ on boundary links now that all P.root → CN
                 for N in N_:
-                    if N.B_: N.Bt = sum_vt([B.root for B in N.B_], root=getattr(N,'Bt'))
+                    for B in N.B_:
+                        if not hasattr(B,'rN_'): B.rN_ = []
+                        if hasattr(B,'nt'):
+                            for P in B.nt:
+                                r_ = getattr(P,'root',None)
+                                if isinstance(r_,CN) and r_ not in B.rN_: B.rN_ += [r_]
+                # Fix 1: sum_vt updates N.Bt in-place via root=, don't reassign
+                for N in N_:
+                    if N.B_: sum_vt([B.root for B in N.B_], root=getattr(N,'Bt'))
                 if val_(sum_vt(N_)[2], 3, TTw(tile), (len(PPm_)-1)*Lw) > 0:
                     G_,TT,C = trace_edge(N_,G_,TT,C,3,tile)  # flatten, cluster B_-mediated Gs, init Nt
     if G_:
