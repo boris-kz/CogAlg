@@ -38,3 +38,128 @@ def comb_Ft(Nt, Lt, Bt, Ct, root, fN=0):  # default Nt
 
     return T
 
+def get_exemplars(N_,r):  # multi-layer non-maximum suppression -> sparse seeds for diffusive clustering, cluster_N too?
+    E_ = set()
+    for rdn,N in enumerate(sorted(N_, key=lambda n:n.Rt.m, reverse=True), start=1):  # strong-first
+        oL_ = set(N.rim) & {l for e in E_ for l in e.rim}
+        roV = (sum_vt(list(oL_), rr=r)[0] if oL_ else 0) / (N.Rt.m or eps)  # relative rim olp V
+        # ave *= rV of overlap by stronger-E inhibition zones:
+        if N.Rt.m * N.c > ave * (r+rdn+nw+ roV):
+            E_.update({n for l in N.rim for n in l.nt if n is not N and N.Rt.m > ave*r})
+            N.exe = 1  # in point cloud of focal nodes  (N.exe is 1, but never added to E? We didn't update E.exe here?)
+        else:
+            break  # the rest of N_ is weaker, trace via rims
+    return E_
+
+def comp_N_(iN_, pairs, r, tnF=None, rL=None):  # incremental-distance cross_comp, max dist depends on prior match
+
+    def proj_V(_N,N, dist, pVt_, dec):  # _N x N induction
+        Dec = dec or decay ** ((dist/((_N.span+N.span)/2)))
+        iTT = (_N.dTT + N.dTT) * Dec
+        eTT = (_N.Rt.dTT + N.Rt.dTT) * Dec
+        if abs( vt_(eTT,r)[0]) * ((len(pVt_)-1)*Lw) > ave*specw:  # spec N links
+            eTT = np.zeros((2,9)) # recompute
+            for _dist,_dy_dx,__N,_V in pVt_:
+                eTT += proj_N(N,_dist, _dy_dx, r, dec)  # proj N L_,B_,rim, if pV>0: eTT += pTT?
+                eTT += proj_N(_N,_dist, -_dy_dx, r, dec)  # reverse direction
+        return iTT+eTT
+    N_, TT, C,R = [], np.zeros((2,9)), 0,0
+    for N in iN_: N.pL_ = []  # init
+    for _N, N in pairs:  # get all-to-all pre-links
+        if _N.sub != N.sub: continue  # or comp x composition?
+        if N is _N:  # overlap = unit match, no miss, or skip?
+            tt = np.array([N.dTT[1],np.zeros(9)]); TT+=tt; C+=min(N.c,_N.c); R+= (N.r+_N.r)/2
+        else:
+            dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)
+            N.pL_+= [[dist,dy_dx,_N]]; _N.pL_+= [[dist,-dy_dx,N]]; N_ += [N,_N]
+    if not N_: return 0,0,0,0,r,0,0
+    for N in set(N_): N.pL_.sort(key=lambda x: x[0])  # proximity prior, test compared?
+    N_,L_,dpTT, TTd,cd = [],[],np.zeros((2,9)),np.zeros((2,9)),0  # any global use of dLs, rd?
+    for N in iN_:
+        pVt_ = []  # [[dist, dy_dx, _N, V]]
+        for dist, dy_dx, _N in N.pL_:  # rim angl is not canonic
+            pTT = proj_V(_N,N, dist, pVt_, rL.m if rL else decay** (dist/((_N.span+N.span)/2)))
+            lr = r+ (N.r+_N.r) / 2; m,d = vt_(pTT,lr)  # +|-match certainty
+            if m > 0:
+                if abs(m) < ave * nw:  # different ave for projected surprise value, comp in marginal predictability
+                    Link = comp_N(_N,N, lr, full=not tnF, A=dy_dx, span=dist, rL=rL)
+                    dTT, m,d,c,lr = Link.dTT,Link.m,Link.d,Link.c,Link.r  # prevent replacing of the input r
+                    if   m > ave: TT+=dTT*c; C+=c; R+=lr*c; L_+=[Link]; N_+=[_N,N]
+                    elif d > avd: TTd+=dTT*c; cd+=c  # no overlap to simplify
+                    dpTT += pTT-dTT  # prediction error to fit code, not implemented
+                else:
+                    pL = CN(typ=-1, nt=[_N,N], dTT=pTT,m=m,d=d,c=min(N.c,_N.c), r=lr, angl=np.array([dy_dx,1],dtype=object),span=dist)
+                    L_+= [pL]; N.rim+=[pL]; N_+=pL.nt; _N.rim+=[pL]; TT+=pTT; C+=pL.c  # same as links in clustering
+                pVt_ += [[dist,dy_dx,_N,m]]  # for next rim eval
+            else: break  # beyond induction range
+    for N in set(N_):
+        if N.rim: sum_vt(N.rim,getattr(N,'Rt'))
+    return list(set(N_)), L_,TT,C,R, TTd,cd  # + dpTT for code-fitting backprop
+
+def cluster_C(Ft, E_, r):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
+
+    C_,_C_ = [],[]  # form root.Ct, may call cross_comp-> cluster_N, incr rc
+    for n in Ft.N_: n._C_,n.m_,n._m_,n.o_,n._o_,n.rN_ = [],[],[],[],[],[]
+    for E in E_:
+        C = cent_TT(Copy_(E, Ft, init=2,typ=0), r)  # all rims are in root, sequence along eigenvector?
+        C._N_ = list({n for l in E.rim for n in l.nt if (n is not E and n in Ft.N_)})  # init C.N_=[]
+        C._L_ = set(E.rim)  # init peer links
+        for n in C._N_: nm = C.m*(n.c/C.c); n.m_+=[nm]; n._m_+=[nm]; n.o_+=[1]; n._o_+=[1]; n.rN_+=[C]; n._C_+=[C]
+        _C_ += [C]
+    __C_ = []  # buffer stable Cs
+    while True:  # reform C_, add direct in-C_ cross-links for membership?
+        C_,cnt,olp, mat,dif, DTT,Dm,Do = [],0,0,0,0,np.zeros((2,9)),0,eps; Ave = ave*(r+nw); Avd = avd*(r+nw)
+        _Ct_ = [[c, c.m/c.c, c.r] for c in _C_]
+        for cr, (_C,_m,_o) in enumerate(sorted(_Ct_, key=lambda t: t[1]/t[2], reverse=True),start=1):
+            if _m > Ave *_o:
+                L_, N_,N__,m_,o_,M,D,O,cc, dTT,dm,do = [],[],[],[],[],0,0,0,0, np.zeros((2,9)),0,0  # /C
+                for n in set(_C.N_+_C._N_):  # current + frontier, refine all
+                    dtt,_ = base_comp(_C, n); cc+=1  # add decay / dist?
+                    m,d = vt_(dtt,cr); dTT += dtt; nm = m * n.c  # rm,olp / C
+                    odm = np.sum([_m-nm for _m in n._m_ if _m>m])  # higher-m overlap
+                    oL_ = set(n.rim) & _C._L_  # replace peer rim overlap with more precise m
+                    if oL_: m += sum_vt(oL_,rr=cr,rm=m)[0]  # add deviation from redundant mC, add eval?
+                    if m > 0 and nm > Ave * odm:
+                        N_+=[n]; L_+=n.L_; M+=m; O+=odm; m_+=[nm]; o_+=[odm]  # n.o for convergence eval
+                        N__ += [_n for l in n.rim for _n in l.nt if _n is not n]  # +|-Ls
+                        if _C not in n._C_: dm+=m; do+=odm  # not in extended _N__
+                    else:
+                        if _C in n._C_: i = n._C_.index(_C); dm+=n._m_[i]; do+=n._o_[i]
+                        D += abs(d)  # distinctive from excluded nodes (background)
+                mat+=M; dif+=D; olp+=O; cnt+=cc  # all comps are selective
+                DTT += dTT
+                if M > Ave * len(N_) * O and val_(dTT, cr+O, TTw(_C),(len(N_)-1)*Lw):
+                    C = sum2C(N_,_C,_Ci=None)
+                    for n,m,o in zip(N_,m_,o_):
+                        if _C in n.rN_: i = n.rN_.index(_C); n.rN_.pop(i); n.m_.pop(i); n.o_.pop(i)  # clear stale _C mapping?
+                        n.m_+=[m]; n.o_+=[o]; n.rN_+= [C]; C.rN_+= [n]  # reciprocal root assign
+                    C._N_ = list(set(N__)-set(N_))  # frontier
+                    C._L_ = set(L_)  # peer links
+                    if D< Avd*len(N_)*O: __C_ += [C]  # stable
+                    else: C_ += [C]; Dm+=dm; Do+=do  # reform in next loop
+                else:
+                    for n in _C._N_:  # not revised
+                        n.exe = n.m/n.c > 2 * ave  # refine exe
+                        for i, c in enumerate(n.rN_):
+                            if c is _C:  # remove _C-mapping m,o:
+                                n.rN_.pop(i); n.m_.pop(i);n.o_.pop(i); break
+            else: break  # the rest is weaker
+        for n in Ft.N_:
+            n._C_ = n.rN_; n._m_= n.m_; n._o_= n.o_; n.rN_,n.m_,n.o_ = [],[],[]  # new n.Ct.N_s, combine with v_ in Ct_?
+        if mat * dif * olp > ave * centw*2:
+            __C_ = cluster_P(__C_, Ft.N_, r)  # refine all memberships in parallel by global backprop|EM
+            break
+        if Dm / Do > Ave:  # dval vs. dolp: overlap increases with Cs expansion
+            _C_ = C_
+        else: break  # converged
+    C_ = [C for C in __C_ if val_(C.dTT, r, TTw(C))]  # prune C_
+    if C_:
+        for n in [N for C in C_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals:
+            n.exe = (n.d if n.typ==1 else n.m) + np.sum([m-ave*o for m, o in zip(n.m_, n.o_)]) - ave
+        if val_(DTT, r+olp, TTw(Ft), (len(C_)-1)*Lw) > 0:
+            Ct = sum2F(C_,'Ct', Ft.root, fCF=0)
+            _, r = cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)? Nt|Ct priority eval?
+    return C_, r
+
+
+
