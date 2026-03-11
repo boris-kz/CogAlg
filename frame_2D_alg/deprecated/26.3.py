@@ -181,5 +181,26 @@ def sum2C(N_,_C, _Ci=None):  # fuzzy sum params used in base_comp
     C.Nt = CF(N_=N_,nF='Ct',dTT=deepcopy(C.dTT), m=C.m,d=C.d,c=C.c,r=C.r)
     return cent_TT(C, C.r)
 
+def comb_Ft_(Nt, Lt, Bt, Ct, root, fN=0):  # root = G|L, default Nt
+
+    r = root.r  # new G.Fs / sum2G | old L.tFs ->L.N_ / comp_N:
+    T = CopyF(Nt)  # temporary accumulator
+    if fN: R = CN(Nt=Nt,Lt=Lt,Bt=Bt,Ct=Ct, root=root); Nt.root=R; Lt.root=R; Bt.root=R; Ct.root=R  # new G / sum2G
+    else:  R = root.Xt  # keep root Link
+    dF_ = [CF(),CF(),CF()]
+    if Lt: dF_[0] = comp_F(T,Lt, r,R); sum_vt([T,Lt],T)  # Lt in sum2G, L.tLt in comp_N
+    if Bt: dF_[1] = comp_F(T,Bt, r,R); sum_vt([T,Bt],T)  # * brrw /G update?
+    if Ct: dF_[2] = comp_F(T,Ct, r,R); sum_vt([T,Ct],T)  # * rdn /G update?
+    sum_vt([R,T], R)
+    if any(dF_):
+        if fN: Xt = R.Xt; RR = R; dFt = Xt
+        else:  Xt = R; RR = root; Xt.Lt = Xt.Lt or CF(root=Xt); dFt = Xt.Lt
+        sum_vt(dF_,dFt, merge=1)  # cross-fork covariance, dFt.N_=dF_
+        sum_vt([RR, Xt], RR)  # update Link or root
+    if fN:  # no L ext update / tLs
+        add_Nt(R, Nt)  # add H,kern,ext /G, doesn't affect comp_F
+        if Lt: add_Lt(R, Lt)
+        return R  # in sum2G
+
 
 
