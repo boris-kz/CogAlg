@@ -14,10 +14,9 @@ Cross-comp forms Miss and Match (min: shared_quantity for directly predictive pa
 rng+: incremental-range cross-comp nodes: edge segments at < max distance, cluster if they match. 
 der+: incremental-derivation cross-comp links, from node cross-comp, if abs_diff * relative_adjacent_match
 
-Clustering compressively groups the elements into compositional hierarchy, initially by pair-wise similarity / density:
-nodes are connectivity clustered, progressively reducing overlap by exemplar selection, centroid clustering, floodfill.
-links are correlation clustered, forming contours that complement adjacent connectivity clusters.
-Each composition cycle goes through <=4 stages, shifting from connectivity to centroid-based:
+Clustering compressively groups the elements into compositional hierarchy, initially by pair-wise similarity or density thereof.
+High-contrast links are correlation clustered to form contours of adjacent node connectivity clusters.
+Each cycle goes through <=4 incrementally fuzzy and parallelizable stages:
 
 - select sparse exemplars to seed the clusters, top k for parallelization? (get_exemplars),
 - connectivity/ density-based agglomerative clustering, followed by divisive clustering (cluster_N), 
@@ -28,16 +27,16 @@ That forms hierarchical graph representation: dual tree of down-forking elements
 https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/generic%20graph.drawio.png
 Similar to neurons: dendritic input tree and axonal output tree, but with lateral cross-comp and nested param sets per layer.
 
-The fitness function is predictive value of the model, estimated through multiple orders of projection:
-initially summed match, refined by external projection in space and time: match combined with directional diffs,
-then by comparing projected to actual match, testing the accuracy of prior cross_comp and clustering process. 
-And so on, higher orders of projection should be generated recursively from lower-order comparisons.
+Overall fitness function is predictive value of the model, estimated through multiple orders of projection:
+initially summed match, refined by external projection in space and time (where match is combined with directional diffs),
+then by comparing projected to actual match, testing the accuracy of prior cross_comp and clustering process, etc. 
+Higher projection orders should be generated recursively from lower-order cross-comp, per sufficient number of newly formed clusters.
 
-Feedback: projected match adjusts filters (with coord filters selecting new input) to maximize next marginal match.
-(currently in ffeedback(), to be refined by cross_comp of co-projected patterns: "imagination, planning, action" in part 3)   
-Similar to backprop but sparse, and the filters only control operations, it's not weights that directly scale individual parameters.
+Feedback: projected match adjusts filters to maximize next marginal match, with coord filters selecting new input (in ffeedback()),
+to be refined by cross_comp of co-projected patterns: "imagination, planning, action" in part 3)   
+This is similar to backprop but sparse, and the filters only control operations, they are not weights on input parameters.
 
-It should also modify the code by adding weights on code elements according to their contribution to projected match.
+Higher-order feedback should modify the code by adding weights on code elements according to their contribution to projected match.
 These weights will trigger skipping or recursing over corresponding functions ( blocks ( operations.
 Also cross-comp and cluster (compress) code elements and function calls, real and projected, though much more coarsely than data?
 
@@ -67,8 +66,7 @@ class CN(CBase):
         # 3= C | Cn: +rN_| m_,d_,r_,o_
         n.m, n.d, n.c, n.r = [kwargs.get(x,0) for x in ('m','d','c','r')]  # combined forks, no direct accum?
         n.dTT = kwargs.get('dTT',np.zeros((2,9)))  # Nt+Lt dTT: m_,d_ [M,D,n, I,G,a, L,S,A]
-        n.Nt,n.Bt,n.Ct,n.Lt,n.Xt,n.Rt = ((kwargs.get(f) if f in kwargs else CF(root=n) for f in ('Nt','Bt','Ct','Lt','Xt','Rt')))
-        # convert to CN if nest, Ct||Nt, add cross-fork Xt?
+        n.Nt,n.Bt,n.Ct,n.Lt,n.Xt,n.Rt = ((kwargs.get(f) if f in kwargs else CF(root=n) for f in ('Nt','Bt','Ct','Lt','Xt','Rt')))  # CN if nest, Ct||Nt
         n.nt  = kwargs.get('nt',[])  # L nodet
         n.kern = kwargs.get('kern',np.zeros(4))  # I,G,A: not ders, in links for simplicity, mostly redundant
         n.span = kwargs.get('span',1) # distance in nodet or aRad, comp with kern or len(N_)
@@ -119,7 +117,7 @@ def vt_(TT, r=0, wTT=None):  # brief val_ to get m,d, rc=0 to return raw vals
 
 def val_(TT, r, wTT, mw=1.0,fi=1, _TT=None,cr=.5):  # m,d eval per cluster, cr = cd / cm+dc, default half-weight?
 
-    t_ = np.abs(TT[0]) + np.abs(TT[1])  # combine vals, not sure about abs m_?
+    t_ = TT[0] + np.abs(TT[1])  # comb val/attr, match can be negative?
     rv = TT[0] / (t_+eps) @ wTT[0] if fi else TT[1] / (t_+eps) @ wTT[1]  # fork / total per scalar
     if _TT is not None:
         _t_ = np.abs(_TT[0]) + np.abs(_TT[1])
@@ -145,7 +143,7 @@ def TTw(G): return getattr(G,'wTT',wTTf)
 def cross_comp(Ft, ir, nF='Nt'):  # core function mediating recursive rng+ and der+ cross-comp and clustering
 
     N_,G_ = Ft.N_,[]  # rc=rdn+olp, comp N_|B_|C_:
-    L_,TT,c,r,TTd,cd,rd = comp_N_(combinations(N_,2),ir) if N_[0].typ<3 else comp_C_(N_,ir,fC=1); r+=ir
+    L_,TT,c,r,TTd,cd,rd = comp_N_(combinations(N_,2),ir) if N_[0].typ<3 else comp_C_(N_,ir,fC=1)
     if L_:  # Lm_, no +|- Ft.Lt?
         if val_(TT, r+connw, TTw(Ft), (len(L_)-1)*Lw,1,TTd,r) > 0:
             E_ = get_exemplars({N for L in L_ for N in L.nt}, r)
@@ -183,14 +181,14 @@ def comp_N_(_pairs, r, tnF=None, rL=None):  # incremental-distance cross_comp, m
     for pL in sorted(pairs, key=lambda x: x[0]):  # proximity prior, test compared?
         dist,dy_dx,_N,N = pL # rim angl is not canonic
         pTT = proj_V(_N,N, dist, dy_dx, rL.m if rL else decay** (dist/((_N.span+N.span)/2)))  # based on current rim
-        lr = r+ (N.r+_N.r) / 2; m,d = vt_(pTT,lr)  # +|-match certainty
+        lr = r+ (N.r+_N.r)/2; m,d = vt_(pTT,lr)  # +|-match certainty
         if m > 0:
             if abs(m) < ave*nw:  # comp if marginally predictable, update N.Rt pair eval, ave / proj surprise value?
                 Link = comp_N(_N,N, lr, full=not tnF, A=dy_dx, span=dist, rL=rL, L_=L_, N_=N_, acc=acc)
                 dpTT += pTT-Link.dTT  # prediction error to fit the code, not implemented
             else:
-                pL = CN(typ=-1, nt=[_N,N], dTT=pTT,m=m,d=d,c=min(N.c,_N.c), r=lr, angl=np.array([dy_dx,1],dtype=object),span=dist)
-                L_+= [pL]; N.rim+=[pL]; N_+=pL.nt; acc[0]+=pTT; acc[1]+=pL.c  # all +ve
+                pL = CN(typ=-1, nt=[_N,N], dTT=pTT,m=m,d=d,c=min(N.c,_N.c),r=lr, angl=np.array([dy_dx,1],dtype=object),span=dist)
+                L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.nt; acc[0]+=pTT*pL.c; acc[1]+=pL.c; acc[2]+=pL.r*pL.c  # all +ve
                 # ~= links in clustering
         else: break  # beyond initial induction range, re-sort by proj_V?
     for N in set(N_):
@@ -254,11 +252,11 @@ def comp_N(_N,N, r, full=1, A=np.zeros(2),span=None, rL=None, L_=None, N_=None, 
             else:
                 for i,(_Ft,Ft,tnF) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct),('Nt','Lt','Bt','Ct'))):
                     if _Ft and Ft:  # sub-comp
-                        dFt = comp_F(_Ft,Ft,r,L); getattr(L,tnF).fb_+=[dFt]  # trans-fork feedback
+                        dFt = comp_F(_Ft,Ft, r,L); getattr(L,tnF).fb_ += dFt.N_  # tFt feedback
                         r = (i or 1) -1  # Nt,Lt are core, not redundant
             for ft_, nF in zip((L.Nt.fb_,L.Lt.fb_,L.Bt.fb_,L.Ct.fb_),('Nt','Lt','Bt','Ct')):
                 if ft_: sum_vt(ft_,getattr(L,nF),merge=1); sum_vt([L,getattr(L,nF)],L)
-                # += trans-links, python-batched bottom-up
+                # +=trans-links, python-batched bottom-up
     if full:
         if span is None: span = np.hypot(*_N.yx - N.yx)
         yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
@@ -430,14 +428,15 @@ def cluster_C(Ft, E_, r):  # form centroids by clustering exemplar surround via 
             if _m > Ave *_o:
                 L_, N_,N__,m_,o_,M,D,O,cc, dTT,dm,do = [],[],[],[],[],0,0,0,0, np.zeros((2,9)),0,0  # /C
                 for n in set(_C.N_+_C._N_):  # current + frontier, refine all
-                    dtt,_ = base_comp(_C, n); cc+=1  # add decay / dist?
-                    m,d = vt_(dtt,cr); dTT += dtt; nm = m * n.c  # rm,olp / C
-                    odm = np.sum([_m-nm for _m in n._m_ if _m>m])  # higher-m overlap
+                    dtt,_ = base_comp(_C, n); cc+=1  # | comp_N, decay/dist?
+                    m,d = vt_(dtt,cr); dTT += dtt; m *= n.c  # rm,olp / C
+                    odm = np.sum([_m-m for _m in n._m_ if _m>m])  # higher-m overlap
                     oL_ = set(n.rim) & _C._L_  # replace peer rim overlap with more precise m
                     if oL_: _m,_d,_,_,_ = sum_vt(oL_,rr=cr,rm=m); m+=_m; d+=_d  # abs?
+                    m_+= [m]; o_+= [odm]  # from all comps
                     M += m; D += abs(d)
-                    if m > 0 and nm > Ave * odm:
-                        N_+=[n]; L_+=n.L_; O+=odm; m_+=[nm]; o_+=[odm]  # n.o for convergence eval
+                    if m > 0 and m > Ave * odm:
+                        N_+=[n]; L_+=n.L_; O+=odm  # convergence val
                         for _n in [_n for l in n.rim for _n in l.nt if _n is not n]:
                             if not hasattr(_n,'_m_'): _n._C_,_n.m_,_n._m_,_n.o_,_n._o_,_n.rN_ = [],[],[],[],[],[]
                             N__ += [_n]  # +|-Ls
@@ -449,7 +448,7 @@ def cluster_C(Ft, E_, r):  # form centroids by clustering exemplar surround via 
                     C = sum2C(N_, _C, _i=None, root=Ft)
                     for n,m,o in zip(N_,m_,o_): n.rN_ += [C]; n.m_+=[m]; n.o_+=[o]
                     C._N_ = list(set(N__)-set(N_))  # frontier
-                    for n in C._N_+C.N_: n._C_ += [C]; n._m_+=[m]; n._o_+=[o]
+                    # for n in C._N_: n.rN_ += [C]  per comp only?
                     C._L_ = set(L_)  # peer links
                     if D< Avd*O: oC_+= [C]  # output if stable, actually if val_(DTT, fi=0) + D?
                     else:        C_ += [C]  # reform
@@ -462,9 +461,9 @@ def cluster_C(Ft, E_, r):  # form centroids by clustering exemplar surround via 
                 Dm+=dm; Do+=do
             else: break  # the rest is weaker
         for n in Ft.N_:
-            n._C_ += n.rN_; n._m_+= n.m_; n._o_+= n.o_; n.rN_,n.m_,n.o_ = [],[],[]  # new n.Ct.N_s, combine with v_ in Ct_?
+            n._C_ = n.rN_; n._m_= n.m_; n._o_= n.o_; n.rN_,n.m_,n.o_ = [],[],[]  # new n.Ct.N_s, combine with v_ in Ct_?
         if mat * dif * olp > ave*centw*2:
-            oC_ = cluster_P(oC_, Ft.N_, Ft)  # refine all memberships in parallel by global backprop|EM
+            oC_ = cluster_P(oC_+C_, Ft.N_, Ft)  # refine all memberships in parallel by global backprop|EM
             break
         if Dm/Do > Ave: _C_=C_  # dval vs. dolp: overlap increases with Cs expansion
         else: oC_ += C_; break  # converged
@@ -491,8 +490,8 @@ def cluster_P(_C_,N_,root):  # Parallel centroid refining, _C_ from cluster_C, N
         C_ = [sum2C(N_,_C, i, root=root) for i, _C in enumerate(_C_)]  # update with new coefs, _C.m, N->C refs
         Ave = ave * (root.r+centw)
         if M > Ave*O and dM > Ave*dO:  # strong update
+            for N in N_: N._m_,N._o_,N._d_,N._r_ = N.m_,N.o_,N.d_,N.r_
             _C_ = C_
-            for N in N_: N._m_,N._o_,N._d_,N._r_ = N.m_,N.o_,N.d_,N.r
         else: break
     out_ = []
     for i, C in enumerate(C_):
@@ -519,9 +518,8 @@ def sum2C(N_, _C, _i=None, root=None):  # fuzzy sum + base attrs for centroids
     Cc = sum(cc_)
     R = 0; TT = np.zeros((2,9)); kern = np.zeros(4); span = 0; yx = np.zeros(2)
     for N,c in zip(N_, cc_):
-        rc = c/Cc
-        TT += N.dTT*rc; kern += N.kern*rc; span += N.span*rc; yx += N.yx*rc; R += N.r*rc
-    R /= len(N_); m,d = vt_(TT,R)
+        rc = c/Cc; TT += N.dTT*rc; kern += N.kern*rc; span += N.span*rc; yx += N.yx*rc; R += N.r*rc
+    R /= Cc; m,d = vt_(TT,R)
     C = CN(typ=3, Nt=CF(N_=N_), dTT=TT, m=m, d=d, c=Cc, r=R, kern=kern, span=span, yx=yx, root=root)
 
     return cent_TT(C, C.r)
@@ -577,8 +575,8 @@ def sum_vt(N_, root=None, rr=0,rm=0,rd=0, merge=0, f2=0):  # weighted sum of CN|
     C = sum(n.c for n in N_); R = 0; TT = np.zeros((2,9))
     for n in N_:
         rc = n.c/C; TT += n.dTT*rc; R += n.r*rc  # * weight
-    R = (R+rr)/len(N_)
-    m,d = vt_(TT,R); m-=rm; d-=rd  # deviations from tentative m,d
+    R+= rr  # or rr * rC?
+    m,d = vt_(TT, R); m-=rm; d-=rd  # deviations from tentative m,d
     if root is not None:
         root.dTT=TT; root.r=R; root.c=C; root.m=m; root.d=d  # * brrw/Bt, rdn/Ct?
         if merge:
@@ -588,7 +586,7 @@ def sum_vt(N_, root=None, rr=0,rm=0,rd=0, merge=0, f2=0):  # weighted sum of CN|
 
 def add_Nt(G, Nt, merge=0):  # addition to sum_vt or init
 
-    if G.Nt.H and Nt.H:  # also Ct.H if separate?
+    if isinstance(Nt,CF) and G.Nt.H and Nt.H:  # also Ct.H if separate?
         for Lev,lev in zip_longest(G.Nt.H, Nt.H):  # bottom-up
             if lev:
                 if Lev: sum_vt([Lev,lev], Lev,merge=1,f2=1)
@@ -598,7 +596,7 @@ def add_Nt(G, Nt, merge=0):  # addition to sum_vt or init
     yx_ = []; C = G.c + Nt.c  # G is empty?
     for N in N_:
         N.fin = 1; N.root = G; c = N.c
-        if hasattr(G,'m_'): G.r = np.sum([o*N.r for o in N.o_]); G.rN_+=N.rN_; G.m_+=N.m_; G.o_+=N.o_
+        if hasattr(G,'m_'): G.r += np.sum([o*N.r for o in N.o_]); G.rN_ += N.rN_; G.m_ += N.m_; G.o_ += N.o_
         G.C_ += N.rN_  # Ct||Nt;  A,a = G.angl[0],N.angl[0]; A[:]= (A*C+a*c)/C # vect only, if in Nt?
         G.kern = (G.kern*G.c + N.kern*c) /C
         G.box = extend_box(G.box, N.box)
@@ -773,7 +771,7 @@ def proj_TT(L, cos_d, dist, r, pTT, wTT, fdec=0, frec=0, dec=1):  # accumulate l
     if not frec:  # non-recursive
         for lev in L.Nt.N_:  # refine pTT
             proj_TT(lev, cos_d, dec, r+1, pTT, wTT, fdec=1, frec=1)
-    pTT+=TT  # L.dTT is redundant to H, neither is redundant to Bt,Ct
+    pTT += TT  # L.dTT is redundant to H, neither is redundant to Bt,Ct
     if L.Bt:  # + trans-link tNt, tBt, tCt?
         TT = L.Bt.dTT
         if TT is not None:
