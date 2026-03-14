@@ -202,5 +202,18 @@ def comb_Ft_(Nt, Lt, Bt, Ct, root, fN=0):  # root = G|L, default Nt
         if Lt: add_Lt(R, Lt)
         return R  # in sum2G
 
+def sum_vt(N_, root=None, rc=0,rr=0,rm=0,rd=0, merge=0, f2=0):  # weighted sum of CN|CF list
+
+    C = sum(n.c for n in N_); R = 0; TT = np.zeros((2,9))
+    for n in N_:
+        rc = n.c/C; TT += n.dTT*rc; R += n.r*rc  # * weight
+    R = (R + rr) / 2  # rr*rc?
+    m,d = vt_(TT, R); m-=rm; d-=rd  # deviations from tentative m,d
+    if root is not None:
+        root.dTT=TT; root.r=R; root.c=C; root.m=m; root.d=d  # * brrw/Bt, rdn/Ct?
+        if merge:
+            n_ = N_[1].N_ if f2 else N_  # f2: two Ns, merge 2nd into 1st
+            for n in n_: n.root=root; root.N_ += [n]
+    return m,d, TT, C,R
 
 
