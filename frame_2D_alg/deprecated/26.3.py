@@ -161,24 +161,20 @@ def cluster_C(Ft, E_, r):  # form centroids by clustering exemplar surround via 
             _, r = cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)? Nt|Ct priority eval?
     return C_, r
 
-def sum2C(N_,_C, _Ci=None):  # fuzzy sum params used in base_comp
+def sum2C(N_, _C, _i=None, root=None):  # fuzzy sum + base attrs for centroids
 
-    c_,r_,dTT_,baseT_,span_,yx_ = zip(*[(n.c,n.r,n.dTT,n.baseT,n.span,n.yx) for n in N_])
-    rc_ = []
+    cc_ = []
     for N in N_:
-        # m,d,dTT,c,r = sum_vt(N_)?
-        Ci = N.rN_.index(_C) if _Ci is None else _Ci
-        rc_ += [N._m_[Ci] / (ave* N._o_[Ci]) * _C.m]  # *_C.m: proj survival, vs post-prune eval?
-        if _Ci is not None: N._m_,N._d_,N._r_ = N.m_,N.d_,N.r_  # from cluster_P
-    c_ = [c * cc for c,cc in zip(c_,rc_)]
-    tot = sum(c_)+eps; Par_ = []
-    for par_ in r_, dTT_, baseT_, span_, yx_:
-        Par_.append(sum([p * c for p,c in zip(par_,c_)]))
-    C = CN(c=tot, typ=3)
-    C.m_=[]; C._m_=[]; C.o_=[]; C._o_=[]  # init
-    C.r, C.dTT, C.baseT, C.span, C.yx = [P / tot for P in Par_]
-    C.m, C.d = vt_(C.dTT, C.r)
-    C.Nt = CF(N_=N_,nF='Ct',dTT=deepcopy(C.dTT), m=C.m,d=C.d,c=C.c,r=C.r)
+        if _i is None: i = N._C_.index(_C); m,o = N._m_[i], N._o_[i]  # cluster_C
+        else:          m,o = N.m_[_i],N.o_[_i]  # current m_,o_ in cluster_P
+        cc_ += [N.c * (m/(ave*o) * _C.m)]  # *_C.m: proj survival?
+    Cc = sum(cc_)
+    R = 0; TT = np.zeros((2,9)); kern = np.zeros(4); span = 0; yx = np.zeros(2)
+    for N, c in zip(N_,cc_):
+        rc = c/ Cc; TT += N.dTT*rc; kern += N.kern*rc; span += N.span*rc; yx += N.yx*rc; R += N.r*rc
+    m,d = vt_(TT,R)
+    C = CN(typ=3, Nt=CF(N_=N_), dTT=TT, m=m, d=d, c=Cc, r=R, kern=kern, span=span, yx=yx, root=root)
+
     return cent_TT(C, C.r)
 
 def comb_Ft_(Nt, Lt, Bt, Ct, root, fN=0):  # root = G|L, default Nt
