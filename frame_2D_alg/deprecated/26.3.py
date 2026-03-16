@@ -212,4 +212,79 @@ def sum_vt(N_, root=None, rc=0,rr=0,rm=0,rd=0, merge=0, f2=0):  # weighted sum o
             for n in n_: n.root=root; root.N_ += [n]
     return m,d, TT, C,R
 
+def ffeedback(root):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
+
+    def L_ders(Fg):  # get current-level ders: from L_ only
+        l_ = [l for n in Fg.N_ for l in n.L_]
+        m,d,dTT = sum_vt(l_,fm=1)[:3] if l_ else (0,0,np.zeros((2,9)))
+        return m,d,dTT
+
+    wTTf = np.ones((2,9))  # sum dTT weights: m_,d_ [M,D,n, I,G,A, L,S,ext_A]: Et, kern, extT
+    rM, rD = 1, 1
+    _m,_d,_dTT = L_ders(root)
+    for lev in root.Nt.H:  # top-down, not lev-selective, not recursive
+        m,d, dTT = L_ders(lev)
+        rM += _m / (m or eps)  # mat,dif change per level
+        rD += _d / (d or eps)
+        wTTf += np.abs(_dTT / (dTT+eps))
+        _m,_d,_dTT = m,d,dTT
+
+def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, wTTf=np.ones((2,9))):  # all initial args set manually
+
+    def base_tile(y,x):  # 1st level, higher levels get Fg s
+        Fg = frame_blobs_root( comp_pixel( image[y:y+Ly, x:x+Lx]), rV)
+        Fg = vect_edge(Fg, rV)  # form, trace PP_
+        if Fg: cross_comp(Fg.Nt, Fg.r)
+        return Fg
+
+    def expand_lev(_iy,_ix, elev, Fg):  # seed tile is pixels in 1st lev, or Fg in higher levs
+
+        tile = np.full((Ly,Lx),None, dtype=object)  # exclude from PV__
+        PV__ = np.zeros([Ly,Lx])  # maps to current-level tile
+        Fg_ = []; iy,ix =_iy,_ix; y,x = 31,31  # start at tile mean
+        while True:
+            if not elev: Fg = base_tile(iy,ix)  # 1st level or previously cross_comped arg tile
+            if Fg and val_(Fg.dTT, Fg.r+nw+elev, Fg.wTT, mw=(len(Fg.N_)-1)*Lw) > 0:
+                tile[y,x] = Fg; Fg_+=[Fg]
+                dy_dx = np.array([Fg.yx[0]-y,Fg.yx[1]-x])
+                pTT = proj_N(Fg, np.hypot(*dy_dx), dy_dx, elev)
+                if 0< val_(pTT, elev, TTw(Fg)) < ave:  # search in marginal +ve predictability?
+                    # extend lev by feedback within current tile:
+                    proj_focus(PV__,y,x,Fg)  # PV__+= pV__
+                    pv__ = PV__.copy(); pv__[tile!=None] = 0  # exclude processed
+                    y, x = np.unravel_index(pv__.argmax(), PV__.shape)
+                    if PV__[y,x] > ave:
+                        iy = _iy + (y-31)* Ly**elev  # feedback to shifted coords in full-res image | space:
+                        ix = _ix + (x-31)* Lx**elev  # y0,x0 in projected bottom tile:
+                        if elev:
+                            subF = frame_H(image, iy,ix, Ly,Lx, Y,X, rV, elev, wTTf)  # up to current level
+                            Fg = subF.N_[-1] if subF else []
+                    else: break
+                else: break
+            else: break
+        if Fg_:
+            gTT,gC,gRc = sum_vt(Fg_); gRc+=elev
+            if val_(gTT, gRc/len(Fg_)+elev, wTTf, mw=(len(Fg_)-1)*Lw) > 0:  # not updated
+                return Fg_
+
+    global ave,avd, Lw, intw, cw,nw, centw,connw, distw, mW, dW
+    ave,avd, Lw, intw, cw,nw, centw,connw, distw = np.array([ave,avd, Lw, intw, cw, nw, centw, connw, distw]) / rV
+
+    frame = CN(box=np.array([0,0,Y,X]), yx=np.array([Y//2, X//2]))
+    Fg=[]; elev=0
+    while elev < max_elev:  # same center in all levels
+        Fg_ = expand_lev(iY,iX, elev, Fg)
+        if Fg_:  # higher-scope sparse tile
+            N_2R(Fg_,root=frame)
+            if Fg and cross_comp(Fg.Nt, rr=elev)[0]:  # spec->tN_,tC_,tL_, proj non-selective Fg.L_?
+                frame.N_ = frame.N_+[Fg]; elev+=1  # forward comped tile
+                if max_elev == 4:  # seed, not from expand_lev
+                    rV,wTTf = ffeedback(Fg)  # set filters
+                    Fg = cent_TT(Fg,2)  # set Fg.dTT correlation weights
+                    wTTf *= Fg.wTT; mW = np.sum(wTTf[0]); dW = np.sum(wTTf[1])
+                    wTTf[0] *= 9/(mW+eps); wTTf[1] *= 9/(dW+eps)
+            else: break
+        else: break
+    return frame  # for intra-lev feedback
+
 
