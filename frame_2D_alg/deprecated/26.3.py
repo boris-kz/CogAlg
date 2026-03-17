@@ -212,22 +212,27 @@ def sum_vt(N_, root=None, rc=0,rr=0,rm=0,rd=0, merge=0, f2=0):  # weighted sum o
             for n in n_: n.root=root; root.N_ += [n]
     return m,d, TT, C,R
 
-def ffeedback(root):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
+def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
 
-    def L_ders(Fg):  # get current-level ders: from L_ only
-        l_ = [l for n in Fg.N_ for l in n.L_]
-        m,d,dTT = sum_vt(l_,fm=1)[:3] if l_ else (0,0,np.zeros((2,9)))
+    def L_ders(Fg, TT,wTT):  # get current-level ders: from L_ only
+        m, d = vt_(TT, wTT=getattr(Fg, wTT))
         return m,d,dTT
 
-    wTTf = np.ones((2,9))  # sum dTT weights: m_,d_ [M,D,n, I,G,A, L,S,ext_A]: Et, kern, extT
-    rM, rD = 1, 1
-    _m,_d,_dTT = L_ders(root)
-    for lev in root.Nt.H:  # top-down, not lev-selective, not recursive
-        m,d, dTT = L_ders(lev)
-        rM += _m / (m or eps)  # mat,dif change per level
-        rD += _d / (d or eps)
-        wTTf += np.abs(_dTT / (dTT+eps))
-        _m,_d,_dTT = m,d,dTT
+    # draft:
+    wTT_ = []
+    for nTT,nwTT in zip(('TT','dTT','TTn','TTc'),('wTTn','wTTc','wTTN','wTTC')):  # combine for total cent_TT(wTTx)?
+        dTT = getattr(frame, nTT)
+        wTTf = np.ones((2,9))  # sum dTT weights: m_,d_ [M,D,n, I,G,A, L,S,ext_A]: Et, kern, extT
+        rM, rD = 1, 1
+        _m,_d,_dTT = 0,0,np.zeros((2,9))
+        for lev in frame.H:  # top-down, not lev-selective, not recursive
+            m,d,dTT =  L_ders(lev, nTT, nwTT)
+            rM += _m / (m or eps)  # mat,dif change per level
+            rD += _d / (d or eps)
+            wTTf += np.abs(_dTT / (dTT+eps))
+            _m,_d,_dTT = m,d,dTT
+        wTT_ += [wTTf]
+    return rM+rD, *wTT_
 
 def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, wTTf=np.ones((2,9))):  # all initial args set manually
 
@@ -287,4 +292,26 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, wTTf=np.ones((2,9))):  # a
         else: break
     return frame  # for intra-lev feedback
 
+def cent_TT(C, r):  # weight attr matches | diffs by their match to the sum, recompute to convergence
 
+    wTT = []  # Cs can be fuzzy only to the extent that their correlation weights are different?
+    tot = C.dTT[0] + np.abs(C.dTT[1])  # m_* align, d_* 2-align for comp only?
+
+    for fd, derT, wT in zip((0,1), C.dTT, wTTf):
+        if fd: derT = np.abs(derT)  # ds
+        _w_ = np.ones(9)  # or 4 if cross fork, weigh by feedback:
+        val_ = derT / tot * wT  # signed ms, abs ds
+        V = np.sum(val_)
+        while True:
+            mean = max(V / max(np.sum(_w_),eps), eps)
+            inverse_dev_ = np.minimum(val_/mean, mean/val_)  # rational deviation from mean rm in range 0:1, if m=mean
+            w_ = inverse_dev_/.5  # 2/ m=mean, 0/ inf max/min, 1 / mid_rng | ave_dev?
+            w_ *= 9 / np.sum(w_)  # mean w = 1, M shouldn't change?
+            if np.sum(np.abs(w_-_w_)) > ave*r:
+                V = np.sum(val_ * w_)
+                _w_ = w_
+            else: break  # weight convergence
+        wTT += [_w_]
+    C.wTT = np.array(wTT)  # replace wTTf
+    # single-mode dTT, extend to 2D-3D lev cycles in H, cross-level param max / centroid?
+    return C
