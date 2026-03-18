@@ -315,3 +315,26 @@ def cent_TT(C, r):  # weight attr matches | diffs by their match to the sum, rec
     C.wTT = np.array(wTT)  # replace wTTf
     # single-mode dTT, extend to 2D-3D lev cycles in H, cross-level param max / centroid?
     return C
+
+def cent_TT1(_wTT, r, rTT=None):  # weight attr matches | diffs by their match to the sum, recompute to convergence
+
+    wTT = []  # Cs can be fuzzy only to the extent that their correlation weights are different?
+    tot = rTT[0] + np.abs(rTT[1])  # m_* align, d_* 2-align for comp only?
+
+    for fd, rT, wT in zip((0,1), rTT,_wTT):  # G.wTT_[wi] *= ffeedback ratios, default ones?
+        if fd: rT = np.abs(rT)  # ds
+        _w_ = np.ones(9)  # or 4 if cross fork, weigh by feedback:
+        rv_ = rT / tot * wT  # signed ms, abs ds
+        V = np.sum(rv_)
+        while True:
+            mean = max(V / max(np.sum(_w_),eps), eps)
+            inverse_dev_ = np.minimum(rv_/mean, mean/rv_)  # rational deviation from mean rm in range 0:1, if m=mean
+            w_ = inverse_dev_/.5  # 2/ m=mean, 0/ inf max/min, 1 / mid_rng | ave_dev?
+            w_ *= 9 / np.sum(w_)  # mean w = 1, M shouldn't change?
+            if np.sum(np.abs(w_-_w_)) > ave*r:
+                V = np.sum(rv_ * w_)
+                _w_ = w_
+            else: break  # weight convergence
+        wTT += [_w_]
+    _wTT[:] = np.array(wTT)  # replace wTTf
+    # single-mode dTT, extend to 2D-3D lev cycles in H, cross-level param max / centroid?

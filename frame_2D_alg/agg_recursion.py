@@ -64,8 +64,8 @@ class CN(CBase):
         # 1= L:  typ,nt,dTT, m,d,c,r, root,rng,yx,box,span,angl,fin,compared, Nt,Bt,Ct from comp_sub
         # 2= G:  + rim,kern,mang,sub,exe
         # 3= C | Cn: +rN_| m_,d_,r_,o_
-        n.dTT, n.TTn, n.TTc = [kwargs.get(x,np.zeros((2,9))) for x in ('dTT','TTn','TTc')]  # +wTTC per Ct.dTT, all m_,d_ [M,D,n, I,G,a, L,S,A]
-        n.wTT_ = kwargs.get('wTT_', None)  # dTT: Nt+Lt+Bt, TTC,TTn,TTc
+        n.dTT, n.TTn, n.TTc = [np.copy(kwargs.get(x,np.zeros((2,9)))) for x in ('dTT','TTn','TTc')]  # +wTTC per Ct.dTT, all m_,d_ [M,D,n, I,G,a, L,S,A]
+        n.wTT_ = kwargs.get('wTT_', None)  # dTT: Nt+Lt+Bt, TTC, TTn, TTc
         n.m, n.d, n.c, n.r = [kwargs.get(x,0) for x in ('m','d','c','r')]  # combined forks, no direct accum?
         n.Nt,n.Bt,n.Ct,n.Lt,n.Xt,n.Rt = ((kwargs.get(f) if f in kwargs else CF(root=n) for f in ('Nt','Bt','Ct','Lt','Xt','Rt'))) # CN if nest, Ct||Nt
         n.kern = kwargs.get('kern',np.zeros(4))  # I,G,A: not ders, in links for simplicity, mostly redundant
@@ -113,10 +113,9 @@ mW = dW = 9  # fb weights per dTT, adjust in agg+
 wY = wX = 64; wYX = np.hypot(wY,wX)  # focus dimensions
 decay = ave / (ave+avd)  # match decay / unit dist?
 
-def vt_(TT, r=0, wi=0, wTT=None):  # brief val_ to get m,d, rc=0 to return raw vals
+def vt_(TT, r, wTT=wTTn):  # brief val_ to get m,d, rc=0 to return raw vals, wTTn for comp_N
 
     m_,d_= TT; ad_ = np.abs(d_); t_ = m_ + ad_ + eps  # ~ max comparand
-    if wTT is None: wTT = wTT_[wi]  # pass wF index
     return m_/t_ @ wTT[0] - ave*r, ad_/t_ @ wTT[1] - avd*r  # norm by co-derived variance
 
 def val_(TT, r, wTT, mw=1.0,fi=1, _TT=None, cr=.5):  # m,d eval per cluster, cr = cd / cm+dc, default half-weight?
@@ -129,12 +128,12 @@ def val_(TT, r, wTT, mw=1.0,fi=1, _TT=None, cr=.5):  # m,d eval per cluster, cr 
         rv  = rv * (1-cr) + _rv * cr  # + borrowed alt fork val, cr: d count ratio, must be passed with _TT?
     return rv*mw - (ave if fi else avd) * r
 
-def sum_vt(N_, fm=0):  # basic weighted sum of CN|CF list
+def sum_vt(N_, fm=0, wTT=wTTn):  # basic weighted sum of CN|CF list, wTTn for comp_N
 
     C = sum(n.c for n in N_); R = 0; TT = np.zeros((2,9))
     for n in N_:
         rc = n.c / C; TT += n.dTT*rc; R += n.r*rc  # * weight
-    return (*vt_(TT,R),TT,C,R) if fm else (TT,C,R)
+    return (*vt_(TT,R,wTT), TT,C,R) if fm else (TT,C,R)
 
 def Q2R(N_, root, merge=1, froot=1):  # update root with N_, maybe unpacked?
 
@@ -145,7 +144,7 @@ def Q2R(N_, root, merge=1, froot=1):  # update root with N_, maybe unpacked?
         if froot:
             for N in N_: N.root=root
 
-def TTw(G, wi): return getattr(G,'wTT_',wTT_)[wi]
+def TTw(G, wi=0): return G.wTT_[wi] or wTT_[wi]
 ''' 
   Agg cycle:
 - Cross-comp nodes, evaluate incremental-derivation cross-comp of new >ave difference links, recursively. 
@@ -162,16 +161,16 @@ def TTw(G, wi): return getattr(G,'wTT_',wTT_)[wi]
 def cross_comp(Ft, rr, nF='Nt'):  # core function mediating recursive rng+ and der+ cross-comp and clustering
 
     N_,G_ = Ft.N_,[]; fC = N_[0].typ==3  # rc=rdn+olp, comp N_|B_|C_:
-    L_, TT,c,r,TTd,cd,rd = comp_N_(combinations(N_,2),rr) if fC else comp_C_(N_,rr,fC=1)
+    L_, TT,c,r,TTd,cd,rd = comp_C_(N_,rr,fC=1) if fC else comp_N_(combinations(N_,2),rr)  # should be comp_C_ when fC
     if L_:  # Lm_, no +|- Ft.Lt?
-        M, D = vt_(TT, r, wTT=wTTc if fC else wTTn)  # M,D / cw,nw,Nw,Cw -> globals in ffeedback?
-        if M * ((len(L_)-1)*Lw) > ave* Nw:
-            G = Ft.root; (G.TTn,G.TTc)[fC] = TT+TTd  # comp->TT, clust->dTT, clust compression = TT-dTT
+        M, D = vt_(TT, r, wTT=(wTTN, wTTN)[fC])
+        if M * ((len(L_)-1)*Lw) > ave * Nw:  # global cw,nw,Nw,Cw / ffeedback
+            setattr( Ft.root,('TTn','TTc')[fC], TT+TTd)  # comp->TT, clust->dTT, clust compression = TT-dTT
             E_ = get_exemplars({N for L in L_ for N in L.nt}, r)
             G_,r = cluster_N(Ft, E_, r)  # -> cluster_C, _P
             if G_:
                 Ft = sum2F(G_, nF, Ft.root)
-                if val_(TT,r+nw, TTw(Ft),(len(G_)-1)*Lw,1, TTd, rd/(r+rd)) > 0:
+                if val_(TT,r+nw, TTw(Ft,0),(len(G_)-1)*Lw,1, TTd, rd/(r+rd)) > 0:
                     G_,r = cross_comp(Ft,r,nF)  # agg+, trans-comp
     return G_, r  # G_ is recursion flag
 
@@ -192,7 +191,7 @@ def comp_N_(_pairs, r, tnF=None, rL=None):  # incremental-distance cross_comp, m
         Dec = dec or decay ** ((dist/((_N.span+N.span)/2)))
         iTT = (_N.dTT + N.dTT) * Dec
         eTT = (_N.Rt.dTT + N.Rt.dTT) * Dec
-        if abs( vt_(eTT,r)[0]) > ave * specw:  # spec N links
+        if abs(vt_(eTT,r)[0]) > ave*specw:  # spec N links
             eTT = proj_N(N, dist, dy_dx, r, dec)  # proj N L_,B_,rim, if pV>0: eTT += pTT?
             eTT+= proj_N(_N,dist, -dy_dx, r, dec)  # reverse direction
         return iTT+eTT
@@ -398,7 +397,7 @@ def cluster_N(Ft, _N_, r):  # flood-fill node | link clusters, flat, replace iL_
             L.Nt,L.Bt,L.Ct = CF(),CF(),CF()
             # merge roots
     G_ =[]  # add prelink pL_,pN_? include merged Cs, in feature space for Cs
-    if _N_ and val_(Ft.dTT, r+Nw, TTw(Ft,'wTTN'), mw=(len(_N_)-1)*Lw) > 0:  #| fL?
+    if _N_ and val_(Ft.dTT, r+Nw, TTw(Ft,0), mw=(len(_N_)-1)*Lw) > 0:  #| fL?
         for N in _N_:
             N.fin=0; N.exe=1; Q2R(N.rim,root=N.Rt)  # only if N was added in trans-cluster?
         G_= []; TT=np.zeros((2,9)); C=0; in_= set()  # root attrs
@@ -426,11 +425,11 @@ def cluster_N(Ft, _N_, r):  # flood-fill node | link clusters, flat, replace iL_
                 (_,_,nt,nc,_),(_,_,lt,lc,_),(_,_,bt,bc,br) = ft_
                 c = nc + lc + bc*br  # redundant B_,C_
                 tt = (nt*nc + lt*lc + bt*bc*br) /c  # tentative?
-                if val_(tt, r, TTw(Ft,'wTTN'), (len(N_)-1)*Lw) > 0:  # should be wTTN?
+                if val_(tt, r, TTw(Ft,0), (len(N_)-1)*Lw) > 0:  # should be wTTN?
                     G_ += [sum2G(ft_,Ft)]; TT+=tt; C+=c  # tt*r? sub+/sum2G
         if G_:
             for G in G_: trans_cluster(G)  # splice trans_links, merge L.nt.roots
-            if val_(TT, r+1, TTw(Ft,'wTTN'), (len(G_)-1)*Lw) > 0:
+            if val_(TT, r+1, TTw(Ft,0), (len(G_)-1)*Lw) > 0:
                 sum2F(G_,Ft.nF, Ft.root,TT,C); r+=1  # sub+, sum Rc? Ft.Lt is empty till cross_comp
     return G_, r
 
@@ -439,11 +438,11 @@ def cluster_C(Ft, E_, r):  # form centroids by clustering exemplar surround via 
     C_,_C_ = [],[]  # form root.Ct, may call cross_comp-> cluster_N, incr rc
     for n in Ft.N_: n._C_,n.m_,n._m_,n.o_,n._o_,n.rN_ = [],[],[],[],[],[]
     for E in E_:
-        C = Copy_(E,Ft,init=2,typ=0)  # all rims in root, sequence along eigenvector?
-        for i,TT in enumerate([C.TTn,C.TTc, C.dTT,C.Ct.dTT]): cent_TT(TT, wTT_[i], r)
-        C._N_ = list({n for l in E.rim for n in l.nt if (n is not E and n in Ft.N_)})  # init C.N_=[]
+        C = Copy_(E,Ft,init=2,typ=0); C.wTT_ = [np.zeros((2,9)) for _ in range(4)]  # all rims in root, sequence along eigenvector?
+        for i,TT in enumerate([C.TTn,C.TTc,C.dTT,C.Ct.dTT]): cent_TT(TT,r)  # no rTT
+        C._N_ = list({n for l in E.rim for n in l.nt if (n is not E and n in Ft.N_)})
         C._L_ = set(E.rim)  # init peer links
-        for n in C._N_+C.N_: n._m_+=[C.m*(n.c/C.c)]; n._o_+=[1]; n.rN_+=[]; n._C_+=[C]
+        for n in C._N_+C.N_: n._m_+=[C.m*(n.c/C.c)]; n._o_+=[1]; n._C_+=[C]
         _C_ += [C]
     oC_ = []  # output stable Cs
     while True:  # reform C_, add direct in-C_ cross-links for membership?
@@ -453,7 +452,7 @@ def cluster_C(Ft, E_, r):  # form centroids by clustering exemplar surround via 
             if _m > Ave *_o:
                 L_, N_,N__,m_,o_,M,D,O,cc, dTT,dm,do = [],[],[],[],[],0,0,0,0, np.zeros((2,9)),0,0  # /C
                 for n in set(_C.N_+_C._N_):  # current + frontier, refine all
-                    dtt,_ = base_comp(_C, n); cc+=1  # | comp_N, decay/dist?
+                    dtt,_ = base_comp(_C, n); cc+=1  # or comp_N, decay/dist?
                     m,d = vt_(dtt,cr,wTTC); dTT += dtt; m *= n.c  # rm,olp / C
                     odm = np.sum([_m-m for _m in n._m_ if _m>m])  # higher-m overlap
                     oL_ = set(n.rim) & _C._L_  # replace peer rim overlap with more precise m
@@ -469,11 +468,11 @@ def cluster_C(Ft, E_, r):  # form centroids by clustering exemplar surround via 
                     else:
                         if _C in n._C_: i = n._C_.index(_C); dm+=n._m_[i]; do+=n._o_[i]
                 DTT+=dTT; mat+=M; dif+=D; olp+=O; cnt+=cc
-                if M > Ave*O and val_(dTT, cr+O, TTw(_C,'wTTC'),(len(N_)-1)*Lw) > 0:  # dTT is more precise? (use wTTC here?)
+                if M > Ave*O and val_(dTT, cr+O, TTw(_C,1),(len(N_)-1)*Lw) > 0:  # dTT is more precise? (use wTTC here?)
                     C = sum2C(N_, _C, _i=None, root=Ft)
-                    for n,m,o in zip(N_,m_,o_): n.rN_ += [C]; n.m_+=[m]; n.o_+=[o]
-                    C._N_ = list(set(N__)-set(N_))  # frontier
-                    # for n in C._N_: n.rN_ += [C]  per comp only?
+                    for n,m,o in zip(N_,m_,o_):
+                        n.rN_ += [C]; n.m_+=[m]; n.o_+=[o]
+                    C._N_ = list(set(N__)-set(N_))  # new frontier
                     C._L_ = set(L_)  # peer links
                     if D< Avd*O: oC_+= [C]  # output if stable, actually if val_(DTT, fi=0) + D?
                     else:        C_ += [C]  # reform
@@ -495,7 +494,7 @@ def cluster_C(Ft, E_, r):  # form centroids by clustering exemplar surround via 
     if oC_:
         for n in [N for C in oC_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals:
             n.exe = (n.d if n.typ==1 else n.m) + np.sum([m-ave*o for m, o in zip(n.m_, n.o_)]) - ave
-        if val_(DTT, r+olp, TTw(Ft,'wTTC'), (len(oC_)-1)*Lw) > 0:
+        if val_(DTT, r+olp, TTw(Ft,1), (len(oC_)-1)*Lw) > 0:
             Ct = sum2F(oC_,'Ct', Ft.root, fCF=0)
             _, r = cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)? Nt|Ct priority eval?
     return oC_, r
@@ -546,9 +545,9 @@ def sum2C(N_, _C, _i=None, root=None):  # fuzzy sum + base attrs for centroids
         rc = c/ Cc; TT += N.dTT*rc; kern += N.kern*rc; span += N.span*rc; yx += N.yx*rc; R += N.r*rc
     m,d = vt_(TT,R,3)  # wTT_[3] = wTTC
     C = CN(typ=3, Nt=CF(N_=N_), dTT=TT, m=m, d=d, c=Cc, r=R, yx=yx, kern=kern, span=span, root=root)
-
+    C.wTT_ = [np.zeros((2,9)) for _ in range(4)]
     for i,TT in enumerate([C.TTn, C.TTc, C.dTT, C.Ct.dTT]):
-        cent_TT(TT, wTT_[i], R)
+        cent_TT(TT, C.wTT_[i],R)
     return C
 
 def sum2G(ft_, root=None, init=1, typ=None):
@@ -572,7 +571,7 @@ def sum2G(ft_, root=None, init=1, typ=None):
                 if (mdecay(L_)-decay)*V > ave*Cw:
                     G_,r = cluster_C(G.Nt, N_,r+1)
                 else: G_,r = cluster_N(G.Nt, N_,r+1)
-                if G_ and val_(G.Nt.dTT, r+nw, TTw(G.Nt,'wTTN'), mw=(len(G_)-1)*Lw) > 0:
+                if G_ and val_(G.Nt.dTT, r+nw, TTw(G.Nt,0), mw=(len(G_)-1)*Lw) > 0:
                     cross_comp(G.Nt,r,'Nt')
     if G.Bt:
         Bt = G.Bt; bd,br = Bt.d,Bt.r
@@ -652,27 +651,22 @@ def sum2F(N_, nF, root, TT=np.zeros((2,9)), C=0, R=0, fset=1, fCF=1):  # -> CF/C
         for N in N_: N.root = Ft
     return Ft
 
-def cent_TT(rTT,_wTT, r):  # weight attr matches | diffs by their match to the sum, recompute to convergence
+def cent_TT(dTT, _wTT, r):  # weight attr matches | diffs by their match to the sum, recompute to convergence
 
-    wTT = []  # Cs can be fuzzy only to the extent that their correlation weights are different?
-    tot = rTT[0] + np.abs(rTT[1])  # m_* align, d_* 2-align for comp only?
-
-    for fd, rT,wT in zip((0,1), rTT,_wTT):  # global wTT_[wi]
-        if fd: rT = np.abs(rT)  # ds
-        _w_ = np.ones(9)  # or 4 if cross fork, weigh by feedback:
-        rv_ = rT / tot * wT  # signed ms, abs ds
-        V = np.sum(rv_)
+    coT = np.abs(dTT[0]) + np.abs(dTT[1]) + eps  # complemented vals
+    wTT = []
+    for fd, _wT, dT in zip((0,1), _wTT, dTT):
+        vT = np.abs(dT)  # wrong for -ve ms
         while True:
-            mean = max(V / max(np.sum(_w_),eps), eps)
-            inverse_dev_ = np.minimum(rv_/mean, mean/rv_)  # rational deviation from mean rm in range 0:1, if m=mean
-            w_ = inverse_dev_/.5  # 2/ m=mean, 0/ inf max/min, 1 / mid_rng | ave_dev?
-            w_ *= 9 / np.sum(w_)  # mean w = 1, M shouldn't change?
-            if np.sum(np.abs(w_-_w_)) > ave*r:
-                V = np.sum(rv_ * w_)
-                _w_ = w_
-            else: break  # weight convergence
-        wTT += [_w_]
-    _wTT[:] = np.array(wTT)  # replace wTTf
+            rvT = vT/coT * _wT  # weighted normalized vals
+            mean = max(rvT.mean(), eps)  # scalar
+            invdev_ = np.minimum(rvT / mean, mean / np.maximum(rvT, eps))
+            wT = invdev_ / max(invdev_.mean(), eps)   # mean(wT)=1
+            _wT = wT
+            if np.sum(np.abs(wT -_wT)) < ave * r:  # if np.linalg.norm(wT - _wT, 1) < r?
+                break
+        wTT += [_wT]
+    _wTT[:] = np.array(wTT)
     # single-mode dTT, extend to 2D-3D lev cycles in H, cross-level param max / centroid?
 
 def mdecay(L_):  # slope function
@@ -733,9 +727,9 @@ def eval(V, weights):  # conditional progressive eval, with default ave in weigh
 def ffeedback(F):  # F=frame, adjust filters: all aves *= rV, ultimately differential backprop per ave?
 
     rTT_ = [np.ones((2,9)),np.ones((2,9)),np.ones((2,9)),np.ones((2,9))]
-    # summed cross-level TT_ ratios
-    _N,_C,_n,_c = F.dTT, F.Ct.dTT, F.TTn, F.TTc  # vs top clusters in lev.Ct.N_
-    for lev in frame.H:  # top-down, not lev-selective, not recursive
+    # sum cross-level TT_ ratios
+    _N,_C,_n,_c = F.dTT, F.Ct.dTT, F.TTn, F.TTc
+    for lev in F.H:  # top-down, not lev-selective, not recursive
         N,C,n,c = lev.dTT, lev.Ct.dTT, lev.TTn, lev.TTc
         rN, rC, rn, rc = [np.abs(_tt/ (tt+eps)) for _tt,tt in zip((_N,_C,_n,_c), (N,C,n,c))]
         for rTT,rtt in zip(rTT_,(rN,rC,rn,rc)):
@@ -746,12 +740,12 @@ def ffeedback(F):  # F=frame, adjust filters: all aves *= rV, ultimately differe
         rm, rd = vt_(rTT, F.r); rM+=rm; rD+=rd
     return rM+rD, *rTT_
 
-def proj_focus(PV__, y,x, Fg):  # radial accum of projected focus value in PV__
+def proj_focus(PV__, y,x, tile):  # radial accum of projected focus value in PV__
 
-    m,d,n = Fg.m, Fg.d, Fg.c  # add r?
+    m,d,n = tile.m, tile.d, tile.c  # add r?
     V = (m-ave*n) + (d-avd*n)
-    dy,dx = Fg.angl[0]; a = dy / max(dx,eps)  # average link_ orientation, projection
-    Dec = decay * (wYX / np.hypot(y-Fg.yx[0], x-Fg.yx[1]))  # unit_decay * rel_dist?
+    dy,dx = tile.angl[0]; a = dy / max(dx,eps)  # average link_ orientation, projection
+    Dec = decay * (wYX / np.hypot(y-tile.yx[0], x-tile.yx[1]))  # unit_decay *rel_dist?
     H, W = PV__.shape  # = win__
     n = 1  # radial distance
     while y-n>=0 and x-n>=0 and y+n<H and x+n<W:  # rim is within frame
@@ -846,7 +840,7 @@ def vect_edge(tile, rV=1, wTT_=None):  # PP_ cross_comp and floodfill to init fo
         if not blob.sign and blob.G > aveB:
             edge = slice_edge(blob, rV)
             if edge.G * ((len(edge.P_)-1)*Lw) > ave * sum([P.latT[4] for P in edge.P_]):
-                PPm_ = comp_slice(edge, rV, wTTn)  # not sure here, use wTTn?
+                PPm_ = comp_slice(edge, rV, wTTn)
                 N_ = [PP2N(PPm) for PPm in PPm_]
                 for PPd in edge.link_: PP2N(PPd)
                 for N in N_:
@@ -922,7 +916,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
         Fg_ = []; iy,ix =_iy,_ix; y,x = 31,31  # start at tile mean
         while True:
             if not elev: Fg = base_tile(iy,ix)  # 1st level or previously cross_comped arg tile
-            if Fg and val_(Fg.dTT, Fg.r+nw+elev, Fg.wTTn, mw=(len(Fg.N_)-1)*Lw) > 0:  # wTTn?
+            if Fg and val_(Fg.dTT, Fg.r+nw+elev, TTw(Fg,2), mw=(len(Fg.N_)-1)*Lw) > 0:  # wTTn
                 tile[y,x] = Fg; Fg_+=[Fg]
                 dy_dx = np.array([Fg.yx[0]-y,Fg.yx[1]-x])
                 pTT = proj_N(Fg, np.hypot(*dy_dx), dy_dx, elev)
@@ -948,26 +942,28 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
     global ave,avd, Lw, intw, cw,nw, Cw,Nw, distw, mW, dW, wTTn, wTTc, wTTN, wTTC
     ave,avd, Lw, intw, cw,nw, Cw,Nw, distw = np.array([ave,avd, Lw, intw, cw, nw, Cw, Nw, distw]) / rV
 
-    frame = CN(box=np.array([0,0,Y,X]), yx=np.array([Y//2, X//2]))
-    Fg=[]; elev=0
-    while elev < max_elev:  # same center in all levels
-        Fg_ = expand_lev(iY,iX, elev, Fg)
-        if Fg_:  # sparse higher-scope tile
-            lev = CN(root=frame); Q2R(frame.N_,root=lev); frame.H += [lev]; frame.N_=[]
-            Q2R(Fg_, root=frame)
-            if Fg and cross_comp(Fg.Nt, rr=elev)[0]:  # spec->tN_,tC_,tL_, proj non-selective Fg.L_?
-                frame.N_ = frame.N_+[Fg]; elev+=1  # forward comped tile
+    elev = 0; F, tile = [],[]  # frame, seed lower tile, if any
+    while elev < max_elev:
+        tile_ = expand_lev(iY,iX, elev, tile)
+        if tile_:  # sparse higher-scope tile
+            F = CN(N_=tile_, box=np.array([0,0,Y,X]), yx=np.array([Y//2, X//2]))  # same center on all levels
+            if cross_comp(F, rr=elev)[0]:  # spec->tN_,tC_,tL_, proj comb N_'L_?
+                elev += 1
                 if max_elev == 4:  # seed, not from expand_lev
-                    rV, rTTn, rTTc, rTTN, rTTC = ffeedback(Fg)  # set filters, 4 rVs?
+                    rV, rTTn, rTTc, rTTN, rTTC = ffeedback(F)  # set filters, 4 rVs?
                     if rV > ave:
-                        for rTT, TTf in zip((rTTn, rTTc, rTTN, rTTC), (Fg.wTTn, Fg.wTTc, Fg.wTTN, Fg.wTTC)):
-                            cent_TT(rTT, TTf,2)  # set TTf correlation weights
-                            TTf *= rTT  # or in cent_TT?
-                            mW = np.sum(TTf[0]); dW = np.sum(TTf[1])
-                            TTf[0]*= 9/(mW+eps); TTf[1]*= 9/(dW+eps)
+                        for i, (rTT, wTT) in enumerate(zip((rTTn, rTTc, rTTN, rTTC), F.wTT_)):
+                            # not sure about using rTT as dTT?
+                            if not wTT: wTT = F.wTT_[i] = np.zeros((2,9))
+                            cent_TT(rTT, wTT,2)  # set correlation weights
+                            mW = np.sum(wTT[0]); dW = np.sum(wTT[1])
+                            wTT[0]*= 9/(mW+eps); wTT[1]*= 9/(dW+eps)
+                        # update globals:
+                        wTTn, wTTc, wTTN, wTTC = F.wTT_
+                tile = F  # comped tile_ is seed for next extension
             else: break
         else: break
-    return frame  # for intra-lev feedback
+    return F  # for intra-lev feedback
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
 
