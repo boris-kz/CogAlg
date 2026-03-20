@@ -113,6 +113,52 @@ mW = dW = 9  # fb weights per dTT, adjust in agg+
 wY = wX = 64; wYX = np.hypot(wY,wX)  # focus dimensions
 decay = ave / (ave+avd)  # match decay / unit dist?
 
+# --- Prediction Error Tracking (for code fitting) ---
+class ErrorTracker:
+    """Track prediction errors to adjust algorithm parameters."""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.dpTT_sum = np.zeros((2,9))  # accumulated prediction error
+        self.dpTT_abs = np.zeros((2,9))  # accumulated absolute error (for attention)
+        self.n_samples = 0
+        self.error_history = []  # rolling history for threshold adjustment
+        self.max_history = 100
+
+    def accumulate(self, dpTT):
+        """Add prediction error from one comparison."""
+        self.dpTT_sum += dpTT
+        self.dpTT_abs += np.abs(dpTT)
+        self.n_samples += 1
+
+    def get_mean_error(self):
+        if self.n_samples == 0:
+            return np.zeros((2,9))
+        return self.dpTT_sum / self.n_samples
+
+    def get_attention(self):
+        """Parameters with high error = more surprising = need more weight."""
+        if self.n_samples == 0:
+            return np.ones((2,9))
+        total = np.sum(self.dpTT_abs) + eps
+        return self.dpTT_abs / total * 9  # normalize to sum=9 (number of params)
+
+    def commit_cycle(self):
+        """End of cycle: store summary and reset."""
+        if self.n_samples > 0:
+            cycle_error = np.sum(self.dpTT_abs) / self.n_samples
+            self.error_history.append(cycle_error)
+            if len(self.error_history) > self.max_history:
+                self.error_history.pop(0)
+        # Reset accumulators but keep history
+        self.dpTT_sum = np.zeros((2,9))
+        self.dpTT_abs = np.zeros((2,9))
+        self.n_samples = 0
+
+error_tracker = ErrorTracker()
+fit_rate = 0.01  # learning rate for weight adjustment
+
 def vt_(TT, r, wTT=wTTn):  # brief val_ to get m,d, rc=0 to return raw vals, wTTn for comp_N
 
     m_,d_= TT; ad_ = np.abs(d_); t_ = m_ + ad_ + eps  # ~ max comparand
@@ -207,7 +253,9 @@ def comp_N_(_pairs, r, tnF=None, rL=None):  # incremental-distance cross_comp, m
         if m > 0:
             if abs(m) < ave*nw:  # comp if marginally predictable, update N.Rt pair eval, ave / proj surprise value?
                 Link = comp_N(_N,N, lr, full=not tnF, A=dy_dx, span=dist, rL=rL, L_=L_, N_=N_, acc=acc)
-                dpTT += pTT-Link.dTT  # prediction error to fit the code, not implemented
+                err = pTT - Link.dTT  # prediction error
+                dpTT += err
+                error_tracker.accumulate(err)  # feed error to code fitting
             else:
                 pL = CN(typ=-1, nt=[_N,N], dTT=pTT,m=m,d=d,c=min(N.c,_N.c),r=lr, angl=np.array([dy_dx,1],dtype=object),span=dist)
                 L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.nt; acc[0]+=pTT*pL.c; acc[1]+=pL.c; acc[2]+=pL.r*pL.c  # all +ve
@@ -750,6 +798,51 @@ def ffeedback(F):  # F:frame, adjust filters: all aves *= rV, ultimately differe
         rm, rd = vt_(rTT, F.r, wTT_[i]); rM+=rm; rD+=rd
     return rM+rD, rTT_
 
+def fit_code(F=None, verbose=False):
+    """
+    Adjust algorithm parameters based on accumulated prediction errors.
+
+    This implements the core feedback loop: prediction error -> weight adjustment.
+    Called at end of each frame/cycle to update:
+    1. wTT_ weights: parameters with high error get more attention
+    2. ave/avd thresholds: adjust based on systematic bias
+    """
+    global ave, avd, wTT_, wTTn, wTTc, wTTN, wTTC, fit_rate
+
+    if error_tracker.n_samples == 0:
+        return  # no errors to learn from
+
+    old_ave, old_avd = ave, avd
+
+    # --- 1. Parameter Attention: adjust wTT_ based on error distribution ---
+    attention = error_tracker.get_attention()  # [2,9] normalized error magnitude
+
+    # High error parameters are harder to predict = more informative = increase weight
+    for wTT in wTT_:
+        wTT[0] = wTT[0] * (1 - fit_rate) + attention[0] * wTT[0].mean() * fit_rate
+        wTT[1] = wTT[1] * (1 - fit_rate) + attention[1] * wTT[1].mean() * fit_rate
+
+    # --- 2. Threshold Adjustment: correct systematic prediction bias ---
+    mean_error = error_tracker.get_mean_error()
+    m_bias = np.sum(mean_error[0])  # positive = over-predicting match
+    d_bias = np.sum(mean_error[1])  # positive = over-predicting difference
+
+    if abs(m_bias) > ave * 0.1:  # significant bias
+        ave *= (1 + fit_rate * np.sign(m_bias) * 0.1)
+        ave = np.clip(ave, 0.1, 1.0)
+
+    if abs(d_bias) > avd * 0.1:
+        avd *= (1 + fit_rate * np.sign(d_bias) * 0.1)
+        avd = np.clip(avd, 0.05, 0.5)
+
+    n_samples = error_tracker.n_samples
+    error_tracker.commit_cycle()
+
+    if verbose and n_samples > 0:
+        print(f"[fit_code] {n_samples} samples, m_bias={m_bias:+.4f}, ave: {old_ave:.4f}->{ave:.4f}")
+
+    return attention, (m_bias, d_bias)
+
 def proj_focus(PV__, y,x, tile):  # radial accum of projected focus value in PV__
 
     m,d,n = tile.m, tile.d, tile.c  # add r?
@@ -961,6 +1054,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
                 elev += 1
                 if max_elev == 4:  # seed, not from expand_lev
                     rV, wTT_ = ffeedback(F)  # update globals, 4 rVs?
+                    fit_code(F)  # adjust weights based on prediction errors
                     if rV > ave:
                         for dTT, wTT in zip((F.TTn,F.TTc,F.dTT,F.Ct.dTT), wTT_):
                             cent_TT(dTT, wTT,2)  # set correlation weights
