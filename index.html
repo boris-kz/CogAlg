@@ -1,0 +1,110 @@
+# Bottom-Up Hierarchical Clustering: From Pixels to Prediction
+
+*Boris Kazachenko*
+
+## The Core Principle
+
+All unsupervised learning can be reduced to cross-correlation and clustering: compare inputs, then group what matches. The groups become new inputs, and the process repeats — recursively, indefinitely.
+
+Prediction requires patterns. Patterns are discovered by comparing proximate inputs and measuring how much they match versus how much they differ. Match defines clusters; difference defines their boundaries. Clusters of clusters form higher-order representations, each level adding a layer of abstraction. This is the entire framework. Everything below is derivation.
+
+## A Concrete Example
+
+Take a row of pixels with grayscale values: `[120, 122, 121, 80, 45, 47, 46]`.
+
+**Step 1 — Cross-comparison.** Compare each adjacent pair. Each comparison produces two signals:
+
+- **Match:** the portion of shared magnitude between the two values. For 120 and 122, most of the signal is shared — match is high.
+- **Difference (miss):** the residual. Here it's 2 — low.
+
+Across this row, the first three pixels produce high match and low difference with their neighbors. Then comes a sharp drop (120 → 80 → 45): low match, high difference. The last three pixels again match well with each other.
+
+**Step 2 — Clustering.** Connected regions of high match form clusters. Here, that yields two clusters: roughly `[120, 122, 121]` and `[45, 47, 46]`. The sharp gradient between them forms a boundary — an edge, in image terms.
+
+**Step 3 — Recursion.** Each cluster is now a single composite unit, with aggregate parameters (mean value, internal variance, span, boundary properties). These units become the inputs to the next level of comparison. Now you're comparing cluster-to-cluster: do two adjacent clusters share similar statistics? If so, they form a higher-order cluster. The boundary between them carries higher-order derivative information.
+
+This recurse produces a hierarchy: pixels → segments → regions → objects — with no top-down fitting, no predefined number of layers, and no training signal.
+
+## Concepts Are Clusters
+
+This isn't just a computational trick — it reflects how all semantic concepts are formed. Every concept is a cluster, but the type of clustering depends on the type of composition.
+
+Some concepts have **structural composition**: their identity depends on how parts are connected. A letter is a specific arrangement of strokes; a face is a specific arrangement of features; a sentence is a syntactically linked sequence of words. These map to connectivity-based clusters, where the pattern is defined by the topology of match-links between components. Rearrange the parts and you get a different concept — "b" vs. "d", or "dog bites man" vs. "man bites dog."
+
+Other concepts have **affine composition**: their identity is defined by proximity to a prototype, with instances varying along continuous parameters like scale, position, orientation, or intensity. "Red" is a cluster of similar wavelength responses. "Walking" is a cluster of motion sequences varying in speed and stride. "Chair" groups objects that vary in size and material but share similar affordance. These map to centroid-based clusters, where membership is graded by similarity to the centroid.
+
+Most real concepts combine both: a "dog" has structural composition (legs connected to torso, head connected to neck — specific topology) and affine variation across instances (size, color, breed). The structural skeleton is captured by connectivity clustering; the variation around it is captured by centroid clustering. Abstract concepts like "justice" or "efficiency" follow the same principle at higher levels: structural relations between roles and outcomes, with affine variation across specific cases. There is no concept that isn't a generalization over similar instances — and generalization is clustering.
+
+## Core vs. Boundary
+
+There is also a fork within each cluster. Clustering by node match produces a **core**: the region of internal similarity. But the high-difference links at the periphery — those with large difference between their endpoint nodes — are more salient: they carry richer properties (gradient magnitude, direction, shape), giving them more information content to compare. When these links are cross-compared, their mutual match can produce clusters of its own, forming a **boundary**. The result is a complemented cluster: core + boundary as a single unit. In images, the core is a flat-ish region of similar pixels; the boundary is the contour surrounding it — a cluster of high-gradient links that share similar orientation and magnitude. In text, the core might be a coherent topic; the boundary is the transition to a different topic. In a social network, the core is a tightly connected community; the boundary is the set of bridging ties linking it to neighboring communities. The clustering criterion is the same everywhere — match — but high-diff links are simply more salient inputs to comparison, and therefore more likely to form structured clusters. The boundary is not just a delimiter — it carries its own derivative structure, which becomes input to the next level of cross-comparison. This is why each level of recursion adds both a level of composition and a layer of derivation.
+
+When complemented clusters are cross-compared at the next level, the relative salience of cores and boundaries can shift. If boundary-to-boundary match is higher than core-to-core match, then the boundaries become the more informative signal — they cluster more strongly and carry more of the pattern. This is common: image contours often share more distinctive structure (orientation, curvature) than the flat regions they separate, which may differ only in brightness. At higher levels, what started as a secondary derivative signal can become the primary basis for clustering.
+
+This extends naturally into the temporal dimension. Temporal links between spatial clusters in successive frames represent change over time — they are temporal differences, analogous to spatial gradients. If these temporal links match across longer time spans, they form patterns of interaction between clusters or elements. Just as a spatial boundary can be more informative than the core it surrounds, a cluster of temporal interactions can be higher-order than the interacting nodes themselves. The interactions become the pattern, not the things interacting. This is not an edge case — it is how the most important structures in nature are organized. In biology, it is metabolic and reproductive cycles that define living systems, not the molecules participating in them. In economics, it is exchange patterns — trade, credit, supply chains — that define the economy, not the individual agents. The recurring interaction is the higher-order cluster; the nodes are its elements.
+
+## The Three-Stage Process
+
+Each level of the hierarchy executes three stages:
+
+**1. Cross-comparison.** Inputs at the current level are compared laterally — initially by proximity, later by derived similarity along other dimensions. Each comparison produces explicit match and miss (difference) signals. Comparison range and derivation order can increase incrementally: first adjacent pairs, then more distant ones; first raw values, then derivatives.
+
+**2. Clustering.** Nodes connected by pairwise match are grouped in connectivity-based clusters. Pair links carry both the match and the difference, so the clusters have built-in boundary representations. After connectivity clustering, strong groups form groupwise representations: centroids. Then their element sets are iteratively refined  by the degree of membership: similarity between the element and the centroid. This is known as centroid-based clustering, which dominates on higher scope and composition levels, as all relationships become more abstract and less local.
+
+**3. Feedback.** Cluster-level parameters are projected downward — not to adjust learned weights (there are none), but to rescale comparison filters, update input coordinates, and potentially modify the process itself. The objective function is projected similarity: how well do known patterns predict new inputs? This is open-ended, not a fixed loss target.
+
+## How This Differs from Neural Networks
+
+
+### Comparison order
+
+Neural networks sum inputs first (weighted aggregation in each neuron), then compare the output to a target. Summation before comparison is lossy: the individual input structure is destroyed before any pattern is extracted from it.
+
+This framework compares first, then sums — only within match-defined clusters. Individual comparison results are preserved and propagated, so higher levels receive structured representations rather than opaque activations.
+
+### Direction of learning
+
+Backpropagation decomposes output error and propagates it backward through all layers, adjusting weights to reduce that error. Each layer's representation is shaped by what the final output needs, not by what the input contains. The resolution of this process degrades exponentially with depth — hence the need for massive iteration.
+
+Bottom-up clustering builds representations directly from input structure. Each level's patterns are determined by the actual match and difference signals at that level. There is no backward error signal because there is no target output to err against.
+
+### What "similarity" means
+
+In self-attention (transformers), similarity is a dot product between projected vectors: it scales with component-wise co-occurrence but discards the sign and magnitude of individual differences. In CNNs, kernels converge on gradient detection — effectively selecting for *difference* rather than similarity.
+
+Here, comparison produces both match and miss as signed, structured quantities. Match supports clustering; difference supports boundary detection and higher-order derivation. Both are retained.
+
+### Hierarchy
+
+In standard deep learning, depth is fixed at design time and all nodes at a given layer share the same receptive scope. Representations are distributed: every node at every layer participates in every input.
+
+In this framework, hierarchy is formed dynamically by recursion. Depth is determined by the data. Processing is localized: each cluster is a semantically coherent unit, compared and clustered only with its neighbors. This enables sparse, selective computation — only informative regions propagate upward.
+
+## Why I think this will scale far better than flat nets?
+
+The recursive structure means the system can form patterns of arbitrary complexity without architectural redesign. Each new level of clustering adds:
+
+- A level of **composition** (clusters of clusters).
+- A layer of **derivation** (differences of differences).
+- A corresponding increment in comparison **range**.
+
+This is a dual hierarchy — composition and derivation grow in parallel — which gives the system a combinatorial vocabulary for representing structure. Standard networks have composition (depth) but no explicit derivation hierarchy; they must learn derivative-like features implicitly through training.
+
+The open-ended objective function — projected correspondence between model and environment — means the system doesn't converge to a fixed optimum. It continues to discover structure as long as the input contains predictable regularities. This makes it a candidate for general-purpose intelligence in a way that loss-minimizing systems are not, because those systems are bounded by their training distribution.
+
+## Relation to Existing Methods
+
+Several existing approaches share partial overlap:
+
+- **Graph Neural Networks / Transformers:** Both embed lateral relationships between inputs (edges in GNNs, attention scores in transformers). But both train these relationships via backpropagation rather than deriving them directly from input comparison.
+- **Capsule Networks (Hinton):** Use explicit positional/pose information, similar to the explicit coordinates here. But still rely on backprop for training.
+- **Spectral Clustering:** Re-orders inputs along eigenvectors of a similarity matrix — conceptually similar to the feedback stage here, which re-orders along predictive dimensions. But spectral clustering is a one-shot method, not recursive.
+- **Hebbian Learning:** Adjusts weights by input-output coincidence — a local, binary version of similarity matching. Each neuron acts as a fuzzy centroid cluster. But Hebbian learning lacks explicit comparison and has no mechanism for hierarchical composition.
+- **Contour Grouping (Pb detector, tensor voting):** In computer vision, these methods explicitly select high-gradient elements (high internal difference), then group them by similarity of their properties (orientation, magnitude). The pipeline — identify salient high-diff elements, compare them, cluster by match — is procedurally close to the boundary fork described above. But these are domain-specific to 2D images, hand-designed for a single level, and not framed as a general recursive principle.
+- **Scale-Space Theory (Lindeberg, Witkin):** Derivative structures at one scale become the objects of analysis at the next — conceptually adjacent to the idea that each recursion level adds a layer of derivation. But scale-space achieves this through continuous smoothing, not through discrete clustering of high-diff links, and has no compositional hierarchy.
+
+The distinguishing feature of this framework is that all operations — comparison, clustering, feedback, recursion — derive from a single principle (prediction via pattern discovery), with no external training signal and no fixed architecture. Whether this theoretical consistency translates to practical performance at scale is the open research question.
+
+---
+
+*Implementation: [CogAlg on GitHub](https://github.com/boris-kz/CogAlg), main process in `agg_recursion.py`.*
