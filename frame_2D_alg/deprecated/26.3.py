@@ -338,3 +338,26 @@ def cent_TT1(_wTT, r, rTT=None):  # weight attr matches | diffs by their match t
         wTT += [_w_]
     _wTT[:] = np.array(wTT)  # replace wTTf
     # single-mode dTT, extend to 2D-3D lev cycles in H, cross-level param max / centroid?
+
+def sum2F(N_, nF, root, TT=np.zeros((2,9)), C=0, R=0, fset=1, fCF=1):  # -> CF/CN
+
+    def sum_H(N_, Ft):
+        H = []
+        for N in N_:
+            if H: H[0] += N.N_  # new top level
+            elif  N.N_: H = [list(N.N_)]
+            for Lev,lev in zip_longest(H[1:], N.Nt.H):  # aligned top-down
+                if lev:
+                    if Lev is not None: Lev += lev.N_
+                    else: H += [list(lev.N_)]
+        Ft.H = [sum2F(lev,'lev',Ft,fset=0) for lev in H] if H else []
+    if C: m,d = vt_(TT,R)
+    else: m,d,TT,C,R = sum_vt(N_,fm=1)
+    Ft = (CN,CF)[fCF](nF=nF, dTT=TT,m=m,d=d,c=C,r=R, root=root); setattr(Ft,'N_',N_)   # root Bt|Ct ->CN
+    if any([n.N_ for n in N_]):
+        sum_H(N_,Ft)  # sum lower levels, if any
+    if fset:
+        setattr(root, Ft.nF,Ft)
+        for N in N_: N.root = Ft
+    return Ft
+
