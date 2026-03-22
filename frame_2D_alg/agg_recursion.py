@@ -65,7 +65,8 @@ class CN(CBase):
         # 2= G:  + rim,kern,mang,sub,exe
         # 3= C | Cn: +rN_| m_,d_,r_,o_
         n.dTT, n.TTn, n.TTc = [np.copy(kwargs.get(x,np.zeros((2,9)))) for x in ('dTT','TTn','TTc')]  # +wTTC per Ct.dTT, all m_,d_ [M,D,n, I,G,a, L,S,A]
-        n.wTT_ = kwargs.get('wTT_',[1,1,1,1])  # dTT: Nt+Lt+Bt, TTC, TTn, TTc, or ones?
+        # n.wTT_ = kwargs.get('wTT_',[1,1,1,1])  # dTT: Nt+Lt+Bt, TTC, TTn, TTc, or ones?
+        n.wTT_ = kwargs.get('wTT_',[np.ones((2,9)) for _ in range(4)])  # dTT: Nt+Lt+Bt, TTC, TTn, TTc, or ones?
         n.m, n.d, n.c, n.r = [kwargs.get(x,0) for x in ('m','d','c','r')]  # combined forks, no direct accum?
         n.Nt,n.Bt,n.Ct,n.Lt,n.Xt,n.Rt = ((kwargs.get(f) if f in kwargs else CF(root=n) for f in ('Nt','Bt','Ct','Lt','Xt','Rt'))) # CN if nest, Ct||Nt
         n.kern = kwargs.get('kern',np.zeros(4))  # I,G,A: not ders, in links for simplicity, mostly redundant
@@ -220,7 +221,7 @@ def comp_N_(_pairs, r, tnF=None, rL=None):  # incremental-distance cross_comp, m
         else: break  # beyond initial induction range, re-sort by proj_V?
     for N in set(N_):
         if N.rim: Q2R(N.rim, N.Rt, merge=0, froot=0)
-    rL.rpTT += rpTT  # any root -> frame: high error-> lower source code weight?
+    if rL is not None: setattr(rL, 'rpTT',rpTT+getattr(rL, 'rpTT',0))  # any root -> frame: high error-> lower source code weight?
     TT,cm,rm, TTd,cd,rd = acc
     return L_,TT,cm,rm/(cm or eps), TTd,cd,rd/(cd or eps)
 
@@ -542,11 +543,11 @@ def cluster_P(_C_,N_,root):  # Parallel centroid refining, _C_ from cluster_C, N
     return [c for c in out_ if c]  # or full out_?
 ''' next order: level-parallel cluster_H / multiple agg+? compress as autoencoder? '''
 
-def add_H(H,h, root):
+def add_H(H,h, root, fN=0):
     for Lev,lev in zip_longest(H, h):  # bottom-up
         if lev:
-            if Lev: Q2R([Lev,lev], Lev, merge=2,froot=0)
-            else: H.append(CopyF(lev, root))
+            if Lev: Q2R([Lev,lev], Lev, merge=2,froot=0, fN=fN)  # add_H might add CN from F.H
+            else: H.append((CopyF,Copy_)[fN](lev, root))
 
 def sum2F(N_, nF, root, TT=np.zeros((2,9)), C=0, R=0, fset=1, fCF=1):  # -> CF/CN
 
@@ -555,11 +556,11 @@ def sum2F(N_, nF, root, TT=np.zeros((2,9)), C=0, R=0, fset=1, fCF=1):  # -> CF/C
         for N in N_:
             if H: H[0] += N.N_  # new top level
             elif  N.N_: H = [list(N.N_)]
-            add_H(Ft.H, N.H, Ft)
+            add_H(Ft.H, N.Nt.H, Ft)
         Ft.H = [sum2F(lev,'lev',Ft,fset=0) for lev in H] if H else []
     if C: m,d = vt_(TT,R)
     else: m,d,TT,C,R = sum_vt(N_,fm=1)
-    Ft = (CN,CF)[fCF](nF=nF, dTT=TT,m=m,d=d,c=C,r=R, root=root); setattr(Ft,'N_',N_)   # root Bt|Ct ->CN
+    Ft = (CN,CF)[fCF](nF=nF, dTT=TT,m=m,d=d,c=C,r=R, root=root); setattr(Ft,'N_',N_); Ft.H = []   # root Bt|Ct ->CN
     if any([n.N_ for n in N_]):
         sum_H(N_,Ft)  # sum lower levels, if any
     if fset:
@@ -578,9 +579,9 @@ def sum2C(N_, _C, _i=None, root=None):  # fuzzy sum + base attrs for centroids
     R = 0; TT = np.zeros((2,9)); kern = np.zeros(4); span = 0; yx = np.zeros(2)
     for N, c in zip(N_,cc_):
         rc = c/ Cc; TT += N.dTT*rc; kern += N.kern*rc; span += N.span*rc; yx += N.yx*rc; R += N.r*rc
-    m,d = vt_(TT,R, TTw(root,1))  # wTTC
+    m,d = vt_(TT,R, TTw(root.root,1))  # wTTC (should be root.root here since root is Ft)
     C = CN(typ=3, Nt=CF(N_=N_), dTT=TT, m=m, d=d, c=Cc, r=R, yx=yx, kern=kern, span=span, root=root)
-    for TT, wTT, ww in zip([C.dTT, C.Ct.dTT, C.TTn, C.TTc], [C.dTT, C.Ct.dTT, C.TTn, C.TTc], [wN, wC, 1, wc]):
+    for TT, wTT, ww in zip([C.dTT, C.Ct.dTT, C.TTn, C.TTc], C.wTT_, [wN, wC, 1, wc]):  # wTT_ should be C.wTT_?
         wTT[:] = cent_TT(TT, R) * ww
     return C
 
@@ -638,7 +639,8 @@ def add_Nt(G, Nt, merge=0):  # addition to Q2R
         add_H(G.Nt.H if merge else G.Nt.H[:-1], Nt.H, G)  # exclude top lev if not merge
     N_ = Nt.N_
     if merge: G.N_ += N_ # never 2
-    else: G.H[-1].N_ += N_  # in new level?
+    elif G.Nt.H: G.Nt.H[-1].N_ += N_  # in new level?
+    else: G.Nt.H = [sum2F(N_, G.Nt.nF, G)]  # init 1st level
     yx_ = []; C = G.c + Nt.c  # G is empty?
     for N in N_:
         N.fin = 1; N.root = G; c = N.c
@@ -954,9 +956,10 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
         tile_ = expand_lev(iY,iX, elev, tile)
         if tile_:  # sparse higher-scope tile, if expanded
             F = CN(box=np.array([0,0,Y,X]), yx=np.array([Y//2, X//2]))  # same center on all levels
+            for tile in tile_: F.dTT += tile.dTT; F.TTn += tile.TTn; F.TTc += tile.TTc  # we need to accumulate F's params?
             F.H = []; F.N_ = tile_  # or Nt = Q2R(tile_)?
-            if elev: [add_H(F.H, T.H,F) for T in tile_]
-            F.H += [Q2R([n for N in tile_ for n in N.N_], fN=1)]  # concat prior top lev
+            if elev: [add_H(F.H, T.H,F,fN=1) for T in tile_]
+            F.H += [Q2R([n for N in tile_ for n in N.N_], R=F, fN=1)]  # concat prior top lev
             if cross_comp(F.Nt, rr=elev)[0]:  # spec->tN_,tC_,tL_, proj comb N_'L_?
                 elev += 1
                 if rV > ave:
@@ -964,7 +967,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
                         wTT[:] = cent_TT(dTT,2) * ww  # max-scope correlation weights
                 if elev == max_elev:  # fb / top lev
                     rV, wTT_ = ffeedback(F)  # update globals, rV is not used?
-                wTT_ *= F.wTT_  # F.wTT_ is effectively global
+                for wTT, wwTT in zip(wTT_, F.wTT_): wTT *= wwTT  # F.wTT_ is effectively global  (we need to multiple each item in list individually)
                 tile = F  # lev tile_ is next extension seed
             else: break
         else: break
