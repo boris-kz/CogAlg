@@ -241,7 +241,7 @@ def comp_C_(C_, rr,_C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
             for i, L in enumerate(L_):
                 if val_(L.dTT, rr+nw, wTTc,fi=0) < 0:
                     C0,C1 = L.nt
-                    if C0 is C1 or C1 in merg_: continue  # not merged
+                    if C0 is C1 or C1 in merg_ or C0 in merg_: continue  # not merged  (if C0 is already merged, skip it?)
                     Q2R([C0,C1], C0,merge=2)
                     add_Nt(C0, C1.Nt); merg_ += [C1]
                     for l in C1.rim: l.nt = [C0 if n is C1 else n for n in l.nt]
@@ -416,6 +416,7 @@ def cluster_N(Ft, _N_, r):  # flood-fill node | link clusters, flat, replace iL_
             while __L_:
                 _L_ = []
                 for L in __L_:  # flood-fill via frontier links
+                    if L in in_: continue  # L could be clustered here? in_ is shared across _N_, and `__L_= N.rim`, so L might be already clustered here
                     _N = L.nt[0] if L.nt[1].fin else L.nt[1]; in_.add(L)
                     if not _N.fin and _N in Ft.N_:
                         m,d = nt_vt(*L.nt)
@@ -447,8 +448,8 @@ def cluster_C(Ft, E_, r):  # form centroids by clustering exemplar surround via 
     C_,_C_ = [],[]  # form root.Ct, may call cross_comp-> cluster_N, incr rc
     for n in Ft.N_: n._C_,n.m_,n._m_,n.o_,n._o_,n.rN_ = [],[],[],[],[],[]
     for E in E_:
-        C = Copy_(E,Ft,init=2,typ=0)  # all rims in root, sequence along eigenvector?
-        for TT, wTT, ww in zip([C.dTT,C.Ct.dTT,C.TTn,C.TTc], [C.dTT,C.Ct.dTT,C.TTn,C.TTc], [wN,wC,1,wc]):
+        C = Copy_(E,Ft,init=2,typ=3)  # all rims in root, sequence along eigenvector?  (typ should be 3 here)
+        for TT, wTT, ww in zip([C.dTT,C.Ct.dTT,C.TTn,C.TTc], C.wTT_, [wN,wC,1,wc]):  # should be C.wTT_
             wTT[:] = cent_TT(TT,r) * ww
         C._N_ = list({n for l in E.rim for n in l.nt if (n is not E and n in Ft.N_)})
         C._L_ = set(E.rim)  # init peer links
@@ -518,7 +519,7 @@ def cluster_P(_C_,N_,root):  # Parallel centroid refining, _C_ from cluster_C, N
         for N in N_:
             N.m_,N.d_,N.r_,N.rN_ = map(list,zip(*[vt_(base_comp(C,N)[0],C.r,wTTC) + (C.r,C) for C in _C_]))  # distance-weight match?
             N.o_ = list(np.argsort(np.argsort(N.m_)[::-1])+1)  # rank of each C_[i] = rdn of C in C_
-            dM+= sum(abs(_m-m) for _m,m in zip(N._m_,N.m_))
+            dM+= sum(abs(_m-m) for _m,m in zip(N._m_,N.m_))  # N._m_ is init empty and here it's always zero
             dO+= sum(abs(_o-o) for _o,o in zip(N._o_,N.o_))
             M += sum(N.m_); O += sum(N.o_)
         C_ = [sum2C(N_,_C, i, root=root) for i, _C in enumerate(_C_)]  # update with new coefs, _C.m, N->C refs
@@ -546,7 +547,7 @@ def add_H(H,h, root, fN=0):
     for Lev,lev in zip_longest(H, h):  # bottom-up
         if lev:
             if Lev: Q2R([Lev,lev], Lev, merge=2,froot=0, fN=fN)
-            else: H.append(CopyF(lev, root)[fN])
+            else: H.append((CopyF,Copy_)[fN](lev, root))
 
 def sum2F(N_, nF, root, TT=np.zeros((2,9)), C=0, R=0, fset=1, fCF=1):  # -> CF/CN
 
@@ -606,7 +607,7 @@ def sum2G(ft_, root=None, init=1, typ=None):
             V = lm - ave*(lr+1) * Nw
             if V > 0:
                 if (mdecay(L_)-decay)*V > ave*Cw:
-                    G_,r = cluster_C(G.Nt, N_,r+1)
+                    G_,r = cluster_C(G.Nt, N_,r+1)  # we parse N_ as E_ to cluster_C, so that E_ in exemplar is just N_ now?
                 else: G_,r = cluster_N(G.Nt, N_,r+1)
                 if G_ and val_(G.Nt.dTT, r+nw, TTw(G,0), mw=(len(G_)-1)*Lw) > 0:
                     cross_comp(G.Nt,r,'Nt')
@@ -639,7 +640,8 @@ def add_Nt(G, Nt, merge=0):  # addition to Q2R
         add_H(G.Nt.H if merge else G.Nt.H[:-1], Nt.H, G)  # exclude top lev if not merge
     N_ = Nt.N_
     if merge: G.N_ += N_ # never 2
-    else: G.H[-1].N_ += N_  # in new level?
+    elif G.Nt.H: G.Nt.H[-1].N_ += N_  # in new level? (this H merging should be in Nt?)
+    else: G.Nt.H = [sum2F(N_, G.Nt.nF, G)]  # init 1st level
     yx_ = []; C = G.c + Nt.c  # G is empty?
     for N in N_:
         N.fin = 1; N.root = G; c = N.c
@@ -677,8 +679,9 @@ def cent_TT(dTT, r):  # weight attr matches | diffs by their match to the sum, r
             wTT += [wT]
         if np.sum(np.abs(wTT-_wTT)) < ave * r:  # if np.linalg.norm(wT - _wT, 1) < r?
             break
-        _wTT = wTT
-    return np.array(wTT)  # single-mode dTT, extend to 2D-3D lev cycles in H, cross-level param max / centroid?
+        _wTT = np.array(wTT); wTT = []  # we need to reset wTT?
+    # should be _wTT here since we reset wTT within the loop
+    return np.array(_wTT)  # single-mode dTT, extend to 2D-3D lev cycles in H, cross-level param max / centroid?
 
 def mdecay(L_):  # slope function
     L_ = sorted(L_, key=lambda l: l.span)
@@ -755,7 +758,7 @@ def proj_focus(PV__, y,x, tile):  # radial accum of projected focus value in PV_
 
     m,d,n = tile.m, tile.d, tile.c  # add r?
     V = (m-ave*n) + (d-avd*n)
-    dy,dx = tile.angl[0]; a = dy / max(dx,eps)  # average link_ orientation, projection
+    dy,dx = tile.angl[0]; a = dy / (eps if dx == 0 else dx)  # average link_ orientation, projection (shouldn't use max here since that removes sign?)
     Dec = decay * (wYX / np.hypot(y-tile.yx[0], x-tile.yx[1]))  # unit_decay *rel_dist?
     H, W = PV__.shape  # = win__
     n = 1  # radial distance
