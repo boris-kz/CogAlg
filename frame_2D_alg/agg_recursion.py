@@ -65,7 +65,6 @@ class CN(CBase):
         # 2= G:  + rim,kern,mang,sub,exe
         # 3= C | Cn: +rN_| m_,d_,r_,o_
         n.dTT, n.TTn, n.TTc = [np.copy(kwargs.get(x,np.zeros((2,9)))) for x in ('dTT','TTn','TTc')]  # +wTTC per Ct.dTT, all m_,d_ [M,D,n, I,G,a, L,S,A]
-        # n.wTT_ = kwargs.get('wTT_',[1,1,1,1])  # dTT: Nt+Lt+Bt, TTC, TTn, TTc, or ones?
         n.wTT_ = kwargs.get('wTT_',[np.ones((2,9)) for _ in range(4)])  # dTT: Nt+Lt+Bt, TTC, TTn, TTc, or ones?
         n.m, n.d, n.c, n.r = [kwargs.get(x,0) for x in ('m','d','c','r')]  # combined forks, no direct accum?
         n.Nt,n.Bt,n.Ct,n.Lt,n.Xt,n.Rt = ((kwargs.get(f) if f in kwargs else CF(root=n) for f in ('Nt','Bt','Ct','Lt','Xt','Rt'))) # CN if nest, Ct||Nt
@@ -110,7 +109,7 @@ wTTN = TT*wN; wTTC = TT*wC; wTTc = TT*wc; wTTn=TT  # vs Lt.dTT: selective
 wTT_ = [wTTN, wTTC, wTTn, wTTc]  # +wTTx for cross-fork cent_TT
 # wweights on finer functions, dTT /= rel prediction error?
 aveB, distw, Lw, intw = 100,.5,.5,.5  # secondary
-nw,cw,Nw,Cw = 10,5,15,20  # or summed wTs, +Ds?
+nw,cw,Nw,Cw = 10,5,15,20  # | summed wTs, +Ds, global only?
 specw = 20  # or nested wTT_?
 mW = dW = 9  # fb weights per dTT, adjust in agg+
 wY = wX = 64; wYX = np.hypot(wY,wX)  # focus dimensions
@@ -221,7 +220,7 @@ def comp_N_(_pairs, r, tnF=None, rL=None):  # incremental-distance cross_comp, m
         else: break  # beyond initial induction range, re-sort by proj_V?
     for N in set(N_):
         if N.rim: Q2R(N.rim, N.Rt, merge=0, froot=0)
-    if rL is not None: setattr(rL, 'rpTT',rpTT+getattr(rL, 'rpTT',0))  # any root -> frame: high error-> lower source code weight?
+    # root.rpTT += rpTT  # any root -> frame: high error-> lower source code weight?
     TT,cm,rm, TTd,cd,rd = acc
     return L_,TT,cm,rm/(cm or eps), TTd,cd,rd/(cd or eps)
 
@@ -546,8 +545,8 @@ def cluster_P(_C_,N_,root):  # Parallel centroid refining, _C_ from cluster_C, N
 def add_H(H,h, root, fN=0):
     for Lev,lev in zip_longest(H, h):  # bottom-up
         if lev:
-            if Lev: Q2R([Lev,lev], Lev, merge=2,froot=0, fN=fN)  # add_H might add CN from F.H
-            else: H.append((CopyF,Copy_)[fN](lev, root))
+            if Lev: Q2R([Lev,lev], Lev, merge=2,froot=0, fN=fN)
+            else: H.append(CopyF(lev, root)[fN])
 
 def sum2F(N_, nF, root, TT=np.zeros((2,9)), C=0, R=0, fset=1, fCF=1):  # -> CF/CN
 
@@ -579,10 +578,11 @@ def sum2C(N_, _C, _i=None, root=None):  # fuzzy sum + base attrs for centroids
     R = 0; TT = np.zeros((2,9)); kern = np.zeros(4); span = 0; yx = np.zeros(2)
     for N, c in zip(N_,cc_):
         rc = c/ Cc; TT += N.dTT*rc; kern += N.kern*rc; span += N.span*rc; yx += N.yx*rc; R += N.r*rc
-    m,d = vt_(TT,R, TTw(root.root,1))  # wTTC (should be root.root here since root is Ft)
-    C = CN(typ=3, Nt=CF(N_=N_), dTT=TT, m=m, d=d, c=Cc, r=R, yx=yx, kern=kern, span=span, root=root)
-    for TT, wTT, ww in zip([C.dTT, C.Ct.dTT, C.TTn, C.TTc], C.wTT_, [wN, wC, 1, wc]):  # wTT_ should be C.wTT_?
-        wTT[:] = cent_TT(TT, R) * ww
+    m,d = vt_(TT,R, TTw(root.root,1))  # wTTC
+    C = CN(typ=3, Nt= CF(N_=N_), dTT=TT, m=m, d=d, c=Cc, r=R, yx=yx, kern=kern, span=span, root=root)
+    # set param correlation wws per comp and clustering:
+    for i, TT, wTT, ww in zip([0,1,2,3], [C.dTT, C.Ct.dTT, C.TTn, C.TTc], C.wTT_, [wN, wC, 1, wc]):
+        C.wTT_[i] = cent_TT(TT, R) * ww
     return C
 
 def sum2G(ft_, root=None, init=1, typ=None):
@@ -639,8 +639,7 @@ def add_Nt(G, Nt, merge=0):  # addition to Q2R
         add_H(G.Nt.H if merge else G.Nt.H[:-1], Nt.H, G)  # exclude top lev if not merge
     N_ = Nt.N_
     if merge: G.N_ += N_ # never 2
-    elif G.Nt.H: G.Nt.H[-1].N_ += N_  # in new level?
-    else: G.Nt.H = [sum2F(N_, G.Nt.nF, G)]  # init 1st level
+    else: G.H[-1].N_ += N_  # in new level?
     yx_ = []; C = G.c + Nt.c  # G is empty?
     for N in N_:
         N.fin = 1; N.root = G; c = N.c
@@ -668,18 +667,17 @@ def add_Lt(G, Lt):  # addition to Q2R
 def cent_TT(dTT, r):  # weight attr matches | diffs by their match to the sum, recompute to convergence
 
     wTT,_wTT = [],np.ones((2,9)); coT = np.abs(dTT[0]) + np.abs(dTT[1]) + eps  # complemented vals
-
-    for fd, _wT, dT in zip((0,1), _wTT, dTT):
-        vT = np.abs(dT)  # if -m: wrong, or surprise value?
-        while True:
+    while True:
+        for fd, _wT, dT in zip((0,1), _wTT, dTT):
+            vT = np.abs(dT)  # if -m: wrong, or surprise value?
             rvT = vT / coT * _wT  # weighted normalized vals
             mean = max(rvT.mean(), eps)  # scalar
             invdev_ = np.minimum(rvT / mean, mean / np.maximum(rvT, eps))
             wT = invdev_ / max(invdev_.mean(), eps)   # mean(wT)=1
-            if np.sum(np.abs(wT -_wT)) < ave * r:  # if np.linalg.norm(wT - _wT, 1) < r?
-                break
-            _wT = wT
-        wTT += [wT]
+            wTT += [wT]
+        if np.sum(np.abs(wTT-_wTT)) < ave * r:  # if np.linalg.norm(wT - _wT, 1) < r?
+            break
+        _wTT = wTT
     return np.array(wTT)  # single-mode dTT, extend to 2D-3D lev cycles in H, cross-level param max / centroid?
 
 def mdecay(L_):  # slope function
@@ -744,7 +742,7 @@ def ffeedback(F):  # F:frame, adjust filters: all aves *= rV, ultimately differe
     _N,_C,_n,_c = F.dTT, F.Ct.dTT, F.TTn, F.TTc
     for lev in F.H:  # top-down, not lev-selective, not recursive
         N,C,n,c = lev.dTT, lev.Ct.dTT, lev.TTn, lev.TTc
-        rN, rC, rn, rc = [np.abs(_tt/ (tt+eps)) for _tt,tt in zip((_N,_C,_n,_c), (N,C,n,c))]
+        rN, rC, rn, rc = [np.abs(_tt / (tt+eps)) for _tt,tt in zip((_N,_C,_n,_c), (N,C,n,c))]
         for rTT,rtt in zip(rTT_,(rN,rC,rn,rc)):
             rTT += rtt
         _N,_C,_n,_c = N,C,n,c
@@ -956,18 +954,17 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
         tile_ = expand_lev(iY,iX, elev, tile)
         if tile_:  # sparse higher-scope tile, if expanded
             F = CN(box=np.array([0,0,Y,X]), yx=np.array([Y//2, X//2]))  # same center on all levels
-            for tile in tile_: F.dTT += tile.dTT; F.TTn += tile.TTn; F.TTc += tile.TTc  # we need to accumulate F's params?
             F.H = []; F.N_ = tile_  # or Nt = Q2R(tile_)?
-            if elev: [add_H(F.H, T.H,F,fN=1) for T in tile_]
+            if elev: [add_H(F.H,T.H, F,fN=1) for T in tile_]
             F.H += [Q2R([n for N in tile_ for n in N.N_], R=F, fN=1)]  # concat prior top lev
             if cross_comp(F.Nt, rr=elev)[0]:  # spec->tN_,tC_,tL_, proj comb N_'L_?
                 elev += 1
                 if rV > ave:
-                    for dTT, wTT, ww in zip((F.dTT,F.Ct.dTT,F.TTn,F.TTc), F.wTT_, (wN,wC,1,wc)):
-                        wTT[:] = cent_TT(dTT,2) * ww  # max-scope correlation weights
+                    for i, dTT, wTT, ww in zip((0,1,2,3), (F.dTT,F.Ct.dTT,F.TTn,F.TTc), F.wTT_, (wN,wC,1,wc)):
+                        F.wTT_[i] = cent_TT(dTT,2) * ww  # max-scope correlation weights
                 if elev == max_elev:  # fb / top lev
                     rV, wTT_ = ffeedback(F)  # update globals, rV is not used?
-                for wTT, wwTT in zip(wTT_, F.wTT_): wTT *= wwTT  # F.wTT_ is effectively global  (we need to multiple each item in list individually)
+                for wTT, wwTT in zip(wTT_, F.wTT_): wTT *= wwTT   # F.wTT_ is effectively global
                 tile = F  # lev tile_ is next extension seed
             else: break
         else: break
