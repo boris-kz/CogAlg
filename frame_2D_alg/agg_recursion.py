@@ -259,6 +259,7 @@ def comp_C_(C_, rr,_C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
             comp_N(_C,C, rr,A=dy_dx,span=dist,L_=L_,N_=N_,acc=acc)  # simplified for typ=3
     for N in list(set(N_)):
         if N.rim: Q2R(N.rim, N.Rt, merge=0, froot=0)
+    # if np.any(rdpTT): accum_rdpTT('comp_N_', rdpTT)  # feed prediction error into code weights
     TTm,cm,rm,TTd,cd,rd = acc
     return L_,TTm,cm, rm/(cm or eps), TTd,cd, rd/(cd or eps)  # L_ is Lm now
 
@@ -327,7 +328,7 @@ def base_comp(_N,N):  # comp Et, kern, extT, dTT
     _pars = np.array([_M*rn,_D*rn,_c,_I*rn,_G*rn, [_Dy,_Dx],_L*rn,_N.span], dtype=object)  # Et, kern, extT
     pars  = np.array([M,D,c, (I,wI),G, [Dy,Dx], L,(N.span,wS)], dtype=object)
     mA,dA = comp_A(_N.angl[0]*_N.angl[1], N.angl[0]*N.angl[1])
-    m_,d_ = comp(_pars,pars, mA,dA)  # M,D,n, I,G,a, L,S,A
+    m_,d_ = comp(_pars,pars, mA or eps,dA or eps)  # M,D,n, I,G,a, L,S,A
     dm_,dd_ = comp_derT(_N.dTT[1], N.dTT[1])
 
     return np.array([m_+dm_,d_+dd_]), rn  # or rm, rv?
@@ -354,11 +355,11 @@ def comp(_pars, pars, meA,deA):  # compute m_,d_ from inputs or derivatives
             p, avd = p
             d = _p - p
             m_ += [avd - abs(d)]  # + complement max(avd,ad)?
-            d_ += [d]
+            d_ += [d or eps]
         else:  # massive
             _a,a = abs(_p), abs(p)
             m_ += [min(_a,a) if (_p<0)==(p<0) else -min(_a,a)]  # + complement max(_a,a) for +ves?
-            d_ += [_p - p]
+            d_ += [(_p - p) or eps]
     # for general mass in 0:1, m = dir_m * mass + inv_m * (1-mass)?
     return np.array(m_+[meA]), np.array(d_+[deA])
 
@@ -448,7 +449,7 @@ def cluster_C(Ft, E_, r):  # form centroids by clustering exemplar surround via 
     C_,_C_ = [],[]  # form root.Ct, may call cross_comp-> cluster_N, incr rc
     for n in Ft.N_: n._C_,n.m_,n._m_,n.o_,n._o_,n.rN_ = [],[],[],[],[],[]
     for E in E_:
-        C = Copy_(E,Ft,init=2,typ=5)  # all rims in root, sequence along eigenvector?
+        C = Copy_(E,Ft,init=1,typ=3)  # all rims in root, sequence along eigenvector?
         for TT, wTT, ww in zip([C.dTT,C.Ct.dTT,C.TTn,C.TTc], C.wTT_, [wN,wC,1,wc]):
             wTT[:] = cent_TT(TT,r) * ww
         C._N_ = list({n for l in E.rim for n in l.nt if (n is not E and n in Ft.N_)})
@@ -608,7 +609,7 @@ def sum2G(ft_, root=None, init=1, typ=None):
         if lm*ld* ((len(L_)-1)*Lw) > ave*avd* (lr+1)*cw:
             V = lm - ave*(lr+1) * Nw
             if V > 0:
-                r+=1; E_= get_exemplars({N for L in L_ for N in L.nt},r)
+                r+=1; E_= get_exemplars({N for L in G.Lt.N_ for N in L.nt},r)
                 G_,r= cluster_C(G.Nt,E_,r) if (mdecay(L_)-decay)*V > ave*Cw else cluster_N(G.Nt, E_,r)
                 if G_ and val_(G.Nt.dTT, r+nw, TTw(G,0), mw=(len(G_)-1)*Lw) > 0:
                     cross_comp(G.Nt,r,'Nt')
@@ -641,7 +642,7 @@ def add_Nt(G, Nt, merge=0):  # addition to Q2R
         add_H(G.Nt.H if merge else G.Nt.H[:-1], Nt.H, G)  # else top lev = Nt.N_
     N_ = Nt.N_
     if merge: G.N_ += N_ # never 2
-    else: G.Nt.H += [Q2R((N_+ G.Nt.H.pop().N_ if G.Nt.H else []), G.Nt)]  # extend or init top level
+    else: G.Nt.H += [Q2R((N_+ G.Nt.H.pop().N_ if G.Nt.H else []), G.Nt, merge=0)]  # extend or init top level
     yx_ = []; C = G.c + Nt.c  # G is empty?
     for N in N_:
         N.fin = 1; N.root = G; c = N.c
@@ -701,17 +702,16 @@ def Copy_(N, root=None, init=0, typ=None):
     if not init and C.typ==N.typ: C.Nt = CopyF(N.Nt,root=C)
     if typ:
         for attr in ['fin','span','mang','sub','exe']: setattr(C,attr, getattr(N,attr))
-        for attr in ['nt','kern','box','compared']: setattr(C,attr, copy(getattr(N,attr)))
+        for attr in ['nt','kern','box','compared','dTT','TTn','TTc','m','d','c','r']: setattr(C,attr, copy(getattr(N,attr)))
         for attr in ['Nt','Lt','Bt','Ct','Xt','Rt']: setattr(C, attr, CopyF(getattr(N,attr), root=C))
         if init:  # new G
             C.yx = [N.yx]; C.angl = np.array([copy(N.angl[0]), N.angl[1]],dtype=object)  # get mean
-            if init==1: C.L_=[l for l in N.rim if l.m>ave]; N.root=C; C.fin = 0  # else centroid
+            C.L_=[l for l in N.rim if l.m>ave]; N.root=C; C.fin = 0  # else centroid
+            C.N_ = [N]; C.m_=[]; C._m_=[]; C.o_=[]; C._o_=[]
         else:
             C.Lt=CopyF(N.Lt); C.Bt=CopyF(N.Bt)  # empty in init G
             C.angl = copy(N.angl); C.yx = copy(N.yx)
         if typ > 1: C.Rt = CopyF(N.Rt)
-    if init==2:
-        C.N_ = [N]; C.m_=[]; C._m_=[]; C.o_=[]; C._o_=[]
     return C
 
 def extend_box(_box, box):
@@ -958,7 +958,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
             F = CN(box=np.array([0,0,Y,X]), yx=np.array([Y//2, X//2]))  # same center on all levels
             F.H = []; F.N_ = tile_  # or Nt = Q2R(tile_)?
             if elev: [add_H(F.H,T.H, F,fN=1) for T in tile_]
-            F.H += [Q2R([n for N in tile_ for n in N.N_], R=F, fN=1)]  # concat prior top lev
+            F.H += [Q2R([n for N in tile_ for n in N.N_], merge=0, R=F, fN=1)]  # concat prior top lev
             if cross_comp(F.Nt, rr=elev)[0]:  # spec->tN_,tC_,tL_, proj comb N_'L_?
                 elev += 1
                 if rV > ave:
