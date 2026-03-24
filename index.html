@@ -108,7 +108,7 @@
 
 <p>When complemented clusters are cross-compared at the next level, the relative salience of cores and boundaries can shift. If boundary-to-boundary match is higher than core-to-core match, then the boundaries become the more informative signal — they cluster more strongly and carry more of the pattern. This is common: image contours often share more distinctive structure (orientation, curvature) than the flat regions they separate, which may differ only in brightness. At higher levels, what started as a secondary derivative signal can become the primary basis for clustering.</p>
 
-<p>This extends naturally into the temporal dimension. Temporal links between spatial clusters in successive frames represent change over time — they are temporal differences, analogous to spatial gradients. If these temporal links match across longer time spans, they form patterns of interaction between clusters or elements. Just as a spatial boundary can be more informative than the core it surrounds, a cluster of temporal interactions can be higher-order than the interacting nodes themselves. The interactions become the pattern, not the things interacting. This is not an edge case — it is how the most important structures in nature are organized. In biology, it is metabolic and reproductive cycles that define living systems, not the molecules participating in them. In economics, it is exchange patterns — trade, credit, supply chains — that define the economy, not the individual agents. The recurring interaction is the higher-order cluster; the nodes are its elements.</p>
+<p>This extends naturally into the temporal dimension. Temporal links between spatial clusters in successive frames represent change over time — they are temporal differences, analogous to spatial gradients. If these temporal links match across longer time spans, they form patterns of interaction between clusters or elements. Just as a spatial boundary can be more informative than the core it surrounds, a cluster of temporal interactions can be higher-order than the interacting nodes themselves. This is not an edge case — it is how the most important structures in nature are organized. In biology, it is metabolic and reproductive cycles that define living systems, not the molecules participating in them. In economics, it is exchange patterns — trade, credit, supply chains — that define the economy, not the individual agents.</p>
 
 <h2>The Three-Stage Process</h2>
 
@@ -146,6 +146,16 @@
 
 <p>In this framework, hierarchy is formed dynamically by recursion. Depth is determined by the data. Processing is localized: each cluster is a semantically coherent unit, compared and clustered only with its neighbors. This enables sparse, selective computation — only informative regions propagate upward.</p>
 
+<h3>Temporal clustering and LLM reasoning</h3>
+
+<p>The connectivity-vs-centroid distinction extends into time. A one-off chain of linked transitions — each step predicting or recruiting the next — is a temporal connectivity cluster: an episode or thread. When many such threads share a common transition pattern, they compress into a temporal centroid cluster: a process type or template. So connectivity clusters individual events into threads; centroid clustering abstracts across threads into process types.</p>
+
+<p>This framework builds episodes first and abstracts process types after — micro-connectivity to macro-centroid. LLMs do the reverse. Base model training compresses co-occurrence patterns across tokens and contexts into shared feature directions — that is spatial centroid clustering, scaled up but not fundamentally different from a single-layer perceptron.</p>
+
+<p>Training the base model to reason — fine-tuning on chains of thought, where the model learns recurrent step-to-step transition structure — is where temporal centroid clustering actually enters. At inference, attention then assembles a transient chain of token-to-token links within that pre-shaped space. That chain is connectivity-like, but it operates in a geometry that was already centroidized by training.</p>
+
+<p>So the inversion is: this framework starts with actual linked structure and derives abstractions from it. LLMs start with abstractions (learned parameters) and generate linked structure (reasoning traces) inside them. What persists in LLMs is the centroidized parameter geometry; what persists here is the connectivity-derived structure, with centroid summarization as optional higher-level compression.</p>
+
 <h2>Why I think this will scale far better than flat nets?</h2>
 
 <p>The recursive structure means the system can form patterns of arbitrary complexity without architectural redesign. Each new level of clustering adds:</p>
@@ -175,7 +185,7 @@
 
 <hr>
 
-<p class="footer">Implementation: <a href="https://github.com/boris-kz/CogAlg">CogAlg on GitHub</a>, main process in <code>agg_recursion.py</code>.</p>
+<p class="footer">Implementation: <a href="https://github.com/boris-kz/CogAlg">CogAlg on GitHub</a>, main process in <code><a href="https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/agg_recursion.py">agg_recursion.py</a></code>.</p>
 
 </body>
 </html>
