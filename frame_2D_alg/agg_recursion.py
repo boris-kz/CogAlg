@@ -101,13 +101,20 @@ class CF(CBase):  # rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int- defining
         f.typ = 0  # blocks sub_comp
     def __bool__(f): return bool(f.c)  # N_ may be empty?
 
+
+O = CF(N_= [CF(nF='comp_'), CF(nF='clust'), CF(nF='eval_')])  # replaces wTT_: process weights
+# omni: root process forks, dTT=wTT, N_=[CF]: sub-forks, cluster by calls or/and similarity? next level:
+comp_ = CF(N_= [CF(nF='cross_comp'), CF(nF='comp_N_'), CF(nF='comp_C_'), CF(nF='comp_F')])  # finer comps downstream?
+clust = CF(N_= [CF(nF='exemplars'), CF(nF='cluster_N'), CF(nF='cluster_C'), CF(nF='cluster_P')])  # Q2R, cent_TT, sum functions downstream?
+eval_ = CF(N_= [CF(nF='vt_'), CF(nF='val_'), CF(nF='proj_TT'), CF(nF='proj_N'), CF(nF='ffeedback')])  # or ffeedback is a clust type?
+# attr_() for param weights?:
 ave = .3; avd = ave*.5  # ave m,d / unit dist: the top of filter hierarchy
 wM,wD,wc, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave
 wT = np.array([wM,wD,wc, wG,wI,wa, wL,wS,wA])
 TT = np.array([wT*ave, wT*avd]); wC,wN,wc = 4,3,2  # decreasing complexty, 1 for wTTn
 wTTN = TT*wN; wTTC = TT*wC; wTTc = TT*wc; wTTn=TT  # vs Lt.dTT: selective
 wTT_ = [wTTN, wTTC, wTTn, wTTc]  # +wTTx for cross-fork cent_TT
-# wweights on finer functions following AST, cwTT *= rel prediction error, uwTT /= rel prediction error?
+# wweights on finer functions following AST, wTT *= rel prediction error, _wTT /= rel prediction error?
 aveB, distw, Lw, intw = 100,.5,.5,.5  # secondary
 nw,cw,Nw,Cw = 10,5,15,20  # | summed wTs, +Ds, global only?
 specw = 20  # or nested wTT_?
@@ -448,7 +455,7 @@ def cluster_C(Ft, E_, r):  # form centroids by clustering exemplar surround via 
     C_,_C_ = [],[]  # form root.Ct, may call cross_comp-> cluster_N, incr rc
     for n in Ft.N_: n._C_,n.m_,n._m_,n.o_,n._o_,n.rN_ = [],[],[],[],[],[]
     for E in E_:
-        C = Copy_(E,Ft,init=2,typ=5)  # all rims in root, sequence along eigenvector?
+        C = Copy_(E,Ft,init=1,typ=3)  # all rims in root, sequence along eigenvector?
         for TT, wTT, ww in zip([C.dTT,C.Ct.dTT,C.TTn,C.TTc], C.wTT_, [wN,wC,1,wc]):
             wTT[:] = cent_TT(TT,r) * ww
         C._N_ = list({n for l in E.rim for n in l.nt if (n is not E and n in Ft.N_)})
@@ -701,17 +708,16 @@ def Copy_(N, root=None, init=0, typ=None):
     if not init and C.typ==N.typ: C.Nt = CopyF(N.Nt,root=C)
     if typ:
         for attr in ['fin','span','mang','sub','exe']: setattr(C,attr, getattr(N,attr))
-        for attr in ['nt','kern','box','compared']: setattr(C,attr, copy(getattr(N,attr)))
+        for attr in ['nt','kern','box','compared','dTT','TTn','TTc','m','d','c','r']: setattr(C,attr, copy(getattr(N,attr)))
         for attr in ['Nt','Lt','Bt','Ct','Xt','Rt']: setattr(C, attr, CopyF(getattr(N,attr), root=C))
         if init:  # new G
             C.yx = [N.yx]; C.angl = np.array([copy(N.angl[0]), N.angl[1]],dtype=object)  # get mean
-            if init==1: C.L_=[l for l in N.rim if l.m>ave]; N.root=C; C.fin = 0  # else centroid
+            C.L_ = [l for l in N.rim if l.m>ave]; N.root=C; C.fin = 0  # else centroid
+            C.N_ = [N]; C.m_=[]; C._m_=[]; C.o_=[]; C._o_=[]
         else:
             C.Lt=CopyF(N.Lt); C.Bt=CopyF(N.Bt)  # empty in init G
             C.angl = copy(N.angl); C.yx = copy(N.yx)
         if typ > 1: C.Rt = CopyF(N.Rt)
-    if init==2:
-        C.N_ = [N]; C.m_=[]; C._m_=[]; C.o_=[]; C._o_=[]
     return C
 
 def extend_box(_box, box):
@@ -958,7 +964,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
             F = CN(box=np.array([0,0,Y,X]), yx=np.array([Y//2, X//2]))  # same center on all levels
             F.H = []; F.N_ = tile_  # or Nt = Q2R(tile_)?
             if elev: [add_H(F.H,T.H, F,fN=1) for T in tile_]
-            F.H += [Q2R([n for N in tile_ for n in N.N_], R=F, fN=1)]  # concat prior top lev
+            F.H += [lev := Q2R([n for N in tile_ for n in N.N_],fN=1)]; Q2R([F,lev], merge=0,R=F)  # concat prior top lev
             if cross_comp(F.Nt, rr=elev)[0]:  # spec->tN_,tC_,tL_, proj comb N_'L_?
                 elev += 1
                 if rV > ave:
