@@ -101,10 +101,9 @@ class CF(CBase):  # rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int- defining
         f.typ = 0  # blocks sub_comp
     def __bool__(f): return bool(f.c)  # N_ may be empty?
 
-
-O = CF(N_= [CF(nF='comp_'), CF(nF='clust'), CF(nF='eval_')])  # replaces wTT_: process weights
-# omni: root process forks, dTT=wTT, N_=[CF]: sub-forks, cluster by calls or/and similarity? next level:
-comp_ = CF(N_= [CF(nF='cross_comp'), CF(nF='comp_N_'), CF(nF='comp_C_'), CF(nF='comp_F')])  # finer comps downstream?
+X = CF(N_= [CF(nF='comp_'), CF(nF='clust'), CF(nF='eval_')])  # process weight Ts
+# root process forks, dTT=wTT, N_=[CF], next-level sub-forks, cluster by calls or/and similarity?:
+comp_ = CF(N_= [CF(nF='comp_N_'), CF(nF='comp_C_'), CF(nF='comp_N'), CF(nF='comp_F')])  # finer comps downstream?
 clust = CF(N_= [CF(nF='exemplars'), CF(nF='cluster_N'), CF(nF='cluster_C'), CF(nF='cluster_P')])  # Q2R, cent_TT, sum functions downstream?
 eval_ = CF(N_= [CF(nF='vt_'), CF(nF='val_'), CF(nF='proj_TT'), CF(nF='proj_N'), CF(nF='ffeedback')])  # or ffeedback is a clust type?
 # attr_() for param weights?:
