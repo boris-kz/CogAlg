@@ -104,8 +104,8 @@ class CF(CBase):  # rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int- defining
     def __bool__(f): return bool(f.c)  # N_ may be empty?
 
 ave = .3; avd = ave*.5  # ave m,d / unit dist: the top of filter hierarchy
-wM,wD,wc, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave
-wT = np.array([wM,wD,wc, wG,wI,wa, wL,wS,wA])
+wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave
+wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
 TT = np.array([wT*ave, wT*avd]); wC,wN,wc,wn = 4,3,2,1  # decreasing complexty, 1 for wTTn
 wTTN = TT*wN; wTTC = TT*wC; wTTc = TT*wc; wTTn=TT  # vs Lt.dTT: selective
 wTT_ = [wTTN, wTTC, wTTn, wTTc]  # +wTTx for cross-fork cent_TT
@@ -116,12 +116,38 @@ mW = dW = 9  # fb weights per dTT, adjust in agg+
 wY = wX = 64; wYX = np.hypot(wY,wX)  # focus dimensions
 decay = ave / (ave+avd)  # match decay / unit dist?
 
+tt = CF(nF='TT',  # promoted from wT * ave
+        N_=[CF(nF='wT', 
+               N_=[CF(nF='wM'), CF(nF='wD'), CF(nF='wi'),
+                   CF(nF='wG'), CF(nF='wI'), CF(nF='wa'),
+                   CF(nF='wL'), CF(nF='wS'), CF(nF='wA')])
+])
+
+attr_ = CF(nF='attr_', 
+           N_=[CF(nF='ave_', N_=[CF(nF='ave'), CF(nF='avd')]),  # ave m,d / unit dist: the top of filter hierarchy
+               CF(nF='decay'),  # promoted from ave/(ave+avd)
+    
+               CF(nF='wTT_',   # promoted from TT * w
+                  N_=[CF(nF='wTTN', N_=[CF(nF='wN'), tt]),  
+                      CF(nF='wTTC', N_=[CF(nF='wC'), tt]),  
+                      CF(nF='wTTn', N_=[CF(nF='wn'), tt]), 
+                      CF(nF='wTTc', N_=[CF(nF='wc'), tt])]),
+
+               # secondary
+               CF(nF='secondary', N_=[CF(nF='aveB'),CF(nF='Lw'),CF(nF='distw'),CF(nF='intw'),CF(nF='wY'),CF(nF='wX')]),
+               CF(nF='wYX'),  # promoted from np.hypot(wY,wX)
+               
+               # fb weights per dTT, adjust in agg+
+               CF(nF='fb_w', N_=[CF(nF='mW'),CF(nF='dW')])
+])
+
+
 X = CF(nF = 'X', # maps to cross_comp, replacing globals, dTT = process wTT, root: caller for credit assign, not similarity type?
     N_ = [  # process forks:
     CF(nF='comp_', N_=[CF(nF='comp_N_'), CF(nF='comp_C_'), CF(nF='comp_N'), CF(nF='comp_F')]),  # finer comps downstream?
     CF(nF='clust', N_=[CF(nF='exemplars'), CF(nF='cluster_N'), CF(nF='cluster_C'), CF(nF='cluster_P')]),  # Q2R, cent_TT, sum functions downstream?
     CF(nF='eval_', N_=[CF(nF='vt_'), CF(nF='val_'), CF(nF='proj_TT'), CF(nF='proj_N'), CF(nF='ffeedback')]),  # or ffeedback is a clust type?
-    CF(nF='attr_')  # packs param weight tree above
+    attr_  # packs param weight tree above
     ])  # replace with automatic fork clustering by call+type, || AST, wTT *= rel prediction error, _wTT /= rel prediction error?
 
 def x_(root, name):
@@ -136,11 +162,11 @@ def vt_(TT, r, wTT=wTTN):  # brief val_ to get m,d, rc=0 to return raw vals, wTT
 
 def val_(TT, r, wTT=wTTN, mw=1.0,fi=1, _TT=None, cr=.5):  # m,d eval per cluster, cr = cd / cm+dc, default half-weight?
 
-    t_ = TT[0] + np.abs(TT[1])  # comb val/attr, match can be negative?
-    rv = TT[0] / eps_(t_) @ wTT[0] if fi else TT[1] / eps_(t_) @ wTT[1]  # fork / total per scalar
+    t_ = eps_(TT[0] + np.abs(TT[1]))  # comb val/attr, match can be negative?
+    rv = TT[0] / t_ @ wTT[0] if fi else TT[1] / t_ @ wTT[1]  # fork / total per scalar
     if _TT is not None:
-        _t_ = np.abs(_TT[0]) + np.abs(_TT[1])
-        _rv = _TT[0] / eps_(_t_) @ wTT[0] if fi else _TT[1] / eps_(_t_)@ wTT[1]
+        _t_ = eps_(np.abs(_TT[0]) + np.abs(_TT[1]))
+        _rv = _TT[0] / _t_ @ wTT[0] if fi else _TT[1] / _t_@ wTT[1]
         rv  = rv * (1-cr) + _rv * cr  # + borrowed alt fork val, cr: d count ratio, must be passed with _TT?
     return rv*mw - (ave if fi else avd) * r
 
@@ -659,7 +685,7 @@ def add_Nt(G, Nt, merge=0):  # addition to Q2R
         add_H(G.Nt.H if merge else G.Nt.H[:-1], Nt.H, G)  # else top lev = Nt.N_
     N_ = Nt.N_
     if merge: G.N_ += N_ # never 2
-    else: G.Nt.H += [Q2R(N_+ (G.Nt.H.pop().N_ if G.Nt.H else []), G.Nt)]  # extend or init top level
+    else:     G.Nt.H += [Q2R(N_+ (G.Nt.H.pop().N_ if G.Nt.H else []))]  # extend or init top level
     yx_ = []; C = G.c + Nt.c  # G is empty?
     for N in N_:
         N.fin = 1; N.root = G; c = N.c
@@ -691,9 +717,9 @@ def cent_TT(dTT, r):  # weight attr matches | diffs by their match to the sum, r
         for fd, _wT, dT in zip((0,1), _wTT, dTT):
             vT = np.abs(dT)  # if -m: wrong, or surprise value?
             rvT = vT / eps_(coT) * _wT  # weighted normalized vals
-            mean = max(rvT.mean(), eps)  # scalar
-            invdev_ = np.minimum(rvT / mean, mean / np.maximum(rvT, eps))
-            wT = invdev_ / max(invdev_.mean(), eps)   # mean(wT)=1
+            mean = rvT.mean() or eps  # scalar
+            invdev_ = np.minimum(rvT / mean, mean / eps_(rvT))
+            wT = invdev_ / (invdev_.mean() or eps)   # mean(wT)=1
             wTT += [wT]
         if np.sum(np.abs(wTT-_wTT)) < ave * r:  # if np.linalg.norm(wT - _wT, 1) < r?
             break
@@ -979,7 +1005,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
             if cross_comp(F.Nt, rr=elev)[0]:  # spec->tN_,tC_,tL_, proj comb N_'L_?
                 elev += 1
                 if rV > ave:
-                    for i, dTT, wTT, ww in zip((0,1,2,3), (F.dTT,F.Ct.dTT,F.TTn,F.TTc), F.wTT_, (wN,wC,1,wc)):
+                    for i, dTT, wTT, ww in zip((0,1,2,3), (F.dTT,F.Ct.dTT,F.TTn,F.TTc), F.wTT_, (wN,wC,wn,wc)):
                         F.wTT_[i] = cent_TT(dTT,2) * ww  # max-scope correlation weights
                 if elev == max_elev:  # fb / top lev
                     rV, wTT_ = ffeedback(F)  # update globals, rV is not used?
