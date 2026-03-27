@@ -361,3 +361,17 @@ def sum2F(N_, nF, root, TT=np.zeros((2,9)), C=0, R=0, fset=1, fCF=1):  # -> CF/C
         for N in N_: N.root = Ft
     return Ft
 
+'''
+ave = .3; avd = ave*.5  # ave m,d / unit dist: the top of filter hierarchy
+wM,wD,wc, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave
+wT = np.array([wM,wD,wc, wG,wI,wa, wL,wS,wA])
+TT = np.array([wT*ave, wT*avd]); wC,wN,wc,wn = 4,3,2,1  # decreasing complexty, 1 for wTTn
+wTTN = TT*wN; wTTC = TT*wC; wTTc = TT*wc; wTTn=TT  # vs Lt.dTT: selective
+wTT_ = [wTTN, wTTC, wTTn, wTTc]  # +wTTx for cross-fork cent_TT
+aveB, distw, Lw, intw = 100,.5,.5,.5  # secondary
+nw,cw,Nw,Cw = 10,5,15,20  # | summed wTs, +Ds, global only?
+specw = 20  # or nested wTT_?
+mW = dW = 9  # fb weights per dTT, adjust in agg+
+wY = wX = 64; wYX = np.hypot(wY,wX)  # focus dimensions
+decay = ave / (ave+avd)  # match decay / unit dist?
+'''
