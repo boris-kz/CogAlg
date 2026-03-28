@@ -114,16 +114,23 @@ wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
 wN,wC,wn,wc = 10,20,5,10  # fork weights
 wTTN, wTTC, wTTn, wTTc = np.array([wT,wT*avd])*wN, np.array([wT,wT*avd])*wC, np.array([wT,wT*avd])*wn, np.array([wT,wT*avd])*wc
 wTT_ = [wTTN,wTTC, wTTn,wTTc]  # || Nt,Ct,Lt, no Bt: no call, no info?
-WN,WC, Wn,Wc = CF(nF=wN,wTT=wTTN,w=wN), CF(nF=wC,wTT=wTTC,w=wC), CF(nF=wn,wTT=wTTn,w=wn), CF(nF=wc,wTT=wTTc,w=wc)  # accum from calls?
-WTT_ = CF(nF='wTT_', wTT=[WN,WC,Wn,Wc])  # add sub-forks:
+WN,WC, Wn,Wc = CF(nF='wN',wTT=wTTN,w=wN), CF(nF='wC',wTT=wTTC,w=wC), CF(nF='wn',wTT=wTTn,w=wn), CF(nF='wc',wTT=wTTc,w=wc)  # accum from calls?
+WTT_ = CF(nF='wTT_', N_=[WN,WC,Wn,Wc])  # add sub-forks:
 # process weight tree:
-X = CF(nF = 'X', # maps to cross_comp, replacing globals, dTT = process wTT, root: caller for credit assign, not similarity type?
+omX = CF(nF = 'X', # maps to cross_comp, replacing globals, dTT = process wTT, root: caller for credit assign, not similarity type?
     N_ = [  # process forks:
     CF(nF='comp_', N_=[CF(nF='comp_N_'), CF(nF='comp_C_'), CF(nF='comp_N'), CF(nF='comp_F')]),  # finer comps downstream?
     CF(nF='clust', N_=[CF(nF='exemplars'), CF(nF='cluster_N'), CF(nF='cluster_C'), CF(nF='cluster_P')]),  # Q2R, cent_TT, sum functions downstream?
     CF(nF='eval_', N_=[CF(nF='vt_'), CF(nF='val_'), CF(nF='proj_TT'), CF(nF='proj_N'), CF(nF='ffeedback')]),  # or ffeedback is a clust type?
     CF(nF='attr_', N_=[Ave,Avd,WTT_, WY,WX, AveB, LW,Distw,Intw])  # all modifiable weights
     ])  # cluster forks by call,type ||AST, oF.wTT *= rel prediction error, _oF.wTT /= rel prediction error?
+
+def update_oF_root(root):
+    for N in root.N_:
+        N.root = root
+        if N.N_: update_oF_root(N)
+update_oF_root(omX)
+    
 '''
 if  projecting_root: F.root.wTT *= rdpTT * (F.c/ F.root.c)  # c-weighted feedback
 elif selecting_root: (F.m - F.root.Lt.m) * (F.root.c-Ft.c)  # clustering value = loss reduction: root.Lt.m < selective F.m, add dval?
@@ -132,7 +139,10 @@ def x_(root, name):
     for i, fork in enumerate(root.N_):
         if fork.nF==name:
             return i,fork
-
+        elif fork.N_:  # recursively search deeper oF
+            sub_oF = x_(fork, name)
+            if sub_oF: return sub_oF 
+        
 def vt_(TT, r, wTT=wTTn):  # brief val_ to get m,d, rc=0 to return raw vals, Wn for comp_N
 
     m_,d_= TT; ad_ = np.abs(d_); t_ = eps_(m_+ad_)  # ~ max comparand
@@ -148,7 +158,7 @@ def val_(TT, r, wTT=wTTn, mw=1.0,fi=1, _TT=None, cr=.5):  # m,d eval per cluster
         rv  = rv * (1-cr) + _rv * cr  # + borrowed alt fork val, cr: d count ratio, must be passed with _TT?
     return rv*mw - (ave if fi else avd) * r
 
-def sum_vt(N_, fm=0, wTT=Wn.TT):  # basic weighted sum of CN|CF list, wTTn for comp_N
+def sum_vt(N_, fm=0, wTT=wTTn):  # basic weighted sum of CN|CF list, wTTn for comp_N
 
     C = sum(n.c for n in N_); R = 0; TT = np.zeros((2,9))
     for n in N_:
@@ -167,7 +177,7 @@ def Q2R(N_, R=None, merge=1, froot=1, fN=0):  # update root with N_
     if fN and R.C_: R.Ct = Q2R(R.C_)
     return R
 
-def TTw(G, wi=0): return wTT_.N_[wi].TT * G.wTT_[wi]  # * secondary wweights, average=1
+def TTw(G, wi=0): return wTT_[wi] * G.wTT_[wi]  # * secondary wweights, average=1
 ''' 
   Agg cycle:
 - Cross-comp nodes, evaluate incremental-derivation cross-comp of new >ave difference links, recursively. 
@@ -215,7 +225,7 @@ def comp_N_(_pairs, r, tnF=None, rL=None):  # incremental-distance cross_comp, m
         Dec = dec or decay ** ((dist/((_N.span+N.span)/2)))
         iTT = (_N.dTT + N.dTT) * Dec
         eTT = (_N.Rt.dTT + N.Rt.dTT) * Dec
-        if abs(vt_(eTT,r)[0]) > ave*wn:  # spec N links
+        if abs(vt_(eTT,r)[0]) > ave*wn*r*(_N.r+N.r)/2:  # spec N links 
             eTT = proj_N(N, dist, dy_dx, r, dec)  # proj N L_,B_,rim, if pV>0: eTT += pTT?
             eTT+= proj_N(_N,dist, -dy_dx, r, dec)  # reverse direction
         return iTT+eTT
@@ -239,6 +249,15 @@ def comp_N_(_pairs, r, tnF=None, rL=None):  # incremental-distance cross_comp, m
         else: break  # beyond initial induction range, re-sort by proj_V?
     for N in set(N_):
         if N.rim: Q2R(N.rim, N.Rt, merge=0, froot=0)
+
+    if np.any(rdpTT):
+        oF = x_(omX,'comp_N_')
+        if oF:
+            i, oF = oF
+            oF.dTT += rdpTT; oF.c += 1
+            if oF.root is not None:
+                oF.root.c += 1  # not sure, oF.root.c is empty before feedback, so we need to add it first? 
+                oF.root.wTT *= rdpTT * (oF.c / oF.root.c)  # this should be done recurisvely to the top root?
     # root.rdpTT += rdpTT  # any root-> frame: high error-> lower source code weight, alt code exploration?
     TT,cm,rm, TTd,cd,rd = acc
     return L_,TT,cm,rm/(cm or eps), TTd,cd,rd/(cd or eps)
@@ -258,7 +277,7 @@ def comp_C_(C_, rr,_C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
             # merge similar distant centroids, they are non-local
             L_ = sorted(L_, key=lambda dC: dC.d); _C_= C_; C_, merg_ = [],[]  # from min D
             for i, L in enumerate(L_):
-                if val_(L.dTT, rr+wn, Wc,fi=0) < 0:
+                if val_(L.dTT, rr+wn, wc,fi=0) < 0:
                     C0,C1 = L.nt
                     if C0 is C1 or C1 in merg_ or C0 in merg_: continue  # not merged
                     Q2R([C0,C1], C0,merge=2)
@@ -269,7 +288,7 @@ def comp_C_(C_, rr,_C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
     else:
         # adjacent | distance-constrained cross_comp along eigenvector: sort by max attr, or original yx in sub+, proj C.L_?
         for C in C_: C.compared=set()
-        C_ = sorted(C_, key=lambda C: C.dTT[0][np.argmax(Wc.TT[0])])  # max weight defines eigenvector
+        C_ = sorted(C_, key=lambda C: C.dTT[0][np.argmax(wTTc[0])])  # max weight defines eigenvector
         for j in range( len(C_)-1):
             _C = C_[j]; C = C_[j+1]
             if _C in C.compared: continue
@@ -310,7 +329,7 @@ def comp_N(_N,N, r, full=1, A=np.zeros(2),span=None, rL=None, L_=None, N_=None, 
         if span is None: span = np.hypot(*_N.yx - N.yx)
         yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
         box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
-        angl = [A, np.sign(TT[1] @ Wn.TT[1])]
+        angl = [A, np.sign(TT[1] @ wTTn[1])]
         L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2
     for n, _n in (_N,N),(N,_N):
         n.rim += [L]; n.compared.add(_n)  # or unique comps?
@@ -458,6 +477,12 @@ def cluster_N(Ft, _N_, r):  # flood-fill node | link clusters, flat, replace iL_
             for G in G_: trans_cluster(G)  # splice trans_links, merge L.nt.roots
             if val_(TT, r+1, TTw(Ft.root), (len(G_)-1)*Lw) > 0:
                 sum2F(G_, Ft.nF, Ft.root, TT,C); r+=1  # reform Nt, Ft.Lt is empty till cross_comp?
+            oF = x_(omX, 'cluster_N')
+            if oF:
+                _, oF = oF; oF.c += 1
+                if oF.root is not None:
+                    oF.m += (oF.m - (oF.root.Lt.m if oF.root.Lt else 0)) * (oF.root.c - oF.c)
+                    oF.root.c += 1
         Q2R([C for N in (G_ if G_ else _N_) for C in N.Ct.N_], Ft.root.Ct, froot=0)
         ''' 
         clustering value = selectivity or loss reduction, add dval?:
@@ -524,6 +549,12 @@ def cluster_C(Ft, E_, r):  # form centroids by clustering exemplar surround via 
         if Do and Dm/Do > Ave: _C_=C_  # dval vs. dolp: overlap increases with Cs expansion
         else: oC_ += C_; break  # converged
     if oC_:
+        oF = x_(omX, 'cluster_C')
+        if oF:
+            _, oF = oF; oF.c += 1
+            if oF.root is not None:
+                oF.m += (oF.m - (oF.root.Lt.m if oF.root.Lt else 0)) * (oF.root.c - oF.c)
+                oF.root.c += 1
         for n in [N for C in oC_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals:
             n.exe = (n.d if n.typ==1 else n.m) + np.sum([m-ave*o for m, o in zip(n.m_, n.o_)]) - ave
         if val_(DTT, r+olp, TTw(Ft.root,1), (len(oC_)-1)*Lw) > 0:
@@ -677,14 +708,14 @@ def add_Nt(G, Nt, merge=0):  # addition to Q2R
 def add_Lt(G, Lt):  # addition to Q2R
 
     L_ = Lt.N_
-    if Lt.m > ave*wn:  # comp typ -1 pre-links
+    if Lt.m > ave*wn*Lt.r:  # comp typ -1 pre-links
         L_,pL_ = [],[]; [L_.append(L) if L.typ==1 else pL_.append(L) for L in Lt.N_]
-        if pL_ and sum_vt(pL_,fm=1)[0] > ave*wn:
+        if pL_ and sum_vt(pL_,fm=1)[0] > ave*wn*sum([L.r for L in pL_]):
             for L in pL_: L_ += [comp_N(*L.nt, G.r,1, L.angl[0], L.span)]
             Q2R(L_,Lt)
             Q2R([G,Lt], G, merge=0)
     A = np.sum([l.angl[0] for l in L_], axis=0) if L_ else np.zeros(2)
-    G.angl = np.array([A, np.sign(G.dTT[1] @ wN)], dtype=object)  # add weighting?
+    G.angl = np.array([A, np.sign(G.dTT[1] @ wTTN[1])], dtype=object)  # add weighting?
     G.mang = np.mean([comp_A(G.angl[0], l.angl[0])[0] for l in G.L_])  # Ls only?
 
 def cent_TT(dTT, r):  # weight attr matches | diffs by their match to the sum, recompute to convergence
@@ -845,7 +876,7 @@ def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
 
 def vect_edge(tile, rV=1, wTT_=None):  # PP_ cross_comp and floodfill to init focal frame graph, no recursion:
 
-    global ave,avd, aveB, Lw,distw,intw, cw,nw,Cw,Nw, wTTn,wTTc,wTTN,wTTC, specw  # /= projected V change:
+    global ave,avd, aveB, Lw,distw,intw, wN,wC,wn,wc, wTTn,wTTc,wTTN,wTTC  # /= projected V change:
     if wTT_ is None: wTTn/=rV; wTTc/=rV; wTTN/=rV; wTTC/=rV  # also cw,nw,Cw,Nw?
     else: wTTN,wTTC, wTTn,wTTc = wTT_  # detailed feedback
     def PP2N(PP):
@@ -949,7 +980,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
         while True:
             # each loop adds one tile to lev_frame
             if not elev: T = base_tile(iy, ix)
-            if T and val_(T.dTT,T.r+wn+elev, wTT_.N_[0].TT, mw=(len(T.N_)-1)*Lw) > 0:
+            if T and val_(T.dTT,T.r+wn+elev, wTT_[0], mw=(len(T.N_)-1)*Lw) > 0:
                 frame[y,x] = T; T_ += [T]
                 dy_dx = np.array([T.yx[0]-y, T.yx[1]-x]); pTT = proj_N(T, np.hypot(*dy_dx), dy_dx, elev)
                 if 0 < val_(pTT, elev, wTT_[0]) < ave:  # extend lev by combined proj T_
