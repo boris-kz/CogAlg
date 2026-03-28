@@ -374,4 +374,24 @@ specw = 20  # or nested wTT_?
 mW = dW = 9  # fb weights per dTT, adjust in agg+
 wY = wX = 64; wYX = np.hypot(wY,wX)  # focus dimensions
 decay = ave / (ave+avd)  # match decay / unit dist?
+
+    wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
+    def make_T(nF, w):
+        wTT = [CF(nF='wM',m=wM),CF(nF='wD',m=wD),CF(nF='wi',m=wi),CF(nF='wG',m=wG),CF(nF='wI',m=wI),CF(nF='wa',m=wa),
+               CF(nF='wL',m=wL),CF(nF='wS',m=wS),CF(nF='wA',m=wA)] * w  # pseudo, make np.array?
+        W = sum([F.w for F in wTT])
+        return CF(nF=nF, w=W, wTT=wTT)
+    def make_TT(nF, w):  # m,d forks
+        return CF(nF=nF, wTT =np.array([make_T('mT',w),make_T('dT'),w]))
+    wN,wC, wn,wc = 10,20,5,10  # sum from wTTN,wTTC,wTTn,wTTc, maps to Nt,Ct,Lt, no Bt: no call, no info?
+    WN,WC, Wn,Wc = make_TT('wN',wN), make_TT('wC',wC), make_TT('wn',wn), make_TT('wc',wc)
+    wTTN, wTTC, wTTn, wTTc = WN,WC, Wn,Wc
+    wTT_ = CF(nF='wTT_', N_=[WN,WC,Wn,Wc])  # add sub-forks, as below?
 '''
+def prop_w_():  # factory function to get and update wTT
+    def get(f): wTT = getattr(f,'N_'); return np.array([[w.m for w in wT.N_] for wT in wTT])
+    def set(f, wTT):
+        for WT, wT in zip(getattr(f, 'N_'), wTT):
+            for W, w in zip(WT.N_, wT):
+                W.m = w
+    return property(get, set)
