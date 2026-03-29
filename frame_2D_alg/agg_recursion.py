@@ -102,7 +102,7 @@ class CF(CBase): # iF/ data: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int-
         f.typ = 0  # blocks sub_comp
         f.root = kwargs.get('root',None)
         f.croot = kwargs.get('croot', None)  # for Ct or Lt?
-def __bool__(f): return bool(f.c)  # N_ may be empty?
+    def __bool__(f): return bool(f.c)  # N_ may be empty?
 # oFs:
 # singletons, no wTT:
 ave,avd = .3,.5; Ave,Avd = CF(nF='ave',w=ave), CF(nF='avd',w=avd)  # ave m,d / unit dist, oF: updatable weights version
@@ -130,11 +130,19 @@ def F_root(_F, fC=1):
     for F in (_F.Lt.N_ if fC else _F.N_):  # fork types or calls
         setattr(F, 'croot' if fC else 'root', _F)
         sub = F.Lt if fC else F.N_
-        if sub: F_root(F, fC)
+        if isinstance(sub, CF): F_root(F, fC)
 F_root(Z)
 def getF(oF, name):
     for fork in oF.Lt.N_:  # current + promoted fork types
-            if fork.nF==name: return fork
+        if fork.nF==name: return fork
+    # if not found, we need to promote it to higher Lt?
+    # But we need to accumulate enough calls before promoting it, which we still need to check for nested Lt?
+    for fork in oF.Lt.N_:
+        for sub_fork in fork.Lt.N_:
+            if sub_fork.nF==name:
+                oF.Lt.N_ += [sub_fork]
+                return  sub_fork
+
 '''
 if  projecting_root: F.root.wTT *= rdpTT * (F.c/ F.root.c)  # c-weighted feedback
 elif selecting_root: (F.m - F.root.Lt.m) * (F.root.c-Ft.c)  # clustering value = loss reduction: root.Lt.m < selective F.m, add dval?
@@ -648,7 +656,7 @@ def sum2G(ft_, root=None, init=1, typ=None):
     if G.Bt:
         Bt = G.Bt; bd,br = Bt.d,Bt.r
         if bd > avd*br*wn and N.typ!=1: cross_comp(Bt, br,'Bt')  # no ddfork
-        Bt.brrw = Bt.m * (root.root.m * (decay * (root.root.span/G.span)))  # external lend only, subtract from root?
+        if N_[0].typ: Bt.brrw = Bt.m * (root.root.m * (decay * (root.root.span/G.span)))  # external lend only, subtract from root?
     G.rN_ = sorted(G.rN_, key=lambda x: (x.m/x.c), reverse=True)
     return G
 
