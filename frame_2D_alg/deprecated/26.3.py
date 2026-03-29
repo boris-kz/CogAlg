@@ -395,3 +395,25 @@ def prop_w_():  # factory function to get and update wTT
             for W, w in zip(WT.N_, wT):
                 W.m = w
     return property(get, set)
+'''
+if np.any(rdpTT):
+    oF = get_F(Z, 'comp_N_')
+    if oF:
+        i, oF = oF
+        oF.dTT += rdpTT;
+        oF.c += 1
+        if oF.root is not None:
+            oF.root.c += 1  # not sure, oF.root.c is empty before feedback, so we need to add it first?
+            oF.root.wTT *= rdpTT * (oF.c / oF.root.c)  # this should be done recurisvely to the top root?
+'''
+def oF_root(root, _F_):  # assign top root only, most likely wrong
+    F_ = []
+    for F in _F_:
+        F.root = root; F_+=[F.Lt.N_]
+    if F_: oF_root(root, list(set(F_)))
+
+def x_(root, name):
+    while root.wTT:
+        for i, fork in enumerate(root.wTT.ravel()):  # flatten
+            if fork.nF==name: return i,fork
+            root = fork
