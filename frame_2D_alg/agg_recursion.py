@@ -81,14 +81,14 @@ class CN(CBase):
         n.fin = kwargs.get('fin',0)  # clustered, temporary
         n.compared = set()
         n.nt = kwargs.get('nt',[])  # L nodet
-        n.rN_= kwargs.get('rN_',[]) # reciprocal root nG_ for bG|cG, nG has Bt.N_,Ct.N_ instead?
-        n.nF = kwargs.get('nF', 'Nt')  # to set attr in root_update
+        n.rN_= kwargs.get('rN_',[])  # reciprocal root nG_ for bG|cG, nG has Bt.N_,Ct.N_ instead?
+        n.nF = kwargs.get('nF','Nt')  # to set attr in root_update
         n.fb_= kwargs.get('fb_',[])
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.c)
 
-class CF(CBase):  # iF/ data: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int- defining links, Lt/Ft, Ct/lev, Bt/G
-                  # oF/ code: N_ calls, H deeper call tree, Lt type tree, dTT=results, w=m or separate sum wTT?
+class CF(CBase): # iF/ data: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int- defining links, Lt/Ft, Ct/lev, Bt/G
+                 # oF/ code: N_ calls, H deeper call tree, Lt type tree, dTT=results, w=m or separate sum wTT?
     name = "fork"
     def __init__(f, **kwargs):
         super().__init__()
@@ -97,13 +97,14 @@ class CF(CBase):  # iF/ data: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int
         f.nF = kwargs.get('nF','Nt')
         f.Lt = kwargs.get('Lt',[])  # +|-/ cross_comp, or type tree in oF
         f.dTT = kwargs.get('dTT',np.zeros((2,9))); f.m, f.d, f.c, f.r = [kwargs.get(x,0) for x in ('m','d','c','r')]
-        f.wTT = kwargs.get('wTT',np.zeros((2,9))); f.w, f.wc, f.wr = [kwargs.get(x,0) for x in ('w','wc','wr')]  # fork coefs, no wd?
+        f.wTT = kwargs.get('wTT',np.zeros((2,9))); f.w, f.wc, f.wr = [kwargs.get(x,0) for x in ('w','wc','wr')]  # or wT, fork coefs, no wd?
         f.fb_ = kwargs.get('fb_',[])
         f.typ = 0  # blocks sub_comp
         f.root = kwargs.get('root',None)
-    def __bool__(f): return bool(f.c)  # N_ may be empty?
-# meta:
-# singleton oFs, no wTT:
+        f.croot = kwargs.get('croot', None)  # for Ct or Lt?
+def __bool__(f): return bool(f.c)  # N_ may be empty?
+# oFs:
+# singletons, no wTT:
 ave,avd = .3,.5; Ave,Avd = CF(nF='ave',w=ave), CF(nF='avd',w=avd)  # ave m,d / unit dist, oF: updatable weights version
 wY, wX = 64, 64; WY,WX = CF(nF='wY',w=wY), CF(nF='wX',w=wX)
 decay, wYX = ave/(ave+avd), np.hypot(wY,wX)
@@ -115,34 +116,29 @@ wN,wC,wn,wc = 10,20,5,10  # fork weights
 wTTN, wTTC, wTTn, wTTc = np.array([wT,wT*avd])*wN, np.array([wT,wT*avd])*wC, np.array([wT,wT*avd])*wn, np.array([wT,wT*avd])*wc
 wTT_ = [wTTN,wTTC, wTTn,wTTc]  # || Nt,Ct,Lt, no Bt: no call, no info?
 WN,WC, Wn,Wc = CF(nF='wN',wTT=wTTN,w=wN), CF(nF='wC',wTT=wTTC,w=wC), CF(nF='wn',wTT=wTTn,w=wn), CF(nF='wc',wTT=wTTc,w=wc)  # accum from calls?
-WTT_ = CF(nF='wTT_', N_=[WN,WC,Wn,Wc])  # add sub-forks:
+WTT_ = CF(nF='wTT_',Lt= CF(N_= [WN,WC,Wn,Wc]))  # add sub-forks:
 # process weight tree:
-omX = CF(nF = 'X', # maps to cross_comp, replacing globals, dTT = process wTT, root: caller for credit assign, not similarity type?
-    N_ = [  # process forks:
-    CF(nF='comp_', N_=[CF(nF='comp_N_'), CF(nF='comp_C_'), CF(nF='comp_N'), CF(nF='comp_F')]),  # finer comps downstream?
-    CF(nF='clust', N_=[CF(nF='exemplars'), CF(nF='cluster_N'), CF(nF='cluster_C'), CF(nF='cluster_P')]),  # Q2R, cent_TT, sum functions downstream?
-    CF(nF='eval_', N_=[CF(nF='vt_'), CF(nF='val_'), CF(nF='proj_TT'), CF(nF='proj_N'), CF(nF='ffeedback')]),  # or ffeedback is a clust type?
-    CF(nF='attr_', N_=[Ave,Avd,WTT_, WY,WX, AveB, LW,Distw,Intw])  # all modifiable weights
-    ])  # cluster forks by call,type ||AST, oF.wTT *= rel prediction error, _oF.wTT /= rel prediction error?
-
-def update_oF_root(root):
-    for N in root.N_:
-        N.root = root
-        if N.N_: update_oF_root(N)
-update_oF_root(omX)
-    
+oF_ = [  # cluster oFs by call,type ||AST, vs rel prediction error, oF.wTT*= rpdTT, _oF.wTT/= rpdTT:
+    CF(nF='comp_',Lt= CF(N_= [CF(nF='comp_N_'), CF(nF='comp_C_'), CF(nF='comp_N'), CF(nF='comp_F')])),  # finer comps downstream?
+    CF(nF='clust',Lt= CF(N_= [CF(nF='exemplars'), CF(nF='cluster_N'), CF(nF='cluster_C'), CF(nF='cluster_P')])),  # Q2R,cent_TT, sum functions?
+    CF(nF='eval_',Lt= CF(N_= [CF(nF='vt_'), CF(nF='val_'), CF(nF='proj_TT'), CF(nF='proj_N'), CF(nF='ffeedback')])),  # or ffeedback is a clust type?
+    CF(nF='attr_',Lt= CF(N_= [Ave,Avd,WTT_, WY,WX, AveB, LW,Distw,Intw]))  # all modifiable weights
+    ]
+Z = CF(nF ='Z',Lt=CF(N_=oF_))
+# global cross_comp fork, root=caller, N_=calls, Lt: similarity sub-types, sum other attrs in ffeedback Q2R
+def F_root(_F, fC=1):
+    for F in (_F.Lt.N_ if fC else _F.N_):  # fork types or calls
+        setattr(F, 'croot' if fC else 'root', _F)
+        sub = F.Lt if fC else F.N_
+        if sub: F_root(F, fC)
+F_root(Z)
+def getF(oF, name):
+    for fork in oF.Lt.N_:  # current + promoted fork types
+            if fork.nF==name: return fork
 '''
 if  projecting_root: F.root.wTT *= rdpTT * (F.c/ F.root.c)  # c-weighted feedback
 elif selecting_root: (F.m - F.root.Lt.m) * (F.root.c-Ft.c)  # clustering value = loss reduction: root.Lt.m < selective F.m, add dval?
 '''
-def x_(root, name):
-    for i, fork in enumerate(root.N_):
-        if fork.nF==name:
-            return i,fork
-        elif fork.N_:  # recursively search deeper oF
-            sub_oF = x_(fork, name)
-            if sub_oF: return sub_oF 
-        
 def vt_(TT, r, wTT=wTTn):  # brief val_ to get m,d, rc=0 to return raw vals, Wn for comp_N
 
     m_,d_= TT; ad_ = np.abs(d_); t_ = eps_(m_+ad_)  # ~ max comparand
@@ -225,7 +221,7 @@ def comp_N_(_pairs, r, tnF=None, rL=None):  # incremental-distance cross_comp, m
         Dec = dec or decay ** ((dist/((_N.span+N.span)/2)))
         iTT = (_N.dTT + N.dTT) * Dec
         eTT = (_N.Rt.dTT + N.Rt.dTT) * Dec
-        if abs(vt_(eTT,r)[0]) > ave*wn*r*(_N.r+N.r)/2:  # spec N links 
+        if abs(vt_(eTT,r)[0]) > ave*wn*r*(_N.r+N.r)/2:  # spec N links
             eTT = proj_N(N, dist, dy_dx, r, dec)  # proj N L_,B_,rim, if pV>0: eTT += pTT?
             eTT+= proj_N(_N,dist, -dy_dx, r, dec)  # reverse direction
         return iTT+eTT
@@ -249,16 +245,8 @@ def comp_N_(_pairs, r, tnF=None, rL=None):  # incremental-distance cross_comp, m
         else: break  # beyond initial induction range, re-sort by proj_V?
     for N in set(N_):
         if N.rim: Q2R(N.rim, N.Rt, merge=0, froot=0)
-
-    if np.any(rdpTT):
-        oF = x_(omX,'comp_N_')
-        if oF:
-            i, oF = oF
-            oF.dTT += rdpTT; oF.c += 1
-            if oF.root is not None:
-                oF.root.c += 1  # not sure, oF.root.c is empty before feedback, so we need to add it first? 
-                oF.root.wTT *= rdpTT * (oF.c / oF.root.c)  # this should be done recurisvely to the top root?
-    # root.rdpTT += rdpTT  # any root-> frame: high error-> lower source code weight, alt code exploration?
+    # store calls for ffeedback, error lowers source code weight, global?
+    getF(Z,'comp_N_').N_ += [(L_,rdpTT)]
     TT,cm,rm, TTd,cd,rd = acc
     return L_,TT,cm,rm/(cm or eps), TTd,cd,rd/(cd or eps)
 
@@ -476,17 +464,13 @@ def cluster_N(Ft, _N_, r):  # flood-fill node | link clusters, flat, replace iL_
         if G_:
             for G in G_: trans_cluster(G)  # splice trans_links, merge L.nt.roots
             if val_(TT, r+1, TTw(Ft.root), (len(G_)-1)*Lw) > 0:
-                sum2F(G_, Ft.nF, Ft.root, TT,C); r+=1  # reform Nt, Ft.Lt is empty till cross_comp?
-            oF = x_(omX, 'cluster_N')
-            if oF:
-                _, oF = oF; oF.c += 1
-                if oF.root is not None:
-                    oF.m += (oF.m - (oF.root.Lt.m if oF.root.Lt else 0)) * (oF.root.c - oF.c)
-                    oF.root.c += 1
+                sum2F(G_, Ft.nF, Ft.root, TT,C)  # reform Nt, Ft.Lt is empty till cross_comp?
+                r += 1
+        # clustering value = selectivity or loss reduction vs root.Lt: all comps, add dval?
+        selV = (Ft.m - Ft.root.Lt.m) * (Ft.root.Lt.c - Ft.c)  # not sure about root
+        getF(Z,'cluster_N').N_ += [(G_,selV)]  # oF feedback, global?
+        # combine C_:
         Q2R([C for N in (G_ if G_ else _N_) for C in N.Ct.N_], Ft.root.Ct, froot=0)
-        ''' 
-        clustering value = selectivity or loss reduction, add dval?:
-        (Ft.m - Ft.root.Lt.m) * (Ft.root.c - Ft.c)  # Ft.root.Lt.m < Ft.m: less selective? '''
     return G_, r
 
 def cluster_C(Ft, E_, r):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
@@ -549,17 +533,14 @@ def cluster_C(Ft, E_, r):  # form centroids by clustering exemplar surround via 
         if Do and Dm/Do > Ave: _C_=C_  # dval vs. dolp: overlap increases with Cs expansion
         else: oC_ += C_; break  # converged
     if oC_:
-        oF = x_(omX, 'cluster_C')
-        if oF:
-            _, oF = oF; oF.c += 1
-            if oF.root is not None:
-                oF.m += (oF.m - (oF.root.Lt.m if oF.root.Lt else 0)) * (oF.root.c - oF.c)
-                oF.root.c += 1
         for n in [N for C in oC_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals:
             n.exe = (n.d if n.typ==1 else n.m) + np.sum([m-ave*o for m, o in zip(n.m_, n.o_)]) - ave
         if val_(DTT, r+olp, TTw(Ft.root,1), (len(oC_)-1)*Lw) > 0:
             Ct = sum2F(oC_,'Ct', Ft.root, fCF=0)
             _, r = cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)? Nt|Ct priority eval?
+            selV = (Ct.m-Ft.m) * (Ft.c-Ct.c)  # selectivity vs. Ns?
+            getF(Z,'cluster_C').N_ += [(oC_,selV)]
+            # oF feedback, global?
     return oC_,r
 
 def cluster_P(_C_,N_,root):  # Parallel centroid refining, _C_ from cluster_C, N_= root.N_, if global val*overlap > min
@@ -710,7 +691,7 @@ def add_Lt(G, Lt):  # addition to Q2R
     L_ = Lt.N_
     if Lt.m > ave*wn*Lt.r:  # comp typ -1 pre-links
         L_,pL_ = [],[]; [L_.append(L) if L.typ==1 else pL_.append(L) for L in Lt.N_]
-        if pL_ and sum_vt(pL_,fm=1)[0] > ave*wn*sum([L.r for L in pL_]):
+        if pL_ and sum_vt(pL_,fm=1)[0] > ave*wn * np.mean([L.r for L in pL_]):
             for L in pL_: L_ += [comp_N(*L.nt, G.r,1, L.angl[0], L.span)]
             Q2R(L_,Lt)
             Q2R([G,Lt], G, merge=0)
