@@ -412,6 +412,13 @@ def oF_root(root, _F_):  # assign top root only, most likely wrong
         F.root = root; F_+=[F.Lt.N_]
     if F_: oF_root(root, list(set(F_)))
 
+def F_root(_F, fC=1):
+    for F in (_F.Ct.N_ if fC else _F.N_):  # fork types or calls
+        setattr(F, 'croot' if fC else 'root', _F)
+        sub = F.Ct if fC else F.N_
+        if sub: F_root(F, fC)
+F_root(Z)
+
 def x_(root, name):
     while root.wTT:
         for i, fork in enumerate(root.wTT.ravel()):  # flatten
