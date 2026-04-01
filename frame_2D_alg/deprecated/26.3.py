@@ -424,3 +424,64 @@ def x_(root, name):
         for i, fork in enumerate(root.wTT.ravel()):  # flatten
             if fork.nF==name: return i,fork
             root = fork
+
+def cluster_N(Ft, _N_, r, oF):  # flood-fill node | link clusters, flat, replace iL_ with E_?
+
+    def nt_vt(n,_n):
+        M, D = 0,0  # exclusive match, contrast
+        for l in set(n.rim+_n.rim):
+            if l.m > 0:   M += l.m
+            elif l.d > 0: D += l.d
+        return M, D
+    def trans_cluster(G):
+        for L in G.L_:
+            for tFt in L.Nt,L.Bt,L.Ct:  # Lt doesn't form trans-links, Ct is not root-constrained?
+                for tL in tFt.N_:
+                    if tL.m > ave*wN:  # merge trans_link.nt.roots
+                        rt0 = getattr(tL.nt[0].root,'root',None); rt1 = getattr(tL.nt[1].root,'root',None)  # CNs
+                        if rt0 and rt1 and rt0 !=rt1: add_Nt(rt0, rt1, merge=1)  # concat in higher G
+            L.Nt,L.Bt,L.Ct = CF(),CF(),CF()
+            # merge roots
+    G_ =[]  # add prelink pL_,pN_? include merged Cs, in feature space for Cs
+    if _N_ and val_(Ft.dTT, r+wN, TTw(Ft.root), mw=(len(_N_)-1)*Lw) > 0:  #| fL?
+        for N in _N_:
+            N.fin=0; N.exe=1; Q2R(N.rim, N.Rt, merge=0, froot=0)  # only if N was added in trans-cluster?
+        G_= []; TT=np.zeros((2,9)); C=0; in_= set()  # root attrs
+        for N in _N_:  # form G per remaining N
+            if N.fin or (Ft.root.root and not N.exe): continue  # no exemplars in Fg
+            N_ = [N]; L_,B_,C_ = [],[],[]; N.fin=1  # init G, no C_?
+            __L_= N.rim  # spliced rim
+            while __L_:
+                _L_ = []
+                for L in set(__L_) - in_:  # flood-fill via frontier links
+                    _N = L.nt[0] if L.nt[1].fin else L.nt[1]; in_.add(L)
+                    if not _N.fin and _N in Ft.N_:
+                        m,d = nt_vt(*L.nt)
+                        if m > ave * (r-1):  # cluster nt, L,C_ by combined rim density:
+                            N_ += [_N]; _N.fin = 1
+                            L_ += [L]; C_ += _N.rN_
+                            _L_+= [l for l in _N.rim if l not in in_ and (l.nt[0].fin ^ l.nt[1].fin)]   # new frontier links, +|-?
+                        elif d > avd * (r-1): B_ += [L]  # contrast value, exclusive?
+                __L_ = list(set(_L_))
+            if N_:
+                ft_ = []
+                for i,(F_,nF) in enumerate(zip((N_,L_,B_),('Nt','Lt','Bt'))):  # no Ct till sub+?
+                    F_ = list(set(F_)) or []; tt,fc,fr = sum_vt(F_) if F_ else (np.zeros((2,9)),0,0)
+                    ft_+= [[F_,nF,tt,fc,fr]]
+                (_,_,nt,nc,_),(_,_,lt,lc,_),(_,_,bt,bc,br) = ft_
+                c = nc + lc + bc*br  # redundant B_,C_
+                tt = (nt*nc + lt*lc + bt*bc*br) /c  # tentative
+                if val_(tt, r, TTw(Ft.root), (len(N_)-1)*Lw) > 0:
+                    G_ += [sum2G(ft_, Ft)]; TT+=tt; C+=c  # tt*(C*r)? sub+ in sum2G
+        if G_:
+            for G in G_: trans_cluster(G)  # splice trans_links, merge L.nt.roots
+            if val_(TT, r+1, TTw(Ft.root), (len(G_)-1)*Lw) > 0:
+                sum2F(G_, Ft.nF, Ft.root, TT,C)  # reform Nt, Ft.Lt is empty till cross_comp?
+                r += 1
+        # clustering value = selectivity or loss reduction vs root.Lt: all comps, add dval? selV = (Ft.m-Ft.root.Lt.m) * (Ft.root.Lt.c-Ft.c)
+        sel_TT = (Ft.dTT*Ft.c - Ft.root.Lt.dTT*Ft.root.Lt.c) / eps_(Ft.root.Lt.dTT * Ft.root.Lt.c)
+        Z.N_+= [CF(nF='cluster_N',root=oF, N_=G_, dTT=sel_TT)]  # feedback
+        # combine C_:
+        Q2R([C for N in (G_ if G_ else _N_) for C in N.Ct.N_], Ft.root.Ct, froot=0)
+    return G_, r
+
