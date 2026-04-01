@@ -5,6 +5,10 @@ from itertools import zip_longest, combinations, product  # from multiprocessing
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
+import inspect
+from functools import wraps
+import contextvars
+
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -103,30 +107,34 @@ class CF(CBase): # iF/ data: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int-
         f.root = kwargs.get('root',None)
     def __bool__(f): return bool(f.c)  # N_ may be empty?
 
-import contextvars
 class CoF(CF):  # code fork: call_: function call trace, H deeper call tree, Ct: types, dTT=results, w=m or separate sum wTT?
     name = "func"
     _cur = contextvars.ContextVar('oF')
     _typ = {}  # func_name -> typ_oF singleton in Z.Ct
     def __init__(f, **kw):
         super().__init__(**kw)
+        f.typ = kw.get('typ', None)
     @staticmethod
-    def get(): return CoF._cur.get()
+    def get(): return CoF._cur.get(Z)
     @staticmethod
     def traced(func):
+        if getattr(func, 'cof_traced', False):
+            return func
+        @wraps(func)
         def inner(*a, **kw):
             name = func.__name__
             if name not in CoF._typ:
                 t = CoF(nF=name); CoF._typ[name] = t
                 Z.Ct.N_ += [t]  # register type
             typ = CoF._typ[name]; _CoF = CoF._cur.get()
-            oF = CoF(nF=name, root=_CoF, typ=typ)  # call instance
+            oF = CoF(nF=name, root=_CoF, typ=typ, Lt=CF()); oF.Lt.root=oF  # call instance
             _CoF.N_ += [oF]; typ.c += 1  # use Q2R?
             CoF._cur.set(oF)
             result = func(*a, **kw)
             typ.dTT += oF.dTT
             CoF._cur.set(_CoF)  # restore after
             return result
+        inner.cof_traced = True  # flag to identify function is wrapped or not
         return inner
 # Z:
 # singletons, no wTT:
@@ -155,6 +163,23 @@ wTT_ = [wTTN,wTTC, wTTn,wTTc]  # || Nt,Ct,Lt, no Bt: no call, no info?
 '''
 Z = CoF(nF ='Z', Ct=CoF(nF='Ct'))  # global meta code, Z.N_= call trace, root=caller, Ct: function sub-types in ffeedback
 CoF._cur.set(Z)  # root context
+
+# function to trace all definitions 
+def trace_all_module_functions(module_dict, module_name=None, exclude=()):
+    if module_name is None:
+        module_name = module_dict.get('__name__')
+    exclude = set(exclude)
+
+    for name, obj in list(module_dict.items()):
+        if name in exclude:
+            continue
+        if not inspect.isfunction(obj):
+            continue
+        if obj.__module__ != module_name:
+            continue
+        if getattr(obj, 'cof_traced', False):
+            continue
+        module_dict[name] = CoF.traced(obj)
 
 def vt_(TT, r, wTT=wTTn):  # brief val_ to get m,d, rc=0 to return raw vals, Wn for comp_N
 
@@ -204,7 +229,7 @@ def TTw(G, wi=0): return wTT_[wi] * G.wTT_[wi]  # * secondary wweights, average=
 - Forward: extend cross-comp and clustering of top clusters across frames, re-order centroids by eigenvalues.
 - Feedback coords to bottom level or prior-level in parallel pipelines, filter updates in more coarse cycles 
 '''
-@CoF.traced
+
 def cross_comp(Ft, rr, nF='Nt'):  # core function mediating recursive rng+ and der+ cross-comp and clustering
 
     N_,G_ = Ft.N_,[]; fC = N_[0].typ==3  # rc=rdn+olp, comp N_|B_|C_:
@@ -222,7 +247,6 @@ def cross_comp(Ft, rr, nF='Nt'):  # core function mediating recursive rng+ and d
                     G_,r = cross_comp(Ft,r,nF)  # agg+, trans-comp
     return G_, r  # G_ is recursion flag
 
-@CoF.traced
 def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, max dist depends on prior match
 
     pairs, TT,cm,rm = [],np.zeros((2,9)), 0,0
@@ -249,7 +273,7 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
     acc = [TT,cm,rm, TTd,cd,rd]
     for pL in sorted(pairs, key=lambda x: x[0]):  # proximity prior, test compared?
         dist,dy_dx,_N,N = pL # rim angl is not canonic
-        pTT = proj_V(_N,N, dist, dy_dx, root.m if root<2 else decay** (dist/((_N.span+N.span)/2)))  # based on current rim
+        pTT = proj_V(_N,N, dist, dy_dx, root.m if root!=2 else decay** (dist/((_N.span+N.span)/2)))  # based on current rim
         lr = r+ (N.r+_N.r)/2; m,d = vt_(pTT,lr)  # +|-match certainty
         if m > 0:
             if abs(m) < ave*wn:  # comp if marginally predictable, update N.Rt pair eval, ave / proj surprise value?
@@ -267,7 +291,7 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
         if N.rim: Q2R(N.rim, N.Rt, merge=0, froot=0)
     # call trace:
     oF = CoF.get()  # this call oF.nF = 'comp_N_', sub-calls are auto-nested in oF.call_
-    oF.Lt = Q2R(L_)  # data scope, c-proportional, or get separate oL_ with L.dTT=rdpTT?
+    oF.Lt = Q2R(L_, R=oF)  # data scope, c-proportional, or get separate oL_ with L.dTT=rdpTT?
     TT,cm,rm, TTd,cd,rd = acc
     return L_,TT,cm,rm/(cm or eps), TTd,cd,rd/(cd or eps)
 
@@ -305,6 +329,8 @@ def comp_C_(C_, rr,_C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
             comp_N(_C,C, rr,A=dy_dx,span=dist,L_=L_,N_=N_,acc=acc)  # simplified for typ=3
     for N in list(set(N_)):
         if N.rim: Q2R(N.rim, N.Rt, merge=0, froot=0)
+    oF = CoF.get()  # this call oF.nF = 'comp_N_', sub-calls are auto-nested in oF.call_
+    oF.Lt = Q2R(L_, R=oF)
     TTm,cm,rm,TTd,cd,rd = acc
     return L_,TTm,cm, rm/(cm or eps), TTd,cd, rd/(cd or eps)  # L_ is Lm now
 
@@ -434,7 +460,7 @@ def get_exemplars(N_,rr):  # multi-layer non-maximum suppression -> sparse seeds
             break  # the rest of N_ is weaker, trace via rims
     return E_ or [N_[0]]
 
-def cluster_N(Ft, _N_, r, oF):  # flood-fill node | link clusters, flat, replace iL_ with E_?
+def cluster_N(Ft, _N_, r):  # flood-fill node | link clusters, flat, replace iL_ with E_?
 
     def nt_vt(n,_n):
         M, D = 0,0  # exclusive match, contrast
@@ -1055,6 +1081,14 @@ def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential
     return rM+rD, rTT_
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
+
+    trace_all_module_functions(vars(),exclude= {'trace_all_module_functions',
+                                                'eps_',
+                                                'prop_F_',
+                                                'extend_box',
+                                                'TTw',
+                                                'Copy_',
+                                                'CopyF'})
 
     Y,X = imread('./images/toucan.jpg').shape
     # frame = agg_frame(0, image=imread('./images/toucan.jpg'), iY=Y, iX=X)
