@@ -93,6 +93,6 @@ Khanh Nguyen, team developer, $900 January-March
 
 2026:  
 
-Kok Wei Chee, team developer, $6300 January-February
+Kok Wei Chee, team developer, $9300 January-March
 
 

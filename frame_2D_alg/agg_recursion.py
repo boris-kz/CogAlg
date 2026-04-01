@@ -88,21 +88,46 @@ class CN(CBase):
     def __bool__(n): return bool(n.c)
 
 class CF(CBase): # iF/ data: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int- defining links, Lt/Ft, Ct/lev, Bt/G
-                 # oF/ code: N_ calls, H deeper call tree, Ct: types, dTT=results, w=m or separate sum wTT?
     name = "fork"
     def __init__(f, **kwargs):
         super().__init__()
         f.N_ = kwargs.get('N_',[])  # flat top lev, calls in oF
         f.H  = kwargs.get('H', [])  # lower CF levs / Nt||Ct
         f.nF = kwargs.get('nF','Nt')
-        f.Lt = kwargs.get('Lt',[])  # +|- cross_comp, including cross-call in oF?
-        f.Ct = kwargs.get('Ct',[])  # promoted lower types, oF only?
+        f.Lt = kwargs.get('Lt',[])  # +|-/ cross_comp | data scope in oF?
+        f.Ct = kwargs.get('Ct',[])  # promoted | generalized lower types, oF only?
         f.dTT = kwargs.get('dTT',np.zeros((2,9))); f.m, f.d, f.c, f.r = [kwargs.get(x,0) for x in ('m','d','c','r')]  # rdpTT in oF?
         f.wTT = kwargs.get('wTT',np.zeros((2,9))); f.w, f.wc, f.wr = [kwargs.get(x,0) for x in ('w','wc','wr')]  # or wT, fork coefs, no wd?
         f.fb_ = kwargs.get('fb_',[])
         f.typ = 0  # blocks sub_comp
         f.root = kwargs.get('root',None)
     def __bool__(f): return bool(f.c)  # N_ may be empty?
+
+import contextvars
+class CoF(CF):  # code fork: call_: function call trace, H deeper call tree, Ct: types, dTT=results, w=m or separate sum wTT?
+    name = "func"
+    _cur = contextvars.ContextVar('oF')
+    _typ = {}  # func_name -> typ_oF singleton in Z.Ct
+    def __init__(f, **kw):
+        super().__init__(**kw)
+    @staticmethod
+    def get(): return CoF._cur.get()
+    @staticmethod
+    def traced(func):
+        def inner(*a, **kw):
+            name = func.__name__
+            if name not in CoF._typ:
+                t = CoF(nF=name); CoF._typ[name] = t
+                Z.Ct.N_ += [t]  # register type
+            typ = CoF._typ[name]; _CoF = CoF._cur.get()
+            oF = CoF(nF=name, root=_CoF, typ=typ)  # call instance
+            _CoF.N_ += [oF]; typ.c += 1  # use Q2R?
+            CoF._cur.set(oF)
+            result = func(*a, **kw)
+            typ.dTT += oF.dTT
+            CoF._cur.set(_CoF)  # restore after
+            return result
+        return inner
 # Z:
 # singletons, no wTT:
 ave,avd = .3,.5; Ave,Avd = CF(nF='ave',w=ave), CF(nF='avd',w=avd)  # ave m,d / unit dist, oFs: updatable weights version
@@ -128,7 +153,8 @@ wTT_ = [wTTN,wTTC, wTTn,wTTc]  # || Nt,Ct,Lt, no Bt: no call, no info?
     if  projecting_root: F.root.wTT *= rdpTT * (F.c/ F.root.c)  # c-weighted feedback
     elif selecting_root: (F.m - F.root.Lt.m) * (F.root.c-Ft.c)  # clustering value = loss reduction: root.Lt.m < selective F.m, add dval? 
 '''
-Z = CF(nF ='Z', Ct=CF(nF='Ct'))  # global meta code, Z.N_= call trace, root=caller, Ct: function sub-types in ffeedback
+Z = CoF(nF ='Z', Ct=CoF(nF='Ct'))  # global meta code, Z.N_= call trace, root=caller, Ct: function sub-types in ffeedback
+CoF._cur.set(Z)  # root context
 
 def vt_(TT, r, wTT=wTTn):  # brief val_ to get m,d, rc=0 to return raw vals, Wn for comp_N
 
@@ -178,6 +204,7 @@ def TTw(G, wi=0): return wTT_[wi] * G.wTT_[wi]  # * secondary wweights, average=
 - Forward: extend cross-comp and clustering of top clusters across frames, re-order centroids by eigenvalues.
 - Feedback coords to bottom level or prior-level in parallel pipelines, filter updates in more coarse cycles 
 '''
+@CoF.traced
 def cross_comp(Ft, rr, nF='Nt'):  # core function mediating recursive rng+ and der+ cross-comp and clustering
 
     N_,G_ = Ft.N_,[]; fC = N_[0].typ==3  # rc=rdn+olp, comp N_|B_|C_:
@@ -195,7 +222,8 @@ def cross_comp(Ft, rr, nF='Nt'):  # core function mediating recursive rng+ and d
                     G_,r = cross_comp(Ft,r,nF)  # agg+, trans-comp
     return G_, r  # G_ is recursion flag
 
-def comp_N_(_pairs, r, oF=Z, tnF=None, root=2):  # incremental-distance cross_comp, max dist depends on prior match
+@CoF.traced
+def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, max dist depends on prior match
 
     pairs, TT,cm,rm = [],np.zeros((2,9)), 0,0
     for pair in _pairs:  # get all-to-all pre-links
@@ -225,8 +253,9 @@ def comp_N_(_pairs, r, oF=Z, tnF=None, root=2):  # incremental-distance cross_co
         lr = r+ (N.r+_N.r)/2; m,d = vt_(pTT,lr)  # +|-match certainty
         if m > 0:
             if abs(m) < ave*wn:  # comp if marginally predictable, update N.Rt pair eval, ave / proj surprise value?
-                Link = comp_N(_N,N, lr, full=not tnF, A=dy_dx, span=dist, rL=rL,L_=L_,N_=N_, acc=acc)
+                Link = comp_N(_N,N, lr, full=not tnF, A=dy_dx, span=dist, rL=root,L_=L_,N_=N_, acc=acc)
                 rdpTT += np.abs(pTT-Link.dTT) / eps_(Link.dTT)
+                # or form separate oL_ with rdpTTs for oF.Lt?
                 ''' relative prediction error to fit the code, direction-agnostic, *c, C+=c: tot_C is not known?
                 increase comp_N_ weight, decrease weights of upstream pTT-forming ops, symmetrically? '''
             else:
@@ -237,7 +266,8 @@ def comp_N_(_pairs, r, oF=Z, tnF=None, root=2):  # incremental-distance cross_co
     for N in set(N_):
         if N.rim: Q2R(N.rim, N.Rt, merge=0, froot=0)
     # call trace:
-    oF.N_ += [CF(nF='comp_N_',root=oF, N_=L_, dTT=rdpTT)]  # assign data root for scope, error lowers source code weight
+    oF = CoF.get()  # this call oF.nF = 'comp_N_', sub-calls are auto-nested in oF.call_
+    oF.Lt = Q2R(L_)  # data scope, c-proportional, or get separate oL_ with L.dTT=rdpTT?
     TT,cm,rm, TTd,cd,rd = acc
     return L_,TT,cm,rm/(cm or eps), TTd,cd,rd/(cd or eps)
 
@@ -404,7 +434,7 @@ def get_exemplars(N_,rr):  # multi-layer non-maximum suppression -> sparse seeds
             break  # the rest of N_ is weaker, trace via rims
     return E_ or [N_[0]]
 
-def cluster_N(Ft, _N_, r, oF=Z):  # flood-fill node | link clusters, flat, replace iL_ with E_?
+def cluster_N(Ft, _N_, r, oF):  # flood-fill node | link clusters, flat, replace iL_ with E_?
 
     def nt_vt(n,_n):
         M, D = 0,0  # exclusive match, contrast
@@ -458,8 +488,9 @@ def cluster_N(Ft, _N_, r, oF=Z):  # flood-fill node | link clusters, flat, repla
                 sum2F(G_, Ft.nF, Ft.root, TT,C)  # reform Nt, Ft.Lt is empty till cross_comp?
                 r += 1
         # clustering value = selectivity or loss reduction vs root.Lt: all comps, add dval? selV = (Ft.m-Ft.root.Lt.m) * (Ft.root.Lt.c-Ft.c)
-        sel_TT = (Ft.dTT*Ft.c - Ft.root.Lt.dTT*Ft.root.Lt.c) / eps_(Ft.root.Lt.dTT * Ft.root.Lt.c)
-        Z.N_+= [CF(nF='cluster_N',root=oF, N_=G_, dTT=sel_TT)]  # feedback
+        sel_TT = (Ft.dTT*Ft.c - Ft.root.Lt.dTT*Ft.root.Lt.c) / eps_(Ft.root.Lt.dTT * Ft.root.Lt.c); sel_c = Ft.c - Ft.root.Lt.c
+        oF = CoF.get()  # this call CoF, oF.nF = 'cluster_N'
+        oF.Lt.N_ = G_; oF.Lt.dTT=sel_TT; oF.Lt.c = sel_c  # data scope, can't use Q2R?
         # combine C_:
         Q2R([C for N in (G_ if G_ else _N_) for C in N.Ct.N_], Ft.root.Ct, froot=0)
     return G_, r
@@ -529,8 +560,9 @@ def cluster_C(Ft, E_, r):  # form centroids by clustering exemplar surround via 
         if val_(DTT, r+olp, TTw(Ft.root,1), (len(oC_)-1)*Lw) > 0:
             Ct = sum2F(oC_,'Ct', Ft.root, fCF=0)
             _, r = cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
-            sel_TT = (Ct.dTT*Ct.c - Ft.dTT*Ft.c) / eps_(Ct.dTT*Ct.c)  # select Nt.N_?
-            Z.N_+= [CF(nF='cluster_C',root=oF, N_=oC_, dTT=sel_TT)]  # feedback
+            sel_TT = (Ct.dTT*Ct.c - Ft.dTT*Ft.c) / eps_(Ct.dTT*Ct.c); sel_c = Ft.c - Ct.c  # select Nt.N_?
+            oF = CoF.get()  # this call CoF, oF.nF = 'cluster_N'
+            oF.Lt.N_ = C_; oF.Lt.dTT=sel_TT; oF.Lt.c = sel_c  # data scope
     return oC_,r
 
 def cluster_P(_C_,N_,root):  # Parallel centroid refining, _C_ from cluster_C, N_= root.N_, if global val*overlap > min
@@ -565,7 +597,12 @@ def cluster_P(_C_,N_,root):  # Parallel centroid refining, _C_ from cluster_C, N
             v_[:] = [v for v,c in zip(v_,out_) if c]; _v_[:] = []
         N.rN_ = [c for c,keep in zip(N.rN_,out_) if keep]
 
-    return [c for c in out_ if c]  # or full out_?
+    C_ = [c for c in out_ if c]
+    Ct = Q2R(C_); _Ct = Q2R(_C_)  # or Q2R(_C_-C_)?
+    sel_TT = (Ct.dTT*Ct.c - _Ct.dTT*_Ct.c) / eps_(_Ct.dTT*_Ct.c); sel_c = _Ct.c - Ct.c
+    oF = CoF.get()  # this call CoF, oF.nF = 'cluster_N'
+    oF.Lt.N_ = C_; oF.Lt.dTT=sel_TT; oF.Lt.c = sel_c  # data scope
+    return C_  # or full out_?
 ''' next order: level-parallel cluster_H / multiple agg+? compress as autoencoder? '''
 
 def add_H(H,h, root, fN=0):
