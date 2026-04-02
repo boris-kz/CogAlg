@@ -1,13 +1,11 @@
-import numpy as np
+import numpy as np, inspect, contextvars
 from copy import copy, deepcopy
 from math import atan2, cos, pi  # from functools import reduce
 from itertools import zip_longest, combinations, product  # from multiprocessing import Pool, Manager
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
-import inspect
 from functools import wraps
-import contextvars
 
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
@@ -103,38 +101,37 @@ class CF(CBase): # iF/ data: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int-
         f.dTT = kwargs.get('dTT',np.zeros((2,9))); f.m, f.d, f.c, f.r = [kwargs.get(x,0) for x in ('m','d','c','r')]  # rdpTT in oF?
         f.wTT = kwargs.get('wTT',np.zeros((2,9))); f.w, f.wc, f.wr = [kwargs.get(x,0) for x in ('w','wc','wr')]  # or wT, fork coefs, no wd?
         f.fb_ = kwargs.get('fb_',[])
-        f.typ = 0  # blocks sub_comp
+        f.typ = f.typ = kwargs.get('typ',0)  # blocks sub_comp
         f.root = kwargs.get('root',None)
     def __bool__(f): return bool(f.c)  # N_ may be empty?
 
-class CoF(CF):  # code fork: call_: function call trace, H deeper call tree, Ct: types, dTT=results, w=m or separate sum wTT?
+class CoF(CF):  # oF/ code fork, Ct: types, dTT=results, w=m or separate sum wTT?
     name = "func"
     _cur = contextvars.ContextVar('oF')
     _typ = {}  # func_name -> typ_oF singleton in Z.Ct
     def __init__(f, **kw):
         super().__init__(**kw)
-        f.typ = kw.get('typ', None)
+        f.call_ = kw.get('call_',[])  # function call trace, H: nested call tree or clustered typs only?
     @staticmethod
     def get(): return CoF._cur.get(Z)
     @staticmethod
     def traced(func):
-        if getattr(func, 'cof_traced', False):
+        if getattr(func, 'wrapped', False):
             return func
         @wraps(func)
         def inner(*a, **kw):
             name = func.__name__
             if name not in CoF._typ:
                 t = CoF(nF=name); CoF._typ[name] = t
-                Z.Ct.N_ += [t]  # register type
-            typ = CoF._typ[name]; _CoF = CoF._cur.get()
-            oF = CoF(nF=name, root=_CoF, typ=typ, Lt=CF()); oF.Lt.root=oF  # call instance
-            _CoF.N_ += [oF]; typ.c += 1  # use Q2R?
-            CoF._cur.set(oF)
-            result = func(*a, **kw)
-            typ.dTT += oF.dTT
-            CoF._cur.set(_CoF)  # restore after
+                Z.Ct.N_ += [t]  # register type, or in ffeedback only?
+            typ = CoF._typ[name]
+            _CoF = CoF._cur.get()
+            oF = CoF(nF=name, root=_CoF, typ=typ)  # call instance
+            _CoF.call_ += [oF]  # add Q2R(call_) before evals? nest by data scope in frame.H[i].H?
+            CoF._cur.set(oF); result = func(*a, **kw)
+            CoF._cur.set(_CoF)  # restore
             return result
-        inner.cof_traced = True  # flag to identify function is wrapped or not
+        inner.wrapped = True  # flag
         return inner
 # Z:
 # singletons, no wTT:
@@ -164,23 +161,6 @@ wTT_ = [wTTN,wTTC, wTTn,wTTc]  # || Nt,Ct,Lt, no Bt: no call, no info?
 Z = CoF(nF ='Z', Ct=CoF(nF='Ct'))  # global meta code, Z.N_= call trace, root=caller, Ct: function sub-types in ffeedback
 CoF._cur.set(Z)  # root context
 
-# function to trace all definitions 
-def trace_all_module_functions(module_dict, module_name=None, exclude=()):
-    if module_name is None:
-        module_name = module_dict.get('__name__')
-    exclude = set(exclude)
-
-    for name, obj in list(module_dict.items()):
-        if name in exclude:
-            continue
-        if not inspect.isfunction(obj):
-            continue
-        if obj.__module__ != module_name:
-            continue
-        if getattr(obj, 'cof_traced', False):
-            continue
-        module_dict[name] = CoF.traced(obj)
-
 def vt_(TT, r, wTT=wTTn):  # brief val_ to get m,d, rc=0 to return raw vals, Wn for comp_N
 
     m_,d_= TT; ad_ = np.abs(d_); t_ = eps_(m_+ad_)  # ~ max comparand
@@ -196,17 +176,17 @@ def val_(TT, r, wTT=wTTn, mw=1.0,fi=1, _TT=None, cr=.5):  # m,d eval per cluster
         rv  = rv * (1-cr) + _rv * cr  # + borrowed alt fork val, cr: d count ratio, must be passed with _TT?
     return rv*mw - (ave if fi else avd) * r
 
-def sum_vt(N_, fm=0, wTT=wTTn):  # basic weighted sum of CN|CF list, wTTn for comp_N
+def sum_vt(N_, fr=0, fm=0, wTT=wTTn):  # basic weighted sum of CN|CF list, wTTn for comp_N
 
     C = sum(n.c for n in N_); R = 0; TT = np.zeros((2,9))
     for n in N_:
-        rc = n.c / C; TT += n.dTT*rc; R += n.r*rc  # * weight
+        rc = n.c / C; TT += (n.dTT,n.rTT)[fr] *rc; R += n.r*rc  # * weight
     return (*vt_(TT,R,wTT), TT,C,R) if fm else (TT,C,R)
 
-def Q2R(N_, R=None, merge=1, froot=1, fN=0):  # update root with N_
+def Q2R(N_, R=None, merge=1, froot=1, fN=0, fr=0):  # update root with N_
 
     if R is None: R = CN() if fN else CF()  # root
-    R.m, R.d, R.dTT, R.c, R.r = sum_vt(N_,fm=1)
+    R.m, R.d, R.dTT, R.c, R.r = sum_vt(N_, fr,fm=1)  # fr: val = local surprise
     if merge:
         for N in [n for N in N_ for n in N.N_] if merge==3 else (N_[1].N_ if merge == 2 else N_):  # 2: pair merge
             R.N_ += [N]
@@ -278,25 +258,20 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
         if m > 0:
             if abs(m) < ave*wn:  # comp if marginally predictable, update N.Rt pair eval, ave / proj surprise value?
                 Link = comp_N(_N,N, lr, full=not tnF, A=dy_dx, span=dist, rL=root,L_=L_,N_=N_, acc=acc)
-                rdpTT += np.abs(pTT-Link.dTT) / eps_(Link.dTT)
-                # or form separate oL_ with rdpTTs for oF.Lt?
-                ''' relative prediction error to fit the code, direction-agnostic, *c, C+=c: tot_C is not known?
-                increase comp_N_ weight, decrease weights of upstream pTT-forming ops, symmetrically? '''
+                Link.rTT = np.abs(pTT - Link.dTT) / eps_(Link.dTT)  # relative prediction error to fit oF, direction-agnostic
             else:
                 pL = CN(typ=-1, nt=[_N,N], dTT=pTT,m=m,d=d,c=min(N.c,_N.c),r=lr, angl=np.array([dy_dx,1],dtype=object),span=dist)
                 L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.nt; acc[0]+=pTT*pL.c; acc[1]+=pL.c; acc[2]+=pL.r*pL.c  # all +ve
-                # ~= links in clustering
+                # no oF val, ~= links in clustering
         else: break  # beyond initial induction range, re-sort by proj_V?
     for N in set(N_):
         if N.rim: Q2R(N.rim, N.Rt, merge=0, froot=0)
     # call trace:
-    oF = CoF.get()  # this call oF.nF = 'comp_N_', sub-calls are auto-nested in oF.call_
-    oF.Lt = Q2R(L_, R=oF)  # data scope, c-proportional, or get separate oL_ with L.dTT=rdpTT?
+    Q2R([n for n in N_ if n.typ>-1], R=CoF.get(),fr=1)  # skip pLs, oF.call_+=[oF], oF.nF='comp_N_', adds data
     TT,cm,rm, TTd,cd,rd = acc
     return L_,TT,cm,rm/(cm or eps), TTd,cd,rd/(cd or eps)
 
 def comp_C_(C_, rr,_C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s, levels
-
     N_,L_ = [],[]; acc = [np.zeros((2,9)),0,0,np.zeros((2,9)),0,0]
     if fall:
         pairs = product(C_,_C_) if _C_ else combinations(C_,r=2)  # comp between | within list
@@ -329,8 +304,7 @@ def comp_C_(C_, rr,_C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
             comp_N(_C,C, rr,A=dy_dx,span=dist,L_=L_,N_=N_,acc=acc)  # simplified for typ=3
     for N in list(set(N_)):
         if N.rim: Q2R(N.rim, N.Rt, merge=0, froot=0)
-    oF = CoF.get()  # this call oF.nF = 'comp_N_', sub-calls are auto-nested in oF.call_
-    oF.Lt = Q2R(L_, R=oF)
+    Q2R(L_,R=CoF.get())  # 0 projection?
     TTm,cm,rm,TTd,cd,rd = acc
     return L_,TTm,cm, rm/(cm or eps), TTd,cd, rd/(cd or eps)  # L_ is Lm now
 
@@ -372,6 +346,7 @@ def comp_N(_N,N, r, full=1, A=np.zeros(2),span=None, rL=None, L_=None, N_=None, 
         N_+= [_N,N]  # for sum_vt(rim)
         if   L.m > ave: acc[0]+=L.dTT*L.c; acc[1]+=L.c; acc[2]+=L.r*L.c; L_ += [L];
         elif L.typ==1 and L.d > avd: acc[3]+=L.dTT*L.c; acc[4]+=L.c; acc[5]+=L.r*L.c  # no pLs?
+    # add call trace?
     return L
 
 def comp_F(_F, F, ir=0, rL=None):
@@ -513,10 +488,9 @@ def cluster_N(Ft, _N_, r):  # flood-fill node | link clusters, flat, replace iL_
             if val_(TT, r+1, TTw(Ft.root), (len(G_)-1)*Lw) > 0:
                 sum2F(G_, Ft.nF, Ft.root, TT,C)  # reform Nt, Ft.Lt is empty till cross_comp?
                 r += 1
-        # clustering value = selectivity or loss reduction vs root.Lt: all comps, add dval? selV = (Ft.m-Ft.root.Lt.m) * (Ft.root.Lt.c-Ft.c)
-        sel_TT = (Ft.dTT*Ft.c - Ft.root.Lt.dTT*Ft.root.Lt.c) / eps_(Ft.root.Lt.dTT * Ft.root.Lt.c); sel_c = Ft.c - Ft.root.Lt.c
-        oF = CoF.get()  # this call CoF, oF.nF = 'cluster_N'
-        oF.Lt.N_ = G_; oF.Lt.dTT=sel_TT; oF.Lt.c = sel_c  # data scope, can't use Q2R?
+        # clust_val = selectivity vs root.Lt: all comps, add dval?
+        sel_TT = (Ft.dTT*Ft.c - Ft.root.Lt.dTT*Ft.root.Lt.c) / eps_(Ft.root.Lt.dTT * Ft.root.Lt.c)
+        oF = CoF.get(); oF.Lt.N_=G_; oF.dTT=sel_TT; oF.c = Ft.root.Lt.c - Ft.c  # add data
         # combine C_:
         Q2R([C for N in (G_ if G_ else _N_) for C in N.Ct.N_], Ft.root.Ct, froot=0)
     return G_, r
@@ -586,16 +560,15 @@ def cluster_C(Ft, E_, r):  # form centroids by clustering exemplar surround via 
         if val_(DTT, r+olp, TTw(Ft.root,1), (len(oC_)-1)*Lw) > 0:
             Ct = sum2F(oC_,'Ct', Ft.root, fCF=0)
             _, r = cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
-            sel_TT = (Ct.dTT*Ct.c - Ft.dTT*Ft.c) / eps_(Ct.dTT*Ct.c); sel_c = Ft.c - Ct.c  # select Nt.N_?
-            oF = CoF.get()  # this call CoF, oF.nF = 'cluster_N'
-            oF.Lt.N_ = C_; oF.Lt.dTT=sel_TT; oF.Lt.c = sel_c  # data scope
+            sel_TT = (Ct.dTT*Ct.c - Ft.dTT*Ft.c) / eps_(Ct.dTT * Ct.c)
+            oF = CoF.get(); oF.N_=C_; oF.dTT=sel_TT; oF.c = Ft.c-Ct.c  # data, select in Nt.N_?
     return oC_,r
 
-def cluster_P(_C_,N_,root):  # Parallel centroid refining, _C_ from cluster_C, N_= root.N_, if global val*overlap > min
+def cluster_P(__C_,N_,root):  # Parallel centroid refining, _C_ from cluster_C, N_= root.N_, if global val*overlap > min
 
     for N in N_: N._m_,N._o_,N._d_,N._r_ = [],[],[],[]
-    for C in _C_: C.rN_= N_  # soft assign all Ns per C
-    cnt = 0
+    for C in __C_: C.rN_= N_  # soft assign all Ns per C
+    _C_=__C_; cnt = 0
     while True:
         M = O = dM = dO = 0
         for N in N_:
@@ -624,11 +597,9 @@ def cluster_P(_C_,N_,root):  # Parallel centroid refining, _C_ from cluster_C, N
         N.rN_ = [c for c,keep in zip(N.rN_,out_) if keep]
 
     C_ = [c for c in out_ if c]
-    Ct = Q2R(C_); _Ct = Q2R(_C_)  # or Q2R(_C_-C_)?
-    sel_TT = (Ct.dTT*Ct.c - _Ct.dTT*_Ct.c) / eps_(_Ct.dTT*_Ct.c); sel_c = _Ct.c - Ct.c
-    oF = CoF.get()  # this call CoF, oF.nF = 'cluster_N'
-    oF.Lt.N_ = C_; oF.Lt.dTT=sel_TT; oF.Lt.c = sel_c  # data scope
-    return C_  # or full out_?
+    dCt= Q2R(set(__C_)-set(C_))  # compression
+    oF = CoF.get(); oF.N_=C_; oF.dTT=dCt.dTT; oF.c = dCt.c  # data
+    return C_  # or out_?
 ''' next order: level-parallel cluster_H / multiple agg+? compress as autoencoder? '''
 
 def add_H(H,h, root, fN=0):
@@ -1042,30 +1013,29 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
 
 def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
 
-    def getF(typ_, name):
-        for fork in typ_:  # current + promoted fork types per level
-            if fork.nF==name: return fork
     def init_C_(N_):
         typ_ = []  # group calls by nF type
         for oF in N_:
-            tF = getF(typ_, oF.nF)
+            tF = next((fork for fork in typ_ if fork.nF==oF.nF), None)
             if tF: tF.N_ += [oF]  # calls / function type
             else:  typ_ += [CF(nF=oF.nF, N_=[oF])]
         return typ_
 
-    sum2F(Z.N_,'Nt', Z)  # fset Z.Nt, sum nested calls in H
+    # obsolete, there is no Z.Nt.H, just flat Z.call_( indiv oF.call_s)?
+    sum2F(Z.call_,'Nt', Z)  # fset Z.Nt, sum nested calls in H
     Z.Ct.H = [init_C_(lev.N_) for lev in Z.Nt.H]  # maps to Z.H
     H, _prom_ = [],[]; r = frame.r+1
-    for lev in Z.Ct.H:  # bottom-up: select and promote high-gain types
-        for typ in _prom_:  # merge lower typ_s
-            _typ = getF(lev, typ.nF)
-            if _typ: Q2R(list(set(_typ.N_+typ.N_)), _typ, merge=0,froot=0)
-            else:    lev += [typ]
+    for lev in Z.Ct.H:  # bottom-up merge nested typ_F calls? it's flat at his point
+        for tF in _prom_:
+            _tF = next((fork for fork in tF.N_ if fork.nF==tF.nF), None)
+            if _tF: Q2R(list(set(_tF.N_+tF.N_)), _tF, merge=0,froot=0)
+            else:   lev += [tF]
         H+= [Q2R([tF for tF in lev if tF.m > ave*r], froot=0) if lev else CF()]
         _prom_ = [tF for tF in lev if tF.m > ave*(r+1)]  # promote to next level
         r += 1
     Z.Ct.H = H  # lower levs
     Z.Ct.N_ = init_C_(Z.N_ + [oF for tF in _prom_ for oF in tF.N_])  # top lev
+
     Q2R(Z.Ct.N_, Z.Ct, froot=0)
     # sum ratios between consecutive-level TTs:
     _N,_C,_n,_c = frame.dTT, frame.Ct.dTT, frame.TTn, frame.TTc; rTT_ = [np.ones((2,9)) for _ in range(4)]
@@ -1082,14 +1052,17 @@ def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
 
-    trace_all_module_functions(vars(),exclude= {'trace_all_module_functions',
-                                                'eps_',
-                                                'prop_F_',
-                                                'extend_box',
-                                                'TTw',
-                                                'Copy_',
-                                                'CopyF'})
+    def trace_func(module_dict, module_name=None, exclude=()):
+        if module_name is None: module_name = module_dict.get('__name__')
+        exclude = set(exclude)
+        for name, obj in list(module_dict.items()):
+            if name in exclude: continue
+            if not inspect.isfunction(obj): continue
+            if obj.__module__ != module_name: continue
+            if getattr(obj, 'wrapped', False): continue
+            module_dict[name] = CoF.traced(obj)
 
+    trace_func(vars(),exclude= {'trace_functions','eps_','prop_F_','extend_box','TTw','Copy_','CopyF'})
     Y,X = imread('./images/toucan.jpg').shape
     # frame = agg_frame(0, image=imread('./images/toucan.jpg'), iY=Y, iX=X)
     frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -31, iX=X//2 -31, Ly=64,Lx=64, Y=Y, X=X, rV=1)
