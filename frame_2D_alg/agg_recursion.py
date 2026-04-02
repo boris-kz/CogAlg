@@ -101,7 +101,7 @@ class CF(CBase): # iF/ data: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int-
         f.dTT = kwargs.get('dTT',np.zeros((2,9))); f.m, f.d, f.c, f.r = [kwargs.get(x,0) for x in ('m','d','c','r')]  # rdpTT in oF?
         f.wTT = kwargs.get('wTT',np.zeros((2,9))); f.w, f.wc, f.wr = [kwargs.get(x,0) for x in ('w','wc','wr')]  # or wT, fork coefs, no wd?
         f.fb_ = kwargs.get('fb_',[])
-        f.typ = f.typ = kwargs.get('typ',0)  # blocks sub_comp
+        f.typ = kwargs.get('typ',0)  # blocks sub_comp
         f.root = kwargs.get('root',None)
     def __bool__(f): return bool(f.c)  # N_ may be empty?
 
@@ -122,7 +122,7 @@ class CoF(CF):  # oF/ code fork, Ct: types, dTT=results, w=m or separate sum wTT
         def inner(*a, **kw):
             name = func.__name__
             if name not in CoF._typ:
-                t = CoF(nF=name); CoF._typ[name] = t
+                t = CoF(nF=name); CoF._typ[name] = t  # not root in typ CoF until clustering?
                 Z.Ct.N_ += [t]  # register type, or in ffeedback only?
             typ = CoF._typ[name]
             _CoF = CoF._cur.get()
@@ -180,7 +180,7 @@ def sum_vt(N_, fr=0, fm=0, wTT=wTTn):  # basic weighted sum of CN|CF list, wTTn 
 
     C = sum(n.c for n in N_); R = 0; TT = np.zeros((2,9))
     for n in N_:
-        rc = n.c / C; TT += (n.dTT,n.rTT)[fr] *rc; R += n.r*rc  # * weight
+        rc = n.c / C; TT += (n.rTT if fr else n.dTT)*rc; R += n.r*rc  # * weight
     return (*vt_(TT,R,wTT), TT,C,R) if fm else (TT,C,R)
 
 def Q2R(N_, R=None, merge=1, froot=1, fN=0, fr=0):  # update root with N_
@@ -249,7 +249,7 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
             eTT+= proj_N(_N,dist, -dy_dx, r, dec)  # reverse direction
         return iTT+eTT
 
-    N_,L_,rdpTT,TTd,cd,rd = [],[],np.zeros((2,9)),np.zeros((2,9)),0,0  # any global use of dLs, rd?
+    N_,L_,TTd,cd,rd = [],[],np.zeros((2,9)),0,0  # any global use of dLs, rd?
     acc = [TT,cm,rm, TTd,cd,rd]
     for pL in sorted(pairs, key=lambda x: x[0]):  # proximity prior, test compared?
         dist,dy_dx,_N,N = pL # rim angl is not canonic
@@ -267,7 +267,8 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
     for N in set(N_):
         if N.rim: Q2R(N.rim, N.Rt, merge=0, froot=0)
     # call trace:
-    Q2R([n for n in N_ if n.typ>-1], R=CoF.get(),fr=1)  # skip pLs, oF.call_+=[oF], oF.nF='comp_N_', adds data
+    L_ = [n for n in L_ if n.typ>-1]
+    if L_: Q2R(L_, R=CoF.get(),fr=1)  # skip pLs, oF.call_+=[oF], oF.nF='comp_N_', adds data
     TT,cm,rm, TTd,cd,rd = acc
     return L_,TT,cm,rm/(cm or eps), TTd,cd,rd/(cd or eps)
 
@@ -304,7 +305,7 @@ def comp_C_(C_, rr,_C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
             comp_N(_C,C, rr,A=dy_dx,span=dist,L_=L_,N_=N_,acc=acc)  # simplified for typ=3
     for N in list(set(N_)):
         if N.rim: Q2R(N.rim, N.Rt, merge=0, froot=0)
-    Q2R(L_,R=CoF.get())  # 0 projection?
+    if L_: Q2R(L_,R=CoF.get())  # 0 projection?
     TTm,cm,rm,TTd,cd,rd = acc
     return L_,TTm,cm, rm/(cm or eps), TTd,cd, rd/(cd or eps)  # L_ is Lm now
 
@@ -490,7 +491,7 @@ def cluster_N(Ft, _N_, r):  # flood-fill node | link clusters, flat, replace iL_
                 r += 1
         # clust_val = selectivity vs root.Lt: all comps, add dval?
         sel_TT = (Ft.dTT*Ft.c - Ft.root.Lt.dTT*Ft.root.Lt.c) / eps_(Ft.root.Lt.dTT * Ft.root.Lt.c)
-        oF = CoF.get(); oF.Lt.N_=G_; oF.dTT=sel_TT; oF.c = Ft.root.Lt.c - Ft.c  # add data
+        oF = CoF.get(); oF.N_=G_; oF.dTT=sel_TT; oF.c = Ft.root.c - Ft.c  # add data
         # combine C_:
         Q2R([C for N in (G_ if G_ else _N_) for C in N.Ct.N_], Ft.root.Ct, froot=0)
     return G_, r
