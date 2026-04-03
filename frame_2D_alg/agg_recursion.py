@@ -96,42 +96,35 @@ class CF(CBase): # iF/ data: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int-
         f.N_ = kwargs.get('N_',[])  # flat top lev, calls in oF
         f.H  = kwargs.get('H', [])  # lower CF levs / Nt||Ct
         f.nF = kwargs.get('nF','Nt')
-        f.Lt = kwargs.get('Lt',[])  # +|-/ cross_comp | data scope in oF?
-        f.Ct = kwargs.get('Ct',[])  # promoted | generalized lower types, oF only?
+        f.Lt = kwargs.get('Lt',[])  # +|- by cross_comp N_, conditional?
+        f.Ct = kwargs.get('Ct',[])  # per clustering in Lt?
         f.dTT = kwargs.get('dTT',np.zeros((2,9))); f.m, f.d, f.c, f.r = [kwargs.get(x,0) for x in ('m','d','c','r')]  # rdpTT in oF?
         f.wTT = kwargs.get('wTT',np.zeros((2,9))); f.w, f.wc, f.wr = [kwargs.get(x,0) for x in ('w','wc','wr')]  # or wT, fork coefs, no wd?
         f.fb_ = kwargs.get('fb_',[])
-        f.typ = f.typ = kwargs.get('typ',0)  # blocks sub_comp
+        f.typ = kwargs.get('typ',0)  # blocks sub_comp
         f.root = kwargs.get('root',None)
     def __bool__(f): return bool(f.c)  # N_ may be empty?
 
 class CoF(CF):  # oF/ code fork, Ct: types, dTT=results, w=m or separate sum wTT?
     name = "func"
     _cur = contextvars.ContextVar('oF')
-    _typ = {}  # func_name -> typ_oF singleton in Z.Ct
     def __init__(f, **kw):
         super().__init__(**kw)
-        f.call_ = kw.get('call_',[])  # function call trace, H: nested call tree or clustered typs only?
+        f.call_ = kw.get('call_',[])  # function call trace, nest by functions in ffeedback
     @staticmethod
     def get(): return CoF._cur.get(Z)
     @staticmethod
-    def traced(func):
-        if getattr(func, 'wrapped', False):
-            return func
+    def traced(func):  # _oF.call_ += call oF
+        if getattr(func, 'wrapped', False): return func
         @wraps(func)
         def inner(*a, **kw):
-            name = func.__name__
-            if name not in CoF._typ:
-                t = CoF(nF=name); CoF._typ[name] = t
-                Z.Ct.N_ += [t]  # register type, or in ffeedback only?
-            typ = CoF._typ[name]
             _CoF = CoF._cur.get()
-            oF = CoF(nF=name, root=_CoF, typ=typ)  # call instance
-            _CoF.call_ += [oF]  # add Q2R(call_) before evals? nest by data scope in frame.H[i].H?
+            oF = CoF(nF=func.__name__, root=_CoF)
+            _CoF.call_ += [oF]
             CoF._cur.set(oF); result = func(*a, **kw)
-            CoF._cur.set(_CoF)  # restore
+            CoF._cur.set(_CoF)
             return result
-        inner.wrapped = True  # flag
+        inner.wrapped = True
         return inner
 # Z:
 # singletons, no wTT:
@@ -145,7 +138,7 @@ wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
 wN,wC,wn,wc = 10,20,5,10  # fork weights
 wTTN, wTTC, wTTn, wTTc = np.array([wT,wT*avd])*wN, np.array([wT,wT*avd])*wC, np.array([wT,wT*avd])*wn, np.array([wT,wT*avd])*wc
 wTT_ = [wTTN,wTTC, wTTn,wTTc]  # || Nt,Ct,Lt, no Bt: no call, no info?
-''' call tree, draft:
+''' type tree, draft:
     WN,WC, Wn,Wc = CF(nF='wN',wTT=wTTN,w=wN), CF(nF='wC',wTT=wTTC,w=wC), CF(nF='wn',wTT=wTTn,w=wn), CF(nF='wc',wTT=wTTc,w=wc)
     WTT_ = CF(nF='wTT_',Ct= CF(N_=[WN,WC,Wn,Wc]))  # add sub-forks
     Z.Ct.N_ = [  
@@ -180,7 +173,7 @@ def sum_vt(N_, fr=0, fm=0, wTT=wTTn):  # basic weighted sum of CN|CF list, wTTn 
 
     C = sum(n.c for n in N_); R = 0; TT = np.zeros((2,9))
     for n in N_:
-        rc = n.c / C; TT += (n.dTT,n.rTT)[fr] *rc; R += n.r*rc  # * weight
+        rc = n.c / C; TT += (n.rTT if fr else n.dTT)*rc; R += n.r*rc  # * weight
     return (*vt_(TT,R,wTT), TT,C,R) if fm else (TT,C,R)
 
 def Q2R(N_, R=None, merge=1, froot=1, fN=0, fr=0):  # update root with N_
@@ -249,7 +242,7 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
             eTT+= proj_N(_N,dist, -dy_dx, r, dec)  # reverse direction
         return iTT+eTT
 
-    N_,L_,rdpTT,TTd,cd,rd = [],[],np.zeros((2,9)),np.zeros((2,9)),0,0  # any global use of dLs, rd?
+    N_,L_,TTd,cd,rd = [],[],np.zeros((2,9)),0,0  # any global use of dLs, rd?
     acc = [TT,cm,rm, TTd,cd,rd]
     for pL in sorted(pairs, key=lambda x: x[0]):  # proximity prior, test compared?
         dist,dy_dx,_N,N = pL # rim angl is not canonic
@@ -267,7 +260,7 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
     for N in set(N_):
         if N.rim: Q2R(N.rim, N.Rt, merge=0, froot=0)
     # call trace:
-    Q2R([n for n in N_ if n.typ>-1], R=CoF.get(),fr=1)  # skip pLs, oF.call_+=[oF], oF.nF='comp_N_', adds data
+    L_ = [n for n in L_ if n.typ>-1]; if L_: Q2R(L_,R=CoF.get(),fr=1)  # skip pLs, oF.call_+=[oF], oF.nF='comp_N_', adds data
     TT,cm,rm, TTd,cd,rd = acc
     return L_,TT,cm,rm/(cm or eps), TTd,cd,rd/(cd or eps)
 
@@ -304,7 +297,7 @@ def comp_C_(C_, rr,_C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
             comp_N(_C,C, rr,A=dy_dx,span=dist,L_=L_,N_=N_,acc=acc)  # simplified for typ=3
     for N in list(set(N_)):
         if N.rim: Q2R(N.rim, N.Rt, merge=0, froot=0)
-    Q2R(L_,R=CoF.get())  # 0 projection?
+    if L_: Q2R(L_,R=CoF.get())
     TTm,cm,rm,TTd,cd,rd = acc
     return L_,TTm,cm, rm/(cm or eps), TTd,cd, rd/(cd or eps)  # L_ is Lm now
 
@@ -490,7 +483,7 @@ def cluster_N(Ft, _N_, r):  # flood-fill node | link clusters, flat, replace iL_
                 r += 1
         # clust_val = selectivity vs root.Lt: all comps, add dval?
         sel_TT = (Ft.dTT*Ft.c - Ft.root.Lt.dTT*Ft.root.Lt.c) / eps_(Ft.root.Lt.dTT * Ft.root.Lt.c)
-        oF = CoF.get(); oF.Lt.N_=G_; oF.dTT=sel_TT; oF.c = Ft.root.Lt.c - Ft.c  # add data
+        oF = CoF.get(); oF.N_=G_; oF.dTT=sel_TT; oF.c = Ft.root.c - Ft.c  # add data
         # combine C_:
         Q2R([C for N in (G_ if G_ else _N_) for C in N.Ct.N_], Ft.root.Ct, froot=0)
     return G_, r
@@ -1013,17 +1006,22 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
 
 def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
 
-    def init_C_(N_):
-        typ_ = []  # group calls by nF type
-        for oF in N_:
-            tF = next((fork for fork in typ_ if fork.nF==oF.nF), None)
-            if tF: tF.N_ += [oF]  # calls / function type
-            else:  typ_ += [CF(nF=oF.nF, N_=[oF])]
-        return typ_
-
-    # obsolete, there is no Z.Nt.H, just flat Z.call_( indiv oF.call_s)?
-    sum2F(Z.call_,'Nt', Z)  # fset Z.Nt, sum nested calls in H
-    Z.Ct.H = [init_C_(lev.N_) for lev in Z.Nt.H]  # maps to Z.H
+    typ_ = []  # group calls by function name
+    for oF in Z.call_:
+        tF = next((fork for fork in typ_ if fork.nF==oF.nF), None)
+        if tF: tF.N_ += [oF]  # top-down in data depth?
+        else:  typ_ += [CF(nF=oF.nF, N_=[oF])]
+    Z.call_ = [Q2R(typ.N_, typ, froot=0) for typ in typ_]  # no Q2R(Z.call_,Z): redundant to frame?
+    '''
+    cross-comp functions, compared components constrained by position in call sequence, bottom-up in composition:
+    primitives: +,-,*,/, min,abs, np.hypot, cos,atan2; order by operand complexity?
+    lev0: !oF.call_: comp_derT, comp_A, vt_, eps_
+    lev1: comp_N, base_comp, cent_TT
+    lev2: comp_N_,comp_C_, cluster_N, cluster_C, cluster_P
+    lev3: cross_comp, frame_H, Z
+    
+    cluster matches into higher oF typs
+    '''
     H, _prom_ = [],[]; r = frame.r+1
     for lev in Z.Ct.H:  # bottom-up merge nested typ_F calls? it's flat at his point
         for tF in _prom_:
@@ -1033,10 +1031,6 @@ def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential
         H+= [Q2R([tF for tF in lev if tF.m > ave*r], froot=0) if lev else CF()]
         _prom_ = [tF for tF in lev if tF.m > ave*(r+1)]  # promote to next level
         r += 1
-    Z.Ct.H = H  # lower levs
-    Z.Ct.N_ = init_C_(Z.N_ + [oF for tF in _prom_ for oF in tF.N_])  # top lev
-
-    Q2R(Z.Ct.N_, Z.Ct, froot=0)
     # sum ratios between consecutive-level TTs:
     _N,_C,_n,_c = frame.dTT, frame.Ct.dTT, frame.TTn, frame.TTc; rTT_ = [np.ones((2,9)) for _ in range(4)]
     for lev in frame.H:
