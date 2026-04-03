@@ -260,7 +260,7 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
     for N in set(N_):
         if N.rim: Q2R(N.rim, N.Rt, merge=0, froot=0)
     # call trace:
-    L_ = [n for n in L_ if n.typ>-1]; if L_: Q2R(L_,R=CoF.get(),fr=1)  # skip pLs, oF.call_+=[oF], oF.nF='comp_N_', adds data
+    L_ = [n for n in L_ if n.typ>-1]; Q2R(L_,R=CoF.get(),fr=1) if L_ else [] # skip pLs, oF.call_+=[oF], oF.nF='comp_N_', adds data
     TT,cm,rm, TTd,cd,rd = acc
     return L_,TT,cm,rm/(cm or eps), TTd,cd,rd/(cd or eps)
 
@@ -1004,14 +1004,38 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
         else: break
     return F  # for intra-lev feedback
 
+# draft, pack typ oF from tree of calls, also create H within the unpacking process?
+def pack_call_tree(oF, typ_, depth=1, sequence=['Z']):
+
+    for of in oF.call_:
+        of.sequence = sequence  # add sequence to call oF
+        of.depth = depth      # add depth to call oF
+        sequence += [of.nF]    # pack new sequence
+        
+        toF = next((typ for typ in typ_ if typ.nF == of.nF), None)  # check all existing typ oFs
+        if toF is not None:  # existing typ oF
+            toF.N_ += [of]
+        else:
+            toF = CF(nF=of.nF, N_=[of], root=oF)  # create new typ oF
+            typ_ += [toF]
+            
+        # recursively unpack call tree
+        pack_call_tree(of, typ_, depth+1, copy(sequence))
+            
+    return typ_
+
 def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
 
+    typ_ = pack_call_tree(Z, [])
+    Z.call_ = [Q2R(typ.N_, typ, merge=0, froot=0) for typ in typ_]
+    '''
     typ_ = []  # group calls by function name
     for oF in Z.call_:
         tF = next((fork for fork in typ_ if fork.nF==oF.nF), None)
         if tF: tF.N_ += [oF]  # top-down in data depth?
         else:  typ_ += [CF(nF=oF.nF, N_=[oF])]
-    Z.call_ = [Q2R(typ.N_, typ, froot=0) for typ in typ_]  # no Q2R(Z.call_,Z): redundant to frame?
+    Z.call_ = [Q2R(typ.N_, typ, merge=0, froot=0) for typ in typ_]  # no Q2R(Z.call_,Z): redundant to frame?
+    '''
     '''
     cross-comp functions, compared components constrained by position in call sequence, bottom-up in composition:
     primitives: +,-,*,/, min,abs, np.hypot, cos,atan2; order by operand complexity?
@@ -1059,5 +1083,6 @@ if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.
     trace_func(vars(),exclude= {'trace_functions','eps_','prop_F_','extend_box','TTw','Copy_','CopyF'})
     Y,X = imread('./images/toucan.jpg').shape
     # frame = agg_frame(0, image=imread('./images/toucan.jpg'), iY=Y, iX=X)
+    CoF._cur.set(Z)  # set root call to Z
     frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -31, iX=X//2 -31, Ly=64,Lx=64, Y=Y, X=X, rV=1)
     # search frames ( tiles inside image, at this size it should be 4K, or 256K panorama, won't actually work on toucan
