@@ -118,9 +118,12 @@ class CoF(CF):  # oF/ code fork, Ct: types, dTT=results, w=m or separate sum wTT
         if getattr(func, 'wrapped', False): return func
         @wraps(func)
         def inner(*a, **kw):
-            _CoF = CoF._cur.get()
+            _CoF = CoF._cur.get()  # not for Z
             oF = CoF(nF=func.__name__, root=_CoF)
             _CoF.call_ += [oF]
+            tF = next((fork for fork in Z.N_ if fork.nF==oF.nF), None)  # Z.N_ is not used for data: redundant to frame, same for cross_comp oF?
+            if tF: tF.N_ += [oF]  # typ_, top-down in data depth?
+            else:  Z.N_ += [CF(nF=oF.nF, N_=[oF])]  # group calls by function name
             CoF._cur.set(oF); result = func(*a, **kw)
             CoF._cur.set(_CoF)
             return result
@@ -209,7 +212,7 @@ def cross_comp(Ft, rr, nF='Nt'):  # core function mediating recursive rng+ and d
     L_, TT,c,r,TTd,cd,rd = comp_C_(N_,rr,fC=1) if fC else comp_N_(combinations(N_,2),rr)
     if L_:  # Lm_, no +|- Ft.Lt?
         M, D = vt_(TT, r, TTw(Ft.root,fC+2))
-        if M * ((len(L_)-1)*Lw) * wn > ave:  # global cw,nw,Nw,Cw / ffeedback
+        if M * ((len(L_)-1)*Lw) * wN > ave:  # global wn,wc,wN,wC / ffeedback
             # vs TTn = root.Lt.dTT: +ve links between initial nodes, does not represent -ves?
             setattr( Ft.root,('TTn','TTc')[fC], TT+TTd)  # comp->TT, clust->dTT, compression = TT-dTT, in sum2G
             E_ = get_exemplars({N for L in L_ for N in L.nt}, r)
@@ -260,7 +263,7 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
     for N in set(N_):
         if N.rim: Q2R(N.rim, N.Rt, merge=0, froot=0)
     # call trace:
-    L_ = [n for n in L_ if n.typ>-1]; if L_: Q2R(L_,R=CoF.get(),fr=1)  # skip pLs, oF.call_+=[oF], oF.nF='comp_N_', adds data
+    if L_ := [n for n in L_ if n.typ>-1]: Q2R(L_, R=CoF.get(), fr=1)  # skip pLs, oF.call_+=[oF], oF.nF='comp_N_', adds data
     TT,cm,rm, TTd,cd,rd = acc
     return L_,TT,cm,rm/(cm or eps), TTd,cd,rd/(cd or eps)
 
@@ -1006,31 +1009,21 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
 
 def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
 
-    typ_ = []  # group calls by function name
-    for oF in Z.call_:
-        tF = next((fork for fork in typ_ if fork.nF==oF.nF), None)
-        if tF: tF.N_ += [oF]  # top-down in data depth?
-        else:  typ_ += [CF(nF=oF.nF, N_=[oF])]
-    Z.call_ = [Q2R(typ.N_, typ, froot=0) for typ in typ_]  # no Q2R(Z.call_,Z): redundant to frame?
+    Z.call_ = [Q2R(typ.N_, typ, merge=0, froot=0) for typ in Z.call_]  # no Q2R(Z.call_,Z): redundant to frame?
     '''
-    cross-comp functions, compared components constrained by position in call sequence, bottom-up in composition:
-    primitives: +,-,*,/, min,abs, np.hypot, cos,atan2; order by operand complexity?
+    cross-comp functions in Z.N_, bottom-up in composition:
+    primitives: +,-,*,/, min,abs, np.hypot, cos,atan2, order by operand complexity?
+    rough composition H:
     lev0: !oF.call_: comp_derT, comp_A, vt_, eps_
     lev1: comp_N, base_comp, cent_TT
-    lev2: comp_N_,comp_C_, cluster_N, cluster_C, cluster_P
-    lev3: cross_comp, frame_H, Z
-    
+    lev2: comp_N_,comp_C_, cluster_N,cluster_C,cluster_P
+    lev3: cross_comp, frame_H, Z: top data is redundant?
+    compare same positions in AST sequence, while prior position matched only?
     cluster matches into higher oF typs
+    
+    separate feedback accumulation up the call (root) chain for each oF, 
+    typ oF.w / level= sum(f.w for f in oF.call_) if oF.call_ else vt_(oF.rTT|dTT)[0]?
     '''
-    H, _prom_ = [],[]; r = frame.r+1
-    for lev in Z.Ct.H:  # bottom-up merge nested typ_F calls? it's flat at his point
-        for tF in _prom_:
-            _tF = next((fork for fork in tF.N_ if fork.nF==tF.nF), None)
-            if _tF: Q2R(list(set(_tF.N_+tF.N_)), _tF, merge=0,froot=0)
-            else:   lev += [tF]
-        H+= [Q2R([tF for tF in lev if tF.m > ave*r], froot=0) if lev else CF()]
-        _prom_ = [tF for tF in lev if tF.m > ave*(r+1)]  # promote to next level
-        r += 1
     # sum ratios between consecutive-level TTs:
     _N,_C,_n,_c = frame.dTT, frame.Ct.dTT, frame.TTn, frame.TTc; rTT_ = [np.ones((2,9)) for _ in range(4)]
     for lev in frame.H:
