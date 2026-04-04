@@ -111,6 +111,7 @@ class CoF(CF):  # oF/ code fork, Ct: types, dTT=results, w=m or separate sum wTT
     def __init__(f, **kw):
         super().__init__(**kw)
         f.call_ = kw.get('call_',[])  # function call trace, nest by functions in ffeedback
+        f.w = kw.get('w', 0)        # total weight of nested operations
     @staticmethod
     def get(): return CoF._cur.get(Z)
     @staticmethod
@@ -120,12 +121,16 @@ class CoF(CF):  # oF/ code fork, Ct: types, dTT=results, w=m or separate sum wTT
         def inner(*a, **kw):
             _CoF = CoF._cur.get()  # not for Z
             oF = CoF(nF=func.__name__, root=_CoF)
+            # sum from CoF's calls' w, which should be updated at this point
+            oF.w = sum([call.w for call in _CoF.call_]) if _CoF.call_ else 1
             _CoF.call_ += [oF]
             tF = next((fork for fork in Z.N_ if fork.nF==oF.nF), None)  # Z.N_ is not used for data: redundant to frame, same for cross_comp oF?
-            if tF: tF.N_ += [oF]  # typ_, top-down in data depth?
-            else:  Z.N_ += [CF(nF=oF.nF, N_=[oF])]  # group calls by function name
+            if tF is None: Z.N_ += [CF(nF=oF.nF, N_=[oF])]  # group calls by function name
+            else:          tF.N_ += [oF]  # typ_, top-down in data depth?
             CoF._cur.set(oF); result = func(*a, **kw)
             CoF._cur.set(_CoF)
+            if oF.call_: oF.w = sum([call.w for call in oF.call_])  # sum from all calls after function is executed             
+            else:        oF.w = 1
             return result
         inner.wrapped = True
         return inner
@@ -1007,9 +1012,27 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
         else: break
     return F  # for intra-lev feedback
 
+# not sure, probably wrong, should be in CoF
+# bottom-up weight accumulation:
+def accum_w(oF):
+    if oF.call_:
+        for call in oF.call_:
+            if not call.w: accum_w(call)  # depth first for bottom up
+        oF.w = sum(call.w for call in oF.call_)/len(oF.call_)  # we need average of w?
+    else:
+        # what sets w at the leaves — oFs with no call_, is rdpTT or direct match contribution?
+        TT = getattr(oF, 'rTT', oF.dTT)
+        if np.any(TT): oF.w = vt_(TT, oF.r)[0]  # weight from TT
+        else:          oF.w = 1  # default weight
+            
+
 def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
 
-    Z.call_ = [Q2R(typ.N_, typ, merge=0, froot=0) for typ in Z.call_]  # no Q2R(Z.call_,Z): redundant to frame?
+    Z.N_ = [Q2R(typ.N_, typ, merge=0, froot=0) for typ in Z.N_]  # no Q2R(Z.call_,Z): redundant to frame?
+ 
+    for typ in Z.N_:  # update weights bottom up
+        for call in typ.N_: accum_w(call)
+
     '''
     cross-comp functions in Z.N_, bottom-up in composition:
     primitives: +,-,*,/, min,abs, np.hypot, cos,atan2, order by operand complexity?
@@ -1049,7 +1072,7 @@ if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.
             if getattr(obj, 'wrapped', False): continue
             module_dict[name] = CoF.traced(obj)
 
-    trace_func(vars(),exclude= {'trace_functions','eps_','prop_F_','extend_box','TTw','Copy_','CopyF'})
+    trace_func(vars(),exclude= {'trace_functions','eps_','prop_F_','extend_box','TTw','Copy_','CopyF','accum_w'})
     Y,X = imread('./images/toucan.jpg').shape
     # frame = agg_frame(0, image=imread('./images/toucan.jpg'), iY=Y, iX=X)
     frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -31, iX=X//2 -31, Ly=64,Lx=64, Y=Y, X=X, rV=1)
