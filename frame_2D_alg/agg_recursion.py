@@ -105,62 +105,60 @@ class CF(CBase): # iF/ data: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int-
         f.root = kwargs.get('root',None)
     def __bool__(f): return bool(f.c)  # N_ may be empty?
 
-class CoF(CF):  # oF/ code fork, Ct: types, dTT=results, w=m or separate sum wTT?
+class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
     name = "func"
     _cur = contextvars.ContextVar('oF')
+    _wdt = {}  # weights
     def __init__(f, **kw):
         super().__init__(**kw)
-        f.call_ = kw.get('call_',[])  # function call trace, nest by functions in ffeedback
-        f.w = kw.get('w', 0)        # total weight of nested operations
+        f.call_ = kw.get('call_',[])
+        f.w = CoF._wdt.get(kw.get('nF',''), 1)
     @staticmethod
     def get(): return CoF._cur.get(Z)
     @staticmethod
-    def traced(func):  # _oF.call_ += call oF
+    def traced(func):
         if getattr(func, 'wrapped', False): return func
         @wraps(func)
+        def _sum_vt(F, fN):
+            N_ = F.N_ if fN else F.call_
+            F.c = C = sum(n.c for n in N_); F.r = sum(f.r* (f.c/C) for f in N_); F.w = sum(f.w* (f.c/C) for f in N_)
         def inner(*a, **kw):
-            _CoF = CoF._cur.get()  # not for Z
+            _CoF = CoF._cur.get()
             oF = CoF(nF=func.__name__, root=_CoF)
-            # sum from CoF's calls' w, which should be updated at this point
-            oF.w = sum([call.w for call in _CoF.call_]) if _CoF.call_ else 1
             _CoF.call_ += [oF]
-            tF = next((fork for fork in Z.N_ if fork.nF==oF.nF), None)  # Z.N_ is not used for data: redundant to frame, same for cross_comp oF?
-            if tF is None: Z.N_ += [CF(nF=oF.nF, N_=[oF])]  # group calls by function name
-            else:          tF.N_ += [oF]  # typ_, top-down in data depth?
-            CoF._cur.set(oF); result = func(*a, **kw)
+            CoF._cur.set(oF); out = func(*a, **kw)
+            if oF.call_:  # complete at this point
+                typ_ = []
+                for sub in oF.call_:
+                    tF = next((f for f in typ_ if f.nF==sub.nF), None)
+                    if tF: tF.N_+= [sub]
+                    else:  typ_ += [CoF(nF=sub.nF, N_=[sub], w=sub.w, c=sub.c)]
+                for tF in typ_: _sum_vt(tF, fN=1)
+                oF.call_= typ_; _sum_vt(oF, fN=0)
+            else:
+                TT = getattr(oF,'rTT', oF.dTT)  # rTT includes cluster compression
+                m,d = (vt_(TT,oF.r) if np.any(TT) else (0,0))
+                oF.w = abs(m) / (abs(d) or eps)
+            CoF._wdt[oF.nF] = oF.w
             CoF._cur.set(_CoF)
-            if oF.call_: oF.w = sum([call.w for call in oF.call_])  # sum from all calls after function is executed             
-            else:        oF.w = 1
-            return result
+            return out
         inner.wrapped = True
         return inner
-# Z:
-# singletons, no wTT:
-ave,avd = .3,.5; Ave,Avd = CF(nF='ave',w=ave), CF(nF='avd',w=avd)  # ave m,d / unit dist, oFs: updatable weights version
-wY, wX = 64, 64; WY,WX = CF(nF='wY',w=wY), CF(nF='wX',w=wX)
-decay, wYX = ave/(ave+avd), np.hypot(wY,wX)
+
+Z = CoF(nF ='Z'); CoF._cur.set(Z)  # global meta code, data is redundant to frame?
+'''
+if  projecting_root: F.root.wTT *= rdpTT * (F.c/ F.root.c)  # c-weighted feedback
+elif selecting_root: (F.m - F.root.Lt.m) * (F.root.c-Ft.c)  # clustering value = loss reduction: root.Lt.m < selective F.m, add dval? 
+'''
+ave,avd = .3,.5; decay = ave/(ave+avd)  # ave m,d / unit dist, recomputed from dTT*wTT?
+wY, wX = 64, 64; wYX = np.hypot(wY,wX)
 aveB,Lw,distw,intw = 100,.5,.5,.5; AveB,LW,Distw,Intw = CF(nF='aveB',w=aveB), CF(nF='Lw',w=Lw), CF(nF='distw',w=distw), CF(nF='intw',w=intw)
-# attr weight tree:
+# wTT:
 wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
 wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
-wN,wC,wn,wc = 10,20,5,10  # fork weights
-wTTN, wTTC, wTTn, wTTc = np.array([wT,wT*avd])*wN, np.array([wT,wT*avd])*wC, np.array([wT,wT*avd])*wn, np.array([wT,wT*avd])*wc
+# replace with oF.w s:
+wN,wC,wn,wc = 10,20,5,10; wTTN,wTTC,wTTn,wTTc = np.array([wT,wT*avd])*wN, np.array([wT,wT*avd])*wC, np.array([wT,wT*avd])*wn, np.array([wT,wT*avd])*wc
 wTT_ = [wTTN,wTTC, wTTn,wTTc]  # || Nt,Ct,Lt, no Bt: no call, no info?
-''' type tree, draft:
-    WN,WC, Wn,Wc = CF(nF='wN',wTT=wTTN,w=wN), CF(nF='wC',wTT=wTTC,w=wC), CF(nF='wn',wTT=wTTn,w=wn), CF(nF='wc',wTT=wTTc,w=wc)
-    WTT_ = CF(nF='wTT_',Ct= CF(N_=[WN,WC,Wn,Wc]))  # add sub-forks
-    Z.Ct.N_ = [  
-        # cluster oFs by call,type, as in AST, if V: compression or rel prediction error, oF.wTT*= rpdTT, _oF.wTT/= rpdTT:
-        CF(nF='comp_',Ct= CF(N_= [CF(nF='comp_N_'), CF(nF='comp_C_'), CF(nF='comp_N'), CF(nF='comp_F')])),  # finer comps downstream?
-        CF(nF='clust',Ct= CF(N_= [CF(nF='exemplars'), CF(nF='cluster_N'), CF(nF='cluster_C'), CF(nF='cluster_P')])),  # Q2R,cent_TT, sum functions?
-        CF(nF='eval_',Ct= CF(N_= [CF(nF='vt_'), CF(nF='val_'), CF(nF='proj_TT'), CF(nF='proj_N'), CF(nF='ffeedback')])),  # or ffeedback is a clust type?
-        CF(nF='attr_',Ct= CF(N_= [Ave,Avd,WTT_, WY,WX, AveB, LW,Distw,Intw]))  # all modifiable weights
-        ] 
-    if  projecting_root: F.root.wTT *= rdpTT * (F.c/ F.root.c)  # c-weighted feedback
-    elif selecting_root: (F.m - F.root.Lt.m) * (F.root.c-Ft.c)  # clustering value = loss reduction: root.Lt.m < selective F.m, add dval? 
-'''
-Z = CoF(nF ='Z', Ct=CoF(nF='Ct'))  # global meta code, Z.N_= call trace, root=caller, Ct: function sub-types in ffeedback
-CoF._cur.set(Z)  # root context
 
 def vt_(TT, r, wTT=wTTn):  # brief val_ to get m,d, rc=0 to return raw vals, Wn for comp_N
 
@@ -216,12 +214,11 @@ def cross_comp(Ft, rr, nF='Nt'):  # core function mediating recursive rng+ and d
     N_,G_ = Ft.N_,[]; fC = N_[0].typ==3  # rc=rdn+olp, comp N_|B_|C_:
     L_, TT,c,r,TTd,cd,rd = comp_C_(N_,rr,fC=1) if fC else comp_N_(combinations(N_,2),rr)
     if L_:  # Lm_, no +|- Ft.Lt?
-        M, D = vt_(TT, r, TTw(Ft.root,fC+2))
-        if M * ((len(L_)-1)*Lw) * wN > ave:  # global wn,wc,wN,wC / ffeedback
-            # vs TTn = root.Lt.dTT: +ve links between initial nodes, does not represent -ves?
-            setattr( Ft.root,('TTn','TTc')[fC], TT+TTd)  # comp->TT, clust->dTT, compression = TT-dTT, in sum2G
+        M, D = vt_(TT, r, TTw(Ft.root, fC+2))
+        if M * ((len(L_)-1)*Lw) * CoF._wdt.get('get_exemplars',1) > ave:
+            setattr( Ft.root,('TTn','TTc')[fC], TT+TTd)  # comp->TT,clust->dTT, compression = TT-dTT in sum2G, auto->Z?
             E_ = get_exemplars({N for L in L_ for N in L.nt}, r)
-            G_,r = cluster_N(Ft, E_, r)  # -> cluster_C, _P
+            G_,r = cluster_N(Ft, E_,r)  # -> cluster_C,_P, eval?
             if G_:
                 Ft = sum2F(G_, nF, Ft.root); fC = G_[0].N_[0].typ==3  # not sure, G.N_= spliced C_ if more valuable?
                 if val_(TT*wn, r, TTw(Ft.root,fC+2), (len(G_)-1)*Lw,1,TTd, rd/(r+rd)) > 0:
@@ -491,7 +488,7 @@ def cluster_N(Ft, _N_, r):  # flood-fill node | link clusters, flat, replace iL_
                 r += 1
         # clust_val = selectivity vs root.Lt: all comps, add dval?
         sel_TT = (Ft.dTT*Ft.c - Ft.root.Lt.dTT*Ft.root.Lt.c) / eps_(Ft.root.Lt.dTT * Ft.root.Lt.c)
-        oF = CoF.get(); oF.N_=G_; oF.dTT=sel_TT; oF.c = Ft.root.c - Ft.c  # add data
+        oF = CoF.get(); oF.N_=G_; oF.rTT=sel_TT; oF.c = Ft.root.c - Ft.c  # add data
         # combine C_:
         Q2R([C for N in (G_ if G_ else _N_) for C in N.Ct.N_], Ft.root.Ct, froot=0)
     return G_, r
@@ -562,7 +559,7 @@ def cluster_C(Ft, E_, r):  # form centroids by clustering exemplar surround via 
             Ct = sum2F(oC_,'Ct', Ft.root, fCF=0)
             _, r = cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
             sel_TT = (Ct.dTT*Ct.c - Ft.dTT*Ft.c) / eps_(Ct.dTT * Ct.c)
-            oF = CoF.get(); oF.N_=C_; oF.dTT=sel_TT; oF.c = Ft.c-Ct.c  # data, select in Nt.N_?
+            oF = CoF.get(); oF.N_=C_; oF.rTT=sel_TT; oF.c = Ft.c-Ct.c  # data, select in Nt.N_?
     return oC_,r
 
 def cluster_P(__C_,N_,root):  # Parallel centroid refining, _C_ from cluster_C, N_= root.N_, if global val*overlap > min
@@ -599,7 +596,7 @@ def cluster_P(__C_,N_,root):  # Parallel centroid refining, _C_ from cluster_C, 
 
     C_ = [c for c in out_ if c]
     dCt= Q2R(set(__C_)-set(C_))  # compression
-    oF = CoF.get(); oF.N_=C_; oF.dTT=dCt.dTT; oF.c = dCt.c  # data
+    oF = CoF.get(); oF.N_=C_; oF.rTT=dCt.dTT; oF.c = dCt.c  # data
     return C_  # or out_?
 ''' next order: level-parallel cluster_H / multiple agg+? compress as autoencoder? '''
 
@@ -1012,28 +1009,20 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
         else: break
     return F  # for intra-lev feedback
 
-# not sure, probably wrong, should be in CoF
-# bottom-up weight accumulation:
-def accum_w(oF):
-    if oF.call_:
-        for call in oF.call_:
-            if not call.w: accum_w(call)  # depth first for bottom up
-        oF.w = sum(call.w for call in oF.call_)/len(oF.call_)  # we need average of w?
-    else:
-        # what sets w at the leaves — oFs with no call_, is rdpTT or direct match contribution?
-        TT = getattr(oF, 'rTT', oF.dTT)
-        if np.any(TT): oF.w = vt_(TT, oF.r)[0]  # weight from TT
-        else:          oF.w = 1  # default weight
-            
-
 def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
 
-    Z.N_ = [Q2R(typ.N_, typ, merge=0, froot=0) for typ in Z.N_]  # no Q2R(Z.call_,Z): redundant to frame?
- 
-    for typ in Z.N_:  # update weights bottom up
-        for call in typ.N_: accum_w(call)
-
+    Z.call_ = [Q2R(typ.N_, typ, merge=0, froot=0) for typ in Z.call_]  # no Q2R(Z.call_,Z): redundant to frame?
     '''
+    rough type tree:
+    WN,WC, Wn,Wc = CF(nF='wN',wTT=wTTN,w=wN), CF(nF='wC',wTT=wTTC,w=wC), CF(nF='wn',wTT=wTTn,w=wn), CF(nF='wc',wTT=wTTc,w=wc)
+    WTT_ = CF(nF='wTT_',Ct= CF(N_=[WN,WC,Wn,Wc]))  # add sub-forks
+    Z.Ct.N_ = [  
+        # cluster oFs by call,type, as in AST, if V: compression or rel prediction error, oF.wTT*= rpdTT, _oF.wTT/= rpdTT:
+        CF(nF='comp_',Ct= CF(N_= [CF(nF='comp_N_'), CF(nF='comp_C_'), CF(nF='comp_N'), CF(nF='comp_F')])),  # finer comps downstream?
+        CF(nF='clust',Ct= CF(N_= [CF(nF='exemplars'), CF(nF='cluster_N'), CF(nF='cluster_C'), CF(nF='cluster_P')])),  # Q2R,cent_TT, sum functions?
+        CF(nF='eval_',Ct= CF(N_= [CF(nF='vt_'), CF(nF='val_'), CF(nF='proj_TT'), CF(nF='proj_N'), CF(nF='ffeedback')])),  # or ffeedback is a clust type?
+        CF(nF='attr_',Ct= CF(N_= [Ave,Avd,WTT_, WY,WX, AveB, LW,Distw,Intw]))  # all modifiable weights
+        ]    
     cross-comp functions in Z.N_, bottom-up in composition:
     primitives: +,-,*,/, min,abs, np.hypot, cos,atan2, order by operand complexity?
     rough composition H:
@@ -1072,7 +1061,7 @@ if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.
             if getattr(obj, 'wrapped', False): continue
             module_dict[name] = CoF.traced(obj)
 
-    trace_func(vars(),exclude= {'trace_functions','eps_','prop_F_','extend_box','TTw','Copy_','CopyF','accum_w'})
+    trace_func(vars(),exclude= {'trace_functions','eps_','prop_F_','extend_box','TTw','Copy_','CopyF'})
     Y,X = imread('./images/toucan.jpg').shape
     # frame = agg_frame(0, image=imread('./images/toucan.jpg'), iY=Y, iX=X)
     frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -31, iX=X//2 -31, Ly=64,Lx=64, Y=Y, X=X, rV=1)
