@@ -112,7 +112,6 @@ class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
     def __init__(f, **kw):
         super().__init__(**kw)
         f.call_ = kw.get('call_',[])
-        f.w = CoF._wdt.get(kw.get('nF',''), 1)
     @staticmethod
     def get(): return CoF._cur.get(Z)
     @staticmethod
@@ -124,7 +123,7 @@ class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
             F.c = C = sum(n.c for n in N_); F.r = sum(f.r* (f.c/C) for f in N_); F.w = sum(f.w* (f.c/C) for f in N_)
         def inner(*a, **kw):
             _CoF = CoF._cur.get()
-            oF = CoF(nF=func.__name__, root=_CoF)
+            oF = CoF(nF=func.__name__, root=_CoF,c=1)
             _CoF.call_ += [oF]
             CoF._cur.set(oF); out = func(*a, **kw)
             if oF.call_:  # complete at this point
@@ -138,8 +137,13 @@ class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
             else:
                 TT = getattr(oF,'rTT', oF.dTT)  # rTT includes cluster compression
                 m,d = (vt_(TT,oF.r) if np.any(TT) else (0,0))
-                oF.w = abs(m) / (abs(d) or eps)
-            CoF._wdt[oF.nF] = oF.w
+                oF.w = (abs(m) / (abs(d) or eps)) or 1      
+            # from prior discussion, we need Z.N_ exclusively for types, and it should be global?
+            ztF = next((f for f in Z.N_ if f.nF==oF.nF), None)
+            if ztF: ztF.N_ += [oF]
+            else:   ztF = CoF(nF=oF.nF, N_=[oF], w=oF.w, c=oF.c); Z.N_ += [ztF]
+            _sum_vt(ztF, fN=1); _sum_vt(Z, fN=1)  # or run this in batch during feedback for Z?
+            CoF._wdt[oF.nF] = ztF.w  # instead of update from last oF, update from typ's oF.w?
             CoF._cur.set(_CoF)
             return out
         inner.wrapped = True
@@ -1011,7 +1015,6 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
 
 def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
 
-    Z.call_ = [Q2R(typ.N_, typ, merge=0, froot=0) for typ in Z.call_]  # no Q2R(Z.call_,Z): redundant to frame?
     '''
     rough type tree:
     WN,WC, Wn,Wc = CF(nF='wN',wTT=wTTN,w=wN), CF(nF='wC',wTT=wTTC,w=wC), CF(nF='wn',wTT=wTTn,w=wn), CF(nF='wc',wTT=wTTc,w=wc)
