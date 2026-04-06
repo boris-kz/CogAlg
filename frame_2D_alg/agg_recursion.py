@@ -118,7 +118,7 @@ class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
     def traced(func):
         if getattr(func, 'wrapped', False): return func
         @wraps(func)
-        def sum_crw(F): N_ = F.call_; F.c = C = sum(n.c for n in N_); F.r = sum(f.r* (f.c/C) for f in N_); F.w = sum(f.w* (f.c/C) for f in N_)
+        def sum_crw(F): N_ = F.call_; F.c = C = sum(n.c for n in N_); F.r = sum(f.r* (f.c/(C or eps)) for f in N_); F.w = sum(f.w* (f.c/(C or eps)) for f in N_)
         def inner(*a, **kw):
             _CoF = CoF._cur.get()
             oF = CoF(nF=func.__name__, root=_CoF)
@@ -135,18 +135,38 @@ class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
             else:
                 TT = getattr(oF,'rTT', oF.dTT)[0]  # rTT includes cluster compression
                 oF.w = vt_(TT,oF.r)[0] if np.any(TT) else 0  # =m
+                
+            for typ in oF.call_:
+                tL_ = []
+                if len(typ.N_)>ave*Le:
+                    for call in typ.N_: call.rim = []; call.fin = 0
+                    for _call, call in combinations(typ.N_, 2):
+                        if hasattr(_call, 'rTT_') and  hasattr(call, 'rTT'):  # func under flags/ if forks should have rTT?
+                            L = CoF._comp_rTT(_call, call)
+                            if L.m > ave: tL_ += [L]
+                if tL_:  # cluster to sub types here, same as cluster_N?
+                    pass
             CoF._wdt[oF.nF] = oF.w
             CoF._cur.set(_CoF)
             return out
         inner.wrapped = True
         return inner
+
+    @staticmethod
+    def _comp_rTT(_oF, oF):
+        _rTT = getattr(_oF, 'rTT'); rTT  = getattr(oF, 'rTT')
+        dTT = comp_derT(_rTT[1], rTT[1]);  m, d = vt_(dTT, (_oF.r + oF.r)/2)
+        L = CoF(nF='rTT', dTT=dTT, m=m, d=d, c=(_oF.c+oF.c)/2, r=(_oF.r+oF.r)/2)  # not sure
+        _oF.rim += [L]; oF.rim += [L]
+        return L 
+        
     def __bool__(f): return bool(f.N_)
 
 Z = CoF(nF ='Z'); CoF._cur.set(Z)  # global meta code, data=frame
 '''
 if  projecting_root: F.root.wTT *= rdpTT * (F.c/ F.root.c)  # c-weighted feedback
 elif selecting_root: (F.m - F.root.Lt.m) * (F.root.c-Ft.c)  # clustering value = loss reduction: root.Lt.m < selective F.m, add dval? 
-'''
+''' 
 ave,avd = .3,.5; decay = ave/(ave+avd)  # ave m,d / unit dist, recomputed from dTT*wTT?
 wY, wX = 64, 64; wYX = np.hypot(wY,wX)
 aveB,Lw,distw,intw = 100,.5,.5,.5; AveB,LW,Distw,Intw = CF(nF='aveB',w=aveB), CF(nF='Lw',w=Lw), CF(nF='distw',w=distw), CF(nF='intw',w=intw)
@@ -156,6 +176,7 @@ wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
 # replace with oF.w s:
 wN,wC,wn,wc = 10,20,5,10; wTTN,wTTC,wTTn,wTTc = np.array([wT,wT*avd])*wN, np.array([wT,wT*avd])*wC, np.array([wT,wT*avd])*wn, np.array([wT,wT*avd])*wc
 wTT_ = [wTTN,wTTC, wTTn,wTTc]  # || Nt,Ct,Lt, no Bt: no call, no info?
+Le = 5  # temporary
 
 def vt_(TT, r, wTT=wTTn):  # brief val_ to get m,d, rc=0 to return raw vals, Wn for comp_N
 
