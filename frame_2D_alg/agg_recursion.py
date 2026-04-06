@@ -20,14 +20,14 @@ Clustering compressively groups the elements into compositional hierarchy, initi
 High-contrast links are correlation clustered to form contours of adjacent node connectivity clusters.
 Each cycle goes through <=4 incrementally fuzzy and parallelizable stages:
 
-- select sparse exemplars to seed the clusters, top k for parallelization? (get_exemplars),
+- select sparse exemplars to seed the clusters, top k for parallelization (get_exemplars),
 - connectivity/ density-based agglomerative clustering, followed by divisive clustering (cluster_N), 
 - sequential centroid-based fuzzy clustering with iterative refinement, start in divisive phase (cluster_C),
 - centroid-parallel frame refine by two-layer EM if min global overlap, prune for next cros_comp cycle (cluster_P).
 
 That forms hierarchical graph representation: dual tree of down-forking elements: node_H, and up-forking clusters: root_H:
 https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/generic%20graph.drawio.png
-Similar to neurons: dendritic input tree and axonal output tree, but with lateral cross-comp and nested param sets per layer.
+Similar to neural dendritic input tree and axonal output tree, but with lateral cross-comp and nested param sets per layer.
 
 Overall fitness function is predictive value of the model, estimated through multiple orders of projection:
 initially summed match, refined by external projection in space and time (where match is combined with directional diffs),
@@ -118,12 +118,10 @@ class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
     def traced(func):
         if getattr(func, 'wrapped', False): return func
         @wraps(func)
-        def _sum_vt(F, fN):
-            N_ = F.N_ if fN else F.call_
-            F.c = C = sum(n.c for n in N_); F.r = sum(f.r* (f.c/C) for f in N_); F.w = sum(f.w* (f.c/C) for f in N_)
+        def sum_crw(F): N_ = F.call_; F.c = C = sum(n.c for n in N_); F.r = sum(f.r* (f.c/C) for f in N_); F.w = sum(f.w* (f.c/C) for f in N_)
         def inner(*a, **kw):
             _CoF = CoF._cur.get()
-            oF = CoF(nF=func.__name__, root=_CoF,c=1)
+            oF = CoF(nF=func.__name__, root=_CoF)
             _CoF.call_ += [oF]
             CoF._cur.set(oF); out = func(*a, **kw)
             if oF.call_:  # complete at this point
@@ -132,24 +130,19 @@ class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
                     tF = next((f for f in typ_ if f.nF==sub.nF), None)
                     if tF: tF.N_+= [sub]
                     else:  typ_ += [CoF(nF=sub.nF, N_=[sub], w=sub.w, c=sub.c)]
-                for tF in typ_: _sum_vt(tF, fN=1)
-                oF.call_= typ_; _sum_vt(oF, fN=0)
+                for tF in typ_: sum_crw(tF)
+                oF.call_= typ_; sum_crw(oF)
             else:
-                TT = getattr(oF,'rTT', oF.dTT)  # rTT includes cluster compression
-                m,d = (vt_(TT,oF.r) if np.any(TT) else (0,0))
-                oF.w = (abs(m) / (abs(d) or eps)) or 1      
-            # from prior discussion, we need Z.N_ exclusively for types, and it should be global?
-            ztF = next((f for f in Z.N_ if f.nF==oF.nF), None)
-            if ztF: ztF.N_ += [oF]
-            else:   ztF = CoF(nF=oF.nF, N_=[oF], w=oF.w, c=oF.c); Z.N_ += [ztF]
-            _sum_vt(ztF, fN=1); _sum_vt(Z, fN=1)  # or run this in batch during feedback for Z?
-            CoF._wdt[oF.nF] = ztF.w  # instead of update from last oF, update from typ's oF.w?
+                TT = getattr(oF,'rTT', oF.dTT)[0]  # rTT includes cluster compression
+                oF.w = vt_(TT,oF.r)[0] if np.any(TT) else 0  # =m
+            CoF._wdt[oF.nF] = oF.w
             CoF._cur.set(_CoF)
             return out
         inner.wrapped = True
         return inner
+    def __bool__(f): return bool(f.N_)
 
-Z = CoF(nF ='Z'); CoF._cur.set(Z)  # global meta code, data is redundant to frame?
+Z = CoF(nF ='Z'); CoF._cur.set(Z)  # global meta code, data=frame
 '''
 if  projecting_root: F.root.wTT *= rdpTT * (F.c/ F.root.c)  # c-weighted feedback
 elif selecting_root: (F.m - F.root.Lt.m) * (F.root.c-Ft.c)  # clustering value = loss reduction: root.Lt.m < selective F.m, add dval? 
@@ -1015,6 +1008,8 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
 
 def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
 
+    # related discussion on code clustering: https://claude.ai/share/8ca0054f-f51e-4d69-ac82-936157d63051
+    _N,_C,_n,_c = frame.dTT, frame.Ct.dTT, frame.TTn, frame.TTc; rTT_ = [np.ones((2,9)) for _ in range(4)]
     '''
     rough type tree:
     WN,WC, Wn,Wc = CF(nF='wN',wTT=wTTN,w=wN), CF(nF='wC',wTT=wTTC,w=wC), CF(nF='wn',wTT=wTTn,w=wn), CF(nF='wc',wTT=wTTc,w=wc)
@@ -1039,9 +1034,7 @@ def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential
     separate feedback accumulation up the call (root) chain for each oF, 
     typ oF.w / level= sum(f.w for f in oF.call_) if oF.call_ else vt_(oF.rTT|dTT)[0]?
     '''
-    # sum ratios between consecutive-level TTs:
-    _N,_C,_n,_c = frame.dTT, frame.Ct.dTT, frame.TTn, frame.TTc; rTT_ = [np.ones((2,9)) for _ in range(4)]
-    for lev in frame.H:
+    for lev in frame.H:  # sum ratios between consecutive-level TTs
         # top-down frame expansion levels, not lev-selective or sub-lev recursive
         N,C,n,c = lev.dTT, lev.Ct.dTT, lev.TTn, lev.TTc
         rN, rC, rn, rc = [np.abs(_tt / eps_(tt)) for _tt,tt in zip((_N,_C,_n,_c), (N,C,n,c))]
