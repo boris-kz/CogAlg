@@ -105,68 +105,60 @@ class CF(CBase): # iF/ data: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int-
         f.root = kwargs.get('root',None)
     def __bool__(f): return bool(f.c)  # N_ may be empty?
 
+def flat_(oF, call_=None):
+    if call_ is None: call_ = []
+    for sub in oF.call_:
+        call_ += [sub]
+        if sub.call_: flat_(sub, call_)
+    return call_
+skip = {'vt_','val_','sum_vt','comp','comp_A','comp_derT','base_comp','comp_F'}
+
 class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
     name = "func"
     _cur = contextvars.ContextVar('oF')
     _wdt = {}  # weights
     def __init__(f, **kw):
         super().__init__(**kw)
-        f.call_ = kw.get('call_',[])
+        f.call_= kw.get('call_',[])  # tree
+        f.typ_ = kw.get('typ_', [])  # flattened, nested with tFs, if any
     @staticmethod
     def get(): return CoF._cur.get(Z)
     @staticmethod
     def traced(func):
-        if getattr(func, 'wrapped', False): return func
+        if getattr(func,'wrapped',False): return func
         @wraps(func)
-        def sum_crw(F): N_ = F.call_; F.c = C = sum(n.c for n in N_); F.r = sum(f.r* (f.c/(C or eps)) for f in N_); F.w = sum(f.w* (f.c/(C or eps)) for f in N_)
+        def sum_crw(F): N_ = F.typ_; F.c = C = sum(n.c for n in N_); F.r = sum(f.r* (f.c/C) for f in N_); F.w = sum(f.w* (f.c/C) for f in N_)
         def inner(*a, **kw):
+            if func.__name__ in skip: return func(*a, **kw)
             _CoF = CoF._cur.get()
             oF = CoF(nF=func.__name__, root=_CoF)
             _CoF.call_ += [oF]
             CoF._cur.set(oF); out = func(*a, **kw)
             if oF.call_:  # complete at this point
-                typ_ = []
-                for sub in oF.call_:
-                    tF = next((f for f in typ_ if f.nF==sub.nF), None)
-                    if tF: tF.N_+= [sub]
-                    else:  typ_ += [CoF(nF=sub.nF, N_=[sub], w=sub.w, c=sub.c)]
+                call_,typ_ = flat_(oF),[]
+                for F in call_:
+                    if F.nF in skip: continue
+                    tF = next((f for f in typ_ if f.nF==F.nF), None)
+                    if tF: tF.typ_+= [F]
+                    else:  typ_ += [CoF(nF=F.nF, typ_=[F])]
                 for tF in typ_: sum_crw(tF)
-                oF.call_= typ_; sum_crw(oF)
+                oF.typ_ = [tF for tF in typ_ if tF.w * tF.c > ave]  # add coef
+                if oF.typ_: sum_crw(oF)  # typ_ vals only?
             else:
-                TT = getattr(oF,'rTT', oF.dTT)[0]  # rTT includes cluster compression
-                oF.w = vt_(TT,oF.r)[0] if np.any(TT) else 0  # =m
-                
-            for typ in oF.call_:
-                tL_ = []
-                if len(typ.N_)>ave*Le:
-                    for call in typ.N_: call.rim = []; call.fin = 0
-                    for _call, call in combinations(typ.N_, 2):
-                        if hasattr(_call, 'rTT_') and  hasattr(call, 'rTT'):  # func under flags/ if forks should have rTT?
-                            L = CoF._comp_rTT(_call, call)
-                            if L.m > ave: tL_ += [L]
-                if tL_:  # cluster to sub types here, same as cluster_N?
-                    pass
+                TT = getattr(oF,'rTT', oF.dTT)  # rTT includes cluster compression
+                oF.w = vt_(TT,oF.r)[0] if np.any(TT) else 0  # m
             CoF._wdt[oF.nF] = oF.w
             CoF._cur.set(_CoF)
             return out
         inner.wrapped = True
         return inner
-
-    @staticmethod
-    def _comp_rTT(_oF, oF):
-        _rTT = getattr(_oF, 'rTT'); rTT  = getattr(oF, 'rTT')
-        dTT = comp_derT(_rTT[1], rTT[1]);  m, d = vt_(dTT, (_oF.r + oF.r)/2)
-        L = CoF(nF='rTT', dTT=dTT, m=m, d=d, c=(_oF.c+oF.c)/2, r=(_oF.r+oF.r)/2)  # not sure
-        _oF.rim += [L]; oF.rim += [L]
-        return L 
-        
     def __bool__(f): return bool(f.N_)
 
 Z = CoF(nF ='Z'); CoF._cur.set(Z)  # global meta code, data=frame
 '''
 if  projecting_root: F.root.wTT *= rdpTT * (F.c/ F.root.c)  # c-weighted feedback
 elif selecting_root: (F.m - F.root.Lt.m) * (F.root.c-Ft.c)  # clustering value = loss reduction: root.Lt.m < selective F.m, add dval? 
-''' 
+'''
 ave,avd = .3,.5; decay = ave/(ave+avd)  # ave m,d / unit dist, recomputed from dTT*wTT?
 wY, wX = 64, 64; wYX = np.hypot(wY,wX)
 aveB,Lw,distw,intw = 100,.5,.5,.5; AveB,LW,Distw,Intw = CF(nF='aveB',w=aveB), CF(nF='Lw',w=Lw), CF(nF='distw',w=distw), CF(nF='intw',w=intw)
@@ -176,7 +168,6 @@ wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
 # replace with oF.w s:
 wN,wC,wn,wc = 10,20,5,10; wTTN,wTTC,wTTn,wTTc = np.array([wT,wT*avd])*wN, np.array([wT,wT*avd])*wC, np.array([wT,wT*avd])*wn, np.array([wT,wT*avd])*wc
 wTT_ = [wTTN,wTTC, wTTn,wTTc]  # || Nt,Ct,Lt, no Bt: no call, no info?
-Le = 5  # temporary
 
 def vt_(TT, r, wTT=wTTn):  # brief val_ to get m,d, rc=0 to return raw vals, Wn for comp_N
 
@@ -1021,7 +1012,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
                         F.wTT_[i] = cent_TT(dTT,2) * ww  # max-scope correlation weights
                 if elev == max_elev:  # fb / top lev
                     rV, wTT_ = ffeedback(F)  # update globals, rV is not used?
-                for wTT, wwTT in zip(wTT_, F.wTT_): wTT *= wwTT   # F.wTT_ is effectively global
+                for wTT, wwTT in zip(wTT_, F.wTT_): wTT *= wwTT   # F.wTT_ is effectively global?
                 tile = F  # lev tile_ is next extension seed
             else: break
         else: break
@@ -1029,7 +1020,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
 
 def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
 
-    # related discussion on code clustering: https://claude.ai/share/8ca0054f-f51e-4d69-ac82-936157d63051
+    # add globals *= oF.w per function?
     _N,_C,_n,_c = frame.dTT, frame.Ct.dTT, frame.TTn, frame.TTc; rTT_ = [np.ones((2,9)) for _ in range(4)]
     '''
     rough type tree:
