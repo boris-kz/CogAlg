@@ -1020,7 +1020,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
 
 def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
 
-    call_ = flat_(Z)  # every oF instance from the run
+    # add globals *= oF.w per function?
     _N,_C,_n,_c = frame.dTT, frame.Ct.dTT, frame.TTn, frame.TTc; rTT_ = [np.ones((2,9)) for _ in range(4)]
     '''
     rough type tree:
