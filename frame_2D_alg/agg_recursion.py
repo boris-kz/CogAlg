@@ -6,6 +6,7 @@ from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
 from functools import wraps
+import ast
 
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
@@ -49,6 +50,60 @@ prefix  _ denotes prior of two same-name vars, multiple _s for relative preceden
 postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized vars are summed small-case vars
 '''
+
+# build ast call map for the existing code
+def index_ast_calls(path=None):
+    
+    def get_call_name(node):
+        if isinstance(node, ast.Name):
+            return node.id
+        if isinstance(node, ast.Attribute):
+            return node.attr
+        return None
+    
+    path = path or __file__
+
+    class ASTCallIndexer(ast.NodeVisitor):
+        def __init__(self):
+            self.scope = None
+            self.branch = 'root'
+            self.calls = {}
+
+        def visit_FunctionDef(self, node):
+            prev_scope = self.scope
+            self.scope = node.name
+            self.calls.setdefault(self.scope, {})
+            self.generic_visit(node)
+            self.scope = prev_scope
+
+        def visit_If(self, node):
+            prev_branch = self.branch
+
+            self.branch = 'if'
+            for stmt in node.body:
+                self.visit(stmt)
+
+            self.branch = 'else'
+            for stmt in node.orelse:
+                self.visit(stmt)
+
+            self.branch = prev_branch
+
+        def visit_Call(self, node):
+            if self.scope is not None:
+                name = get_call_name(node.func)
+                if name:
+                    d = self.calls[self.scope]
+                    d.setdefault(name, []).append(self.branch)
+            self.generic_visit(node)
+
+    with open(path, 'r', encoding='utf-8') as f:
+        tree = ast.parse(f.read())
+
+    walker = ASTCallIndexer()
+    walker.visit(tree)
+    CoF._ast_calls = walker.calls
+
 eps = 1e-7
 def eps_(a): return np.where(a==0, eps, a)
 
@@ -117,10 +172,12 @@ class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
     name = "func"
     _cur = contextvars.ContextVar('oF')
     _wdt = {}  # weights
+    _ast_calls = {}
     def __init__(f, **kw):
         super().__init__(**kw)
         f.call_= kw.get('call_',[])  # tree
         f.typ_ = kw.get('typ_', [])  # flattened, nested with tFs, if any
+        f.ast_calls = kw.get('ast_calls', {})
     @staticmethod
     def get(): return CoF._cur.get(Z)
     @staticmethod
@@ -128,31 +185,41 @@ class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
         if getattr(func,'wrapped',False): return func
         @wraps(func)
         def sum_crw(F): N_ = F.typ_; F.c = C = sum(n.c for n in N_); F.r = sum(f.r* (f.c/C) for f in N_); F.w = sum(f.w* (f.c/C) for f in N_)
+        def compute_typ_(oF):
+            call_,typ_ = flat_(oF),[]
+            for F in call_:
+                if F.nF in skip: continue
+                tF = next((f for f in typ_ if f.nF==F.nF), None)
+                if tF: tF.typ_+= [F]
+                else:  typ_ += [CoF(nF=F.nF, typ_=[F])]
+            for tF in typ_: sum_crw(tF)
+            oF.typ_ = [tF for tF in typ_ if tF.w * tF.c > ave]  # add coef
+            if oF.typ_: sum_crw(oF)  # typ_ vals only?
         def inner(*a, **kw):
-            if func.__name__ in skip: return func(*a, **kw)
+            if func.__name__ in skip: 
+                return func(*a, **kw)
             _CoF = CoF._cur.get()
-            oF = CoF(nF=func.__name__, root=_CoF)
+            oF = CoF(nF=func.__name__, root=_CoF,ast_calls=CoF._ast_calls.get(func.__name__, {}))
             _CoF.call_ += [oF]
             CoF._cur.set(oF); out = func(*a, **kw)
             if oF.call_:  # complete at this point
-                call_,typ_ = flat_(oF),[]
-                for F in call_:
-                    if F.nF in skip: continue
-                    tF = next((f for f in typ_ if f.nF==F.nF), None)
-                    if tF: tF.typ_+= [F]
-                    else:  typ_ += [CoF(nF=F.nF, typ_=[F])]
-                for tF in typ_: sum_crw(tF)
-                oF.typ_ = [tF for tF in typ_ if tF.w * tF.c > ave]  # add coef
-                if oF.typ_: sum_crw(oF)  # typ_ vals only?
+                compute_typ_(oF)
+                if (len(oF.call_)-1)*Lw > ave:
+                    for call in oF.call_: call.rim = []; call.fin = 0
+                    for _call, call in combinations(oF.call_, 2): 
+                        if 'if' in oF.ast_calls.get(_call.nF,()) and 'if' in oF.ast_calls.get(call.nF,()):  # func under flags/ if forks
+                            # comp calls here
+                            pass
             else:
                 TT = getattr(oF,'rTT', oF.dTT)  # rTT includes cluster compression
                 oF.w = vt_(TT,oF.r)[0] if np.any(TT) else 0  # m
             CoF._wdt[oF.nF] = oF.w
             CoF._cur.set(_CoF)
+            if _CoF.nF == 'Z':  compute_typ_(Z)  # compute typ_ for Z
             return out
         inner.wrapped = True
         return inner
-    def __bool__(f): return bool(f.N_)
+    def __bool__(f): return bool(f.call_)
 
 Z = CoF(nF ='Z'); CoF._cur.set(Z)  # global meta code, data=frame
 '''
@@ -1069,7 +1136,8 @@ if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.
             if getattr(obj, 'wrapped', False): continue
             module_dict[name] = CoF.traced(obj)
 
-    trace_func(vars(),exclude= {'trace_functions','eps_','prop_F_','extend_box','TTw','Copy_','CopyF'})
+    index_ast_calls()
+    trace_func(vars(),exclude= {'trace_functions','eps_','prop_F_','extend_box','TTw','Copy_','CopyF','flat_','index_ast_calls'})
     Y,X = imread('./images/toucan.jpg').shape
     # frame = agg_frame(0, image=imread('./images/toucan.jpg'), iY=Y, iX=X)
     frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -31, iX=X//2 -31, Ly=64,Lx=64, Y=Y, X=X, rV=1)
