@@ -89,3 +89,33 @@ def cross_comp(Ft, rr, nF='Nt'):  # core function mediating recursive rng+ and d
 conditional_ = ['add_H','add_Lt','cluster_C','cluster_N','cluster_P','comp_F','ffeedback','frame_H','get_exemplars','mdecay','proj_N','proj_focus','proj_TT',
                 'sum2G','sum_H','trace_edge','Q2R','add_Nt','cent_TT','comp_N','comp_N_','cross_comp','sum2C','sum2F']
 
+def sum2F(N_, nF, root, TT=np.zeros((2,9)), C=0, R=0, fset=1, fCF=1):  # -> CF/CN
+
+    if C: m,d = vt_(TT,R)
+    else: m,d,TT,C,R = sum_vt(N_,C, fm=1)
+    Ft = (CN,CF)[fCF](nF=nF, dTT=TT,m=m,d=d,c=C,r=R, root=root); setattr(Ft,'N_',N_); Ft.H = []   # root Bt|Ct ->CN
+    if any([n.N_ for n in N_]):
+        sum_H(N_,Ft)  # sum lower levels, if any
+    if fset:
+        setattr(root, Ft.nF,Ft)
+        for N in N_: N.root = Ft
+    return Ft
+
+def sum_crw(F, call_=None):  # no sum wTT?
+    N_ = call_ if call_ is not None else F.typ_
+    F.c = C = sum(n.c for n in N_); F.r = sum(f.r* (f.c/C) for f in N_); F.w = sum(f.w* (f.c/C) for f in N_)
+
+def Q2R(N_, R=None, merge=1, froot=1, fN=0, fr=0):  # update root with N_
+
+    if R is None: R = CN() if fN else CF()  # root
+    R.m, R.d, R.dTT, R.c, R.r = sum_vt(N_, fr,fm=1)  # fr: val = local surprise
+    if merge:
+        for N in [n for N in N_ for n in N.N_] if merge==3 else (N_[1].N_ if merge == 2 else N_):  # 2: pair merge
+            R.N_ += [N]
+            if froot: N.root=R
+            if fN: R.C_ += N.C_; R.TTn += N.TTn; R.TTc += N.TTc  # frame_H only?
+    if fN and R.C_: R.Ct = Q2R(R.C_)
+    return R
+
+
+
