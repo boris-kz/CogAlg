@@ -135,9 +135,13 @@ class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
             CoF._cur.set(oF); out = func(*a, **kw)
             if oF.call_:  # complete at this point
                 if (len(flat_(oF))-1)*Lw > ave*(_CoF.wc+oF.r):
-                    sum2F(oF.call_,oF)  # represents all nested call_s
+                    sum2F(oF.call_,oF)  # represents all nested call_s   
+                    oF.w  = vt_(oF.dTT, oF.wc+oF.r)[0] if np.any(oF.dTT) else 0  # recomputed from summed dTT
+                    C = sum(f.c for f in oF.call_)
+                    oF.wc = sum(f.wc * (f.c/C) for f in oF.call_)  # not sure
             else:
                 TT = getattr(oF,'rTT', oF.dTT)  # rTT includes cluster compression
+                oF.wc =  sum(f.wc * (f.c/C) for f in oF.call_)  # or should be default to global wc?
                 oF.w = vt_(TT, _CoF.wc+oF.r)[0] if np.any(TT) else 0  # ~m
             CoF._wdt[oF.nF] = oF.w
             CoF._cur.set(_CoF)
@@ -193,12 +197,13 @@ def add2F(F, n, fr=0, merge=0):
 
     a = 'rTT' if fr else 'dTT'  # or wTT?
     if F.c:
-        C=F.c+n.c; _rc,rc = F.c/C, n.c/C; F.r = F.r*_rc+n.r*rc; F.c = C
+        C=F.c+n.c; _rc,rc = F.c/C, n.c/C; F.r = F.r*_rc+n.r*rc; F.c = C; 
+        if hasattr(n, 'wc'): F.wc = (F.wc*_rc + n.wc*rc) if F.wc != 0 else n.wc
         setattr(F, a, getattr(F,a)*_rc + getattr(n,a)*rc)
     else: setattr(F,a,getattr(n,a)); F.c=n.c; F.r=n.r
     if merge: F.N_ += n.N_ if merge>1 else [n]
     if getattr(n,'H',None): add_H(F.H, n.H, F)
-    if hasattr(n,'C_'): F.C_ += n.C_  # same for L_?
+    if hasattr(n,'C_'): F.C_ = getattr(F, 'C_', []) + n.C_  # same for L_?
 
 def sum2F(N_, R, fr=0, merge=0, froot=0):  # -> CF/CN
 
@@ -255,7 +260,7 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
         else:
             dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)
             pairs += [[dist, dy_dx,_N,N,c]]
-    if not pairs: return 0,0,0,r,0,0,0,0
+    if not pairs: return 0,0,0,r,0,0,0
 
     def proj_V(_N,N, dist, dy_dx, dec):  # _N x N induction
         Dec = dec or decay ** ((dist/((_N.span+N.span)/2)))
@@ -356,7 +361,7 @@ def comp_N(_N,N, r,_c, full=1, A=np.zeros(2),span=None, rL=None, L_=None, N_=Non
             for fb_, nF in zip((L.Nt.fb_,L.Lt.fb_,L.Bt.fb_,L.Ct.fb_), ('Nt','Lt','Bt','Ct')):
                 if fb_:  # +=trans-links, python-batched bottom-up
                     Ft = sum2F(fb_, getattr(L,nF)); add2F(L,Ft)
-                sum2F([L.Nt,L.Lt,L.Bt,L.Ct], CoF.get())
+            sum2F([L.Nt,L.Lt,L.Bt,L.Ct], CoF.get())
     if full:
         if span is None: span = np.hypot(*_N.yx - N.yx)
         yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
@@ -374,7 +379,7 @@ def comp_N(_N,N, r,_c, full=1, A=np.zeros(2),span=None, rL=None, L_=None, N_=Non
 def comp_F(_F, F, ir=0, rL=None):
 
     ddTT = comp_derT(_F.dTT[1],F.dTT[1]); r=(_F.r+F.r)/2; m,d = vt_(ddTT,r); r+=ir
-    dF = CF(dTT=ddTT, m=m,d=d,r=r)
+    dF = CF(dTT=ddTT, m=m,d=d,r=r,c=min(_F.c,F.c))
     if _F.nF == F.nF:  # sub-comp
         _N_,N_=_F.N_,F.N_; nF=F.nF; f = nF =='Lt'
         if  _N_ and N_:
@@ -508,9 +513,9 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
                     G_ += [sum2G(ft_,CF())]; Gt_+= [[tt,c,r]]  # _C=C+c; _rc=C/_C; rc=c/_C; TT=TT*_rc+tt*rc; R=R*_rc+r*rc; C=_C
         if G_:
             for G in G_: trans_cluster(G)  # splice trans_links, merge L.nt.roots
-            C = sum([g[1] for g in Gt_]); tt,_,R= Gt_[0]; TT=deepcopy(tt)
-            for tt,c,r in Gt_[1:]: rc=c/C; TT+=tt*rc; R+=r*rc
-            R/=C; r+=1
+            C = sum([g[1] for g in Gt_]); TT = np.zeros((2,9)); R = 0
+            for tt,c,r in Gt_: rc=c/C; TT+=tt*rc; R+=r*rc  # we need the first element?
+            r+=1  # R/=C is redundant? rc is already c/C
             if val_(TT, r+R, TTw(Ft.root), (len(G_)-1)*Lw) > 0:  # reform root,Nt, no other forks yet:
                 rG = Ft.root; Nt=rG.Nt; Nt.N_=G_; Nt.dTT=TT; Nt.r=R
                 rG.dTT=TT; rG.c=C; rG.r=R
@@ -713,7 +718,7 @@ def add_Nt(G, Nt, merge=0):  # addition to Q2R
         add_H(G.Nt.H if merge else G.Nt.H[:-1], Nt.H, G)  # else top lev = Nt.N_
     N_ = Nt.N_
     if merge: G.N_ += N_ # never 2
-    else:     G.Nt.H += [sum2F(N_+ (G.Nt.H.pop().N_ if G.Nt.H else []), froot=0)]  # extend or init top level
+    else:     G.Nt.H += [sum2F(N_+ (G.Nt.H.pop().N_ if G.Nt.H else []), R=G.Nt, froot=0)]  # extend or init top level
     yx_ = []; C = G.c + Nt.c  # G is empty?
     for N in N_:
         N.fin = 1; N.root = G; c = N.c
@@ -919,8 +924,7 @@ def vect_edge(tile, rV=1, wTT_=None):  # PP_ cross_comp and floodfill to init fo
     oF = CoF.get(); oF.c = C; oF.r = R
     if G_:
         # set directly:
-        setattr(tile,'Nt', sum2F(G_, CF(dTT=TT,c=C,r=1),tile))  # update tile.wTT?
-        tile.dTT = TT; tile.c = C
+        Nt = CF(nF='Nt', root=tile); Nt.N_ = G_; Nt.dTT = TT; Nt.c = C; Nt.r = 1; tile.Nt = Nt; tile.dTT = TT; tile.c = C
         if vt_(TT, tile.r)[0] > ave:
             return tile
 
@@ -1003,10 +1007,10 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
             else: break
         if T_:
             TT,C,R = sum_vt(T_); R += elev
-            if val_(TT, R/len(T_) + elev, frame.wTT_[0], mw=(len(T_)-1)*Lw) <= 0: T_=[]; C=0; R=0
+            if val_(TT, R/len(T_) + elev, wTT_[0], mw=(len(T_)-1)*Lw) <= 0: T_=[]; C=0; R=0
         return T_,C,R
     global ave,avd, Lw,intw,distw, Tw_,wTT_
-    ave,avd, Lw,intw,distw, Tw_,wTT_ = np.array([ave,avd, Lw,intw,distw, Tw_,wTT_]) / rV
+    (ave,avd, Lw,intw,distw), Tw_,wTT_ = np.array([ave,avd, Lw,intw,distw])/rV, np.array(Tw_)/rV, np.array(wTT_)/rV
 
     elev = 0; F, tile = [],[]  # frame, seed lower tile, if any
     while elev < max_elev:
