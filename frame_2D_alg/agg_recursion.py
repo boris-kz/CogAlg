@@ -6,6 +6,7 @@ from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
 from functools import wraps
+import ast
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -104,6 +105,10 @@ class CF(CBase):  # clustering forks: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes,
         f.root = kwargs.get('root',None)
     def __bool__(f): return bool(f.c)  # N_ may be empty?
 
+onF_ = ['cross_comp','comp_N_','comp_C_','comp_N','comp_F','proj_N',  # comp_ functions
+        'get_exemplars','cluster_N','cluster_C','cluster_P','frame_H','vect_edge','trace_edge','ffeedback'  # clust_ functions
+        ]
+
 # process selection attrs:
 def flat_(oF, call_=None):
     if call_ is None: call_ = []
@@ -112,10 +117,47 @@ def flat_(oF, call_=None):
         if sub.call_: flat_(sub, call_)
     return call_
 
+
+# init function‘s wc, using vt_'s complexity as base unit
+def init_wc():
+    # compute weights based on operations in function, independent of deeper callees
+    def get_ops(node):
+        # suggested by LLM
+        weights = {
+            ast.Assign:       1,  # bind name: trivial
+            ast.Attribute:    1,  # single dict lookup on object
+            ast.UnaryOp:      1,  # apply one operator to one operand
+            ast.BoolOp:       1,  # short-circuit decision between already-evaluated values
+            ast.Compare:      1,  # compare already-evaluated operands
+            ast.If:           1,  # test + pick branch, body ops counted separately
+            ast.IfExp:        1,  # same as If
+            ast.BinOp:        1,  # apply operator to two already-evaluated operands
+            ast.AugAssign:    1,  # read + op + store, but op and target counted separately
+            ast.Subscript:    1,  # index resolution into container
+            ast.GeneratorExp: 1,  # lazy wrapper, inner loop body counted as child nodes
+            ast.While:        2,  # condition re-evaluation overhead per iteration, body counted separately
+            ast.For:          2,  # iterator protocol: __iter__ + __next__ overhead, body counted separately
+            ast.ListComp:     2,  # same iteration overhead as For + list.append + allocation
+            ast.SetComp:      2,  # same as ListComp + hashing per element
+            ast.Call:         2,  # frame creation + arg binding + return: overhead beyond the callee body itself
+        }
+        return sum(weights.get(type(n), 0) for n in ast.walk(node))
+
+    path = __file__
+    with open(path) as f: tree = ast.parse(f.read())
+    # get only onF_'s function name and their function object, and also vt_
+    funcs = {func.name: func for func in ast.walk(tree) if isinstance(func, ast.FunctionDef) and (func.name in onF_ or func.name == 'vt_')}
+    # get base vt_'s operations weight
+    base = get_ops(funcs.pop('vt_'))
+    return [(get_ops(funcs[name]) /base) for name in onF_]
+ 
+Fw_ = init_wc()  # maps to onF_
+Fc_ = Fw_.copy()  # oF.wc_, init oF.w_, accum from call_?
+
 class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
     name = "func"
     _cur = contextvars.ContextVar('oF')
-    _W_,_C_ = [],[]  # sum called oF weights and costs, global Fw_ is not summed
+    _W_,_C_ = np.zeros(len(onF_)),np.zeros(len(onF_))  # sum called oF weights and costs, global Fw_ is not summed
     def __init__(f, **kw):
         super().__init__(**kw)
         f.call_= kw.get('call_',[])  # tree
@@ -128,15 +170,15 @@ class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
         @wraps(func)
         def inner(*a, **kw):
             _CoF = CoF._cur.get()
-            oF = CoF(nF=onF_.index(func.__name__), root=_CoF); _CoF.call_+=[oF]
+            oF = CoF(nF=onF_.index(func.__name__), root=_CoF); oF.wc = Fc_[onF_.index(func.__name__)]; _CoF.call_+=[oF]
             CoF._cur.set(oF); out = func(*a, **kw)
             if oF.call_:  # complete at this point
                 if (len(flat_(oF))-1)*Lw > ave*(_CoF.wc+oF.r):
                     sum2F(oF.call_,oF)  # represents all nested call_s
             TT = getattr(oF,'rTT', oF.dTT)  # rTT includes cluster compression
             oF.w = vt_(TT, oF.wc+oF.r)[0] if np.any(TT) else 0  # recompute
-            _CoF._W_[oF.nF] = [oF.w]  # nF is index
-            _CoF._C_[oF.nF] = [oF.wc]
+            CoF._W_[oF.nF] += oF.w  # nF is index
+            CoF._C_[oF.nF] += oF.wc
             CoF._cur.set(_CoF)
             return out
         inner.wrapped = True
@@ -161,12 +203,7 @@ wY, wX = 64, 64; wYX = np.hypot(wY,wX)
 aveB, Lw, distw,intw = 100,.5,.5,.5  # AveB,LW,Distw,Intw = CF(nF='aveB',w=aveB), CF(nF='Lw',w=Lw), CF(nF='distw',w=distw), CF(nF='intw',w=intw)
 wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
 wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA]); wTT = np.array([wT,wT*avd])  # default for comp_N_?
-onF_ = ['cross_comp','comp_N_','comp_C_','comp_N','comp_F','proj_N',  # comp_ functions
-        'get_exemplars','cluster_N','cluster_C','cluster_P','frame_H','vect_edge','trace_edge','ffeedback'  # clust_ functions
-        ]
 iCC, iCN_, iCC_, iCN, iCF, iPN, iGE, iCLN, iCLC, iCLP, iFH, iVE, iTE, iFB = range(len(onF_))
-Fw_ = [5,10,20,10,8,5, 5,10,20,30,30,10,15,10]  # maps to onF_
-Fc_ = copy(Fw_)  # oF.wc_, init oF.w_, accum from call_?
 wTT_= [np.ones((2,9)) for _ in range(4)]  # replace with Fwtt_
 ''' 
   Agg cycle:
@@ -188,6 +225,7 @@ def cross_comp(Ft, rr, nF='Nt'):  # core function mediating recursive rng+ and d
     L_,TT,c,r,TTd,cd,rd = comp_C_(N_,rr,fC=1) if fC else comp_N_(combinations(N_,2),rr)
     if L_:  # Lm_, no +|- Ft.Lt?
         M, D = vt_(TT, r, TTw(Ft.root, fC+2))
+        # there's a problem with the usage of IGE and CoF._W_ here
         if M * ((len(L_)-1)*Lw) * CoF._W_[iGE] > ave:  # or CoF._wdt[onF_.index('get_exemplars')]?
             E_ = get_exemplars({N for L in L_ for N in L.nt}, r,c)
             G_,r = cluster_N(Ft, E_,r,c)  # -> cluster_C,_P, eval?
@@ -645,7 +683,7 @@ def sum2F(N_, root, fr=0, merge=0, froot=0):  # -> CF/CN
     c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); rc_ = c_/C
     TT = np.einsum('i,ijk->jk', rc_, np.stack([getattr(n,a) for n in N_]))  # weighted sum
     R  = rc_ @ np.array([n.r  for n in N_])
-    wC = rc_ @ np.array([n.wc for n in N_])
+    wC = rc_ @ np.array([getattr(n,'wc',0) for n in N_])
     if merge:
         for n in N_: root.N_ += n.N_ if merge>1 else [n]
     if froot:
