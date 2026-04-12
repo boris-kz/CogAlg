@@ -89,18 +89,6 @@ def cross_comp(Ft, rr, nF='Nt'):  # core function mediating recursive rng+ and d
 conditional_ = ['add_H','add_Lt','cluster_C','cluster_N','cluster_P','comp_F','ffeedback','frame_H','get_exemplars','mdecay','proj_N','proj_focus','proj_TT',
                 'sum2G','sum_H','trace_edge','Q2R','add_Nt','cent_TT','comp_N','comp_N_','cross_comp','sum2C','sum2F']
 
-def sum2F(N_, nF, root, TT=np.zeros((2,9)), C=0, R=0, fset=1, fCF=1):  # -> CF/CN
-
-    if C: m,d = vt_(TT,R)
-    else: m,d,TT,C,R = sum_vt(N_,C, fm=1)
-    Ft = (CN,CF)[fCF](nF=nF, dTT=TT,m=m,d=d,c=C,r=R, root=root); setattr(Ft,'N_',N_); Ft.H = []   # root Bt|Ct ->CN
-    if any([n.N_ for n in N_]):
-        sum_H(N_,Ft)  # sum lower levels, if any
-    if fset:
-        setattr(root, Ft.nF,Ft)
-        for N in N_: N.root = Ft
-    return Ft
-
 def sum_crw(F, call_=None):  # no sum wTT?
     N_ = call_ if call_ is not None else F.typ_
     F.c = C = sum(n.c for n in N_); F.r = sum(f.r* (f.c/C) for f in N_); F.w = sum(f.w* (f.c/C) for f in N_)
@@ -116,6 +104,44 @@ def Q2R(N_, R=None, merge=1, froot=1, fN=0, fr=0):  # update root with N_
             if fN: R.C_ += N.C_; R.TTn += N.TTn; R.TTc += N.TTc  # frame_H only?
     if fN and R.C_: R.Ct = Q2R(R.C_)
     return R
+
+def add2F(F, n, fr=0, merge=0):
+
+    a = 'rTT' if fr else 'dTT'  # or wTT?
+    if F.c:
+        C=F.c+n.c; _rc,rc = F.c/C, n.c/C; F.r = F.r*_rc + n.r*rc; F.c = C
+        if hasattr(n,'wc'): F.wc = (F.wc*_rc + n.wc*rc) if F.wc else n.wc
+        setattr(F, a, getattr(F,a)*_rc + getattr(n,a)*rc)
+    else: setattr(F,a,getattr(n,a)); F.c=n.c; F.r=n.r
+    if merge: F.N_ += n.N_ if merge>1 else [n]
+    if getattr(n,'H',None): add_H(F.H, n.H, F)
+    if hasattr(n,'C_'): F.C_ = getattr(F, 'C_', []) + n.C_  # same for L_?
+
+def sum2F(N_, root, fr=0, merge=0, froot=0):  # -> CF/CN
+
+    _C=root.c; n=N_[0]; C=n.c; TT,R,wC = np.zeros((2,9)),0,0
+    vt_ = [[n.rTT if fr else n.dTT], n.c, n.r, n.wc, n.H]
+    for n in N_:
+        vt_ += [[n.rTT if fr else n.dTT], n.c, n.r, n.wc, n.H]
+        if merge: root.N_ += n.N_ if merge>1 else [n]
+        if froot: n.root = root
+    for tt,c,r,wc,H in N_:
+        rc = c/C; TT += tt*rc; R+=r*rc; wC+=wc*rc; add_H(root.H,H, root, rc)
+    new = CF(N_=N_, dTT=TT, c=C, r=R/C, wc=wC, H=H)
+    if _C: add2F(root,new)
+    else: root=new
+    if getattr(root,'C_',None):  # same for L_,H, etc?
+        root.Ct = sum2F(root.C_,CF(root=root))  # external init R, setattr(root, nF,R)
+    return root
+
+def sum_H(N_, Ft, rc_):
+    H = []
+    for N in N_:
+        if H: H[0]+= N.N_  # top lev
+        elif  N.N_: H = [list(N.N_)]
+        if hasattr(N, 'Nt'): add_H(Ft.H, N.Nt.H, Ft)
+    Ft.H = [sum2F(lev, CF(), rc_) for lev in H] if H else []
+
 
 
 
