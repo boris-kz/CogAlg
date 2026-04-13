@@ -193,7 +193,7 @@ def cross_comp(Ft, rr, nF='Nt'):  # core function mediating recursive rng+ and d
             E_ = get_exemplars({N for L in L_ for N in L.nt}, r,c)
             G_,r = cluster_N(Ft, E_,r,c)  # -> cluster_C,_P, eval?
             if G_:
-                Ft = sum2F(G_, Ft.root,froot=1); fC = G_[0].N_[0].typ==3  # or G.N_ = spliced C_ if more valuable?
+                Ft = sum2F(G_,CF(root=Ft.root),froot=1); fC = G_[0].N_[0].typ==3  # or G.N_ = spliced C_ if more valuable?
                 if val_(TT*wn, r, TTw(Ft.root,fC+2), (len(G_)-1)*Lw,1,TTd, rd/(r+rd)) > 0:
                     G_,r = cross_comp(Ft,r,nF)  # agg+, trans-comp
     return G_, r  # G_ is recursion flag
@@ -340,7 +340,7 @@ def comp_F(_F, F, ir=0, rL=None):
             if f: Np_ = [[_n,n] for _n,n in zip(_N_,N_) if _n and n]  # same forks
             else: Np_ = list(product(_N_,N_))  # pairs
             if (rL.m+m)/2 * ((len(Np_)-1)*Lw) > ave * wn:
-                if f: L_= [comp_F(*Np, min(Np[0].c,Np[1].c), r,rL=dF) for Np in Np_]; TT,C,R = sum_vt(L_)
+                if f: L_= [comp_F(*Np, r,rL=dF) for Np in Np_]; TT,C,R = sum_vt(L_)
                 else: L_,TT,C,R,_,_,_= comp_N_(Np_,r,nF,rL)
                 if L_:
                     add2F(dF,CF(N_=L_,dTT=TT,c=C,r=R)); add2F(rL,dF); sum2F(L_,CoF.get())
@@ -436,11 +436,11 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
     G_= []  # add prelink pL_,pN_? include merged Cs, in feature space for Cs
     if _N_ and val_(Ft.dTT, r+wN, TTw(Ft.root), mw=(len(_N_)-1)*Lw) > 0:  #| fL?
         for N in _N_:
-            N.fin=0; N.exe=1; sum2F(N.rim, R=N.Rt, froot=0)  # only if N was added in trans-cluster?
+            N.fin=0; N.exe=1; sum2F(N.rim, N.Rt, froot=0)  # only if N was added in trans-cluster?
         G_=[]; Gt_=[]; in_= set()  # root attrs
         for N in _N_:  # form G per remaining N
             if N.fin or (Ft.root.root and not N.exe): continue  # no exemplars in Fg
-            N_ = [N]; L_,B_,C_ = [],[],[]; N.fin=1  # init G, no C_?
+            N_ = [N]; L_,B_,C_ = [],[],[]; N.fin=1  # init G, no C_? (C_ is actually redundant now? We will combine them anyway)
             __L_= N.rim  # spliced rim
             while __L_:
                 _L_ = []
@@ -476,7 +476,8 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
         sel_TT = (Ft.dTT*Ft.c - Ft.root.Lt.dTT*Ft.root.Lt.c) / eps_(Ft.root.Lt.dTT * Ft.root.Lt.c)
         oF = CoF.get(); oF.N_=G_; oF.rTT=sel_TT; oF.c = Ft.root.c - Ft.c; oF.r=sum([G.r * G.c for G in G_])/oF.c
         # combine C_:
-        sum2F([C for N in (G_ if G_ else _N_) for C in N.Ct.N_], Ft.root.Ct, froot=0)  # Ct.r includes overlap?
+        C_ = [C for N in (G_ if G_ else _N_) for C in N.Ct.N_]
+        if C_: sum2F(C_, Ft.root.Ct, froot=0)  # Ct.r includes overlap?
     return G_, r
 
 def cluster_C(Ft, E_, r,_c):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
@@ -558,7 +559,7 @@ def cluster_P(__C_, N_, _c, root):  # Parallel centroid refining, _C_ from clust
     while True:
         M = O = dM = dO = 0
         for N in N_:
-            N.m_,N.d_,N.r_,N.rN_ = map(list,zip(*[vt_(base_comp(C,N)[0],C.r,wTTC) + (C.r,C) for C in _C_]))  # distance-weight match?
+            N.m_,N.d_,N.r_,N.rN_ = map(list,zip(*[vt_(base_comp(C,N)[0],C.r,wTTC,1) + (C.r,C) for C in _C_]))  # distance-weight match?
             N.o_ = list(np.argsort(np.argsort(N.m_)[::-1])+1)  # rank of each C_[i] = rdn of C in C_
             dM+= sum(abs(m-_m) for _m,m in zip(N._m_,N.m_)) if cnt else sum(N.m_)
             dO+= sum(abs(o-_o) for _o,o in zip(N._o_,N.o_)) if cnt else sum(N.o_)
@@ -598,9 +599,10 @@ def cluster_FCM(__C_, N_, _c, root):  # FCM-style parallel centroid refine, repl
         dU = 0  # total membership change per loop
         for N in N_:
             N.m_,N.d_,N.r_,N.rN_ = map(list, zip(*[ vt_( base_comp(C,N)[0], C.r, wTTC) + (C.r,C) for C in _C_]))
-            s = sum(N.m_) or eps; N.u_ = [m/s for m in N.m_]  # normalize matches so Σ_C u = 1
+            dist_ = [np.hypot(*(N.yx - C.yx)) / (N.span + C.span) for C in _C_]  # FCM usually have distance? Or use the feature space distance: TT[1]/(TT[0]+TT[1]) @wTT?
+            s = sum(N.m_) or eps; N.u_ = [m/s*dist for m,dist in zip(N.m_, dist_)]  # normalize matches so Σ_C u = 1
             dU += sum(abs(u-_u) for _u,u in zip(N._u_,N.u_)) if cnt else sum(N.u_)
-        C_ = [sum2C(N_,_C, i, root=root) for i,_C in enumerate(_C_)]  # update Cs as u-weighted sum of N_, sum2C reads n.u_[i]
+        C_ = [sum2C(N_,_C, i, root=root, fu=1) for i,_C in enumerate(_C_)]  # update Cs as u-weighted sum of N_, sum2C reads n.u_[i]
         cnt += 1
         if dU > ave * (root.r+wC) * len(N_):  # memberships change
             for N in N_: N._u_ = N.u_
@@ -610,13 +612,13 @@ def cluster_FCM(__C_, N_, _c, root):  # FCM-style parallel centroid refine, repl
     for i, C in enumerate(C_):
         if C.m > ave*(wC+C.r):  # final pruning
             C.N_ = [n for n in C.N_ if n.u_[i] * C.m > ave * n.r_[i]]  # membership-weighted match > redundancy
-            if C.N_: out_ += [C]
+            if C.N_: out_ += [sum2C(C.N_,C, i, root=root, fu=1)]  # we need to resum N_ into C?
     for N in N_:  # compact per-N vectors to surviving Cs
         for v_ in (N.m_,N.d_,N.r_,N.u_):
             v_[:] = [v for v,c in zip(v_,out_) if c]
         N._u_ = []
         N.rN_ = [c for c,keep in zip(N.rN_,out_) if keep]
-    C_ = [c for c in out_ if c]
+    C_ = out_  # [c for c in out_ if c] (all Cs in out_ shouldn't be empty?)
     dCt = sum2F(set(__C_)-set(C_), CF())  # compression
     oF = CoF.get(); oF.N_=C_; oF.rTT=dCt.dTT; oF.r=dCt.r; oF.c=_c-dCt.c
     return C_
@@ -638,10 +640,12 @@ def cent_TT(dTT, r):  # weight attr matches | diffs by their match to the sum, r
     return _wTT  # single-mode dTT, extend to 2D-3D lev cycles in H, cross-level param max / centroid?
 
 # evaluations:
-def vt_(TT, r, wTT=wTT):  # brief val_ to get m,d, rc=0 to return raw vals, Wn for comp_N
+def vt_(TT, r, wTT=wTT, fdiv=0):  # brief val_ to get m,d, rc=0 to return raw vals, Wn for comp_N
 
     m_,d_= TT; ad_ = np.abs(d_); t_ = eps_(m_+ad_)  # ~ max comparand
-    return m_/t_ @ wTT[0] - ave*r, ad_/t_ @ wTT[1] - avd*r  # norm by co-derived variance
+    m = m_/t_ @ wTT[0] /ave*r if fdiv else m_/t_ @ wTT[0] - ave*r
+    d = ad_/t_ @ wTT[1]/avd*r if fdiv else ad_/t_ @ wTT[1] - avd*r
+    return m, d   # norm by co-derived variance
 
 def val_(TT, r, wTT=wTT, mw=1.0,fi=1, _TT=None, cr=.5):  # m,d eval per cluster, cr = cd / cm+dc, default half-weight?
 
@@ -665,11 +669,11 @@ def add2F(F, n, fr=0, merge=0):  # unpack for batching in sum2F
     a = 'rTT' if fr else 'dTT'  # or wTT?
     if F.c:
         C=F.c+n.c; _rc,rc = F.c/C, n.c/C; F.r = F.r*_rc + n.r*rc; F.c = C
-        if hasattr(n,'wc'): F.wc = (F.wc*_rc + n.wc*rc) if F.wc else n.wc
+        if hasattr(F,'wc') and hasattr(n,'wc'): F.wc = (F.wc*_rc + n.wc*rc) if F.wc else n.wc
         setattr(F, a, getattr(F,a)*_rc + getattr(n,a)*rc)
     else: setattr(F,a,getattr(n,a)); F.c=n.c; F.r=n.r
     if merge: F.N_ += n.N_ if merge>1 else [n]
-    if getattr(n,'H',None): add_H(F.H, n.H, F)
+    if hasattr(F, 'H') and getattr(n,'H',None): add_H(F.H, n.H, F)
     if hasattr(n,'C_'): F.C_ = getattr(F, 'C_', []) + n.C_  # same for L_?
 
 def sum2F(N_, root, fr=0, merge=0, froot=0):  # -> CF/CN
@@ -686,7 +690,7 @@ def sum2F(N_, root, fr=0, merge=0, froot=0):  # -> CF/CN
     new = CF(N_=N_, c=C, r=R, wc=wC, **{a: TT})
     sum_H(N_, new)
     if root.c: add2F(root,new)
-    else:      root = new
+    else:      new.root=root.root; root = new
     if getattr(root,'C_',None):
         root.Ct = sum2F(root.C_, CF(root=root))
     return root
@@ -704,13 +708,17 @@ def sum_H(N_, Ft):
         elif N.N_: H = [list(N.N_)]
     Ft.H = [sum2F(H[0], CF())] if H else []
 
-def sum2C(N_, _C, _i=None, root=None):  # fuzzy sum + base attrs for centroids
+def sum2C(N_, _C, _i=None, root=None, fu=0):  # fuzzy sum + base attrs for centroids
 
     cc_ = []
     for N in N_:
-        if _i is None: i = N._C_.index(_C); m,o = N._m_[i], N._o_[i]  # cluster_C
-        else:          m,o = N.m_[_i],N.o_[_i]  # current m_,o_ in cluster_P
-        cc_ += [N.c * (m/(ave*o) * _C.m)]  # *_C.m: proj survival?
+        if fu:
+            u = N.u_[_i]  # membership
+            cc_ += [N.c * u ]  # apply * c when computing u, then we can skip it here?
+        else:
+            if _i is None: i = N._C_.index(_C); m,o = N._m_[i], N._o_[i]  # cluster_C
+            else:          m,o = N.m_[_i],N.o_[_i]  # current m_,o_ in cluster_P
+            cc_ += [N.c * (m/(ave*o) * _C.m)]  # *_C.m: proj survival?
     Cc = sum(cc_)
     R = 0; TT = np.zeros((2,9)); kern = np.zeros(4); span = 0; yx = np.zeros(2)
     for N, c in zip(N_,cc_):
@@ -961,7 +969,7 @@ def vect_edge(tile, rV=1, wTT_=None):  # PP_ cross_comp and floodfill to init fo
                 for PPd in edge.link_: PP2N(PPd)
                 for N in N_:
                     if N.B_:
-                        PPd_ = [B.root for B in N.B_]; sum2F(PPd_,R=N.Bt)
+                        PPd_ = [B.root for B in N.B_]; sum2F(PPd_,N.Bt)
                         N.Bt.N_ = PPd_; [setattr(B,'root',N.Bt) for B in PPd_]
                 if val_(sum_vt(N_)[0],3,TTw(tile), (len(PPm_)-1)*Lw) > 0:
                     G_,TT,C, R = trace_edge(N_,G_,TT,C,3,tile)  # flatten B_-mediated Gs
