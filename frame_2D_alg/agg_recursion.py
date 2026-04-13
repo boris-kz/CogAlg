@@ -104,7 +104,11 @@ class CF(CBase):  # clustering forks: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes,
         f.root = kwargs.get('root',None)
     def __bool__(f): return bool(f.c)  # N_ may be empty?
 
-# process selection attrs:
+# process selection attrs for
+onF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
+        'get_exemplars','cluster_N','cluster_C','cluster_P',  # clust_ functions
+        'cross_comp','frame_H','vect_edge','trace_edge','ffeedback','proj_N'  # combined, ancillary
+        ]
 def flat_(oF, call_=None):
     if call_ is None: call_ = []
     for sub in oF.call_:
@@ -115,7 +119,7 @@ def flat_(oF, call_=None):
 class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
     name = "func"
     _cur = contextvars.ContextVar('oF')
-    _W_,_C_ = [],[]  # sum called oF weights and costs, global Fw_ is not summed
+    _W_,_C_ = np.zeros(len(onF_)),np.zeros(len(onF_))  # sum called oF weights and costs, global Fw_ is not summed
     def __init__(f, **kw):
         super().__init__(**kw)
         f.call_= kw.get('call_',[])  # tree
@@ -128,15 +132,15 @@ class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
         @wraps(func)
         def inner(*a, **kw):
             _CoF = CoF._cur.get()
-            oF = CoF(nF=onF_.index(func.__name__), root=_CoF); _CoF.call_+=[oF]
+            oF = CoF(nF=onF_.index(func.__name__), root=_CoF); oF.wc = Fc_[oF.nF]; _CoF.call_+=[oF]
             CoF._cur.set(oF); out = func(*a, **kw)
             if oF.call_:  # complete at this point
                 if (len(flat_(oF))-1)*Lw > ave*(_CoF.wc+oF.r):
                     sum2F(oF.call_,oF)  # represents all nested call_s
             TT = getattr(oF,'rTT', oF.dTT)  # rTT includes cluster compression
-            oF.w = vt_(TT, oF.wc+oF.r)[0] if np.any(TT) else 0  # recompute
-            _CoF._W_[oF.nF] = [oF.w]  # nF is index
-            _CoF._C_[oF.nF] = [oF.wc]
+            oF.w += vt_(TT, oF.wc+oF.r)[0] if np.any(TT) else 0  # default Fw_[oF.nF], get ave?
+            _CoF._W_[oF.nF] += Fw_[oF.nF]  # if nF is index in onF_
+            _CoF._C_[oF.nF] += Fc_[oF.nF]
             CoF._cur.set(_CoF)
             return out
         inner.wrapped = True
@@ -161,12 +165,9 @@ wY, wX = 64, 64; wYX = np.hypot(wY,wX)
 aveB, Lw, distw,intw = 100,.5,.5,.5  # AveB,LW,Distw,Intw = CF(nF='aveB',w=aveB), CF(nF='Lw',w=Lw), CF(nF='distw',w=distw), CF(nF='intw',w=intw)
 wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
 wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA]); wTT = np.array([wT,wT*avd])  # default for comp_N_?
-onF_ = ['cross_comp','comp_N_','comp_C_','comp_N','comp_F','proj_N',  # comp_ functions
-        'get_exemplars','cluster_N','cluster_C','cluster_P','frame_H','vect_edge','trace_edge','ffeedback'  # clust_ functions
-        ]
-iCC, iCN_, iCC_, iCN, iCF, iPN, iGE, iCLN, iCLC, iCLP, iFH, iVE, iTE, iFB = range(len(onF_))
-Fw_ = [5,10,20,10,8,5, 5,10,20,30,30,10,15,10]  # maps to onF_
-Fc_ = copy(Fw_)  # oF.wc_, init oF.w_, accum from call_?
+iCC, iCN_, iCC_, iCN, iCF, iPN, iGE, iCLN, iCLC, iCLP, iFH, iVE, iTE, iFB = range(len(onF_))  # pre-call nF indices
+Fc_ = [5,10,20,10,8,5, 5,10,20,30,30,10,15,10]  # fixed complexity weights from AST, maps to onF_
+Fw_ = copy(Fc_)  # ave gain summed from calls, init neutral
 wTT_= [np.ones((2,9)) for _ in range(4)]  # replace with Fwtt_
 ''' 
   Agg cycle:
@@ -188,7 +189,7 @@ def cross_comp(Ft, rr, nF='Nt'):  # core function mediating recursive rng+ and d
     L_,TT,c,r,TTd,cd,rd = comp_C_(N_,rr,fC=1) if fC else comp_N_(combinations(N_,2),rr)
     if L_:  # Lm_, no +|- Ft.Lt?
         M, D = vt_(TT, r, TTw(Ft.root, fC+2))
-        if M * ((len(L_)-1)*Lw) * CoF._W_[iGE] > ave:  # or CoF._wdt[onF_.index('get_exemplars')]?
+        if M * ((len(L_)-1)*Lw) * Fw_[iGE] > ave * Fc_[iGE]:
             E_ = get_exemplars({N for L in L_ for N in L.nt}, r,c)
             G_,r = cluster_N(Ft, E_,r,c)  # -> cluster_C,_P, eval?
             if G_:
@@ -549,7 +550,7 @@ def cluster_C(Ft, E_, r,_c):  # form centroids by clustering exemplar surround v
             oF = CoF.get(); oF.N_=oC_; oF.rTT=sel_TT; oF.r=Ct.r; oF.c = Ft.c-Ct.c  # data, select in Nt.N_?
     return oC_,r
 
-def cluster_P(__C_,N_, _c, root):  # Parallel centroid refining, _C_ from cluster_C, N_= root.N_, if global val*overlap > min
+def cluster_P(__C_, N_, _c, root):  # Parallel centroid refining, _C_ from cluster_C, N_= root.N_, if global val*overlap > min
 
     for N in N_: N._m_,N._o_,N._d_,N._r_ = [],[],[],[]
     for C in __C_: C.rN_= N_  # soft assign all Ns per C
@@ -588,6 +589,38 @@ def cluster_P(__C_,N_, _c, root):  # Parallel centroid refining, _C_ from cluste
 ''' 
 next order: level-parallel cluster_H / multiple agg+? compress as autoencoder? 
 '''
+def cluster_FCM(__C_, N_, _c, root):  # FCM-style parallel centroid refine, replace cluster_P
+
+    for N in N_: N._u_ = []    # prior membership with implicit competition: Σ_C u = 1, for convergence test
+    for C in __C_: C.rN_ = N_  # soft-assign every N to every C
+    _C_ = __C_; cnt = 0
+    while True:
+        dU = 0  # total membership change per loop
+        for N in N_:
+            N.m_,N.d_,N.r_,N.rN_ = map(list, zip(*[ vt_( base_comp(C,N)[0], C.r, wTTC) + (C.r,C) for C in _C_]))
+            s = sum(N.m_) or eps; N.u_ = [m/s for m in N.m_]  # normalize matches so Σ_C u = 1
+            dU += sum(abs(u-_u) for _u,u in zip(N._u_,N.u_)) if cnt else sum(N.u_)
+        C_ = [sum2C(N_,_C, i, root=root) for i,_C in enumerate(_C_)]  # update Cs as u-weighted sum of N_, sum2C reads n.u_[i]
+        cnt += 1
+        if dU > ave * (root.r+wC) * len(N_):  # memberships change
+            for N in N_: N._u_ = N.u_
+            _C_ = C_
+        else: break  # converged
+    out_ = []
+    for i, C in enumerate(C_):
+        if C.m > ave*(wC+C.r):  # final pruning
+            C.N_ = [n for n in C.N_ if n.u_[i] * C.m > ave * n.r_[i]]  # membership-weighted match > redundancy
+            if C.N_: out_ += [C]
+    for N in N_:  # compact per-N vectors to surviving Cs
+        for v_ in (N.m_,N.d_,N.r_,N.u_):
+            v_[:] = [v for v,c in zip(v_,out_) if c]
+        N._u_ = []
+        N.rN_ = [c for c,keep in zip(N.rN_,out_) if keep]
+    C_ = [c for c in out_ if c]
+    dCt = sum2F(set(__C_)-set(C_), CF())  # compression
+    oF = CoF.get(); oF.N_=C_; oF.rTT=dCt.dTT; oF.r=dCt.r; oF.c=_c-dCt.c
+    return C_
+
 def cent_TT(dTT, r):  # weight attr matches | diffs by their match to the sum, recompute to convergence
 
     wTT,_wTT = [],np.ones((2,9)); coT = np.abs(dTT[0]) + np.abs(dTT[1])  # complemented vals
@@ -645,7 +678,7 @@ def sum2F(N_, root, fr=0, merge=0, froot=0):  # -> CF/CN
     c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); rc_ = c_/C
     TT = np.einsum('i,ijk->jk', rc_, np.stack([getattr(n,a) for n in N_]))  # weighted sum
     R  = rc_ @ np.array([n.r  for n in N_])
-    wC = rc_ @ np.array([n.wc for n in N_])
+    wC = rc_ @ np.array([getattr(n,'wc',1) for n in N_])
     if merge:
         for n in N_: root.N_ += n.N_ if merge>1 else [n]
     if froot:
