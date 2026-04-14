@@ -166,7 +166,7 @@ aveB, Lw, distw,intw = 100,.5,.5,.5  # AveB,LW,Distw,Intw = CF(nF='aveB',w=aveB)
 wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
 wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA]); wTT = np.array([wT,wT*avd])  # default for comp_N_?
 iCC, iCN_, iCC_, iCN, iCF, iPN, iGE, iCLN, iCLC, iCLP, iFH, iVE, iTE, iFB = range(len(onF_))  # pre-call nF indices
-Fc_ = [5,10,20,10,8,5, 5,10,20,30,30,10,15,10]  # fixed complexity weights from AST, maps to onF_
+Fc_ = [6.38, 5.56, 9.24, 2.29, 1.9, 10.82, 13.08, 6.94, 1.77, 6.73, 6.81, 5.77, 1.62, 1.84] # fixed complexity weights from AST, maps to onF_
 Fw_ = copy(Fc_)  # ave gain summed from calls, init neutral
 wTT_= [np.ones((2,9)) for _ in range(4)]  # replace with Fwtt_
 ''' 
@@ -517,7 +517,7 @@ def cluster_C(Ft, E_, r,_c):  # form centroids by clustering exemplar surround v
                         if _C in n._C_: i = n._C_.index(_C); dm+=n._m_[i]; do+=n._o_[i]
                 DTT+=dTT; mat+=M; dif+=D; olp+=O; cnt+=cc
                 if M > Ave*O and val_(dTT, cr+O, TTw(_C,1),(len(N_)-1)*Lw) > 0:  # dTT * wTTC is more precise?
-                    C = sum2C(N_, _C, _i=None, root=Ft)
+                    C = sum2C(N_, _C, root=Ft)
                     for n,m,o in zip(N_,m_,o_):
                         n.rN_ += [C]; n.m_+=[m]; n.o_+=[o]
                     C._N_ = list(set(N__)-set(N_))  # new frontier
@@ -552,13 +552,14 @@ def cluster_C(Ft, E_, r,_c):  # form centroids by clustering exemplar surround v
 ''' 
 next order: level-parallel cluster_H / multiple agg+? compress as autoencoder? 
 '''
-def cluster_P(__C_, N_, _c, root):  # FCM-style parallel centroid refine, replace cluster_P
+def cluster_P(__C_, N_, _c, root): # FCM-style parallel centroid refine, replace cluster_P
 
     cnt = 0  # r = root.r+1
     _u__= [[1]*len(__C_) for _ in N_]
     while True:
         u__,dU = [], 0
-        C_ = [sum2C(N_,root.Ct, u_) for u_ in _u__]  # same N_ * updated membership u_s
+        # we don't need _C here? Or we can include their value when computing cc in sum2C?
+        C_ = [sum2C(N_,None, u_,root) for u_ in _u__]  # same N_ * updated membership u_s 
         for N,_u_ in zip(N_,_u__):
             u_ = []
             for C in C_:
@@ -573,8 +574,11 @@ def cluster_P(__C_, N_, _c, root):  # FCM-style parallel centroid refine, replac
     out_ = []
     for i, C in enumerate(C_):
         if C.m > ave*(wC+C.r):  # final pruning
-            C.N_ = [n for n,u_ in zip(N_,u__) if u_[i] * C.m > ave * C.r]  # not sure
-            if C.N_: out_ += [C]
+            N_,u_ = [], []
+            for n,_u_ in zip(C.N_,u__):  # not sure
+                if _u_[i] * C.m > ave * C.r and len(N_)<2:
+                    N_ += [n]; u_ += [_u_[i]]  # pack both n and their soft membership weight of current C
+            if N_: out_ += [sum2C(N_,C, u_,root=root)]
     dCt = sum2F(set(__C_)-set(out_), CF())  # compression
     oF = CoF.get(); oF.N_=out_; oF.rTT=dCt.dTT; oF.r=dCt.r; oF.c=_c-dCt.c
     return out_
@@ -665,13 +669,13 @@ def sum_H(N_, Ft):
         elif N.N_: H = [list(N.N_)]
     Ft.H = [sum2F(H[0], CF())] if H else []
 
-def sum2C(N_, _C, _i=None, root=None):  # fuzzy sum + base attrs for centroids
+def sum2C(N_, _C, u_=None, root=None):  # fuzzy sum + base attrs for centroids
 
     cc_ = []
-    for N in N_:
-        if _i is None:   # cluster_C, add d_?
+    for i, N in enumerate(N_):
+        if u_ is None:   # cluster_C, add d_?
             i = N._C_.index(_C); m,o = N._m_[i],N._o_[i]; cc_ += [N.c * (m/(ave*o) * _C.m)]  # *_C.m: proj survival?
-        else: m = N.m_[_i]  # current m_, add d_? in cluster_P
+        else: cc_ += [N.c * u_[i]]  # apply N.c to each N's own membership
     Cc = sum(cc_)
     R = 0; TT = np.zeros((2,9)); kern = np.zeros(4); span = 0; yx = np.zeros(2)
     for N, c in zip(N_,cc_):
@@ -727,6 +731,7 @@ def comb_Ft(Nt, Lt, Bt, Ct, root):  # from sum2G, default Nt
     if any(dF_): sum2F(dF_,G.Xt); add2F(G, G.Xt)  # cross-fork covariance
     add_Nt(G,Nt)  # add H,kern,ext, doesn't affect comp_F
     if Lt: add_Lt(G, Lt)
+    G.m,G.d = vt_(G.dTT,G.r)  # recompute m and d after add_Nt and add_Lt above
     return G
 
 def add_Nt(G, Nt, merge=0):  # addition to Q2R
