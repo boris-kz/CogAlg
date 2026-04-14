@@ -142,6 +142,44 @@ def sum_H(N_, Ft, rc_):
         if hasattr(N, 'Nt'): add_H(Ft.H, N.Nt.H, Ft)
     Ft.H = [sum2F(lev, CF(), rc_) for lev in H] if H else []
 
+def cluster_P(__C_, N_, _c, root):  # Parallel centroid refining, _C_ from cluster_C, N_= root.N_, if global val*overlap > min
+
+    for N in N_: N._m_,N._o_,N._d_,N._r_ = [],[],[],[]
+    for C in __C_: C.rN_= N_  # soft assign all Ns per C
+    _C_=__C_; cnt = 0
+    while True:
+        M = O = dM = dO = 0
+        for N in N_:
+            N.m_,N.d_,N.r_,N.rN_ = map(list,zip(*[vt_(base_comp(C,N)[0],C.r,wTTC) + (C.r,C) for C in _C_]))  # distance-weight match?
+            N.o_ = list(np.argsort(np.argsort(N.m_)[::-1])+1)  # rank of each C_[i] = rdn of C in C_
+            dM+= sum(abs(m-_m) for _m,m in zip(N._m_,N.m_)) if cnt else sum(N.m_)
+            dO+= sum(abs(o-_o) for _o,o in zip(N._o_,N.o_)) if cnt else sum(N.o_)
+            M += sum(N.m_); O += sum(N.o_)
+        C_ = [sum2C(N_,_C, i, root=root) for i, _C in enumerate(_C_)]  # update with new coefs, _C.m, N->C refs
+        Ave = ave * (root.r+wC)
+        cnt += 1
+        if M > Ave*O and dM > Ave*dO:  # strong update
+            for N in N_: N._m_,N._o_,N._d_,N._r_ = N.m_,N.o_,N.d_,N.r_
+            _C_ = C_
+        else: break
+    out_ = []
+    for i, C in enumerate(C_):
+        keep = C.m > ave*(wC+C.r)
+        if keep:
+            C.N_ = [n for n in C.N_ if n.m_[i] * C.m > ave * n.r_[i] * n.o_[i]]
+            keep = bool(C.N_)
+        out_ += [C if keep else []]
+    for N in N_:
+        for _v_,v_ in zip((N._m_,N._d_,N._r_,N._o_), (N.m_,N.d_,N.r_,N.o_)):
+            v_[:] = [v for v,c in zip(v_,out_) if c]; _v_[:] = []
+        N.rN_ = [c for c,keep in zip(N.rN_,out_) if keep]
+
+    C_ = [c for c in out_ if c]
+    dCt = sum2F(set(__C_)-set(C_),CF())  # compression
+    oF = CoF.get(); oF.N_=C_; oF.rTT=dCt.dTT; oF.r = dCt.r; oF.c = _c - dCt.c  # data
+    return C_  # or out_?
+
+
 
 
 
