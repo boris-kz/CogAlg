@@ -166,7 +166,7 @@ aveB, Lw, distw,intw = 100,.5,.5,.5  # AveB,LW,Distw,Intw = CF(nF='aveB',w=aveB)
 wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
 wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA]); wTT = np.array([wT,wT*avd])  # default for comp_N_?
 iCC, iCN_, iCC_, iCN, iCF, iPN, iGE, iCLN, iCLC, iCLP, iFH, iVE, iTE, iFB = range(len(onF_))  # pre-call nF indices
-Fc_ = [5,10,20,10,8,5, 5,10,20,30,30,10,15,10]  # fixed complexity weights from AST, maps to onF_
+Fc_ = [6.38, 5.56, 9.24, 2.29, 1.9, 10.82, 13.08, 6.94, 1.77, 6.73, 6.81, 5.77, 1.62, 1.84] # fixed complexity weights from AST, maps to onF_
 Fw_ = copy(Fc_)  # ave gain summed from calls, init neutral
 wTT_= [np.ones((2,9)) for _ in range(4)]  # replace with Fwtt_
 ''' 
@@ -518,7 +518,7 @@ def cluster_C(Ft, E_, r,_c):  # form centroids by clustering exemplar surround v
                         if _C in n._C_: i = n._C_.index(_C); dm+=n._m_[i]; do+=n._o_[i]
                 DTT+=dTT; mat+=M; dif+=D; olp+=O; cnt+=cc
                 if M > Ave*O and val_(dTT, cr+O, TTw(_C,1),(len(N_)-1)*Lw) > 0:  # dTT * wTTC is more precise?
-                    C = sum2C(N_, _C, _i=None, root=Ft)
+                    C = sum2C(N_, _C, root=Ft)
                     for n,m,o in zip(N_,m_,o_):
                         n.rN_ += [C]; n.m_+=[m]; n.o_+=[o]
                     C._N_ = list(set(N__)-set(N_))  # new frontier
@@ -551,42 +551,36 @@ def cluster_C(Ft, E_, r,_c):  # form centroids by clustering exemplar surround v
             oF = CoF.get(); oF.N_=oC_; oF.rTT=sel_TT; oF.r=Ct.r; oF.c = Ft.c-Ct.c  # data, select in Nt.N_?
     return oC_,r
 
-def cluster_P(__C_, N_, _c, root):  # Parallel centroid refining, _C_ from cluster_C, N_= root.N_, if global val*overlap > min
+def cluster_P(__C_, N_, _c, root): # FCM-style parallel centroid refine, replace cluster_P
 
-    for N in N_: N._m_,N._o_,N._d_,N._r_ = [],[],[],[]
-    for C in __C_: C.rN_= N_  # soft assign all Ns per C
-    _C_=__C_; cnt = 0
+    cnt = 0  # r = root.r+1
+    _u__= [[1]*len(__C_) for _ in N_]
     while True:
-        M = O = dM = dO = 0
-        for N in N_:
-            N.m_,N.d_,N.r_,N.rN_ = map(list,zip(*[vt_(base_comp(C,N)[0],C.r,wTTC,1) + (C.r,C) for C in _C_]))  # distance-weight match?
-            N.o_ = list(np.argsort(np.argsort(N.m_)[::-1])+1)  # rank of each C_[i] = rdn of C in C_
-            dM+= sum(abs(m-_m) for _m,m in zip(N._m_,N.m_)) if cnt else sum(N.m_)
-            dO+= sum(abs(o-_o) for _o,o in zip(N._o_,N.o_)) if cnt else sum(N.o_)
-            M += sum(N.m_); O += sum(N.o_)
-        C_ = [sum2C(N_,_C, i, root=root) for i, _C in enumerate(_C_)]  # update with new coefs, _C.m, N->C refs
-        Ave = ave * (root.r+wC)
+        u__,dU = [], 0
+        # we don't need _C here? Or we can include their value when computing cc in sum2C?
+        C_ = [sum2C(N_,None, u_,root) for u_ in _u__]  # same N_ * updated membership u_s 
+        for N,_u_ in zip(N_,_u__):
+            u_ = []
+            for C in C_:
+                TT,rn = base_comp(C,N); u_ += [vt_(TT, r=1, fdiv=1)[0]]
+            s = sum(u_); u_ = [f/s for f in u_]  # per-N membership, Σ_C u = 1
+            dU += sum(abs(u-_u) for u,_u in zip(u_,_u_))
+            u__ += [u_]
         cnt += 1
-        if M > Ave*O and dM > Ave*dO:  # strong update
-            for N in N_: N._m_,N._o_,N._d_,N._r_ = N.m_,N.o_,N.d_,N.r_
-            _C_ = C_
-        else: break
+        if dU > ave * (root.r+wC) * len(N_):  # memberships change
+            _C_ = C_; _u__ = u__
+        else: break  # converged
     out_ = []
     for i, C in enumerate(C_):
-        keep = C.m > ave*(wC+C.r)
-        if keep:
-            C.N_ = [n for n in C.N_ if n.m_[i] * C.m > ave * n.r_[i] * n.o_[i]]
-            keep = bool(C.N_)
-        out_ += [C if keep else []]
-    for N in N_:
-        for _v_,v_ in zip((N._m_,N._d_,N._r_,N._o_), (N.m_,N.d_,N.r_,N.o_)):
-            v_[:] = [v for v,c in zip(v_,out_) if c]; _v_[:] = []
-        N.rN_ = [c for c,keep in zip(N.rN_,out_) if keep]
-
-    C_ = [c for c in out_ if c]
-    dCt = sum2F(set(__C_)-set(C_),CF())  # compression
-    oF = CoF.get(); oF.N_=C_; oF.rTT=dCt.dTT; oF.r = dCt.r; oF.c = _c - dCt.c  # data
-    return C_  # or out_?
+        if C.m > ave*(wC+C.r):  # final pruning
+            N_,u_ = [], []
+            for n,_u_ in zip(C.N_,u__):  # not sure
+                if _u_[i] * C.m > ave * C.r and len(N_)<2:
+                    N_ += [n]; u_ += [_u_[i]]  # pack both n and their soft membership weight of current C
+            if N_: out_ += [sum2C(N_,C, u_,root=root)]
+    dCt = sum2F(set(__C_)-set(out_), CF())  # compression
+    oF = CoF.get(); oF.N_=out_; oF.rTT=dCt.dTT; oF.r=dCt.r; oF.c=_c-dCt.c
+    return out_
 ''' 
 next order: level-parallel cluster_H / multiple agg+? compress as autoencoder? 
 '''
@@ -671,7 +665,7 @@ def add2F(F, n, fr=0, merge=0):  # unpack for batching in sum2F
         C=F.c+n.c; _rc,rc = F.c/C, n.c/C; F.r = F.r*_rc + n.r*rc; F.c = C
         if hasattr(F,'wc') and hasattr(n,'wc'): F.wc = (F.wc*_rc + n.wc*rc) if F.wc else n.wc
         setattr(F, a, getattr(F,a)*_rc + getattr(n,a)*rc)
-    else: setattr(F,a,getattr(n,a)); F.c=n.c; F.r=n.r
+    else: setattr(F,a,getattr(n,a)); F.c=n.c; F.r=n.r; setattr(F,a, getattr(n,a))
     if merge: F.N_ += n.N_ if merge>1 else [n]
     if hasattr(F, 'H') and getattr(n,'H',None): add_H(F.H, n.H, F)
     if hasattr(n,'C_'): F.C_ = getattr(F, 'C_', []) + n.C_  # same for L_?
@@ -708,17 +702,15 @@ def sum_H(N_, Ft):
         elif N.N_: H = [list(N.N_)]
     Ft.H = [sum2F(H[0], CF())] if H else []
 
-def sum2C(N_, _C, _i=None, root=None, fu=0):  # fuzzy sum + base attrs for centroids
+def sum2C(N_, _C, u_=None, root=None):  # fuzzy sum + base attrs for centroids
 
     cc_ = []
-    for N in N_:
-        if fu:
-            u = N.u_[_i]  # membership
-            cc_ += [N.c * u ]  # apply * c when computing u, then we can skip it here?
-        else:
-            if _i is None: i = N._C_.index(_C); m,o = N._m_[i], N._o_[i]  # cluster_C
-            else:          m,o = N.m_[_i],N.o_[_i]  # current m_,o_ in cluster_P
+    for i, N in enumerate(N_):
+        if u_ is None: 
+            i = N._C_.index(_C); m,o = N._m_[i], N._o_[i]  # cluster_C
             cc_ += [N.c * (m/(ave*o) * _C.m)]  # *_C.m: proj survival?
+        else:
+            cc_ += [N.c * u_[i]]  # apply N.c to each N's own membership      
     Cc = sum(cc_)
     R = 0; TT = np.zeros((2,9)); kern = np.zeros(4); span = 0; yx = np.zeros(2)
     for N, c in zip(N_,cc_):
@@ -773,6 +765,7 @@ def comb_Ft(Nt, Lt, Bt, Ct, root):  # from sum2G, default Nt
     if any(dF_): sum2F(dF_,G.Xt); add2F(G, G.Xt)  # cross-fork covariance
     add_Nt(G,Nt)  # add H,kern,ext, doesn't affect comp_F
     if Lt: add_Lt(G, Lt)
+    G.m,G.d = vt_(G.dTT,G.r)  # recompute m and d after add_Nt and add_Lt above
     return G
 
 def add_Nt(G, Nt, merge=0):  # addition to Q2R
