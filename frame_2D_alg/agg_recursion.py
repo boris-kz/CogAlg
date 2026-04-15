@@ -16,15 +16,16 @@ rng+: incremental-range cross-comp nodes: edge segments at < max distance, clust
 der+: incremental-derivation cross-comp links, from node cross-comp, if abs_diff * relative_adjacent_match
 
 Clustering compressively groups the elements into compositional hierarchy, initially by pair-wise similarity or density thereof.
-High-contrast links are correlation clustered to form contours of adjacent node connectivity clusters.
-Each cycle goes through <=4 incrementally fuzzy and parallelizable stages:
+High-contrast links are correlation clustered to form a boundary per node connectivity cluster.
+This is followed by centroid-based expansion and divisive sub-clustering.
 
+Each clustering cycle has 4 incrementally sparse and fuzzy stages of scope expansion, each seeded by prior-stage output:
 - select sparse exemplars to seed the clusters, top k for parallelization (get_exemplars),
-- connectivity/ density-based agglomerative clustering, followed by divisive clustering (cluster_N), 
-- sequential centroid-based fuzzy clustering with iterative refinement, start in divisive phase (cluster_C),
-- centroid-parallel frame refine by two-layer EM if min global overlap, prune for next cros_comp cycle (cluster_P).
+- connectivity| density-based agglomerative clustering, followed by divisive clustering (cluster_N), 
+- centroid-sequential marginally fuzzy iteratively refined clustering, start in divisive phase (cluster_C),
+- centroid-parallel fully-fuzzy refine by FCM, if min global overlap, prune for next cros_comp cycle (cluster_P).
 
-That forms hierarchical graph representation: dual tree of down-forking elements: node_H, and up-forking clusters: root_H:
+Clustering forms hierarchical graphs, each a dual tree of down-forking elements: node_H, and up-forking clusters: root_H:
 https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/generic%20graph.drawio.png
 Similar to neural dendritic input tree and axonal output tree, but with lateral cross-comp and nested param sets per layer.
 
@@ -107,7 +108,7 @@ class CF(CBase):  # clustering forks: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes,
 # process selection attrs for
 onF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
         'get_exemplars','cluster_N','cluster_C','cluster_P',  # clust_ functions
-        'cross_comp','frame_H','vect_edge','trace_edge','ffeedback','proj_N'  # combined, ancillary
+        'cross_comp','frame_H','vect_edge','trace_edge','ffeedback','proj_N'  # combined+ancillary
         ]
 def flat_(oF, call_=None):
     if call_ is None: call_ = []
@@ -165,10 +166,10 @@ wY, wX = 64, 64; wYX = np.hypot(wY,wX)
 aveB, Lw, distw,intw = 100,.5,.5,.5  # AveB,LW,Distw,Intw = CF(nF='aveB',w=aveB), CF(nF='Lw',w=Lw), CF(nF='distw',w=distw), CF(nF='intw',w=intw)
 wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
 wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA]); wTT = np.array([wT,wT*avd])  # default for comp_N_?
-iCC, iCN_, iCC_, iCN, iCF, iPN, iGE, iCLN, iCLC, iCLP, iFH, iVE, iTE, iFB = range(len(onF_))  # pre-call nF indices
-Fc_ = [6.38, 5.56, 9.24, 2.29, 1.9, 10.82, 13.08, 6.94, 1.77, 6.73, 6.81, 5.77, 1.62, 1.84] # fixed complexity weights from AST, maps to onF_
-Fw_ = copy(Fc_)  # ave gain summed from calls, init neutral
-wTT_= [np.ones((2,9)) for _ in range(4)]  # replace with Fwtt_
+cmpN_, cmpC_, cmpN, cmpF, exem, cltN, cltC, cltP, xcmp, frmH, vctE, trcE, fbac, prjN = range(len(onF_))  # pre-call nF indices
+Fc_ = [6, 9, 2, 2, 13, 7, 2, 6, 7, 7, 6, 2, 2, 11]  # AST complexity / vt_, maps to onF_
+Fw_ = copy(Fc_)  # ave gain summed from calls, init neutral to Fc_
+FTT_= [deepcopy(wTT) for _ in range(14)]
 ''' 
   Agg cycle:
 - Cross-comp nodes, evaluate incremental-derivation cross-comp of new >ave difference links, recursively. 
@@ -189,9 +190,9 @@ def cross_comp(Ft, rr, nF='Nt'):  # core function mediating recursive rng+ and d
     L_,TT,c,r,TTd,cd,rd = comp_C_(N_,rr,fC=1) if fC else comp_N_(combinations(N_,2),rr)
     if L_:  # Lm_, no +|- Ft.Lt?
         M, D = vt_(TT, r, TTw(root, fC+2))
-        if M * ((len(L_)-1)*Lw) * Fw_[iGE] > ave * Fc_[iGE]:
+        if M * ((len(L_)-1)*Lw) * Fw_[exem] > ave * Fc_[exem]:
             E_ = get_exemplars({N for L in L_ for N in L.nt}, r,c)
-            G_,r = cluster_N(Ft, E_,r,c)  # -> cluster_C,_P, eval?
+            G_,r = cluster_N(Ft, E_,r,c)  # -> cluster_C, _P, eval?
             if G_:
                 root.Nt = sum2F(G_,CF(root=root),froot=1); fC = G_[0].N_[0].typ==3  # or G.N_ = spliced C_ if more valuable?
                 if val_(TT*wn, r, TTw(root,fC+2), (len(G_)-1)*Lw,1,TTd, rd/(r+rd)) > 0:
@@ -244,7 +245,7 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
     for N in set(N_):
         if N.rim: sum2F(N.rim, N.Rt)
     # call trace:
-    if L_ := [n for n in L_ if n.typ>-1]: sum2F(L_,CoF.get(),fr=1)  # skip pLs, oF.call_+=[oF], oF.nF='comp_N_', adds data
+    if L_ := [n for n in L_ if n.typ>-1]: sum2F(L_,CoF.get(),fr=1)  # skip pLs, oF.call_+=[oF], adds data
     TT,cm,rm, TTd,cd,rd = acc
     return L_,TT,cm,rm/(cm or eps), TTd,cd,rd/(cd or eps)
 
@@ -517,7 +518,7 @@ def cluster_C(Ft, E_, r,_c):  # form centroids by clustering exemplar surround v
                         if _C in n._C_: i = n._C_.index(_C); dm+=n._m_[i]; do+=n._o_[i]
                 DTT+=dTT; mat+=M; dif+=D; olp+=O; cnt+=cc
                 if M > Ave*O and val_(dTT, cr+O, TTw(_C,1),(len(N_)-1)*Lw) > 0:  # dTT * wTTC is more precise?
-                    C = sum2C(N_, _C, root=Ft)
+                    C = sum2C(N_,root=Ft)
                     for n,m,o in zip(N_,m_,o_):
                         n.rN_ += [C]; n.m_+=[m]; n.o_+=[o]
                     C._N_ = list(set(N__)-set(N_))  # new frontier
@@ -549,36 +550,32 @@ def cluster_C(Ft, E_, r,_c):  # form centroids by clustering exemplar surround v
             sel_TT = (Ct.dTT*Ct.c - Ft.dTT*Ft.c) / eps_(Ct.dTT * Ct.c)
             oF = CoF.get(); oF.N_=oC_; oF.rTT=sel_TT; oF.r=Ct.r; oF.c = Ft.c-Ct.c  # data, select in Nt.N_?
     return oC_,r
-''' 
-next order: level-parallel cluster_H / multiple agg+? compress as autoencoder? 
-'''
-def cluster_P(__C_, N_, _c, root): # FCM-style parallel centroid refine, replace cluster_P
 
-    cnt = 0  # r = root.r+1
-    _u__= [[1]*len(__C_) for _ in N_]
+def cluster_P(__C_, N_, _c, root):  # FCM-style parallel centroid refine, may add proj_C
+
+    cnt = 0; _u__= [[1]*len(__C_) for _ in N_]  # r = root.r+1?
     while True:
-        u__,dU = [], 0
-        # we don't need _C here? Or we can include their value when computing cc in sum2C?
-        C_ = [sum2C(N_,None, u_,root) for u_ in _u__]  # same N_ * updated membership u_s 
+        u__, dU = [], 0
+        C_ = [sum2C(N_, u_, root) for u_ in _u__]  # same N_ * updated membership u_
         for N,_u_ in zip(N_,_u__):
             u_ = []
             for C in C_:
                 TT,rn = base_comp(C,N); u_ += [vt_(TT, r=1, fdiv=1)[0]]
-            s = sum(u_); u_ = [f/s for f in u_]  # per-N membership, Σ_C u = 1
-            dU += sum(abs(u-_u) for u,_u in zip(u_,_u_))
-            u__ += [u_]
+            s = sum(u_); u_ = [f/s for f in u_]  # per-N membership, Σ_u_ = 1
+            dU += sum(abs(u-_u) for u,_u in zip(u_,_u_))  # normalized
+            u__+= [u_]
         cnt += 1
         if dU > ave * (root.r+wC) * len(N_):  # memberships change
             _C_ = C_; _u__ = u__
         else: break  # converged
     out_ = []
-    for i, C in enumerate(C_):
-        if C.m > ave*(wC+C.r):  # final pruning
-            N_,u_ = [], []
-            for n,_u_ in zip(C.N_,u__):  # not sure
-                if _u_[i] * C.m > ave * C.r and len(N_)<2:
-                    N_ += [n]; u_ += [_u_[i]]  # pack both n and their soft membership weight of current C
-            if N_: out_ += [sum2C(N_,C, u_,root=root)]
+    for C,_u_ in zip(C_,u__):
+        if C.m > ave * C.r:  # final pruning, C vals are competitive
+            N_,u_ = [],[]
+            for N, u in zip(C.N_,_u_):
+                if u * N.m > ave * N.r: N_+= [N]; u_+= [u]
+            if N_:  # assign C.u_, N.rN_
+                out_ += [sum2C(N_, u_,root=root, final=1)]
     dCt = sum2F(set(__C_)-set(out_), CF())  # compression
     oF = CoF.get(); oF.N_=out_; oF.rTT=dCt.dTT; oF.r=dCt.r; oF.c=_c-dCt.c
     return out_
@@ -671,21 +668,18 @@ def sum_H(N_, Ft):
 
 def sum2C(N_, _C, u_=None, root=None):  # fuzzy sum + base attrs for centroids
 
-    cc_ = []
+    uc_ = []  #  N/C contribution = c-scaled u_
     for i, N in enumerate(N_):
-        if u_ is None:   # cluster_C, add d_?
-            i = N._C_.index(_C); m,o = N._m_[i],N._o_[i]; cc_ += [N.c * (m/(ave*o) * _C.m)]  # *_C.m: proj survival?
-        else: cc_ += [N.c * u_[i]]  # apply N.c to each N's own membership
-    Cc = sum(cc_)
+        if u_ is None:   # cluster_C, fdiv m_, proj C survival?
+            i = N._C_.index(_C); m,o = N._m_[i],N._o_[i]; uc_ += [N.c * (m/(ave*o))]  # rational overlap?
+        else: uc_ += [N.c * u_[i]]  # N/C contribution
+    U = sum(uc_)
     R = 0; TT = np.zeros((2,9)); kern = np.zeros(4); span = 0; yx = np.zeros(2)
-    for N, c in zip(N_,cc_):
-        rc = c/ Cc; TT += N.dTT*rc; kern += N.kern*rc; span += N.span*rc; yx += N.yx*rc; R += N.r*rc
-    m,d = vt_(TT,R, TTw(root.root,1))  # wTTC
-    C = CN(typ=3, Nt= CF(N_=N_), dTT=TT, m=m,d=d,c=Cc,r=R, yx=yx, kern=kern, span=span, root=root)
-    # set param correlation wws per comp and clustering'
-    # not updated:
-    for i, TT, wTT, ww in zip([0,1,2,3], [C.dTT, C.Ct.dTT, C.TTn, C.TTc], C.wTT_, [wN,wC,wn,wc]):
-        C.wTT_[i] = cent_TT(TT, R) * ww
+    for N, uc in zip(N_,uc_):
+        rc = uc/U; TT+= N.dTT*rc; kern+= N.kern*rc; span+= N.span*rc; yx+= N.yx*rc; R+= N.r*rc
+    wTT = cent_TT(TT, R) * Fw_[cltC if _C else cltP]  # set param correlation weights
+    m,d = vt_(TT,R, wTT)
+    C = CN(typ=3, Nt= CF(N_=N_),dTT=TT,m=m,d=d,c=U,r=R, yx=yx, kern=kern,span=span, root=root, wTT=wTT)
     return C
 
 def sum2G(ft_, root=None, init=1, typ=None):
@@ -765,7 +759,7 @@ def add_Lt(G, Lt):  # addition to Q2R
     G.mang = np.mean([comp_A(G.angl[0], l.angl[0])[0] for l in G.L_])  # Ls only?
 
 # utilities:
-def TTw(G, wi=0): return wTT_[wi] * G.wTT_[wi]  # * secondary wweights, average=1
+def TTw(G, wi=None): return (G.wTT or FTT_[wi]) * (1 if wi is None else Fw_[wi])  # * func weight?
 
 def CopyF(F, root=None, r=1):  # F = CF
     C = CF(dTT=F.dTT*r, m=F.m, d=F.d, c=F.c, r=F.r, root=root or F.root, nF=F.nF)
