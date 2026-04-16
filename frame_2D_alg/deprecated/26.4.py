@@ -179,7 +179,94 @@ def cluster_P(__C_, N_, _c, root):  # Parallel centroid refining, _C_ from clust
     oF = CoF.get(); oF.N_=C_; oF.rTT=dCt.dTT; oF.r = dCt.r; oF.c = _c - dCt.c  # data
     return C_  # or out_?
 
+def cluster_C(Ft, E_, r,_c):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
 
+    oF = CoF.get(); oF.c += _c; oF.r += r  # revert if no clustering
+    C_,_C_ = [],[]  # form root.Ct, may call cross_comp-> cluster_N, incr rc
+    for n in Ft.N_: n._C_,n.m_,n._m_,n.o_,n._o_,n.rN_ = [],[],[],[],[],[]
+    for E in E_:
+        C = Copy_(E,Ft,init=1,typ=3)  # all rims in root, sequence along eigenvector?
+        for TT, wTT, ww in zip([C.dTT,C.Ct.dTT,C.TTn,C.TTc], C.wTT_, [wN,wC,wn,wc]):
+            wTT[:] = cent_TT(TT,r) * ww
+        C._N_ = list({n for l in E.rim for n in l.nt if (n is not E and n in Ft.N_)})
+        C._L_ = set(E.rim)  # init peer links
+        for n in C._N_+C.N_: n._m_+=[C.m*(n.c/C.c)]; n._o_+=[1]; n._C_+=[C]
+        _C_ += [C]
+    oC_ = []  # output stable Cs
+    while True:  # reform C_, add direct in-C_ cross-links for membership?
+        C_,cnt,olp, mat,dif, DTT,Dm,Do = [],0,0,0,0,np.zeros((2,9)),0,0; Ave = ave*(r+wn); Avd = avd*(r+wn)
+        _Ct_ = [[c, c.m/c.c, c.r] for c in _C_]
+        for cr, (_C,_m,_o) in enumerate(sorted(_Ct_, key=lambda t: t[1]/t[2], reverse=True),start=1):
+            if _m > Ave *_o:
+                L_, N_,N__,m_,o_,M,D,O,cc, dTT,dm,do = [],[],[],[],[],0,0,0,0, np.zeros((2,9)),0,0  # /C
+                for n in set(_C.N_+_C._N_):  # current + frontier
+                    dtt,_ = base_comp(_C, n); cc+=1  # or comp_N, decay?
+                    m,d = vt_(dtt, cr, wTTC); dTT += dtt; m *= n.c  # rm,olp / C
+                    odm = np.sum([_m-m for _m in n._m_ if _m>m])  # higher-m overlap
+                    oL_ = set(n.rim) & _C._L_  # replace peer rim overlap with more precise m
+                    if oL_: _m,_d = sum_vt(oL_,fm=1)[:2]; m+=_m; d+=_d  # abs m?
+                    m_+=[m]; o_+= [odm]  # from all comps
+                    M += m; D += abs(d)
+                    if m > 0 and m > Ave * odm:
+                        N_+=[n]; L_+=n.L_; O+=odm  # convergence val
+                        for _n in [_n for l in n.rim for _n in l.nt if _n is not n]:
+                            if not hasattr(_n,'_m_'): _n._C_,_n.m_,_n._m_,_n.o_,_n._o_,_n.rN_ = [],[],[],[],[],[]
+                            N__ += [_n]  # +|-Ls
+                        if _C not in n._C_: dm+=m; do+=odm  # not in extended _N__
+                    else:
+                        if _C in n._C_: i = n._C_.index(_C); dm+=n._m_[i]; do+=n._o_[i]
+                DTT+=dTT; mat+=M; dif+=D; olp+=O; cnt+=cc
+                if M > Ave*O and val_(dTT, cr+O, TTw(_C,1),(len(N_)-1)*Lw) > 0:  # dTT * wTTC is more precise?
+                    C = sum2C(N_,root=Ft)
+                    for n,m,o in zip(N_,m_,o_):
+                        n.rN_ += [C]; n.m_+=[m]; n.o_+=[o]
+                    C._N_ = list(set(N__)-set(N_))  # new frontier
+                    C._L_ = set(L_)  # peer links
+                    if D< Avd*O: oC_+= [C]  # output if stable, actually if val_(DTT, fi=0) + D?
+                    else:        C_ += [C]  # reform
+                else:
+                    for n in _C._N_+_C.N_:
+                        n.exe = n.m/n.c > 2 * ave
+                        for i, c in enumerate(n.rN_):
+                            if c is _C:  # remove _C-mapping m,o:
+                                n.rN_.pop(i); n.m_.pop(i);n.o_.pop(i); break
+                Dm+=dm; Do+=do
+            else: break  # the rest is weaker
+        for n in Ft.N_:
+            n._C_ = n.rN_; n._m_= n.m_; n._o_= n.o_; n.rN_,n.m_,n.o_ = [],[],[]  # new n.Ct.N_s, combine with v_ in Ct_?
+        if oC_+C_ and mat*dif*olp > ave*wC*2:  # if val_(DTT,len(oC_+C_)?
+            oC_+= C_; cc = sum([f.c for f in oC_])
+            oC_ = cluster_P(oC_, Ft.N_, cc, Ft)  # refine all memberships in parallel by global backprop|EM
+            break
+        if Do and Dm/Do > Ave: _C_=C_  # dval vs. dolp: overlap increases with Cs expansion
+        else: oC_ += C_; break  # converged
+    if oC_:
+        for n in [N for C in oC_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals:
+            n.exe = (n.d if n.typ==1 else n.m) + np.sum([m-ave*o for m, o in zip(n.m_, n.o_)]) - ave
+        if val_(DTT, r+olp, TTw(Ft.root,1), (len(oC_)-1)*Lw) > 0:
+            Ct = sum2F(oC_, Ft.root.Ct)  # ?
+            _, r = cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
+            sel_TT = (Ct.dTT*Ct.c - Ft.dTT*Ft.c) / eps_(Ct.dTT * Ct.c)
+            oF = CoF.get(); oF.N_=oC_; oF.rTT=sel_TT; oF.r=Ct.r; oF.c = Ft.c-Ct.c  # data, select in Nt.N_?
+    return oC_,r
+
+def sum2C(N_, _C, u_=None, root=None):  # fuzzy sum + base attrs for centroids
+
+    uc_ = []  #  N/C contribution = c-scaled u_
+    for i, N in enumerate(N_):
+        if u_ is None:   # cluster_C, fdiv m_, proj C survival?
+            i = N._C_.index(_C); m,o = N._m_[i],N._o_[i]; uc_ += [N.c * (m/(ave*o))]  # rational overlap?
+        else: uc_ += [N.c * u_[i]]  # N/C contribution
+    U = sum(uc_)
+    R = 0; TT = np.zeros((2,9)); kern = np.zeros(4); span = 0; yx = np.zeros(2)
+    for N, uc in zip(N_,uc_):
+        rc = uc/U; TT+= N.dTT*rc; kern+= N.kern*rc; span+= N.span*rc; yx+= N.yx*rc; R+= N.r*rc
+    wTT = cent_TT(TT, R) * Fw_[cltC if _C else cltP]  # set param correlation weights
+    m,d = vt_(TT,R, wTT)
+    C = CN(typ=3, Nt= CF(N_=N_),dTT=TT,m=m,d=d,c=U,r=R, yx=yx, kern=kern,span=span, root=root, wTT=wTT)
+    return C
+
+# cmpN_, cmpC_, cmpN, cmpF, exem, cltN, cltC, cltP, xcmp, frmH, vctE, trcE, fbac, prjN = range(len(onF_))  # pre-call nF indices
 
 
 
