@@ -268,5 +268,26 @@ def sum2C(N_, _C, u_=None, root=None):  # fuzzy sum + base attrs for centroids
 
 # cmpN_, cmpC_, cmpN, cmpF, exem, cltN, cltC, cltP, xcmp, frmH, vctE, trcE, fbac, prjN = range(len(onF_))  # pre-call nF indices
 
+def TTw(G, wTT): return wTT if G.wTT is None else G.wTT
+
+
+def vt_(TT, r, wTT=wTT, fdiv=0):  # brief val_ to get m,d, rc=0 to return raw vals, Wn for comp_N
+
+    m_,d_ = TT; ad_ = np.abs(d_); t_ = eps_(m_+ad_)  # ~ max comparand
+    m = m_/t_ @ wTT[0]; d = ad_/t_ @ wTT[1]  # norm by co-derived
+    if fdiv: m/= ave*r; d/= avd*r  # in 0-inf for summation
+    else:    m-= ave*r; d-= avd*r  # in -1:1 without r
+    return m,d
+
+def val_(TT, r, wTT=wTT, mw=1.0,fi=1, _TT=None, cr=.5):  # m,d eval per cluster, cr = cd / cm+dc, default half-weight?
+
+    t_ = eps_(TT[0] + np.abs(TT[1]))  # comb val/attr, match can be negative?
+    rv = TT[0] / t_ @ wTT[0] if fi else TT[1] / t_ @ wTT[1]  # fork / total per scalar
+    if _TT is not None:
+        _t_ = eps_(np.abs(_TT[0]) + np.abs(_TT[1]))
+        _rv = _TT[0] / _t_ @ wTT[0] if fi else _TT[1] / _t_@ wTT[1]
+        rv  = rv * (1-cr) + _rv * cr  # + borrowed alt fork val, cr: d count ratio, must be passed with _TT?
+    return rv*mw - (ave if fi else avd) * r
+
 
 
