@@ -168,7 +168,7 @@ def add_typ_(oF):  # record oF vals for weighting, mapped to global FTT_
     for F in call_: typ_[F.nF] += [F]
     for i, F_ in enumerate(typ_):
         if F_: T=sum2F(F_,CF()); T.nF=i; T.wTT=cent_TT(getattr(T,'rTT',T.dTT),T.r); typ_[i]=T
-    oF.typ_ = np.array(typ_)
+    oF.typ_ = typ_
     if any(typ_): add2F(oF, sum2F([t for t in typ_ if t], CF()))  # refine summed call_?
 
 Z = CoF(nF='Z'); CoF._cur.set(Z)  # global meta code, data=frame
@@ -224,8 +224,8 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
         iTT = (_N.dTT + N.dTT) * Dec
         eTT = (_N.Rt.dTT + N.Rt.dTT) * Dec
         if abs(vt_(eTT,ttN_)[0]) > ave*(cN+r+(_N.r+N.r)/2):  # spec N links
-            eTT = proj_N(N, dist, dy_dx, r, dec)  # proj N L_,B_,rim, if pV>0: eTT += pTT?
-            eTT+= proj_N(_N,dist, -dy_dx, r, dec)  # reverse direction
+            eTT = proj_N(N, dist, dy_dx, r, N.c, dec)  # proj N L_,B_,rim, if pV>0: eTT += pTT?
+            eTT+= proj_N(_N,dist, -dy_dx, r, _N.c, dec)  # reverse direction
         return iTT+eTT
 
     N_,L_,C,R,TTd,cd,rd = [],[],0,0,np.zeros((2,9)),0,0  # any global use of dLs, rd?
@@ -497,17 +497,15 @@ def cluster_C(Ft, E_, r,_c):  # form centroids by clustering exemplar surround v
     oC_, u__ = [], []; fP = 0  # output stable Cs
     while True: # reform C_, add direct in-C_ cross-links for membership?
         C_,cnt,mat,dif,DTT,Du = [],0,0,0,np.zeros((2,9)),0; Ave = ave*(r+ccC); Avd = avd*(r+ccC)
-        _Ct_ = [[C,0,0,0] for C in _C_]
+        _Ct_ = [[C,sum([n._u_[n._C_.index(C)] for n in C.N_]),C.c] for C in _C_]
         for cr, (_C,_U,rc) in enumerate(sorted(_Ct_, key=lambda t: t[1]*t[2], reverse=True),start=1):  # rc weighting?
             if _U > Ave:
                 L_, N_,N__,u_,M,D,cc, dTT,du = [],[],[],[],0,0,0, np.zeros((2,9)),0  # /C
                 Ct_ = []  # candidate Nts
                 for n in set(_C.N_+_C._N_):  # current + frontier
                     dtt,_ = base_comp(_C,n)  # or comp_N, decay?
-                    m,d = vt_(dtt,ttcC); dTT+=dtt; c=n.c
-                    oL_ = set(n.rim) & _C._L_  # peer rim overlap -> more precise m
-                    if oL_: _m,_d,_,_c,_ = sum_vt(oL_,fm=1, fdiv=1, wTT=ttcC); m+=_m; d+=_d; c+=_c
-                    Ct_ += [(n,m,d,c)]
+                    m,d = vt_(dtt,ttcC); dTT+=dtt
+                    Ct_ += [(n,m,d,n.c)]
                 for n,m,d,c in Ct_:
                     if m*c > Ave:
                         N_+= [n]; u_+=[m]; L_+=n.L_; M+=m; D+=abs(d)*c; cc+=c
@@ -524,12 +522,12 @@ def cluster_C(Ft, E_, r,_c):  # form centroids by clustering exemplar surround v
                         n.rN_ += [C]; n.u_+=[u]
                     C._N_ = list(set(N__)-set(N_))  # new frontier
                     C._L_ = set(L_)  # peer links
-                    if D<Avd: oC_+= [C]; u__ += [[n._u_[n._C_.index(C)] for n in C.N_]]  # output if stable, or if val_(DTT,fi=0) + D?
+                    if D<Avd: oC_+= [C]; u__ += [[n._u_[n.rN_.index(C)] for n in C.N_]]  # output if stable, or if val_(DTT,fi=0) + D?
                 # below is not revised:
                     else:     C_ += [C]  # reform
                 else:
                     for n in _C._N_+_C.N_:
-                        n.exe = sum(n.u_) > 2 * ave
+                        n.exe = sum(n.u_) > 2 * ave  # scale with c here for eval?
                         for i, c in enumerate(n.rN_):
                             if c is _C: n.rN_.pop(i); n.u_.pop(i); break
                 Du += du
@@ -548,6 +546,7 @@ def cluster_C(Ft, E_, r,_c):  # form centroids by clustering exemplar surround v
             n.exe = (n.d if n.typ==1 else n.m) + np.sum(n.u_) - ave
         if val_(DTT, r, Ft.root.wTT*ttcC, (len(oC_)-1)*Lw) > 0:
             Ct = sum2F(oC_,Ft.root.Ct)
+            if not Ft.root.Ct: Ft.root.Ct = Ct
             _,r = cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
             sel_TT = (Ct.dTT*Ct.c - Ft.dTT*Ft.c) / eps_(Ct.dTT * Ct.c)
             oF = CoF.get(); oF.N_=oC_; oF.rTT=sel_TT; oF.r=Ct.r; oF.c = Ft.c-Ct.c  # data, select in Nt.N_?
@@ -556,7 +555,7 @@ def cluster_C(Ft, E_, r,_c):  # form centroids by clustering exemplar surround v
 def cluster_P(__C_, N_, _c, root):  # FCM-style parallel centroid refine, may add proj_C
 
     cnt = 0  # r = root.r+1?:
-    _u__ = [[(N._u_[N._C_.index(C)] if C in N._C_ else 0) for C in __C_] for N in N_]
+    _u__ = [[(N._u_[N._C_.index(C)] if C in N._C_ else 0) for N in N_] for C in __C_]  # get each C's membership of Ns
     for u_ in _u__: s = sum(u_) or 1; u_[:] = [f/s for f in u_]
     while True:
         u__, dU = [], 0
@@ -1037,9 +1036,9 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
                 elev += 1
                 if rV > ave:
                     add_typ_(Z)  # maps to FTT_
-                    FTT_ = lev.wTT_ = [t.wTT if t else wTT for t in Z.typ_]
+                    FTT_ = lev.wTT_ = [t.wTT if not isinstance(t,list) else wTT for t in Z.typ_]
                     if elev == max_elev:  # fb from top lev
-                        rV, wTT_ = ffeedback(F)  # update globals, rV is not used?
+                        rV, FTT_ = ffeedback(F)  # update globals, rV is not used? (rV should replace the input rV?)
                 tile = F  # lev tile_ is next extension seed
             else: break
         else: break
@@ -1077,4 +1076,3 @@ if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.
     # frame = agg_frame(0, image=imread('./images/toucan.jpg'), iY=Y, iX=X)
     frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -31, iX=X//2 -31, Ly=64,Lx=64, Y=Y, X=X, rV=1)
     # search frames ( tiles inside image, at this size it should be 4K, or 256K panorama, won't actually work on toucan
-    # add_typ_(Z)  we already have this in ffeedback?
