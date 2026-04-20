@@ -489,14 +489,14 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
     _C_ = []
     for E in E_:  # along eigenvector?
         C = Copy_(E, Ft, init=1,typ=3)
-        C.N_,C.L_,C.m_,C.d_ = [],[],[],[]  # aligned
+        C.N_,C.L_,C.m_,C.d_ = [E],[],[E.m],[E.d]  # aligned
         C._N_ = list({n for l in E.rim for n in l.nt if (n is not E and n in Ft.N_)})  # frontier
         _C_ += [C]
     oC_=[]; fP = 0
     while True: # reform C_
-        C_, Ct_,cnt,mat,dif,rdn,DTT,Up = [],[],0,0,0,0,np.zeros((2,9)),0; Ave = ave*(r+ccC); Avd = avd*(r+ccC)
+        C_,cnt,mat,dif,rdn,DTT,Up = [],0,0,0,0,np.zeros((2,9)),0; Ave = ave*(_r+ccC); Avd = avd*(_r+ccC)
         c_= [[] for _ in _C_]
-        for _n in set([_n for _C in _C_ for _n in _C.N_]):
+        for _n in set([_n for _C in _C_ for _n in _C.N_+_C._N_]):
             _n.c_=copy(c_); _n.m_=copy(c_); _n.d_=copy(c_)  # fill /C index
         for i,_C in enumerate(_C_):  # C.m,d / rTT, not dTT? sort and break by sum(_C.m_)?
             if sum(_C.m_) *_C.c > Ave*_C.r:
@@ -511,7 +511,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
                 if M > Ave*r and val_(dTT, r,_C.wTT*ttcC, (L-1)*Lw) > 0:
                     for _n in [_n for l in n.rim for _n in l.nt if _n is not n]: N__+= [_n]  # +|-Ls
                     C = sum2C(n_,m_,d_, root=Ft)
-                    for n,m,d in zip(C.N_,C.m_,C.d_): n.c_[i]=C; n.m_[i]=m; n.d[i]=d  # mapping-C vals
+                    for n,m,d in zip(C.N_,C.m_,C.d_): n.c_[i]=C; n.m_[i]=m; n.d_[i]=d  # mapping-C vals
                     C._N_ = list(set(N__)-set(n_))  # new frontier
                     if D<Avd: oC_+= [C]  # output if stable, or if val_(DTT,fi=0)+D?
                     else:     C_ += [C]  # reform
@@ -525,6 +525,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
             break
         if Up > Avd*rdn: _C_ = C_  # add n_ overlap in C_?
         else:   oC_+= C_; break  # converged
+    r = _r
     if oC_:
         if not fP: oC_ = prune_C_(oC_, Ft)
         for n in [N for C in oC_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals:
@@ -540,11 +541,11 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
 def cluster_P(__C_, N_, _c, root):  # FCM-style parallel centroid refine, may add proj_C
 
     cnt = 0  # r = root.r+1?:
-    _u__ = [[(N._m_[N._C_.index(C)] if C in N._C_ else 0) for N in N_] for C in __C_]  # N memberships per C
+    _u__ = [[(N.m_[N._c_.index(C)] if C in N._c_ else 0) for N in N_] for C in __C_]  # N memberships per C
     for u_ in _u__: s = sum(u_) or 1; u_[:] = [f/s for f in u_]
     while True:
         u__, dU = [], 0
-        C_ = [sum2C(N_, u_, root) for u_ in _u__]  # same N_ * updated membership u_
+        C_ = [sum2C(N_, u_, d_=[0 for _ in u_], root=root) for u_ in _u__]  # same N_ * updated membership u_
         for N,_u_ in zip(N_,_u__):
             u_ = []
             for C in C_:
@@ -556,7 +557,7 @@ def cluster_P(__C_, N_, _c, root):  # FCM-style parallel centroid refine, may ad
         if dU*wcP > ave * (root.r+ccP) * len(N_):  # memberships change
             _u__ = u__
         else: break  # converged
-    out_ = prune_C_(C_,u__,root)
+    out_ = prune_C_(C_,root)
     dCt = sum2F(list(set(__C_)-set(out_)),CF())  # compress
     oF = CoF.get(); oF.N_=out_; oF.rTT=dCt.dTT; oF.r=dCt.r; oF.c=_c-dCt.c
     return out_
@@ -566,9 +567,22 @@ def prune_C_(C_, root):
     for i, C in enumerate(C_):
         if C.m > ave * C.r:  # final pruning, C vals are competitive
             N_,m_,d_ = [],[],[]
-            for N, m, d in zip(C.N_,C._m_,C._d_):
+            for N, m, d in zip(C.N_,C.m_,C.d_):
                 if m * N.c > ave * N.r: N_+= [N]; m_+= [m]; d_+= [d]
             if N_: out_+= [sum2C(N_,m_,d_,root=root, final=1)]
+        
+    # reinit and reassign m_, d_ and c_ after pruning
+    for C in C_:
+        for n in C.N_: n.c_ = []; n.m_ = []; n.d_ = []
+    n_= []
+    for C in out_:
+        for n, m, d in zip(C.N_, C.m_, C.d_): 
+            n.c_ += [C]; n.m_ += [m]; n.d_ += [d]
+            n_ += [n]
+
+    for n in n_:
+        n.o = sum(n.m_)  # overlap is sum of m? or len(n.C_)?
+        n.o_ = sum(n.m_)/n.o
     return out_
 
 def cent_TT(dTT, r):  # weight attr matches | diffs by their match to the sum, recompute to convergence
@@ -660,7 +674,7 @@ def sum_H(N_, Ft):
         elif N.N_: H = [list(N.N_)]
     Ft.H = [sum2F(H[0], CF())] if H else []
 
-def sum2C(N_, u_, root=None, final=0, fP=0):  # fuzzy sum + base attrs for centroids
+def sum2C(N_, u_, d_=[], root=None, final=0, fP=0):  # fuzzy sum + base attrs for centroids
 
     L_, uc_ = [],[]  # N/C contribution = c-scaled u_
     for i, N in enumerate(N_):
@@ -673,6 +687,7 @@ def sum2C(N_, u_, root=None, final=0, fP=0):  # fuzzy sum + base attrs for centr
     wTT = cent_TT(TT, R) * (wcP if fP else wcC)  # set param correlation weights
     m,d = vt_(TT,wTT)
     C = CN(typ=3, Nt= CF(N_=N_),dTT=TT,m=m,d=d,c=U,r=R, yx=yx, kern=kern,span=span, root=root, wTT=wTT, L_=L_)
+    C.m_ = u_; C.d_ = d_ 
     return C
 
 def sum2G(ft_, root=None, init=1, typ=None):
