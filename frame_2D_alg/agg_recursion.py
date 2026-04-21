@@ -515,7 +515,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
                     if D<Avd: oC_+= [C]  # output if stable, or if val_(DTT,fi=0)+D?
                     else:     C_ += [C]  # reform
                 DTT+=dTT; mat+=M; dif+=D; cnt+=cc; rdn+=R; Up+=up
-        r = _r+ rdn/cnt
+        r = _r+ rdn/(cnt or 1)
         for n in Ft.N_: n._c_ = n.c_; n._m_ = n.m_; n._d_ = n.d_  # init currents on top
         if oC_+C_ and mat*dif*wcC > ave*(r+ccC+2):  # if val_(DTT,len(oC_+C_)?
             oC_+= C_; cc = sum([f.c for f in oC_]); fP=1
@@ -539,11 +539,16 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
 def cluster_P(__C_, N_, _c, root):  # FCM-style parallel centroid refine, may add proj_C
 
     cnt = 0  # r = root.r+1?:
-    _u__ = [[N._m_ for N in N_] for C in __C_]  # N membership_ per C
-    for u_ in _u__: s = sum(u_) or 1; u_[:] = [f/s for f in u_]
+    # _u__ = [[N._m_ for N in N_ if C in N._c_] for C in __C_]  # N membership_ per C
+    # _d__ = [[N._d_ for N in N_ if C in N._c_] for C in __C_] 
+    _u__ = [[N.m for N in N_] for N in N_]  # N.m as seed
+    _d__ = [[N.d for N in N_] for N in N_]
+    c_= [[] for _ in N_]
+    for n in N_: n.c_ = copy(c_); n.m_ = copy(c_); n.d_ = copy(c_)   # init
+    # for u_ in _u__: s = np.sum(u_) or 1; u_[:] = [f/s for f in u_]
     while True:
         u__, dU = [], 0
-        C_ = [sum2C(N_, u_, root) for u_ in _u__]  # same N_ * updated membership u_
+        C_ = [sum2C(N_, u_, d_, i, root) for i, (u_, d_) in enumerate(zip(_u__, _d__))]  # same N_ * updated membership u_
         for N,_u_ in zip(N_,_u__):
             u_ = []
             for C in C_:
@@ -562,12 +567,13 @@ def cluster_P(__C_, N_, _c, root):  # FCM-style parallel centroid refine, may ad
 
 def prune_C_(C_, root):
     out_ = []
-    for i, C in enumerate(C_):
+    for i, C in reversed(list(enumerate(C_))):  # loop from last C
         if C.m > ave * C.r:  # final pruning, C vals are competitive
             N_,m_,d_ = [],[],[]
-            for N, m, d in zip(C.N_,C._m_,C._d_):
+            for k, (N, m, d) in enumerate(zip(C.N_,C.m_,C.d_)):
                 if m * N.c > ave * N.r: N_+= [N]; m_+= [m]; d_+= [d]
-            if N_: out_+= [sum2C(N_,m_,d_,i, root=root, final=1)]
+                else:                   N.c_.pop(i); N.m_.pop(i); N.d_.pop(i)
+            if N_: out_+= [sum2C(N_,m_,d_,None, root=root, final=1)]
     return out_
 
 def cent_TT(dTT, r):  # weight attr matches | diffs by their match to the sum, recompute to convergence
@@ -659,13 +665,12 @@ def sum_H(N_, Ft):
         elif N.N_: H = [list(N.N_)]
     Ft.H = [sum2F(H[0], CF())] if H else []
 
-# not revised:
 def sum2C(N_, m_,d_, i, root=None, final=0, fP=0):  # fuzzy sum + base attrs for centroids
 
     L_, mc_ = [],[]  # N/C contribution = c-scaled u_
     for j, N in enumerate(N_):
         if final: L_ += [CN(typ=1, w=[N.c * m_[j]])]  # add u,c,r,TT,span,angl for proj_C?
-        mc_ += [N.c * m_[i]]  # N/C contribution  (this should be default even in final?)
+        mc_ += [N.c * m_[j if final else i]]  # N/C contribution  (this should be default even in final?)
     M = sum(mc_)
     R = 0; TT = np.zeros((2,9)); kern = np.zeros(4); span = 0; yx = np.zeros(2)
     for N, mc in zip(N_,mc_):
@@ -674,7 +679,8 @@ def sum2C(N_, m_,d_, i, root=None, final=0, fP=0):  # fuzzy sum + base attrs for
     m,d = vt_(TT,wTT)
     C = CN(typ=3, Nt= CF(N_=N_),dTT=TT,m=m,d=d,c=M,r=R, yx=yx, kern=kern,span=span, root=root, wTT=wTT, L_=L_)
     C.m_=m_; C.d_=d_
-    for n,m,d in zip(C.N_,C.m_,C.d_): n.c_[i] = C; n.m_[i] = m; n.d_[i] = d  # mapping-C vals
+    if not final: 
+        for n,m,d in zip(C.N_,C.m_,C.d_): n.c_[i] = C; n.m_[i] = m; n.d_[i] = d  # mapping-C vals
     return C
 
 def sum2G(ft_, root=None, init=1, typ=None):
@@ -1007,6 +1013,10 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
             TT,C,R = sum_vt(T_, wTT=ttFrm); R += elev
             if val_(TT, R/len(T_) + elev, ttFrm, mw=(len(T_)-1)*Lw) <= 0: T_=[]; C=0; R=0
         return T_,C,R
+
+    # we need rV > ave below, so this should be init first
+    global ave,avd, Lw,intw,distw, Fw_,FTT_  # update globals:
+    
     elev = 0
     F,tile = [],[]  # frame, seed lower tile, if any
     while elev < max_elev:
@@ -1023,7 +1033,6 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
                     FTT_ = lev.wTT_ = np.array([t.wTT if not isinstance(t,list) else wTT for t in Z.typ_])
                     if elev == max_elev:  # fb from top lev
                         rV, FTT_ = ffeedback(F)
-                        global ave,avd, Lw,intw,distw, Fw_,FTT_  # update globals:
                         (ave,avd, Lw,intw,distw), Fw_,FTT_ = np.array([ave,avd, Lw,intw,distw])/rV, np.array(Fw_)/rV, np.array(FTT_)/rV
                 tile = F  # lev tile_ is next extension seed
             else: break
