@@ -358,4 +358,15 @@ def add_typ_(oF):  # record oF vals for weighting
     oF.typ_ = [tF for tF in typ_ if tF.w * tF.c > ave]  # add coef
     if oF.typ_: sum2F(oF.typ_,oF)  # tVs replace all Vs?
 
+def prune_C_(C_, root):
+    out_ = []
+    for i, C in enumerate(C_):
+        if C.m > ave * C.r:  # final pruning, C vals are competitive
+            N_,m_,d_ = [],[],[]
+            for N, m, d in zip(C.N_,C._m_,C._d_):
+                if m * N.c > ave * N.r: N_+= [N]; m_+= [m]; d_+= [d]
+            if N_: out_+= [sum2C(N_,m_,d_,i, root=root, final=1)]
+    return out_
+
+
 
