@@ -59,7 +59,7 @@ wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA]); wTT = np.array([wT,wT*avd])  # de
 onF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
         'get_exemplars','cluster_N','cluster_C','cluster_P',  # clust_ functions
         'cross_comp','frame_H','vect_edge','trace_edge','ffeedback','proj_N']  # combined + ancillary
-Fc_ = [9,8,13,3,3,15,18,4,3,9,9,8,2,2]  # AST complexity / vt_, maps to onF_, *= data_size?
+Fc_ = [9,8,13,3,3,15,18,4,3,9,9,8,2,2]  # AST complexity / vt_, maps to onF_, *= data_size: not implemented yet
 Fw_ = copy(Fc_)  # ave gain summed from calls, init neutral to Fc_
 wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wX,wFrm,wVct,wTrc,wBac,wPrj = Fw_
 cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cX,cFrm,cVct,cTrc,cBac,cPrj = Fc_
@@ -484,91 +484,93 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
 
 def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
 
-    for n in Ft.N_: n._c_,n.c_,n.m_,n._m_,n.d_,n._d_ = [],[],[],[],[],[]
-    oF = CoF.get(); oF.c += _c; oF.r+=_r  # revert if 0 clusters?
+    N_= Ft.N_; oF = CoF.get(); oF.c += _c; oF.r+=_r  # revert if 0 clusters?
+    for n in N_: n.c_,n.m_,n.d_ = [],[],[]
+    c_ = [[] for _ in E_]
+    for n in N_: n._c_=copy(c_); n._m_=copy(c_); n._d_=copy(c_)
     _C_ = []
-    for E in E_:  # along eigenvector?
-        C = Copy_(E, Ft, init=1,typ=3)
-        C.N_,C.L_,C.m_,C.d_ = [],[],[],[]  # aligned
-        C._N_ = list({n for l in E.rim for n in l.nt if (n is not E and n in Ft.N_)})  # frontier
+    for i, E in enumerate(E_):  # along eigenvector?
+        C = Copy_(E, Ft, init=1, typ=3)
+        C.N_, C.L_, C.m_, C.d_ = [E],[],[1],[0]
+        E._c_[i], E._m_[i], E._d_[i] = [C],[1],[0]  # aligned, self m,d
+        C._N_= list({n for l in E.rim for n in l.nt if (n is not E and n in N_)})  # init frontier
         _C_ += [C]
-    oC_=[]; iter= fP= 0
-    while True: # reform C_
+    out_=[]; iter=0
+    while True:  # reform C_
         C_, cnt,mat,dif,rdn,DTT,Up = [],0,0,0,0,np.zeros((2,9)),0; Ave = ave*(_r+ccC); Avd = avd*(_r+ccC)
-        c_= [[] for _ in _C_]
-        for _n in set([_n for _C in _C_ for _n in _C.N_+_C._N_]):  # merge frontier C_ += C._N_'c__?
-            _n.c_=copy(c_); _n.m_=copy(c_); _n.d_=copy(c_)  # fill /C index
-        for i,_C in enumerate(_C_):  # C.m,d / rTT, not dTT? sort and break by sum(_C.m_)?
-            if not iter or sum(_C._m_) *_C.c > Ave*_C.r:
-                N__,n_,m_,d_,M,D,cc,R, dTT,up = [],[],[],[],0,0,0,0, np.zeros((2,9)),0  # /C
-                for n in set(_C.N_+_C._N_):  # current + frontier
-                    dtt,_ = base_comp(_C,n)  # or comp_N, decay?
-                    m,d = vt_(dtt,ttcC); dTT+=dtt
-                    n_+=[n]; m_+=[m]; d_+=[d]; c=n.c; cc+=c; M+=m*c; D+=abs(d)*c; R+=n.r*c  # scale totals only?
-                    if _C in n._c_: up += abs(n._m_[i]-m)  # update, no d_?
-                    else:           up += m  # not in extended _N__
-                r = _r+R/cc  # loop-local, not ave?
-                if M > Ave*r and val_(dTT, r,_C.wTT*ttcC, (len(n_)-1)*Lw) > 0:
-                    for _n in [_n for l in n.rim for _n in l.nt if _n is not n]: N__+= [_n]  # +|-Ls
-                    C = sum2C(n_,m_,d_, i, root=Ft)
-                    C._N_ = list(set(N__)- set(n_))  # new frontier
-                    if D<Avd: oC_+= [C]  # output if stable, or if val_(DTT,fi=0)+D?
-                    else:     C_ += [C]  # reform
-                DTT+=dTT; mat+=M; dif+=D; cnt+=cc; rdn+=R; Up+=up
-        r = _r+ rdn/cnt
-        for n in Ft.N_: n._c_ = n.c_; n._m_ = n.m_; n._d_ = n.d_  # init currents on top
-        if oC_+C_ and mat*dif*wcC > ave*(r+ccC+2):  # if val_(DTT,len(oC_+C_)?
-            oC_+= C_; cc = sum([f.c for f in oC_]); fP=1
-            oC_ = cluster_P(oC_, Ft.N_, cc, Ft)  # refine all memberships in parallel by global backprop
+        for i,_C in enumerate(_C_):  # C.m,d /rTT? sort/ sum(_C.m_)?
+            if _C==None: continue
+            N__,n_,m_,d_,M,D,T,R,dTT,up = [],[],[],[],0,0,0,0, np.zeros((2,9)),0  # /C
+            for n in _C.N_+_C._N_:  # current + frontier
+                dtt,_ = base_comp(_C,n)  # or comp_N, decay?
+                m,d = vt_(dtt,ttcC); dTT+=dtt
+                n_+=[n]; m_+=[m]; d_+=[d]; c=n.c; T+=c; M+=m*c; D+=abs(d)*c; R+=n.r*c  # scale totals only?
+                if _C in n._c_: up += abs(n._m_[i]-m) + abs(n._d_[i]-d)  # update
+                else:           up += m+abs(d)  # not in extended _N__
+            r = _r+R/T  # loop-local, not ave?
+            if M > Ave*r and val_(dTT, r,_C.wTT*ttcC, (len(n_)-1)*Lw) > 0:  # else: Up+= sum(_C._m_)+ sum([abs(d) for d in _C._d_])?
+                for n in n_: N__ += [_n for l in n.rim for _n in l.nt if _n is not n]  # +|-Ls
+                C = sum2C(n_,m_,d_, i, root=Ft)
+                C._N_ = list(set(N__)- set(n_))  # new frontier
+                if D<Avd: out_+=[C]; C_+=[None]  # output if stable, keep slot for alignment
+                else:     C_ += [C]  # reform
+                DTT+=dTT; mat+=M; dif+=D; cnt+=T; rdn+=R; Up+=up
+        r = _r+ rdn/(cnt or eps)
+        if out_+C_ and mat*dif*wcC > ave*(r+ccC+2):  # if val_(DTT,len(oC_+C_)?
+            out_+= C_; T = sum([f.c for f in out_])
+            out_ = cluster_P(out_,T,Ft)  # refine all memberships in parallel by global backprop
             break
-        if Up > Avd*r: _C_ = C_  # last-loop r,Up
-        else:   oC_+= C_; break  # converged
+        if C_ and Up > Avd*r:
+            for n in N_: n._c_ = n.c_; n._m_ = n.m_; n._d_ = n.d_  # init currents on top
+            for C in C_: C._m_ = C.m_; C._d_ = C.d_  # no need to align?
+            _C_ = C_; c_ = [[] for _ in _C_]  # last loop
+            for _n in set([_n for _C in _C_ for _n in _C.N_+_C._N_]):  # merge frontier C_ += C._N_'c__?
+                _n.c_=copy(c_); _n.m_=copy(c_); _n.d_=copy(c_)  # fill /C index
+        else:   out_+= C_; break  # converged
         iter += 1
-    if oC_:
-        if not fP: oC_ = prune_C_(oC_, Ft)
-        for n in [N for C in oC_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals:
+    if out_:
+        for n in [N for C in out_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals:
             n.exe = (n.d if n.typ==1 else n.m) + np.sum(n.m_) - ave
-        if val_(DTT, r, Ft.root.wTT*ttcC, (len(oC_)-1)*Lw) > 0:
-            Ct = sum2F(oC_,Ft.root.Ct)
+        if val_(DTT, r, Ft.root.wTT*ttcC, (len(out_)-1)*Lw) > 0:
+            Ct = sum2F(out_,Ft.root.Ct)
             if not Ft.root.Ct: Ft.root.Ct = Ct
             _,r = cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
             sel_TT = (Ct.dTT*Ct.c - Ft.dTT*Ft.c) / eps_(Ct.dTT * Ct.c)
-            oF = CoF.get(); oF.N_=oC_; oF.rTT=sel_TT; oF.r=Ct.r; oF.c = Ft.c-Ct.c  # data, select in Nt.N_?
-    return oC_,r
+            oF = CoF.get(); oF.N_=out_; oF.rTT=sel_TT; oF.r=Ct.r; oF.c = Ft.c-Ct.c  # data, select in Nt.N_?
+    return out_,r
 
-def cluster_P(__C_, N_, _c, root):  # FCM-style parallel centroid refine, may add proj_C
+def cluster_P(_C_, _c, root):  # FCM-style parallel centroid refine, may add proj_C
 
     cnt = 0  # r = root.r+1?:
-    _u__ = [[N._m_ for N in N_] for C in __C_]  # N membership_ per C
-    for u_ in _u__: s = sum(u_) or 1; u_[:] = [f/s for f in u_]
+    N_ = list(set([N for C in _C_ for N in C.N_]))  # fully fuzzy: all Ns are in all Cs
+    _u__ = [N._m_ for N in N_]  # N/C vals, aligned with _C_
+    _d__ = [N._d_ for N in N_]
     while True:
-        u__, dU = [], 0
-        C_ = [sum2C(N_, u_, root) for u_ in _u__]  # same N_ * updated membership u_
-        for N,_u_ in zip(N_,_u__):
-            u_ = []
+        u__,d__, dU,dD = [],[],0,0  # fixed-length C_ and N_
+        C_ = [sum2C(N_,u_,d_,i, root) for i,(u_,d_) in enumerate(zip(_u__,_d__))]  # same N_ * updated membership
+        for N,_u_,_d_ in zip(N_,_u__,_d__):
+            u_,d_ = [],[]
             for C in C_:
-                TT,rn = base_comp(C,N); u_ += [vt_(TT, ttcP)[0]]
-            s = sum(u_); u_ = [f/s for f in u_]  # per-N membership, Σ_u_ = 1
-            dU += sum(abs(u-_u) for u,_u in zip(u_,_u_))  # normalized
-            u__+= [u_]
+                TT,_ = base_comp(C,N); u,d = vt_(TT, ttcP); u_+=[u]; d_+=[d]
+            s = sum(u_); u_ = [f/s for f in u_]  # per-N membership, Σ_u_=1: norm for cross-C redundancy, or for totals only?
+            dU += sum(abs(u-_u) for u,_u in zip(u_,_u_))  # normalize?
+            dD += sum(abs(d-_d) for d,_d in zip(d_,_d_))
+            u__+=[u_]; d__+=[d_]
         cnt += 1
-        if dU*wcP > ave * (root.r+ccP) * len(N_):  # memberships change
-            _u__ = u__
+        if (dU+dD) * wcP > ave * (root.r+ccP) * len(N_):  # memberships change
+            _u__= u__; _d__= d__
         else: break  # converged
-    out_ = prune_C_(C_,root)
-    dCt = sum2F(list(set(__C_)-set(out_)),CF())  # compress
-    oF = CoF.get(); oF.N_=out_; oF.rTT=dCt.dTT; oF.r=dCt.r; oF.c=_c-dCt.c
-    return out_
-
-def prune_C_(C_, root):
     out_ = []
     for i, C in enumerate(C_):
         if C.m > ave * C.r:  # final pruning, C vals are competitive
             N_,m_,d_ = [],[],[]
-            for N, m, d in zip(C.N_,C._m_,C._d_):
-                if m * N.c > ave * N.r: N_+= [N]; m_+= [m]; d_+= [d]
-            if N_: out_+= [sum2C(N_,m_,d_,i, root=root, final=1)]
-    return out_
+            for N,m,d in zip(C.N_,C._m_,C._d_):
+                if m * N.c > ave * N.r: N_+=[N]; m_+=[m]; d_+=[d]
+            if N_: out_ += [sum2C(N_, m_, d_, i, root=root, final=1)]
+    if out_:
+        dCt = sum2F(list(set(_C_)-set(out_)),CF())  # compress
+        oF = CoF.get(); oF.N_=C_; oF.rTT=dCt.dTT; oF.r=dCt.r; oF.c=_c-dCt.c
+        return out_
 
 def cent_TT(dTT, r):  # weight attr matches | diffs by their match to the sum, recompute to convergence
 
@@ -1009,6 +1011,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
         return T_,C,R
     elev = 0
     F,tile = [],[]  # frame, seed lower tile, if any
+    global ave, avd, Lw, intw, distw, Fw_, FTT_  # update from ffeedback:
     while elev < max_elev:
         tile_,C,R = expand_lev(iY,iX, elev, tile); oF=CoF.get();oF.c += C; oF.r += R
         if tile_:  # sparse higher-scope tile, if expanded
@@ -1023,7 +1026,6 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
                     FTT_ = lev.wTT_ = np.array([t.wTT if not isinstance(t,list) else wTT for t in Z.typ_])
                     if elev == max_elev:  # fb from top lev
                         rV, FTT_ = ffeedback(F)
-                        global ave,avd, Lw,intw,distw, Fw_,FTT_  # update globals:
                         (ave,avd, Lw,intw,distw), Fw_,FTT_ = np.array([ave,avd, Lw,intw,distw])/rV, np.array(Fw_)/rV, np.array(FTT_)/rV
                 tile = F  # lev tile_ is next extension seed
             else: break
