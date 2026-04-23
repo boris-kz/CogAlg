@@ -368,5 +368,36 @@ def prune_C_(C_, root):
             if N_: out_+= [sum2C(N_,m_,d_,i, root=root, final=1)]
     return out_
 
+def cluster_P1(_C_, _c, root):  # FCM-style parallel centroid refine, may add proj_C
 
+    cnt = 0  # r = root.r+1?:
+    N_ = list(set([N for C in _C_ for N in C.N_]))  # fully fuzzy: all Ns are in all Cs
+    _u__ = [N._m_ for N in N_]  # N/C vals, aligned with _C_
+    _d__ = [N._d_ for N in N_]
+    while True:
+        u__,d__, dU,dD = [],[],0,0  # fixed-length C_ and N_
+        C_ = [sum2C(N_,u_,d_,i, root) for i,(u_,d_) in enumerate(zip(_u__,_d__))]  # same N_ * updated membership
+        for N,_u_,_d_ in zip(N_,_u__,_d__):
+            u_,d_ = [],[]
+            for C in C_:
+                TT,_ = base_comp(C,N); u,d = vt_(TT, ttcP); u_+=[u]; d_+=[d]
+            s = sum(u_); u_ = [f/s for f in u_]  # per-N membership, Σ_u_=1: norm for cross-C redundancy, or for totals only?
+            dU += sum(abs(u-_u) for u,_u in zip(u_,_u_))  # normalize?
+            dD += sum(abs(d-_d) for d,_d in zip(d_,_d_))
+            u__+=[u_]; d__+=[d_]
+        cnt += 1
+        if (dU+dD) * wcP > ave * (root.r+ccP) * len(N_):  # memberships change
+            _u__= u__; _d__= d__
+        else: break  # converged
+    out_ = []
+    for i, C in enumerate(C_):
+        if C.m > ave * C.r:  # final pruning, C vals are competitive
+            N_,m_,d_ = [],[],[]
+            for N,m,d in zip(C.N_,C._m_,C._d_):
+                if m * N.c > ave * N.r: N_+=[N]; m_+=[m]; d_+=[d]
+            if N_: out_ += [sum2C(N_, m_, d_, i, root=root, final=1)]
+    if out_:
+        dCt = sum2F(list(set(_C_)-set(out_)),CF())  # compress
+        oF = CoF.get(); oF.N_=C_; oF.rTT=dCt.dTT; oF.r=dCt.r; oF.c=_c-dCt.c
+        return out_
 

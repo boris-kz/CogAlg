@@ -231,7 +231,7 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
     N_,L_,C,R,TTd,cd,rd = [],[],0,0,np.zeros((2,9)),0,0  # any global use of dLs, rd?
     acc = [TT,cm,rm, TTd,cd,rd]
     for pL in sorted(pairs, key=lambda x: x[0]):  # proximity prior, test compared?
-        dist,dy_dx,_N,N, c = pL # rim angl is not canonic
+        dist,dy_dx,_N,N, c = pL  # rim angl is not canonic
         pTT = proj_V(_N,N, dist, dy_dx, root.m if root!=2 else decay** (dist/((_N.span+N.span)/2)))  # based on current rim
         lr = r+ (N.r+_N.r)/2; m,d = vt_(pTT,ttN_)  # +|-match certainty
         if m > 0:
@@ -482,24 +482,25 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
         if C_: sum2F(C_, Ft.root.Ct,froot=0)  # Ct.r includes overlap?
     return G_, r
 
+def vQ(Q): return [i for i in Q if i is not None]  # valid Cs or vals
+
 def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
 
     N_= Ft.N_; oF = CoF.get(); oF.c += _c; oF.r+=_r  # revert if 0 clusters?
-    for n in N_: n.c_,n.m_,n.d_ = [],[],[]
-    c_ = [[] for _ in E_]
-    for n in N_: n._c_=copy(c_); n._m_=copy(c_); n._d_=copy(c_)
+    q = [None for _ in E_]
+    for n in N_: n.c_=copy(q); n.m_=copy(q); n.d_=copy(q); n._c_=copy(q); n._m_=copy(q); n._d_=copy(q)
     _C_ = []
-    for i, E in enumerate(E_):  # along eigenvector?
-        C = Copy_(E, Ft, init=1, typ=3)
-        C.N_, C.L_, C.m_, C.d_ = [E],[],[1],[0]
-        E._c_[i], E._m_[i], E._d_[i] = [C],[1],[0]  # aligned, self m,d
+    for i,E in enumerate(E_):  # along eigenvector?
+        C = Copy_(E, Ft,init=1,typ=3)
+        C.N_,C.L_,C.m_,C.d_ = [E],[],[1],[0]
+        E._c_[i], E._m_[i], E._d_[i] = C,1,0  # aligned, self m,d
         C._N_= list({n for l in E.rim for n in l.nt if (n is not E and n in N_)})  # init frontier
         _C_ += [C]
-    out_=[]; iter=0
+    out_ = []
     while True:  # reform C_
         C_, cnt,mat,dif,rdn,DTT,Up = [],0,0,0,0,np.zeros((2,9)),0; Ave = ave*(_r+ccC); Avd = avd*(_r+ccC)
         for i,_C in enumerate(_C_):  # C.m,d /rTT? sort/ sum(_C.m_)?
-            if _C==None: continue
+            if _C==None: continue  # to map i
             N__,n_,m_,d_,M,D,T,R,dTT,up = [],[],[],[],0,0,0,0, np.zeros((2,9)),0  # /C
             for n in _C.N_+_C._N_:  # current + frontier
                 dtt,_ = base_comp(_C,n)  # or comp_N, decay?
@@ -509,31 +510,33 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
                 else:           up += m+abs(d)  # not in extended _N__
             r = _r+R/T  # loop-local, not ave?
             if M > Ave*r and val_(dTT, r,_C.wTT*ttcC, (len(n_)-1)*Lw) > 0:  # else: Up+= sum(_C._m_)+ sum([abs(d) for d in _C._d_])?
-                for n in n_: N__ += [_n for l in n.rim for _n in l.nt if _n is not n]  # +|-Ls
-                C = sum2C(n_,m_,d_, i, root=Ft)
+                for n in [_n for n in n_ for l in n.rim for _n in l.nt if _n is not n]:  # +|-Ls
+                    N__ += [n]
+                    if n not in N_: N_ += [n]
+                C = sum2C(n_,m_,d_, i, final=2, root=Ft)
                 C._N_ = list(set(N__)- set(n_))  # new frontier
                 if D<Avd: out_+=[C]; C_+=[None]  # output if stable, keep slot for alignment
                 else:     C_ += [C]  # reform
                 DTT+=dTT; mat+=M; dif+=D; cnt+=T; rdn+=R; Up+=up
         r = _r+ rdn/(cnt or eps)
-        if out_+C_ and mat*dif*wcC > ave*(r+ccC+2):  # if val_(DTT,len(oC_+C_)?
-            out_+= C_; T = sum([f.c for f in out_])
-            out_ = cluster_P(out_,T,Ft)  # refine all memberships in parallel by global backprop
+        V_ = vQ(C_)
+        if  (mat+dif)* ((len(out_+V_)-1)*Lw + wcC) > ave*(r+ccC+2):
+            out_+=V_; T = sum([f.c for f in out_])
+            out_ = cluster_P(out_, T, Ft)  # refine all memberships in parallel by global backprop
             break
-        if C_ and Up > Avd*r:
-            for n in N_: n._c_ = n.c_; n._m_ = n.m_; n._d_ = n.d_  # init currents on top
-            for C in C_: C._m_ = C.m_; C._d_ = C.d_  # no need to align?
-            _C_ = C_; c_ = [[] for _ in _C_]  # last loop
-            for _n in set([_n for _C in _C_ for _n in _C.N_+_C._N_]):  # merge frontier C_ += C._N_'c__?
-                _n.c_=copy(c_); _n.m_=copy(c_); _n.d_=copy(c_)  # fill /C index
-        else:   out_+= C_; break  # converged
-        iter += 1
+        if Up*((len(V_)-1)*Lw) > Avd*r:  # do next loop
+            for C in V_: C._m_ = C.m_; C._d_ = C.d_  # not aligned, merge frontier C_ += C._N_'c__?
+            for n in N_: n._c_ = n.c_; n._m_ = n.m_; n._d_ = n.d_
+            q = [None for _ in _C_]  # last loop
+            for n in set([_n for _C in _C_ for _n in _C.N_+_C._N_]): n.c_=copy(q); n.m_=copy(q); n.d_=copy(q)  # fill /C index
+            _C_ = C_
+        else: out_+=V_; break  # converged
     if out_:
         for n in [N for C in out_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals:
-            n.exe = (n.d if n.typ==1 else n.m) + np.sum(n.m_) - ave
-        if val_(DTT, r, Ft.root.wTT*ttcC, (len(out_)-1)*Lw) > 0:
+            n.exe = (n.d if n.typ==1 else n.m) + np.sum(vQ(n.m_)) - ave
+        if val_(DTT,r, Ft.root.wTT*ttcC, (len(out_)-1)*Lw) > 0:
             Ct = sum2F(out_,Ft.root.Ct)
-            if not Ft.root.Ct: Ft.root.Ct = Ct
+            if not Ft.root.Ct: Ft.root.Ct = Ct; Ct.root = Ft.root
             _,r = cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
             sel_TT = (Ct.dTT*Ct.c - Ft.dTT*Ft.c) / eps_(Ct.dTT * Ct.c)
             oF = CoF.get(); oF.N_=out_; oF.rTT=sel_TT; oF.r=Ct.r; oF.c = Ft.c-Ct.c  # data, select in Nt.N_?
@@ -542,12 +545,16 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
 def cluster_P(_C_, _c, root):  # FCM-style parallel centroid refine, may add proj_C
 
     cnt = 0  # r = root.r+1?:
-    N_ = list(set([N for C in _C_ for N in C.N_]))  # fully fuzzy: all Ns are in all Cs
-    _u__ = [N._m_ for N in N_]  # N/C vals, aligned with _C_
-    _d__ = [N._d_ for N in N_]
+    N_= list(set([N for C in _C_ for N in C.N_]))  # all Ns are in all Cs
+    Q = [0 for _ in _C_]; _u__,_d__ = [],[]  # all replaced
+    for N in N_:
+        m_= copy(Q); d_= copy(Q)
+        for c,m,d in zip(N.c_,N.m_,N.d_):  # N/C vals
+            i = _C_.index(c); m_[i] = m; d_[i] = d  # align with _C_
+        N.m_ = m_; N.d_ = d_; _u__ += [m_]; _d__ += [d_]  # aligned with N_
     while True:
         u__,d__, dU,dD = [],[],0,0  # fixed-length C_ and N_
-        C_ = [sum2C(N_,u_,d_,i, root) for i,(u_,d_) in enumerate(zip(_u__,_d__))]  # same N_ * updated membership
+        C_ = [sum2C(N_,u_,d_,i, root,wO=wcP) for i,(u_,d_) in enumerate(zip(_u__,_d__))]  # same N_ * updated membership
         for N,_u_,_d_ in zip(N_,_u__,_d__):
             u_,d_ = [],[]
             for C in C_:
@@ -557,20 +564,38 @@ def cluster_P(_C_, _c, root):  # FCM-style parallel centroid refine, may add pro
             dD += sum(abs(d-_d) for d,_d in zip(d_,_d_))
             u__+=[u_]; d__+=[d_]
         cnt += 1
-        if (dU+dD) * wcP > ave * (root.r+ccP) * len(N_):  # memberships change
-            _u__= u__; _d__= d__
+        if (dU+dD) * wcP*len(N_) > ave * (root.r+ ccP*len(N_)):
+            _u__= u__; _d__= d__  # memberships change
         else: break  # converged
     out_ = []
     for i, C in enumerate(C_):
         if C.m > ave * C.r:  # final pruning, C vals are competitive
             N_,m_,d_ = [],[],[]
-            for N,m,d in zip(C.N_,C._m_,C._d_):
+            for N,m,d in zip(C.N_,C.m_,C.d_):
                 if m * N.c > ave * N.r: N_+=[N]; m_+=[m]; d_+=[d]
             if N_: out_ += [sum2C(N_, m_, d_, i, root=root, final=1)]
     if out_:
         dCt = sum2F(list(set(_C_)-set(out_)),CF())  # compress
         oF = CoF.get(); oF.N_=C_; oF.rTT=dCt.dTT; oF.r=dCt.r; oF.c=_c-dCt.c
         return out_
+
+def sum2C(N_, m_,d_, i, root=None, final=0, wO=wcC):  # fuzzy sum + base attrs for centroids
+
+    L_, mc_, dc_ = [],[],[]  # m_ * c_
+    for j, (N,m,d) in enumerate(zip(N_,m_,d_)):
+        if final==1:
+            L_ += [CN(typ=1, w=[N.c * m_[j]])]  # add u,c,r,TT,span,angl for proj_C?
+        mc_ += [N.c * m_[j if final else i]]  # N/C else C/N contribution
+    M = sum(mc_)
+    R = 0; TT = np.zeros((2,9)); kern = np.zeros(4); span = 0; yx = np.zeros(2)
+    for N, mc in zip(N_,mc_):
+        rc = mc/M; TT+= N.dTT*rc; kern+= N.kern*rc; span+= N.span*rc; yx+= N.yx*rc; R+= N.r*rc
+    wTT = cent_TT(TT,R) * wO  # set param correlation weights
+    m,d = vt_(TT,wTT)
+    C = CN(typ=3, Nt= CF(N_=N_),dTT=TT,m=m,d=d,c=M,r=R, yx=yx, kern=kern,span=span, root=root, wTT=wTT, L_=L_)
+    C.m_=m_; C.d_=d_
+    for n,m,d in zip(C.N_,C.m_,C.d_): n.c_[i] = C; n.m_[i] = m; n.d_[i] = d  # mapping-C vals
+    return C
 
 def cent_TT(dTT, r):  # weight attr matches | diffs by their match to the sum, recompute to convergence
 
@@ -661,24 +686,6 @@ def sum_H(N_, Ft):
         elif N.N_: H = [list(N.N_)]
     Ft.H = [sum2F(H[0], CF())] if H else []
 
-# not revised:
-def sum2C(N_, m_,d_, i, root=None, final=0, fP=0):  # fuzzy sum + base attrs for centroids
-
-    L_, mc_ = [],[]  # N/C contribution = c-scaled u_
-    for j, N in enumerate(N_):
-        if final: L_ += [CN(typ=1, w=[N.c * m_[j]])]  # add u,c,r,TT,span,angl for proj_C?
-        mc_ += [N.c * m_[i]]  # N/C contribution  (this should be default even in final?)
-    M = sum(mc_)
-    R = 0; TT = np.zeros((2,9)); kern = np.zeros(4); span = 0; yx = np.zeros(2)
-    for N, mc in zip(N_,mc_):
-        rc = mc/M; TT+= N.dTT*rc; kern+= N.kern*rc; span+= N.span*rc; yx+= N.yx*rc; R+= N.r*rc
-    wTT = cent_TT(TT, R) * (wcP if fP else wcC)  # set param correlation weights
-    m,d = vt_(TT,wTT)
-    C = CN(typ=3, Nt= CF(N_=N_),dTT=TT,m=m,d=d,c=M,r=R, yx=yx, kern=kern,span=span, root=root, wTT=wTT, L_=L_)
-    C.m_=m_; C.d_=d_
-    for n,m,d in zip(C.N_,C.m_,C.d_): n.c_[i] = C; n.m_[i] = m; n.d_[i] = d  # mapping-C vals
-    return C
-
 def sum2G(ft_, root=None, init=1, typ=None):
 
     if not init:
@@ -735,7 +742,9 @@ def add_Nt(G, Nt, merge=0):  # addition to Q2R
     yx_ = []; C = G.c + Nt.c  # G is empty?
     for N in N_:
         N.fin = 1; N.root = G; c = N.c
-        if hasattr(G,'m_'): G.r += np.sum([o*N.r for o in N.o_]); G.rN_ += N.rN_; G.m_ += N.m_; G.o_ += N.o_
+        if hasattr(N,'m_'):
+            if not hasattr(G, 'c_'): G.c_, G.m_, G.d_ = [], [], []
+            G.r += N.r; G.c_ += N.c_; G.m_ += N.m_; G.d_ += N.d_
         G.C_ += N.rN_  # Ct||Nt;  A,a = G.angl[0],N.angl[0]; A[:]= (A*C+a*c)/C # vect only, if in Nt?
         G.kern = G.kern = (G.kern*(C-c) + N.kern*c) / C  # massive?
         G.box = extend_box(G.box, N.box)
@@ -774,7 +783,7 @@ def Copy_(N, root=None, init=0, typ=None):
         if init:  # new G
             C.yx = [N.yx]; C.angl = np.array([copy(N.angl[0]), N.angl[1]],dtype=object)  # get mean
             C.L_ = [l for l in N.rim if l.m>ave]; N.root=C; C.fin = 0  # else centroid
-            C.N_ = [N]; C.m_=[]; C._m_=[]; C.o_=[]; C._o_=[]
+            C.N_ = [N]
         else:
             C.Lt=CopyF(N.Lt); C.Bt=CopyF(N.Bt)  # empty in init G
             C.angl = copy(N.angl); C.yx = copy(N.yx)
