@@ -546,12 +546,24 @@ def cluster_P(_C_, _c, root):  # FCM-style parallel centroid refine, may add pro
 
     cnt = 0  # r = root.r+1?:
     N_= list(set([N for C in _C_ for N in C.N_]))  # all Ns are in all Cs
-    Q = [0 for _ in _C_]; _u__,_d__ = [],[]  # all replaced
-    for N in N_:
+    # per N_ (the existing method, each N is a seed)
+    Q = [0 for _ in N_]; _u__,_d__ = [],[]  # all replaced
+    for i, N in enumerate(N_):
         m_= copy(Q); d_= copy(Q)
+        m_[i] = sum([m for m in N.m_ if m is not None]); d_[i] = sum([d for d in N.d_ if d is not None])
+        N.m_ = copy(m_); N.d_ = copy(d_); N.c_ = copy(Q); _u__ += [m_]; _d__ += [d_]  # aligned with N_
+        
+    '''
+    # per C_ (the number of N_ and C_ are different)
+    Q = [0 for _ in _C_]
+    _u__ = [list(np.zeros(len(N_))) for _ in _C_]; _d__ = [list(np.zeros(len(N_))) for _ in _C_]
+    for N in N_:
         for c,m,d in zip(N.c_,N.m_,N.d_):  # N/C vals
-            i = _C_.index(c); m_[i] = m; d_[i] = d  # align with _C_
-        N.m_ = m_; N.d_ = d_; _u__ += [m_]; _d__ += [d_]  # aligned with N_
+            if c is not None: 
+                i = _C_.index(c); j=N_.index(N);_u__[i][j] += m; _d__[i][j] += d  # align with _C_      
+        N.m_ = copy(Q); N.d_ = copy(Q)
+    '''
+        
     while True:
         u__,d__, dU,dD = [],[],0,0  # fixed-length C_ and N_
         C_ = [sum2C(N_,u_,d_,i, root,wO=wcP) for i,(u_,d_) in enumerate(zip(_u__,_d__))]  # same N_ * updated membership
@@ -583,8 +595,6 @@ def sum2C(N_, m_,d_, i, root=None, final=0, wO=wcC):  # fuzzy sum + base attrs f
 
     L_, mc_, dc_ = [],[],[]  # m_ * c_
     for j, (N,m,d) in enumerate(zip(N_,m_,d_)):
-        if final==1:
-            L_ += [CN(typ=1, w=[N.c * m_[j]])]  # add u,c,r,TT,span,angl for proj_C?
         mc_ += [N.c * m_[j if final else i]]  # N/C else C/N contribution
     M = sum(mc_)
     R = 0; TT = np.zeros((2,9)); kern = np.zeros(4); span = 0; yx = np.zeros(2)
@@ -595,6 +605,13 @@ def sum2C(N_, m_,d_, i, root=None, final=0, wO=wcC):  # fuzzy sum + base attrs f
     C = CN(typ=3, Nt= CF(N_=N_),dTT=TT,m=m,d=d,c=M,r=R, yx=yx, kern=kern,span=span, root=root, wTT=wTT, L_=L_)
     C.m_=m_; C.d_=d_
     for n,m,d in zip(C.N_,C.m_,C.d_): n.c_[i] = C; n.m_[i] = m; n.d_[i] = d  # mapping-C vals
+
+    if final==1:  # this L could be from comp instead?
+        for j, N in enumerate(N_):
+            dTT, _ = base_comp(C, N)  # but C isn't constructed yet — order issue
+            dy_dx = C.yx - N.yx; span = np.hypot(*dy_dx); m, d = vt_(dTT, ttcC)
+            L = CN(typ=1,w=[N.c * m_[j]],nt=[C,N],dTT=dTT,m=m,d=d,c=N.c*m_[j],r=(C.r+N.r)/2,span=span,angl=np.array([dy_dx,1],dtype=object),yx=(C.yx+N.yx)/2,kern=(C.kern+N.kern)/2, root=C)
+            L_ += [L]
     return C
 
 def cent_TT(dTT, r):  # weight attr matches | diffs by their match to the sum, recompute to convergence
