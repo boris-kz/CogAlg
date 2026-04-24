@@ -488,7 +488,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
     for n in N_: n.c_,n.m_,n.d_, n._c_,n._m_,n._d_ = [],[],[], [],[],[]
     _C_ = []
     for i,E in enumerate(E_):
-        C = Copy_(E, Ft,init=1,typ=3)
+        C = Copy_(E, Ft,init=1,typ=3); C.w = C.m * C.c
         C.N_,C.L_,C.m_,C.d_ = [E],[],[1],[0]
         E._c_+=[C]; E._m_+=[1]; E._d_+=[0]  # self m,d
         C._N_= list({n for l in E.rim for n in l.nt if (n is not E and n in N_)})
@@ -502,13 +502,14 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
                 dtt,_ = base_comp(_C,n)  # or comp_N, decay?
                 m,d = vt_(dtt,ttcC); dTT+=dtt
                 n_+=[n]; m_+=[m]; d_+=[d]; c=n.c; T+=c; M+=m*c; D+=abs(d)*c; R+=n.r*c  # scale totals only?
+                n.m_ += [m]; n.d_ += [d]; n.c_ += [None]  # to align position 
                 if _C in n._c_: k=n._c_.index(_C); up += abs(n._m_[k]-m) + abs(n._d_[k]-d)
                 else:           up += m+abs(d)
             r = _r+ R/T  # loop-local, not ave?
             if M*(_C.w+ wC_*len(n_)+wC_*len(n_)) > Ave*(r+_C.r+ cC_*len(n_)):  # else: Up+= sum(_C._m_)+ sum([abs(d) for d in _C._d_])?
                 for n in [_n for n in n_ for l in n.rim for _n in l.nt if _n is not n]:
                     N__ += [n]  # +|-Ls
-                C = sum2C(n_,m_,d_, i, final=2, root=Ft)
+                C = sum2F(n_, Ft, m_=m_, d_=d_, ci=i)
                 C._N_ = list(set(N__)- set(n_))  # new frontier
                 if D<Avd: out_+=[C]  # output if stable
                 else:     C_ += [C]  # reform
@@ -551,7 +552,7 @@ def cluster_P(_C_, _c, root):  # FCM-style parallel centroid refine, may add pro
         for j,N in enumerate(N_):
             for i,C in enumerate(_C_):
                 TT,_ = base_comp(C,N); md__[j,i] = vt_(TT, ttcP)  # use rc?
-        C_ = [sum2C(N_, md__[:,i,0], md__[:,i,1], i, root) for i in range(Lc)]
+        C_ = [sum2F(N_, root, m_=md__[:,i,0], d_=md__[:,i,1], ci=i) for i in range(Lc)]
         Mt = md__[:,:,0].sum()  # total V
         dM = np.abs(md__[:,:,0] -_md__[:,:,0]).sum()
         dD = np.abs(md__[:,:,1] -_md__[:,:,1]).sum()  # updates
@@ -566,7 +567,7 @@ def cluster_P(_C_, _c, root):  # FCM-style parallel centroid refine, may add pro
             for N, m,d in zip(C.N_, md__[:,i,0], md__[:,i,1]):
                 if m*N.c > ave*N.r: N_+=[N]; m_+=[m]; d_+=[d]
             if N_:
-                out_ += [sum2C(N_,m_,d_,i, root=root, final=1)]
+                out_ += [sum2F(N_, root, m_=m_, d_=d_, ci=i, final=1)]
     if out_:
         dCt = sum2F(list(set(_C_)-set(out_)),CF())  # compress
         oF = CoF.get(); oF.N_=C_; oF.rTT=dCt.dTT; oF.r=dCt.r; oF.c=_c-dCt.c
@@ -574,20 +575,25 @@ def cluster_P(_C_, _c, root):  # FCM-style parallel centroid refine, may add pro
 
 def sum2C(N_, m_,d_, i, root=None, final=0, wO=wcC):  # fuzzy sum + base attrs for centroids
 
-    for N in N_: N.w = N.c*N.m_[i]  # combined weight of N in C?
-    C = sum2F(N_,root, fm=1)  # weigh by N.m instead of N.c?
-    if final==1:
-        L_ = []  # draft:
-        for N in N_: L_ += [CN(typ=1, nt=[C,N])]  # L.c = N.c, L.r=N.r,  u,c,r,TT,span,angl for proj_C?
+    W = 0
+    for j, N in enumerate(N_): N.w = N.c*N.m_[i]; W += N.w  # combined weight of N in C?
+    C = sum2F(N_,root)  # weigh by N.m instead of N.c?
     M = sum(m_); D = sum(d_)
     R = 0; TT = np.zeros((2,9)); kern = np.zeros(4); span = 0; yx = np.zeros(2)
     for N, m in zip(N_,m_):
         rc = m/M; TT+= N.dTT*rc; kern+= N.kern*rc; span+= N.span*rc; yx+= N.yx*rc; R+= N.r*rc
     wTT = cent_TT(TT,R) * wO  # set param correlation weights
     m,d = vt_(TT,wTT)
-    C = CN(typ=3, Nt= CF(N_=N_),dTT=TT,m=m,d=d,c=M,r=R, yx=yx, kern=kern,span=span, root=root, wTT=wTT, L_=L_)
-    C.m_=m_; C.d_=d_
+    C = CN(typ=3, Nt= CF(N_=N_),dTT=TT,m=m,d=d,c=M,r=R, yx=yx, kern=kern,span=span, root=root, wTT=wTT)
+    C.m_=m_; C.d_=d_; C.w=W; C.c_=[]
     for n,m,d in zip(C.N_,C.m_,C.d_): n.c_[i] = C; n.m_[i] = m; n.d_[i] = d  # mapping-C vals
+    if final==1:
+        L_ = []  # draft:
+        for N in N_:
+            dy_dx = C.yx - N.yx
+            span = np.hypot(*dy_dx)
+            angl = np.array([dy_dx, np.sign(N.dTT[1] @ ttcN[1])], dtype=object) 
+            L_ += [CN(typ=1,nt=[C,N],dTT=N.dTT,c=N.c,r=N.r,m=N.m,d=N.d,span=span,angl=angl)]  # L.c = N.c, L.r=N.r,  u,c,r,TT,span,angl for proj_C?
     return C
 
 def cent_TT(dTT, r):  # weight attr matches | diffs by their match to the sum, recompute to convergence
@@ -647,24 +653,45 @@ def add2F(F, n, fr=0, merge=0):  # unpack for batching in sum2F
     if hasattr(F,'H') and getattr(n,'H',None): add_H(F.H, n.H, F)
     if hasattr(n,'C_') and hasattr(n,'C_'): F.C_ = getattr(F,'C_',[]) + n.C_  # same for L_?
 
-def sum2F(N_, root, fr=0, merge=0, froot=0):  # -> CF/CN
+def sum2F(N_, root, fr=0, merge=0, froot=0, m_=None, d_=None, ci=None, final=0, wO=wcC):
 
     a = 'rTT' if fr else 'dTT'
-    c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); rc_ = c_/C
+    fC = m_ is not None
+    w_ = np.array(m_ if fC else [n.c for n in N_]); C = w_.sum(); rc_ = w_/C  # weights
     TT = np.einsum('i,ijk->jk', rc_, np.stack([getattr(n,a) for n in N_]))  # weighted sum
     R  = rc_ @ np.array([n.r  for n in N_])
     wC = rc_ @ np.array([getattr(n,'wc',1) for n in N_])
-    if merge:
-        for n in N_: root.N_ += n.N_ if merge>1 else [n]
-    if froot:
-        for n in N_: n.root = root
-    new = CF(N_=N_, c=C, r=R, wc=wC, **{a: TT})
-    sum_H(N_, new)
-    if root.c: add2F(root,new)
-    else:      root = new
-    if getattr(root,'C_',None):
-        root.Ct = sum2F(root.C_, CF(root=root))
-    return root
+    if hasattr(N_[0], 'kern'):
+        kern = rc_ @ np.stack([n.kern for n in N_])
+        span = rc_ @ np.array([n.span for n in N_])
+        yx   = rc_ @ np.stack([n.yx for n in N_])
+  
+    if fC:
+        for j, N in enumerate(N_): N.w = N.c * m_[j]  # combined weight of N in C?
+        _wTT = cent_TT(TT, R) * wO  # set param correlation weights
+        m, d = vt_(TT, _wTT)
+        new = CN(typ=3, Nt=CF(N_=N_), dTT=TT, m=m, d=d, c=C, r=R,yx=yx, kern=kern, span=span, root=root, wTT=_wTT)  # weigh by N.m instead of N.c?
+        new.m_=m_; new.d_=d_; new.w=sum(n.w for n in N_); new.c_=[]
+        for n,m,d in zip(N_,new.m_,new.d_): n.c_[ci]=new; n.m_[ci]=m; n.d_[ci]=d  # mapping-C vals
+        if final:
+            L_ = []
+            for N in N_:
+                dy_dx = new.yx - N.yx; span = np.hypot(*dy_dx)
+                angl = np.array([dy_dx, np.sign(N.dTT[1] @ ttcN[1])], dtype=object)
+                L_ += [CN(typ=1,nt=[new,N],dTT=N.dTT,c=N.c,r=N.r,m=N.m,d=N.d,span=span,angl=angl)]  # L.c = N.c, L.r=N.r,  u,c,r,TT,span,angl for proj_C?
+            new.L_ = L_
+    else:
+        if merge:
+            for n in N_: root.N_ += n.N_ if merge>1 else [n]
+        if froot:
+            for n in N_: n.root = root
+        new = CF(N_=N_, c=C, r=R, wc=wC, **{a: TT})
+        sum_H(N_, new)
+        if root.c: add2F(root,new)
+        else:      root = new
+        if getattr(root,'C_',None):
+            root.Ct = sum2F(root.C_, CF(root=root))
+    return new
 
 def add_H(H,h, root, fN=0):
     # bottom-up:
