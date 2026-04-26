@@ -19,7 +19,7 @@ Clustering compressively groups the elements into compositional hierarchy, initi
 High-contrast links are correlation clustered to form a boundary per node connectivity cluster.
 This is followed by centroid-based expansion and divisive sub-clustering.
 
-I have 4 stages of conditionally extended clustering, increasingly dense/fuzzy, each seeded by prior-stage output:
+each level may extend clustering through 4 increasingly fuzzy stages, each seeded by prior-stage output:
 - select sparse exemplars to seed the clusters, top k for parallelization (get_exemplars),
 - connectivity-based agglomerative clustering, followed by divisive clustering (cluster_N), 
 - centroid-based marginally fuzzy and extensible clustering, in divisive phase (cluster_C),
@@ -60,7 +60,7 @@ onF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
         'cross_comp','frame_H','vect_edge','trace_edge','ffeedback','proj_N']  # combined + ancillary
 Fc_ = [9,8,13,3,3,15,18,4,3,9,9,8,2,2]  # AST complexity / vt_, maps to onF_, *= data_size: not implemented yet
 Fw_ = copy(Fc_)  # ave gain summed from calls, init neutral to Fc_
-wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wX,wFrm,wVct,wTrc,wBac,wPrj = Fw_  # or use ave * (Fc/Fw) only?
+wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wX,wFrm,wVct,wTrc,wBac,wPrj = Fw_
 cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cX,cFrm,cVct,cTrc,cBac,cPrj = Fc_
 FTT_= [deepcopy(wTT) for _ in range(14)]; ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP, ttX,ttFrm,ttVct,ttTrc,ttBac,ttPrj = FTT_
 
@@ -98,14 +98,14 @@ class CN(CBase):  # full node / graph attrs:
         n.fin = kwargs.get('fin',0)  # clustered, temporary
         n.compared = set()
         n.nt = kwargs.get('nt',[])  # L nodet
-        n.rN_= kwargs.get('rN_',[])  # reciprocal root nG_ for bG|cG, nG has Bt.N_,Ct.N_ instead?
+        n.c_ = kwargs.get('c_',[])  # reciprocal root Cs
         n.nF = kwargs.get('nF','Nt')  # to set attr in root_update
         n.fb_= kwargs.get('fb_',[])
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.c)
 
-class CF(CBase):  # clustering forks: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int- defining links, Lt/Ft, Ct/lev, Bt/G
-    name = "fork"
+class CF(CBase):  # clustering fork: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int- defining links, Lt/Ft, Ct/lev, Bt/G
+    name ="fork"  # sub-forks added conditionally
     def __init__(f, **kwargs):
         super().__init__()
         f.N_ = kwargs.get('N_',[])  # flat top lev, calls in oF, all sub-forks added conditionally
@@ -189,15 +189,15 @@ def cross_comp(Ft, rr):  # core function mediating recursive rng+ and der+ cross
     N_,G_ = Ft.N_,[]; fC = N_[0].typ==3; root=Ft.root  # rc=rdn+olp, comp N_|B_|C_:
     # comp_ s update root oF:
     L_,TT,c,r,TTd,cd,rd = comp_C_(N_,rr,fC=1) if fC else comp_N_(combinations(N_,2),rr)
-    if L_:  # Lm_, no +|- Ft.Lt?
-        M, D = vt_(TT,ttE)
-        if M * ((len(L_)-1)*Lw) * wE > ave * cE:
+    if L_: # Lm_, no +|- Ft.Lt?
+        L= len(L_)-1  # val=m+d /clust, m/comp
+        if sum(vt_(TT,ttE)) * (wE*L) > (ave+avd) * (r+cE*L):
             E_ = get_exemplars({N for L in L_ for N in L.nt}, r,c)
             G_,r = cluster_N(Ft, E_,r,c)  # -> cluster_C,_P, eval?
             if G_:
-                root.Nt = sum2F(G_,CF(root=root),froot=1)  # or G.N_ = spliced C_ if higher value?
-                if val_(TT, r*cX, ttX, (len(G_)-1)*Lw,1,TTd, rd/(r+rd)) > 0:
-                    G_,r = cross_comp(root.Nt,r)  # agg+, trans-comp
+                root.Nt = sum2F(G_,CF(root=root),froot=1); L=len(G_)-1  # or G.N_ = spliced C_ if higher value?
+                if vt_(TT,ttX)[0]* (wX*L) > ave* (r+cX*L):  # root borrw| rdn?
+                    G_,r = cross_comp(root.Nt,r)  # agg+
     return G_, r  # G_ is recursion flag
 '''
 oF.m = val dTT, or
@@ -270,8 +270,7 @@ def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
                 if val_(L.dTT,_r+cC_, ttC_,fi=0) < 0:
                     C0,C1 = L.nt
                     if C0 is C1 or C1 in merg_ or C0 in merg_: continue  # not merged
-                    add2F(C0,C1,merge=2); add_Nt(C0, C1.Nt)
-                    merg_ += [C1]
+                    add2F(C0,C1,merge=2); merg_ += [C1]
                     for l in C1.rim: l.nt = [C0 if n is C1 else n for n in l.nt]
                 else: L_ = L_[i:]; break
             if merg_: N_ = list(set(N_) - set(merg_))
@@ -737,13 +736,12 @@ def add_Nt(G, Nt, merge=0):  # addition to Q2R
     for N in N_:
         N.fin = 1; N.root = G; c = N.c
         if hasattr(N,'m_'):
-            if not hasattr(G, 'c_'): G.c_, G.m_, G.d_ = [], [], []
-            G.r += N.r; G.c_ += N.c_; G.m_ += N.m_; G.d_ += N.d_
-        G.C_ += N.rN_  # Ct||Nt;  A,a = G.angl[0],N.angl[0]; A[:]= (A*C+a*c)/C # vect only, if in Nt?
+            if not hasattr(G, 'c_'): G.c_,G.m_,G.d_ = [],[],[]
+            G.C_ += N.c_; G.m_ += N.m_; G.d_ += N.d_  # Ct || Nt
         G.kern = G.kern = (G.kern*(C-c) + N.kern*c) / C  # massive?
         G.box = extend_box(G.box, N.box)
         yx_ += [N.yx]
-    G.yx = yx = np.mean(yx_, axis=0); dy_,dx_ = (np.array(yx_)-yx).T
+    G.yx = yx = np.mean(yx_, axis=0); dy_,dx_ = (np.array(yx_)-yx).T  # weigh by c?
     G.span = np.hypot(dy_,dx_).mean() if len(N_)>1 else N.span
 
 def add_Lt(G, Lt,wTT):  # addition to Q2R
@@ -814,8 +812,8 @@ def mdecay(L_):  # slope function
     ddist_ = np.diff([l.span for l in L_])
     return - (dm_/ eps_(ddist_)).mean()  # -dm/ddist
 
-# process scaffold:
-def vect_edge(tile, rV=1, iFTT_=None):  # PP_ cross_comp and floodfill to init focal frame graph, no recursion:
+# hand-off from comp_slice:
+def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame graph, no recursion:
 
     global ave,avd, aveB, Lw,distw,intw, Fw_, Fc_  # /= projected V change:
     def PP2N(PP):
@@ -854,7 +852,6 @@ def vect_edge(tile, rV=1, iFTT_=None):  # PP_ cross_comp and floodfill to init f
                     G_,TT,C, R = trace_edge(N_,G_,TT,c,3,tile)  # flatten B_-mediated Gs
     oF = CoF.get(); oF.c = C; oF.r = R
     if G_:
-        # set directly:
         Nt = CF(nF='Nt', root=tile); Nt.N_ = G_; Nt.dTT = TT; Nt.c = C; Nt.r = 1; tile.Nt = Nt; tile.dTT = TT; tile.c = C
         if vt_(TT, ttVct)[0] > ave:
             return tile
@@ -911,7 +908,6 @@ def proj_focus(PV__, y,x, tile):  # radial accum of projected focus value in PV_
     m,d,n = tile.m, tile.d, tile.c  # add r?
     V = (m-ave*n) + (d-avd*n)
     dy,dx = tile.angl[0]; a = dy / (dx or eps)  # average link_ orientation, projection
-    # include C/N links?
     Dec = decay * (wYX / np.hypot(y-tile.yx[0], x-tile.yx[1]))  # unit_decay *rel_dist?
     H, W = PV__.shape  # = win__
     n = 1  # radial distance
@@ -955,11 +951,12 @@ def proj_N(N, dist, A, r, _c, dec=1):  # arg rc += N.rc+Nw, recursively specify 
     cos_d = (N.angl[0].dot(A) / ((np.hypot(*N.angl[0]) * dist) or eps)) * N.angl[1]  # internal x external angle alignment
     iTT, eTT = np.zeros((2,9)), np.zeros((2,9))
     wTT = oF.wTT*ttPrj
-    for L in N.L_+N.B_: proj_TT(L, cos_d, dist, L.r+r, iTT, wTT, dec=dec)  # accum TT internally
+    for L in N.L_+ N.B_: proj_TT(L, cos_d, dist, L.r+r, iTT, wTT, dec=dec)  # accum TT internally
+    for L in N.Ct.Lt.N_: proj_TT(L, cos_d, dist, L.r + r, iTT, wTT, dec=dec)  # C-to-N links?
     for L in N.rim:  proj_TT(L, cos_d, dist, L.r+r, eTT, wTT, dec=dec)
     pTT = iTT + eTT  # projected int,ext links, work the same?
 
-    return pTT  # val_(N.dTT,rc) * (1- val_(iTT+eTT, rc))  # info_gain = N.m * average link uncertainty, should be separate
+    return pTT  # info_gain = N.m * average link uncertainty, should be separate
 '''
 add comp_prj_nt?
 def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
@@ -988,14 +985,14 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
     def expand_lev(_iy, _ix, elev, T):  # seed tile is pixels in 1st lev, or Fg in higher levs
 
         frame = np.full((Ly, Lx), None, dtype=object)  # level scope
-        iy,ix = _iy,_ix; cy,cx = (Ly-1)//2, (Lx-1)//2; y,x = cy,cx  # start at mean
-        T_, PV__,C,R = [],np.zeros([Ly,Lx]),0,0  # maps to level frame
+        iy,ix = _iy,_ix; cy,cx = (Ly-1)//2, (Lx-1)//2; y,x = cy,cx  # start=mean
+        T_, PV__,C,R = [],np.zeros([Ly,Lx]),0,0  # tiles, maps to level frame
         while True:
-            # each loop adds one tile to lev_frame
             if not elev: T = base_tile(iy, ix)
             if T and val_(T.dTT,T.r+cFrm+elev, T.wTT*ttFrm, mw=(len(T.N_)-1)*Lw) > 0:
-                frame[y,x] = T; T_ += [T]
-                dy_dx = np.array([T.yx[0]-y, T.yx[1]-x]); pTT = proj_N(T, np.hypot(*dy_dx), dy_dx, elev,T.c)
+                frame[y,x] = T; T_ += [T]  # loop adds one tile to level
+                dy_dx = np.array([T.yx[0]-y, T.yx[1]-x])
+                pTT = proj_N(T, np.hypot(*dy_dx), dy_dx, elev,T.c)
                 if 0 < val_(pTT, elev, T.wTT*ttFrm) < ave:  # extend lev by combined proj T_
                     proj_focus(PV__,y,x, T)  # PV__+= pV__
                     pv__ = PV__.copy(); pv__[frame != None] = 0  # exclude processed
