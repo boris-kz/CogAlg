@@ -489,3 +489,37 @@ def cluster_C1(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround 
     return out_,r
 
 def vQ(Q): return [i for i in Q if i is not None]  # valid Cs or vals
+
+def val_1(TT, r, wTT=wTT, mw=1.0,fi=1, _TT=None, cr=.5):  # m,d eval per cluster, cr = cd / cm+dc, default half-weight?
+
+    t_ = eps_(TT[0] + np.abs(TT[1]))  # comb val/attr, match can be negative?
+    rv = TT[0] / t_ @ wTT[0] if fi else TT[1] / t_ @ wTT[1]  # fork / total per scalar
+    if _TT is not None:
+        _t_ = eps_(np.abs(_TT[0]) + np.abs(_TT[1]))
+        _rv = _TT[0] / _t_ @ wTT[0] if fi else _TT[1] / _t_@ wTT[1]
+        rv  = rv * (1-cr) + _rv * cr  # + borrowed alt fork val, cr: d count ratio, must be passed with _TT?
+    return rv*mw - (ave if fi else avd) * r
+
+def sum2C2(N_, m_,d_, root=None, final=0, wO=wcC):  # fuzzy sum + base attrs for centroids
+
+    a = 'rTT' if fr else 'dTT'
+    c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); rc_ = c_/C
+    TT = np.einsum('i,ijk->jk', rc_, np.stack([getattr(n,a) for n in N_]))  # weighted sum
+    R  = rc_ @ np.array([n.r  for n in N_])  # wC = rc_ @ np.array([getattr(n,'wc',1) for n in N_])
+
+    TT= np.zeros((2,9)); kern= np.zeros(4); yx= np.zeros(2); T= R= span= 0
+    M = sum(m_) or eps  # C-normalizer
+    A = np.zeros(2)  # for base_comp
+    for N, m in zip(N_,m_):
+        w = m/M; TT+= N.dTT*w; kern+= N.kern*w; span+= N.span*w; yx+= N.yx*w; R+= N.r*w; A += N.angl[0]; T+=N.c  # not weighted
+    wTT = cent_TT(TT,R)* wO; m,d = vt_(TT,wTT)  # set param correlation weights
+    C = F2N(CF())(typ=3, N_=N_,dTT=TT,m=m,d=d,c=T,r=R, root=root, wTT=wTT, yx=yx,kern=kern,span=span)
+    C.angl = np.array([A, np.sign(C.dTT[1] @ ttcN[1])], dtype=object); C.m_=m_; C.d_=d_
+    for n,m,d in zip(N_,m_,d_):
+        n.c_ += [C]; n.m_ = [m]; n.d_ = [d]  # mapping-C vals
+    if final:
+        C.L_ = []
+        for N in N_:
+            dy_dx = C.yx-N.yx; span = np.hypot(*dy_dx); angl = np.array([dy_dx, np.sign(N.dTT[1] @ ttcN[1])], dtype=object)
+            C.L_ += [CN(typ=1,nt=[C,N],dTT=N.dTT,c=N.c,r=N.r,m=N.m,d=N.d,span=span,angl=angl)]  # for proj_C?
+    return C
