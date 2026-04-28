@@ -2,7 +2,7 @@
 import ast
 from agg_recursion import onF_
 
-def init_wc(path):
+def init_wc(paths):
     # compute weights based on operations in function, independent of deeper callees
     def get_ops(node):
         weights = {
@@ -25,13 +25,19 @@ def init_wc(path):
         }
         return sum(weights.get(type(n), 0) for n in ast.walk(node))
 
-    with open(path, "r", encoding="utf-8") as f:
-        tree = ast.parse(f.read(), filename=path)
+
     # onF_+ vt_ names and function objects:
-    funcs = {func.name: func for func in ast.walk(tree) if isinstance(func, ast.FunctionDef) and (func.name in onF_ or func.name=='vt_')}
+    funcs = {}
+    for path in paths:
+        with open(path, "r", encoding="utf-8") as f:
+            tree = ast.parse(f.read(), filename=path)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and (node.name in onF_ or node.name == 'vt_'):
+                funcs[node.name] = node
+
     base = get_ops(funcs.pop('vt_'))  # denominator
-    return [(get_ops(funcs[name]) / base) for name in onF_]
+    return [round(get_ops(funcs[name]) / base) for name in onF_]
 
 if __name__ == "__main__":
-    fc_ = init_wc("agg_recursion.py")
+    fc_ = init_wc(("agg_recursion.py", "comp_slice.py"))
     print(f"Weights = {fc_}")
