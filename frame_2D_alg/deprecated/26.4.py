@@ -117,21 +117,22 @@ def add2F(F, n, fr=0, merge=0):
     if getattr(n,'H',None): add_H(F.H, n.H, F)
     if hasattr(n,'C_'): F.C_ = getattr(F, 'C_', []) + n.C_  # same for L_?
 
-def sum2F(N_, root, fr=0, merge=0, froot=0):  # -> CF/CN
+def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0):  # -> CF/CN
 
-    _C=root.c; n=N_[0]; C=n.c; TT,R,wC = np.zeros((2,9)),0,0
-    vt_ = [[n.rTT if fr else n.dTT], n.c, n.r, n.wc, n.H]
-    for n in N_:
-        vt_ += [[n.rTT if fr else n.dTT], n.c, n.r, n.wc, n.H]
-        if merge: root.N_ += n.N_ if merge>1 else [n]
-        if froot: n.root = root
-    for tt,c,r,wc,H in N_:
-        rc = c/C; TT += tt*rc; R+=r*rc; wC+=wc*rc; add_H(root.H,H, root, rc)
-    new = CF(N_=N_, dTT=TT, c=C, r=R/C, wc=wC, H=H)
-    if _C: add2F(root,new)
-    else: root=new
-    if getattr(root,'C_',None):  # same for L_,H, etc?
-        root.Ct = sum2F(root.C_,CF(root=root))  # external init R, setattr(root, nF,R)
+    c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); w_ = c_/C
+    for i, (n,w) in enumerate(zip(N_,w_)):
+        if i: TT+=n.dTT*w; R+=n.r*w; n_ += n.N_ if merge>1 else [n] if merge else []
+        else: TT = n.dTT*w; R=n.r*w; n_=[]
+    if not merge: n_ = N_
+    F = CF(N_=n_, dTT=TT, c=C, r=R)
+    if np.any(m_): F.typ=3; F.m_,F.d_=m_,d_; F.m,F.d=sum(m_),sum(d_); F.kern=n.kern*w
+    else:  F.m, F.d = vt_(TT)
+    root = add2F(root,F) if root!=None else F
+    if froot:
+        for n in N_: n.root=root
+    sum_H(N_, root)
+    if getattr(root,'C_',None):
+        root.Ct = sum2F(root.C_, CF(root=root))
     return root
 
 def sum_H(N_, Ft, rc_):
@@ -523,3 +524,34 @@ def sum2C2(N_, m_,d_, root=None, final=0, wO=wcC):  # fuzzy sum + base attrs for
             dy_dx = C.yx-N.yx; span = np.hypot(*dy_dx); angl = np.array([dy_dx, np.sign(N.dTT[1] @ ttcN[1])], dtype=object)
             C.L_ += [CN(typ=1,nt=[C,N],dTT=N.dTT,c=N.c,r=N.r,m=N.m,d=N.d,span=span,angl=angl)]  # for proj_C?
     return C
+
+class CoF1(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
+    name = "func"
+    _cur = contextvars.ContextVar('oF')
+    _W_,_C_ = np.zeros(len(onF_)),np.zeros(len(onF_))  # sum called oF weights and costs, global Fw_ is not summed
+    def __init__(f, **kw):
+        super().__init__(**kw)
+        f.call_= kw.get('call_',[])  # tree
+        f.typ_ = kw.get('typ_', [])  # flattened and nested with tFs
+    @staticmethod
+    def get(): return CoF._cur.get(Z)
+    @staticmethod
+    def traced(func):
+        if getattr(func,'wrapped',False): return func
+        @wraps(func)
+        def inner(*a, **kw):
+            _CoF = CoF._cur.get()
+            oF = CoF(nF=onF_.index(func.__name__), root=_CoF); oF.wTT = FTT_[oF.nF]; oF.wc = Fc_[oF.nF]; _CoF.call_+=[oF]
+            CoF._cur.set(oF); out = func(*a, **kw)
+            if oF.call_:  # complete at this point
+                if (len(flat_(oF))-1)*Lw > ave*(_CoF.wc+oF.r):
+                    sum2F(oF.call_,oF)  # represents all nested call_s
+            oF.wTT= cent_TT(getattr(oF,'rTT',oF.dTT), oF.r)  # rTT covers cluster compression
+            oF.w += np.mean(wTT)  # default Fw_[oF.nF], * c, / r?
+            _CoF._W_[oF.nF] += Fw_[oF.nF]  # nF is index in onF_
+            _CoF._C_[oF.nF] += Fc_[oF.nF]
+            CoF._cur.set(_CoF)
+            return out
+        inner.wrapped = True
+        return inner
+    def __bool__(f): return bool(f.call_)
