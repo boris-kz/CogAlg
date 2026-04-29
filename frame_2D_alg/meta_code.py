@@ -38,5 +38,5 @@ def init_wc(paths):
     return [round(get_ops(funcs[name]) / base) for name in onF_]
 
 if __name__ == "__main__":
-    fc_ = init_wc(("agg_recursion.py", "comp_slice.py"))
+    fc_ = init_wc(("agg_recursion.py", "comp_slice.py","slice_edge.py"))
     print(f"Weights = {fc_}")
