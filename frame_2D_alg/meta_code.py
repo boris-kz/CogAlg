@@ -25,7 +25,6 @@ def init_wc(paths):
         }
         return sum(weights.get(type(n), 0) for n in ast.walk(node))
 
-
     # onF_+ vt_ names and function objects:
     funcs = {}
     for path in paths:
