@@ -555,3 +555,9 @@ class CoF1(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
         inner.wrapped = True
         return inner
     def __bool__(f): return bool(f.call_)
+
+def F2N(F):  # extend for cross_comp F.N_
+    F.N_, F.L_, F.B_, F.C_, F.X_, F.rim = prop_F_('Nt'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Ct'),prop_F_('Xt'),prop_F_('Rt')
+    F.Nt, F.Lt, F.Bt, F.Ct, F.Xt, F.Rt = sum2F(F.N_), CF(typ='Lt'), CF(typ='Bt'), CF(typ='Ct'), CF(typ='Xt'), CF(typ='Rt')
+    F.compared = set(); F.fin = 0
+    F.__class__ = CN
