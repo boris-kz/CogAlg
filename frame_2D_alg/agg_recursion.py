@@ -147,6 +147,7 @@ class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
             CoF._cur.set(oF); out = func(*a, **kw)
             if oF.call_:  # complete at this point
                 cT = flat_(oF); L=(len(cT)-1)  # flatten call tree
+                # sum2F here is packing CoF into CoF.N_?
                 if oF.fw*L > ave*(oF.fc*L): sum2F(cT,oF)  # eval summarize, fc*fr if multiple oFs on the same data?
             oF.wTT= cent_TT(getattr(oF,'rTT',oF.dTT), oF.r)  # rTT covers cluster compression
             oF.w += np.mean(oF.wTT)
@@ -206,6 +207,7 @@ def cross_comp(Ft, rr):  # core function mediating recursive rng+ and der+ cross
             E_ = get_exemplars({N for L in L_ for N in L.nt}, r,c)
             G_,r = cluster_N(Ft, E_,r,c)  # -> cluster_C,_P, eval?
             if G_:
+                root.H += [sum2F(L_, root)]  # replaces Nt, but pack from L_
                 root.Nt = sum2F(G_,CF(root=root),froot=1); L=len(G_)-1  # or G.N_ = spliced C_ if higher value?
                 if vt_(TT,ttX)[0]* (wX*L) > ave* (r+cX*L):  # root borrw| rdn?
                     G_,r = cross_comp(root.Nt,r)  # agg+
@@ -316,7 +318,7 @@ def comp_N(_N,N, r,_c, full=1, A=np.zeros(2),span=None, rL=None, L_=None, N_=Non
     TT= base_comp(_N,N)[0] if full else comp_derT(_N.dTT[1],N.dTT[1]); m,d = vt_(TT, ttN_)
     L = CN(typ=1, nt=[_N,N], dTT=TT,m=m,d=d,c=_c,r=r, root=rL, exe=1)
     if N.typ > 0 and m*wF > ave*(r+cF):
-        dH,htt,C,R = comp_H(_N.Nt, N.Nt, L); r+=R  # tentative subcomp
+        dH,htt,C,R = comp_H(_N, N, L); r+=R  # tentative subcomp
         if m + vt_(htt,ttN_)[0]*wN_> ave*(r+cN_):  # subcomp -> tFs in L:
             if abs(N.typ) ==1:
                 for _n,n in product(_N.nt,N.nt): L.Nt.fb_ += [comp_N(_n,n,r,_c)]  # link sub-comp
@@ -327,7 +329,7 @@ def comp_N(_N,N, r,_c, full=1, A=np.zeros(2),span=None, rL=None, L_=None, N_=Non
                         r = (i or 1) -1  # Nt,Lt are core, not redundant
             for fb_, nF in zip((L.Nt.fb_,L.Lt.fb_,L.Bt.fb_,L.Ct.fb_), ('Nt','Lt','Bt','Ct')):
                 if fb_:  # += trans-links, python-batched bottom-up
-                    Ft = sum2F(fb_, getattr(L,nF)); add2F(L,Ft)
+                    sum2F(fb_, getattr(L,nF))  # add2F(L,Ft,merge=1) This add2F is redundant now since we already have add2F when root is not empty
             sum2F([L.Nt,L.Lt,L.Bt,L.Ct], CoF.get())
     if full:
         if span is None: span = np.hypot(*_N.yx - N.yx)
@@ -354,10 +356,10 @@ def comp_F(_F, F, ir=0, rL=None):
             else: Np_ = list(product(_N_,N_))  # pairs
             L = len(Np_)-1
             if np.mean([rL.m,m])* (wF*L) > ave* (r+cF*L):
-                if f: L_= [comp_F(*Np, r,rL=dF) for Np in Np_]; TT,C,R = sum_vt(L_, wTT=ttF)
+                if f: L_= [L for Np in Np_ for L in comp_F(*Np, r,rL=dF).N_]; TT,C,R = sum_vt(L_, wTT=ttF)
                 else: L_,TT,C,R,_,_,_= comp_N_(Np_,r,nF,rL)
                 if L_:
-                    add2F(dF,CF(N_=L_,dTT=TT,c=C,r=R)); add2F(rL,dF); sum2F(L_,CoF.get())
+                    add2F(dF,CF(N_=L_,dTT=TT,c=C,r=R),merge=1); sum2F(L_,CoF.get())  # do we really need this "add2F(rL,dF)" here? This is packing dF to rL.N_, and rL.N_ should be dF.N_ only?
     return dF  # no cross-fork N_, no L ext updates?
 
 def base_comp(_N,N):  # comp Et, kern, extT, dTT
@@ -367,7 +369,7 @@ def base_comp(_N,N):  # comp Et, kern, extT, dTT
     rn = C/_C; mA=dA=0
     _pars = np.array([_M*rn,_D*rn,_C,_I*rn,_G*rn, [_Dy,_Dx],_L*rn,_N.span], dtype=object)  # Et, kern, extT
     pars  = np.array([M,D,C, (I,wI),G, [Dy,Dx], L,(N.span,wS)], dtype=object)
-    if _N.angl and N.angl:  # mostly Ls, some Gs
+    if hasattr(_N,'angl') and _N.angl and N.angl:  # mostly Ls, some Gs
         mA,dA = comp_A(_N.angl[0]*_N.angl[1], N.angl[0]*N.angl[1])
     m_,d_ = comp(_pars,pars, mA,dA)  # M,D,n, I,G,a, L,S,A
     dm_,dd_ = comp_derT(_N.dTT[1], N.dTT[1])
@@ -544,7 +546,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
         for n in [N for C in out_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals:
             n.exe = (n.d if n.typ==1 else n.m) + np.sum(n.m_) - ave
         if vt_(DTT,Ft.root.wTT*ttcC)[0]*wcC*(len(out_)-1) > ave*(r+ccC*(len(out_)-1)):
-            Ct = sum2F([F2N for C in out_],Ft.root.Ct)
+            Ct = sum2F([F2N(C) for C in out_],Ft.root.Ct)
             _,r = cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
             sel_TT = (Ct.dTT*Ct.c - Ft.dTT*Ft.c) / eps_(Ct.dTT * Ct.c)
             oF = CoF.get(); oF.N_=out_; oF.rTT=sel_TT; oF.r=Ct.r; oF.c = Ft.c-Ct.c  # data, select in Nt.N_?
@@ -611,7 +613,9 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0):  # -> CF/CN
     for i, (n,w) in enumerate(zip(N_,w_)):
         if i:
             TT+=n.dTT*w; R+=n.r*w; n_ += (n.N_ if merge else [n])
-            if fC: box=extend_box(box,n.box); kern+=n.kern*w; span+=n.span*w; yx+=n.yx*w; angl += n.angl[0] if n.angl is not None else None  # mostly Ls?
+            if fC: 
+                box=extend_box(box,n.box); kern+=n.kern*w; span+=n.span*w; yx+=n.yx*w; 
+                if n.angl is not None : angl += n.angl[0]  # mostly Ls?
             elif fO: Fw += n.m
         else:  # init with N_[0]
             TT = n.dTT*w; R=n.r*w; n_ = copy(n.N_ if merge else [n])
@@ -620,16 +624,19 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0):  # -> CF/CN
     F = (CoF if fO else CF)(N_=n_, dTT=TT, c=C, r=R)
     if fC:
         F.typ=3; F.m_,F.d_=m_,d_; F.m,F.d=sum(m_),sum(d_); F.box=box;F.kern=kern;F.span=span;F.yx=yx
-        if angl is not None: F.angl,np.sign(F.dTT[1] @ ttcP[1])
+        if angl is not None: F.angl = [angl, np.sign(F.dTT[1] @ ttcP[1])]
     else:
         F.m, F.d = vt_(TT)
         if fO: F.fw = Fw
     root = add2F(root,F,1) if (root!=None and not fC) else F
     if froot:
         for n in N_: n.root=root
-    sum_H(N_, root)
-    if getattr(root,'C_',None):
-        root.Ct = sum2F(root.C_, CF(root=root))
+     
+    if root and not isinstance(root, CoF):  # not valid for CoF?
+        rroot = root if isinstance(root,CN) else root.root
+        if rroot: sum_H(N_, rroot)  # sum H into Ft.root
+        if getattr(root,'C_',None):
+            root.Ct = sum2F(root.C_, CF(root=root))
     return root
 
 def add2F(F, n, merge=0, fr=0):  # unpack for batching in sum2F
@@ -658,7 +665,7 @@ def sum_H(N_, Ft):
     for N in N_:
         if H: H[0] += N.N_
         elif N.N_: H = [list(N.N_)]
-    Ft.H = [sum2F(H[0], CF())] if H else []
+    Ft.H += [sum2F(H[0], CF())] if H else []  # should be append here? Else it overwrites existing levels
 
 def sum2G(ft_, root=None, init=1, typ=None):
 
@@ -700,8 +707,8 @@ def comb_Ft(Nt, Lt, Bt, Ct, root,wTT):  # from sum2G, default Nt
     for Ft in Lt, Bt:  # connectivity forks, Ct is not directly combined and compared, rdn only?
         if Ft: dF_ += [comp_F(T, Ft, root.r,G)]; T.dTT,T.c,T.r = sum_vt([T,Ft],wTT=wTT)  # Bt*brrw?
         else:  dF_ += [CF()]
-    add2F(G,T)
-    if any(dF_): sum2F(dF_,G.Xt); add2F(G,G.Xt)  # cross-fork covariance
+    add2F(G,T,merge=1)
+    if any(dF_): sum2F(dF_,G.Xt)  # add2F(G,G.Xt)  # cross-fork covariance  (same here, add2F is already called within sum2F)
     add_Nt(G,Nt)  # add H,kern,ext, doesn't affect comp_F
     if Lt: add_Lt(G, Lt,wTT)
     G.m,G.d = vt_(G.dTT, wTT)  # recompute m and d after add_Nt and add_Lt above
@@ -709,11 +716,12 @@ def comb_Ft(Nt, Lt, Bt, Ct, root,wTT):  # from sum2G, default Nt
 
 def add_Nt(G, Nt, merge=0):  # addition to sum2F
 
-    if isinstance(Nt,CF) and G.Nt.H and Nt.H:  # also Ct.H if separate?
-        add_H(G.Nt.H if merge else G.Nt.H[:-1], Nt.H, G)  # else top lev = Nt.N_
+    NtH = Nt.root.H if isinstance(Nt,CF) else Nt.H
+    if isinstance(Nt,CN) and G.H and NtH:  # also Ct.H if separate?
+        add_H(G.H if merge else G.H[:-1], NtH, G)  # else top lev = Nt.N_
     N_ = Nt.N_
     if merge: G.N_ += N_ # never 2
-    else:     G.Nt.H += [sum2F(N_+ (G.Nt.H.pop().N_ if G.Nt.H else []), G.Nt)]  # extend or init top level
+    else:     G.H += [sum2F(N_+ (G.H.pop().N_ if G.H else []), G)]  # extend or init top level
     yx_ = []; C = G.c + Nt.c  # G is empty?
     for N in N_:
         N.fin = 1; N.root = G; c = N.c
@@ -745,9 +753,10 @@ def F2N(F):  # convert for cross_comp
     F.__class__ = CN
     for k,v in dict(H=[],kern=np.zeros(4),span=1,angl=None,mang=1,box=np.array([np.inf,np.inf,-np.inf,-np.inf]),yx=np.zeros(2),sub=0,exe=0,fin=0,nt=[],c_=[]).items():
         setattr(F,k, copy(v))
-    if L_: F.H += sum2F(L_,F)  # level Ls only
+    if L_: F.H += [sum2F(L_,F)]  # level Ls only
     for ft in ('Lt','Ct','Bt','Xt','Rt'): setattr(F, ft, CF(root=F))
     F.Nt = Nt; F.compared = set()
+    return F
 
 def CopyF(F, root=None, r=1):  # F = CF
     C = CF(dTT=F.dTT*r, m=F.m, d=F.d, c=F.c, r=F.r, root=root or F.root, nF=F.nF)
