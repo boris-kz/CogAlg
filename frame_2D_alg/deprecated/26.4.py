@@ -561,3 +561,38 @@ def F2N(F):  # extend for cross_comp F.N_
     F.Nt, F.Lt, F.Bt, F.Ct, F.Xt, F.Rt = sum2F(F.N_), CF(typ='Lt'), CF(typ='Bt'), CF(typ='Ct'), CF(typ='Xt'), CF(typ='Rt')
     F.compared = set(); F.fin = 0
     F.__class__ = CN
+
+def add2F1(F, n, merge=0, fr=0):  # unpack for batching in sum2F
+
+    a = 'rTT' if fr else 'dTT'  # or wTT?
+    if F.c:
+        C=F.c+n.c; _w,w = F.c/C, n.c/C; F.r = F.r*_w + n.r*w; F.c = C
+        if isinstance(F,CoF) and isinstance(n,CoF): F.fw += n.m  # sum subtree gain, fixed cost, extensive: no weighting?
+        setattr(F, a, getattr(F,a)*_w + getattr(n,a)*w)
+    else:
+        setattr(F,a,getattr(n,a)); F.c=n.c; F.r=n.r
+        if isinstance(F,CoF) and isinstance(n,CoF): F.fw=n.m
+    F.N_ += (n.N_ if merge else [n])
+    if hasattr(F,'H') and getattr(n,'H',None): add_H(F.H, n.H, F)
+    if hasattr(n,'C_'): F.C_ = getattr(F,'C_',[]) + n.C_  # same for L_?
+    return F
+
+def add_H(H,h, root, fN=0):
+    # bottom-up:
+    for Lev,lev in zip_longest(H, h):
+        if lev:
+            if Lev: add2F(Lev,lev,1)
+            else: H.append((CopyF,Copy_)[fN](lev, root))
+
+def sum_H1(N_, Ft):  # merge L.H to lev, if any
+    H = []
+    for N in N_:
+        if H: H[0] += N.N_
+        elif N.N_: H = [list(N.N_)]
+    Ft.H = [sum2F(H[0], CF())] if H else []
+
+def prop_F_(F):  # factory function to get and update top-composition fork.N_
+    def get(N): return getattr(N,F).N_
+    def set(N, new_N): setattr(getattr(N,F),'N_', new_N)
+    return property(get,set)
+
