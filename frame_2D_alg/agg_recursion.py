@@ -110,6 +110,7 @@ class CF(CBase):  # clustering fork: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, 
         super().__init__()
         f.N_ = kw.get('N_',[])  # flat top lev, calls in oF, all sub-forks added conditionally
         f.L_ = kw.get('L_',[])  # +-Ls in levs or cLs in C
+        f.H = kw.get('H',[])    # lower CF levs / Nt||Ct
         f.nF = kw.get('nF','Nt')
         f.dTT = kw.get('dTT',np.zeros((2,9))); f.m, f.d, f.c, f.r = [kw.get(x,0) for x in ('m','d','c','r')]  # rdpTT in oF?
         f.wTT = kw.get('wTT',wTT); f.w = kw.get('w',0)  # or np.sum(wTT)
@@ -207,8 +208,8 @@ def cross_comp(root, rr):  # core function mediating recursive rng+ and der+ cro
             G_,r = cluster_N(root, E_,r,c)  # -> cluster_C,_P, eval?
             if G_:
                 if isinstance(root,CF): F2N(root)  # upgrade @ 1st sub|agg+
-                root.H += [sum2F(L_,root)]  # L_ only: lev= new derivatives
-                root.Nt = sum2F(G_,CF(root=root),froot=1); L=len(G_)-1  # or G.N_ = spliced C_ if higher value?
+                root.H += [sum2F(L_,root,fF=1)]  # L_ only: lev= new derivatives
+                root.Nt = sum2F(G_,CF(root=root)); L=len(G_)-1  # or G.N_ = spliced C_ if higher value?
                 if vt_(TT,ttX)[0]* (wX*L) > ave* (r+cX*L):  # root borrw| rdn?
                     G_,r = cross_comp(root.Nt,r)  # agg+
     return G_, r  # G_ is recursion flag
@@ -496,7 +497,7 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
         C_ = [C for N in (G_ if G_ else _N_) for C in N.Ct.N_]
         if C_:
             sum2F(C_, root=Ft.root.Ct)  # Ct.r includes overlap?
-            Ft.root.Ct.Lt = sum2F([L for C in C_ for L in C.L_], root=Ft.root.Ct)
+            Ft.root.Ct.Lt = sum2F([L for C in C_ for L in C.L_], root=Ft.root.Ct, fF=1)
     return G_, r
 
 def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
@@ -525,7 +526,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
             if M*(_C.m+ wC_*len(n_)+wC_*len(n_)) > Ave*(r+_C.r+ cC_*len(n_)):  # else: Up+= sum(_C._m_)+ sum([abs(d) for d in _C._d_])?
                 for n in [_n for n in n_ for l in n.rim for _n in l.nt if _n is not n]:
                     N__ += [n]  # +|-Ls
-                C = sum2F(n_,Ft, m_,d_)
+                C = sum2F(n_,Ft, m_,d_, fF=1)
                 C._N_ = list(set(N__)- set(n_))  # new frontier
                 if D<Avd: out_+=[C]  # output if stable
                 else:     C_ += [C]  # reform
@@ -566,7 +567,7 @@ def cluster_P(_C_, _c, root):  # FCM-style parallel centroid refine, may add pro
         for j,N in enumerate(N_):
             for i,C in enumerate(_C_):
                 TT,_ = base_comp(C,N); md__[j,i] = vt_(TT, ttcP)  # use rc?
-        C_ = [sum2F(N_, root, md__[:,i,0], md__[:,i,1]) for i in range(Lc)]
+        C_ = [sum2F(N_, root, md__[:,i,0], md__[:,i,1],fF=1) for i in range(Lc)]
         Mt = md__[:,:,0].sum()  # total V
         dM = np.abs(md__[:,:,0] -_md__[:,:,0]).sum()
         dD = np.abs(md__[:,:,1] -_md__[:,:,1]).sum()  # updates
@@ -581,7 +582,7 @@ def cluster_P(_C_, _c, root):  # FCM-style parallel centroid refine, may add pro
             for N, m,d in zip(_C.N_, md__[:,i,0], md__[:,i,1]):
                 if m*N.c > ave*N.r: N_+=[N]; m_+=[m]; d_+=[d]
             if N_:
-                C = sum2F(N_,root, m_,d_)
+                C = sum2F(N_,root, m_,d_, fF=1)
                 C.L_= [CN(typ=1,nt=[N,C], dTT=N.dTT,c=N.c,r=N.r,m=N.m,d=N.d, span=np.hypot(*(dy_dx:=C.yx-N.yx)), angl=[dy_dx,np.sign(N.dTT[1]@ttcN[1])])
                        for N in N_]  # form C-to-N links
                 out_ += [C]
@@ -606,7 +607,7 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
         _wTT = np.array(wTT); wTT = []
     return _wTT  # single-mode dTT, extend to 2D-3D lev cycles in H, cross-level param max / centroid?
 
-def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0):  # -> CF/CN
+def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, fF=0):  # -> CF/CN
 
     c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); w_ = c_/C
     fO = isinstance(N_[0],CoF); fC = np.any(m_)
@@ -621,7 +622,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0):  # -> CF/CN
             TT = n.dTT*w; R=n.r*w; n_ = copy(n.N_ if merge else [n])
             if fC: box=copy(n.box); kern=n.kern*w; span=n.span*w; yx=n.yx*w; angl = copy(n.angl[0]) if n.angl is not None else None
             elif fO: Fw = n.m
-    F = (CoF if fO else CF)(N_=n_, dTT=TT, c=C, r=R)
+    F = (CoF if fO else CF)(dTT=TT, c=C, r=R); setattr(F, 'call__' if fO else 'N_', n_)  # call__ to pack flatten call__
     if fC:
         F.typ=3; F.m_,F.d_=m_,d_; F.m,F.d=sum(m_),sum(d_); F.box=box;F.kern=kern;F.span=span;F.yx=yx
         if angl is not None: F.angl = [angl, np.sign(F.dTT[1] @ ttcP[1])]
@@ -633,7 +634,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0):  # -> CF/CN
         if getattr(root,'C_',None): root.Ct = sum2F(root.C_, CF(root=root))
     if froot:
         for n in N_: n.root=root
-    return root
+    return F if fF else root  # we may need to return F? I guess we need another flag to return F or root?
 
 def add2F(F, n, merge=0, fr=0):  # unpack for batching in sum2F
 
@@ -710,7 +711,7 @@ def add_Nt(G, Nt, merge=0):  # addition to sum2F
         add_H(G.H if merge else G.H[:-1], Nt.H, G)  # else top lev = Nt.N_
     N_ = Nt.N_
     if merge: G.N_ += N_
-    else:     G.H += [sum2F(N_+ (G.H.pop().N_ if G.H else []), G)]  # init or extend top level
+    else:     G.H += [sum2F(N_+ (G.H.pop().N_ if G.H else []), G, fF=1)]  # init or extend top level
     yx_ = []; C = G.c + Nt.c  # G is empty?
     for N in N_:
         N.fin = 1; N.root = G; c = N.c
@@ -739,12 +740,13 @@ def add_Lt(G, Lt,wTT):  # addition to Q2R
 def F2N(F):  # convert for cross_comp
 
     Nt = CopyF(F, root=F); Nt.N_ = F.N_; L_ = F.L_  # replace in cross_comp
-    F.__class__ = CN
-    for k,v in dict(H=[],kern=np.zeros(4),span=1,angl=None,mang=1,box=np.array([np.inf,np.inf,-np.inf,-np.inf]),yx=np.zeros(2),sub=0,exe=0,fin=0,nt=[],c_=[]).items():
-        setattr(F,k, copy(v))
-    if L_: F.H += [sum2F(L_,F)]  # level Ls only
+    F.__class__ = CN; F.Nt = Nt;
+    # H is in Nt.H now, we can skip it
+    for attr,v in dict(kern=np.zeros(4),span=1,angl=None,mang=1,box=np.array([np.inf,np.inf,-np.inf,-np.inf]),yx=np.zeros(2),sub=0,exe=0,fin=0,nt=[],c_=[]).items():
+        setattr(F,attr, copy(v))
+    if L_: F.H += [sum2F(L_,F,fF=1)]  # level Ls only
     for ft in ('Lt','Ct','Bt','Xt','Rt'): setattr(F, ft, CF(root=F))
-    F.Nt = Nt; F.compared = set()
+    F.compared = set()
     return F
 
 def CopyF(F, root=None, r=1):  # F = CF
