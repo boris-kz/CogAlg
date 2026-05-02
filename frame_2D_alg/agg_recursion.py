@@ -66,44 +66,6 @@ FTT_= [deepcopy(wTT) for _ in range(16)]; ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP,
 eps = 1e-7
 def eps_(a): return np.where(a==0, eps, a)
 
-def prop_F_(F, attr='N_'):  # factory function to get and update top-composition fork.N_|H
-    def get(N): return getattr(getattr(N,F), attr)
-    def set(N, new_val): setattr(getattr(N,F), attr, new_val)
-    return property(get,set)
-
-class CN(CBase):  # full node / graph attrs:
-    name ="node"  # ext|int - defined Ns,Ls:
-    N_,C_,L_,B_,X_,rim,H = prop_F_('Nt'),prop_F_('Ct'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Xt'),prop_F_('Rt'),prop_F_('Nt','H')
-    def __init__(n, **kw):
-        super().__init__()
-        n.typ = kw.get('typ', 0)
-        # 0= PP: block trans_comp, etc?
-        # 1= L:  typ,nt,dTT, m,d,c,r, root,rng,yx,box,span,angl,fin,compared, Nt,Bt,Ct from comp_sub
-        # 2= G:  + rim,kern,mang,sub,exe; +-Lt if N_ is sub-clustered?
-        # 3= C | Cn: +rN_| m_,d_,r_,o_
-        n.wTT = kw.get('wTT',wTT)  # set as oF.wTT if any, re-weight in cent_TT
-        n.dTT = kw.get('dTT',np.zeros((2,9)))  # Nt+Lt+Bt, Ct is separate, all m_,d_ [M,D,n, I,G,a, L,S,A]
-        n.m, n.d, n.c, n.r = [kw.get(x,0) for x in ('m','d','c','r')]  # combined-fork vals
-        n.Nt,n.Bt,n.Ct,n.Lt,n.Xt,n.Rt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Ct','Lt','Xt','Rt')))  # CN if nest, Ct||Nt
-        n.root = kw.get('root',None)  # immediate
-        n.kern = kw.get('kern',np.zeros(4))  # I,G,A: not ders, in links for simplicity, mostly redundant
-        n.span = kw.get('span',1)  # distance in nodet or aRad, comp with kern or len(N_)
-        n.angl = kw.get('angl',None)  # (dy,dx),dir, sum from L_, rarely?
-        n.mang = kw.get('mang',1)  # ave match of angles in L_, =1 in links
-        n.box  = kw.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
-        n.yx = kw.get('yx', np.zeros(2))  # [(y+Y)/2,(x,X)/2], from nodet, then ave node yx
-        n.H  = kw.get('H', [])  # lower CF levs / Nt||Ct
-        n.nt = kw.get('nt',[])  # L nodet
-        n.c_ = kw.get('c_',[])  # reciprocal root Cs
-        n.nF = kw.get('nF','Nt')  # to set attr in root_update
-        n.fb_ = kw.get('fb_',[])
-        n.sub = 0  # composition depth relative to top-composition peers?
-        n.exe = kw.get('exe',0)  # exemplar, temporary
-        n.fin = kw.get('fin',0)  # clustered, temporary
-        n.compared = set()
-        # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
-    def __bool__(n): return bool(n.c)
-
 class CF(CBase):  # clustering fork: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int- defining links, Lt/Ft, Ct/lev, Bt/G
     name ="fork"  # add sub-forks by F2N
     def __init__(f, **kw):
@@ -117,6 +79,49 @@ class CF(CBase):  # clustering fork: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, 
         f.typ = kw.get('typ',0)  # blocks sub_comp
         f.root = kw.get('root',None)
     def __bool__(f): return bool(f.c)  # N_ may be empty?
+
+class CL(CF):  # typ=1, add kern+positionals for base comp, Rt,Nt,Bt,Ct from comp_sub F2N
+    name = "link"
+    def __init__(l, **kw):
+        super().__init__(**kw)
+        l.nt = kw.get('nt',[])  # nodet
+        l.yx = kw.get('yx', np.zeros(2))  # mean nodet? comp box is not meaningful?
+        l.kern = kw.get('kern',np.zeros(4))  # I,G,A diffs in links
+        l.span = kw.get('span',1)  # distance in nodet or aRad, comp with kern or len(N_)
+        l.angl = kw.get('angl',None)  # (dy,dx),dir, sum from L_, rarely?
+        l.typ  = kw.get('typ',1)  # blocks sub_comp
+
+class CC(CL):  # typ=2, adds arrays per N_
+    name = "cent"
+    def __init__(c, **kw):
+        super().__init__(**kw)
+        c.m_ = kw.get('m_',[])  # add _m_,_d_,_c_?
+        c.d_ = kw.get('d_',[])
+        c.c_ = kw.get('c_',[])  # c.r_ = kw.get('r_',[]), c.o_ = kw.get('o_',[])?
+        c.typ = kw.get('typ',2)
+
+def prop_F_(F, attr='N_'):  # factory function to get and update top-composition fork.N_|H
+    def get(N): return getattr(getattr(N,F), attr)
+    def set(N, new_val): setattr(getattr(N,F), attr, new_val)
+    return property(get,set)
+
+class CN(CL):  # full node | graph fork set
+    name = "node"  # ext|int -defined Ns,Ls:
+    N_,C_,L_,B_,X_,rim,H = prop_F_('Nt'),prop_F_('Ct'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Xt'),prop_F_('Rt'),prop_F_('Nt','H')
+    def __init__(n, **kw):
+        super().__init__(**kw)
+        n.H  = kw.get('H', [])  # lower CF levs / Nt||Ct
+        n.c_ = kw.get('c_',[])  # reciprocal root Cs
+        n.Nt,n.Bt,n.Ct,n.Lt,n.Xt,n.Rt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Ct','Lt','Xt','Rt')))  # CN if nest, Ct||Nt
+        n.mang = kw.get('mang',1)  # ave match of angles in L_, =1 in links
+        n.box  = kw.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
+        n.sub = 0  # composition depth relative to top-composition peers?
+        n.exe = kw.get('exe',0)  # exemplar, temporary
+        n.fin = kw.get('fin',0)  # clustered, temporary
+        n.compared = set()
+        n.typ = kw.get('typ',3)  # full comp
+        # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
+    def __bool__(n): return bool(n.c)
 
 # process selection:
 def flat_(oF, call_=None):  # all nested call_ s
@@ -147,7 +152,8 @@ class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
             CoF._cur.set(oF); out = func(*a, **kw)
             if oF.call_:  # complete at this point
                 call_ = flat_(oF); L=(len(call_)-1)  # flat call tree
-                if oF.fw*L > ave*(oF.fc*L): sum2F(call_,oF)  # eval summarize, fc*fr if multiple oFs on the same data?
+                if oF.fw*L > ave*(oF.fc*L):  # eval summarize, fc*fr if multiple oFs on the same data?
+                    sum2F(call_,oF)  # sum data only?
             oF.wTT= cent_TT(getattr(oF,'rTT',oF.dTT), oF.r)  # rTT covers cluster compression
             oF.w += np.mean(oF.wTT)
             CoF._cur.set(_CoF)
@@ -207,9 +213,9 @@ def cross_comp(root, rr):  # core function mediating recursive rng+ and der+ cro
             G_,r = cluster_N(root, E_,r,c)  # -> cluster_C,_P, eval?
             if G_:
                 if isinstance(root,CF): F2N(root)  # upgrade @ 1st sub|agg+
-                root.H += [sum2F(L_,root)]  # L_ only: lev= new derivatives
-                root.Nt = sum2F(G_,CF(root=root),froot=1); L=len(G_)-1  # or G.N_ = spliced C_ if higher value?
-                if vt_(TT,ttX)[0]* (wX*L) > ave* (r+cX*L):  # root borrw| rdn?
+                root.H+= [sum2F(L_,root,froot=1)]  # lev: L_+ derivatives
+                root.Nt = sum2F(G_,froot=1); L=len(G_)-1  # or spliced C_?
+                if vt_(TT,ttX)[0]*(wX*L) > ave*(r+cX*L):  # root brrw|rdn?
                     G_,r = cross_comp(root.Nt,r)  # agg+
     return G_, r  # G_ is recursion flag
 '''
@@ -606,34 +612,42 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
         _wTT = np.array(wTT); wTT = []
     return _wTT  # single-mode dTT, extend to 2D-3D lev cycles in H, cross-level param max / centroid?
 
-def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0):  # -> CF/CN
+def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0):  # -> CF/CL/CC/CN/CoF
 
-    c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); w_ = c_/C
-    fO = isinstance(N_[0],CoF); fC = np.any(m_)
+    c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); w_ = c_/C; N = N_[0]
+    fC = np.any(m_); fO = isinstance(N, CoF)
+    typ = 2 if fC else N.typ
+    cls_ = [CF,CL,CC,CN]
     for i, (n,w) in enumerate(zip(N_,w_)):
         if i:
             TT+=n.dTT*w; R+=n.r*w; n_ += (n.N_ if merge else [n])
-            if fC:
-                box=extend_box(box,n.box); kern+=n.kern*w; span+=n.span*w; yx+=n.yx*w;
-                if n.angl is not None : angl += n.angl[0]  # mostly Ls?
+            if typ:  # links and higher
+                kern+=n.kern*w; span+=n.span*w; yx+=n.yx*w
+                if n.angl is not None: angl += n.angl[0]
+                if typ==3: box=extend_box(box,n.box)
             elif fO: Fw += n.m
-        else:  # init with N_[0]
+        else:  # init
             TT = n.dTT*w; R=n.r*w; n_ = copy(n.N_ if merge else [n])
-            if fC: box=copy(n.box); kern=n.kern*w; span=n.span*w; yx=n.yx*w; angl = copy(n.angl[0]) if n.angl is not None else None
+            if typ:
+                kern=n.kern*w; span=n.span*w; yx=n.yx*w; angl = copy(n.angl[0]) if n.angl is not None else None
+                if typ==3: box=copy(n.box)
             elif fO: Fw = n.m
-    F = (CoF if fO else CF)(N_=n_, dTT=TT, c=C, r=R)
-    if fC:
-        F.typ=3; F.m_,F.d_=m_,d_; F.m,F.d=sum(m_),sum(d_); F.box=box;F.kern=kern;F.span=span;F.yx=yx
+    F = (CoF if fO else cls_[typ])(dTT=TT, c=C, r=R)
+    if typ:
+        F.N_ = n_; F.kern=kern; F.span=span; F.yx=yx
         if angl is not None: F.angl = [angl, np.sign(F.dTT[1] @ ttcP[1])]
-    else:
-        F.m, F.d = vt_(TT)
-        if fO: F.fw = Fw
+        if typ==2: F.m_,F.d_=m_,d_; F.m,F.d=sum(m_),sum(d_)
+        else:      F.m, F.d = vt_(TT)
+        if typ==3: F.box = box
+    elif fO: F.call_ = n_; F.fw = Fw; F.m, F.d = vt_(TT)
+    else:    F.N_ = n_; F.m,F.d = vt_(TT)
     if root:
-        add2F(root, F,2)
-        if getattr(root,'C_',None): root.Ct = sum2F(root.C_, CF(root=root))
+        if typ != 2: add2F(root, F, 1)  # don't fold centroid into root
+        if typ==3 and getattr(root,'C_',None):
+            root.Ct = sum2F(root.C_, CF(root=root))
     if froot:
-        for n in N_: n.root=root
-    return root
+        for n in N_: n.root = root or F
+    return F if typ==2 else (root or F)
 
 def add2F(F, n, merge=0, fr=0):  # unpack for batching in sum2F
 
