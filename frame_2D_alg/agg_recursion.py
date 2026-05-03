@@ -93,12 +93,12 @@ class CL(CF):  # typ=1, add kern+positionals for base comp, Rt,Nt,Bt,Ct from com
 
 class CC(CL):  # typ=2, adds arrays per N_
     name = "cent"
-    def __init__(c, **kw):
+    def __init__(ce, **kw):
         super().__init__(**kw)
-        c.m_ = kw.get('m_',[])  # add _m_,_d_,_c_?
-        c.d_ = kw.get('d_',[])
-        c.c_ = kw.get('c_',[])  # c.r_ = kw.get('r_',[]), c.o_ = kw.get('o_',[])?
-        c.typ = kw.get('typ',2)
+        ce.m_ = kw.get('m_',[])  # add _m_,_d_,_c_?
+        ce.d_ = kw.get('d_',[])
+        ce.c_ = kw.get('c_',[])  # c.r_ = kw.get('r_',[]), c.o_ = kw.get('o_',[])?
+        ce.typ = kw.get('typ',2)
 
 def prop_F_(F, attr='N_'):  # factory function to get and update top-composition fork.N_|H
     def get(N): return getattr(getattr(N,F), attr)
@@ -112,7 +112,7 @@ class CN(CL):  # full node | graph fork set
         n.Nt,n.Bt,n.Ct,n.Lt,n.Xt,n.Rt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Ct','Lt','Xt','Rt')))  # CN if nest, Ct||Nt
         super().__init__(**kw)
         n.H  = kw.get('H', [])  # lower CF levs / Nt||Ct
-        n.c_ = kw.get('c_',[])  # reciprocal root Cs
+        n.C_ = kw.get('C_',[])  # reciprocal root Cs
         n.mang = kw.get('mang',1)  # ave match of angles in L_, =1 in links
         n.box  = kw.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
         n.sub = 0  # composition depth relative to top-composition peers?
@@ -127,7 +127,7 @@ class CN(CL):  # full node | graph fork set
 def flat_(oF, call_=None):  # all nested call_ s
 
     if call_ is None: call_ = []
-    for sub in oF.N_:
+    for sub in oF.call_:
         call_ += [sub]
         if sub.N_: flat_(sub, call_)
     return call_
@@ -212,7 +212,7 @@ def cross_comp(root, rr):  # core function mediating recursive rng+ and der+ cro
             E_ = get_exemplars({N for L in L_ for N in L.nt}, r,c)
             G_,r = cluster_N(root, E_,r,c)  # -> cluster_C,_P, eval?
             if G_:
-                if isinstance(root,CF): F2N(root)  # upgrade @ 1st sub|agg+
+                if not hasattr(root,'H'): F2N(root)  # upgrade @ 1st sub|agg+
                 root.H+= [sum2F(L_,root,froot=1)]  # lev: L_+ derivatives
                 root.Nt = sum2F(G_,froot=1); L=len(G_)-1  # or spliced C_?
                 if vt_(TT,ttX)[0]*(wX*L) > ave*(r+cX*L):  # root brrw|rdn?
@@ -643,7 +643,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0):  # -> CF/CL/CC/CN/CoF
     elif fO: F.call_ = n_; F.fw = Fw; F.m, F.d = vt_(TT)
     else:    F.N_ = n_; F.m,F.d = vt_(TT)
     if root:
-        if typ != 2: add2F(root, F, 1)  # don't fold centroid into root
+        if typ != 2: add2F(root, F, 2)  # don't fold centroid into root
         if typ==3 and getattr(root,'C_',None):
             root.Ct = sum2F(root.C_)
     if froot:
@@ -681,7 +681,7 @@ def sum2G(ft_, root=None, init=1, typ=None):
     for ft, nF in zip_longest(ft_,('Nt','Lt','Bt')):
         if ft: n_,_,tt,c,r = ft; Ft_+= [CF(N_=n_,nF=nF,dTT=tt,m=(vt:=vt_(tt,ttTrc if typ == 2 else ttcN))[0],d=vt[1],c=c,r=r)]
         else:  Ft_ += [CF()]
-    C_ = [c for N in ft_[0][0] for c in N.Ct.N_]
+    C_ = [c for N in ft_[0][0] if hasattr(N, 'Ct') for c in N.Ct.N_]
     Ft_ += [sum2F(list(set(C_)), root.Ct) if C_ else CF()]  # add multiple root_ in Cs?
     G = comb_Ft(*Ft_, root, wTT=ttTrc if typ == 2 else ttcN)
     N_ = G.N_; N=N_[0]; G.sub = N.sub+1 if G.L_ else N.sub
@@ -707,12 +707,12 @@ def sum2G(ft_, root=None, init=1, typ=None):
 def comb_Ft(Nt, Lt, Bt, Ct, root,wTT):  # from sum2G, default Nt
 
     G = CN(Nt=Nt,Lt=Lt,Bt=Bt,Ct=Ct, root=root); Nt.root=G; Lt.root=G; Bt.root=G; Ct.root=G
-    T = CopyF(Nt)  # temporary accumulator
+    T = Nt  # temporary accumulator
     dF_ = []
     for Ft in Lt, Bt:  # connectivity forks, Ct is not directly combined and compared, rdn only?
         if Ft: dF_ += [comp_F(T, Ft, root.r,G)]; T.dTT,T.c,T.r = sum_vt([T,Ft],wTT=wTT)  # Bt*brrw?
         else:  dF_ += [CF()]
-    add2F(G,T,merge=1)
+    add2F(G,T,merge=2)
     if any(dF_): sum2F(dF_,G.Xt)  # add2F(G,G.Xt)  # cross-fork covariance  (same here, add2F is already called within sum2F)
     add_Nt(G,Nt)  # add H,kern,ext, doesn't affect comp_F
     if Lt: add_Lt(G, Lt,wTT)
@@ -835,7 +835,7 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
         for B in B_: m_ += B.verT[0]; d_ += B.verT[1];
         ad_ = np.abs(d_); t_ = m_ + ad_  # ~ max comparand
         m = m_/eps_(t_) @ w_t[0] - ave*2; d = ad_/eps_(t_) @ w_t[1] - avd*2
-        PP.Bt = CF(N_=B_, m=m, d=d, r=2, root=PP,nF='Bt')
+        PP.Bt = CF(N_=B_, m=m, d=d, r=2, root=PP,nF='Bt'); PP.B_ = PP.Bt.N_; PP.rim = []; PP.box = box; PP.sub=0
         for P in P_: P.root = PP
         if hasattr(P,'nt'):  # PPd, assign rN_:
             PP.rN_ = []  # init, do we really still need rN_?
