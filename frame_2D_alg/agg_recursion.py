@@ -70,8 +70,8 @@ class CF(CBase):  # clustering fork: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, 
     name ="fork"  # add sub-forks by F2N
     def __init__(f, **kw):
         super().__init__()
-        if not hasattr(f, 'N_'): f.N_ = kw.get('N_',[])  # flat top lev, calls in oF, all sub-forks added conditionally
-        if not hasattr(f, 'L_'): f.L_ = kw.get('L_',[])  # +-Ls in levs or cLs in C       
+        if not hasattr(f,'N_'): f.N_ = kw.get('N_',[])  # flat top lev, calls in oF, all sub-forks added conditionally
+        if not hasattr(f,'L_'): f.L_ = kw.get('L_',[])  # +-Ls in levs or cLs in C
         f.nF = kw.get('nF','Nt')
         f.dTT = kw.get('dTT',np.zeros((2,9))); f.m, f.d, f.c, f.r = [kw.get(x,0) for x in ('m','d','c','r')]  # rdpTT in oF?
         f.wTT = kw.get('wTT',wTT); f.w = kw.get('w',0)  # or np.sum(wTT)
@@ -89,7 +89,7 @@ class CL(CF):  # typ=1, add kern+positionals for base comp, Rt,Nt,Bt,Ct from com
         l.kern = kw.get('kern',np.zeros(4))  # I,G,A diffs in links
         l.span = kw.get('span',1)  # distance in nodet or aRad, comp with kern or len(N_)
         l.angl = kw.get('angl',None)  # (dy,dx),dir, sum from L_, rarely?
-        l.typ  = kw.get('typ',1)  # blocks sub_comp
+        l.typ  = kw.get('typ',1)
 
 class CC(CL):  # typ=2, adds arrays per N_
     name = "cent"
@@ -106,10 +106,9 @@ def prop_F_(F, attr='N_'):  # factory function to get and update top-composition
     return property(get,set)
 
 class CN(CL):  # full node | graph fork set
-    name = "node"  # ext|int -defined Ns,Ls:
-    N_,C_,L_,B_,X_,rim,H = prop_F_('Nt'),prop_F_('Ct'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Xt'),prop_F_('Rt'),prop_F_('Nt','H')
+    name = "node"
+    N_,C_,L_,B_,X_,rim,H = prop_F_('Nt'),prop_F_('Ct'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Xt'),prop_F_('Rt'),prop_F_('Nt','H')  # ext|int -defined Ns,Ls
     def __init__(n, **kw):
-        # Ft needs before init because f.N_ = kw.get('N_',[]) trigger setter on Nt, which is not available yet
         n.Nt,n.Bt,n.Ct,n.Lt,n.Xt,n.Rt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Ct','Lt','Xt','Rt')))  # CN if nest, Ct||Nt
         super().__init__(**kw)
         n.H  = kw.get('H', [])  # lower CF levs / Nt||Ct
@@ -154,7 +153,7 @@ class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
             if oF.call_:  # complete at this point
                 call_ = flat_(oF); L=(len(call_)-1)  # flat call tree
                 if oF.fw*L > ave*(oF.fc*L):  # eval summarize, fc*fr if multiple oFs on the same data?
-                    sum2F(call_,oF)  # sum data only?
+                    sum2F(call_,oF)  # sum data only
             oF.wTT= cent_TT(getattr(oF,'rTT',oF.dTT), oF.r)  # rTT covers cluster compression
             oF.w += np.mean(oF.wTT)
             CoF._cur.set(_CoF)
@@ -323,22 +322,22 @@ def comp_N(_N,N, r,_c, full=1, A=np.zeros(2),span=None, rL=None, L_=None, N_=Non
         return dH,tt,C, (r* Link.c+R)/ (Link.c+C)  # same norm for tt?
 
     TT= base_comp(_N,N)[0] if full else comp_derT(_N.dTT[1],N.dTT[1]); m,d = vt_(TT, ttN_)
-    L = CL(typ=1, nt=[_N,N], dTT=TT,m=m,d=d,c=_c,r=r, root=rL, exe=1)
-    if N.typ and m*wF > ave*(r+cF):  # compares L, C and N only? Skip CF
-        dH,htt,C,R = comp_H(_N,N, L); r+=R  # dH tentative, replace if subcomp?
-        if m + vt_(htt,ttN_)[0]*wN_> ave*(r+cN_):  # subcomp -> tFs in L:
-            F2N(L)  # convert to accss Nt below?
-            if abs(N.typ) ==1:
-                for _n,n in product(_N.nt,N.nt): L.Nt.fb_ += [comp_N(_n,n,r,_c)]  # link sub-comp
-            else:
-                for i,(_Ft,Ft,tnF) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct),('Nt','Lt','Bt','Ct'))):
-                    if _Ft and Ft:  # sub-comp
-                        dFt = comp_F(_Ft,Ft,r,L); getattr(L,tnF).fb_ += dFt.N_  # tFt feedback
-                        r = (i or 1) -1  # Nt,Lt are core, not redundant
-            for fb_, nF in zip((L.Nt.fb_,L.Lt.fb_,L.Bt.fb_,L.Ct.fb_), ('Nt','Lt','Bt','Ct')):
-                if fb_:  # L+= trans-Ls, python-batched bottom-up:
-                    sum2F(fb_,getattr(L,nF))
-            sum2F([L.Nt,L.Lt,L.Bt,L.Ct], CoF.get())
+    L = CL(nt=[_N,N], dTT=TT,m=m,d=d,c=_c,r=r, root=rL)
+    if N.typ==3 and _N.typ==3 and m*wF > ave*(r+cF):
+        dH,htt,C,R = comp_H(_N,N, L); r+=R; m+= vt_(htt,ttN_)[0]  # tentative dH, replace if subcomp?
+    if N.typ and m*wN_ > ave*(r+cN_):  # skip PPs
+        F2N(L)  # add tFs for subcomp
+        if N.typ==1:
+            for _n,n in product(_N.nt,N.nt): L.Nt.fb_ += [comp_N(_n,n,r,_c)]  # link sub-comp
+        else:
+            for i,(_Ft,Ft, tnF) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct),('Nt','Lt','Bt','Ct'))):
+                if _Ft and Ft:  # sub-comp
+                    dFt = comp_F(_Ft,Ft,r,L); getattr(L,tnF).fb_ += dFt.N_  # tFt feedback
+                    r+= (i or 1) -1  # Nt,Lt are core, not redundant
+        for fb_, nF in zip((L.Nt.fb_,L.Lt.fb_,L.Bt.fb_,L.Ct.fb_), ('Nt','Lt','Bt','Ct')):
+            if fb_:  # L+= trans-Ls, python-batched bottom-up:
+                sum2F(fb_,getattr(L,nF))
+        sum2F([L.Nt,L.Lt,L.Bt,L.Ct], CoF.get())
     if full:
         if span is None: span = np.hypot(*_N.yx - N.yx)
         yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
@@ -754,14 +753,14 @@ def add_Lt(G, Lt,wTT):  # addition to Q2R
 # utilities:
 def F2N(F):  # convert for cross_comp
 
-    Nt = CopyF(F, root=F); Nt.N_ = F.N_; L_ = F.L_  # replace in cross_comp
-    F.__class__ = CN
-    F.Nt = Nt; F.compared = set()
-    for k,v in dict(H=[],kern=np.zeros(4),span=1,angl=None,mang=1,box=np.array([np.inf,np.inf,-np.inf,-np.inf]),yx=np.zeros(2),sub=0,exe=0,fin=0,nt=[],c_=[]).items():
-        setattr(F,k, copy(v))
-    if L_: F.H += [sum2F(L_,F)]  # level Ls only
+    Nt = CopyF(F, root=F); Nt.N_=F.N_; L_=F.L_  # replace in cross_comp
+    F.__class__ = CN; F.Nt = Nt
+    Na_ = dict(H=[], mang=1, box=np.array([np.inf,np.inf,-np.inf,-np.inf]), sub=0, exe=0, fin=0, c_=[], compared = set())
+    if F.typ==0:  # CF | PP, no overlap for Cs
+        Na_.update(kern=np.zeros(4), span=1, angl=None, yx=np.zeros(2))
+    for k,v in Na_.items(): setattr(F, k, copy(v))
+    if L_: F.H += [sum2F(L_, F)]
     for ft in ('Lt','Ct','Bt','Xt','Rt'): setattr(F, ft, CF(root=F))
-    
     return F
 
 def CopyF(F, root=None, r=1):  # F = CF
@@ -831,7 +830,7 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
                          np.array([dM, dD, dL, dI, dG, dA, dL, dL / 2, 0])])
         y,x,Y,X = box; dy,dx = Y+1-y, X+1-x
         A = [np.array(A), np.sign(dTT[1] @ ttVct[1])]  # append sign
-        PP = CN(typ=3, dTT=dTT,m=m,d=d,c=c,r=1, kern=kern,box=box,yx=yx,angl=A,span=np.hypot(dy/2,dx/2))  # set root in trace_edge
+        PP = CL(typ=0, dTT=dTT,m=m,d=d,c=c,r=1, kern=kern,yx=yx,angl=A,span=np.hypot(dy/2,dx/2))  # set root in trace_edge
         m_, d_ = np.zeros(6), np.zeros(6)
         for B in B_: m_ += B.verT[0]; d_ += B.verT[1];
         ad_ = np.abs(d_); t_ = m_ + ad_  # ~ max comparand
