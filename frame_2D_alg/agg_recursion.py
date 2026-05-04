@@ -128,7 +128,7 @@ def flat_(oF, call_=None):  # all nested call_ s
     if call_ is None: call_ = []
     for sub in oF.call_:
         call_ += [sub]
-        if sub.N_: flat_(sub, call_)
+        if sub.call_: flat_(sub, call_)  # should be call_ here
     return call_
 
 class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
@@ -139,6 +139,7 @@ class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
         f.call_ = kw.get('call_',[])  # call tree
         f.typ_ = kw.get('typ_',[])  # call_ flattened and nested with tFs
         f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]  # call_ gain, cost, rdn: multiple oFs on same data?
+        f.gate_ = kw.get('gate_', [])  # each gate eval within the function
     @staticmethod
     def get(): return CoF._cur.get(Z)
     @staticmethod
@@ -170,6 +171,59 @@ def add_typ_(oF):  # record oF vals for weighting, mapped to global FTT_
         if F_: T =sum2F(F_,CoF()); T.nF=i; T.wTT=cent_TT(getattr(T,'rTT',T.dTT),T.r); typ_[i]=T
     oF.typ_ = typ_
     if any(typ_): add2F(oF,sum2F([t for t in typ_ if t],CoF()))  # refine summed call_?
+
+# may merge into CoF if needed
+class gate(CoF):
+    name = "gate"
+    reg = {}     # name -> list of gate instances (stats)
+    hnd = {}     # name -> handler(g) -> bool, optional override
+
+    def __init__(g, V, cost, dTT=None, name='', **kw):
+        super().__init__(nF=name, **kw)
+        _CoF = CoF._cur.get()
+        g.root = _CoF
+        g.fc = cost
+        g.w  = V - ave * cost
+        if dTT is not None: g.dTT = dTT
+        _CoF.gate_ += [g]
+        gate.reg.setdefault(name, []).append(g)
+
+    def __bool__(g):
+        h = gate.hnd.get(g.nF)
+        return bool(h(g) if h else g.w > 0)
+
+
+def gate_eval():  # split/merge/drop gates per 2D criterion
+
+    for oF in [oF for oF in flat_(Z) if oF.gate_]:  # only functions with gates
+        for i, g_ in enumerate([gate.reg[gN.nF] for gN in oF.gate_]):
+            if not g_: continue
+            name = g_[0].nF
+            G = sum2F(g_)                    # sum gates: G.w, G.dTT, G.c, G.r
+            P_ = [g for g in g_ if g.w > 0]  # passes
+            F_ = [g for g in g_ if g.w <=0]  # fails
+            pr = len(P_) / (len(g_) or eps)  # pass-rate
+            L = len(g_)-1
+            # eval with gate value > cost?
+            if G.w * (wcN*L) > ave * (G.fc + cN_*L):  # "high w" branch
+                # body variance across passes: cent_TT non-uniform => multimodal predicate
+                if P_:
+                    pTT = sum2F(P_).dTT
+                    wTT = cent_TT(pTT, G.r)
+                    spread = np.max(np.abs(wTT - 1))   # 1 = uniform; >0 = multimodal
+                    if spread * wcN > ave * (G.r + cN_):
+                        gate.hnd[name] = split(name)   # high w, high var = split
+                    else: 
+                        pass  # high w, low var -> leave alone
+            else:  # "low w" branch                                    
+                if pr * wcN < ave * cN_:               # low pass-rate = drop
+                    gate.hnd[name] = lambda g: False
+                elif i > 0:                            # check predecessor correlation = merge
+                    pName = oF.gate_[i-1].nF
+                    pG = sum2F(gate.reg[pName])
+                    corr = comp_F(pG, G).m
+                    if corr * wcN > ave * (pG.r + G.r + cN_):
+                        merge(pName, name)  # low w, correlated = merge
 
 Z = CoF(nF='Z'); CoF._cur.set(Z)  # global meta code, data=frame
 # evals:
@@ -208,6 +262,7 @@ def cross_comp(root, rr):  # core function mediating recursive rng+ and der+ cro
     if L_: # Lm_, no +|- Ft.Lt?
         root.L_ = L_; L= len(L_)-1  # val=m+d /clust, m/comp
         if sum(vt_(TT,ttE)) * (wE*L) > (ave+avd) * (r+cE*L):
+        # if gate(sum(vt_(TT,ttE))*(wE*L), r+cE*L, dTT=TT, name='cross_comp:get_exemplars'):
             E_ = get_exemplars({N for L in L_ for N in L.nt}, r,c)
             G_,r = cluster_N(root, E_,r,c)  # -> cluster_C,_P, eval?
             if G_:
@@ -215,6 +270,7 @@ def cross_comp(root, rr):  # core function mediating recursive rng+ and der+ cro
                 root.H+= [sum2F(L_,root,froot=1)]  # lev: L_+ derivatives
                 root.Nt = sum2F(G_,froot=1); L=len(G_)-1  # or spliced C_?
                 if vt_(TT,ttX)[0]*(wX*L) > ave*(r+cX*L):  # root brrw|rdn?
+                # if gate(vt_(TT,ttX)[0]*(wX*L), r+cX*L, dTT=TT, name='cross_comp:cross_comp'):
                     G_,r = cross_comp(root.Nt,r)  # agg+
     return G_, r  # G_ is recursion flag
 '''
@@ -513,7 +569,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
     for i,E in enumerate(E_):
         C = Copy_(E, Ft,init=1,typ=2)
         C.N_,C.L_,C.m_,C.d_ = [E],[],[1],[0]
-        E._c_+=[C]; E._m_+=[1]; E._d_+=[0]  # self m,d
+        E._root_+=[C]; E._m_+=[1]; E._d_+=[0]  # self m,d
         C._N_= list({n for l in E.rim for n in l.nt if n is not E})  # init w for first loop eval
         _C_ += [C]
     out_ = []
@@ -538,7 +594,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
                 else:     C_ += [C]  # reform
                 DTT+=dTT; mat+=M; dif+=D; cnt+=T; rdn+=R; Up+=up
         r = _r+ rdn/(cnt or eps)
-        L = len(out_+ C_); olp = sum([len(N.c_) for N in N_])  # rdn+=olp, prioritize stronger?
+        L = len(out_+ C_); olp = sum([len(N.root_) for N in N_])  # rdn+=olp, prioritize stronger?
         if (mat+dif)* (wcP*L) > Ave* (r+olp+ ccP*L):
             out_+=C_; T=sum([f.c for f in out_])
             out_ = cluster_P(out_,T, Ft)  # refine all memberships in parallel by global backprop
@@ -566,7 +622,7 @@ def cluster_P(_C_, _c, root):  # FCM-style parallel centroid refine, may add pro
     Ln,Lc = len(N_),len(_C_); L=Lc*Ln  # localy constant
     _md__ = np.zeros((Ln, Lc, 2))  # NxC
     for j, N in enumerate(N_):
-        for c,m,d in zip(N.c_,N.m_,N.d_):
+        for c,m,d in zip(N.root_,N.m_,N.d_):
             if c: i= _C_.index(c); _md__[j,i] = m,d
     while True:
         md__ = np.zeros_like(_md__)
@@ -830,7 +886,7 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
         y,x,Y,X = box; dy,dx = Y+1-y, X+1-x
         A = [np.array(A), np.sign(dTT[1] @ ttVct[1])]  # append sign
         PP = CL(typ=0, dTT=dTT,m=m,d=d,c=c,r=1, kern=kern,yx=yx,angl=A,span=np.hypot(dy/2,dx/2))  # set root in trace_edge
-        m_, d_ = np.zeros(6), np.zeros(6)
+        m_, d_ = np.zeros(6), np.zeros(6); PP.B_ = B_  # B_ exclusively for PPd
         for B in B_: m_ += B.verT[0]; d_ += B.verT[1];
         ad_ = np.abs(d_); t_ = m_ + ad_  # ~ max comparand
         m = m_/eps_(t_) @ w_t[0] - ave*2; d = ad_/eps_(t_) @ w_t[1] - avd*2
