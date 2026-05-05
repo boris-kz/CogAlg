@@ -1,3 +1,4 @@
+import os
 import numpy as np, inspect, contextvars
 from copy import copy, deepcopy
 from math import atan2, cos, pi  # from functools import reduce
@@ -7,6 +8,8 @@ from functools import wraps
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
+from meta_code import get_wc
+
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -63,6 +66,8 @@ Fw_ = copy(Fc_)  # ave gain/call, init = cost
 wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wX,wFrm,wVct,wTrc,wBac,wPrj,wCS,wSE = Fw_
 cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cX,cFrm,cVct,cTrc,cBac,cPrj,cCS,cSE = Fc_
 FTT_ = [deepcopy(wTT) for _ in range(16)]; ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP, ttX,ttFrm,ttVct,ttTrc,ttBac,ttPrj,ttCs,ttSE = FTT_
+GTT_ = deepcopy(FTT_); Gw_ = copy(Fw_); Gc_ = copy(Fc_)
+
 
 eps = 1e-7
 def eps_(a): return np.where(a==0, eps, a)
@@ -151,7 +156,7 @@ class CoF(CF):
         def inner(*a, **kw):
             _CoF = CoF._cur.get()
             oF = CoF(nF=onF_.index(func.__name__), root=_CoF)  # gF auto-created
-            gF = oF.gF
+            gF = oF.gF; gF.name = func.__name__  # add name to retrieve cost via runtime ast
             oF.wTT = FTT_[oF.nF]; oF.fw = Fw_[oF.nF]; oF.fc = Fc_[oF.nF]; _CoF.call_+= [oF]
             gF.wTT = GTT_[gF.nF]; gF.fw = Gw_[gF.nF]; gF.fc = Gc_[gF.nF]; _CoF.gF.call_+= [gF]
             CoF._cur.set(oF); out = func(*a, **kw)
@@ -160,11 +165,16 @@ class CoF(CF):
                 if oF.fw*L > ave*(oF.fc*L):
                     sum2F(tree, oF); oF.wTT = cent_TT(getattr(oF,'rTT',oF.dTT), oF.r); oF.w += np.mean(oF.wTT)
                 tree = flat_(gF); L=len(tree)-1
-                if gF.fw*L > ave*(gF.fc*L): sum2F(tree, gF); gF.w += np.mean(gF.wTT)  # no cent_TT?
+                if gF.fw*L > ave*(gF.fc*L): 
+                    sum2F(tree, gF); gF.w += np.mean(gF.wTT)  # no cent_TT?
+                    for gf in tree:  # add gated functions' cost, computed from ast
+                        fc = get_wc(os.path.basename(__file__),gf.name)
+                        gF.fc += fc
             CoF._cur.set(_CoF)
             return out
         inner.wrapped = True
-        return inner    @staticmethod
+        return inner    
+    @staticmethod
     def gate(V, cost, dTT=None, name=''):
         _CoF = CoF._cur.get()
         g = CoF(nF=name, root=_CoF, fo=0); g.fc=cost; g.w = V - ave*cost; g.span = len(_CoF.call_)
