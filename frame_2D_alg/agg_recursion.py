@@ -2,10 +2,11 @@ import numpy as np, inspect, contextvars
 from copy import copy, deepcopy
 from math import atan2, cos, pi  # from functools import reduce
 from itertools import zip_longest, combinations, product  # from multiprocessing import Pool, Manager
+from contextlib import contextmanager
+from functools import wraps
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
-from functools import wraps
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -110,9 +111,9 @@ class CN(CL):  # full node | graph fork set
     def __init__(n, **kw):
         n.Nt,n.Bt,n.Ct,n.Lt,n.Xt,n.Rt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Ct','Lt','Xt','Rt')))  # CN if nest, Ct||Nt
         super().__init__(**kw)
-        n.H  = kw.get('H', [])  # lower CF levs / Nt||Ct
-        n.mang = kw.get('mang',1)  # ave match of angles in L_, =1 in links
-        n.box  = kw.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
+        n.H = kw.get('H',[])  # lower CF levs / Nt||Ct
+        n.box = kw.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
+        n.mang= kw.get('mang',1)  # ave match of angles in L_, =1 in links
         n.sub = 0  # composition depth relative to top-composition peers?
         n.exe = kw.get('exe',0)  # exemplar, temporary
         n.fin = kw.get('fin',0)  # clustered, temporary
@@ -128,17 +129,19 @@ def flat_(oF, call_=None):  # all nested call_ s
     if call_ is None: call_ = []
     for sub in oF.call_:
         call_ += [sub]
-        if sub.N_: flat_(sub, call_)
+        if sub.call_: flat_(sub,call_)
     return call_
 
-class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
+class CoF(CF):
     name = "func"
     _cur = contextvars.ContextVar('oF')
-    def __init__(f, **kw):
+    def __init__(f, fo=1, **kw):
         super().__init__(**kw)
-        f.call_ = kw.get('call_',[])  # call tree
-        f.typ_ = kw.get('typ_',[])  # call_ flattened and nested with tFs
-        f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]  # call_ gain, cost, rdn: multiple oFs on same data?
+        f.fo = fo
+        f.call_ = kw.get('call_',[])  # sub-oFs
+        f.typ_  = kw.get('typ_', [])
+        f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]
+        f.gF = CoF(nF=kw.get('nF',0), root=f, fo=0) if fo else None  # embedded gate aggregate
     @staticmethod
     def get(): return CoF._cur.get(Z)
     @staticmethod
@@ -146,19 +149,28 @@ class CoF(CF):  # oF/ code fork, N_,dTT: data scope, w = vt_(wTT)[0]?
         if getattr(func,'wrapped',False): return func
         @wraps(func)
         def inner(*a, **kw):
-            _CoF = CoF._cur.get()  # oF.N_ = call_:
-            oF = CoF(nF=onF_.index(func.__name__),root=_CoF); oF.wTT = FTT_[oF.nF]; oF.fw = Fw_[oF.nF]; oF.fc = Fc_[oF.nF]; _CoF.call_+=[oF]
+            _CoF = CoF._cur.get()
+            oF = CoF(nF=onF_.index(func.__name__), root=_CoF)  # gF auto-created
+            gF = oF.gF
+            oF.wTT = FTT_[oF.nF]; oF.fw = Fw_[oF.nF]; oF.fc = Fc_[oF.nF]; _CoF.call_+= [oF]
+            gF.wTT = GTT_[gF.nF]; gF.fw = Gw_[gF.nF]; gF.fc = Gc_[gF.nF]; _CoF.gF.call_+= [gF]
             CoF._cur.set(oF); out = func(*a, **kw)
-            if oF.call_:  # complete at this point
-                call_ = flat_(oF); L=(len(call_)-1)  # flat call tree
-                if oF.fw*L > ave*(oF.fc*L):  # eval summarize, fc*fr if multiple oFs on the same data?
-                    sum2F(call_,oF)  # sum data only
-            oF.wTT= cent_TT(getattr(oF,'rTT',oF.dTT), oF.r)  # rTT covers cluster compression
-            oF.w += np.mean(oF.wTT)
+            if oF.call_:
+                tree = flat_(oF); L=len(tree)-1
+                if oF.fw*L > ave*(oF.fc*L):
+                    sum2F(tree, oF); oF.wTT = cent_TT(getattr(oF,'rTT',oF.dTT), oF.r); oF.w += np.mean(oF.wTT)
+                tree = flat_(gF); L=len(tree)-1
+                if gF.fw*L > ave*(gF.fc*L): sum2F(tree, gF); gF.w += np.mean(gF.wTT)  # no cent_TT?
             CoF._cur.set(_CoF)
             return out
         inner.wrapped = True
-        return inner
+        return inner    @staticmethod
+    def gate(V, cost, dTT=None, name=''):
+        _CoF = CoF._cur.get()
+        g = CoF(nF=name, root=_CoF, fo=0); g.fc=cost; g.w = V - ave*cost; g.span = len(_CoF.call_)
+        if dTT is not None: g.dTT = dTT
+        _CoF.gF.call_ += [g]; _CoF.gF.fw += g.w; _CoF.gF.fc += cost
+        return g.w > 0
     def __bool__(f): return bool(f.N_)
 
 def add_typ_(oF):  # record oF vals for weighting, mapped to global FTT_
@@ -208,6 +220,7 @@ def cross_comp(root, rr):  # core function mediating recursive rng+ and der+ cro
     if L_: # Lm_, no +|- Ft.Lt?
         root.L_ = L_; L= len(L_)-1  # val=m+d /clust, m/comp
         if sum(vt_(TT,ttE)) * (wE*L) > (ave+avd) * (r+cE*L):
+        # if gate(sum(vt_(TT,ttE))*(wE*L), r+cE*L, dTT=TT, name='cross_comp:get_exemplars'):
             E_ = get_exemplars({N for L in L_ for N in L.nt}, r,c)
             G_,r = cluster_N(root, E_,r,c)  # -> cluster_C,_P, eval?
             if G_:
@@ -215,6 +228,7 @@ def cross_comp(root, rr):  # core function mediating recursive rng+ and der+ cro
                 root.H+= [sum2F(L_,root,froot=1)]  # lev: L_+ derivatives
                 root.Nt = sum2F(G_,froot=1); L=len(G_)-1  # or spliced C_?
                 if vt_(TT,ttX)[0]*(wX*L) > ave*(r+cX*L):  # root brrw|rdn?
+                # if gate(vt_(TT,ttX)[0]*(wX*L), r+cX*L, dTT=TT, name='cross_comp:cross_comp'):
                     G_,r = cross_comp(root.Nt,r)  # agg+
     return G_, r  # G_ is recursion flag
 '''
@@ -513,7 +527,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
     for i,E in enumerate(E_):
         C = Copy_(E, Ft,init=1,typ=2)
         C.N_,C.L_,C.m_,C.d_ = [E],[],[1],[0]
-        E._c_+=[C]; E._m_+=[1]; E._d_+=[0]  # self m,d
+        E._root_+=[C]; E._m_+=[1]; E._d_+=[0]  # self m,d
         C._N_= list({n for l in E.rim for n in l.nt if n is not E})  # init w for first loop eval
         _C_ += [C]
     out_ = []
@@ -538,7 +552,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
                 else:     C_ += [C]  # reform
                 DTT+=dTT; mat+=M; dif+=D; cnt+=T; rdn+=R; Up+=up
         r = _r+ rdn/(cnt or eps)
-        L = len(out_+ C_); olp = sum([len(N.c_) for N in N_])  # rdn+=olp, prioritize stronger?
+        L = len(out_+ C_); olp = sum([len(N.root_) for N in N_])  # rdn+=olp, prioritize stronger?
         if (mat+dif)* (wcP*L) > Ave* (r+olp+ ccP*L):
             out_+=C_; T=sum([f.c for f in out_])
             out_ = cluster_P(out_,T, Ft)  # refine all memberships in parallel by global backprop
@@ -566,7 +580,7 @@ def cluster_P(_C_, _c, root):  # FCM-style parallel centroid refine, may add pro
     Ln,Lc = len(N_),len(_C_); L=Lc*Ln  # localy constant
     _md__ = np.zeros((Ln, Lc, 2))  # NxC
     for j, N in enumerate(N_):
-        for c,m,d in zip(N.c_,N.m_,N.d_):
+        for c,m,d in zip(N.root_,N.m_,N.d_):
             if c: i= _C_.index(c); _md__[j,i] = m,d
     while True:
         md__ = np.zeros_like(_md__)
@@ -830,16 +844,16 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
         y,x,Y,X = box; dy,dx = Y+1-y, X+1-x
         A = [np.array(A), np.sign(dTT[1] @ ttVct[1])]  # append sign
         PP = CL(typ=0, dTT=dTT,m=m,d=d,c=c,r=1, kern=kern,yx=yx,angl=A,span=np.hypot(dy/2,dx/2))  # set root in trace_edge
-        m_, d_ = np.zeros(6), np.zeros(6)
+        m_, d_ = np.zeros(6), np.zeros(6); PP.B_ = B_
         for B in B_: m_ += B.verT[0]; d_ += B.verT[1];
         ad_ = np.abs(d_); t_ = m_ + ad_  # ~ max comparand
         m = m_/eps_(t_) @ w_t[0] - ave*2; d = ad_/eps_(t_) @ w_t[1] - avd*2
         PP.Bt = CF(N_=B_, m=m, d=d, r=2, root=PP,nF='Bt')
         for P in P_: P.root = PP
-        if hasattr(P,'nt'):  # PPd, assign rN_:
-            PP.rN_ = []  # init, do we really still need rN_?
+        if hasattr(P,'nt'):  # typ=1?
+            PP.root_ = []  # Gd.root_: cores, no centroids? multiple PPms may share same PPd?
             for dP in P_:
-                for P in dP.nt: PP.rN_ += [P.root]  # PPm
+                for P in dP.nt: PP.root_ += [P.root]  # PPm
         return PP
     blob_ = tile.N_; G_,TT,C,R = [],np.zeros((2,9)),0,0
     for blob in blob_:
@@ -849,7 +863,7 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
                 PPm_ = comp_slice(edge, rV, ttVct)  # add comp_slice's weights?
                 N_ = [PP2N(PPm) for PPm in PPm_]
                 c = sum([PPm.c for PPm in N_]); C += c
-                for PPd in edge.link_: PP2N(PPd)
+                for PPd in edge.link_: PP2N(PPd)  # we don't form Gds?
                 for N in N_:
                     if N.B_:
                         PPd_ = [B.root for B in N.B_]; sum2F(PPd_,N.Bt)
@@ -868,7 +882,7 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
     L_, cT_, lTT, lc = [],set(),np.zeros((2,9)),0  # comp co-mediated Ns:
     for N in N_: N.fin = 0
     for N in N_:
-        _N_ = [rN for B in N.B_ for rN in B.rN_ if rN is not N]   # + node-mediated
+        _N_ = [rN for B in N.B_ for rN in B.root_ if rN is not N]   # + node-mediated
         for _N in list(set(_N_)):  # share boundary or cores if lG with N, same val?
             cT = tuple(sorted((N.id,_N.id)))
             if cT in cT_: continue
