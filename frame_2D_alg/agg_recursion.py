@@ -57,12 +57,16 @@ wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = r
 wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA]); wTT = np.array([wT,wT*avd])  # default for comp_N_?
 onF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
         'get_exemplars','cluster_N','cluster_C','cluster_P',  # clust_ functions
-        'cross_comp','frame_H','vect_edge','trace_edge','ffeedback','proj_N','comp_slice','slice_edge']  # combined,ancillary
-Fc_ = [13,11,18,5,4,22,20,12,3,13,14,11,3,5,4,3]  # oF complexity / vt_ complexity, maps to onF_, *= data
-Fw_ = copy(Fc_)  # ave gain/call, init = cost
-wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wX,wFrm,wVct,wTrc,wBac,wPrj,wCS,wSE = Fw_
-cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cX,cFrm,cVct,cTrc,cBac,cPrj,cCS,cSE = Fc_
-FTT_ = [deepcopy(wTT) for _ in range(16)]; ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP, ttX,ttFrm,ttVct,ttTrc,ttBac,ttPrj,ttCs,ttSE = FTT_
+        'cross_comp','frame_H','vect_edge','trace_edge','ffeedback','proj_N','comp_slice','slice_edge']
+         # combined, ancillary
+# func | block cost,gain,distribution, cost = oF_complexity / vt_complexity, ||oF_, *=data:
+Fc_ = [13,11,18,5,4,22,20,12,3,13,14,11,3,5,4,3]; cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cX,cFrm,cVct,cTrc,cBac,cPrj,cCS,cSE = Fc_
+Fw_ = copy(Fc_); wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wX,wFrm,wVct,wTrc,wBac,wPrj,wCS,wSE = Fw_  # ave gain/call, init = cost
+FTT_= [deepcopy(wTT) for _ in range(16)]; ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP, ttX,ttFrm,ttVct,ttTrc,ttBac,ttPrj,ttCs,ttSE = FTT_
+# eval V = Ew - Ec * ave:
+Ec_ = [3,3,4,2,1,5,5,4,1,4,4,4,2,2,1.1]  # complexity placeholders || oF_, same evals for different oFs?
+Ew_ = copy(Ec_)  # ave gain/eval, init = cost, then evaled_block_w - default_block_w
+ETT_= [deepcopy(wTT) for _ in range(16)]  # for more precise eeval?
 
 eps = 1e-7
 def eps_(a): return np.where(a==0, eps, a)
@@ -150,27 +154,29 @@ class CoF(CF):
         @wraps(func)
         def inner(*a, **kw):
             _CoF = CoF._cur.get()
-            oF = CoF(nF=onF_.index(func.__name__), root=_CoF)  # gF auto-created
-            gF = oF.gF
+            oF = CoF(nF=onF_.index(func.__name__), root=_CoF); gF = oF.gF  # auto-created, gF.nF=oF.nF?
             oF.wTT = FTT_[oF.nF]; oF.fw = Fw_[oF.nF]; oF.fc = Fc_[oF.nF]; _CoF.call_+= [oF]
-            gF.wTT = GTT_[gF.nF]; gF.fw = Gw_[gF.nF]; gF.fc = Gc_[gF.nF]; _CoF.gF.call_+= [gF]
+            gF.wTT = ETT_[gF.nF]; gF.fw = Ew_[gF.nF]; gF.fc = Ec_[gF.nF]; _CoF.gF.call_+= [gF]
             CoF._cur.set(oF); out = func(*a, **kw)
             if oF.call_:
                 tree = flat_(oF); L=len(tree)-1
-                if oF.fw*L > ave*(oF.fc*L):
-                    sum2F(tree, oF); oF.wTT = cent_TT(getattr(oF,'rTT',oF.dTT), oF.r); oF.w += np.mean(oF.wTT)
+                if oF.fw*L > ave*(oF.fc*L): sum2F(tree, oF); oF.wTT = cent_TT(getattr(oF,'rTT',oF.dTT), oF.r); oF.w += np.mean(oF.wTT)
                 tree = flat_(gF); L=len(tree)-1
                 if gF.fw*L > ave*(gF.fc*L): sum2F(tree, gF); gF.w += np.mean(gF.wTT)  # no cent_TT?
             CoF._cur.set(_CoF)
             return out
         inner.wrapped = True
-        return inner    @staticmethod
-    def gate(V, cost, dTT=None, name=''):
-        _CoF = CoF._cur.get()
-        g = CoF(nF=name, root=_CoF, fo=0); g.fc=cost; g.w = V - ave*cost; g.span = len(_CoF.call_)
+        return inner
+    @staticmethod
+    def gate(gain,cost, dTT=None):  # gain = evaled_block_w - default_block_w
+        _CoF = CoF._cur.get(); gF = _CoF.gF
+        Ec = Ec_[gF.nF]; T = ave*cost  # threshold
+        if gain>T: gw = -Ec  # pass: cost only, body runs anyway
+        else:      gw = cost-gain - Ec  # fail: saved body cost - proj gain - eval cost
+        g = CoF(nF=gF.nF, root=_CoF, fo=0); g.w = gw; g.fc = Ec; g.span = len(_CoF.call_)
         if dTT is not None: g.dTT = dTT
-        _CoF.gF.call_ += [g]; _CoF.gF.fw += g.w; _CoF.gF.fc += cost
-        return g.w > 0
+        gF.call_+=[g]; gF.fw += gw; gF.fc += Ec
+        return gain>T
     def __bool__(f): return bool(f.N_)
 
 def add_typ_(oF):  # record oF vals for weighting, mapped to global FTT_
