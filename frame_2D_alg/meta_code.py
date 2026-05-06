@@ -7,50 +7,56 @@ from agg_recursion import (CoF, comp_F, cent_TT, vt_, Z, Fw_, Fc_, FTT_, Ew_, Ec
 # pairwise similarity over function-type summaries:
 def comp_typ_(typ_):
     L_ = []
-    for _T,T in combinations([t for t in typ_ if t], 2):
-        dF = comp_F(_T,T)  # already gives m,d via comp_derT(dTT)
+    for _T,T in combinations(typ_, 2):
+        dF = comp_F(_T,T)  # already gives m,d via comp_derT(dTT) (most of the oF.dTT is empty, and we only fill rTT?)
         L_ += [(_T,T,dF)]
     return L_
 
 # similarity clusters: flood-fill on m > ave links
 def cluster_O(typ_):
-    L_ = comp_typ_(typ_); grp_ = []; seen = set()
-    for T in [t for t in typ_ if t]:
-        if T in seen: continue
-        grp = {T}; front = [T]
+    L_ = comp_typ_(typ_); Clust_ = []; seen = set()
+    for typ in typ_:
+        if typ in seen: continue
+        Clust = {typ}; front = [typ]
         while front:
-            n = front.pop()
-            for _T,T2,dF in L_:
-                other = T2 if _T is n else (_T if T2 is n else None)
-                if other and other not in grp and dF.m > ave*dF.r:
-                    grp.add(other); front += [other]
-        seen |= grp; grp_ += [list(grp)]
-    return grp_
+            T = front.pop()
+            for T1,T2,dF in L_:
+                _T = T2 if T1 is T else (T1 if T2 is T else None)
+                if _T and _T not in Clust and dF.m > ave*dF.r:
+                    Clust.add(_T); front += [_T]
+        seen |= Clust; Clust_ += [list(Clust)]
+    return Clust_
 
 # nF similarity → "alike", gain → "useful"
-def gain_rate(T): return Ew_[T.nF] / (Ec_[T.nF] or eps)
+def gain_rate(T): return Ew_[T.nF] / (Ec_[T.nF] or eps)  # use only global?
 
 # combined decision per cluster
 def decisions(typ_):
     out = []
-    for grp in cluster_O(typ_):
-        ranked = sorted(grp, key=gain_rate, reverse=True)
+    typ_ = [t for t in typ_ if isinstance(t, CoF)]  # remove empty
+    clust_ = cluster_O(typ_)
+    for clust in clust_:
+        ranked = sorted(clust, key=gain_rate, reverse=True)
         rep = ranked[0]; rest = ranked[1:]
         if len(rest):
             high = [t for t in rest if gain_rate(t) > ave]
             low  = [t for t in rest if gain_rate(t) <= ave]
-            if high: out += [('merge_factor', rep.nF, [t.nF for t in high])]  # both pay off
-            if low:  out += [('drop_dup', rep.nF, [t.nF for t in low])]       # rep does the work
+            if high: out += [('merge_factor', rep.nF, [t.nF for t in high])]  # both pay off      (similar and high gain, merge them?)
+            if low:  out += [('drop_dup', rep.nF, [t.nF for t in low])]       # rep does the work (similar but low gain, leave them?)
     # split: per-T multimodality (placeholder — needs per-call dTT, see below)
     # drop: per-T gain
-    for T in [t for t in typ_ if t]:
-        if gain_rate(T) < ave: out += [('drop', T.nF)]
+    for T in typ_:
+        if gain_rate(T) < ave: out += [('drop', T.nF)]  # shouldn't be split here? Drop means remove?
     return out
 
 if __name__ == "__main__":
-    from agg_recursion import frame_H, imread
+    import agg_recursion
+    from agg_recursion import frame_H, imread, trace_func, add_typ_
+    
+    trace_func(vars(agg_recursion))
     Y,X = imread('./images/toucan.jpg').shape
     frame_H(image=imread('./images/toucan.jpg'), iY=Y//2-31, iX=X//2-31, Ly=64,Lx=64, Y=Y,X=X, rV=1)
+    add_typ_(Z)
     for d in decisions(Z.typ_): print(d)
 '''
 Split detection needs per-call dTT, not just summary. Current add_typ_ does T = sum2F(F_, CoF()) which collapses N calls into one mean. 
@@ -67,6 +73,8 @@ Two cluster sets, possibly with conflicting groupings, that's OK — they answer
 
 Position in the system: this naturally goes above agg_recursion, importing from it, no upward dependency. ffeedback's role would extend slightly: 
 instead of just updating filters, it could call decisions() and surface them. 
+# '''
+
 '''
 import ast
 
@@ -144,3 +152,4 @@ if __name__ == "__main__":
 
     fc_block = get_wc("agg_recursion.py", block=(225,243))
     print(f"Weights for line 225 to 243 = {fc_block}")
+'''
