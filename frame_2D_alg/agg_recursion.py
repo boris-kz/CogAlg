@@ -159,10 +159,11 @@ class CoF(CF):
             gF.wTT = ETT_[gF.nF]; gF.fw = Ew_[gF.nF]; gF.fc = Ec_[gF.nF]; _CoF.gF.call_+= [gF]
             CoF._cur.set(oF); out = func(*a, **kw)
             if oF.call_:
-                tree = flat_(oF); L=len(tree)-1
-                if oF.fw*L > ave*(oF.fc*L): sum2F(tree, oF); oF.wTT = cent_TT(getattr(oF,'rTT',oF.dTT), oF.r); oF.w += np.mean(oF.wTT)
-                tree = flat_(gF); L=len(tree)-1
-                if gF.fw*L > ave*(gF.fc*L): sum2F(tree, gF); gF.w += np.mean(gF.wTT)  # no cent_TT?
+                for i,F in zip((1,0),(oF,oF.gF)):
+                    tree = flat_(oF); L=len(tree)-1
+                    if oF.fw*L > ave*(oF.fc*L):
+                        sum2F(tree, oF); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r) if i else wtt  # oF only?
+                        oF.w += np.mean(oF.wTT)  # not affected by cent_TT?
             CoF._cur.set(_CoF)
             return out
         inner.wrapped = True
@@ -177,7 +178,7 @@ class CoF(CF):
         if dTT is not None: g.dTT = dTT
         gF.call_+=[g]; gF.fw += gw; gF.fc += Ec
         return gain>T
-    def __bool__(f): return bool(f.N_)  # this bool is wrong now? N_ in CoF is mostly empty
+    def __bool__(f): return bool(f.call_)
 
 def add_typ_(oF):  # record oF vals for weighting, mapped to global FTT_
 
@@ -373,17 +374,15 @@ def comp_N(_N,N, r,_c, full=1, A=np.zeros(2),span=None, rL=None, L_=None, N_=Non
 
 def comp_F(_F, F, ir=0, rL=None):
 
-    ddTT = comp_derT(getattr(_F, 'rTT',_F.dTT)[1],getattr(F, 'rTT',F.dTT)[1]); r=(_F.r+F.r)/2; m,d = vt_(ddTT,ttF); r+=ir
+    ddTT = comp_derT(_F.dTT[1],F.dTT[1]); r=(_F.r+F.r)/2; m,d = vt_(ddTT,ttF); r+=ir
     dF = CF(dTT=ddTT, m=m,d=d,r=r,c=min(_F.c,F.c))
-    foF = isinstance(_F, CoF)
-    if foF or _F.nF == F.nF:  # sub-comp
-        _N_,N_=_F.call_ if foF else _F.N_,F.call_ if foF else F.N_; nF=F.nF; l = nF=='Lt'
+    if _F.nF == F.nF:  # sub-comp
+        _N_,N_=_F.N_,F.N_; nF=F.nF; l = nF=='Lt'
         if  _N_ and N_:
             if l: Np_ = [[_n,n] for _n,n in zip(_N_,N_) if _n and n]  # same forks
             else: Np_ = list(product(_N_,N_))  # pairs
             L = len(Np_)-1
-            if rL: m = np.mean([rL.m,m])
-            if m * (wF*L) > ave* (r+cF*L):
+            if np.mean([rL.m,m])* (wF*L) > ave* (r+cF*L):
                 if l: L_= [L for Np in Np_ for L in comp_F(*Np, r,rL=dF).N_]; TT,C,R = sum_vt(L_, wTT=ttF)
                 else: L_,TT,C,R,_,_,_= comp_N_(Np_,r,nF,rL)
                 if L_:
@@ -1073,24 +1072,22 @@ def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential
     for i, rTT in enumerate(rTT_):
         rm, rd = vt_(rTT,FTT_[i]); rM+=rm; rD+=rd
     return rM+rD, rTT_
-
-
-def trace_func(module_dict, module_name=None):
-    if module_name is None: module_name = module_dict.get('__name__')
-    for name, obj in list(module_dict.items()):
-        if name in onF_:
-            if not inspect.isfunction(obj): continue
-            if obj.__module__ != module_name: continue
-            if getattr(obj, 'wrapped', False): continue
-            module_dict[name] = CoF.traced(obj)
-
-
 '''
     add code consolidation, for all onF_:
     compare aligned ops between Z.typ_[i] AST sequences, while prior ops matched?
     cluster matches into higher oF typs
 '''
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
+
+    def trace_func(module_dict, module_name=None):
+        if module_name is None: module_name = module_dict.get('__name__')
+        for name, obj in list(module_dict.items()):
+            if name in onF_:
+                if not inspect.isfunction(obj): continue
+                if obj.__module__ != module_name: continue
+                if getattr(obj, 'wrapped', False): continue
+                module_dict[name] = CoF.traced(obj)
+
     trace_func(vars())
     Y,X = imread('./images/toucan.jpg').shape
     # frame = agg_frame(0, image=imread('./images/toucan.jpg'), iY=Y, iX=X)
