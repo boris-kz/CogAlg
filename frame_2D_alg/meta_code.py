@@ -29,12 +29,18 @@ def split(Q, root=None):  # invert merge at most cost-unamortized gate
     return Qs
 
 if __name__ == "__main__":
-    from agg_recursion import frame_H, imread
+    
+    import agg_recursion
+    from agg_recursion import frame_H, imread, trace_func, add_typ_
+    
+    trace_func(vars(agg_recursion))  # add oF tracing
     Y,X = imread('./images/toucan.jpg').shape
     frame_H(image=imread('./images/toucan.jpg'), iY=Y//2-31, iX=X//2-31, Ly=64,Lx=64, Y=Y,X=X, rV=1)
+    add_typ_(Z)   # each call_ in Z.typ_ is the flatten calls of same typ
     mrg_,spl_ = [],[]
-    # add in ffeedback?:
-    for F,_F in combinations(Z.typ_,2): mrg_ += [merge(F,_F)]
+    # add in ffeedback?:  (I think it should be here, ffeedback is per frame_H, and we may call frame_H at higher elevation)
+    call_ = [call for typ in Z.typ_ if isinstance(typ, CoF) for call in typ.call_]  # typ.call_ are the oFs with the same typ, unpack to match with others
+    for F,_F in combinations(call_,2): mrg_ += [merge(F,_F)]
     for F in Z.typ_: spl_ += [split(F)]
 '''
 this naturally goes above agg_recursion, but then meta_code should include frame_H and ffeedback to add merges ot splits 
