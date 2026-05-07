@@ -3,70 +3,41 @@ import numpy as np
 from itertools import combinations
 from agg_recursion import (CoF, comp_F, cent_TT, vt_, Z, Fw_, Fc_, FTT_, Ew_, Ec_, ETT_, ave, avd, ttF, eps_, eps)
 
-# draft by claude:
-# pairwise similarity over function-type summaries:
-def comp_typ_(typ_):
-    L_ = []
-    for _T,T in combinations([t for t in typ_ if t], 2):
-        dF = comp_F(_T,T)  # already gives m,d via comp_derT(dTT)
-        L_ += [(_T,T,dF)]
-    return L_
+# draft:
+def merge(_Q,Q, root=None):  # combine aligned ops, if-fork per miss, recurse on matched
 
-# similarity clusters: flood-fill on m > ave links
-def cluster_O(typ_):
-    L_ = comp_typ_(typ_); grp_ = []; seen = set()
-    for T in [t for t in typ_ if t]:
-        if T in seen: continue
-        grp = {T}; front = [T]
-        while front:
-            n = front.pop()
-            for _T,T2,dF in L_:
-                other = T2 if _T is n else (_T if T2 is n else None)
-                if other and other not in grp and dF.m > ave*dF.r:
-                    grp.add(other); front += [other]
-        seen |= grp; grp_ += [list(grp)]
-    return grp_
+    mrg = CoF(nF=Q.nF, root=root or Q.root)
+    for _f,f in zip(_Q.call_, Q.call_):  # call_: op sequence in func or block
+        if _f.nF == f.nF:  # match
+            mrg.call_ += [merge(_f,f,mrg) if isinstance(_f,CoF) else f]  # if nested oF
+        else:  # miss: gate selects alternative bodies
+            # not reviewed:
+            g = CoF(nF=_f.nF, root=mrg, fo=0); g.call_=[_f,f]; g.fc=Ec_[_f.nF]; g.c=_f.c+f.c
+            _f.root=g; f.root=g; mrg.call_+=[g]; mrg.gF.call_+=[g]
+    mrg.c=_Q.c+Q.c; mrg.fw=_Q.fw+Q.fw; mrg.fc=Fc_[Q.nF]
+    return mrg
 
-# nF similarity → "alike", gain → "useful"
-def gain_rate(T): return Ew_[T.nF] / (Ec_[T.nF] or eps)
+def split(Q, root=None):  # invert merge at most cost-unamortized gate
 
-# combined decision per cluster
-def decisions(typ_):
-    out = []
-    for grp in cluster_O(typ_):
-        ranked = sorted(grp, key=gain_rate, reverse=True)
-        rep = ranked[0]; rest = ranked[1:]
-        if len(rest):
-            high = [t for t in rest if gain_rate(t) > ave]
-            low  = [t for t in rest if gain_rate(t) <= ave]
-            if high: out += [('merge_factor', rep.nF, [t.nF for t in high])]  # both pay off
-            if low:  out += [('drop_dup', rep.nF, [t.nF for t in low])]       # rep does the work
-    # split: per-T multimodality (placeholder — needs per-call dTT, see below)
-    # drop: per-T gain
-    for T in [t for t in typ_ if t]:
-        if gain_rate(T) < ave: out += [('drop', T.nF)]
-    return out
+    g = max(Q.gF.call_, key=lambda g: max(b.fc*b.c - b.fw*b.c for b in g.call_))
+    Qs = []
+    for b in g.call_:
+        S = CoF(nF=Q.nF, root=root or Q.root); S.call_=[b if f is g else f for f in Q.call_]
+        S.gF.call_=[x for x in Q.gF.call_ if x is not g]
+        S.c=b.c; S.fw=sum(f.fw for f in S.call_ if isinstance(f,CoF)); S.fc=Fc_[Q.nF]
+        Qs += [S]
+    return Qs
 
 if __name__ == "__main__":
     from agg_recursion import frame_H, imread
     Y,X = imread('./images/toucan.jpg').shape
     frame_H(image=imread('./images/toucan.jpg'), iY=Y//2-31, iX=X//2-31, Ly=64,Lx=64, Y=Y,X=X, rV=1)
-    for d in decisions(Z.typ_): print(d)
+    mrg_,spl_ = [],[]
+    # add in ffeedback?:
+    for F,_F in combinations(Z.typ_,2): mrg_ += [merge(F,_F)]
+    for F in Z.typ_: spl_ += [split(F)]
 '''
-Split detection needs per-call dTT, not just summary. Current add_typ_ does T = sum2F(F_, CoF()) which collapses N calls into one mean. 
-To detect multimodal input distributions (the split signal), we need to keep the F_ list — either preserve T.N_ = F_ in add_typ_, 
-or accumulate without collapsing. Then cent_TT over those individual dTTs reveals modes. Without this, "split" recommendations are guesses.
-
-comp_F's sub-comp branch fires when _F.nF == F.nF. In meta_code, typ_ entries have distinct nF (one per function type), 
-so sub-comp never fires — we get the bare dTT comparison only. That's what we want here, but worth knowing: 
-if you ever feed two summaries of the same function (e.g. across runs or across sub-trees), comp_F goes deep. May or may not be desirable.
-
-No connectivity over gFs yet. This sketch clusters oFs only. To get the dual mechanism (similarity-by-data + similarity-by-control-flow), 
-add a parallel cluster_O pass over the gF-side of typ_ entries (T.gF if it exists on summary). 
-Two cluster sets, possibly with conflicting groupings, that's OK — they answer different questions.
-
-Position in the system: this naturally goes above agg_recursion, importing from it, no upward dependency. ffeedback's role would extend slightly: 
-instead of just updating filters, it could call decisions() and surface them. 
+this naturally goes above agg_recursion, but then meta_code should include frame_H and ffeedback to add merges ot splits 
 '''
 import ast
 

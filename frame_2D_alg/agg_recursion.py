@@ -159,10 +159,11 @@ class CoF(CF):
             gF.wTT = ETT_[gF.nF]; gF.fw = Ew_[gF.nF]; gF.fc = Ec_[gF.nF]; _CoF.gF.call_+= [gF]
             CoF._cur.set(oF); out = func(*a, **kw)
             if oF.call_:
-                tree = flat_(oF); L=len(tree)-1
-                if oF.fw*L > ave*(oF.fc*L): sum2F(tree, oF); oF.wTT = cent_TT(getattr(oF,'rTT',oF.dTT), oF.r); oF.w += np.mean(oF.wTT)
-                tree = flat_(gF); L=len(tree)-1
-                if gF.fw*L > ave*(gF.fc*L): sum2F(tree, gF); gF.w += np.mean(gF.wTT)  # no cent_TT?
+                for i,F in zip((1,0),(oF,oF.gF)):
+                    tree = flat_(oF); L=len(tree)-1
+                    if oF.fw*L > ave*(oF.fc*L):
+                        sum2F(tree, oF); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r) if i else wtt  # oF only?
+                        oF.w += np.mean(oF.wTT)  # not affected by cent_TT?
             CoF._cur.set(_CoF)
             return out
         inner.wrapped = True
@@ -177,7 +178,7 @@ class CoF(CF):
         if dTT is not None: g.dTT = dTT
         gF.call_+=[g]; gF.fw += gw; gF.fc += Ec
         return gain>T
-    def __bool__(f): return bool(f.N_)
+    def __bool__(f): return bool(f.call_)
 
 def add_typ_(oF):  # record oF vals for weighting, mapped to global FTT_
 
