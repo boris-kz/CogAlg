@@ -1,29 +1,46 @@
 import numpy as np
-from itertools import combinations
-from agg_recursion import (CoF, comp_F, cent_TT, vt_, Z, Fw_, Fc_, FTT_, Ew_, Ec_, ETT_, ave, avd, ttF, eps_, eps)
+from itertools import combinations, zip_longest
+from agg_recursion import (CoF, comp_F, cent_TT, vt_, sum_vt, Z, Fw_, Fc_, FTT_, Ew_, Ec_, ETT_, ave, avd, ttF, eps_, eps)
 '''
 code modification: compare aligned ops between Z.typ_[i] AST sequences, cluster/merge matches into higher oF typs
 '''
 def merge(_Q,Q, root=None):  # combine aligned ops, if-fork per miss, no inline recursion
 
-    mrg = CoF(nF=Q.nF, root=root or Q.root)
-    for _f,f in zip(_Q.call_, Q.call_):  # call_: op sequence in func or block
-        if _f.nF==f.nF:
-            mrg.call_ += [f.nF]  # match: copy the sequence
-        else:  # miss: add gate to select forks
-            gate = CoF(nF='E', call_=[_f,f], c=_f.c+f.c, root=mrg, fo=0)  # fc=Ec_[eval.nF]? root is not reassigned
-            mrg.call_ += [gate]  # need to add eval func?
-    mrg.c +=_Q.c+Q.c; mrg.fw +=_Q.fw+Q.fw; mrg.fc+= Fc_[Q.nF]  # included for final mrg eval, gates are transparent?
-    return mrg
+    mrg = CoF(nF=Q.nF, N_=[_Q,Q], root=root or Q.root)  # add Q to N_ for unpacking purpose during eval
+    call_, Q_ = [],set()
+    for _f,f in zip_longest(_Q.call_, Q.call_, fillvalue=None):  # call_: op sequence in func or block
+        if _f is not None and f is not None:
+            if _f.nF==f.nF:
+                mrg.call_ += [f]  # match: copy the sequence
+            elif sum_vt([_f,f],fm=1)[0]>ave:  # miss: add gate to select forks (temporary)
+                # i think we need to add eval func here, else all combinations are getting gates if their nF is different    
+                gate = CoF(nF='E', call_=[_f,f], c=_f.c+f.c, root=mrg, fo=0)  # fc=Ec_[eval.nF]? root is not reassigned
+                mrg.call_ += [gate]  # need to add eval func?
+        else:
+            call_ += [_f if f is None else f]  # leftover, if their call_ size is different
+       
+    if mrg.call_:
+        mrg.c +=_Q.c+Q.c; mrg.fw +=_Q.fw+Q.fw; mrg.fc+= Fc_[Q.nF]  # included for final mrg eval, gates are transparent?
+        if call_:  # leftover calls, pack them into gate? or repack them into call_?
+            mrg.call_ += call_
+    else:  # there is no merged fs or gate in mrg, return and recycle the input typs?
+        Q_ = set([_Q, Q])
+    
+    return mrg, Q_
 
 def eval(mrg):  # after adding multiple oFs in mrg.call_, not just the pair in single merge()
 
     fW = eW = 0
-    call_ = []
+    # call_ = []
     for F in mrg.call_:  # or typ_: nFs?
         if F.nF=='E': eW += F.w*F.c  # vs plain count
-        else: call_+= [F]; fW += F.fc
-    Z.typ_ += [mrg if fW/eW >ave else call_[:]]  # unpack mrg if high forking cost ratio
+        else: fW += F.fc  # call_+= [F]; 
+        
+    if fW/(eW or eps) >ave:  # pack mrg as new typ
+        Z.typ_ += [mrg]
+    else:  # unpack mrg
+        Z.typ_ += [Q for Q in mrg.N_ if Q not in Z.typ_]
+    # Z.typ_ += [mrg if fW/(eW or eps) >ave else call_[:]]  # unpack mrg if high forking cost ratio
 
 # not revised:
 def split(Q, root=None):  # invert merge at most cost-unamortized gate
@@ -46,10 +63,14 @@ if __name__ == "__main__":
     Y,X = imread('./images/toucan.jpg').shape
     frame_H(image=imread('./images/toucan.jpg'), iY=Y//2-31, iX=X//2-31, Ly=64,Lx=64, Y=Y,X=X, rV=1)
     add_typ_(Z)  # each call_ in Z.typ_ is the flatten calls of same typ
-    mrg_, spl_ = [],[]
+    mrg_, spl_, oF_ = [],[], set()
     # add fffeedback to reform Z for next frame_H
-    for F,_F in combinations(Z.typ_,2): mrg_ += [merge(F,_F)]
-    for F in Z.typ_: spl_ += [split(F)]
+    
+    typ_ = [typ for typ in Z.typ_ if isinstance(typ, CoF)]; Z.typ_ = []  # remove empty list and reset typ
+    for F,_F in combinations(typ_,2): mrg, of_ = merge(F,_F); mrg_ += [mrg]; oF_.update(of_)
+    for mrg in mrg_: eval(mrg)
+    if oF_:  # split only those non-merged oF? Else we may split those merged typs or gates (split or merge sequence should be matters here?)
+        for F in oF_: spl_ += [split(F)]
 
 import ast
 onF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
