@@ -1072,21 +1072,17 @@ def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential
     for i, rTT in enumerate(rTT_):
         rm, rd = vt_(rTT,FTT_[i]); rM+=rm; rD+=rd
     return rM+rD, rTT_
-'''
-    add code consolidation, for all onF_:
-    compare aligned ops between Z.typ_[i] AST sequences, while prior ops matched?
-    cluster matches into higher oF typs
-'''
-if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
 
-    def trace_func(module_dict, module_name=None):
-        if module_name is None: module_name = module_dict.get('__name__')
-        for name, obj in list(module_dict.items()):
-            if name in onF_:
-                if not inspect.isfunction(obj): continue
-                if obj.__module__ != module_name: continue
-                if getattr(obj, 'wrapped', False): continue
-                module_dict[name] = CoF.traced(obj)
+def trace_func(module_dict, module_name=None):
+    if module_name is None: module_name = module_dict.get('__name__')
+    for name, obj in list(module_dict.items()):
+        if name in onF_:
+            if not inspect.isfunction(obj): continue
+            if obj.__module__ != module_name: continue
+            if getattr(obj, 'wrapped', False): continue
+            module_dict[name] = CoF.traced(obj)
+
+if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
 
     trace_func(vars())
     Y,X = imread('./images/toucan.jpg').shape
