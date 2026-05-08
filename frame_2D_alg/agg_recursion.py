@@ -1073,7 +1073,6 @@ def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential
         rm, rd = vt_(rTT,FTT_[i]); rM+=rm; rD+=rd
     return rM+rD, rTT_
 
-# this should be outside main, to be called by meta_code
 def trace_func(module_dict, module_name=None):
     if module_name is None: module_name = module_dict.get('__name__')
     for name, obj in list(module_dict.items()):
@@ -1083,12 +1082,6 @@ def trace_func(module_dict, module_name=None):
             if getattr(obj, 'wrapped', False): continue
             module_dict[name] = CoF.traced(obj)
 
-
-'''
-    add code consolidation, for all onF_:
-    compare aligned ops between Z.typ_[i] AST sequences, while prior ops matched?
-    cluster matches into higher oF typs
-'''
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
 
     trace_func(vars())
