@@ -141,7 +141,7 @@ class CoF(CF):
     _cur = contextvars.ContextVar('oF')
     def __init__(f, fo=1, **kw):
         super().__init__(**kw)
-        f.fo = fo
+        f.fo = fo  # this fo is redundant? We only need local fo to init gF
         f.call_ = kw.get('call_',[])  # sub-oFs
         f.typ_  = kw.get('typ_', [])
         f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]
@@ -653,7 +653,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0):  # -> CF/CL/CC/CN/CoF
         else:  # init
             TT = n.dTT*w; R=n.r*w; n_ = copy(n.N_ if merge else [n])
             if typ:
-                kern=n.kern*w; span=n.span*w; yx=n.yx*w; angl = copy(n.angl[0]) if n.angl is not None else None
+                kern=n.kern*w; span=n.span*w; yx=n.yx*w; angl = copy(n.angl[0]) if n.angl is not None else np.zeros(2)
                 if typ==3: box=copy(n.box)
             elif fO: Fw = n.m
     F = (CoF if fO else cls_[typ])(dTT=TT, c=C, r=R)
@@ -672,7 +672,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0):  # -> CF/CL/CC/CN/CoF
         for n in N_: n.root = root or F
     return F
 
-def add2F(F, n, merge=0, fr=0, fo=1):  # unpack for batching in sum2F
+def add2F(F, n, merge=0, fr=0, fo=0):  # unpack for batching in sum2F
 
     a = 'rTT' if fr else 'dTT'  # or wTT?
     if F.c:
@@ -783,6 +783,13 @@ def F2N(F):  # convert for cross_comp
     if L_: F.H += [sum2F(L_, F)]
     for ft in ('Lt','Ct','Bt','Xt','Rt'): setattr(F, ft, CF(root=F))
     return F
+
+
+def CopyoF(oF, root=None, r=1):
+    C = CoF(fo=oF.fo, dTT=oF.dTT*r, m=oF.m, d=oF.d, c=oF.c, r=oF.r, nF=oF.nF, root=root or oF.root, fw=oF.fw, fc=oF.fc, fr=oF.fr, wTT=copy(oF.wTT))
+    C.call_ = copy(oF.call_); C.typ_  = copy(oF.typ_); C.N_ = copy(oF.N_)  # shallow copy to preserve objects reference
+    C.gF = CopyoF(oF.gF, root=C) if oF.gF is not None else None
+    return C
 
 def CopyF(F, root=None, r=1):  # F = CF
     C = CF(dTT=F.dTT*r, m=F.m, d=F.d, c=F.c, r=F.r, root=root or F.root, nF=F.nF)
