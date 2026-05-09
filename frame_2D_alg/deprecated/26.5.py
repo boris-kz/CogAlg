@@ -74,3 +74,26 @@ class CoF(CF):
         _CoF.gF.call_ += [g]; _CoF.gF.fw += g.w; _CoF.gF.fc += cost
         return g.w > 0
     def __bool__(f): return bool(f.N_)
+
+def merge(_Q,Q, root=None):  # combine aligned ops, if-fork per miss, no inline recursion
+
+    mrg = CoF(nF=Q.nF, N_=[_Q,Q], root=root or Q.root)  # add Q to N_ for unpacking purpose during eval
+    call_, Q_ = [],set()
+    for _f,f in zip_longest(_Q.call_, Q.call_, fillvalue=None):  # call_: op sequence in func or block
+        if _f is not None and f is not None:
+            if _f.nF==f.nF:
+                mrg.call_ += [f]  # match: copy the sequence
+            elif sum_vt([_f,f],fm=1)[0]>ave:  # miss: add gate to select forks (temporary)
+                # i think we need to add eval func here, else all combinations are getting gates if their nF is different
+                gate = CoF(nF='E', call_=[_f,f], c=_f.c+f.c, root=mrg, fo=0)  # fc=Ec_[eval.nF]? root is not reassigned
+                mrg.call_ += [gate]  # need to add eval func?
+        else:
+            call_ += [_f if f is None else f]  # leftover, if their call_ size is different
+    if mrg.call_:
+        mrg.c +=_Q.c+Q.c; mrg.fw +=_Q.fw+Q.fw; mrg.fc+= Fc_[Q.nF]  # included for final mrg eval, gates are transparent?
+        if call_:  # leftover calls, pack them into gate? or repack them into call_?
+            mrg.call_ += call_
+    else:  # there is no merged fs or gate in mrg, return and recycle the input typs?
+        Q_ = set([_Q, Q])
+
+    return mrg, Q_

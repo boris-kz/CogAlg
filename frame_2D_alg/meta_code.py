@@ -1,20 +1,28 @@
 import numpy as np
 from itertools import combinations
-from agg_recursion import (CoF, comp_F, cent_TT, vt_, Z, Fw_, Fc_, FTT_, Ew_, Ec_, ETT_, ave, avd, ttF, eps_, eps)
+from agg_recursion import (sum2F, add2F, CoF, CopyF, cent_TT, vt_, Z, Fw_, Fc_, FTT_, Ew_, Ec_, ETT_, ave, avd, eps)
 '''
 code modification: compare aligned ops between Z.typ_[i] AST sequences, cluster/merge matches into higher oF typs
 '''
-def merge(_Q,Q, root=None):  # combine aligned ops, if-fork per miss, no inline recursion
+def merge(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f can only be added as a whole
 
-    mrg = CoF(nF=Q.nF, root=root or Q.root)
-    for _f,f in zip(_Q.call_, Q.call_):  # call_: op sequence in func or block
-        if _f.nF==f.nF:
-            mrg.call_ += [f.nF]  # match: copy the sequence
-        else:  # miss: add gate to select forks
-            gate = CoF(nF='E', call_=[_f,f], c=_f.c+f.c, root=mrg, fo=0)  # fc=Ec_[eval.nF]? root is not reassigned
-            mrg.call_ += [gate]  # need to add eval func?
-    mrg.c +=_Q.c+Q.c; mrg.fw +=_Q.fw+Q.fw; mrg.fc+= Fc_[Q.nF]  # included for final mrg eval, gates are transparent?
-    return mrg
+    call_, add_ = [], []  # replace F.call_ if eval
+    C = 0; cost = Ec_[0]  # total and fixed-fork costs
+    for Sub,sub in zip(F.call_,f.call_):  # call_: op sequence in func or block, init F per f?
+        fork = []
+        if Sub.nF=='E':  # previously added gate
+            fork = Sub; fin=0
+            for _sub in Sub.call_:
+                if _sub.nF==sub.nF: fin=1; break  # no new fork cost?
+            if not fin:
+                add2F(Sub,sub, fo=1); C+=sub.fc; add_+=[sub]
+        elif Sub.nF != sub.nF:
+            fork = CoF(nF='E',call_=[Sub,sub]); C += cost; add_+=[sub]
+        call_ += [fork or Sub]
+    if f.fc / (C or eps) > ave:  # high individual_cost / forking_Cost, else keep old F,f
+        if add_: add2F(F, sum2F(add_), fo=1)
+        F.call_= call_
+        return f  # caller pops merged f from Z.typ_
 
 def eval(mrg):  # after adding multiple oFs in mrg.call_, not just the pair in single merge()
 
@@ -46,10 +54,16 @@ if __name__ == "__main__":
     Y,X = imread('./images/toucan.jpg').shape
     frame_H(image=imread('./images/toucan.jpg'), iY=Y//2-31, iX=X//2-31, Ly=64,Lx=64, Y=Y,X=X, rV=1)
     add_typ_(Z)  # each call_ in Z.typ_ is the flatten calls of same typ
-    mrg_, spl_ = [],[]
-    # add fffeedback to reform Z for next frame_H
-    for F,_F in combinations(Z.typ_,2): mrg_ += [merge(F,_F)]
+    # add fffeedback to reform Z for next frame_H:
+    spl_ = []  # draft:
     for F in Z.typ_: spl_ += [split(F)]
+    Z.typ_ = spl_; typ_, mrg_ = [],[]
+    for typ in Z.typ_.pop():
+        if typ in mrg_: continue
+        F = CopyF(typ)
+        for f in Z.typ_: mrg_ += [merge(F,f)]  # merged fs, if any
+        typ_ += [F]
+    Z.typ_ = typ_
 
 import ast
 onF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
