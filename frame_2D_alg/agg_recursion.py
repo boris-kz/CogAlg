@@ -672,7 +672,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0):  # -> CF/CL/CC/CN/CoF
         for n in N_: n.root = root or F
     return F
 
-def add2F(F, n, merge=0, fr=0):  # unpack for batching in sum2F
+def add2F(F, n, merge=0, fr=0, fo=1):  # unpack for batching in sum2F
 
     a = 'rTT' if fr else 'dTT'  # or wTT?
     if F.c:
@@ -683,7 +683,8 @@ def add2F(F, n, merge=0, fr=0):  # unpack for batching in sum2F
         setattr(F,a,getattr(n,a)); F.c=n.c; F.r=n.r
         if isinstance(F,CoF) and isinstance(n,CoF): F.fw=n.m
     if merge <2:
-        F.N_ += (n.N_ if merge else [n])
+        if fo: F.typ_+= [n]
+    else: F.N_ += (n.N_ if merge else [n])
     if hasattr(F,'H') and getattr(n,'H',None): add_H(F.H, n.H, F)
     if hasattr(n,'C_'): F.C_ = getattr(F,'C_',[]) + n.C_  # same for L_?
     return F
