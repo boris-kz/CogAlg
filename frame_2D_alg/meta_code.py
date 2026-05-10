@@ -1,6 +1,6 @@
 import numpy as np
 from itertools import combinations
-from agg_recursion import (sum2F, add2F, CoF, CopyoF, cent_TT, vt_, Z, Fw_, Fc_, FTT_, Ew_, Ec_, ETT_, ave, avd, eps)
+from agg_recursion import (sum2F, add2F, CoF, CopyF, cent_TT, vt_, Z, Fw_, Fc_, FTT_, Ew_, Ec_, ETT_, ave, avd, eps)
 '''
 code modification: compare aligned ops between Z.typ_[i] AST sequences, cluster/merge matches into higher oF typs
 '''
@@ -12,19 +12,15 @@ def merge(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f
         fork = []
         if Sub.nF=='E':  # previously added gate
             fork = Sub; fin=0
-            if sub.nF == 'E':  # when both subs are gates, merge them?
-                merge(Sub,sub); C+=sub.fc; add_+=[sub]
-            else:
-                for _sub in Sub.call_:
-                    if _sub.nF==sub.nF: 
-                        add2F(_sub,sub, fo=1); C+=sub.fc; add_+=[sub]  # matching element in gated oF, merge them?
-                        fin=1; break  # no new fork cost?
-            if not fin:  # when there is no matching gated's oF, why we still merge them here?
+            if sub.nF=='E':
+                sub = merge(Sub, sub)  # add2F(Sub,ssub_)?
+                if sub: C+=sub.fc; call_+=[sub]; add_+=[sub]  # merge failed
+            for _sub in Sub.call_:
+                if _sub.nF==sub.nF: fin=1; break  # no new fork cost?
+            if not fin:
                 add2F(Sub,sub, fo=1); C+=sub.fc; add_+=[sub]
         elif Sub.nF != sub.nF:
             fork = CoF(nF='E',call_=[Sub,sub]); C += cost; add_+=[sub]
-        else:  # merge same typ subs
-            add2F(Sub,sub, fo=1); C+=sub.fc; add_+=[sub]      
         call_ += [fork or Sub]
     if f.fc / (C or eps) > ave:  # high individual_cost / forking_Cost, else keep old F,f
         if add_: add2F(F, sum2F(add_), fo=1)
@@ -63,14 +59,14 @@ if __name__ == "__main__":
     add_typ_(Z)  # each call_ in Z.typ_ is the flatten calls of same typ
     # add fffeedback to reform Z for next frame_H:
     spl_ = []  # draft:
-    for F in [typ for typ in Z.typ_ if isinstance(typ, CoF)]: spl_ += [split(F)]
-    Z.typ_ = spl_; typ_, mrg_ = [],[]
-    while Z.typ_:
-        typ = Z.typ_.pop()
-        if typ in mrg_: continue
-        F = CopyoF(typ)
+    for F in [t for t in Z.typ_ if isinstance(t,CoF)]: spl_+= [split(F)]
+    Z.typ_= spl_; typ_,mrg_ = [],[]
+    for t in Z.typ_.pop():
+        if t in mrg_: continue
+        F = CopyF(t)
         for f in Z.typ_: mrg_ += [merge(F,f)]  # merged fs, if any
         typ_ += [F]
+    Z.typ_ = typ_
 
 import ast
 onF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
