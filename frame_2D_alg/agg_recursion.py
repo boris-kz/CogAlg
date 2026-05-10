@@ -142,7 +142,6 @@ class CoF(CF):
     _cur = contextvars.ContextVar('oF')
     def __init__(f, fo=1, **kw):
         super().__init__(**kw)
-        f.fo = kw.get('fo',1)
         f.call_ = kw.get('call_',[])  # sub-oFs
         f.typ_  = kw.get('typ_', [])
         f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]
@@ -491,7 +490,7 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
                     _N = L.nt[0] if L.nt[1].fin else L.nt[1]; in_.add(L)
                     if not _N.fin and _N in Ft.N_:
                         m,d = nt_vt(*L.nt)
-                        if m > ave * (r-1):  # cluster nt, L,C_ by combined rim density:
+                        if m > ave * (r-1) and cluster_rim(_N, N_, r):  # cluster nt, L,C_ by combined rim density:
                             N_ += [_N]; L_ += [L]; _N.fin = 1
                             _L_+= [l for l in _N.rim if l not in in_ and (l.nt[0].fin ^ l.nt[1].fin)]   # new frontier links, +|-?
                         elif d > avd * (r-1): B_ += [L]  # contrast value, exclusive?
@@ -526,13 +525,35 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
     # add density-normalized aggregate-linkage: if ((S(N.in_rim) / S(N.ex_rim)) / (len(C.N_) / (C.span*decay)?
     return G_, r
 
+def cluster_rim(_N, N_, r):
+
+    in_M = ex_M = 0.0
+    in_ = set(N_)
+    
+    # for each new _N, eval based on all new N's links
+    for L in _N.rim:
+        __N = L.nt[0] if L.nt[1] is _N else L.nt[1]
+        if __N in in_: in_M += L.m
+        else:          ex_M += L.m
+
+    if len(N_)>1:
+        yx_ = np.array([n.yx for n in N_])
+        span = np.hypot(*(yx_ - yx_.mean(axis=0)).T).mean()
+    else: span = N_[0].span
+        
+    density_inv = (span * decay) / len(N_)  # invert from "(len(C.N_) / (C.span*decay)" so that we can multiply it later
+
+    # ((sum(in_C N.rim) / sum(ex_C N.rim)) / (len(C.N_) / (C.span*decay)
+    return (in_M / (ex_M or eps)) * density_inv > ave * r
+
+
 def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
 
     N_= Ft.N_; oF = CoF.get(); oF.c += _c; oF.r+=_r  # revert if 0 clusters?
     for n in N_: n.root_,n.m_,n.d_,n._root_,n._m_,n._d_ = [],[],[],[],[],[]
     _C_ = []
     for i,E in enumerate(E_):
-        C = Copy_(E, Ft,init=1,typ=2)
+        C = Copy(E, Ft,init=1,typ=CC)
         C.N_,C.L_,C.m_,C.d_ = [E],[],[1],[0]
         E._root_+=[C]; E._m_+=[1]; E._d_+=[0]  # self m,d
         C._N_= list({n for l in E.rim for n in l.nt if n is not E})  # init w for first loop eval
@@ -693,7 +714,7 @@ def add_H(H,h, root, fN=0):
     for Lev,lev in zip_longest(H, h):  # bottom-up
         if lev:
             if Lev: add2F(Lev,lev,1)
-            else: H.append((CopyF,Copy_)[fN](lev, root))
+            else: H.append(Copy(lev, root, cls=(CF, CN)[fN]))
 
 def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
 
@@ -728,7 +749,7 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
 def comb_Ft(Nt, Lt, Bt, Ct, root,wTT):  # from sum2G, default Nt
 
     G = CN(Nt=Nt,Lt=Lt,Bt=Bt,Ct=Ct, root=root); Nt.root=G; Lt.root=G; Bt.root=G; Ct.root=G
-    T = CopyF(Nt)  # temporary accumulator
+    T = Copy(Nt)  # temporary accumulator
     dF_ = []
     for Ft in Lt, Bt:  # connectivity forks, Ct is not directly combined and compared, rdn only?
         if Ft: dF_ += [comp_F(T, Ft, root.r,G)]; T.dTT,T.c,T.r = sum_vt([T,Ft],wTT=wTT)  # Bt*brrw?
@@ -774,7 +795,7 @@ def add_Lt(G, Lt,wTT):  # addition to Q2R
 # utilities:
 def F2N(F):  # convert for cross_comp
 
-    Nt = CopyF(F, root=F); Nt.N_=F.N_; L_=F.L_  # replace in cross_comp
+    Nt = Copy(F, root=F, cls=CF,typ=0); Nt.N_=F.N_; L_=F.L_  # replace in cross_comp
     F.__class__ = CN; F.Nt = Nt
     Na_ = dict(H=[], mang=1, box=np.array([np.inf,np.inf,-np.inf,-np.inf]), sub=0, exe=0, fin=0, root_=[], compared = set())
     if F.typ==0:  # CF | PP, no overlap for Cs
@@ -784,30 +805,45 @@ def F2N(F):  # convert for cross_comp
     for ft in ('Lt','Ct','Bt','Xt','Rt'): setattr(F, ft, CF(root=F))
     return F
 
-def CopyF(F, root=None, r=1):  # F = CF
-    C = CF(dTT=F.dTT*r, m=F.m, d=F.d, c=F.c, r=F.r, root=root or F.root, nF=F.nF)
-    C.N_ = [(N if isinstance(N, CN) else (CopyF(N,root=C) if isinstance(N, CF) else [])) for N in F.N_]  # flat
-    return C
+def Copy(N, root=None, r=1, cls=None, init=0, typ=None):
 
-def Copy_(N, root=None, init=0, typ=None):
+    cls = cls or type(N)
+    
+    # CF, default for all classes
+    attrs = dict(dTT=N.dTT*r, m=N.m, d=N.d, c=N.c, r=N.r, fb_=list(N.fb_),
+              root=root or N.root, nF=N.nF, wTT=copy(N.wTT), w=N.w, typ=N.typ if typ is None else typ)
 
-    if typ is None: typ = 3 if init<2 else N.typ  # G.typ = 3, C.typ=2
-    C = [CC, CN][typ-2](dTT=deepcopy(N.dTT),typ=typ); C.root = N.root if root is None else root
-    for attr in ['m','d','c','r']: setattr(C,attr, getattr(N,attr))
-    if not init and C.typ==N.typ: C.Nt = CopyF(N.Nt,root=C)
-    if typ:
-        for attr in ['fin','span','mang','sub','exe']: setattr(C,attr, getattr(N,attr))
-        for attr in ['nt','kern','box','compared','dTT','m','d','c','r']: setattr(C,attr, copy(getattr(N,attr)))
-        for attr in ['Nt','Lt','Bt','Ct','Xt','Rt']: setattr(C, attr, CopyF(getattr(N,attr), root=C))
+    C = cls(**attrs)
+
+    # CF -> CoF
+    if isinstance(N, CoF) and cls==CoF:
+        C.fw, C.fc, C.fr = N.fw, N.fc, N.fr
+        C.call_ = copy(N.call_); C.typ_  = copy(N.typ_); C.N_ = copy(N.N_)
+        C.gF = Copy(N.gF, root=C,cls=CoF) if N.gF is not None else None
+    else:  # create new class instances for non CoF
+        C.N_ = [(n if isinstance(n, CN) else Copy(n, root=C) if isinstance(n, CF) else []) for n in N.N_]
+        C.L_ = [(l if isinstance(l, CN) else Copy(l, root=C) if isinstance(l, CF) else []) for l in N.L_]
+
+    # CF->CL
+    if isinstance(N, CL) and cls==CL:
+        C.nt = list(N.nt); C.yx = copy(N.yx); C.kern = copy(N.kern); C.span = N.span; C.angl = [copy(N.angl[0]), N.angl[1]] if N.angl else None
+
+    # CF -> CL -> CC
+    if isinstance(N, CC) and cls==CC:
+        C.m_ = list(N.m_); C.d_ = list(N.d_)
+
+    # CF -> CL -> CN
+    if isinstance(N, CN) and cls==CN:
+        C.H = [Copy(lev, root=C) for lev in N.H]
+        C.box = copy(N.box);C.mang = N.mang; C.sub = N.sub; C.exe  = N.exe; C.fin = N.fin; C.compared = copy(N.compared); C.root_ = list(N.root_)
         if init:  # new G
             C.yx = [N.yx]
             if N.angl is not None: C.angl = [copy(N.angl[0]), N.angl[1]]  # get mean
             C.L_ = [l for l in N.rim if l.m>ave]; N.root=C; C.fin = 0  # else centroid
             C.N_ = [N]
         else:
-            C.Lt=CopyF(N.Lt); C.Bt=CopyF(N.Bt)  # empty in init G
-            C.angl = copy(N.angl); C.yx = copy(N.yx)
-        if typ > 1: C.Rt = CopyF(N.Rt)
+            for attr in ['Nt','Lt','Bt','Ct','Xt','Rt']: setattr(C, attr, Copy(getattr(N,attr), root=C))  # Lt and Bt are empty in init G
+            C.angl = deepcopy(N.angl); C.yx = copy(N.yx)
     return C
 
 def extend_box(_box, box):
