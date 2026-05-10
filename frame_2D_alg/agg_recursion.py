@@ -23,6 +23,7 @@ This is followed by centroid-based expansion and divisive sub-clustering.
 each level may extend clustering through 4 increasingly fuzzy stages, each seeded by prior-stage output:
 - select sparse exemplars to seed the clusters, top k for parallelization (get_exemplars),
 - connectivity-based agglomerative clustering, followed by divisive clustering (cluster_N), 
+- add density-normalized aggregate-linkage: ((S(N.in_rim) / S(N.ex_rim)) / (len(C.N_) / (C.span*decay)?
 - centroid-based marginally fuzzy and extensible clustering, in divisive phase (cluster_C),
 - centroid-parallel fully fuzzy FCM-like refine, if significant global overlap (cluster_P).
 
@@ -115,7 +116,7 @@ class CN(CL):  # full node | graph fork set
     def __init__(n, **kw):
         n.Nt,n.Bt,n.Ct,n.Lt,n.Xt,n.Rt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Ct','Lt','Xt','Rt')))  # CN if nest, Ct||Nt
         super().__init__(**kw)
-        n.H = kw.get('H',[])  # lower CF levs / Nt||Ct
+        n.H = kw.get('H',[])  # hierarchy: lower CF levs/ Nt||Ct
         n.box = kw.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
         n.mang= kw.get('mang',1)  # ave match of angles in L_, =1 in links
         n.sub = 0  # composition depth relative to top-composition peers?
@@ -141,7 +142,7 @@ class CoF(CF):
     _cur = contextvars.ContextVar('oF')
     def __init__(f, fo=1, **kw):
         super().__init__(**kw)
-        f.fo = fo
+        f.fo = kw.get('fo',1)
         f.call_ = kw.get('call_',[])  # sub-oFs
         f.typ_  = kw.get('typ_', [])
         f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]
@@ -159,7 +160,7 @@ class CoF(CF):
             gF.wTT = ETT_[gF.nF]; gF.fw = Ew_[gF.nF]; gF.fc = Ec_[gF.nF]; _CoF.gF.call_+= [gF]
             CoF._cur.set(oF); out = func(*a, **kw)
             if oF.call_:
-                for i,F in zip((1,0),(oF,oF.gF)):
+                for i, F in zip((1,0),(oF, oF.gF)):
                     tree = flat_(oF); L=len(tree)-1
                     if oF.fw*L > ave*(oF.fc*L):
                         sum2F(tree, oF); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r) if i else wtt  # oF only?
@@ -226,16 +227,14 @@ def cross_comp(root, rr):  # core function mediating recursive rng+ and der+ cro
     L_,TT,c,r,TTd,cd,rd = comp_C_(N_,rr,fC=1) if fC else comp_N_(combinations(N_,2),rr)
     if L_: # Lm_, no +|- Ft.Lt?
         root.L_ = L_; L= len(L_)-1  # val=m+d /clust, m/comp
-        if sum(vt_(TT,ttE)) * (wE*L) > (ave+avd) * (r+cE*L):
-        # if gate(sum(vt_(TT,ttE))*(wE*L), r+cE*L, dTT=TT, name='cross_comp:get_exemplars'):
+        if sum(vt_(TT,ttE)) * (wE*L) > (ave+avd) * (r+cE*L):  # oF.gF evals?
             E_ = get_exemplars({N for L in L_ for N in L.nt}, r,c)
-            G_,r = cluster_N(root, E_,r,c)  # -> cluster_C,_P, eval?
+            G_,r = cluster_N(root, E_,r,c)  # cluster_C, _P, eval?
             if G_:
                 if not root.typ: F2N(root)  # promote @ 1st sub+ or agg+
                 root.H+= [sum2F(L_,root,froot=1)]  # lev: L_+ derivatives
                 root.Nt = sum2F(G_,froot=1); L=len(G_)-1  # or spliced C_?
                 if vt_(TT,ttX)[0]*(wX*L) > ave*(r+cX*L):  # root brrw|rdn?
-                # if gate(vt_(TT,ttX)[0]*(wX*L), r+cX*L, dTT=TT, name='cross_comp:cross_comp'):
                     G_,r = cross_comp(root.Nt,r)  # agg+
     return G_, r  # G_ is recursion flag
 '''
@@ -524,6 +523,7 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
         if C_:
             sum2F(C_, root=Ft.root.Ct)  # Ct.r includes overlap?
             Ft.root.Ct.Lt = sum2F([L for C in C_ for L in C.L_], root=Ft.root.Ct)
+    # add density-normalized aggregate-linkage: if ((S(N.in_rim) / S(N.ex_rim)) / (len(C.N_) / (C.span*decay)?
     return G_, r
 
 def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
@@ -647,7 +647,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0):  # -> CF/CL/CC/CN/CoF
             TT+=n.dTT*w; R+=n.r*w; n_ += (n.N_ if merge else [n])
             if typ:  # links and higher
                 kern+=n.kern*w; span+=n.span*w; yx+=n.yx*w
-                if n.angl is not None: angl += n.angl[0]
+                if n.angl is not None: angl = copy(n.angl[0]) if angl is None else angl+n.angl[0]
                 if typ==3: box=extend_box(box,n.box)
             elif fO: Fw += n.m
         else:  # init
@@ -672,7 +672,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0):  # -> CF/CL/CC/CN/CoF
         for n in N_: n.root = root or F
     return F
 
-def add2F(F, n, merge=0, fr=0, fo=1):  # unpack for batching in sum2F
+def add2F(F, n, merge=0, fr=0, fo=0):  # unpack for batching in sum2F
 
     a = 'rTT' if fr else 'dTT'  # or wTT?
     if F.c:

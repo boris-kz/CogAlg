@@ -12,6 +12,9 @@ def merge(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f
         fork = []
         if Sub.nF=='E':  # previously added gate
             fork = Sub; fin=0
+            if sub.nF=='E':
+                sub = merge(Sub, sub)  # add2F(Sub,ssub_)?
+                if sub: C+=sub.fc; call_+=[sub]; add_+=[sub]  # merge failed
             for _sub in Sub.call_:
                 if _sub.nF==sub.nF: fin=1; break  # no new fork cost?
             if not fin:
@@ -56,11 +59,11 @@ if __name__ == "__main__":
     add_typ_(Z)  # each call_ in Z.typ_ is the flatten calls of same typ
     # add fffeedback to reform Z for next frame_H:
     spl_ = []  # draft:
-    for F in Z.typ_: spl_ += [split(F)]
-    Z.typ_ = spl_; typ_, mrg_ = [],[]
-    for typ in Z.typ_.pop():
-        if typ in mrg_: continue
-        F = CopyF(typ)
+    for F in [t for t in Z.typ_ if isinstance(t,CoF)]: spl_+= [split(F)]
+    Z.typ_= spl_; typ_,mrg_ = [],[]
+    for t in Z.typ_.pop():
+        if t in mrg_: continue
+        F = CopyF(t)
         for f in Z.typ_: mrg_ += [merge(F,f)]  # merged fs, if any
         typ_ += [F]
     Z.typ_ = typ_
