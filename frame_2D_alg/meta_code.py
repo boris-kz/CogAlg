@@ -1,6 +1,6 @@
 import numpy as np
 from itertools import combinations
-from agg_recursion import (sum2F, add2F, CoF, Copy, cent_TT, vt_, Z, Fw_, Fc_, FTT_, Ew_, Ec_, ETT_, ave, avd, eps)
+from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z, Fw_, Fc_, FTT_, Ew_, Ec_, ETT_, ave, avd, eps)
 '''
 code modification: compare aligned ops between Z.typ_[i] AST sequences, cluster/merge matches into higher oF typs
 '''
@@ -60,12 +60,11 @@ if __name__ == "__main__":
     # add fffeedback to reform Z for next frame_H:
     spl_ = []  # draft:
     for F in [t for t in Z.typ_ if isinstance(t,CoF)]: spl_+= [split(F)]
-    Z.typ_= spl_; typ_,mrg_ = [],[]
-    while Z.typ_:
-        t = Z.typ_.pop()
+    Z.typ_ = spl_; typ_,mrg_ = [],[]
+    for i, t in enumerate(Z.typ_):
         if t in mrg_: continue
-        F = Copy(t,cls=CoF)
-        for f in Z.typ_: mrg_ += [merge(F,f)]  # merged fs, if any
+        F = Copy_(t, cls=CoF)
+        for f in Z.typ_[i:]: mrg_ += [merge(F,f)]  # merged fs, if any
         typ_ += [F]
     Z.typ_ = typ_
 

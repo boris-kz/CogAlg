@@ -23,7 +23,6 @@ This is followed by centroid-based expansion and divisive sub-clustering.
 each level may extend clustering through 4 increasingly fuzzy stages, each seeded by prior-stage output:
 - select sparse exemplars to seed the clusters, top k for parallelization (get_exemplars),
 - connectivity-based agglomerative clustering, followed by divisive clustering (cluster_N), 
-- add density-normalized aggregate-linkage: ((S(N.in_rim) / S(N.ex_rim)) / (len(C.N_) / (C.span*decay)?
 - centroid-based marginally fuzzy and extensible clustering, in divisive phase (cluster_C),
 - centroid-parallel fully fuzzy FCM-like refine, if significant global overlap (cluster_P).
 
@@ -118,11 +117,11 @@ class CN(CL):  # full node | graph fork set
         super().__init__(**kw)
         n.H = kw.get('H',[])  # hierarchy: lower CF levs/ Nt||Ct
         n.box = kw.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
-        n.mang= kw.get('mang',1)  # ave match of angles in L_, =1 in links
-        n.sub = 0  # composition depth relative to top-composition peers?
+        n.mang= kw.get('mang',1) # ave match of angles in L_, =1 in links
+        n.sub = kw.get('sub',0)  # composition depth relative to top-composition peers?
         n.exe = kw.get('exe',0)  # exemplar, temporary
         n.fin = kw.get('fin',0)  # clustered, temporary
-        n.compared = set()
+        n.compared = kw.get('compared',set())
         n.root_ = kw.get('root_',[])  # reciprocal roots, Cs not Bs?
         n.typ = kw.get('typ',3)  # full comp
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
@@ -226,7 +225,7 @@ def cross_comp(root, rr):  # core function mediating recursive rng+ and der+ cro
     L_,TT,c,r,TTd,cd,rd = comp_C_(N_,rr,fC=1) if fC else comp_N_(combinations(N_,2),rr)
     if L_: # Lm_, no +|- Ft.Lt?
         root.L_ = L_; L= len(L_)-1  # val=m+d /clust, m/comp
-        if sum(vt_(TT,ttE)) * (wE*L) > (ave+avd) * (r+cE*L):  # oF.gF evals?
+        if sum(vt_(TT,ttE)) * (wE*L) > (ave+avd) * (r+cE*L):  # or oF.gF evals?
             E_ = get_exemplars({N for L in L_ for N in L.nt}, r,c)
             G_,r = cluster_N(root, E_,r,c)  # cluster_C, _P, eval?
             if G_:
@@ -458,7 +457,7 @@ def get_exemplars(N_,_r,_c):  # multi-layer non-maximum suppression -> sparse se
     else: E_ = [N_[0]]  # no inhibition, any N can be seed
     return E_
 
-def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace iL_ with E_?
+def cluster_N(Ft, _N_, r,_c, frim=0):  # flood-fill node | link clusters, flat, replace iL_ with E_?
 
     def nt_vt(n,_n):
         M, D = 0,0  # exclusive match, contrast
@@ -490,7 +489,11 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
                     _N = L.nt[0] if L.nt[1].fin else L.nt[1]; in_.add(L)
                     if not _N.fin and _N in Ft.N_:
                         m,d = nt_vt(*L.nt)
-                        if m > ave * (r-1) and cluster_rim(_N, N_, r):  # cluster nt, L,C_ by combined rim density:
+                        if m > ave * (r-1):  # cluster nt, L,C_ by combined rim density:
+                            span = np.sqrt(len(N_))  # approx span
+                            if span > 3:  # refine by rim connectivity / norm span
+                                iM = sum([L.m for L in _N.rim if (L.nt[0] if L.nt[1] is _N else L.nt[1]) in N_])
+                                if iM / (span*decay) < ave * (r-1): continue  # normalized N-to-N_ match, sum for sum2G?
                             N_ += [_N]; L_ += [L]; _N.fin = 1
                             _L_+= [l for l in _N.rim if l not in in_ and (l.nt[0].fin ^ l.nt[1].fin)]   # new frontier links, +|-?
                         elif d > avd * (r-1): B_ += [L]  # contrast value, exclusive?
@@ -525,35 +528,13 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
     # add density-normalized aggregate-linkage: if ((S(N.in_rim) / S(N.ex_rim)) / (len(C.N_) / (C.span*decay)?
     return G_, r
 
-def cluster_rim(_N, N_, r):
-
-    in_M = ex_M = 0.0
-    in_ = set(N_)
-    
-    # for each new _N, eval based on all new N's links
-    for L in _N.rim:
-        __N = L.nt[0] if L.nt[1] is _N else L.nt[1]
-        if __N in in_: in_M += L.m
-        else:          ex_M += L.m
-
-    if len(N_)>1:
-        yx_ = np.array([n.yx for n in N_])
-        span = np.hypot(*(yx_ - yx_.mean(axis=0)).T).mean()
-    else: span = N_[0].span
-        
-    density_inv = (span * decay) / len(N_)  # invert from "(len(C.N_) / (C.span*decay)" so that we can multiply it later
-
-    # ((sum(in_C N.rim) / sum(ex_C N.rim)) / (len(C.N_) / (C.span*decay)
-    return (in_M / (ex_M or eps)) * density_inv > ave * r
-
-
 def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
 
     N_= Ft.N_; oF = CoF.get(); oF.c += _c; oF.r+=_r  # revert if 0 clusters?
     for n in N_: n.root_,n.m_,n.d_,n._root_,n._m_,n._d_ = [],[],[],[],[],[]
     _C_ = []
     for i,E in enumerate(E_):
-        C = Copy(E, Ft,init=1,typ=CC)
+        C = Copy_(E, Ft,init=1,typ=CC)
         C.N_,C.L_,C.m_,C.d_ = [E],[],[1],[0]
         E._root_+=[C]; E._m_+=[1]; E._d_+=[0]  # self m,d
         C._N_= list({n for l in E.rim for n in l.nt if n is not E})  # init w for first loop eval
@@ -714,7 +695,7 @@ def add_H(H,h, root, fN=0):
     for Lev,lev in zip_longest(H, h):  # bottom-up
         if lev:
             if Lev: add2F(Lev,lev,1)
-            else: H.append(Copy(lev, root, cls=(CF, CN)[fN]))
+            else: H.append(Copy_(lev, root, cls=(CF,CN)[fN]))
 
 def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
 
@@ -749,7 +730,7 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
 def comb_Ft(Nt, Lt, Bt, Ct, root,wTT):  # from sum2G, default Nt
 
     G = CN(Nt=Nt,Lt=Lt,Bt=Bt,Ct=Ct, root=root); Nt.root=G; Lt.root=G; Bt.root=G; Ct.root=G
-    T = Copy(Nt)  # temporary accumulator
+    T = Copy_(Nt)  # temporary accumulator
     dF_ = []
     for Ft in Lt, Bt:  # connectivity forks, Ct is not directly combined and compared, rdn only?
         if Ft: dF_ += [comp_F(T, Ft, root.r,G)]; T.dTT,T.c,T.r = sum_vt([T,Ft],wTT=wTT)  # Bt*brrw?
@@ -795,7 +776,7 @@ def add_Lt(G, Lt,wTT):  # addition to Q2R
 # utilities:
 def F2N(F):  # convert for cross_comp
 
-    Nt = Copy(F, root=F, cls=CF,typ=0); Nt.N_=F.N_; L_=F.L_  # replace in cross_comp
+    Nt = Copy_(F, root=F, cls=CF,typ=0); Nt.N_=F.N_; L_=F.L_  # replace in cross_comp
     F.__class__ = CN; F.Nt = Nt
     Na_ = dict(H=[], mang=1, box=np.array([np.inf,np.inf,-np.inf,-np.inf]), sub=0, exe=0, fin=0, root_=[], compared = set())
     if F.typ==0:  # CF | PP, no overlap for Cs
@@ -805,45 +786,24 @@ def F2N(F):  # convert for cross_comp
     for ft in ('Lt','Ct','Bt','Xt','Rt'): setattr(F, ft, CF(root=F))
     return F
 
-def Copy(N, root=None, r=1, cls=None, init=0, typ=None):
-
+def Copy_(N, root=None, r=1, cls=None, init=0, typ=None):
     cls = cls or type(N)
-    
-    # CF, default for all classes
-    attrs = dict(dTT=N.dTT*r, m=N.m, d=N.d, c=N.c, r=N.r, fb_=list(N.fb_),
-              root=root or N.root, nF=N.nF, wTT=copy(N.wTT), w=N.w, typ=N.typ if typ is None else typ)
-
-    C = cls(**attrs)
-
-    # CF -> CoF
-    if isinstance(N, CoF) and cls==CoF:
-        C.fw, C.fc, C.fr = N.fw, N.fc, N.fr
-        C.call_ = copy(N.call_); C.typ_  = copy(N.typ_); C.N_ = copy(N.N_)
-        C.gF = Copy(N.gF, root=C,cls=CoF) if N.gF is not None else None
-    else:  # create new class instances for non CoF
-        C.N_ = [(n if isinstance(n, CN) else Copy(n, root=C) if isinstance(n, CF) else []) for n in N.N_]
-        C.L_ = [(l if isinstance(l, CN) else Copy(l, root=C) if isinstance(l, CF) else []) for l in N.L_]
-
-    # CF->CL
-    if isinstance(N, CL) and cls==CL:
-        C.nt = list(N.nt); C.yx = copy(N.yx); C.kern = copy(N.kern); C.span = N.span; C.angl = [copy(N.angl[0]), N.angl[1]] if N.angl else None
-
-    # CF -> CL -> CC
-    if isinstance(N, CC) and cls==CC:
-        C.m_ = list(N.m_); C.d_ = list(N.d_)
-
-    # CF -> CL -> CN
-    if isinstance(N, CN) and cls==CN:
-        C.H = [Copy(lev, root=C) for lev in N.H]
-        C.box = copy(N.box);C.mang = N.mang; C.sub = N.sub; C.exe  = N.exe; C.fin = N.fin; C.compared = copy(N.compared); C.root_ = list(N.root_)
-        if init:  # new G
-            C.yx = [N.yx]
-            if N.angl is not None: C.angl = [copy(N.angl[0]), N.angl[1]]  # get mean
-            C.L_ = [l for l in N.rim if l.m>ave]; N.root=C; C.fin = 0  # else centroid
-            C.N_ = [N]
+    a = dict(dTT=N.dTT*r,m=N.m,d=N.d,c=N.c,r=N.r,fb_=list(N.fb_), root=root or N.root, nF=N.nF,wTT=copy(N.wTT),w=N.w, typ=N.typ if typ is None else typ,
+             N_=copy(N.N_), L_=copy(N.L_))
+    if isinstance(N, CL): a.update(nt=list(N.nt), yx=copy(N.yx), kern=copy(N.kern), span=N.span, angl=[copy(N.angl[0]), N.angl[1]] if N.angl else None)
+    if isinstance(N, CC): a.update(m_=list(N.m_), d_=list(N.d_))
+    if isinstance(N,CoF): a.update(call_=copy(N.call_), typ_=copy(N.typ_), fw=N.fw, fc=N.fc, fr=N.fr)
+    C = cls(**a)
+    if isinstance(N, CoF) and N.gF is not None: C.gF = Copy_(N.gF, root=C, cls=CoF)
+    if isinstance(N, CN):
+        if init:
+            C.yx=[N.yx]; C.angl=[copy(N.angl[0]), N.angl[1]] if N.angl is not None else None
+            C.L_=[l for l in N.rim if l.m>ave]; N.root=C; C.fin=0; C.N_=[N]
         else:
-            for attr in ['Nt','Lt','Bt','Ct','Xt','Rt']: setattr(C, attr, Copy(getattr(N,attr), root=C))  # Lt and Bt are empty in init G
-            C.angl = deepcopy(N.angl); C.yx = copy(N.yx)
+            for f in ('Nt','Lt','Bt','Ct','Xt','Rt'): setattr(C, f, Copy_(getattr(N,f), root=C))
+            C.H = [Copy_(lev, root=C) for lev in N.H]
+            C.angl=deepcopy(N.angl); C.yx=copy(N.yx); C.box=copy(N.box); C.mang=N.mang; C.exe=N.exe; C.fin=N.fin; C.root_=list(N.root_)
+    for n in C.N_+C.L_: n.root = C
     return C
 
 def extend_box(_box, box):

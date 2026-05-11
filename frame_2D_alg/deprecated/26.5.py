@@ -97,3 +97,29 @@ def merge(_Q,Q, root=None):  # combine aligned ops, if-fork per miss, no inline 
         Q_ = set([_Q, Q])
 
     return mrg, Q_
+
+def CopyF(F, root=None, r=1):  # F = CF
+    C = CF(dTT=F.dTT*r, m=F.m, d=F.d, c=F.c, r=F.r, root=root or F.root, nF=F.nF)
+    C.N_ = [(N if isinstance(N, CN) else (CopyF(N,root=C) if isinstance(N, CF) else [])) for N in F.N_]  # flat
+    return C
+
+def Copy_(N, root=None, init=0, typ=None):
+
+    if typ is None: typ = 3 if init<2 else N.typ  # G.typ = 3, C.typ=2
+    C = [CC, CN][typ-2](dTT=deepcopy(N.dTT),typ=typ); C.root = N.root if root is None else root
+    for attr in ['m','d','c','r']: setattr(C,attr, getattr(N,attr))
+    if not init and C.typ==N.typ: C.Nt = CopyF(N.Nt,root=C)
+    if typ:
+        for attr in ['fin','span','mang','sub','exe']: setattr(C,attr, getattr(N,attr))
+        for attr in ['nt','kern','box','compared','dTT','m','d','c','r']: setattr(C,attr, copy(getattr(N,attr)))
+        for attr in ['Nt','Lt','Bt','Ct','Xt','Rt']: setattr(C, attr, CopyF(getattr(N,attr), root=C))
+        if init:  # new G
+            C.yx = [N.yx]
+            if N.angl is not None: C.angl = [copy(N.angl[0]), N.angl[1]]  # get mean
+            C.L_ = [l for l in N.rim if l.m>ave]; N.root=C; C.fin = 0  # else centroid
+            C.N_ = [N]
+        else:
+            C.Lt=CopyF(N.Lt); C.Bt=CopyF(N.Bt)  # empty in init G
+            C.angl = copy(N.angl); C.yx = copy(N.yx)
+        if typ > 1: C.Rt = CopyF(N.Rt)
+    return C
