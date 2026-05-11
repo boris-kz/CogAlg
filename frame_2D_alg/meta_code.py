@@ -39,13 +39,16 @@ def eval(mrg):  # after adding multiple oFs in mrg.call_, not just the pair in s
 # not revised:
 def split(Q, root=None):  # invert merge at most cost-unamortized gate
 
-    g = max(Q.gF.call_, key=lambda g: max(b.fc*b.c - b.fw*b.c for b in g.call_))
     Qs = []
-    for b in g.call_:
-        S = CoF(nF=Q.nF, root=root or Q.root); S.call_=[b if f is g else f for f in Q.call_]
-        S.gF.call_=[x for x in Q.gF.call_ if x is not g]
-        S.c=b.c; S.fw=sum(f.fw for f in S.call_ if isinstance(f,CoF)); S.fc=Fc_[Q.nF]
-        Qs += [S]
+    for gF in Q.call_:
+        if gF.nF == "E":
+            g = max(gF.call_, key=lambda g: max(b.fc*b.c - b.fw*b.c for b in g.call_))
+            for b in g.call_:
+                # not quite sure below
+                S = CoF(nF=b.nF, root=root or gF.root); S.call_=[b if f is g else f for f in gF.call_]
+                S.call_=[x for x in Q.gF.call_ if x is not g]
+                S.c=b.c; S.fw=sum(f.fw for f in S.call_ if isinstance(f,CoF)); S.fc=Fc_[b.nF]
+                Qs += [S]
     return Qs
 
 if __name__ == "__main__":
@@ -64,7 +67,7 @@ if __name__ == "__main__":
     for i, t in enumerate(Z.typ_):
         if t in mrg_: continue
         F = Copy_(t, cls=CoF)
-        for f in Z.typ_[i:]: mrg_ += [merge(F,f)]  # merged fs, if any
+        for f in Z.typ_[i+1:]: mrg_ += [merge(F,f)]  # merged fs, if any (+1 to exclude self)
         typ_ += [F]
     Z.typ_ = typ_
 
