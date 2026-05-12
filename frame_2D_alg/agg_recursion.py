@@ -142,6 +142,7 @@ class CoF(CF):
     def __init__(f, fo=1, **kw):
         super().__init__(**kw)
         f.call_ = kw.get('call_',[])  # top-level AST items
+        f.caller_ = kw.get('caller_',[])  # roots that call this oF
         f.typ_  = kw.get('typ_', [])  # unique oFs in call_
         f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]
         f.gF = CoF(nF=kw.get('nF',0), root=f, fo=0) if fo else None  # oF gate, if any
@@ -160,6 +161,8 @@ class CoF(CF):
             if oF.call_:
                 for i, F in zip((1,0),(oF, oF.gF)):
                     tree = flat_(oF); L=len(tree)-1
+                    if i:
+                        for call in tree: call.caller_ += [oF]   # add caller for flatten calls? Else actually root is already sufficient                       
                     if oF.fw*L > ave*(oF.fc*L):
                         sum2F(tree, oF); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r) if i else wtt  # oF only?
                         oF.w += np.mean(oF.wTT)  # not affected by cent_TT?

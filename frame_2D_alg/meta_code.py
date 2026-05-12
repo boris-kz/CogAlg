@@ -30,16 +30,39 @@ def merge(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f
 # draft
 def cluster_call_(rF, root=None):  # cluster rF callees that are called toghether?
 
-    Sub_,sub_ = [],[]  # _C = rF.call_[0]; sub_ = [_C]
-    _C = []
+    # temporary
+    def comp_call(_C, C, sub_):
+        
+        # callers:
+        # weighted by m? But oF.m is empty, use length?
+        '''
+        m = 0; dm = 0
+        for _caller, caller in zip(_caller_, caller_):
+            if _caller.nF == caller.nF: m  += _caller.m + caller.m
+            else:                       dm += _caller.m + caller.m  
+        caller_eval = m/(m+dm)>0.5
+        '''
+        m = 0
+        for _caller, caller in zip(_C.caller_, C.caller_):
+            if _caller.nF == caller.nF: m  += 1
+            
+        caller_eval = m/max(len(_C.caller_), len(C.caller_))>0.5
+            
+        # sub_:
+        sub_eval = sum([sub.fc for sub in sub_+[C]])/(len(sub_) + 1) < ave * 10
+    
+        return caller_eval and sub_eval
+
+    Sub_,sub_,_C = [],[],[]
     for C in rF.call_[1:]:  # oFs, or all top-level AST items?
         if isinstance(C,CoF):  # call history eval, gated oFs only?
-            if _C and C.caller_ != _C.caller_:  # pseudo, flesh it out
-                if len(sub_) > 5:  # need real eval here
-                    Sub_ += [sum2F(sub_)]; sub_ = [C]
-                    continue  # else keep accumulating sub_?
-        sub_ += [C]; _C = C
-    return Sub_  # may be empty
+            if _C and comp_call(_C, C, sub_):  # pseudo, flesh it out
+                Sub_ += [sum2F(sub_)]; sub_ = [C]
+            else: sub_ += [C]
+            _C = C
+    if sub_: 
+        Sub_ += [sum2F(sub_)]  # last sub_
+    return Sub_  # may be empty  (each element have the same typ here)
 
 if __name__ == "__main__":
 
@@ -52,8 +75,8 @@ if __name__ == "__main__":
     add_typ_(Z)  # each call_ in Z.typ_ is the flatten calls of same typ
     # add fffeedback to reform Z for next frame_H:
     spl_ = []
-    for F in Z.call_:
-        if isinstance(F,CoF): spl_ += [cluster_call_(F)]  # add eval?
+    for F in Z.typ_:
+        if isinstance(F,CoF): spl_ += cluster_call_(F)  # add eval?
     Z.typ_ = spl_; typ_,mrg_ = [],[]
     for i, t in enumerate(Z.typ_):
         if t in mrg_: continue
