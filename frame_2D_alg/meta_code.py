@@ -27,29 +27,19 @@ def merge(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f
         F.call_= call_
         return f  # caller pops merged f from Z.typ_
 
-def eval(mrg):  # after adding multiple oFs in mrg.call_, not just the pair in single merge()
+# draft
+def cluster_call_(rF, root=None):  # cluster rF callees that are called toghether?
 
-    fW = eW = 0
-    call_ = []
-    for F in mrg.call_:  # or typ_: nFs?
-        if F.nF=='E': eW += F.w*F.c  # vs plain count
-        else: call_+= [F]; fW += F.fc
-    Z.typ_ += [mrg if fW/eW >ave else call_[:]]  # unpack mrg if high forking cost ratio
-
-# not revised:
-def split(Q, root=None):  # invert merge at most cost-unamortized gate
-
-    Qs = []
-    for gF in Q.call_:
-        if gF.nF == "E":
-            g = max(gF.call_, key=lambda g: max(b.fc*b.c - b.fw*b.c for b in g.call_))
-            for b in g.call_:
-                # not quite sure below
-                S = CoF(nF=b.nF, root=root or gF.root); S.call_=[b if f is g else f for f in gF.call_]
-                S.call_=[x for x in Q.gF.call_ if x is not g]
-                S.c=b.c; S.fw=sum(f.fw for f in S.call_ if isinstance(f,CoF)); S.fc=Fc_[b.nF]
-                Qs += [S]
-    return Qs
+    Sub_,sub_ = [],[]  # _C = rF.call_[0]; sub_ = [_C]
+    _C = []
+    for C in rF.call_[1:]:  # oFs, or all top-level AST items?
+        if isinstance(C,CoF):  # call history eval, gated oFs only?
+            if _C and C.caller_ != _C.caller_:  # pseudo, flesh it out
+                if len(sub_) > 5:  # need real eval here
+                    Sub_ += [sum2F(sub_)]; sub_ = [C]
+                    continue  # else keep accumulating sub_?
+        sub_ += [C]; _C = C
+    return Sub_  # may be empty
 
 if __name__ == "__main__":
 
@@ -61,13 +51,14 @@ if __name__ == "__main__":
     frame_H(image=imread('./images/toucan.jpg'), iY=Y//2-31, iX=X//2-31, Ly=64,Lx=64, Y=Y,X=X, rV=1)
     add_typ_(Z)  # each call_ in Z.typ_ is the flatten calls of same typ
     # add fffeedback to reform Z for next frame_H:
-    spl_ = []  # draft:
-    for F in [t for t in Z.typ_ if isinstance(t,CoF)]: spl_+= [split(F)]
+    spl_ = []
+    for F in Z.call_:
+        if isinstance(F,CoF): spl_ += [cluster_call_(F)]  # add eval?
     Z.typ_ = spl_; typ_,mrg_ = [],[]
     for i, t in enumerate(Z.typ_):
         if t in mrg_: continue
         F = Copy_(t, cls=CoF)
-        for f in Z.typ_[i+1:]: mrg_ += [merge(F,f)]  # merged fs, if any (+1 to exclude self)
+        for f in Z.typ_[i+1:]: mrg_ += [merge(F,f)]
         typ_ += [F]
     Z.typ_ = typ_
 
@@ -135,7 +126,6 @@ def get_wc(path, func=None, block=None, base=None):
     elif func:
         node = get_func_node(tree, func)
     return round(get_ops(node) / base)
-
 
 if __name__ == "__main__":
     fc_, base = init_wc(("agg_recursion.py", "comp_slice.py", "slice_edge.py"))

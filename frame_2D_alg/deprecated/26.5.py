@@ -123,3 +123,24 @@ def Copy_(N, root=None, init=0, typ=None):
             C.angl = copy(N.angl); C.yx = copy(N.yx)
         if typ > 1: C.Rt = CopyF(N.Rt)
     return C
+
+def split(Q, root=None):  # invert merge at most cost-unamortized gate
+
+    g = max(Q.gF.call_, key=lambda g: max(b.fc*b.c - b.fw*b.c for b in g.call_))
+    Qs = []
+    for b in g.call_:
+        S = CoF(nF=Q.nF, root=root or Q.root); S.call_=[b if f is g else f for f in Q.call_]
+        S.gF.call_=[x for x in Q.gF.call_ if x is not g]
+        S.c=b.c; S.fw=sum(f.fw for f in S.call_ if isinstance(f,CoF)); S.fc=Fc_[Q.nF]
+        Qs += [S]
+    return Qs
+
+def eval(mrg):  # after adding multiple oFs in mrg.call_, not just the pair in single merge()
+
+    fW = eW = 0
+    call_ = []
+    for F in mrg.call_:  # or typ_: nFs?
+        if F.nF=='E': eW += F.w*F.c  # vs plain count
+        else: call_+= [F]; fW += F.fc
+    Z.typ_ += [mrg if fW/eW >ave else call_[:]]
+    # unpack mrg if high forking cost ratio
