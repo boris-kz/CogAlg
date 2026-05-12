@@ -141,10 +141,10 @@ class CoF(CF):
     _cur = contextvars.ContextVar('oF')
     def __init__(f, fo=1, **kw):
         super().__init__(**kw)
-        f.call_ = kw.get('call_',[])  # sub-oFs
-        f.typ_  = kw.get('typ_', [])
+        f.call_ = kw.get('call_',[])  # top-level AST items
+        f.typ_  = kw.get('typ_', [])  # unique oFs in call_
         f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]
-        f.gF = CoF(nF=kw.get('nF',0), root=f, fo=0) if fo else None  # embedded gate aggregate
+        f.gF = CoF(nF=kw.get('nF',0), root=f, fo=0) if fo else None  # oF gate, if any
     @staticmethod
     def get(): return CoF._cur.get(Z)
     @staticmethod
@@ -153,7 +153,7 @@ class CoF(CF):
         @wraps(func)
         def inner(*a, **kw):
             _CoF = CoF._cur.get()
-            oF = CoF(nF=onF_.index(func.__name__), root=_CoF); gF = oF.gF  # auto-created, gF.nF=oF.nF?
+            oF = CoF(nF=onF_.index(func.__name__), root=_CoF); gF=oF.gF  # auto-created
             oF.wTT = FTT_[oF.nF]; oF.fw = Fw_[oF.nF]; oF.fc = Fc_[oF.nF]; _CoF.call_+= [oF]
             gF.wTT = ETT_[gF.nF]; gF.fw = Ew_[gF.nF]; gF.fc = Ec_[gF.nF]; _CoF.gF.call_+= [gF]
             CoF._cur.set(oF); out = func(*a, **kw)
@@ -231,8 +231,8 @@ def cross_comp(root, rr):  # core function mediating recursive rng+ and der+ cro
             if G_:
                 if not root.typ: F2N(root)  # promote @ 1st sub+ or agg+
                 root.H+= [sum2F(L_,root,froot=1)]  # lev: L_+ derivatives
-                root.Nt = sum2F(G_,froot=1); L=len(G_)-1  # or spliced C_?
-                if vt_(TT,ttX)[0]*(wX*L) > ave*(r+cX*L):  # root brrw|rdn?
+                root.Nt = sum2F(G_,root,froot=2); L=len(G_)-1  # or C_ s?
+                if vt_(TT,ttX)[0]*(wX*L) > ave*(r+cX*L):  # root brrw| rdn?
                     G_,r = cross_comp(root.Nt,r)  # agg+
     return G_, r  # G_ is recursion flag
 '''
@@ -524,15 +524,14 @@ def cluster_N(Ft, _N_, r,_c, frim=0):  # flood-fill node | link clusters, flat, 
         C_ = [C for N in (G_ if G_ else _N_) for C in N.Ct.N_]
         if C_:
             sum2F(C_, root=Ft.root.Ct)  # Ct.r includes overlap?
-            Ft.root.Ct.Lt = sum2F([L for C in C_ for L in C.L_], root=Ft.root.Ct)
-    # add density-normalized aggregate-linkage: if ((S(N.in_rim) / S(N.ex_rim)) / (len(C.N_) / (C.span*decay)?
+            L_ = [L for C in C_ for L in C.L_]  # C-to-N links
+            if L_: Ft.root.Ct.Lt = sum2F(L_,root=Ft.root.Ct)
     return G_, r
 
 def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
 
-    N_= Ft.N_; oF = CoF.get(); oF.c += _c; oF.r+=_r  # revert if 0 clusters?
+    N_= copy(Ft.N_); _C_=[]; oF=CoF.get(); oF.c+=_c; oF.r+=_r  # revert if 0 clusters?
     for n in N_: n.root_,n.m_,n.d_,n._root_,n._m_,n._d_ = [],[],[],[],[],[]
-    _C_ = []
     for i,E in enumerate(E_):
         C = Copy_(E, Ft,init=1,typ=CC)
         C.N_,C.L_,C.m_,C.d_ = [E],[],[1],[0]
@@ -545,6 +544,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
         for _C in _C_:  # C.m,d /rTT? sort / sum(_C.m_)?
             N__,n_,m_,d_,M,D,T,R,dTT,up = [],[],[],[],0,0,0,0, np.zeros((2,9)),0  # /C
             for n in _C.N_+_C._N_:  # current + frontier
+                if n not in N_: N_+=[n]; n.root_,n.m_,n.d_,n._root_,n._m_,n._d_ = [],[],[],[],[],[]
                 dtt,_ = base_comp(_C,n)  # or comp_N, decay?
                 m,d = vt_(dtt,ttcC); dTT+=dtt
                 n_+=[n]; m_+=[m]; d_+=[d]; c=n.c; T+=c; M+=m*c; D+=abs(d)*c; R+=n.r*c  # scale totals only?
@@ -670,8 +670,9 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0):  # -> CF/CL/CC/CN/CoF
     if root:
         if typ!=2: add2F(root,F,2)  # skip centroids
         if typ==3 and getattr(root,'C_', None): root.Ct = sum2F(root.C_)
-    if froot:
+    if froot == 1:
         for n in N_: n.root = root or F
+    elif froot == 2: F.root = root
     return F
 
 def add2F(F, n, merge=0, fr=0, fo=0):  # unpack for batching in sum2F
@@ -686,7 +687,7 @@ def add2F(F, n, merge=0, fr=0, fo=0):  # unpack for batching in sum2F
         if isinstance(F,CoF) and isinstance(n,CoF): F.fw=n.m
     if merge <2:
         if fo: F.typ_+= [n]
-    else: F.N_ += (n.N_ if merge else [n])
+        else: F.N_ += (n.N_ if merge else [n])
     if hasattr(F,'H') and getattr(n,'H',None): add_H(F.H, n.H, F)
     if hasattr(n,'C_'): F.C_ = getattr(F,'C_',[]) + n.C_  # same for L_?
     return F
@@ -753,8 +754,8 @@ def add_Nt(G, Nt, merge=0):  # in sum2G
     for N in N_:
         N.fin = 1; N.root = G; c = N.c
         if hasattr(N,'m_'):
-            if G.typ < 3: G.root_,G.m_,G.d_ = [],[],[]  # never rename to G.rm_,G.rd_?
-            G.C_+= N.root_; G.m_+= N.m_; G.d_+= N.d_  # Ct || Nt
+            if not hasattr(G,'m_'): G.root_,G.m_,G.d_ = [],[],[]  # or G.rm_,G.rd_?
+            G.C_ += N.root_; G.m_+= N.m_; G.d_+= N.d_  # Ct || Nt
         G.kern = (G.kern*(C-c) + N.kern*c) / C  # massive?
         G.box = extend_box(G.box, N.box)
         yx_ += [N.yx]
@@ -768,7 +769,7 @@ def add_Lt(G, Lt,wTT):  # addition to Q2R
         L_,pL_ = [],[]; [L_.append(L) if L.typ==1 else pL_.append(L) for L in Lt.N_]
         if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0]* ave*wN > ave*(cN * np.mean([L.r for L in pL_])):
             for L in pL_: L_ += [comp_N(*L.nt, G.r,L.c,1, L.angl[0], L.span)]
-            sum2F(L_,Lt); add2F(G,Lt)
+            sum2F(L_,Lt); add2F(G, Lt, merge=2)
     A = np.sum([l.angl[0] for l in L_], axis=0) if L_ else np.zeros(2)
     G.angl = [A, np.sign(G.dTT[1] @ ttcN[1])]
     G.mang = np.mean([comp_A(G.angl[0], l.angl[0])[0] for l in G.L_])  # Ls only?
@@ -786,7 +787,7 @@ def F2N(F):  # convert for cross_comp
     for ft in ('Lt','Ct','Bt','Xt','Rt'): setattr(F, ft, CF(root=F))
     return F
 
-def Copy_(N, root=None, r=1, cls=None, init=0, typ=None):
+def Copy_(N, root=None, r=1, cls=None, init=0, typ=None, froot=0):
     cls = cls or type(N)
     a = dict(dTT=N.dTT*r,m=N.m,d=N.d,c=N.c,r=N.r,fb_=list(N.fb_), root=root or N.root, nF=N.nF,wTT=copy(N.wTT),w=N.w, typ=N.typ if typ is None else typ,
              N_=copy(N.N_), L_=copy(N.L_))
@@ -794,7 +795,7 @@ def Copy_(N, root=None, r=1, cls=None, init=0, typ=None):
     if isinstance(N, CC): a.update(m_=list(N.m_), d_=list(N.d_))
     if isinstance(N,CoF): a.update(call_=copy(N.call_), typ_=copy(N.typ_), fw=N.fw, fc=N.fc, fr=N.fr)
     C = cls(**a)
-    if isinstance(N, CoF) and N.gF is not None: C.gF = Copy_(N.gF, root=C, cls=CoF)
+    if isinstance(N,CoF) and N.gF is not None: C.gF = Copy_(N.gF, root=C, cls=CoF)
     if isinstance(N, CN):
         if init:
             C.yx=[N.yx]; C.angl=[copy(N.angl[0]), N.angl[1]] if N.angl is not None else None
@@ -803,7 +804,8 @@ def Copy_(N, root=None, r=1, cls=None, init=0, typ=None):
             for f in ('Nt','Lt','Bt','Ct','Xt','Rt'): setattr(C, f, Copy_(getattr(N,f), root=C))
             C.H = [Copy_(lev, root=C) for lev in N.H]
             C.angl=deepcopy(N.angl); C.yx=copy(N.yx); C.box=copy(N.box); C.mang=N.mang; C.exe=N.exe; C.fin=N.fin; C.root_=list(N.root_)
-    for n in C.N_+C.L_: n.root = C
+    if froot:
+        for n in C.N_+C.L_: n.root = C  # reassign for feedback, or root_+= if multiple roots?
     return C
 
 def extend_box(_box, box):
