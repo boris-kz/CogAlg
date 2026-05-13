@@ -28,25 +28,39 @@ def merge(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f
         return f  # caller pops merged f from Z.typ_
 
 # draft, need to fold-in merge()
-def cluster_call_(rF, root=None):  # cluster rF callees if called toghether?
+def cluster_call_(call_, root=None):  # cluster rF callees if called toghether?
 
     def comp_call_(_C, C):  # draft, need to include identity - cost of forking?
 
-        _caller_, caller_ = set(_C.root), set(C.root)
+        # internal
+        m = sum(1 for _c, c in zip(_C.call_, C.call_) if _c.nF == c.nF)
+        d = max(len(_C.call_), len(C.call_)) - m
+
+        # external (single caller for call, multiple for typ)
+        _caller_, caller_ = set(_C.root) if isinstance(_C.root, list) else set([C.root]), set(C.root) if isinstance(C.root, list) else set([C.root]),
         olp = _caller_ & caller_
         off = list(_caller_-olp) + list(caller_-olp)
         M = sum([c.w * c.c for c in olp])
         D = sum([c.w * c.c for c in off])
-        return M/D
+        return m, d, M, D
 
-    seg_,seg,_C = [],[],[]
-    for C in rF.call_:  # AST?
-        if isinstance(C, CoF):
-            if _C and comp_call_(_C, C) > ave:  # comp call history: C callers?
-                seg_ += [sum2F(seg)]; seg=[C]
-            else: seg += [C]
-            _C = C
-    if seg: seg_ += [sum2F(seg)]  # last seg
+    seg_ = []; _C = call_[0]
+    for C in call_[1:]:  # AST?
+
+        mi, di, me, de = comp_call_(_C, C)
+        unit_cost = ave  # unit cost = ave? Or need redefine another var?
+        sep_cost = (mi + me) * unit_cost   # sep_cost = overlap_size * unit_dup_cost
+        residue_cost = np.mean([call.fc for call in set(_C.call_+C.call_)])  # residue cost is mean of calls' fc?
+        mrg_cost = ((di + de) * unit_cost) + residue_cost   # mrg_cost = structural_overhead + residue_cost
+        
+        if sep_cost > mrg_cost: # merge / fork-merge
+            if mi > me:  # merge or splice
+                merged = merge(_C, C)
+                if merged: seg_ += [_C]     
+            elif _C.call_ and C.call_:  # fork-merge (flatten calls, remerge them again)
+                seg_ += cluster_call_(_C.call_ + C.call_)
+        _C = C
+
     return seg_  # may be empty
 
 if __name__ == "__main__":
@@ -58,9 +72,10 @@ if __name__ == "__main__":
     Y,X = imread('./images/toucan.jpg').shape
     frame_H(image=imread('./images/toucan.jpg'), iY=Y//2-31, iX=X//2-31, Ly=64,Lx=64, Y=Y,X=X, rV=1)
     add_typ_(Z)  # each call_ in Z.typ_ is the flatten calls of same typ
+    Z.typ_ = cluster_call_(Z.typ_)  # add eval?
+    '''
     # add fffeedback to reform Z for next frame_H:
     spl_ = []
-    for F in Z.typ_: spl_ += cluster_call_(F)  # add eval?
     Z.typ_ = spl_; typ_,mrg_ = [],[]
     for i, t in enumerate(Z.typ_):
         if t in mrg_: continue
@@ -68,6 +83,7 @@ if __name__ == "__main__":
         for f in Z.typ_[i+1:]: mrg_ += [merge(F,f)]
         typ_ += [F]
     Z.typ_ = typ_
+    '''
 
 import ast
 onF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
