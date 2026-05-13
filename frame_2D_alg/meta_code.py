@@ -27,19 +27,27 @@ def merge(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f
         F.call_= call_
         return f  # caller pops merged f from Z.typ_
 
-# draft
-def cluster_call_(rF, root=None):  # cluster rF callees that are called toghether?
+# draft, need to fold-in merge()
+def cluster_call_(rF, root=None):  # cluster rF callees if called toghether?
 
-    Sub_,sub_ = [],[]  # _C = rF.call_[0]; sub_ = [_C]
-    _C = []
-    for C in rF.call_[1:]:  # oFs, or all top-level AST items?
-        if isinstance(C,CoF):  # call history eval, gated oFs only?
-            if _C and C.caller_ != _C.caller_:  # pseudo, flesh it out
-                if len(sub_) > 5:  # need real eval here
-                    Sub_ += [sum2F(sub_)]; sub_ = [C]
-                    continue  # else keep accumulating sub_?
-        sub_ += [C]; _C = C
-    return Sub_  # may be empty
+    def comp_call_(_C, C):  # draft, need to include identity - cost of forking?
+
+        _caller_, caller_ = set(_C.root), set(C.root)
+        olp = _caller_ & caller_
+        off = list(_caller_-olp) + list(caller_-olp)
+        M = sum([c.w * c.c for c in olp])
+        D = sum([c.w * c.c for c in off])
+        return M/D
+
+    seg_,seg,_C = [],[],[]
+    for C in rF.call_:  # AST?
+        if isinstance(C, CoF):
+            if _C and comp_call_(_C, C) > ave:  # comp call history: C callers?
+                seg_ += [sum2F(seg)]; seg=[C]
+            else: seg += [C]
+            _C = C
+    if seg: seg_ += [sum2F(seg)]  # last seg
+    return seg_  # may be empty
 
 if __name__ == "__main__":
 
@@ -52,8 +60,7 @@ if __name__ == "__main__":
     add_typ_(Z)  # each call_ in Z.typ_ is the flatten calls of same typ
     # add fffeedback to reform Z for next frame_H:
     spl_ = []
-    for F in Z.call_:
-        if isinstance(F,CoF): spl_ += [cluster_call_(F)]  # add eval?
+    for F in Z.typ_: spl_ += cluster_call_(F)  # add eval?
     Z.typ_ = spl_; typ_,mrg_ = [],[]
     for i, t in enumerate(Z.typ_):
         if t in mrg_: continue

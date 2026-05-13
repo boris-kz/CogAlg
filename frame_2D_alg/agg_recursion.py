@@ -82,7 +82,7 @@ class CF(CBase):  # clustering fork: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, 
         f.wTT = kw.get('wTT',wTT); f.w = kw.get('w',0)  # or np.sum(wTT)
         f.fb_ = kw.get('fb_',[])
         f.typ = kw.get('typ',0)  # blocks sub_comp
-        f.root = kw.get('root',None)
+        f.root = kw.get('root',None)  # convert to list in typ oFs?
     def __bool__(f): return bool(f.c)  # N_ may be empty?
 
 class CL(CF):  # typ=1, add kern+positionals for base comp, Rt,Nt,Bt,Ct from comp_sub F2N
@@ -181,11 +181,12 @@ class CoF(CF):
 
 def add_typ_(oF):  # record oF vals for weighting, mapped to global FTT_
 
-    call_ = flat_(oF)
     typ_ = [[] for _ in range(len(FTT_))]
-    for F in call_: typ_[F.nF] += [F]
+    for F in flat_(oF): typ_[F.nF] += [F]  # flattened call tree
     for i, F_ in enumerate(typ_):
-        if F_: T =sum2F(F_,CoF()); T.nF=i; T.wTT=cent_TT(getattr(T,'rTT',T.dTT),T.r); typ_[i]=T
+        if F_:
+            T = sum2F(F_,CoF()); T.nF=i; T.wTT=cent_TT(getattr(T,'rTT',T.dTT),T.r); typ_[i]=T
+            T.root = [F.root for F in F_]  # all callers per typ
     oF.typ_ = typ_
     if any(typ_): add2F(oF,sum2F([t for t in typ_ if t],CoF()))  # refine summed call_?
 
