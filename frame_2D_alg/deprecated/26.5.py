@@ -144,3 +144,16 @@ def eval(mrg):  # after adding multiple oFs in mrg.call_, not just the pair in s
         else: call_+= [F]; fW += F.fc
     Z.typ_ += [mrg if fW/eW >ave else call_[:]]
     # unpack mrg if high forking cost ratio
+
+    def comp_call_(_C, C):  # draft, need to include identity - cost of forking?
+
+        # common aligned calls
+        m = sum(1 for _c, c in zip(_C.call_, C.call_) if _c.nF == c.nF)
+        d = min(len(_C.call_), len(C.call_)) - m
+        # common callers, single / call
+        _caller_, caller_ = set(_C.root) if isinstance(_C.root, list) else set([C.root]), set(C.root) if isinstance(C.root, list) else set([C.root]),
+        olp = _caller_ & caller_
+        off = list(_caller_-olp) + list(caller_-olp)
+        M = sum([c.w * c.c for c in olp])
+        D = sum([c.w * c.c for c in off])
+        return m, d, M, D
