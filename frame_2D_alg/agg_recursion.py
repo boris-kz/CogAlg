@@ -1017,8 +1017,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
         T_, PV__,C,R = [],np.zeros([Ly,Lx]),0,0  # tiles, maps to level frame
         while True:
             if not elev: T = base_tile(iy, ix)
-            L = len(T.N_)-1
-            if T and sum(vt_(T.dTT,T.wTT*ttFrm)) * (wFrm*L) > (ave+avd)*(T.r+elev+ cFrm*L):
+            if T and sum(vt_(T.dTT,T.wTT*ttFrm)) * (wFrm*(len(T.N_)-1)) > (ave+avd)*(T.r+elev+ cFrm*(len(T.N_)-1)):  # T maybe None
                 frame[y,x] = T; T_ += [T]  # loop adds one tile to level
                 dy_dx = np.array([T.yx[0]-y, T.yx[1]-x])
                 pTT = proj_N(T, np.hypot(*dy_dx), dy_dx, elev,T.c)
