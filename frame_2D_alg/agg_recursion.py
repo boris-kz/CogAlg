@@ -179,17 +179,6 @@ class CoF(CF):
         return gain>T
     def __bool__(f): return bool(f.call_)
 
-def add_typ_(oF):  # record oF vals for weighting, mapped to global FTT_
-
-    typ_ = [[] for _ in range(len(FTT_))]
-    for F in flat_(oF): typ_[F.nF] += [F]  # flattened call tree
-    for i, F_ in enumerate(typ_):
-        if F_:
-            T = sum2F(F_,CoF()); T.nF=i; T.wTT=cent_TT(getattr(T,'rTT',T.dTT),T.r)
-            T.N_ = T.call_; T.call_ = F_[0].call_; typ_[i]=T  # N_=instances, call_=callees
-            T.root = [F.root for F in F_]  # all callers per typ
-    oF.typ_ = typ_
-    if any(typ_): add2F(oF,sum2F([t for t in typ_ if t],CoF()))  # refine summed call_?
 
 Z = CoF(nF='Z'); CoF._cur.set(Z)  # global meta code, data=frame
 
@@ -1049,6 +1038,8 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
             F.H += [lev := sum2F(tile_)]  # include top lev, same vals as F?
             if cross_comp(lev, rr=elev)[0]:  # spec->tN_,tC_,tL_, proj comb N_'L_?
                 elev += 1
+                # this feedback should be in meta_code only now?
+                '''
                 if rV > ave:
                     add_typ_(Z)  # typ_ maps to Fw_,Fc_,FTT_
                     if elev== max_elev:
@@ -1056,6 +1047,8 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
                     for i, tF in enumerate(Z.typ_):
                         if tF: Fw_[i] = tF.fw/tF.c; FTT_[i] = lev.wTT_[i] = tF.wTT
                     ave/=rV; avd/=rV; Fw_,FTT_ = np.array(Fw_) / rV, np.array(FTT_) / rV  # Fc_ is fixed
+                '''
+                
                 tile = F  # lev tile_ is next extension seed
             else: break
         else: break
@@ -1073,16 +1066,9 @@ def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential
         rm, rd = vt_(rTT,FTT_[i]); rM+=rm; rD+=rd
     return rM+rD, rTT_
 
-def trace_func(module_dict, module_name=None):
-    if module_name is None: module_name = module_dict.get('__name__')
-    for name, obj in list(module_dict.items()):
-        if name in onF_:
-            if not inspect.isfunction(obj): continue
-            if obj.__module__ != module_name: continue
-            if getattr(obj, 'wrapped', False): continue
-            module_dict[name] = CoF.traced(obj)
-
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
+
+    from meta_code import trace_func
 
     trace_func(vars())
     Y,X = imread('./images/toucan.jpg').shape

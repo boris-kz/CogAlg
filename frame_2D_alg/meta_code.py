@@ -1,6 +1,6 @@
-import numpy as np
+import numpy as np, inspect, contextvars
 from itertools import combinations
-from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z, Fw_, Fc_, FTT_,
+from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z, Fw_, Fc_, FTT_, wTT,
                            Ew_, Ec_, ETT_, ave, avd, eps, onF_, flat_)
 '''
 code modification: compare aligned ops between Z.typ_[i] AST sequences, cluster/merge matches into higher oF typs
@@ -14,8 +14,10 @@ def merge(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f
         if Sub.nF=='E':  # previously added gate
             fork = Sub; fin=0
             if sub.nF=='E':
-                sub = merge(Sub, sub)  # add2F(Sub,ssub_)?
-                if sub: C+=sub.fc; call_+=[sub]; add_+=[sub]  # merge failed
+                subt = merge(Sub, sub)  # add2F(Sub,ssub_)?
+                if isinstance(subt, tuple): 
+                    sub = subt[1]; C+=sub.fc; call_+=[sub]; add_+=[sub]
+                    continue  # skip below when merging is done
             for _sub in Sub.call_:
                 if _sub.nF==sub.nF: fin=1; break  # no new fork cost?
             if not fin:
@@ -53,7 +55,7 @@ def cluster_call_(Z):  # cluster T callees if called together?
         seg_, seg, _C = [],[],[]
         for C in T.call_:
             if isinstance(C, CoF):
-                if not _C: _C = C; seg += [C]; continue
+                if isinstance(_C, list): _C = C; seg += [C]; continue
                 _t, t = Z.typ_[_C.nF], Z.typ_[C.nF]
                 if comp_callers(_t,t)>ave: seg+= [C]
                 else: seg_eval(seg, seg_); seg = [C]
@@ -77,14 +79,52 @@ def cluster_AST(Q):  # initial wrap all primitives with oFs for Z.call_
     if C: seg_ += [C]
     return seg_
 
+
+
+def add_typ_(oF):  # record oF vals for weighting, mapped to global FTT_
+
+    typ_ = [[] for _ in range(len(FTT_))]
+    for F in flat_(oF): typ_[F.nF] += [F]  # flattened call tree
+    for i, F_ in enumerate(typ_):
+        if F_:
+            T = sum2F(F_,CoF()); T.nF=i; T.wTT=cent_TT(getattr(T,'rTT',T.dTT),T.r)
+            # using Z.call_ is the same, since it covers all calls, so the AST version add_type_ below is redundant
+            T.N_ = T.call_; T.call_ = list(set([call for F in F_ for call in F.call_])); typ_[i]=T  # N_=instances, call_=callees
+            T.root = [F.root for F in F_]  # all callers per typ
+    oF.typ_ = typ_
+    if any(typ_): add2F(oF,sum2F([t for t in typ_ if t],CoF()))  # refine summed call_?
+
+
+def trace_func(module_dict, module_name=None):
+    if module_name is None: module_name = module_dict.get('__name__')
+    for name, obj in list(module_dict.items()):
+        if name in onF_:
+            if not inspect.isfunction(obj): continue
+            if obj.__module__ != module_name: continue
+            if getattr(obj, 'wrapped', False): continue
+            module_dict[name] = CoF.traced(obj)
+
+# skip ffeedback in on onF_? Since it's in meta_code now
+def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
+
+    rTT = np.divide(frame.H[0].wTT, frame.H[1].wTT)  # wTT_ is not relevant now
+    _wTT = frame.H[1].wTT
+    for lev in frame.H[2:]:  # sum ratios between consecutive-level TTs, top-down frame expansion levels, not lev-selective or sub-lev recursive
+        rTT += np.divide(_wTT,lev.wTT)
+        _wTT = lev.wTT
+    rM = rD = 0
+    rm, rd = vt_(rTT,wTT);
+    return rM+rD, rTT
+
+
 if __name__ == "__main__":
 
     import agg_recursion
-    from agg_recursion import frame_H, imread, trace_func, add_typ_
+    from agg_recursion import frame_H, imread
 
     trace_func(vars(agg_recursion))  # add oF tracing
     Y,X = imread('./images/toucan.jpg').shape
-    frame_H(image=imread('./images/toucan.jpg'), iY=Y//2-31, iX=X//2-31, Ly=64,Lx=64, Y=Y,X=X, rV=1)
+    frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2-31, iX=X//2-31, Ly=64,Lx=64, Y=Y,X=X, rV=1)
     add_typ_(Z)  # each call_ in Z.typ_ is the flatten calls of same typ
     # add fffeedback to reform Z for next frame_H:
     Z = cluster_call_(Z)  # new Z, before or after merge?
@@ -94,6 +134,28 @@ if __name__ == "__main__":
         F = Copy_(t, cls=CoF)
         for f in Z.typ_[i+1:]: mrg_ += [merge(F,f)]
         typ_ += [F]
+        
+    
+    if not isinstance(frame, list):
+        rV,rTT = ffeedback(frame)
+        
+        # we need to remove or add FTT_, Fw_ based on the new Z.typ_ here?\
+        # then recompute Fc_ using AST.walk in runtime again
+        for i, tF in enumerate(Z.typ_):
+            if tF: Fw_[i] = tF.fw/tF.c; FTT_[i] = tF.wTT
+        ave/=rV; avd/=rV; Fw_ = np.array(Fw_) / rV  # Fc_ is fixed
+        for i in range(len(FTT_)): FTT_[i] = FTT_[i] * rTT / rV
+    
+        agg_recursion.Z = Z
+        agg_recursion.CoF._cur.set(Z)
+        agg_recursion.ave = ave
+        agg_recursion.avd = avd
+        agg_recursion.Fw_ = Fw_
+        agg_recursion.FTT_ = FTT_
+
+    
+
+        
 
 import ast
 onF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
