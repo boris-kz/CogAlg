@@ -142,7 +142,7 @@ class CoF(CF):
     def __init__(f, fo=1, **kw):
         super().__init__(**kw)
         f.call_ = kw.get('call_',[])  # top-level AST items
-        f.typ_  = kw.get('typ_', [])  # unique oFs in call_
+        f.typ_ = kw.get('typ_',[])  # unique oFs in call_
         f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]
         f.gF = CoF(nF=kw.get('nF',0), root=f, fo=0) if fo else None  # oF gate, if any
     @staticmethod
@@ -185,14 +185,15 @@ def add_typ_(oF):  # record oF vals for weighting, mapped to global FTT_
     for F in flat_(oF): typ_[F.nF] += [F]  # flattened call tree
     for i, F_ in enumerate(typ_):
         if F_:
-            T = sum2F(F_,CoF()); T.nF=i; T.wTT=cent_TT(getattr(T,'rTT',T.dTT),T.r); typ_[i]=T
+            T = sum2F(F_,CoF()); T.nF=i; T.wTT=cent_TT(getattr(T,'rTT',T.dTT),T.r)
+            T.N_ = T.call_; T.call_ = F_[0].call_; typ_[i]=T  # N_=instances, call_=callees
             T.root = [F.root for F in F_]  # all callers per typ
     oF.typ_ = typ_
     if any(typ_): add2F(oF,sum2F([t for t in typ_ if t],CoF()))  # refine summed call_?
 
 Z = CoF(nF='Z'); CoF._cur.set(Z)  # global meta code, data=frame
-# evals:
-def vt_(TT, wTT=wTT):  # multi-variate rel match, rel diff for membership
+
+def vt_(TT, wTT=wTT):  # base eval: multi-variate rel match, rel diff for membership
 
     m_,d_ = TT; ad_ = np.abs(d_); t_ = eps_(m_+ad_)  # ~ max comparand
     m = m_/t_ @ wTT[0]; d = ad_/t_ @ wTT[1]  # norm by co-derived val
@@ -351,9 +352,9 @@ def comp_N(_N,N, r,_c, full=1, A=np.zeros(2),span=None, rL=None, L_=None, N_=Non
             for i,(_Ft,Ft, tnF) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct),('Nt','Lt','Bt','Ct'))):
                 if _Ft and Ft:  # sub-comp
                     dFt = comp_F(_Ft,Ft,r,L); getattr(L,tnF).fb_ += dFt.N_  # tFt feedback
-                    r+= (i or 1) -1  # Nt,Lt are core, not redundant
+                    r += (i or 1) -1  # Nt,Lt are not redundant
         for fb_, nF in zip((L.Nt.fb_,L.Lt.fb_,L.Bt.fb_,L.Ct.fb_), ('Nt','Lt','Bt','Ct')):
-            if fb_:  # L+= trans-Ls, python-batched bottom-up:
+            if fb_: # L+= trans-Ls, python-batched bottom-up:
                 sum2F(fb_,getattr(L,nF))
         sum2F([L.Nt,L.Lt,L.Bt,L.Ct], CoF.get())
     if full:
@@ -1017,8 +1018,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
         T_, PV__,C,R = [],np.zeros([Ly,Lx]),0,0  # tiles, maps to level frame
         while True:
             if not elev: T = base_tile(iy, ix)
-            L = len(T.N_)-1
-            if T and sum(vt_(T.dTT,T.wTT*ttFrm)) * (wFrm*L) > (ave+avd)*(T.r+elev+ cFrm*L):
+            if T and sum(vt_(T.dTT, T.wTT*ttFrm))*(wFrm*(len(T.N_)-1)) > (ave+avd)*(T.r+elev+cFrm*(len(T.N_)-1)):
                 frame[y,x] = T; T_ += [T]  # loop adds one tile to level
                 dy_dx = np.array([T.yx[0]-y, T.yx[1]-x])
                 pTT = proj_N(T, np.hypot(*dy_dx), dy_dx, elev,T.c)

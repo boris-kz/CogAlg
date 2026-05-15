@@ -157,3 +157,17 @@ def eval(mrg):  # after adding multiple oFs in mrg.call_, not just the pair in s
         M = sum([c.w * c.c for c in olp])
         D = sum([c.w * c.c for c in off])
         return m, d, M, D
+
+def add_typ_(oF):  # record oF vals for weighting, mapped to global FTT_
+
+    typ_ = [[] for _ in range(len(FTT_))]
+    for F in flat_(oF): typ_[F.nF] += [F]  # flattened call tree
+    for i, F_ in enumerate(typ_):
+        if F_:
+            T = sum2F(F_,CoF()); T.nF=i; T.wTT=cent_TT(getattr(T,'rTT',T.dTT),T.r)
+            T.N_ = T.call_; T.call_ = F_[0].call_; typ_[i]=T  # N_=instances, call_=callees
+            T.root = [F.root for F in F_]  # all callers per typ
+    oF.typ_ = typ_
+    if any(typ_): add2F(oF,sum2F([t for t in typ_ if t],CoF()))  # refine summed call_?
+
+
