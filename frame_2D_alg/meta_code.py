@@ -1,6 +1,7 @@
 import numpy as np
 from itertools import combinations
-from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z, Fw_, Fc_, FTT_, Ew_, Ec_, ETT_, ave, avd, eps)
+from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z, Fw_, Fc_, FTT_,
+                           Ew_, Ec_, ETT_, ave, avd, eps, onF_, flat_)
 '''
 code modification: compare aligned ops between Z.typ_[i] AST sequences, cluster/merge matches into higher oF typs
 '''
@@ -31,39 +32,50 @@ def merge(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f
         return F,f
     else: return F
 
-# draft
-def cluster_call_(Z, root=None):  # cluster T callees if called together?
+def comp_callers(_T, T):
 
-    def comp_callers(_C, C):
+    caller_, _caller_ = set(T.root), set(_T.root)
+    olp = _caller_ & caller_
+    off = list(_caller_-olp) + list(caller_-olp)
+    M = sum([c.w * c.c for c in olp])
+    D = sum([c.w * c.c for c in off])
+    return M/(D or eps)  # match if same_callers / diff_callers > ave?
 
-        if _C.nF == C.nF: _T,T = Z.typ_[_C.root.nF], Z.typ_[C.root.nF]  # if same typ, get their caller's typ?
-        else:             _T,T = Z.typ_[_C.nF], Z.typ_[C.nF]  # caller_ = typ.root
-        caller_, _caller_ = set(T.root), set(_T.root)  # always typs?
-        olp = _caller_ & caller_
-        off = list(_caller_-olp) + list(caller_-olp)
-        M = sum([c.w * c.c for c in olp])
-        D = sum([c.w * c.c for c in off])
-        return M/(D or eps)
+def cluster_call_(Z):  # cluster T callees if called together?
 
-    
-    def term_seg(seg, seg_):
-        
-        new_typ = sum2F(seg); new_typ.nF = [call.nF for call in new_typ.call_]  # new nF is a list packing multiple nFs
-        seg_ += [new_typ]
-
-    seg_ = []
+    def seg_eval(seg, seg_):
+        if sum(c.fc for c in seg) > ave * Ec_[0]:  # base eval cost
+            T = sum2F(seg); T.nF = [call.nF for call in T.call_]  # new_nF = old_nF_?
+            seg_ += [T]
+    T_= []
     for T in Z.typ_:
         if not T: continue
-        seg, _C = [],[]
-        for C in T.call_:  # AST?
-            if isinstance(C,CoF):
-                if isinstance(_C, CoF): # init _C only
-                    # we should terminate only if < ave?
-                    if comp_callers(_C,C) < ave:  # cost of forking < cost of adding new function?
-                         term_seg(seg,seg_); seg=[]
-                seg += [C]; _C = C
-        if seg: term_seg(seg,seg_)  # last seg
-    return seg_  # may be empty
+        seg_, seg, _C = [],[],[]
+        for C in T.call_:
+            if isinstance(C, CoF):
+                if not _C: _C = C; seg += [C]; continue
+                _t, t = Z.typ_[_C.nF], Z.typ_[C.nF]
+                if comp_callers(_t,t)>ave: seg+= [C]
+                else: seg_eval(seg, seg_); seg = [C]
+                _C = C
+            else: seg += [C]
+        if seg: seg_eval(seg, seg_)  # last seg, add eval?
+        if seg_: T_ += seg_  # segmented T, add eval?
+        else:    T_ += [T]   # recycled T
+    return CoF(typ_ = T_)  # new Z for new input, no other attrs yet?
+
+# draft, may not be needed
+def cluster_AST(Q):  # initial wrap all primitives with oFs for Z.call_
+
+    seg_, C = [],[]
+    for c in Q:
+        if C:
+            if isinstance(c, CoF): seg_ += [C]; C = c
+            else: C.call_ += [c]
+        elif isinstance(c, CoF): C=c
+        else: C = CoF(call_=[c])
+    if C: seg_ += [C]
+    return seg_
 
 if __name__ == "__main__":
 
@@ -75,14 +87,13 @@ if __name__ == "__main__":
     frame_H(image=imread('./images/toucan.jpg'), iY=Y//2-31, iX=X//2-31, Ly=64,Lx=64, Y=Y,X=X, rV=1)
     add_typ_(Z)  # each call_ in Z.typ_ is the flatten calls of same typ
     # add fffeedback to reform Z for next frame_H:
-    Z.typ_ = cluster_call_(Z)
-    typ_,mrg_ = [],[]
-    for i, t in enumerate(Z.typ_):  # combinations(Z.typ_,2)?
+    Z = cluster_call_(Z)  # new Z, before or after merge?
+    typ_, mrg_ = [],[]
+    for i, t in enumerate(Z.typ_):  # vs. combinations(Z.typ_,2)?
         if t in mrg_: continue
         F = Copy_(t, cls=CoF)
         for f in Z.typ_[i+1:]: mrg_ += [merge(F,f)]
         typ_ += [F]
-    Z.typ_ = typ_
 
 import ast
 onF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
@@ -148,6 +159,45 @@ def get_wc(path, func=None, block=None, base=None):
     elif func:
         node = get_func_node(tree, func)
     return round(get_ops(node) / base)
+
+TYP_SKEL = None
+
+def build_typ_skel(paths=("agg_recursion.py","comp_slice.py","slice_edge.py")):
+    nodes = {}
+    for p in paths:
+        with open(p,encoding="utf-8") as f: tree = ast.parse(f.read(),filename=p)
+        for n in ast.walk(tree):
+            if isinstance(n, ast.FunctionDef) and n.name in onF_: nodes[n.name] = n
+    call_seq = [[] for _ in onF_]
+    for name, fn in nodes.items():
+        i = onF_.index(name)
+        for n in ast.walk(fn):
+            if isinstance(n, ast.Call):
+                c = getattr(n.func,'id',None) or getattr(n.func,'attr',None)
+                if c in onF_: call_seq[i] += [onF_.index(c)]
+    callers = [[] for _ in onF_]
+    for i, seq in enumerate(call_seq):
+        for c in seq:
+            if i not in callers[c]: callers[c] += [i]
+    return call_seq, callers
+
+def add_typ_(oF):  # moved from agg_recursion
+
+    global TYP_SKEL
+    if TYP_SKEL is None: TYP_SKEL = build_typ_skel()
+    call_seq, callers = TYP_SKEL
+    typ_ = [[] for _ in range(len(FTT_))]
+    for F in flat_(oF): typ_[F.nF] += [F]
+    for i, F_ in enumerate(typ_):
+        if F_:
+            T = sum2F(F_,CoF()); T.nF=i; T.wTT=cent_TT(getattr(T,'rTT',T.dTT),T.r)
+            T.N_ = T.call_; typ_[i] = T  # instances → N_
+    for i, T in enumerate(typ_):  # wire AST structure after all T's exist
+        if T:
+            T.call_ = [typ_[k] for k in call_seq[i] if typ_[k]]
+            T.root  = [typ_[k] for k in callers[i]  if typ_[k]]
+    oF.typ_ = typ_
+    if any(typ_): add2F(oF, sum2F([t for t in typ_ if t], CoF()))
 
 if __name__ == "__main__":
     fc_, base = init_wc(("agg_recursion.py", "comp_slice.py", "slice_edge.py"))
