@@ -170,4 +170,11 @@ def add_typ_(oF):  # record oF vals for weighting, mapped to global FTT_
     oF.typ_ = typ_
     if any(typ_): add2F(oF,sum2F([t for t in typ_ if t],CoF()))  # refine summed call_?
 
+def cluster_AST(Q):  # primitives are triggers for next oF, wrap them in CoF, for frame only?
+
+    seg_, seg = [], []
+    for c in Q:
+        seg += [c]
+        if isinstance(c,CoF): seg_ += [CoF(call_=seg)]; seg = []
+    return seg_
 

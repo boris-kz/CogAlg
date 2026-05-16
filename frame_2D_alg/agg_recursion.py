@@ -7,6 +7,7 @@ from functools import wraps
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
+from meta_code import trace_func, add_call_typ_, ffeedback, add_gF
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -179,19 +180,7 @@ class CoF(CF):
         return gain>T
     def __bool__(f): return bool(f.call_)
 
-def add_typ_(oF):  # record oF vals for weighting, mapped to global FTT_
-
-    typ_ = [[] for _ in range(len(FTT_))]
-    for F in flat_(oF): typ_[F.nF] += [F]  # flattened call tree
-    for i, F_ in enumerate(typ_):
-        if F_:
-            T = sum2F(F_,CoF()); T.nF=i; T.wTT=cent_TT(getattr(T,'rTT',T.dTT),T.r)
-            T.N_ = T.call_; T.call_ = F_[0].call_; typ_[i]=T  # N_=instances, call_=callees
-            T.root = [F.root for F in F_]  # all callers per typ
-    oF.typ_ = typ_
-    if any(typ_): add2F(oF,sum2F([t for t in typ_ if t],CoF()))  # refine summed call_?
-
-Z = CoF(nF='Z'); CoF._cur.set(Z)  # global meta code, data=frame
+Z = CoF(nF='Z'); CoF._cur.set(Z)  # global instance of frame_H: call_typ_(Z)
 
 def vt_(TT, wTT=wTT):  # base eval: multi-variate rel match, rel diff for membership
 
@@ -1050,9 +1039,9 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
             if cross_comp(lev, rr=elev)[0]:  # spec->tN_,tC_,tL_, proj comb N_'L_?
                 elev += 1
                 if rV > ave:
-                    add_typ_(Z)  # typ_ maps to Fw_,Fc_,FTT_
                     if elev== max_elev:
-                        rV,FTT_ = ffeedback(F)  # from top lev
+                        Z,rV,FTT_ = ffeedback(F)  # from top lev
+                        add_call_typ_(Z)  # typ_ maps to Fw_,Fc_,FTT_
                     for i, tF in enumerate(Z.typ_):
                         if tF: Fw_[i] = tF.fw/tF.c; FTT_[i] = lev.wTT_[i] = tF.wTT
                     ave/=rV; avd/=rV; Fw_,FTT_ = np.array(Fw_) / rV, np.array(FTT_) / rV  # Fc_ is fixed
@@ -1060,27 +1049,6 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
             else: break
         else: break
     return F  # for intra-lev feedback
-
-def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
-
-    rTT_ = np.divide(frame.H[0].wTT_, frame.H[1].wTT_)
-    _wTT_ = frame.H[1].wTT_
-    for lev in frame.H[2:]:  # sum ratios between consecutive-level TTs, top-down frame expansion levels, not lev-selective or sub-lev recursive
-        rTT_ += np.divide(_wTT_,lev.wTT_)
-        _wTT_ = lev.wTT_
-    rM = rD = 0
-    for i, rTT in enumerate(rTT_):
-        rm, rd = vt_(rTT,FTT_[i]); rM+=rm; rD+=rd
-    return rM+rD, rTT_
-
-def trace_func(module_dict, module_name=None):
-    if module_name is None: module_name = module_dict.get('__name__')
-    for name, obj in list(module_dict.items()):
-        if name in onF_:
-            if not inspect.isfunction(obj): continue
-            if obj.__module__ != module_name: continue
-            if getattr(obj, 'wrapped', False): continue
-            module_dict[name] = CoF.traced(obj)
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
 

@@ -1,6 +1,6 @@
-import numpy as np
+import numpy as np, inspect, contextvars
 from itertools import combinations
-from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z, Fw_, Fc_, FTT_,
+from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z, Fw_, Fc_, FTT_, wTT,
                            Ew_, Ec_, ETT_, ave, avd, eps, onF_, flat_)
 '''
 code modification: compare aligned ops between Z.typ_[i] AST sequences, cluster/merge matches into higher oF typs
@@ -14,8 +14,10 @@ def merge(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f
         if Sub.nF=='E':  # previously added gate
             fork = Sub; fin=0
             if sub.nF=='E':
-                sub = merge(Sub, sub)  # add2F(Sub,ssub_)?
-                if sub: C+=sub.fc; call_+=[sub]; add_+=[sub]  # merge failed
+                subt = merge(Sub, sub)  # add2F(Sub,ssub_)?
+                if isinstance(subt, tuple):
+                    sub = subt[1]; C+=sub.fc; call_+=[sub]; add_+=[sub]
+                    continue  # skip if merged:
             for _sub in Sub.call_:
                 if _sub.nF==sub.nF: fin=1; break  # no new fork cost?
             if not fin:
@@ -53,7 +55,8 @@ def cluster_call_(Z):  # cluster T callees if called together?
         seg_, seg, _C = [],[],[]
         for C in T.call_:
             if isinstance(C, CoF):
-                if not _C: _C = C; seg += [C]; continue
+                if isinstance(_C, list):  # init
+                    _C = C; seg += [C]; continue
                 _t, t = Z.typ_[_C.nF], Z.typ_[C.nF]
                 if comp_callers(_t,t)>ave: seg+= [C]
                 else: seg_eval(seg, seg_); seg = [C]
@@ -64,18 +67,26 @@ def cluster_call_(Z):  # cluster T callees if called together?
         else:    T_ += [T]   # recycled T
     return CoF(typ_ = T_)  # new Z for new input, no other attrs yet?
 
-# draft, may not be needed
-def cluster_AST(Q):  # initial wrap all primitives with oFs for Z.call_
+def trace_func(module_dict, module_name=None):
+    if module_name is None: module_name = module_dict.get('__name__')
+    for name, obj in list(module_dict.items()):
+        if name in onF_:
+            if not inspect.isfunction(obj): continue
+            if obj.__module__ != module_name: continue
+            if getattr(obj, 'wrapped', False): continue
+            module_dict[name] = CoF.traced(obj)
 
-    seg_, C = [],[]
-    for c in Q:
-        if C:
-            if isinstance(c, CoF): seg_ += [C]; C = c
-            else: C.call_ += [c]
-        elif isinstance(c, CoF): C=c
-        else: C = CoF(call_=[c])
-    if C: seg_ += [C]
-    return seg_
+
+def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
+
+    rTT = np.divide(frame.H[0].wTT, frame.H[1].wTT)  # wTT_ is not relevant now
+    _wTT = frame.H[1].wTT
+    for lev in frame.H[2:]:  # sum ratios between consecutive-level TTs, top-down frame expansion levels, not lev-selective or sub-lev recursive
+        rTT += np.divide(_wTT,lev.wTT)
+        _wTT = lev.wTT
+    rM = rD = 0
+    rm, rd = vt_(rTT,wTT)
+    return rM+rD, rTT
 
 if __name__ == "__main__":
 
@@ -161,31 +172,56 @@ def get_wc(path, func=None, block=None, base=None):
     return round(get_ops(node) / base)
 
 TYP_SKEL = None
-
-def build_typ_skel(paths=("agg_recursion.py","comp_slice.py","slice_edge.py")):
-    nodes = {}
-    for p in paths:
-        with open(p,encoding="utf-8") as f: tree = ast.parse(f.read(),filename=p)
-        for n in ast.walk(tree):
-            if isinstance(n, ast.FunctionDef) and n.name in onF_: nodes[n.name] = n
-    call_seq = [[] for _ in onF_]
-    for name, fn in nodes.items():
-        i = onF_.index(name)
-        for n in ast.walk(fn):
-            if isinstance(n, ast.Call):
-                c = getattr(n.func,'id',None) or getattr(n.func,'attr',None)
-                if c in onF_: call_seq[i] += [onF_.index(c)]
+# draft:
+'''
+def resolve(seq, typ_): return [typ_[x] if isinstance(x,int) else x for x in seq]
+    ...
+    oF.call_ = cluster_AST(resolve(entry_seq, typ_), root=oF)
+    for i, T in enumerate(typ_):
+        if T: T.call_ = cluster_AST(resolve(ast_seq[i], typ_), root=T)
+'''
+def build_typ_skel(entry='frame_H', modules=('agg_recursion','comp_slice','slice_edge')):
+    import importlib, inspect
+    funcs = {}
+    for m in modules:
+        mod = importlib.import_module(m)
+        for n in onF_+[entry]:
+            fn = getattr(mod, n, None)
+            if fn and n not in funcs: funcs[n] = ast.parse(inspect.getsource(fn)).body[0]
+    def items(fn):
+        seq = []
+        for stmt in fn.body:
+            names = [getattr(c.func,'id',None) or getattr(c.func,'attr',None)
+                     for c in ast.walk(stmt) if isinstance(c,ast.Call)]
+            onF_in = [n for n in names if n in onF_]
+            seq += [onF_.index(n) for n in onF_in] if onF_in else [stmt]
+        return seq
+    ast_seq  = [items(funcs[n]) if n in funcs else [] for n in onF_]
+    entry_seq = items(funcs[entry]) if entry in funcs else []
     callers = [[] for _ in onF_]
-    for i, seq in enumerate(call_seq):
-        for c in seq:
-            if i not in callers[c]: callers[c] += [i]
-    return call_seq, callers
+    for i, seq in enumerate(ast_seq):
+        for x in seq:
+            if isinstance(x,int) and i not in callers[x]: callers[x] += [i]
+    return ast_seq, callers, entry_seq
 
-def add_typ_(oF):  # moved from agg_recursion
+def add_gF(Q, root=None): # pack primitives in next oF.gF
+
+    if root is None: root = Z
+    C_, gate = [],[]
+    for c in Q:
+        if isinstance(c, CoF):
+            C = CoF(nF=c.nF,root=root)  # fresh call-site, .gF auto-created
+            C.gF.call_ = gate; C_ += [C]  # gF is accumulated triggers
+            gate = []
+        else: gate += [c]
+    return C_
+
+def add_call_typ_(oF):
 
     global TYP_SKEL
     if TYP_SKEL is None: TYP_SKEL = build_typ_skel()
-    call_seq, callers = TYP_SKEL
+    call_seq, callers, entry_seq = TYP_SKEL
+    oF.call_ = add_gF(call_seq, root=Z)
     typ_ = [[] for _ in range(len(FTT_))]
     for F in flat_(oF): typ_[F.nF] += [F]
     for i, F_ in enumerate(typ_):
@@ -194,7 +230,7 @@ def add_typ_(oF):  # moved from agg_recursion
             T.N_ = T.call_; typ_[i] = T  # instances → N_
     for i, T in enumerate(typ_):  # wire AST structure after all T's exist
         if T:
-            T.call_ = [typ_[k] for k in call_seq[i] if typ_[k]]
+            T.call_ = [typ_[k] for k in call_seq[i] if typ_[k]]  # add_gF(ast_seq[i], root=T)?
             T.root  = [typ_[k] for k in callers[i]  if typ_[k]]
     oF.typ_ = typ_
     if any(typ_): add2F(oF, sum2F([t for t in typ_ if t], CoF()))
