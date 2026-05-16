@@ -1,7 +1,50 @@
+import ast
 import numpy as np, inspect, contextvars
 from itertools import combinations
 from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z, Fw_, Fc_, FTT_, wTT,
                            Ew_, Ec_, ETT_, ave, avd, eps, onF_, flat_)
+
+weights = {
+    ast.Assign: 2,  # bind name: trivial
+    ast.Attribute: 5,  # single dict lookup on object
+    ast.UnaryOp: 2,  # apply one operator to one operand
+    ast.BoolOp: 1,  # short-circuit decision between already-evaluated values
+    ast.Compare: 2,  # compare already-evaluated operands
+    ast.If: 1,  # test + pick branch, body ops counted separately
+    ast.IfExp: 2,  # same as If
+    ast.BinOp: 2,  # apply operator to two already-evaluated operands
+    ast.AugAssign: 2,  # read + op + store, but op and target counted separately
+    ast.Subscript: 5,  # index resolution into container
+    ast.GeneratorExp: 3,  # lazy wrapper, inner loop body counted as child nodes
+    ast.While: 1,  # condition re-evaluation overhead per iteration, body counted separately
+    ast.For: 1,  # iterator protocol: __iter__ + __next__ overhead, body counted separately
+    ast.ListComp: 1,  # same iteration overhead as For + list.append + allocation
+    ast.SetComp: 2,  # same as ListComp + hashing per element
+    ast.Call: 3,  # frame creation + arg binding + return: overhead beyond the callee body itself
+}
+
+BASE = None  # unit weight from vt_
+TYP_SKEL = None
+
+def prim(primitive, root):  # static primitive computation
+
+    # get weights
+    def get_ops(node): return sum(weights.get(type(n), 0) for n in ast.walk(node))
+    
+    # get base weight from vt_
+    def get_base():  
+        global BASE
+        if BASE is None:
+            import importlib, inspect
+            src = inspect.getsource(importlib.import_module('agg_recursion').vt_)
+            BASE = get_ops(ast.parse(src).body[0])
+        return BASE
+
+    p = CoF(nF=root.nF, root=root, fo=0)      
+    p.fc = p.fw = get_ops(primitive) / get_base()  # ast cost
+    p.ast = primitive                              # pack ast? To identify between primitive CoF and  calls
+    return p
+
 '''
 code modification: compare aligned ops between Z.typ_[i] AST sequences, cluster/merge matches into higher oF typs
 '''
@@ -91,12 +134,12 @@ def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential
 if __name__ == "__main__":
 
     import agg_recursion
-    from agg_recursion import frame_H, imread, trace_func, add_typ_
+    from agg_recursion import frame_H, imread
 
     trace_func(vars(agg_recursion))  # add oF tracing
     Y,X = imread('./images/toucan.jpg').shape
     frame_H(image=imread('./images/toucan.jpg'), iY=Y//2-31, iX=X//2-31, Ly=64,Lx=64, Y=Y,X=X, rV=1)
-    add_typ_(Z)  # each call_ in Z.typ_ is the flatten calls of same typ
+    add_call_typ_(Z)  # each call_ in Z.typ_ is the flatten calls of same typ
     # add fffeedback to reform Z for next frame_H:
     Z = cluster_call_(Z)  # new Z, before or after merge?
     typ_, mrg_ = [],[]
@@ -111,24 +154,7 @@ onF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
         'get_exemplars','cluster_N','cluster_C','cluster_P',  # clust_ functions
         'cross_comp','frame_H','vect_edge','trace_edge','ffeedback','proj_N','comp_slice','slice_edge']  # combined,ancillary
 
-weights = {
-    ast.Assign: 2,  # bind name: trivial
-    ast.Attribute: 5,  # single dict lookup on object
-    ast.UnaryOp: 2,  # apply one operator to one operand
-    ast.BoolOp: 1,  # short-circuit decision between already-evaluated values
-    ast.Compare: 2,  # compare already-evaluated operands
-    ast.If: 1,  # test + pick branch, body ops counted separately
-    ast.IfExp: 2,  # same as If
-    ast.BinOp: 2,  # apply operator to two already-evaluated operands
-    ast.AugAssign: 2,  # read + op + store, but op and target counted separately
-    ast.Subscript: 5,  # index resolution into container
-    ast.GeneratorExp: 3,  # lazy wrapper, inner loop body counted as child nodes
-    ast.While: 1,  # condition re-evaluation overhead per iteration, body counted separately
-    ast.For: 1,  # iterator protocol: __iter__ + __next__ overhead, body counted separately
-    ast.ListComp: 1,  # same iteration overhead as For + list.append + allocation
-    ast.SetComp: 2,  # same as ListComp + hashing per element
-    ast.Call: 3,  # frame creation + arg binding + return: overhead beyond the callee body itself
-}
+
 
 def get_ops(node):
     return sum(weights.get(type(n), 0) for n in ast.walk(node))
@@ -171,15 +197,6 @@ def get_wc(path, func=None, block=None, base=None):
         node = get_func_node(tree, func)
     return round(get_ops(node) / base)
 
-TYP_SKEL = None
-# draft:
-'''
-def resolve(seq, typ_): return [typ_[x] if isinstance(x,int) else x for x in seq]
-    ...
-    oF.call_ = cluster_AST(resolve(entry_seq, typ_), root=oF)
-    for i, T in enumerate(typ_):
-        if T: T.call_ = cluster_AST(resolve(ast_seq[i], typ_), root=T)
-'''
 def build_typ_skel(entry='frame_H', modules=('agg_recursion','comp_slice','slice_edge')):
     import importlib, inspect
     funcs = {}
@@ -210,18 +227,26 @@ def add_gF(Q, root=None): # pack primitives in next oF.gF
     C_, gate = [],[]
     for c in Q:
         if isinstance(c, CoF):
-            C = CoF(nF=c.nF,root=root)  # fresh call-site, .gF auto-created
+            C = CoF(nF=c.nF,root=root,fc=Fc_[c.nF], fw=Fw_[c.nF], wTT=FTT_[c.nF])  # fresh call-site, .gF auto-created
             C.gF.call_ = gate; C_ += [C]  # gF is accumulated triggers
             gate = []
-        else: gate += [c]
+        else: gate += [prim(c, root)]
     return C_
 
 def add_call_typ_(oF):
 
+    def resolve(seq, typ_):  # sort call sequences, to convert int into typ oF, and remains primitives
+        out = []
+        for x in seq:
+            if isinstance(x, int):
+                if isinstance(typ_[x], CoF): out.append(typ_[x])   # skip empty typ_
+            else: out.append(x)
+        return out
+
     global TYP_SKEL
-    if TYP_SKEL is None: TYP_SKEL = build_typ_skel()
+    if TYP_SKEL is None: TYP_SKEL = build_typ_skel()  # we don't need this TYP_SKEL? We will recompute this in every new frame anyway 
     call_seq, callers, entry_seq = TYP_SKEL
-    oF.call_ = add_gF(call_seq, root=Z)
+    
     typ_ = [[] for _ in range(len(FTT_))]
     for F in flat_(oF): typ_[F.nF] += [F]
     for i, F_ in enumerate(typ_):
@@ -229,10 +254,12 @@ def add_call_typ_(oF):
             T = sum2F(F_,CoF()); T.nF=i; T.wTT=cent_TT(getattr(T,'rTT',T.dTT),T.r)
             T.N_ = T.call_; typ_[i] = T  # instances → N_
     for i, T in enumerate(typ_):  # wire AST structure after all T's exist
-        if T:
-            T.call_ = [typ_[k] for k in call_seq[i] if typ_[k]]  # add_gF(ast_seq[i], root=T)?
-            T.root  = [typ_[k] for k in callers[i]  if typ_[k]]
+        if isinstance(T, CoF):
+            T.call_ = add_gF(resolve(call_seq[i], typ_), root=T)
+            T.root  = [typ_[k] for k in callers[i] if isinstance(typ_[k], CoF)]
+
     oF.typ_ = typ_
+    oF.call_ = add_gF(resolve([prim for seq in call_seq for prim in seq], typ_), root=oF)
     if any(typ_): add2F(oF, sum2F([t for t in typ_ if t], CoF()))
 
 if __name__ == "__main__":

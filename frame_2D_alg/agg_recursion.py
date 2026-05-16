@@ -7,7 +7,7 @@ from functools import wraps
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
-from meta_code import trace_func, add_call_typ_, ffeedback, add_gF
+
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -1040,6 +1040,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
                 elev += 1
                 if rV > ave:
                     if elev== max_elev:
+                        from meta_code import add_call_typ_, ffeedback, add_gF
                         Z,rV,FTT_ = ffeedback(F)  # from top lev
                         add_call_typ_(Z)  # typ_ maps to Fw_,Fc_,FTT_
                     for i, tF in enumerate(Z.typ_):
@@ -1052,6 +1053,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
 
+    from meta_code import trace_func
     trace_func(vars())
     Y,X = imread('./images/toucan.jpg').shape
     # frame = agg_frame(0, image=imread('./images/toucan.jpg'), iY=Y, iX=X)
