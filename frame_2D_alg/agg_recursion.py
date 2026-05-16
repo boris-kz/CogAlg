@@ -7,6 +7,7 @@ from functools import wraps
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
+from meta_code import trace_func, add_call_typ_, ffeedback, add_gF
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -179,8 +180,7 @@ class CoF(CF):
         return gain>T
     def __bool__(f): return bool(f.call_)
 
-
-Z = CoF(nF='Z'); CoF._cur.set(Z)  # global meta code, data=frame
+Z = CoF(nF='Z'); CoF._cur.set(Z)  # global instance of frame_H: call_typ_(Z)
 
 def vt_(TT, wTT=wTT):  # base eval: multi-variate rel match, rel diff for membership
 
@@ -1038,37 +1038,19 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
             F.H += [lev := sum2F(tile_)]  # include top lev, same vals as F?
             if cross_comp(lev, rr=elev)[0]:  # spec->tN_,tC_,tL_, proj comb N_'L_?
                 elev += 1
-                # this feedback should be in meta_code only now?
-                '''
                 if rV > ave:
-                    add_typ_(Z)  # typ_ maps to Fw_,Fc_,FTT_
                     if elev== max_elev:
-                        rV,FTT_ = ffeedback(F)  # from top lev
+                        Z,rV,FTT_ = ffeedback(F)  # from top lev
+                        add_call_typ_(Z)  # typ_ maps to Fw_,Fc_,FTT_
                     for i, tF in enumerate(Z.typ_):
                         if tF: Fw_[i] = tF.fw/tF.c; FTT_[i] = lev.wTT_[i] = tF.wTT
                     ave/=rV; avd/=rV; Fw_,FTT_ = np.array(Fw_) / rV, np.array(FTT_) / rV  # Fc_ is fixed
-                '''
-                
                 tile = F  # lev tile_ is next extension seed
             else: break
         else: break
     return F  # for intra-lev feedback
 
-def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
-
-    rTT_ = np.divide(frame.H[0].wTT_, frame.H[1].wTT_)
-    _wTT_ = frame.H[1].wTT_
-    for lev in frame.H[2:]:  # sum ratios between consecutive-level TTs, top-down frame expansion levels, not lev-selective or sub-lev recursive
-        rTT_ += np.divide(_wTT_,lev.wTT_)
-        _wTT_ = lev.wTT_
-    rM = rD = 0
-    for i, rTT in enumerate(rTT_):
-        rm, rd = vt_(rTT,FTT_[i]); rM+=rm; rD+=rd
-    return rM+rD, rTT_
-
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
-
-    from meta_code import trace_func
 
     trace_func(vars())
     Y,X = imread('./images/toucan.jpg').shape
