@@ -1,5 +1,6 @@
 import numpy as np, inspect, contextvars
 import ast; from itertools import combinations
+import agg_recursion
 from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z, Fw_, Fc_, FTT_, wTT, Ew_, Ec_, ETT_, ave, avd, eps, onF_, flat_)
 '''
 code modification: compare aligned ops between Z.typ_[i] AST sequences, cluster/merge matches into higher oF typs
@@ -107,13 +108,12 @@ def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential
 # move to agg_recusrion?:
 if __name__ == "__main__":
 
-    import agg_recursion
-    from agg_recursion import frame_H, imread, trace_func, add_typ_
+    from agg_recursion import frame_H, imread
 
     trace_func(vars(agg_recursion))  # add oF tracing
     Y,X = imread('./images/toucan.jpg').shape
     frame_H(image=imread('./images/toucan.jpg'), iY=Y//2-31, iX=X//2-31, Ly=64,Lx=64, Y=Y,X=X, rV=1)
-    add_typ_(Z)  # each call_ in Z.typ_ is the flatten calls of same typ
+    add_call_typ_(Z)  # each call_ in Z.typ_ is the flatten calls of same typ
     # add fffeedback to reform Z for next frame_H:
     Z = cluster_call_(Z)  # new Z, before or after merge?
     typ_, mrg_ = [],[]
@@ -123,7 +123,6 @@ if __name__ == "__main__":
         for f in Z.typ_[i+1:]: mrg_ += [merge(F,f)]
         typ_ += [F]
 
-import ast
 onF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
         'get_exemplars','cluster_N','cluster_C','cluster_P',  # clust_ functions
         'cross_comp','frame_H','vect_edge','trace_edge','ffeedback','proj_N','comp_slice','slice_edge']  # combined,ancillary
@@ -171,10 +170,10 @@ def get_wc(path, func=None, block=None, base=None):
 def typ_AST(nF, typ_):  # static body scan: typ refs + primitive stmts
 
     seq = []
-    for stmt in ast.parse(inspect.getsource(globals()[onF_[nF]])).body[0].body:  # .body[0]: FunctionDef, .body: function stmts
-        oF_ = [n for n in (getattr(c.func, 'id', None) or getattr(c.func, 'attr', None)
-                 for c in ast.walk(stmt) if isinstance(c, ast.Call)) if n in onF_]
-        seq += [typ_[onF_.index(n)] for n in oF_] if oF_ else [stmt]
+    for stmt in ast.parse(inspect.getsource(getattr(agg_recursion, onF_[nF]))).body[0].body:
+        oF_ =  [n for n in (getattr(c.func, 'id', None) or getattr(c.func, 'attr', None)
+                for c in ast.walk(stmt) if isinstance(c, ast.Call)) if n and n in onF_]
+        seq += [typ_[onF_.index(n)] for n in oF_ if isinstance(typ_[onF_.index(n)], CoF)] if oF_ else [stmt]  # skip empty typ? or we need to preserve it?
     return seq
 
 def add_gF(T, stmts):  # per typ,call_, pack primitives in next oF.gF.call_
@@ -196,10 +195,13 @@ def add_call_typ_(T):
         if F_:
             t = sum2F(F_,CoF()); t.nF=i; t.wTT=cent_TT(getattr(t,'rTT',t.dTT), t.r)
             t.N_ = t.call_  # instances → N_
-            t.call_ = add_gF(t, typ_AST(i))  # static AST structure
+            t.root = [F.root for F in F_]   # this is missed out?
             typ_[i] = t
+    # after all typs are filled
+    for i, t in enumerate(typ_):
+        if isinstance(t, CoF): t.call_ = add_gF(t, typ_AST(i, typ_)) # static AST structure
     T.typ_ = typ_
-    T.call_ = add_gF(T, typ_AST(T.nF))  # T's own static structure
+    T.call_ = add_gF(T, [call for t in typ_ if isinstance(t, CoF) for call in t.call_])  # T's own static structure (Z should covers all, so just typ_?)
     if any(typ_): add2F(T, sum2F([t for t in typ_ if t], CoF()))
 
 if __name__ == "__main__":
