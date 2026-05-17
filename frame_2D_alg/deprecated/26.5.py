@@ -178,3 +178,26 @@ def cluster_AST(Q):  # primitives are triggers for next oF, wrap them in CoF, fo
         if isinstance(c,CoF): seg_ += [CoF(call_=seg)]; seg = []
     return seg_
 
+TYP_SKEL = None
+
+def build_typ_skel(root_F='frame_H', modules=('agg_recursion','comp_slice','slice_edge')):
+    import importlib, inspect
+    funcs = {}
+    for m in modules:
+        mod = importlib.import_module(m)
+        for n in onF_+[root_F]:
+            fn = getattr(mod, n, None)
+            if fn and n not in funcs: funcs[n] = ast.parse(inspect.getsource(fn)).body[0]
+    def items(fn):
+        seq = []
+        for stmt in fn.body:
+            names = [getattr(c.func,'id',None) or getattr(c.func,'attr',None)
+                     for c in ast.walk(stmt) if isinstance(c,ast.Call)]
+            nF_ = [n for n in names if n in onF_]
+            seq += [nF_.index(nF) for nF in nF_] if nF_ else [stmt]
+        return seq
+    oF_ = [items(funcs[n]) if n in funcs else [] for n in onF_]
+    op_ = items(funcs[root_F]) if root_F in funcs else []
+    return oF_, op_
+
+
