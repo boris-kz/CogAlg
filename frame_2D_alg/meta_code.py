@@ -1,10 +1,27 @@
 import numpy as np, inspect, contextvars
-from itertools import combinations
-from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z, Fw_, Fc_, FTT_, wTT,
-                           Ew_, Ec_, ETT_, ave, avd, eps, onF_, flat_)
+import ast; from itertools import combinations
+from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z, Fw_, Fc_, FTT_, wTT, Ew_, Ec_, ETT_, ave, avd, eps, onF_, flat_)
 '''
 code modification: compare aligned ops between Z.typ_[i] AST sequences, cluster/merge matches into higher oF typs
 '''
+costs = {
+    ast.Assign: 2,  # bind name: trivial
+    ast.Attribute: 5,  # single dict lookup on object
+    ast.UnaryOp: 2,  # apply one operator to one operand
+    ast.BoolOp: 1,  # short-circuit decision between already-evaluated values
+    ast.Compare: 2,  # compare already-evaluated operands
+    ast.If: 1,  # test + pick branch, body ops counted separately
+    ast.IfExp: 2,  # same as If
+    ast.BinOp: 2,  # apply operator to two already-evaluated operands
+    ast.AugAssign: 2,  # read + op + store, but op and target counted separately
+    ast.Subscript: 5,  # index resolution into container
+    ast.GeneratorExp: 3,  # lazy wrapper, inner loop body counted as child nodes
+    ast.While: 1,  # condition re-evaluation overhead per iteration, body counted separately
+    ast.For: 1,  # iterator protocol: __iter__ + __next__ overhead, body counted separately
+    ast.ListComp: 1,  # same iteration overhead as For + list.append + allocation
+    ast.SetComp: 2,  # same as ListComp + hashing per element
+    ast.Call: 3,  # frame creation + arg binding + return: overhead beyond the callee body itself
+}
 def merge(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f can only be added as a whole
 
     call_, add_ = [], []  # replace F.call_ if eval
@@ -76,7 +93,6 @@ def trace_func(module_dict, module_name=None):
             if getattr(obj, 'wrapped', False): continue
             module_dict[name] = CoF.traced(obj)
 
-
 def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
 
     rTT = np.divide(frame.H[0].wTT, frame.H[1].wTT)  # wTT_ is not relevant now
@@ -86,8 +102,9 @@ def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential
         _wTT = lev.wTT
     rM = rD = 0
     rm, rd = vt_(rTT,wTT)
-    return rM+rD, rTT
+    return rM+rD, rTT  # add rm,rd?
 
+# move to agg_recusrion?:
 if __name__ == "__main__":
 
     import agg_recursion
@@ -111,27 +128,8 @@ onF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
         'get_exemplars','cluster_N','cluster_C','cluster_P',  # clust_ functions
         'cross_comp','frame_H','vect_edge','trace_edge','ffeedback','proj_N','comp_slice','slice_edge']  # combined,ancillary
 
-weights = {
-    ast.Assign: 2,  # bind name: trivial
-    ast.Attribute: 5,  # single dict lookup on object
-    ast.UnaryOp: 2,  # apply one operator to one operand
-    ast.BoolOp: 1,  # short-circuit decision between already-evaluated values
-    ast.Compare: 2,  # compare already-evaluated operands
-    ast.If: 1,  # test + pick branch, body ops counted separately
-    ast.IfExp: 2,  # same as If
-    ast.BinOp: 2,  # apply operator to two already-evaluated operands
-    ast.AugAssign: 2,  # read + op + store, but op and target counted separately
-    ast.Subscript: 5,  # index resolution into container
-    ast.GeneratorExp: 3,  # lazy wrapper, inner loop body counted as child nodes
-    ast.While: 1,  # condition re-evaluation overhead per iteration, body counted separately
-    ast.For: 1,  # iterator protocol: __iter__ + __next__ overhead, body counted separately
-    ast.ListComp: 1,  # same iteration overhead as For + list.append + allocation
-    ast.SetComp: 2,  # same as ListComp + hashing per element
-    ast.Call: 3,  # frame creation + arg binding + return: overhead beyond the callee body itself
-}
-
 def get_ops(node):
-    return sum(weights.get(type(n), 0) for n in ast.walk(node))
+    return sum(costs.get(type(n), 0) for n in ast.walk(node))
 
 def init_wc(paths): # compute weights based on operations in function, independent of deeper callees
     # onF_+ vt_ names and function objects:
@@ -148,7 +146,6 @@ def init_wc(paths): # compute weights based on operations in function, independe
 
 def get_wc(path, func=None, block=None, base=None):
 
-    # get function
     def get_func_node(tree, name):
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef) and node.name == name:
@@ -165,75 +162,45 @@ def get_wc(path, func=None, block=None, base=None):
         for n in ast.walk(tree): # walk the tree and sum weights for nodes that fall within the line range
             if hasattr(n, 'lineno'):
                 if start <= n.lineno <= end:  # make sure node's line number falls within the block
-                    ops_count += weights.get(type(n), 0)
+                    ops_count += costs.get(type(n), 0)
         return round(ops_count / base)
     elif func:
         node = get_func_node(tree, func)
     return round(get_ops(node) / base)
 
-TYP_SKEL = None
-# draft:
-'''
-def resolve(seq, typ_): return [typ_[x] if isinstance(x,int) else x for x in seq]
-    ...
-    oF.call_ = cluster_AST(resolve(entry_seq, typ_), root=oF)
-    for i, T in enumerate(typ_):
-        if T: T.call_ = cluster_AST(resolve(ast_seq[i], typ_), root=T)
-'''
-def build_typ_skel(entry='frame_H', modules=('agg_recursion','comp_slice','slice_edge')):
-    import importlib, inspect
-    funcs = {}
-    for m in modules:
-        mod = importlib.import_module(m)
-        for n in onF_+[entry]:
-            fn = getattr(mod, n, None)
-            if fn and n not in funcs: funcs[n] = ast.parse(inspect.getsource(fn)).body[0]
-    def items(fn):
-        seq = []
-        for stmt in fn.body:
-            names = [getattr(c.func,'id',None) or getattr(c.func,'attr',None)
-                     for c in ast.walk(stmt) if isinstance(c,ast.Call)]
-            onF_in = [n for n in names if n in onF_]
-            seq += [onF_.index(n) for n in onF_in] if onF_in else [stmt]
-        return seq
-    ast_seq  = [items(funcs[n]) if n in funcs else [] for n in onF_]
-    entry_seq = items(funcs[entry]) if entry in funcs else []
-    callers = [[] for _ in onF_]
-    for i, seq in enumerate(ast_seq):
-        for x in seq:
-            if isinstance(x,int) and i not in callers[x]: callers[x] += [i]
-    return ast_seq, callers, entry_seq
+def typ_AST(nF, typ_):  # static body scan: typ refs + primitive stmts
 
-def add_gF(Q, root=None): # pack primitives in next oF.gF
+    seq = []
+    for stmt in ast.parse(inspect.getsource(globals()[onF_[nF]])).body[0].body:  # .body[0]: FunctionDef, .body: function stmts
+        oF_ = [n for n in (getattr(c.func, 'id', None) or getattr(c.func, 'attr', None)
+                 for c in ast.walk(stmt) if isinstance(c, ast.Call)) if n in onF_]
+        seq += [typ_[onF_.index(n)] for n in oF_] if oF_ else [stmt]
+    return seq
 
-    if root is None: root = Z
+def add_gF(T, stmts):  # per typ,call_, pack primitives in next oF.gF.call_
+
     C_, gate = [],[]
-    for c in Q:
-        if isinstance(c, CoF):
-            C = CoF(nF=c.nF,root=root)  # fresh call-site, .gF auto-created
-            C.gF.call_ = gate; C_ += [C]  # gF is accumulated triggers
-            gate = []
+    for c in stmts:
+        if isinstance(c,CoF):
+            c.gF.call_ = gate
+            c.gF.fc = sum(costs.get(type(n),0) for p in gate for n in ast.walk(p))
+            C_ += [c]; gate = []
         else: gate += [c]
     return C_
 
-def add_call_typ_(oF):
+def add_call_typ_(T):
 
-    global TYP_SKEL
-    if TYP_SKEL is None: TYP_SKEL = build_typ_skel()
-    call_seq, callers, entry_seq = TYP_SKEL
-    oF.call_ = add_gF(call_seq, root=Z)
     typ_ = [[] for _ in range(len(FTT_))]
-    for F in flat_(oF): typ_[F.nF] += [F]
+    for F in flat_(T): typ_[F.nF] += [F] # bin runtime instances, T.call_ still trace tree
     for i, F_ in enumerate(typ_):
         if F_:
-            T = sum2F(F_,CoF()); T.nF=i; T.wTT=cent_TT(getattr(T,'rTT',T.dTT),T.r)
-            T.N_ = T.call_; typ_[i] = T  # instances → N_
-    for i, T in enumerate(typ_):  # wire AST structure after all T's exist
-        if T:
-            T.call_ = [typ_[k] for k in call_seq[i] if typ_[k]]  # add_gF(ast_seq[i], root=T)?
-            T.root  = [typ_[k] for k in callers[i]  if typ_[k]]
-    oF.typ_ = typ_
-    if any(typ_): add2F(oF, sum2F([t for t in typ_ if t], CoF()))
+            t = sum2F(F_,CoF()); t.nF=i; t.wTT=cent_TT(getattr(t,'rTT',t.dTT), t.r)
+            t.N_ = t.call_  # instances → N_
+            t.call_ = add_gF(t, typ_AST(i))  # static AST structure
+            typ_[i] = t
+    T.typ_ = typ_
+    T.call_ = add_gF(T, typ_AST(T.nF))  # T's own static structure
+    if any(typ_): add2F(T, sum2F([t for t in typ_ if t], CoF()))
 
 if __name__ == "__main__":
     fc_, base = init_wc(("agg_recursion.py", "comp_slice.py", "slice_edge.py"))

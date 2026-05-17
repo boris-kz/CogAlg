@@ -7,7 +7,6 @@ from functools import wraps
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
-from meta_code import trace_func, add_call_typ_, ffeedback, add_gF
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -155,8 +154,8 @@ class CoF(CF):
         def inner(*a, **kw):
             _CoF = CoF._cur.get()
             oF = CoF(nF=onF_.index(func.__name__), root=_CoF); gF=oF.gF  # auto-created
-            oF.wTT = FTT_[oF.nF]; oF.fw = Fw_[oF.nF]; oF.fc = Fc_[oF.nF]; _CoF.call_+= [oF]
-            gF.wTT = ETT_[gF.nF]; gF.fw = Ew_[gF.nF]; gF.fc = Ec_[gF.nF]; _CoF.gF.call_+= [gF]
+            oF.wTT = FTT_[oF.nF]; oF.fw = Fw_[oF.nF]; oF.fc = Fc_[oF.nF]; _CoF.call_ += [oF]
+            # gF.wTT = ETT_[gF.nF]; gF.fw = Ew_[gF.nF]; gF.fc = Ec_[gF.nF]  # in gate | add_gF?
             CoF._cur.set(oF); out = func(*a, **kw)
             if oF.call_:
                 for i, F in zip((1,0),(oF, oF.gF)):
@@ -176,7 +175,7 @@ class CoF(CF):
         else:      gw = cost-gain - Ec  # fail: saved body cost - proj gain - eval cost
         g = CoF(nF=gF.nF, root=_CoF, fo=0); g.w = gw; g.fc = Ec; g.span = len(_CoF.call_)
         if dTT is not None: g.dTT = dTT
-        gF.call_+=[g]; gF.fw += gw; gF.fc += Ec
+        gF.N_+=[g]; gF.fw += gw; gF.fc += Ec
         return gain>T
     def __bool__(f): return bool(f.call_)
 
@@ -1040,8 +1039,10 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
                 elev += 1
                 if rV > ave:
                     if elev== max_elev:
-                        Z,rV,FTT_ = ffeedback(F)  # from top lev
+                        from meta_code import add_call_typ_, ffeedback,add_gF
+                        rV,FTT_ = ffeedback(F)  # from top lev
                         add_call_typ_(Z)  # typ_ maps to Fw_,Fc_,FTT_
+                        for T in Z.typ_: add_gF(T,root=Z)  # T.call_- specific
                     for i, tF in enumerate(Z.typ_):
                         if tF: Fw_[i] = tF.fw/tF.c; FTT_[i] = lev.wTT_[i] = tF.wTT
                     ave/=rV; avd/=rV; Fw_,FTT_ = np.array(Fw_) / rV, np.array(FTT_) / rV  # Fc_ is fixed
@@ -1051,7 +1052,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
     return F  # for intra-lev feedback
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
-
+    from meta_code import trace_func
     trace_func(vars())
     Y,X = imread('./images/toucan.jpg').shape
     # frame = agg_frame(0, image=imread('./images/toucan.jpg'), iY=Y, iX=X)
