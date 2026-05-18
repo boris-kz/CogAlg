@@ -772,7 +772,6 @@ def Copy_(N, root=None, r=1, cls=None, init=0, typ=None, froot=0):
     if isinstance(N, CC): a.update(m_=list(N.m_), d_=list(N.d_))
     if isinstance(N,CoF): a.update(call_=copy(N.call_), typ_=copy(N.typ_), fw=N.fw, fc=N.fc, fr=N.fr)
     C = cls(**a)
-    if isinstance(N,CoF) and N.gF is not None: C.gF = Copy_(N.gF, root=C, cls=CoF)
     if isinstance(N, CN):
         if init:
             C.yx=[N.yx]; C.angl=[copy(N.angl[0]), N.angl[1]] if N.angl is not None else None

@@ -54,18 +54,18 @@ def merge(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f
 
 def comp_callers(_T, T):
 
-    caller_, _caller_ = set(T.root), set(_T.root)
+    caller_, _caller_ = set(T.caller_), set(_T.caller_)
     olp = _caller_ & caller_
     off = list(_caller_-olp) + list(caller_-olp)
     M = sum([c.w * c.c for c in olp])
     D = sum([c.w * c.c for c in off])
     return M/(D or eps)  # match if same_callers / diff_callers > ave?
 
-def cluster_call_(Z):  # cluster T callees if called together?
+def cluster_call_():  # cluster T callees if called together? (Z is global and can be retrieved within the func anyway)
 
     def seg_eval(seg, seg_):
         if sum(c.fc for c in seg) > ave * Ec_[0]:  # base eval cost
-            T = sum2F(seg); T.nF = [call.nF for call in T.call_]  # new_nF = old_nF_?
+            T = sum2F(seg); T.nF = [call.nF for call in T.call_]  # new_nF = old_nF_? (only need list when there's different typ in call_?)
             seg_ += [T]
     T_= []
     for T in Z.typ_:
@@ -82,7 +82,7 @@ def cluster_call_(Z):  # cluster T callees if called together?
             else: seg += [C]
         if seg: seg_eval(seg, seg_)  # last seg, add eval?
         if seg_: T_ += seg_  # segmented T, add eval?
-        else:    T_ += [T]   # recycled T
+        else:    T_ += [T]   # recycled T (seg is always filled, so T_ may not be relevant?)
     return CoF(typ_ = T_)  # new Z for new input, no other attrs yet?
 
 def trace_func(module_dict, module_name=None):
@@ -125,29 +125,6 @@ def init_wc(paths): # compute weights based on operations in function, independe
     base = get_ops(funcs.pop('vt_'))
     return [round(get_ops(funcs[name]) / base) for name in onF_], base
 
-def get_wc(path, func=None, block=None, base=None):
-
-    def get_func_node(tree, name):
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == name:
-                return node
-
-    with open(path, "r", encoding="utf-8") as f:
-        src = f.read()
-
-    tree = ast.parse(src, filename=path)
-    if not base: base = get_ops(get_func_node(tree, 'vt_'))
-    if block:
-        start, end = block  # inclusive line numbers
-        ops_count = 0
-        for n in ast.walk(tree): # walk the tree and sum weights for nodes that fall within the line range
-            if hasattr(n, 'lineno'):
-                if start <= n.lineno <= end:  # make sure node's line number falls within the block
-                    ops_count += costs.get(type(n), 0)
-        return round(ops_count / base)
-    elif func:
-        node = get_func_node(tree, func)
-    return round(get_ops(node) / base)
 
 def add_typ_(R):  # root oF, always Z?
 
@@ -158,7 +135,7 @@ def add_typ_(R):  # root oF, always Z?
             T = sum2F(F_,CoF()); T.nF=i; T.wTT=cent_TT(getattr(T,'rTT',T.dTT), T.r)
             T.N_ = T.call_; root_ = []  # instances → N_
             T.caller_ = [F.root for F in F_]  # for comp_callers only?
-            T.root = root_
+            T.fc = get_ops(ast.parse(inspect.getsource(getattr(agg_recursion, onF_[i]))).body[0])
             typ_[i] = T
     if any(typ_):
         add2F( R, sum2F([t for t in typ_ if t], CoF()))
@@ -171,7 +148,7 @@ if __name__ == "__main__":
     frame_H(image=imread('./images/toucan.jpg'), iY=Y//2-31, iX=X//2-31, Ly=64,Lx=64, Y=Y,X=X, rV=1)
     add_typ_(Z)
     # add fffeedback to reform Z for next frame_H
-    Z = cluster_call_(Z)  # new Z, before or after merge?
+    Z = cluster_call_()  # new Z, before or after merge?
     typ_, mrg_ = [],[]
     for i, t in enumerate(Z.typ_):  # vs. combinations(Z.typ_,2)?
         if t in mrg_: continue
@@ -181,9 +158,3 @@ if __name__ == "__main__":
 
     fc_, base = init_wc(("agg_recursion.py", "comp_slice.py", "slice_edge.py"))
     print(f"Weights = {fc_}")
-
-    fc_cross_comp = get_wc("agg_recursion.py", func="cross_comp")
-    print(f"Weight of cross_comp = {fc_cross_comp}")
-
-    fc_block = get_wc("agg_recursion.py", block=(225,243))
-    print(f"Weights for line 225 to 243 = {fc_block}")
