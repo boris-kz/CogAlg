@@ -200,4 +200,81 @@ def build_typ_skel(root_F='frame_H', modules=('agg_recursion','comp_slice','slic
     op_ = items(funcs[root_F]) if root_F in funcs else []
     return oF_, op_
 
+class CoF1(CF):
+    name = "func"
+    _cur = contextvars.ContextVar('oF')
+    def __init__(f, fo=1, **kw):
+        super().__init__(**kw)
+        f.call_ = kw.get('call_',[])  # top-level AST items
+        f.typ_ = kw.get('typ_',[])  # unique oFs in call_
+        f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]
+        f.gF = CoF(nF=kw.get('nF',0), root=f, fo=0) if fo else None  # oF gate, if any
+    @staticmethod
+    def get(): return CoF._cur.get(Z)
+    @staticmethod
+    def traced(func):
+        if getattr(func,'wrapped',False): return func
+        @wraps(func)
+        def inner(*a, **kw):
+            _CoF = CoF._cur.get()
+            oF = CoF(nF=onF_.index(func.__name__), root=_CoF); gF=oF.gF  # auto-created
+            oF.wTT = FTT_[oF.nF]; oF.fw = Fw_[oF.nF]; oF.fc = Fc_[oF.nF]; _CoF.call_ += [oF]
+            # gF.wTT = ETT_[gF.nF]; gF.fw = Ew_[gF.nF]; gF.fc = Ec_[gF.nF]  # in gate | add_gF?
+            CoF._cur.set(oF); out = func(*a, **kw)
+            if oF.call_:
+                for i, F in zip((1,0),(oF, oF.gF)):
+                    tree = flat_(oF); L=len(tree)-1
+                    if oF.fw*L > ave*(oF.fc*L):
+                        sum2F(tree, oF); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r) if i else wtt  # oF only?
+                        oF.w += np.mean(oF.wTT)  # not affected by cent_TT?
+            CoF._cur.set(_CoF)
+            return out
+        inner.wrapped = True
+        return inner
+    @staticmethod
+    def gate(gain,cost, dTT=None):  # gain = evaled_block_w - default_block_w
+        _CoF = CoF._cur.get(); gF = _CoF.gF
+        Ec = Ec_[gF.nF]; T = ave*cost  # threshold
+        if gain>T: gw = -Ec  # pass: cost only, body runs anyway
+        else:      gw = cost-gain - Ec  # fail: saved body cost - proj gain - eval cost
+        g = CoF(nF=gF.nF, root=_CoF, fo=0); g.w = gw; g.fc = Ec; g.span = len(_CoF.call_)
+        if dTT is not None: g.dTT = dTT
+        gF.N_+=[g]; gF.fw += gw; gF.fc += Ec
+        return gain>T
+    def __bool__(f): return bool(f.call_)
+
+def typ_AST(nF, typ_):  # static body scan: typ refs + primitive stmts
+
+    seq = []
+    for stmt in ast.parse(inspect.getsource(globals()[onF_[nF]])).body[0].body:  # .body[0]: FunctionDef, .body: function stmts
+        oF_ = [n for n in (getattr(c.func, 'id', None) or getattr(c.func, 'attr', None)
+                 for c in ast.walk(stmt) if isinstance(c, ast.Call)) if n in onF_]
+        seq += [typ_[onF_.index(n)] for n in oF_] if oF_ else [stmt]
+    return seq
+
+def add_gF(T, stmts):  # per typ.call_, pack primitives in next oF.gF.call_
+
+    C_, gate = [],[]
+    for c in stmts:
+        if isinstance(c,CoF):
+            c.gF.call_ = gate
+            c.gF.fc = sum(costs.get(type(n),0) for p in gate for n in ast.walk(p))
+            C_ += [c]; gate = []
+        else: gate += [c]
+    return C_
+
+def add_call_typ_(T):
+
+    typ_ = [[] for _ in range(len(FTT_))]
+    for F in flat_(T): typ_[F.nF] += [F]  # bin runtime instances, T.call_ still trace tree
+    for i, F_ in enumerate(typ_):
+        if F_:
+            t = sum2F(F_,CoF()); t.nF=i; t.wTT=cent_TT(getattr(t,'rTT',t.dTT), t.r)
+            t.N_ = t.call_  # instances → N_
+            t.call_ = add_gF(t, typ_AST(i))  # static AST structure
+            typ_[i] = t
+    T.typ_ = typ_
+    T.call_ = add_gF(T, typ_AST(T.nF))  # T's own static structure
+    if any(typ_): add2F(T, sum2F([t for t in typ_ if t], CoF()))
+
 

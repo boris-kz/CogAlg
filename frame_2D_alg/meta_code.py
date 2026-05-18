@@ -1,6 +1,7 @@
 import numpy as np, inspect, contextvars
 import ast; from itertools import combinations
-from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z, Fw_, Fc_, FTT_, wTT, Ew_, Ec_, ETT_, ave, avd, eps, onF_, flat_)
+import agg_recursion
+from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z, Fw_, Fc_, FTT_, wTT, Ew_, Ec_, ETT_, ave, avd, eps, flat_, frame_H, imread)
 '''
 code modification: compare aligned ops between Z.typ_[i] AST sequences, cluster/merge matches into higher oF typs
 '''
@@ -104,26 +105,6 @@ def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential
     rm, rd = vt_(rTT,wTT)
     return rM+rD, rTT  # add rm,rd?
 
-# move to agg_recusrion?:
-if __name__ == "__main__":
-
-    import agg_recursion
-    from agg_recursion import frame_H, imread, trace_func, add_typ_
-
-    trace_func(vars(agg_recursion))  # add oF tracing
-    Y,X = imread('./images/toucan.jpg').shape
-    frame_H(image=imread('./images/toucan.jpg'), iY=Y//2-31, iX=X//2-31, Ly=64,Lx=64, Y=Y,X=X, rV=1)
-    add_typ_(Z)  # each call_ in Z.typ_ is the flatten calls of same typ
-    # add fffeedback to reform Z for next frame_H:
-    Z = cluster_call_(Z)  # new Z, before or after merge?
-    typ_, mrg_ = [],[]
-    for i, t in enumerate(Z.typ_):  # vs. combinations(Z.typ_,2)?
-        if t in mrg_: continue
-        F = Copy_(t, cls=CoF)
-        for f in Z.typ_[i+1:]: mrg_ += [merge(F,f)]
-        typ_ += [F]
-
-import ast
 onF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
         'get_exemplars','cluster_N','cluster_C','cluster_P',  # clust_ functions
         'cross_comp','frame_H','vect_edge','trace_edge','ffeedback','proj_N','comp_slice','slice_edge']  # combined,ancillary
@@ -168,41 +149,36 @@ def get_wc(path, func=None, block=None, base=None):
         node = get_func_node(tree, func)
     return round(get_ops(node) / base)
 
-def typ_AST(nF, typ_):  # static body scan: typ refs + primitive stmts
-
-    seq = []
-    for stmt in ast.parse(inspect.getsource(globals()[onF_[nF]])).body[0].body:  # .body[0]: FunctionDef, .body: function stmts
-        oF_ = [n for n in (getattr(c.func, 'id', None) or getattr(c.func, 'attr', None)
-                 for c in ast.walk(stmt) if isinstance(c, ast.Call)) if n in onF_]
-        seq += [typ_[onF_.index(n)] for n in oF_] if oF_ else [stmt]
-    return seq
-
-def add_gF(T, stmts):  # per typ,call_, pack primitives in next oF.gF.call_
-
-    C_, gate = [],[]
-    for c in stmts:
-        if isinstance(c,CoF):
-            c.gF.call_ = gate
-            c.gF.fc = sum(costs.get(type(n),0) for p in gate for n in ast.walk(p))
-            C_ += [c]; gate = []
-        else: gate += [c]
-    return C_
-
-def add_call_typ_(T):
+def add_typ_(R):  # root oF, always Z?
 
     typ_ = [[] for _ in range(len(FTT_))]
-    for F in flat_(T): typ_[F.nF] += [F] # bin runtime instances, T.call_ still trace tree
+    for F in flat_(R): typ_[F.nF] += [F] # bin runtime instances, T.call_ still trace tree
     for i, F_ in enumerate(typ_):
         if F_:
-            t = sum2F(F_,CoF()); t.nF=i; t.wTT=cent_TT(getattr(t,'rTT',t.dTT), t.r)
-            t.N_ = t.call_  # instances → N_
-            t.call_ = add_gF(t, typ_AST(i))  # static AST structure
-            typ_[i] = t
-    T.typ_ = typ_
-    T.call_ = add_gF(T, typ_AST(T.nF))  # T's own static structure
-    if any(typ_): add2F(T, sum2F([t for t in typ_ if t], CoF()))
+            T = sum2F(F_,CoF()); T.nF=i; T.wTT=cent_TT(getattr(T,'rTT',T.dTT), T.r)
+            T.N_ = T.call_; root_ = []  # instances → N_
+            T.caller_ = [F.root for F in F_]  # for comp_callers only?
+            T.root = root_
+            typ_[i] = T
+    if any(typ_):
+        add2F( R, sum2F([t for t in typ_ if t], CoF()))
+    R.typ_ = typ_
 
 if __name__ == "__main__":
+    # move to agg_recursion
+    trace_func(vars(agg_recursion))  # add oF tracing
+    Y,X = imread('./images/toucan.jpg').shape
+    frame_H(image=imread('./images/toucan.jpg'), iY=Y//2-31, iX=X//2-31, Ly=64,Lx=64, Y=Y,X=X, rV=1)
+    add_typ_(Z)
+    # add fffeedback to reform Z for next frame_H
+    Z = cluster_call_(Z)  # new Z, before or after merge?
+    typ_, mrg_ = [],[]
+    for i, t in enumerate(Z.typ_):  # vs. combinations(Z.typ_,2)?
+        if t in mrg_: continue
+        F = Copy_(t, cls=CoF)
+        for f in Z.typ_[i+1:]: mrg_ += [merge(F,f)]
+        typ_ += [F]
+
     fc_, base = init_wc(("agg_recursion.py", "comp_slice.py", "slice_edge.py"))
     print(f"Weights = {fc_}")
 

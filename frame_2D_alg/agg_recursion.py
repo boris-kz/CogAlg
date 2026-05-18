@@ -139,12 +139,11 @@ def flat_(oF, call_=None):  # all nested call_ s
 class CoF(CF):
     name = "func"
     _cur = contextvars.ContextVar('oF')
-    def __init__(f, fo=1, **kw):
+    def __init__(f, **kw):
         super().__init__(**kw)
-        f.call_ = kw.get('call_',[])  # top-level AST items
-        f.typ_ = kw.get('typ_',[])  # unique oFs in call_
+        f.call_ = kw.get('call_',[])  # called oFs only
+        f.typ_ = kw.get('typ_',[])  # oF set in call_tree
         f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]
-        f.gF = CoF(nF=kw.get('nF',0), root=f, fo=0) if fo else None  # oF gate, if any
     @staticmethod
     def get(): return CoF._cur.get(Z)
     @staticmethod
@@ -153,30 +152,18 @@ class CoF(CF):
         @wraps(func)
         def inner(*a, **kw):
             _CoF = CoF._cur.get()
-            oF = CoF(nF=onF_.index(func.__name__), root=_CoF); gF=oF.gF  # auto-created
+            oF = CoF(nF=onF_.index(func.__name__), root=_CoF)
             oF.wTT = FTT_[oF.nF]; oF.fw = Fw_[oF.nF]; oF.fc = Fc_[oF.nF]; _CoF.call_ += [oF]
-            # gF.wTT = ETT_[gF.nF]; gF.fw = Ew_[gF.nF]; gF.fc = Ec_[gF.nF]  # in gate | add_gF?
             CoF._cur.set(oF); out = func(*a, **kw)
             if oF.call_:
-                for i, F in zip((1,0),(oF, oF.gF)):
-                    tree = flat_(oF); L=len(tree)-1
-                    if oF.fw*L > ave*(oF.fc*L):
-                        sum2F(tree, oF); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r) if i else wtt  # oF only?
-                        oF.w += np.mean(oF.wTT)  # not affected by cent_TT?
+                tree = flat_(oF); L=len(tree)-1
+                if oF.fw*L > ave*(oF.fc*L):
+                    sum2F(tree, oF); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)  # conditional?
+                    oF.w += np.mean(oF.wTT)  # not affected by cent_TT?
             CoF._cur.set(_CoF)
             return out
         inner.wrapped = True
         return inner
-    @staticmethod
-    def gate(gain,cost, dTT=None):  # gain = evaled_block_w - default_block_w
-        _CoF = CoF._cur.get(); gF = _CoF.gF
-        Ec = Ec_[gF.nF]; T = ave*cost  # threshold
-        if gain>T: gw = -Ec  # pass: cost only, body runs anyway
-        else:      gw = cost-gain - Ec  # fail: saved body cost - proj gain - eval cost
-        g = CoF(nF=gF.nF, root=_CoF, fo=0); g.w = gw; g.fc = Ec; g.span = len(_CoF.call_)
-        if dTT is not None: g.dTT = dTT
-        gF.N_+=[g]; gF.fw += gw; gF.fc += Ec
-        return gain>T
     def __bool__(f): return bool(f.call_)
 
 Z = CoF(nF='Z'); CoF._cur.set(Z)  # global instance of frame_H: call_typ_(Z)
@@ -1039,10 +1026,9 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
                 elev += 1
                 if rV > ave:
                     if elev== max_elev:
-                        from meta_code import add_call_typ_, ffeedback,add_gF
+                        from meta_code import add_typ_, ffeedback
                         rV,FTT_ = ffeedback(F)  # from top lev
-                        add_call_typ_(Z)  # typ_ maps to Fw_,Fc_,FTT_
-                        for T in Z.typ_: add_gF(T,root=Z)  # T.call_- specific
+                        add_typ_(Z)  # maps to Fw_,Fc_,FTT_
                     for i, tF in enumerate(Z.typ_):
                         if tF: Fw_[i] = tF.fw/tF.c; FTT_[i] = lev.wTT_[i] = tF.wTT
                     ave/=rV; avd/=rV; Fw_,FTT_ = np.array(Fw_) / rV, np.array(FTT_) / rV  # Fc_ is fixed
