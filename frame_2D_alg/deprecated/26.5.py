@@ -277,4 +277,59 @@ def add_call_typ_(T):
     T.call_ = add_gF(T, typ_AST(T.nF))  # T's own static structure
     if any(typ_): add2F(T, sum2F([t for t in typ_ if t], CoF()))
 
+def cluster_call_():  # cluster T callees if called together, for global Z
 
+    def seg_eval(seg, seg_):
+        if sum(c.fc for c in seg) > ave * Ec_[0]:  # base eval cost
+            T = sum2F(seg); nF = T.nF = seg[0].nF  # 1st onF slot
+            onF_[nF+1: nF+len(seg)+1].pop()  # remove nested oFs
+            for i, F in enumerate(seg): F.nF = i  # nested indices
+            seg_ += [T]
+        else: seg[:] = []
+    T_= []
+    for T in Z.typ_:
+        if not T: continue
+        seg_, seg, _C = [],[],[]
+        for C in T.call_:
+            if isinstance(C, CoF):
+                if isinstance(_C, list): _C = C; seg += [C]; continue  # init
+                _t,t = Z.typ_[_C.nF], Z.typ_[C.nF]
+                if comp_callers(_t,t) > ave: seg+= [C]
+                else:  # init seg with consecutive externally missing call
+                    seg_ += [seg_oF] if (seg_oF := seg_eval(seg)) else []
+                    seg = [T]
+        if seg:  # last
+            seg_ += [seg_oF] if (seg_oF := seg_eval(seg)) else []
+        T_ += seg_ or T  # eval segmented T?
+        _C = C
+    return CoF(typ_ = T_)  # new Z for new input, no other attrs yet?
+
+def cluster_call_1():  # cluster T callees if called together, for global Z only?
+
+    _T_ = []
+    for t in Z.typ_:
+        if t: t.grp = [t]; t.caller_ = set(t.caller_); _T_ += [t]; t.V = 0  # pairwise accum of membership value?
+    V = 0; Olp,Off = set(),set()
+    C = -Fc_[0]  # default cost of new representation, placeholder
+    for _T,T in combinations(_T_,2):
+        if _T.grp is T.grp: continue  # the pair was merged
+        v,olp,off = comp_callers(_T,T)
+        if v > ave:
+            V += v; Olp.update(olp); Off.update(off)  # caller overlap and offset, not sure we need it
+            _T.grp += T.grp; T.grp = _T.grp; T.V+=v; _T.V+=v  # concat new roots of externally matching typs
+    grp_ = set(t.grp for t in _T_)
+    for T_ in grp_:
+        v,c = 0,-Fc_[0]
+        for t in T_: v+= t.v; c+= t.fc  # external match and compression of element representation
+    if V > ave - C:
+        G_ = []
+        for T in _T_:
+            if T.grp in G_: continue
+            grp = T.grp; gV = sum(t.v for t in grp); gC = sum(t.fc for t in grp) - 1  # if G.fc = 1
+            if gV > ave- gC:  # caller overlap gain - (ave - grp_compression)
+                G_ += [grp]
+            else: G_ += grp; V-= gV; C-= gC  # revert grouping
+        if V > ave - C:
+            G_ = [sum2F(grp) if isinstance(grp,list) else grp for grp in G_]  # keep discrete Ts
+            # form new Z for new input, vals added in CoF traced:
+            return CoF(typ_=G_)  # or Z.w = V+ C*ave?
