@@ -1,5 +1,5 @@
 import numpy as np, inspect, contextvars
-import ast; from itertools import combinations
+import ast; from itertools import combinations, zip_longest
 import agg_recursion
 from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z, Fw_, Fc_, FTT_, wTT, Ew_, Ec_, ETT_, ave, avd, eps, flat_, frame_H, imread)
 '''
@@ -52,8 +52,23 @@ def merge(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f
         return F,f
     else: return F
 
-def cluster_call_(Z):  # cluster Ts if called together, for global Z only?
+def cluster_call_():  # cluster Ts if called together, for global Z only?
 
+    global Z
+
+    def comp_sequence(_call_, call_):  # or pack in comp_callers?
+        M = D = 0
+        for i, (_c, c) in enumerate(zip_longest(_call_, call_,fillvalue=None)):
+            if _c is None or c is None:
+                call = c if _c is None else _c;
+                D += call.fc * call.c
+            else:
+                if _c.nF == c.nF: M += _c.fc * c.c + c.fc * c.c  # or use min?
+                else:             D += _c.fc * c.c + c.fc * c.c
+                if _c.call_ and c.call_:  # recursive?
+                    m, d = comp_sequence(_c.call_, c.call_); M += m; D += d
+        return M, D
+    
     def comp_callers(_T, T):
         # compute rel value of callers overlap
         olp = _T.caller_ & T.caller_
@@ -62,32 +77,31 @@ def cluster_call_(Z):  # cluster Ts if called together, for global Z only?
         D = sum([c.w * c.c for c in off])
         return M / (D or eps)
         # match if same_callers / diff_callers > ave?
-    _T_ = []
+    _T_, G_ = [], []
     for t in Z.typ_:
         if t: t.grp = [t]; t.caller_ = set(t.caller_); t.V = 0; _T_ += [t]
     for _T,T in combinations(_T_,2):
         if _T.grp is T.grp: continue  # already merged
-        v = comp_callers(_T,T)
+        m, d = comp_sequence(_T.call_, T.call_); v = comp_callers(_T,T); v += m/(d or eps)
         if v > ave:
             _g,g = _T.grp,T.grp
             for t in g: t.grp = _g  # repoint T.grp
             _g += g; _T.V += v; T.V += v  # pairwise accum of membership value
-    G_= []
+        if _T.grp not in G_: G_ += [_T.grp]
     V = 0; C = -Fc_[0]  # grp cost if grp.nF=comp_N_
-    for t in _T_:
-        if t.grp[0] is not t: continue  # eval each group once, at its seed
-        grp = t.grp; gV = 0; gC = -Fc_[0]  # membership, compression / grp
-        for t in grp: gV += t.V; gC += t.fc  # add links?
+    for grp in G_:
+        gV = 0; gC = -Fc_[0]  # membership, compression / grp
+        for t in grp: gV += t.V; gC -= t.fc  # add links?  (gC supposes to be begative when we ave-gC below?)
         gV /= 2  # norm for pairwise redundancy
-        if gV > ave-gC: G_ += [[grp,gV,gC]]; V += gV; C += gC
-        else:           G_ += grp
+        if gV > ave-gC: grp[:] = [grp[:],gV,gC]; V += gV; C += gC
+
     if V > ave - C:
         typ_ = []  # form new Z.typ_ for new input, vals added in CoF traced:
         for grp in G_:
-            if isinstance(grp,list):
+            if isinstance(grp[0],list):
                 g,v,c = grp; T=sum2F(g); T.memb=v; T.compr=c  # downward reciprocals of V,C
                 typ_ += [T]
-            else: typ_ += [grp]  # keep old T
+            else: typ_ += grp  # keep old T  (grp is a list of typs, so remove nested [])
         Z = CoF(typ_=typ_); Z.memb, Z.compr = V,C  # membership and compression summed per Z?
         return Z
 
