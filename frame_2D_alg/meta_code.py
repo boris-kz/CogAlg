@@ -52,38 +52,44 @@ def merge(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f
         return F,f
     else: return F
 
-def comp_callers(_T, T):
+def cluster_call_(Z):  # cluster Ts if called together, for global Z only?
 
-    caller_, _caller_ = set(T.root), set(_T.root)
-    olp = _caller_ & caller_
-    off = list(_caller_-olp) + list(caller_-olp)
-    M = sum([c.w * c.c for c in olp])
-    D = sum([c.w * c.c for c in off])
-    return M/(D or eps)  # match if same_callers / diff_callers > ave?
-
-def cluster_call_(Z):  # cluster T callees if called together?
-
-    def seg_eval(seg, seg_):
-        if sum(c.fc for c in seg) > ave * Ec_[0]:  # base eval cost
-            T = sum2F(seg); T.nF = [call.nF for call in T.call_]  # new_nF = old_nF_?
-            seg_ += [T]
-    T_= []
-    for T in Z.typ_:
-        if not T: continue
-        seg_, seg, _C = [],[],[]
-        for C in T.call_:
-            if isinstance(C, CoF):
-                if isinstance(_C, list):  # init
-                    _C = C; seg += [C]; continue
-                _t, t = Z.typ_[_C.nF], Z.typ_[C.nF]
-                if comp_callers(_t,t)>ave: seg+= [C]
-                else: seg_eval(seg, seg_); seg = [C]
-                _C = C
-            else: seg += [C]
-        if seg: seg_eval(seg, seg_)  # last seg, add eval?
-        if seg_: T_ += seg_  # segmented T, add eval?
-        else:    T_ += [T]   # recycled T
-    return CoF(typ_ = T_)  # new Z for new input, no other attrs yet?
+    def comp_callers(_T, T):
+        # compute rel value of callers overlap
+        olp = _T.caller_ & T.caller_
+        off = list(_T.caller_- olp) + list(T.caller_- olp)
+        M = sum([c.w * c.c for c in olp])
+        D = sum([c.w * c.c for c in off])
+        return M / (D or eps)
+        # match if same_callers / diff_callers > ave?
+    _T_ = []
+    for t in Z.typ_:
+        if t: t.grp = [t]; t.caller_ = set(t.caller_); t.V = 0; _T_ += [t]
+    for _T,T in combinations(_T_,2):
+        if _T.grp is T.grp: continue  # already merged
+        v = comp_callers(_T,T)
+        if v > ave:
+            _g,g = _T.grp,T.grp
+            for t in g: t.grp = _g  # repoint T.grp
+            _g += g; _T.V += v; T.V += v  # pairwise accum of membership value
+    G_= []
+    V = 0; C = -Fc_[0]  # grp cost if grp.nF=comp_N_
+    for t in _T_:
+        if t.grp[0] is not t: continue  # eval each group once, at its seed
+        grp = t.grp; gV = 0; gC = -Fc_[0]  # membership, compression / grp
+        for t in grp: gV += t.V; gC += t.fc  # add links?
+        gV /= 2  # norm for pairwise redundancy
+        if gV > ave-gC: G_ += [[grp,gV,gC]]; V += gV; C += gC
+        else:           G_ += grp
+    if V > ave - C:
+        typ_ = []  # form new Z.typ_ for new input, vals added in CoF traced:
+        for grp in G_:
+            if isinstance(grp,list):
+                g,v,c = grp; T=sum2F(g); T.memb=v; T.compr=c  # downward reciprocals of V,C
+                typ_ += [T]
+            else: typ_ += [grp]  # keep old T
+        Z = CoF(typ_=typ_); Z.memb, Z.compr = V,C  # membership and compression summed per Z?
+        return Z
 
 def trace_func(module_dict, module_name=None):
     if module_name is None: module_name = module_dict.get('__name__')
@@ -125,29 +131,6 @@ def init_wc(paths): # compute weights based on operations in function, independe
     base = get_ops(funcs.pop('vt_'))
     return [round(get_ops(funcs[name]) / base) for name in onF_], base
 
-def get_wc(path, func=None, block=None, base=None):
-
-    def get_func_node(tree, name):
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == name:
-                return node
-
-    with open(path, "r", encoding="utf-8") as f:
-        src = f.read()
-
-    tree = ast.parse(src, filename=path)
-    if not base: base = get_ops(get_func_node(tree, 'vt_'))
-    if block:
-        start, end = block  # inclusive line numbers
-        ops_count = 0
-        for n in ast.walk(tree): # walk the tree and sum weights for nodes that fall within the line range
-            if hasattr(n, 'lineno'):
-                if start <= n.lineno <= end:  # make sure node's line number falls within the block
-                    ops_count += costs.get(type(n), 0)
-        return round(ops_count / base)
-    elif func:
-        node = get_func_node(tree, func)
-    return round(get_ops(node) / base)
 
 def add_typ_(R):  # root oF, always Z?
 
@@ -158,7 +141,7 @@ def add_typ_(R):  # root oF, always Z?
             T = sum2F(F_,CoF()); T.nF=i; T.wTT=cent_TT(getattr(T,'rTT',T.dTT), T.r)
             T.N_ = T.call_; root_ = []  # instances → N_
             T.caller_ = [F.root for F in F_]  # for comp_callers only?
-            T.root = root_
+            T.fc = get_ops(ast.parse(inspect.getsource(getattr(agg_recursion, onF_[i]))).body[0])  # body costs
             typ_[i] = T
     if any(typ_):
         add2F( R, sum2F([t for t in typ_ if t], CoF()))
@@ -171,7 +154,7 @@ if __name__ == "__main__":
     frame_H(image=imread('./images/toucan.jpg'), iY=Y//2-31, iX=X//2-31, Ly=64,Lx=64, Y=Y,X=X, rV=1)
     add_typ_(Z)
     # add fffeedback to reform Z for next frame_H
-    Z = cluster_call_(Z)  # new Z, before or after merge?
+    Z = cluster_call_()  # new Z, before or after merge?
     typ_, mrg_ = [],[]
     for i, t in enumerate(Z.typ_):  # vs. combinations(Z.typ_,2)?
         if t in mrg_: continue
@@ -181,9 +164,3 @@ if __name__ == "__main__":
 
     fc_, base = init_wc(("agg_recursion.py", "comp_slice.py", "slice_edge.py"))
     print(f"Weights = {fc_}")
-
-    fc_cross_comp = get_wc("agg_recursion.py", func="cross_comp")
-    print(f"Weight of cross_comp = {fc_cross_comp}")
-
-    fc_block = get_wc("agg_recursion.py", block=(225,243))
-    print(f"Weights for line 225 to 243 = {fc_block}")
