@@ -333,3 +333,43 @@ def cluster_call_1():  # cluster T callees if called together, for global Z only
             G_ = [sum2F(grp) if isinstance(grp,list) else grp for grp in G_]  # keep discrete Ts
             # form new Z for new input, vals added in CoF traced:
             return CoF(typ_=G_)  # or Z.w = V+ C*ave?
+
+def cluster_calls():  # cluster Ts if called together, for global Z only?
+
+    def comp_callers(_T, T):
+        # compute value of callers_overlap + calls_overlap
+        olp = _T.caller_ & T.caller_
+        off = list(_T.caller_- olp) + list(T.caller_- olp)
+        M = sum([c.w * c.c for c in olp])
+        D = sum([c.w * c.c for c in off])
+        return M / (D or eps)
+        # match if same_callers / diff_callers > ave?
+    _T_ = []
+    global Z
+    for t in Z.typ_:
+        if t: t.grp = [t]; t.caller_ = set(t.caller_); t.V = 0; _T_ += [t]
+    for _T,T in combinations(_T_,2):
+        if _T.grp is T.grp: continue  # already merged
+        v = comp_callers(_T,T)
+        if v > ave:
+            _g,g = _T.grp,T.grp
+            for t in g: t.grp = _g  # repoint T.grp
+            _g += g; _T.V += v; T.V += v  # pairwise accum of membership value
+    G_= []
+    V = 0; C = -Fc_[0]  # grp cost if grp.nF=comp_N_
+    for t in _T_:
+        if t.grp[0] is not t: continue  # eval each group once, at its seed
+        grp = t.grp; gV = 0; gC = -Fc_[0]  # membership, compression / grp
+        for t in grp: gV += t.V; gC += t.fc  # add links?
+        gV /= 2  # norm for pairwise redundancy
+        if gV > ave-gC: G_ += [[grp,gV,gC]]; V += gV; C += gC
+        else:           G_ += grp
+    if V > ave - C:
+        typ_ = []  # form new Z.typ_ for new input, vals added in CoF traced:
+        for grp in G_:
+            if isinstance(grp,list):
+                g,v,c = grp; T=sum2F(g); T.memb=v; T.cmpr=c  # downward reciprocals of V,C
+                typ_ += [T]
+            else: typ_ += [grp]  # keep old T
+        Z = CoF(typ_=typ_); Z.memb, Z.cmpr = V,C  # membership and compression summed / Z?
+        return Z
