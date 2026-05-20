@@ -1,5 +1,5 @@
 import numpy as np, inspect, contextvars
-import ast; from itertools import combinations
+import ast; from itertools import combinations, zip_longest
 import agg_recursion
 from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z, Fw_, Fc_, FTT_, wTT, Ew_, Ec_, ETT_, ave, avd, eps, flat_, frame_H, imread)
 '''
@@ -56,6 +56,7 @@ def merge(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f
 def cluster_calls():  # cluster Ts if called together, for global Z only?
 
     def comp_body(_n, n):  # project AST-merge cost, recursive, no commit
+        '''
         # draft
         if type(_n) is not type(n): return get_ops(_n) + get_ops(n)
         C = 0
@@ -63,6 +64,32 @@ def cluster_calls():  # cluster Ts if called together, for global Z only?
         for a, b in zip(_ch, ch): C += comp_body(a, b)
         for x in _ch[len(ch):] + ch[len(_ch):]: C += get_ops(x)
         return C
+        '''
+        
+        def get_node_c(node):  # cost of a single AST node, including onF_
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name):      name = node.func.id
+                if isinstance(node.func, ast.Attribute): name = node.func.attr
+                if name in oF_: return get_ops(ast.parse(inspect.getsource(getattr(agg_recursion, oF_[oF_.index(name)]))).body[0])
+            else: return costs.get(type(node), 0)
+       
+        # get ast of each typ
+        if isinstance(_n, CoF):  # first call
+            _ast_n, ast_n = get_ast(_n).body, get_ast(n).body
+        else:  # recursive node
+            _ast_n, ast_n = ast.iter_child_nodes(_n), ast.iter_child_nodes(n)
+        
+        #  Not sure on this, return native cost when both calls have different nF? I think we still can comp if it's different?
+        # if _n.nF != n.nF: return get_ops(_ast_n) + get_ops(ast_n)
+        
+        C = 0
+        for _node, node in zip_longest(_ast_n, ast_n):
+            if _node is None:                   C += get_node_c(node)   # n is longer
+            elif node is None:                  C += get_node_c(_node)  # _n is longer          
+            elif type(_node) is not type(node): C += get_node_c(_node) + get_node_c(node)  # both nodes are different
+            # else:                               C += comp_body(_node, node)   # same type, run the proces recursively (not sure)
+        return C
+
     def comp_callers(_T, T):
         # compute value of callers_overlap + calls_overlap (add comp_body)
         olp = _T.caller_ & T.caller_
@@ -144,6 +171,9 @@ oF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
 
 def get_ops(node):
     return sum(costs.get(type(n), 0) for n in ast.walk(node))
+
+def get_ast(T):  # get ast primitives of T, and T.nF must be in onF_
+    return ast.parse(inspect.getsource(getattr(agg_recursion, oF_[T.nF]))).body[0]
 
 def init_wc(paths): # compute weights based on operations in function, independent of deeper callees
     # oF_+ vt_ names and function objects:
