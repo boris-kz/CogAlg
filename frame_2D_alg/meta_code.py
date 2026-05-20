@@ -1,5 +1,5 @@
 import numpy as np, inspect, contextvars
-import ast; from itertools import combinations, zip_longest
+import ast; from itertools import combinations
 import agg_recursion
 from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z, Fw_, Fc_, FTT_, wTT, Ew_, Ec_, ETT_, ave, avd, eps, flat_, frame_H, imread)
 '''
@@ -27,9 +27,10 @@ def merge(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f
 
     call_, add_ = [], []  # replace F.call_ if eval
     C = 0; cost = Ec_[0]  # total and fixed-fork costs
-    for i, (Sub,sub) in enumerate(zip(F.call_,f.call_)):  # call_: op sequence in func or block, init F per f?
+    for i, (Sub,sub) in enumerate(zip(F.body,f.body)):  # call_: op sequence in func or block, init F per f?
         fork = []
-        if Sub.nF=='E':  # previously added gate
+        # add comp primitives
+        if Sub.nF=='E':  # previously added gate, use gF_
             fork = Sub; fin=0
             if sub.nF=='E':
                 subt = merge(Sub, sub)  # add2F(Sub,ssub_)?
@@ -52,63 +53,75 @@ def merge(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f
         return F,f
     else: return F
 
-def cluster_call_():  # cluster Ts if called together, for global Z only?
+def cluster_calls():  # cluster Ts if called together, for global Z only?
 
-    global Z
-
-    def comp_sequence(_call_, call_):  # or pack in comp_callers?
-        M = D = 0
-        for i, (_c, c) in enumerate(zip_longest(_call_, call_,fillvalue=None)):
-            if _c is None or c is None:
-                call = c if _c is None else _c;
-                D += call.fc * call.c
-            else:
-                if _c.nF == c.nF: M += _c.fc * c.c + c.fc * c.c  # or use min?
-                else:             D += _c.fc * c.c + c.fc * c.c
-                if _c.call_ and c.call_:  # recursive?
-                    m, d = comp_sequence(_c.call_, c.call_); M += m; D += d
-        return M, D
-    
+    def comp_body(_n, n):  # project AST-merge cost, recursive, no commit
+        # draft
+        if type(_n) is not type(n): return get_ops(_n) + get_ops(n)
+        C = 0
+        _ch, ch = list(ast.iter_child_nodes(_n)), list(ast.iter_child_nodes(n))
+        for a, b in zip(_ch, ch): C += comp_body(a, b)
+        for x in _ch[len(ch):] + ch[len(_ch):]: C += get_ops(x)
+        return C
     def comp_callers(_T, T):
-        # compute rel value of callers overlap
+        # compute value of callers_overlap + calls_overlap (add comp_body)
         olp = _T.caller_ & T.caller_
         off = list(_T.caller_- olp) + list(T.caller_- olp)
         M = sum([c.w * c.c for c in olp])
         D = sum([c.w * c.c for c in off])
         return M / (D or eps)
         # match if same_callers / diff_callers > ave?
-    _T_, G_ = [], []
+    global Z
+    _T_, pairs = [],[]
     for t in Z.typ_:
         if t: t.grp = [t]; t.caller_ = set(t.caller_); t.V = 0; _T_ += [t]
     for _T,T in combinations(_T_,2):
         if _T.grp is T.grp: continue  # already merged
-        m, d = comp_sequence(_T.call_, T.call_); v = comp_callers(_T,T); v += m/(d or eps)
-        if v > ave:
-            _g,g = _T.grp,T.grp
-            for t in g: t.grp = _g  # repoint T.grp
-            _g += g; _T.V += v; T.V += v  # pairwise accum of membership value
-        if _T.grp not in G_: G_ += [_T.grp]
-    V = 0; C = -Fc_[0]  # grp cost if grp.nF=comp_N_
-    for grp in G_:
-        gV = 0; gC = -Fc_[0]  # membership, compression / grp
-        for t in grp: gV += t.V; gC -= t.fc  # add links?  (gC supposes to be begative when we ave-gC below?)
-        gV /= 2  # norm for pairwise redundancy
-        if gV > ave-gC: grp[:] = [grp[:],gV,gC]; V += gV; C += gC
+        v,c = comp_callers(_T,T), comp_body(_T,T)
+        pairs += [[v,c,_T,T]]
 
+    # draft: complete-linkage agglomeration on pairs
+    qual = {frozenset({p[2], p[3]}) for p in pairs if p[0] > ave}  # qualifying pairs
+    pairs.sort(key=lambda p: -p[0])  # best v first
+    for v, c, _T, T in pairs:
+        if v <= ave: break
+        if _T.grp is T.grp: continue
+        if all(frozenset({a, b}) in qual for a in _T.grp for b in T.grp):
+            _g, g = _T.grp, T.grp
+            for t in g: t.grp = _g
+            _g += g
+    ''' Claude:
+    Qualifying criterion is just v > ave; if you want c to gate qualification too, change the filter (e.g. p[0] > ave and p[1] < some_bound).
+    Sort key is v only — c could be folded in (-(p[0] - p[1]/k)) for joint ordering.
+    The complete-linkage check is O(|_g|·|g|) per candidate merge — unavoidable for the criterion; the all-pairs qual lookup keeps it constant per check.
+    if _T.grp is T.grp: continue in the first loop fires never (no merges happen during pair collection); harmless but vestigial. 
+    Same for t.V = 0 now that the pair loop doesn't accumulate t.V.
+    '''
+    # not revised:
+    G_= []
+    V = 0; C = -Fc_[0]  # grp cost if grp.nF=comp_N_
+    for t in _T_:
+        if t.grp[0] is not t: continue  # eval each group once, at its seed
+        grp = t.grp; gV = 0; gC = -Fc_[0]  # membership, compression / grp
+        for t in grp: gV += t.V; gC += t.fc  # add links?
+        gV /= 2  # norm for pairwise redundancy
+        if gV > ave-gC: G_ += [[grp,gV,gC]]; V += gV; C += gC
+        else:           G_ += grp
     if V > ave - C:
         typ_ = []  # form new Z.typ_ for new input, vals added in CoF traced:
         for grp in G_:
-            if isinstance(grp[0],list):
-                g,v,c = grp; T=sum2F(g); T.memb=v; T.compr=c  # downward reciprocals of V,C
+            if isinstance(grp,list):
+                g,v,c = grp; T=sum2F(g); T.memb=v; T.cmpr=c  # downward reciprocals of V,C
                 typ_ += [T]
-            else: typ_ += grp  # keep old T  (grp is a list of typs, so remove nested [])
-        Z = CoF(typ_=typ_); Z.memb, Z.compr = V,C  # membership and compression summed per Z?
+            else: typ_ += [grp]  # keep old T
+        Z = CoF(typ_=typ_); Z.memb, Z.cmpr = V,C  # membership and compression summed / Z?
         return Z
 
 def trace_func(module_dict, module_name=None):
+
     if module_name is None: module_name = module_dict.get('__name__')
     for name, obj in list(module_dict.items()):
-        if name in onF_:
+        if name in oF_:
             if not inspect.isfunction(obj): continue
             if obj.__module__ != module_name: continue
             if getattr(obj, 'wrapped', False): continue
@@ -118,32 +131,32 @@ def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential
 
     rTT = np.divide(frame.H[0].wTT, frame.H[1].wTT)  # wTT_ is not relevant now
     _wTT = frame.H[1].wTT
-    for lev in frame.H[2:]:  # sum ratios between consecutive-level TTs, top-down frame expansion levels, not lev-selective or sub-lev recursive
+    for lev in frame.H[2:]:  # sum ratios between consecutive-level TTs, top-down in frame H, not lev-selective or sub-lev recursive
         rTT += np.divide(_wTT,lev.wTT)
         _wTT = lev.wTT
     rM = rD = 0
     rm, rd = vt_(rTT,wTT)
     return rM+rD, rTT  # add rm,rd?
 
-onF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
-        'get_exemplars','cluster_N','cluster_C','cluster_P',  # clust_ functions
-        'cross_comp','frame_H','vect_edge','trace_edge','ffeedback','proj_N','comp_slice','slice_edge']  # combined,ancillary
+oF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
+       'get_exemplars','cluster_N','cluster_C','cluster_P',  # clust_ functions
+       'cross_comp','frame_H','vect_edge','trace_edge','ffeedback','proj_N','comp_slice','slice_edge']  # combined,ancillary
 
 def get_ops(node):
     return sum(costs.get(type(n), 0) for n in ast.walk(node))
 
 def init_wc(paths): # compute weights based on operations in function, independent of deeper callees
-    # onF_+ vt_ names and function objects:
+    # oF_+ vt_ names and function objects:
     funcs = {}
     for path in paths:
         with open(path, "r", encoding="utf-8") as f:
             tree = ast.parse(f.read(), filename=path)
         for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and (node.name in onF_ or node.name == 'vt_'):
+            if isinstance(node, ast.FunctionDef) and (node.name in oF_ or node.name == 'vt_'):
                 funcs[node.name] = node
 
     base = get_ops(funcs.pop('vt_'))
-    return [round(get_ops(funcs[name]) / base) for name in onF_], base
+    return [round(get_ops(funcs[name]) / base) for name in oF_], base
 
 
 def add_typ_(R):  # root oF, always Z?
@@ -155,7 +168,7 @@ def add_typ_(R):  # root oF, always Z?
             T = sum2F(F_,CoF()); T.nF=i; T.wTT=cent_TT(getattr(T,'rTT',T.dTT), T.r)
             T.N_ = T.call_; root_ = []  # instances → N_
             T.caller_ = [F.root for F in F_]  # for comp_callers only?
-            T.fc = get_ops(ast.parse(inspect.getsource(getattr(agg_recursion, onF_[i]))).body[0])  # body costs
+            T.fc = get_ops(ast.parse(inspect.getsource(getattr(agg_recursion, oF_[i]))).body[0])  # body costs
             typ_[i] = T
     if any(typ_):
         add2F( R, sum2F([t for t in typ_ if t], CoF()))
@@ -168,7 +181,7 @@ if __name__ == "__main__":
     frame_H(image=imread('./images/toucan.jpg'), iY=Y//2-31, iX=X//2-31, Ly=64,Lx=64, Y=Y,X=X, rV=1)
     add_typ_(Z)
     # add fffeedback to reform Z for next frame_H
-    Z = cluster_call_()  # new Z, before or after merge?
+    Z = cluster_calls()  # new Z, before or after merge?
     typ_, mrg_ = [],[]
     for i, t in enumerate(Z.typ_):  # vs. combinations(Z.typ_,2)?
         if t in mrg_: continue
