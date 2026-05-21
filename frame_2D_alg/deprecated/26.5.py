@@ -373,3 +373,29 @@ def cluster_calls():  # cluster Ts if called together, for global Z only?
             else: typ_ += [grp]  # keep old T
         Z = CoF(typ_=typ_); Z.memb, Z.cmpr = V,C  # membership and compression summed / Z?
         return Z
+
+    def comp_body(_n, n):  # estimate AST-merge cost compression, non-recursive
+
+        if isinstance(n,CoF):
+            if isinstance(_n,CoF):
+                if n.nF==_n.nF: return Fc_[n.nF]  # or F.fc? cost compression
+                else: return -2  # fork cost = ast.IfExp, unpack in recursion
+            else: return -2
+        elif type(_n) is type(n): return costs.get(type(n))  # cost compression
+        else: return -2
+
+def add_typ_1(R):  # root oF, always Z?
+
+    typ_ = [[] for _ in range(len(FTT_))]
+    for F in flat_(R): typ_[F.nF] += [F] # bin runtime instances, T.call_ still trace tree
+    for i, F_ in enumerate(typ_):
+        if F_:
+            T = sum2F(F_,CoF()); T.nF=i; T.wTT=cent_TT(getattr(T,'rTT',T.dTT), T.r)
+            T.N_ = T.call_; root_ = []  # instances → N_
+            T.caller_ = [F.root for F in F_]  # for comp_callers only?
+            T.fc = Fc_[T.nF]  # get_ops(ast.parse(inspect.getsource(getattr(agg_recursion, oF_[i]))).body[0])  # body costs
+            typ_[i] = T
+    if any(typ_):
+        add2F( R, sum2F([t for t in typ_ if t], CoF()))
+    R.typ_ = typ_
+
