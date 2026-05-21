@@ -1,11 +1,26 @@
 import numpy as np, inspect, contextvars
+from copy import copy, deepcopy
 import ast; from itertools import combinations
 import agg_recursion
-from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z, Fw_, Fc_, FTT_, wTT, Ew_, Ec_, ETT_, ave, avd, eps, flat_, frame_H, imread)
+from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z,wTT, ave, avd, eps, flat_, frame_H, imread)
 '''
 code modification: compare aligned ops between Z.typ_[i] AST sequences, cluster/merge matches into higher oF typs
 '''
-costs = {
+oF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
+       'get_exemplars','cluster_N','cluster_C','cluster_P',  # clust_ functions
+       'cross_comp','frame_H','vect_edge','trace_edge','ffeedback','proj_N','comp_slice','slice_edge']  # combined, ancillary
+gF_ = []  # add gating oFs, was nF='E'
+# func | block cost,gain,distribution, cost = oF_complexity / vt_complexity, ||oF_, *=data:
+Fc_ = [13,11,18,5,4,22,20,12,3,13,14,11,3,5,4,3]; cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cX,cFrm,cVct,cTrc,cBac,cPrj,cCS,cSE = Fc_
+Fw_ = copy(Fc_); wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wX,wFrm,wVct,wTrc,wBac,wPrj,wCS,wSE = Fw_  # ave gain/call, init = cost
+FTT_= [deepcopy(wTT) for _ in range(16)]; ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP, ttX,ttFrm,ttVct,ttTrc,ttBac,ttPrj,ttCs,ttSE = FTT_
+# eval V = Ew - Ec * ave:
+Ec_ = [3,3,4,2,1,5,5,4,1,4,4,4,2,2,1.1]  # complexity placeholders || oF_, same evals for different oFs?
+Ew_ = copy(Ec_)  # ave gain/eval, init = cost, then evaled_block_w - default_block_w
+ETT_= [deepcopy(wTT) for _ in range(16)]  # for more precise eeval?
+ave_C = 3
+
+costs = {  # types
     ast.Assign: 2,  # bind name: trivial
     ast.Attribute: 5,  # single dict lookup on object
     ast.UnaryOp: 2,  # apply one operator to one operand
@@ -53,18 +68,38 @@ def merge(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f
         return F,f
     else: return F
 
+# work in progress
 def cluster_calls():  # cluster Ts if called together, for global Z only?
 
-    def comp_body(_n, n):  # project AST-merge cost, recursive, no commit
-        # draft
-        if type(_n) is not type(n): return get_ops(_n) + get_ops(n)
-        C = 0
-        _ch, ch = list(ast.iter_child_nodes(_n)), list(ast.iter_child_nodes(n))
-        for a, b in zip(_ch, ch): C += comp_body(a, b)
-        for x in _ch[len(ch):] + ch[len(_ch):]: C += get_ops(x)
+    def comp_body(_n, n, C=4):  # estimate AST-merge cost compression, init mean C=3, accum from recursive unpack
+        # C0 = 4; Cmin = 3; fork = 2
+        if isinstance(n, CoF):
+            if isinstance(_n, CoF):
+                if n.nF==_n.nF: C+= Fc_[n.nF]
+                elif C > 3:  # mean compression value
+                    for _sub,sub in zip(_n.body,n.body):  # eval bodies before merging?
+                        C = comp_body(_sub, sub, C)
+                    if len(_n.body) != len(n.body): C-=2  # single tail fork cost
+                else: C-=2  # fork compression cost, ast.IfExp
+            else: C-=2
+        elif type(_n) is type(n): C+= costs.get(type(n),0)
+        else: C-=2
         return C
+
+    def comp_body_claude(_n, n, C=0):  # compression of n given _n: cost of n absorbed by merge
+        if isinstance(n, CoF) and isinstance(_n, CoF):
+            if n is _n: C += Fc_[n.nF]  # full reuse, save whole body
+            elif n.fc > ave_C:  # mean compression value
+                for i, sub in enumerate(n.body):
+                    if i < len(_n.body): C = comp_body(_n.body[i], sub, C)
+                    else: C -= 2  # n has tail past _n
+            else: C -= 2
+        elif type(_n) is type(n): C += costs.get(type(n),0)
+        else: C -= 2
+        return C
+
     def comp_callers(_T, T):
-        # compute value of callers_overlap + calls_overlap (add comp_body)
+        # compute value of callers_overlap + calls_overlap
         olp = _T.caller_ & T.caller_
         off = list(_T.caller_- olp) + list(T.caller_- olp)
         M = sum([c.w * c.c for c in olp])
@@ -76,7 +111,6 @@ def cluster_calls():  # cluster Ts if called together, for global Z only?
     for t in Z.typ_:
         if t: t.grp = [t]; t.caller_ = set(t.caller_); t.V = 0; _T_ += [t]
     for _T,T in combinations(_T_,2):
-        if _T.grp is T.grp: continue  # already merged
         v,c = comp_callers(_T,T), comp_body(_T,T)
         pairs += [[v,c,_T,T]]
 
@@ -138,16 +172,10 @@ def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential
     rm, rd = vt_(rTT,wTT)
     return rM+rD, rTT  # add rm,rd?
 
-oF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
-       'get_exemplars','cluster_N','cluster_C','cluster_P',  # clust_ functions
-       'cross_comp','frame_H','vect_edge','trace_edge','ffeedback','proj_N','comp_slice','slice_edge']  # combined,ancillary
+# old: start with flat oFs
+def get_Fc_(paths): # compute weights based on operations in function, independent of deeper callees
 
-def get_ops(node):
-    return sum(costs.get(type(n), 0) for n in ast.walk(node))
-
-def init_wc(paths): # compute weights based on operations in function, independent of deeper callees
-    # oF_+ vt_ names and function objects:
-    funcs = {}
+    funcs = {}  # oF_ names and function objects
     for path in paths:
         with open(path, "r", encoding="utf-8") as f:
             tree = ast.parse(f.read(), filename=path)
@@ -155,24 +183,46 @@ def init_wc(paths): # compute weights based on operations in function, independe
             if isinstance(node, ast.FunctionDef) and (node.name in oF_ or node.name == 'vt_'):
                 funcs[node.name] = node
 
-    base = get_ops(funcs.pop('vt_'))
-    return [round(get_ops(funcs[name]) / base) for name in oF_], base
+    return round(sum(costs.get(type(p),0) for name in oF_ for p in ast.walk(funcs[name])))
+# or:
+funcs = {}  # name → FunctionDef, populated by parse_funcs(paths)
 
+def parse_funcs(paths):
+    for path in paths:
+        with open(path, encoding="utf-8") as f:
+            tree = ast.parse(f.read(), filename=path)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name in oF_:
+                funcs[node.name] = node
 
-def add_typ_(R):  # root oF, always Z?
-
+def add_typ_(R):
     typ_ = [[] for _ in range(len(FTT_))]
-    for F in flat_(R): typ_[F.nF] += [F] # bin runtime instances, T.call_ still trace tree
+    for F in flat_(R): typ_[F.nF] += [F]
     for i, F_ in enumerate(typ_):
         if F_:
             T = sum2F(F_,CoF()); T.nF=i; T.wTT=cent_TT(getattr(T,'rTT',T.dTT), T.r)
-            T.N_ = T.call_; root_ = []  # instances → N_
-            T.caller_ = [F.root for F in F_]  # for comp_callers only?
-            T.fc = get_ops(ast.parse(inspect.getsource(getattr(agg_recursion, oF_[i]))).body[0])  # body costs
+            T.N_ = T.call_
+            T.caller_ = [F.root for F in F_]
+            T.fc = Fc_[T.nF]
             typ_[i] = T
+    for i, T in enumerate(typ_):  # second pass: static body refs other Ts
+        if T: T.body = build_body(funcs[oF_[i]], typ_)
     if any(typ_):
-        add2F( R, sum2F([t for t in typ_ if t], CoF()))
+        add2F(R, sum2F([t for t in typ_ if t], CoF()))
     R.typ_ = typ_
+
+# draft
+def build_body(node, typ_):
+    out = []
+    children = node.body if isinstance(node, ast.FunctionDef) else ast.iter_child_nodes(node)
+    for child in children:
+        if isinstance(child, ast.Call) and isinstance(child.func, ast.Name) and child.func.id in oF_:
+            T = typ_[oF_.index(child.func.id)]
+            if T: out += [T]
+            continue
+        if type(child) in costs: out += [child]
+        out += build_body(child, typ_)
+    return out
 
 if __name__ == "__main__":
     # move to agg_recursion
@@ -188,6 +238,5 @@ if __name__ == "__main__":
         F = Copy_(t, cls=CoF)
         for f in Z.typ_[i+1:]: mrg_ += [merge(F,f)]
         typ_ += [F]
-
-    fc_, base = init_wc(("agg_recursion.py", "comp_slice.py", "slice_edge.py"))
-    print(f"Weights = {fc_}")
+    for i, F in typ_: F.nF = i
+    Z.typ_ = typ_
