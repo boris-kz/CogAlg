@@ -3,21 +3,11 @@ from copy import copy, deepcopy
 import ast; from itertools import combinations
 import agg_recursion
 from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z,wTT, ave, avd, eps, flat_, frame_H, imread)
+from meta_data import (ave, avd, eps, wTT, oF_, gF_, Fc_, Fw_, FTT_, Ec_, Ew_, ETT_)
+
 '''
 code modification: compare aligned ops between Z.typ_[i] AST sequences, cluster/merge matches into higher oF typs
 '''
-oF_ = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
-       'get_exemplars','cluster_N','cluster_C','cluster_P',  # clust_ functions
-       'cross_comp','frame_H','vect_edge','trace_edge','ffeedback','proj_N','comp_slice','slice_edge']  # combined, ancillary
-gF_ = []  # add gating oFs, was nF='E'
-# func | block cost,gain,distribution, cost = oF_complexity / vt_complexity, ||oF_, *=data:
-Fc_ = [13,11,18,5,4,22,20,12,3,13,14,11,3,5,4,3]; cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cX,cFrm,cVct,cTrc,cBac,cPrj,cCS,cSE = Fc_
-Fw_ = copy(Fc_); wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wX,wFrm,wVct,wTrc,wBac,wPrj,wCS,wSE = Fw_  # ave gain/call, init = cost
-FTT_= [deepcopy(wTT) for _ in range(16)]; ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP, ttX,ttFrm,ttVct,ttTrc,ttBac,ttPrj,ttCs,ttSE = FTT_
-# eval V = Ew - Ec * ave:
-Ec_ = [3,3,4,2,1,5,5,4,1,4,4,4,2,2,1.1]  # complexity placeholders || oF_, same evals for different oFs?
-Ew_ = copy(Ec_)  # ave gain/eval, init = cost, then evaled_block_w - default_block_w
-ETT_= [deepcopy(wTT) for _ in range(16)]  # for more precise eeval?
 ave_C = 3
 
 costs = {  # types
@@ -115,12 +105,13 @@ def cluster_calls():  # cluster Ts if called together, for global Z only?
         pairs += [[v,c,_T,T]]
 
     # draft: complete-linkage agglomeration on pairs
-    qual = {frozenset({p[2], p[3]}) for p in pairs if p[0] > ave}  # qualifying pairs
+    qual = {frozenset({p[2], p[3]}) for p in pairs if p[0]+p[1] > ave}  # qualifying pairs
     pairs.sort(key=lambda p: -p[0])  # best v first
     for v, c, _T, T in pairs:
         if v <= ave: break
         if _T.grp is T.grp: continue
-        if all(frozenset({a, b}) in qual for a in _T.grp for b in T.grp):
+        match = sum([1 for a in _T.grp for b in T.grp if frozenset({a, b}) in qual])
+        if match/len(T.grp)*len(T.grp) > 0.75:  # using all is too strict? 
             _g, g = _T.grp, T.grp
             for t in g: t.grp = _g
             _g += g
@@ -188,12 +179,22 @@ def get_Fc_(paths): # compute weights based on operations in function, independe
 funcs = {}  # name → FunctionDef, populated by parse_funcs(paths)
 
 def parse_funcs(paths):
+    global oF_
     for path in paths:
         with open(path, encoding="utf-8") as f:
             tree = ast.parse(f.read(), filename=path)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.name in oF_:
+        for node in tree.body:  # only function definitions, skips those class def
+            if isinstance(node, ast.FunctionDef):
                 funcs[node.name] = node
+    # replaces oF_ with all func names
+    oF_ = list(funcs.keys())
+    # ['eps_', 'prop_F_', 'flat_', 'vt_', 'sum_vt', 'cross_comp',
+    #  'comp_N_', 'comp_C_', 'comp_N', 'comp_F', 'base_comp', 
+    #  'comp_derT', 'comp', 'comp_A', 'get_exemplars', 'cluster_N', 
+    #  'cluster_C', 'cluster_P', 'cent_TT', 'sum2F', 'add2F', 'add_H',
+    #  'sum2G', 'comb_Ft', 'add_Nt', 'add_Lt', 'F2N', 'Copy_', 
+    #  'extend_box', 'sort_H', 'eval', 'mdecay', 'vect_edge', 
+    #  'trace_edge', 'proj_focus', 'proj_TT', 'proj_N', 'frame_H']
 
 def add_typ_(R):
     typ_ = [[] for _ in range(len(FTT_))]
@@ -221,11 +222,13 @@ def build_body(node, typ_):
             if T: out += [T]
             continue
         if type(child) in costs: out += [child]
-        out += build_body(child, typ_)
+        out += build_body(child, typ_)  # this should be nested? Now it's packed flat
     return out
 
 if __name__ == "__main__":
     # move to agg_recursion
+    parse_funcs(["agg_recursion.py"])  # populate funcs
+    # we actually should build those Fc_, Ec_ using the func here?
     trace_func(vars(agg_recursion))  # add oF tracing
     Y,X = imread('./images/toucan.jpg').shape
     frame_H(image=imread('./images/toucan.jpg'), iY=Y//2-31, iX=X//2-31, Ly=64,Lx=64, Y=Y,X=X, rV=1)

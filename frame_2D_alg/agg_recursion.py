@@ -7,7 +7,15 @@ from functools import wraps
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
-from meta_code  import oF_,gF_,Fw_,Fc_,FTT_, Ew_,Ec_,ETT_
+from meta_data import (
+    ave, avd, decay, eps, wY, wX, wYX,
+    wM, wD, wi, wG, wI, wa, wL, wS, wA, wT, wTT,
+    oF_, gF_, Fc_, Fw_, FTT_, Ec_, Ew_, ETT_,
+    cN_, cC_, cN, cF,  cE, ccN, ccC, ccP,  cX, cFrm, cVct, cTrc,  cBac, cPrj, cCS, cSE,
+    wN_, wC_, wN, wF,  wE, wcN, wcC, wcP, wFrm, wVct, wTrc,  wBac, wPrj, wCS, wSE,
+    ttN_, ttC_, ttN, ttF, ttE, ttcN, ttcC, ttcP, ttX, ttFrm, ttVct, ttTrc, ttBac, ttPrj, ttCs, ttSE,
+)
+
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -51,14 +59,8 @@ prefix  _ denotes prior of two same-name vars, multiple _s for relative preceden
 postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized vars are summed small-case vars
 '''
-ave,avd = .3,.5; decay = ave/(ave+avd)  # ave m,d / unit dist, recomputed from dTT*wTT?
-wY, wX = 64, 64; wYX = np.hypot(wY,wX)
-wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
-wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA]); wTT = np.array([wT,wT*avd])  # default for comp_N_?
-cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cX,cFrm,cVct,cTrc,cBac,cPrj,cCS,cSE = Fc_
-wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wX,wFrm,wVct,wTrc,wBac,wPrj,wCS,wSE = Fw_  # ave gain/call, init = cost
-ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP, ttX,ttFrm,ttVct,ttTrc,ttBac,ttPrj,ttCs,ttSE = FTT_  # add ETT_?
-eps = 1e-7
+
+
 def eps_(a): return np.where(a==0, eps, a)
 
 class CF(CBase):  # clustering fork: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int- defining links, Lt/Ft, Ct/lev, Bt/G
@@ -633,7 +635,10 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0):  # -> CF/CL/CC/CN/CoF
         if typ==2: F.m_,F.d_=m_,d_; F.m,F.d=sum(m_),sum(d_)
         else:      F.m, F.d = vt_(TT)
         if typ==3: F.box = box
-    elif fO: F.call_ = n_; F.fw = Fw; F.m, F.d = vt_(TT)
+    elif fO: 
+        F.call_ = n_; F.fw = Fw; F.m, F.d = vt_(TT)
+        # add merging of body here?
+
     else:    F.N_ = n_; F.m,F.d = vt_(TT)
     if root:
         if typ!=2: add2F(root,F,2)  # skip centroids
