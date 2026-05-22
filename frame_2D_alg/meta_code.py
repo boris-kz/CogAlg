@@ -145,7 +145,7 @@ def trace_func(module_dict, module_name=None):
 
     if module_name is None: module_name = module_dict.get('__name__')
     for name, obj in list(module_dict.items()):
-        if name in oF_:
+        if name in iF_.keys():  # should be iF_ now 
             if not inspect.isfunction(obj): continue
             if obj.__module__ != module_name: continue
             if getattr(obj, 'wrapped', False): continue
@@ -164,7 +164,7 @@ def add_typ_():
         if nF_[i] is not None:
             T.caller_ = []
             T.body = build_body(nF_[i])
-            T.fc = set_fc(T.body)
+            T.fc = set_fc([T.body])  # body is not iterable but we iter it in set_fc, so make it a list for the first run?
 
 def build_body(node):
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
@@ -185,10 +185,20 @@ def set_fc(body):
 if __name__ == "__main__":
     # move to agg_recursion
     parse_funcs(["agg_recursion.py"])  # populate Fname_
-    trace_func(vars(agg_recursion))  # add oF tracing
     Y,X = imread('./images/toucan.jpg').shape
+    add_typ_()
+    # temporary:
+    # update agg_recursion's globals before running them
+    agg_recursion.oF_,agg_recursion.iF_,agg_recursion.nF_ = oF_,iF_,nF_
+    # cost and weight init from iF_ now
+    for oF, cname, wname in zip(oF_,
+                               ('cN_','cC_','cN','cF','cE','ccN','ccC','ccP','cX','cFrm','cVct','cTrc','cBac','cPrj','cCS','cSE'),
+                               ('wN_','wC_','wN','wF','wE','wcN','wcC','wcP','wX','wFrm','wVct','wTrc','wBac','wPrj','wCS','wSE')):
+        setattr(agg_recursion, cname, oF.fc)
+        setattr(agg_recursion, wname, oF.fc)
+
+    trace_func(vars(agg_recursion))  # add oF tracing (after parsing iF_, oF_ and nF_ into agg_recursion)
     frame_H(image=imread('./images/toucan.jpg'), iY=Y//2-31, iX=X//2-31, Ly=64,Lx=64, Y=Y,X=X, rV=1)
-    add_typ_(Z)
     # add fffeedback to reform Z for next frame_H
     Z = cluster_calls()  # new Z, before or after merge?
     typ_, mrg_ = [],[]

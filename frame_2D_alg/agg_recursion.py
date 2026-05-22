@@ -7,7 +7,7 @@ from functools import wraps
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
-from meta_code  import oF_,iF_,nF_
+
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -55,8 +55,10 @@ ave,avd = .3,.5; decay = ave/(ave+avd)  # ave m,d / unit dist, recomputed from d
 wY, wX = 64, 64; wYX = np.hypot(wY,wX)
 wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
 wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA]); wTT = np.array([wT,wT*avd])  # default for comp_N_?
-cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cX,cFrm,cVct,cTrc,cBac,cPrj,cCS,cSE = Fc_  # replace with oF_[i].fc, same below:
-wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wX,wFrm,wVct,wTrc,wBac,wPrj,wCS,wSE = Fw_  # ave gain/call, init = cost
+# below are updated from meta_code now
+# cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cX,cFrm,cVct,cTrc,cBac,cPrj,cCS,cSE = Fc_  # replace with oF_[i].fc, same below:
+# wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wX,wFrm,wVct,wTrc,wBac,wPrj,wCS,wSE = Fw_  # ave gain/call, init = cost
+FTT_= [deepcopy(wTT) for _ in range(16)]
 ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP, ttX,ttFrm,ttVct,ttTrc,ttBac,ttPrj,ttCs,ttSE = FTT_  # add ETT_?
 eps = 1e-7
 def eps_(a): return np.where(a==0, eps, a)
@@ -143,8 +145,9 @@ class CoF(CF):
         @wraps(func)
         def inner(*a, **kw):
             _CoF = CoF._cur.get()
-            oF = CoF(nF=oF_.index(func.__name__), root=_CoF)
-            oF.wTT = FTT_[oF.nF]; oF.fw = Fw_[oF.nF]; oF.fc = Fc_[oF.nF]; _CoF.call_ += [oF]
+            oF = CoF(nF=iF_[func.__name__], root=_CoF)
+            # we need fw per oF now? add that in add_typ_?
+            oF.wTT = FTT_[oF.nF]; oF.fw = oF_[oF.nF].fc; oF.fc = oF_[oF.nF].fc; _CoF.call_ += [oF]
             CoF._cur.set(oF); out = func(*a, **kw)
             if oF.call_:
                 tree = flat_(oF); L=len(tree)-1
