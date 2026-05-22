@@ -399,3 +399,67 @@ def add_typ_1(R):  # root oF, always Z?
         add2F( R, sum2F([t for t in typ_ if t], CoF()))
     R.typ_ = typ_
 
+def get_Fc_(paths): # compute weights based on operations in function, independent of deeper callees
+
+    for path in paths:
+        with open(path, "r", encoding="utf-8") as f:
+            tree = ast.parse(f.read(), filename=path)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name in oF_:
+                funcs[node.name] = node
+
+    return round(sum(costs.get(type(p),0) for name in oF_ for p in ast.walk(funcs[name])))
+
+def get_nF_(paths):
+    global oF_
+    for path in paths:
+        with open(path, encoding="utf-8") as f:
+            tree = ast.parse(f.read(), filename=path)
+        for node in tree.body:  # only function definitions
+            if isinstance(node, ast.FunctionDef):
+                dict_oF_[node.name] = node
+
+    return list(dict_oF_.keys())  # nF_: func names
+'''
+# func | block cost,gain,distribution, cost = oF_complexity / vt_complexity, ||oF_, *=data:
+Fc_ = [13,11,18,5,4,22,20,12,3,13,14,11,3,5,4,3]; cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cX,cFrm,cVct,cTrc,cBac,cPrj,cCS,cSE = Fc_
+Fw_ = copy(Fc_); wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wX,wFrm,wVct,wTrc,wBac,wPrj,wCS,wSE = Fw_  # ave gain/call, init = cost
+FTT_= [deepcopy(wTT) for _ in range(16)]; ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP, ttX,ttFrm,ttVct,ttTrc,ttBac,ttPrj,ttCs,ttSE = FTT_
+ETT_ is local, add in oF_?
+eval V = Ew - Ec * ave:
+Ec_ = [3,3,4,2,1,5,5,4,1,4,4,4,2,2,1.1]  # complexity placeholders || oF_, same evals for different oFs?
+Ew_ = copy(Ec_)  # ave gain/eval, init = cost, then evaled_block_w - default_block_w
+'''
+def add_typ_(R):
+
+    def build_body(node):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in oF_:
+            T = typ_[oF_.index(node.func.id)]
+            if T: return T
+        sub_ = [r for t in ast.iter_child_nodes(node) if (r := build_body(t)) is not None]
+        if sub_: return (type(node), sub_)
+        if type(node) in costs: return node
+
+    def set_fc(body):
+        fc = 0
+        for n in body:
+            if isinstance(n, CoF): fc += 3
+            elif isinstance(n, tuple): fc += costs.get(n[0],0) + set_fc(n[1])
+            else: fc += costs.get(type(n),0)
+        return fc
+
+    typ_ = [[] for _ in range(len(oF_))]
+    for F in flat_(R): typ_[F.nF] += [F]
+    for i, F_ in enumerate(typ_):
+        if F_:
+            T = sum2F(F_,CoF()); T.nF=i; T.wTT=cent_TT(getattr(T,'rTT',T.dTT), T.r)
+            T.N_ = T.call_
+            T.caller_ = [F.root for F in F_]
+            typ_[i] = T
+    for i, T in enumerate(typ_):  # second pass: static body refs other Ts
+        if T:
+            T.body = build_body(Fname_[oF_[i]])
+            T.fc = set_fc(T.body)
+    if any(typ_):
+        add2F(R, sum2F([t for t in typ_ if t], CoF()))
+    R.typ_ = typ_
