@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from functools import wraps
 from copy import copy, deepcopy
 import ast; from itertools import combinations
-import agg_recursion
+
 # from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z,wTT, ave, avd, eps, flat_, frame_H, imread)
 '''
 code modification: compare aligned ops between Z.typ_[i] AST sequences, cluster/merge matches into higher oF typs
@@ -113,15 +113,15 @@ class CoF(CF):
         if getattr(func, 'wrapped', False): return func
         @wraps(func)
         def inner(*a, **kw):
-            _CoF = CoF._cur.get()
+            _CoF = CoF._cur.get(None)  # None for the root frame_H
             oF = CoF(nF=iF_[func.__name__], root=_CoF)
-            _CoF.call_ += [oF]
-            CoF._cur.set(oF); out = func(*a, **kw)
+            if _CoF is not None: _CoF.call_ += [oF]
+            token = CoF._cur.set(oF); out = func(*a, **kw)
             if oF.call_:
                 tree = flat_(oF); L=len(tree)-1
                 if oF.fw*L > ave*(oF.fc*L):  # conditional?
                     sum2O(tree, oF); wtt = getattr(oF,'rTT',oF.dTT);  oF.wTT = cent_TT(wtt,oF.r)
-            CoF._cur.set(_CoF)
+            CoF._cur.reset(token)
             return out
         inner.wrapped = True
         return inner
@@ -296,13 +296,12 @@ def F_body_():
         return costs.get(type(n), 0)
 
     for i, F in enumerate(oF_):
-        if not F.body: continue
         F.caller_ = []
-        F.body = [r for c in F.body if (r := build(c)) is not None]
-        F.fc = sum(set_fc(n) for n in F.body)
+        F.body = build(nF_[i])
+        F.fc = set_fc(F.body)  # each main body is sub anyway, where the typ is function def: (func def, sub_)
 
 def sum2O(N_, root=None):  # for w,c,r, fw,fc,fr only?
-
+    # we need to update c across all functions now? Only some functions such as cluster_N, cluster_C are updated now
     c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); w_ = c_/C
     fc_ = np.array([n.fc for n in N_], dtype=float); fC = fc_.sum(); w_ = fc_/fC  # N = N_[0]
     # unfinished, use w_ for N summing?

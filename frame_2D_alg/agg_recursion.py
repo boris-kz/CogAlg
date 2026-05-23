@@ -48,7 +48,7 @@ prefix  _ denotes prior of two same-name vars, multiple _s for relative preceden
 postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized vars are summed small-case vars
 '''
-from meta_code import oF_,CF,CL,CC,CN,CoF, wT,wTT, eps_,eps, ave,avd,decay, trace_func
+from meta_code import oF_,CF,CL,CC,CN,CoF, wT,wTT, eps_,eps, ave,avd,decay, trace_func,parse_funcs,cluster_calls,F_body_
 wM,wD,wi, wG,wI,wa, wL,wS,wA = wT
 cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cAgg, cFrm,cVct,cTrc,cBac,cPrj,cCS,cSE = (      # function complexity
 wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wAgg, wFrm,wVct,wTrc,wBac,wPrj,wCS,wSE ) = [F.fc for F in oF_]  # ave gain/call, init = cost
@@ -871,7 +871,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
                     if PV__[y,x] > ave:
                         iy = _iy + (y-cy) * Ly**elev; ix = _ix + (x-cx) * Lx**elev  # feedback to shifted coords
                         if elev:
-                            T = frame_H(image, iy, ix, Ly, Lx, Y,X, rV, elev)  # up to current level
+                            T,_ = frame_H(image, iy, ix, Ly, Lx, Y,X, rV, elev)  # up to current level
                     else: break
                 else: break
             else: break
@@ -899,7 +899,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
                 tile = F  # lev tile_ is next extension seed
             else: break
         else: break
-    return F  # for intra-lev feedback
+    return F, CoF.get()  # for intra-lev feedback
 
 def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
 
@@ -916,12 +916,13 @@ if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.
     trace_func(vars())
     Y,X = imread('./images/toucan.jpg').shape
     # frame = agg_frame(0, image=imread('./images/toucan.jpg'), iY=Y, iX=X)
-    frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -31, iX=X//2 -31, Ly=64,Lx=64, Y=Y, X=X, rV=1)
+    parse_funcs(["agg_recursion.py","comp_slice.py","slice_edge.py"])  # populate nF_
+    F_body_()  # fill body
+    # not sure if we need this Z, we only need oF_ and access calls from oF_?
+    frame, Z = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -31, iX=X//2 -31, Ly=64,Lx=64, Y=Y, X=X, rV=1)
     # search frames ( tiles inside image, at this size it should be 4K, or 256K panorama, won't actually work on toucan
-    '''
     # add oF fffeedback to reform Frm for next frame_H:
-    parse_funcs(["agg_recursion.py"])  # populate nF_
-    add_typ_()
+    '''
     Frm = cluster_calls()  # new Frm, before or after merge?
     new_F_, mrg_ = [],[]
     for i, t in enumerate(oF_):  # vs. combinations(oF_,2)?
