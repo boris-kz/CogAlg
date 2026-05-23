@@ -2,12 +2,9 @@ import numpy as np, inspect, contextvars
 from copy import copy, deepcopy
 from math import atan2, cos, pi  # from functools import reduce
 from itertools import zip_longest, combinations, product  # from multiprocessing import Pool, Manager
-from contextlib import contextmanager
-from functools import wraps
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
-
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -51,116 +48,11 @@ prefix  _ denotes prior of two same-name vars, multiple _s for relative preceden
 postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized vars are summed small-case vars
 '''
-ave,avd = .3,.5; decay = ave/(ave+avd)  # ave m,d / unit dist, recomputed from dTT*wTT?
-wY, wX = 64, 64; wYX = np.hypot(wY,wX)
-wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
-wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA]); wTT = np.array([wT,wT*avd])  # default for comp_N_?
-# below are updated from meta_code now
-# cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cX,cFrm,cVct,cTrc,cBac,cPrj,cCS,cSE = Fc_  # replace with oF_[i].fc, same below:
-# wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wX,wFrm,wVct,wTrc,wBac,wPrj,wCS,wSE = Fw_  # ave gain/call, init = cost
-FTT_= [deepcopy(wTT) for _ in range(16)]
-ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP, ttX,ttFrm,ttVct,ttTrc,ttBac,ttPrj,ttCs,ttSE = FTT_  # add ETT_?
-eps = 1e-7
-def eps_(a): return np.where(a==0, eps, a)
-
-class CF(CBase):  # clustering fork: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, ext|int- defining links, Lt/Ft, Ct/lev, Bt/G
-    name ="fork"  # add sub-forks by F2N
-    def __init__(f, **kw):
-        super().__init__()
-        if not hasattr(f,'N_'): f.N_ = kw.get('N_',[])  # flat top lev, calls in oF, all sub-forks added conditionally
-        if not hasattr(f,'L_'): f.L_ = kw.get('L_',[])  # +-Ls in levs or cLs in C
-        f.nF = kw.get('nF','Nt')
-        f.dTT = kw.get('dTT',np.zeros((2,9))); f.m, f.d, f.c, f.r = [kw.get(x,0) for x in ('m','d','c','r')]  # rdpTT in oF?
-        f.wTT = kw.get('wTT',wTT); f.w = kw.get('w',0)  # or np.sum(wTT)
-        f.fb_ = kw.get('fb_',[])
-        f.typ = kw.get('typ',0)  # blocks sub_comp
-        f.root = kw.get('root',None)  # convert to list in typ oFs?
-    def __bool__(f): return bool(f.c)  # N_ may be empty?
-
-class CL(CF):  # typ=1, add kern+positionals for base comp, Rt,Nt,Bt,Ct from comp_sub F2N
-    name = "link"
-    def __init__(l, **kw):
-        super().__init__(**kw)
-        l.nt = kw.get('nt',[])  # nodet
-        l.yx = kw.get('yx', np.zeros(2))  # mean nodet? comp box is not meaningful?
-        l.kern = kw.get('kern',np.zeros(4))  # I,G,A diffs in links
-        l.span = kw.get('span',1)  # distance in nodet or aRad, comp with kern or len(N_)
-        l.angl = kw.get('angl',None)  # (dy,dx),dir, sum from L_, rarely?
-        l.typ  = kw.get('typ',1)
-
-class CC(CL):  # typ=2, adds arrays per N_
-    name = "cent"
-    def __init__(n, **kw):
-        super().__init__(**kw)
-        n.m_ = kw.get('m_',[])  # add _m_,_d_? also in C.N_, may conflict with promoted C m_,d_?
-        n.d_ = kw.get('d_',[])
-        n.typ = kw.get('typ',2)
-
-def prop_F_(F, attr='N_'):  # factory function to get and update top-composition fork.N_|H
-    def get(N): return getattr(getattr(N,F), attr)
-    def set(N, new_val): setattr(getattr(N,F), attr, new_val)
-    return property(get,set)
-
-class CN(CL):  # full node | graph fork set
-    name = "node"
-    N_,C_,L_,B_,X_,rim,H = prop_F_('Nt'),prop_F_('Ct'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Xt'),prop_F_('Rt'),prop_F_('Nt','H')  # ext|int -defined Ns,Ls
-    def __init__(n, **kw):
-        n.Nt,n.Bt,n.Ct,n.Lt,n.Xt,n.Rt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Ct','Lt','Xt','Rt')))  # CN if nest, Ct||Nt
-        super().__init__(**kw)
-        n.H = kw.get('H',[])  # hierarchy: lower CF levs/ Nt||Ct
-        n.box = kw.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
-        n.mang= kw.get('mang',1) # ave match of angles in L_, =1 in links
-        n.sub = kw.get('sub',0)  # composition depth relative to top-composition peers?
-        n.exe = kw.get('exe',0)  # exemplar, temporary
-        n.fin = kw.get('fin',0)  # clustered, temporary
-        n.compared = kw.get('compared',set())
-        n.root_ = kw.get('root_',[])  # reciprocal roots, Cs not Bs?
-        n.typ = kw.get('typ',3)  # full comp
-        # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
-    def __bool__(n): return bool(n.c)
-
-# process selection:
-def flat_(oF, call_=None):  # all nested call_ s
-
-    if call_ is None: call_ = []
-    for sub in oF.call_:
-        call_ += [sub]
-        if sub.call_: flat_(sub,call_)
-    return call_
-
-class CoF(CF):
-    name = "func"
-    _cur = contextvars.ContextVar('oF')
-    def __init__(f, **kw):
-        super().__init__(**kw)
-        f.call_ = kw.get('call_',[])  # called oFs only
-        f.body = kw.get('body',[])  # static AST ops + CoF refs in source order
-        f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]
-    @staticmethod
-    def get(): return CoF._cur.get(Z)
-    @staticmethod
-    def traced(func):
-        if getattr(func, 'wrapped', False): return func
-        func.nF = iF_[func.__name__]  # decoration time
-        @wraps(func)
-        def inner(*a, **kw):
-            _CoF = CoF._cur.get()
-            oF = CoF(nF=iF_[func.__name__], root=_CoF)
-            # we need fw per oF now? add that in add_typ_?
-            oF.wTT = FTT_[oF.nF]; oF.fw = oF_[oF.nF].fc; oF.fc = oF_[oF.nF].fc; _CoF.call_ += [oF]
-            CoF._cur.set(oF); out = func(*a, **kw)
-            if oF.call_:
-                tree = flat_(oF); L=len(tree)-1
-                if oF.fw*L > ave*(oF.fc*L):
-                    sum2F(tree, oF); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)  # conditional?
-                    oF.w += np.mean(oF.wTT)  # not affected by cent_TT?
-            CoF._cur.set(_CoF)
-            return out
-        inner.wrapped = True
-        return inner
-    def __bool__(f): return bool(f.call_)
-
-Z = CoF(nF='Z'); CoF._cur.set(Z)  # global instance of frame_H: call_typ_(Z)
+from meta_code import oF_,CF,CL,CC,CN,CoF, wT,wTT, eps_,eps, ave,avd,decay, trace_func
+wM,wD,wi, wG,wI,wa, wL,wS,wA = wT
+cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cAgg, cFrm,cVct,cTrc,cBac,cPrj,cCS,cSE = (      # function complexity
+wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wAgg, wFrm,wVct,wTrc,wBac,wPrj,wCS,wSE ) = [F.fc for F in oF_]  # ave gain/call, init = cost
+ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP, ttX,ttFrm,ttVct,ttTrc,ttBac,ttPrj,ttCs,ttSE = [F.dTT for F in oF_]
 
 def vt_(TT, wTT=wTT):  # base eval: multi-variate rel match, rel diff for membership
 
@@ -203,7 +95,7 @@ def cross_comp(root, rr):  # core function mediating recursive rng+ and der+ cro
                 if not root.typ: F2N(root)  # promote @ 1st sub+ or agg+
                 root.H+= [sum2F(L_,root,froot=1)]  # lev: L_+ derivatives
                 root.Nt = sum2F(G_,root,froot=2); L=len(G_)-1  # or C_ s?
-                if vt_(TT,ttX)[0]*(wX*L) > ave*(r+cX*L):  # root brrw| rdn?
+                if vt_(TT,ttX)[0]*(wAgg*L) > ave* (r+cAgg*L):  # root brrw| rdn?
                     G_,r = cross_comp(root.Nt,r)  # agg+
     return G_, r  # G_ is recursion flag
 '''
@@ -593,26 +485,10 @@ def cluster_P(_C_, _c, root):  # FCM-style parallel centroid refine, may add pro
         oF = CoF.get(); oF.N_=C_; oF.rTT=dCt.dTT; oF.r=dCt.r; oF.c=_c-dCt.c
         return out_
 
-def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to the sum, recompute to convergence
-
-    wTT,_wTT = [],np.ones((2,9)); coT = np.abs(dTT[0])+np.abs(dTT[1])  # complemented vals
-    while True:
-        for fd, _wT, dT in zip((0,1), _wTT, dTT):
-            vT = np.abs(dT)  # if -m: wrong, or surprise value?
-            rvT = vT / eps_(coT) * _wT  # weighted normalized vals
-            mean = rvT.mean() or eps  # scalar
-            invdev_ = np.minimum(rvT / mean, mean / eps_(rvT))
-            wT = invdev_ / (invdev_.mean() or eps)   # mean(wT)=1
-            wTT += [wT]
-        if np.sum(np.abs(wTT-_wTT)) < ave * r:  # if np.linalg.norm(wT - _wT, 1) < r?
-            break
-        _wTT = np.array(wTT); wTT = []
-    return _wTT  # single-mode dTT, extend to 2D-3D lev cycles in H, cross-level param max / centroid?
-
-def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0):  # -> CF/CL/CC/CN/CoF
+def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0):  # -> CF/CL/CC/CN
 
     c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); w_ = c_/C; N = N_[0]
-    fC = np.any(m_); fO = isinstance(N, CoF)
+    fC = np.any(m_)
     typ = 2 if fC else N.typ
     cls_ = [CF,CL,CC,CN]
     for i, (n,w) in enumerate(zip(N_,w_)):
@@ -622,21 +498,18 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0):  # -> CF/CL/CC/CN/CoF
                 kern+=n.kern*w; span+=n.span*w; yx+=n.yx*w
                 if n.angl is not None: angl = copy(n.angl[0]) if angl is None else angl+n.angl[0]
                 if typ==3: box=extend_box(box,n.box)
-            elif fO: Fw += n.m
         else:  # init
             TT = n.dTT*w; R=n.r*w; n_ = copy(n.N_ if merge else [n])
             if typ:
                 kern=n.kern*w; span=n.span*w; yx=n.yx*w; angl = copy(n.angl[0]) if n.angl is not None else None
                 if typ==3: box=copy(n.box)
-            elif fO: Fw = n.m
-    F = (CoF if fO else cls_[typ])(dTT=TT, c=C, r=R)
+    F = (cls_[typ])(dTT=TT, c=C, r=R)
     if typ:
         F.N_ = n_; F.kern=kern; F.span=span; F.yx=yx
         if angl is not None: F.angl = [angl, np.sign(F.dTT[1] @ ttcP[1])]
         if typ==2: F.m_,F.d_=m_,d_; F.m,F.d=sum(m_),sum(d_)
         else:      F.m, F.d = vt_(TT)
         if typ==3: F.box = box
-    elif fO: F.call_ = n_; F.fw = Fw; F.m, F.d = vt_(TT)
     else:    F.N_ = n_; F.m,F.d = vt_(TT)
     if root:
         if typ!=2: add2F(root,F,2)  # skip centroids
@@ -691,11 +564,11 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
                 r+=1; G_,r = cluster_C(G.Nt,E_,r,c)  # higher V, low decay
             else:     G_,r = cluster_N(G.Nt,E_,r,c)  # updates G
             L= (len(G_)-1) **2  # full cross_comp?
-            if G_ and vt_(G.Nt.dTT,G.wTT*ttX)[0]*(wX*L) > ave*(r+cX*L) > 0:
+            if G_ and vt_(G.Nt.dTT,G.wTT*ttX)[0]*(wAgg*L) > ave*(r+cAgg*L) > 0:
                 cross_comp(G.Nt,r)
     if G.Bt:
         Bt = G.Bt; bd,br,L = Bt.d,Bt.r,len(Bt.N_); rroot = root.root if root.root else 0
-        if N.typ!=1 and bd*(wX*L) > avd*(br+cX*L): [F2N(L) for L in Bt.N_]; cross_comp(Bt, br)  # no ddfork
+        if N.typ!=1 and bd*(wAgg*L) > avd*(br+cAgg*L): [F2N(L) for L in Bt.N_]; cross_comp(Bt, br)  # no ddfork
         if rroot: Bt.brrw = Bt.m * (rroot.m * (decay * (rroot.span/G.span)))  # external lend only, subtract from root?
     return G
 
@@ -899,6 +772,7 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
     return _G_,_TT,_C, r+R/_C
 
 # frame expansion: cross_comp lower-tile N_,C_, forward results to next lev, project feedback to scan new lower windows
+wY, wX = 64, 64; wYX = np.hypot(wY,wX)
 
 def proj_focus(PV__, y,x, tile):  # radial accum of projected focus value in PV__
 
@@ -1018,9 +892,8 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
             if cross_comp(lev, rr=elev)[0]:  # spec->tN_,tC_,tL_, proj comb N_'L_?
                 elev += 1
                 if rV > ave:
-                    if elev== max_elev:
-                        rV,FTT_ = ffeedback(F)  # from top lev
-                    for i, tF in enumerate(Z.typ_):
+                    if elev== max_elev: rV,FTT_ = ffeedback(F)  # from top lev
+                    for i, tF in enumerate(oF_):
                         if tF: Fw_[i] = tF.fw/tF.c; FTT_[i] = lev.wTT_[i] = tF.wTT
                     ave/=rV; avd/=rV; Fw_,FTT_ = np.array(Fw_) / rV, np.array(FTT_) / rV  # Fc_ is fixed
                 tile = F  # lev tile_ is next extension seed
@@ -1040,9 +913,21 @@ def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential
     return rM+rD, rTT  # add rm,rd?
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
-    from meta_code import trace_func
     trace_func(vars())
     Y,X = imread('./images/toucan.jpg').shape
     # frame = agg_frame(0, image=imread('./images/toucan.jpg'), iY=Y, iX=X)
     frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -31, iX=X//2 -31, Ly=64,Lx=64, Y=Y, X=X, rV=1)
     # search frames ( tiles inside image, at this size it should be 4K, or 256K panorama, won't actually work on toucan
+    '''
+    # add oF fffeedback to reform Frm for next frame_H:
+    parse_funcs(["agg_recursion.py"])  # populate nF_
+    add_typ_()
+    Frm = cluster_calls()  # new Frm, before or after merge?
+    new_F_, mrg_ = [],[]
+    for i, t in enumerate(oF_):  # vs. combinations(oF_,2)?
+        if t in mrg_: continue
+        F = Copy_(t, cls=CoF)
+        for f in oF_: mrg_ += [merge(F,f)]
+        new_F_ += [F]
+    for i, F in new_F_: F.nF = i
+    '''
