@@ -463,3 +463,11 @@ def add_typ_(R):
     if any(typ_):
         add2F(R, sum2F([t for t in typ_ if t], CoF()))
     R.typ_ = typ_
+
+def set_fc(body):
+    fc = 0
+    for n in body:
+        if isinstance(n, CoF): fc += 3
+        elif isinstance(n, tuple): fc += costs.get(n[0],0) + set_fc(n[1])
+        else: fc += costs.get(type(n),0)
+    return fc
