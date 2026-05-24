@@ -113,6 +113,7 @@ class CoF(CF):
         def inner(*a, **kw):
             _CoF = CoF._cur.get(None)
             oF = CoF(nF=iF_[func.__name__], root=_CoF)
+            oF_[iF_[func.__name__]].call_ += [oF]  # we need to pack call in typ oF?
             if _CoF is not None: _CoF.call_ += [oF]
             _oF = CoF._cur.set(oF)
             out = func(*a, **kw)
@@ -227,28 +228,33 @@ def cluster_oF_():  # cluster Ts if called together, global only
         if t: t.grp = set(); t.caller_ = set(t.caller_); t.V = 0; t.rim = set(); _T_ += [t]
     for _T,T in combinations(_T_,2):  # cross-comp function bodies
         V = comp_callers(_T,T) + comp_body(_T,T)  # co-occurence + similarity
-        link = [V,_T,T]; L_+= [link]
+        link = (V,_T,T); L_+= [link]
         T.rim.add(link); T.V += V; _T.rim.add(link); _T.V += V
 
-    _T_.sort(key=lambda t: t.V, reverse=True)  # complete-linkage agglomeration on pairs, replace with centroids if max n pairs?
-    _T = _T_[0]
-    for T in _T_[1:]:
-        if _T.grp is T.grp: continue
-        olp = T.rim & _T.grp  # probably wrong
-        # eval olp_V?
-        _g, g = _T.grp, T.grp
-        for t in g: t.grp = _g
-        _g += g
-    # old:
+    L_.sort(key=lambda link: link[0], reverse=True)  # complete-linkage agglomeration on pairs, replace with centroids if max n pairs?
+    for link in L_:
+        V, _T, T = link
+        if _T.grp is not T.grp: 
+            olp = T.rim & _T.rim  
+            if sum([V for V,_,_ in olp]) > ave * len(olp):  # full linkage's olp V?
+                _T.grp.add(link); _T.grp.update(T.grp) 
+                T.grp = _T.grp  # group T into _T           
+
+    grp_ = np.unique([T.grp for T in _T_ if T.grp])  # unique grp
+    # with link method, T without links will be recycled?
+    _T_ = [T for T in _T_ if not T.grp]
+    
     G_= []
     V = C = 0  # recompute grp cost from AST?
-    for t in _T_:
-        if t.grp[0] is not t: continue  # eval each group once, at its seed
-        grp = t.grp; gV = gC = 0  # membership, compression / grp
-        for t in grp: gV += t.V; gC += t.fc  # add links?
-        gV /= 2  # norm for pairwise redundancy
-        if gV > ave-gC: G_ += [[grp,gV,gC]]; V += gV; C += gC
-        else:           G_ += grp
+    for grp in grp_:
+        N_, L_ = [], []; gV = gC = 0  # membership, compression / grp
+        for link in grp: 
+            V, _T, T = link
+            # overlapping Ns between G_ here, so we need to eval T's G here, and merge them?
+            N_ += [_T, T]; L_ += [link]  
+            gV += V; gC += (T.fc + _T.fc)/2
+        if gV > ave-gC: G_ += [[N_,L_,gV,gC]]; V += gV; C += gC  
+    # below not updated
     if V > ave - C:
         new_oF_ = []  # for new input, vals added in CoF traced:
         for grp in G_:
@@ -281,22 +287,17 @@ def F_body_():
         # AST → CoF | (type,sub_) | ast_leaf | None
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
             i = iF_.get(node.func.id)
-            if i is not None and oF_[i].body: return oF_[i]
-        sub_ = [ret for t in ast.iter_child_nodes(node) if (ret := build(t)) is not None]
-        if sub_: return (type(node), sub_)
-        if type(node) in costs: return node
-    # this is wrong:
-    def set_fc(n):  # nested structure → cost
-        if isinstance(n, CoF): return 3
-        if isinstance(n, tuple): return costs.get(n[0], 0) + sum(set_fc(c) for c in n[1])
-        return costs.get(type(n), 0)
+            if i is not None and oF_[i].body: return oF_[i], 3
+        sub_ = [rett for t in ast.iter_child_nodes(node) if (rett:= build(t)) is not None]
+        if sub_: sub_, fc_ = zip(*sub_); return (type(node), sub_), sum(fc_)+costs.get(type(node), 0)
+        if type(node) in costs: return type(node), costs.get(type(node), 0)
 
     for i, F in enumerate(oF_):
         F.caller_ = []
-        F.body = build(nF_[i])
-        F.fc = set_fc(F.body)
-        # each main body is sub anyway, where the typ is function def: (func def, sub_)
-        # so skip func def?
+        for node in ast.iter_child_nodes(nF_[i]):  # skip top function definition
+            rett = build(node)
+            if rett:
+                t, fc = rett; F.body += [t]; F.fc += fc
 
 def sum2O(N_, root=None, fdata=0):  # for w,c,r, fw,fc,fr only?
 
