@@ -50,9 +50,9 @@ capitalized vars are summed small-case vars
 '''
 from meta_code import oF_,CF,CL,CC,CN,CoF, wT,wTT, eps_,eps, ave,avd,decay, trace_func,parse_funcs,cluster_calls,F_body_
 wM,wD,wi, wG,wI,wa, wL,wS,wA = wT
-cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cAgg, cFrm,cVct,cTrc,cBac,cPrj,cCS,cSE = (      # function complexity
-wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wAgg, wFrm,wVct,wTrc,wBac,wPrj,wCS,wSE ) = [F.fc for F in oF_]  # ave gain/call, init = cost
-ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP, ttX,ttFrm,ttVct,ttTrc,ttBac,ttPrj,ttCs,ttSE = [F.dTT for F in oF_]
+cFrm, cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cAgg, cVct,cTrc,cBac,cPrj,cCS,cSE = (      # function complexity
+wFrm, wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wAgg, wVct,wTrc,wBac,wPrj,wCS,wSE ) = [F.fc for F in oF_]  # ave gain/call, init = cost
+ttFrm, ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP, tAgg,ttVct,ttTrc,ttBac,ttPrj,ttCs,ttSE = [F.dTT for F in oF_]
 
 def vt_(TT, wTT=wTT):  # base eval: multi-variate rel match, rel diff for membership
 
@@ -95,7 +95,7 @@ def cross_comp(root, rr):  # core function mediating recursive rng+ and der+ cro
                 if not root.typ: F2N(root)  # promote @ 1st sub+ or agg+
                 root.H+= [sum2F(L_,root,froot=1)]  # lev: L_+ derivatives
                 root.Nt = sum2F(G_,root,froot=2); L=len(G_)-1  # or C_ s?
-                if vt_(TT,ttX)[0]*(wAgg*L) > ave* (r+cAgg*L):  # root brrw| rdn?
+                if vt_(TT,tAgg)[0]*(wAgg*L) > ave* (r+cAgg*L):  # root brrw| rdn?
                     G_,r = cross_comp(root.Nt,r)  # agg+
     return G_, r  # G_ is recursion flag
 '''
@@ -320,7 +320,7 @@ def get_exemplars(N_,_r,_c):  # multi-layer non-maximum suppression -> sparse se
     else: E_ = [N_[0]]  # no inhibition, any N can be seed
     return E_
 
-def cluster_N(Ft, _N_, r,_c, frim=0):  # flood-fill node | link clusters, flat, replace iL_ with E_?
+def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace iL_ with E_?
 
     def nt_vt(n,_n):
         M, D = 0,0  # exclusive match, contrast
@@ -564,7 +564,7 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
                 r+=1; G_,r = cluster_C(G.Nt,E_,r,c)  # higher V, low decay
             else:     G_,r = cluster_N(G.Nt,E_,r,c)  # updates G
             L= (len(G_)-1) **2  # full cross_comp?
-            if G_ and vt_(G.Nt.dTT,G.wTT*ttX)[0]*(wAgg*L) > ave*(r+cAgg*L) > 0:
+            if G_ and vt_(G.Nt.dTT,G.wTT*tAgg)[0]*(wAgg*L) > ave*(r+cAgg*L) > 0:
                 cross_comp(G.Nt,r)
     if G.Bt:
         Bt = G.Bt; bd,br,L = Bt.d,Bt.r,len(Bt.N_); rroot = root.root if root.root else 0
@@ -871,7 +871,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
                     if PV__[y,x] > ave:
                         iy = _iy + (y-cy) * Ly**elev; ix = _ix + (x-cx) * Lx**elev  # feedback to shifted coords
                         if elev:
-                            T,_ = frame_H(image, iy, ix, Ly, Lx, Y,X, rV, elev)  # up to current level
+                            T = frame_H(image, iy, ix, Ly, Lx, Y,X, rV, elev)  # up to current level
                     else: break
                 else: break
             else: break
@@ -899,7 +899,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
                 tile = F  # lev tile_ is next extension seed
             else: break
         else: break
-    return F, CoF.get()  # for intra-lev feedback
+    return F  # for intra-lev feedback
 
 def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
 
@@ -914,15 +914,13 @@ def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
     trace_func(vars())
-    Y,X = imread('./images/toucan.jpg').shape
-    # frame = agg_frame(0, image=imread('./images/toucan.jpg'), iY=Y, iX=X)
     parse_funcs(["agg_recursion.py","comp_slice.py","slice_edge.py"])  # populate nF_
-    F_body_()  # fill body
-    # not sure if we need this Z, we only need oF_ and access calls from oF_?
-    frame, Z = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -31, iX=X//2 -31, Ly=64,Lx=64, Y=Y, X=X, rV=1)
+    F_body_()  # fill with AST
+    Y, X = imread('./images/toucan.jpg').shape
+    frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -31, iX=X//2 -31, Ly=64,Lx=64, Y=Y, X=X, rV=1)
     # search frames ( tiles inside image, at this size it should be 4K, or 256K panorama, won't actually work on toucan
-    # add oF fffeedback to reform Frm for next frame_H:
     '''
+    add oF fffeedback to reform Frm for next frame_H:
     Frm = cluster_calls()  # new Frm, before or after merge?
     new_F_, mrg_ = [],[]
     for i, t in enumerate(oF_):  # vs. combinations(oF_,2)?

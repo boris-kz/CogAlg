@@ -3,8 +3,6 @@ from contextlib import contextmanager
 from functools import wraps
 from copy import copy, deepcopy
 import ast; from itertools import combinations
-
-# from agg_recursion import (sum2F, add2F, CoF, Copy_, cent_TT, vt_, Z,wTT, ave, avd, eps, flat_, frame_H, imread)
 '''
 code modification: compare aligned ops between Z.typ_[i] AST sequences, cluster/merge matches into higher oF typs
 '''
@@ -113,15 +111,15 @@ class CoF(CF):
         if getattr(func, 'wrapped', False): return func
         @wraps(func)
         def inner(*a, **kw):
-            _CoF = CoF._cur.get(None)  # None for the root frame_H
+            _CoF = CoF._cur.get(None)
             oF = CoF(nF=iF_[func.__name__], root=_CoF)
             if _CoF is not None: _CoF.call_ += [oF]
-            token = CoF._cur.set(oF); out = func(*a, **kw)
+            _oF = CoF._cur.set(oF)
+            out = func(*a, **kw)
             if oF.call_:
-                tree = flat_(oF); L=len(tree)-1
-                if oF.fw*L > ave*(oF.fc*L):  # conditional?
-                    sum2O(tree, oF); wtt = getattr(oF,'rTT',oF.dTT);  oF.wTT = cent_TT(wtt,oF.r)
-            CoF._cur.reset(token)
+                tree = flat_(oF)  # if len(tree)-1?
+                sum2O(tree,oF,1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)
+            CoF._cur.reset(_oF)
             return out
         inner.wrapped = True
         return inner
@@ -153,6 +151,16 @@ costs = {  # types
     ast.SetComp: 2,  # same as ListComp + hashing per element
     ast.Call: 3,  # frame creation + arg binding + return: overhead beyond the callee body itself
 }
+_names = ['frame_H',  # root function
+          'comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
+          'get_exemplars','cluster_N','cluster_C','cluster_P',  # clust_ functions
+          'cross_comp','vect_edge','trace_edge','ffeedback','proj_N','comp_slice','slice_edge']  # combined, ancillary
+          # eval Fs?
+oF_ = [CoF(nF=i) for i in range(len(_names))]  # oF_[0]= frame_H, adds level per call
+iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
+nF_ = [None] * len(_names)  # FunctionDef s
+
+# old:
 def merge(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f can only be added as a whole
 
     call_, add_ = [], []  # replace F.call_ if eval
@@ -183,7 +191,7 @@ def merge(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f
         return F,f
     else: return F
 
-def cluster_calls():  # cluster Ts if called together, for global Z only?
+def cluster_oF_():  # cluster Ts if called together, global only
 
     def comp_body(_n, n, C=0):  # estimated n-merge cost compression, init mean C=3, accum from recursive unpack
 
@@ -214,27 +222,24 @@ def cluster_calls():  # cluster Ts if called together, for global Z only?
         D = sum([c.w * c.c for c in off])
         return M / (D or 1e-7)  # match if same_callers / diff_callers > ave?
 
-    _T_, pairs = [],[]
+    _T_,L_ = [],[]
     for t in oF_:
-        if t: t.grp = [t]; t.caller_ = set(t.caller_); t.V = 0; _T_ += [t]
-    for _T,T in combinations(_T_,2):
-        v,c = comp_callers(_T,T), comp_body(_T,T)
-        pairs += [[v,c,_T,T]]
+        if t: t.grp = set(); t.caller_ = set(t.caller_); t.V = 0; t.rim = set(); _T_ += [t]
+    for _T,T in combinations(_T_,2):  # cross-comp function bodies
+        V = comp_callers(_T,T) + comp_body(_T,T)  # co-occurence + similarity
+        link = [V,_T,T]; L_+= [link]
+        T.rim.add(link); T.V += V; _T.rim.add(link); _T.V += V
 
-    # complete-linkage agglomeration on pairs, replace with centroids
-    # not revised:
-    Pairs = {frozenset({p[2], p[3]}) for p in pairs if p[0]+p[1] > ave}  # qualifying pairs
-    Pairs.sort(key=lambda p: -p[0]-p[1])  # best v first
-    for v, c, _T,T in pairs:
-        if v <= ave: break
-        if _T.grp is T.grp: continue  # not needed?
-        if all(frozenset({a,b}) in Pairs for a in _T.grp for b in T.grp):
-        # match = sum([1 for a in _T.grp for b in T.grp if frozenset({a, b}) in Pairs])
-        # if match/len(T.grp)*len(T.grp) > 0.75:  # using all is too strict?
-            _g, g = _T.grp, T.grp
-            for t in g: t.grp = _g
-            _g += g
-    # draft:
+    _T_.sort(key=lambda t: t.V, reverse=True)  # complete-linkage agglomeration on pairs, replace with centroids if max n pairs?
+    _T = _T_[0]
+    for T in _T_[1:]:
+        if _T.grp is T.grp: continue
+        olp = T.rim & _T.grp  # probably wrong
+        # eval olp_V?
+        _g, g = _T.grp, T.grp
+        for t in g: t.grp = _g
+        _g += g
+    # old:
     G_= []
     V = C = 0  # recompute grp cost from AST?
     for t in _T_:
@@ -251,16 +256,7 @@ def cluster_calls():  # cluster Ts if called together, for global Z only?
                 g,v,c = grp; T=sum2O(g); T.memb=v; T.cmpr=c  # downward reciprocals of V,C
                 new_oF_ += [T]
             else: new_oF_ += [grp]  # keep old T
-        Z = CoF(); Z.memb, Z.cmpr = V,C  # membership and compression summed / Z?
-        return Z
-
-_names = ['comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
-          'get_exemplars','cluster_N','cluster_C','cluster_P',  # clust_ functions
-          'cross_comp','frame_H','vect_edge','trace_edge','ffeedback','proj_N','comp_slice','slice_edge']  # combined, ancillary
-          # + eval Fs?
-oF_ = [CoF(nF=i) for i in range(len(_names))]
-iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
-nF_ = [None] * len(_names)  # FunctionDef s
+        return new_oF_
 
 def trace_func(module_dict, module_name=None):
 
@@ -289,7 +285,7 @@ def F_body_():
         sub_ = [ret for t in ast.iter_child_nodes(node) if (ret := build(t)) is not None]
         if sub_: return (type(node), sub_)
         if type(node) in costs: return node
-
+    # this is wrong:
     def set_fc(n):  # nested structure → cost
         if isinstance(n, CoF): return 3
         if isinstance(n, tuple): return costs.get(n[0], 0) + sum(set_fc(c) for c in n[1])
@@ -298,22 +294,24 @@ def F_body_():
     for i, F in enumerate(oF_):
         F.caller_ = []
         F.body = build(nF_[i])
-        F.fc = set_fc(F.body)  # each main body is sub anyway, where the typ is function def: (func def, sub_)
+        F.fc = set_fc(F.body)
+        # each main body is sub anyway, where the typ is function def: (func def, sub_)
+        # so skip func def?
 
-def sum2O(N_, root=None):  # for w,c,r, fw,fc,fr only?
-    # we need to update c across all functions now? Only some functions such as cluster_N, cluster_C are updated now
+def sum2O(N_, root=None, fdata=0):  # for w,c,r, fw,fc,fr only?
+
     c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); w_ = c_/C
     fc_ = np.array([n.fc for n in N_], dtype=float); fC = fc_.sum(); w_ = fc_/fC  # N = N_[0]
     # unfinished, use w_ for N summing?
     return CoF(call_=N_, root=root, fC=fC  )  # fw = Fw
 
-def add2O(F, n, merge=0):
+def add2O(F, n, nested=0):
 
-    if F.c:  # sum subtree gain, fixed cost, extensive: no weighting?
-        C=F.c+n.c; _w,w = F.c/C, n.c/C; F.r = F.r*_w + n.r*w; F.c = C; F.fw += n.m
+    if F.fc:  # sum subtree gain, fixed cost, extensive: no weighting?
+        C=F.fc+n.fc; _w,w = F.fc/C, n.fc/C; F.fr = F.fr*_w + n.fr*w; F.fc = C; F.fw += n.fw
     else:
-        F.c=n.c; F.r=n.r; F.fw=n.m
-    F.N_ += (n.N_ if merge else [n])
+        F.fc=n.fc; F.fr=n.fr; F.fw=n.fw
+    if nested: F.call_ += [n]  # else add forks?
     return F
 
 def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to the sum, recompute to convergence

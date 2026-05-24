@@ -471,3 +471,75 @@ def set_fc(body):
         elif isinstance(n, tuple): fc += costs.get(n[0],0) + set_fc(n[1])
         else: fc += costs.get(type(n),0)
     return fc
+
+def cluster_calls1():  # cluster Ts if called together, for global Z only?
+
+    def comp_body(_n, n, C=0):  # estimated n-merge cost compression, init mean C=3, accum from recursive unpack
+
+        if isinstance(n, CoF):
+            if isinstance(_n, CoF):
+                if n is _n: C += n.fc
+                elif n.fc > ave_C:  # mean compression value
+                    C -= 2  # fork compression cost, ast.IfExp
+                    for _sub, sub in zip(_n.body, n.body): C = comp_body(_sub, sub, C)
+                    if len(n.body) > len(_n.body): C -= 2  # single tail fork cost
+                else: C -= 2
+            else: C -= 2
+        elif isinstance(n, tuple):  # AST fork
+            if isinstance(_n, tuple) and n[0] is _n[0]:
+                C += costs.get(n[0], 0)
+                for _sub, sub in zip(_n[1], n[1]): C = comp_body(_sub, sub, C)
+                if len(n[1]) > len(_n[1]): C -= 2
+            else: C -= 2
+        elif type(_n) is type(n): C += costs.get(type(n),0)  # AST leaf
+        else: C -= 2
+        return C
+
+    def comp_callers(_T, T):
+        # compute value of callers_overlap + calls_overlap
+        olp = _T.caller_ & T.caller_
+        off = list(_T.caller_- olp) + list(T.caller_- olp)
+        M = sum([c.w * c.c for c in olp])
+        D = sum([c.w * c.c for c in off])
+        return M / (D or 1e-7)  # match if same_callers / diff_callers > ave?
+
+    _T_, pairs = [],[]
+    for t in oF_:
+        if t: t.grp = [t]; t.caller_ = set(t.caller_); t.V = 0; _T_ += [t]
+    for _T,T in combinations(_T_,2):
+        v,c = comp_callers(_T,T), comp_body(_T,T)
+        pairs += [[v,c,_T,T]]
+
+    # complete-linkage agglomeration on pairs, replace with centroids
+    # not revised:
+    Pairs = {frozenset({p[2], p[3]}) for p in pairs if p[0]+p[1] > ave}  # qualifying pairs
+    Pairs.sort(key=lambda p: -p[0]-p[1])  # best v first
+    for v, c, _T,T in pairs:
+        if v <= ave: break
+        if _T.grp is T.grp: continue  # not needed?
+        if all(frozenset({a,b}) in Pairs for a in _T.grp for b in T.grp):
+        # match = sum([1 for a in _T.grp for b in T.grp if frozenset({a, b}) in Pairs])
+        # if match/len(T.grp)*len(T.grp) > 0.75:  # using all is too strict?
+            _g, g = _T.grp, T.grp
+            for t in g: t.grp = _g
+            _g += g
+    # draft:
+    G_= []
+    V = C = 0  # recompute grp cost from AST?
+    for t in _T_:
+        if t.grp[0] is not t: continue  # eval each group once, at its seed
+        grp = t.grp; gV = gC = 0  # membership, compression / grp
+        for t in grp: gV += t.V; gC += t.fc  # add links?
+        gV /= 2  # norm for pairwise redundancy
+        if gV > ave-gC: G_ += [[grp,gV,gC]]; V += gV; C += gC
+        else:           G_ += grp
+    if V > ave - C:
+        new_oF_ = []  # for new input, vals added in CoF traced:
+        for grp in G_:
+            if isinstance(grp,list):
+                g,v,c = grp; T=sum2O(g); T.memb=v; T.cmpr=c  # downward reciprocals of V,C
+                new_oF_ += [T]
+            else: new_oF_ += [grp]  # keep old T
+        Z = CoF(); Z.memb, Z.cmpr = V,C  # membership and compression summed / Z?
+        return Z
+
