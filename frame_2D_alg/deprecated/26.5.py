@@ -542,4 +542,41 @@ def cluster_calls1():  # cluster Ts if called together, for global Z only?
             else: new_oF_ += [grp]  # keep old T
         Z = CoF(); Z.memb, Z.cmpr = V,C  # membership and compression summed / Z?
         return Z
+    # new:
+    _T_,L_ = [],[]
+    for t in oF_:
+        if t: t.grp = set(); t.caller_ = set(t.caller_); t.V = 0; t.rim = set(); _T_ += [t]
+    for _T,T in combinations(_T_,2):  # cross-comp function bodies
+        V = comp_callers(_T,T) + comp_body(_T,T)  # co-occurence + similarity
+        link = (V,_T,T); L_+= [link]
+        T.rim.add(link); T.V += V; _T.rim.add(link); _T.V += V
+
+    L_.sort(key=lambda link:link[0], reverse=True)  # complete-linkage agglomeration, replace with centroids if max n pairs?
+    for link in L_:
+        V, _T, T = link
+        if _T.grp is not T.grp:
+            olp = T.rim & _T.rim
+            if sum([V for V,_,_ in olp]) > ave * len(olp):  # full linkage's olp V?
+                _T.grp.add(link); _T.grp.update(T.grp)
+                T.grp = _T.grp
+    grp_ = np.unique([T.grp for T in _T_ if T.grp])  # unique grp
+    _T_ = [T for T in _T_ if not T.grp]
+    G_= []
+    V = C = 0  # recompute grp cost from AST?
+    for grp in grp_:
+        N_, L_ = [], []; gV = gC = 0  # membership, compression / grp
+        for link in grp:
+            V, _T, T = link  # overlapping Ns between G_ here, so we need to eval T's G here, and merge them?
+            N_ += [_T, T]; L_ += [link]
+            gV += V; gC += (T.fc + _T.fc)/2
+        if gV > ave-gC: G_ += [[N_,L_,gV,gC]]; V += gV; C += gC
+    # below not updated
+    if V > ave - C:
+        new_oF_ = []  # for new input, vals added in CoF traced:
+        for grp in G_:
+            if isinstance(grp,list):
+                g,v,c = grp; T=sum2O(g); T.memb=v; T.cmpr=c  # downward reciprocals of V,C
+                new_oF_ += [T]
+            else: new_oF_ += [grp]  # keep old T
+        return new_oF_
 

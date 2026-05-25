@@ -4,7 +4,7 @@ from functools import wraps
 from copy import copy, deepcopy
 import ast; from itertools import combinations
 '''
-code modification: compare aligned ops between Z.typ_[i] AST sequences, cluster/merge matches into higher oF typs
+code modification: compare aligned ops between oF_ AST sequences, cluster/merge matches into higher oF typs
 '''
 class CBase:
     refs = []
@@ -113,6 +113,7 @@ class CoF(CF):
         def inner(*a, **kw):
             _CoF = CoF._cur.get(None)
             oF = CoF(nF=iF_[func.__name__], root=_CoF)
+            oF_[iF_[func.__name__]].call_ += [oF]
             if _CoF is not None: _CoF.call_ += [oF]
             _oF = CoF._cur.set(oF)
             out = func(*a, **kw)
@@ -156,7 +157,7 @@ _names = ['frame_H',  # root function
           'get_exemplars','cluster_N','cluster_C','cluster_P',  # clust_ functions
           'cross_comp','vect_edge','trace_edge','ffeedback','proj_N','comp_slice','slice_edge']  # combined, ancillary
           # eval Fs?
-oF_ = [CoF(nF=i) for i in range(len(_names))]  # oF_[0]= frame_H, adds level per call
+oF_ = [CoF(nF=i) for i in range(len(_names))]  # root oF_[0] = frame_H, adds level per call
 iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
 nF_ = [None] * len(_names)  # FunctionDef s
 
@@ -222,41 +223,47 @@ def cluster_oF_():  # cluster Ts if called together, global only
         D = sum([c.w * c.c for c in off])
         return M / (D or 1e-7)  # match if same_callers / diff_callers > ave?
 
-    _T_,L_ = [],[]
-    for t in oF_:
-        if t: t.grp = set(); t.caller_ = set(t.caller_); t.V = 0; t.rim = set(); _T_ += [t]
-    for _T,T in combinations(_T_,2):  # cross-comp function bodies
-        V = comp_callers(_T,T) + comp_body(_T,T)  # co-occurence + similarity
-        link = [V,_T,T]; L_+= [link]
-        T.rim.add(link); T.V += V; _T.rim.add(link); _T.V += V
+    # draft:
+    E_ = []; T_ = oF_
+    for t in T_:  # preset initial T.grp and .exe
+        t.caller_ = set(t.caller_); t.in_,t.ex_ = {},{}  # _T.V s in and outside local grp
+        if t.exe: E_ += [t]
+    for _T,T in combinations(T_,2):  # full pairwise V, stored per-node
+        V = comp_callers(_T,T) + comp_body(_T,T)
+        fin = _T.grp == T.grp
+        for t, o in ((_T,T), (T,_T)):
+            if fin: t.in_[o] = V
+            else:   t.ex_[o] = V
+    # not reviewed:
+    for _ in range(4):  # iterative reassignment
+        change = 0
+        for T in T_:
+            gV = {}  # destination grp -> [sumV, count]
+            for d in (T.in_, T.ex_):
+                for m,v in d.items():
+                    if m.grp not in gV: gV[m.grp] = [0,0]
+                    gV[m.grp][0] += v; gV[m.grp][1] += 1
+            bG = max(gV, key=lambda g: gV[g][0]/gV[g][1])
+            if bG is T.grp: continue
+            full = {**T.in_, **T.ex_}
+            T.in_, T.ex_, T.grp = {}, {}, bG
+            for m,v in full.items():  # repartition both endpoints
+                if T in m.in_: m.in_.pop(T)
+                else: m.ex_.pop(T)
+                same = m.grp is bG
+                (T.in_ if same else T.ex_)[m] = v
+                (m.in_ if same else m.ex_)[T] = v
+            change = 1
+        if not change: break
 
-    _T_.sort(key=lambda t: t.V, reverse=True)  # complete-linkage agglomeration on pairs, replace with centroids if max n pairs?
-    _T = _T_[0]
-    for T in _T_[1:]:
-        if _T.grp is T.grp: continue
-        olp = T.rim & _T.grp  # probably wrong
-        # eval olp_V?
-        _g, g = _T.grp, T.grp
-        for t in g: t.grp = _g
-        _g += g
-    # old:
-    G_= []
-    V = C = 0  # recompute grp cost from AST?
-    for t in _T_:
-        if t.grp[0] is not t: continue  # eval each group once, at its seed
-        grp = t.grp; gV = gC = 0  # membership, compression / grp
-        for t in grp: gV += t.V; gC += t.fc  # add links?
-        gV /= 2  # norm for pairwise redundancy
-        if gV > ave-gC: G_ += [[grp,gV,gC]]; V += gV; C += gC
-        else:           G_ += grp
-    if V > ave - C:
-        new_oF_ = []  # for new input, vals added in CoF traced:
-        for grp in G_:
-            if isinstance(grp,list):
-                g,v,c = grp; T=sum2O(g); T.memb=v; T.cmpr=c  # downward reciprocals of V,C
-                new_oF_ += [T]
-            else: new_oF_ += [grp]  # keep old T
-        return new_oF_
+    new_oF_ = []
+    for E in E_:
+        N_ = [t for t in oF_ if t.grp is E]
+        gV = sum(sum(t.in_.values()) for t in N_) / 2  # intra-V, each counted twice
+        gC = sum(t.fc for t in N_)
+        nT = sum2O(N_); nT.memb=gV; nT.cmpr=gC
+        new_oF_ += [nT]
+    return new_oF_
 
 def trace_func(module_dict, module_name=None):
 
@@ -276,27 +283,25 @@ def parse_funcs(paths):
             if isinstance(node, ast.FunctionDef) and node.name in iF_:
                 nF_[iF_.get(node.name)] = node
 
-def F_body_():
-    def build(node):
-        # AST → CoF | (type,sub_) | ast_leaf | None
+def F_body_():  # get function bodies from their AST
+
+    def build(node):  # AST → CoF | (type,sub_) | ast_leaf | None
+
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            i = iF_.get(node.func.id)
-            if i is not None and oF_[i].body: return oF_[i]
-        sub_ = [ret for t in ast.iter_child_nodes(node) if (ret := build(t)) is not None]
-        if sub_: return (type(node), sub_)
-        if type(node) in costs: return node
-    # this is wrong:
-    def set_fc(n):  # nested structure → cost
-        if isinstance(n, CoF): return 3
-        if isinstance(n, tuple): return costs.get(n[0], 0) + sum(set_fc(c) for c in n[1])
-        return costs.get(type(n), 0)
+            if i is not None and oF_[iF_.get(node.func.id)].body:
+                return oF_[i], 3
+        sub_ = [rett for t in ast.iter_child_nodes(node) if (rett:= build(t)) is not None]
+        if sub_:
+            sub_, fc_ = zip(*sub_); return (type(node), sub_), sum(fc_)+costs.get(type(node), 0)
+        if type(node) in costs:
+            return type(node), costs.get(type(node), 0)
 
     for i, F in enumerate(oF_):
         F.caller_ = []
-        F.body = build(nF_[i])
-        F.fc = set_fc(F.body)
-        # each main body is sub anyway, where the typ is function def: (func def, sub_)
-        # so skip func def?
+        for node in ast.iter_child_nodes(nF_[i]):  # skip top function definition
+            rett = build(node)
+            if rett:
+                t, fc = rett; F.body += [t]; F.fc += fc
 
 def sum2O(N_, root=None, fdata=0):  # for w,c,r, fw,fc,fr only?
 
