@@ -224,10 +224,13 @@ def cluster_oF_():  # cluster Ts if called together, global only
         return M / (D or 1e-7)  # match if same_callers / diff_callers > ave?
 
     # draft:
-    E_ = []; T_ = oF_
+    # temporary, preset:
+    E_ = sorted(oF_, key=lambda t: t.fc, reverse=True)[:int(len(oF_)/2)]  # high fc as exemplars? 
+    for T in oF_: T.grp = set([T])
+
+    T_ = oF_
     for t in T_:  # preset initial T.grp and .exe
         t.caller_ = set(t.caller_); t.in_,t.ex_ = {},{}  # _T.V s in and outside local grp
-        if t.exe: E_ += [t]
     for _T,T in combinations(T_,2):  # full pairwise V, stored per-node
         V = comp_callers(_T,T) + comp_body(_T,T)
         fin = _T.grp == T.grp
@@ -236,33 +239,37 @@ def cluster_oF_():  # cluster Ts if called together, global only
             else:   t.ex_[o] = V
     # not reviewed:
     for _ in range(4):  # iterative reassignment
+        grpt_ = [[T.grp, 0, 1, 0, 1] for T in T_]   # init [grp, inV, inC, exV, exC], or only from exemplars?
         change = 0
         for T in T_:
-            gV = {}  # destination grp -> [sumV, count]
-            for d in (T.in_, T.ex_):
-                for m,v in d.items():
-                    if m.grp not in gV: gV[m.grp] = [0,0]
-                    gV[m.grp][0] += v; gV[m.grp][1] += 1
-            bG = max(gV, key=lambda g: gV[g][0]/gV[g][1])
-            if bG is T.grp: continue
-            full = {**T.in_, **T.ex_}
-            T.in_, T.ex_, T.grp = {}, {}, bG
-            for m,v in full.items():  # repartition both endpoints
-                if T in m.in_: m.in_.pop(T)
-                else: m.ex_.pop(T)
-                same = m.grp is bG
-                (T.in_ if same else T.ex_)[m] = v
-                (m.in_ if same else m.ex_)[T] = v
-            change = 1
+            for ind, tv in zip((0,2),(T.in_, T.ex_)):  # accumulate internal and external V based on target group
+                for t, v in tv.items():
+                    for grpt in grpt_:  # check matching group and accumulate v and c
+                        if grpt[0] is t.grp:
+                            grpt[1+ind] += v; grpt[2+ind] += 1  # ind = index of internal or external in grp
+                            break
+
+            # reassign: loop with highest V group, which is most similar group, break when found
+            grpt_ = sorted(grpt_, key=lambda grpt: (grpt[1]/grpt[2])+(grpt[3]/grpt[4]), reverse=True)  # internal V/c + external V/c             
+            for grpt in grpt_:
+                grp,inV,inC,exV,exC = grpt 
+                if grp is T.grp: continue  # skip if same grp, check the subsequent groups again until found
+                if inV/inC + exV/exC < ave: break # V is too small, stop the grouping
+                # reassign T to the best grp with highest V
+                T.grp = grp
+                # reupdate T.in_ and ex_ based on grp's Ts?   
+                change = 1
+                break
         if not change: break
 
     new_oF_ = []
     for E in E_:
-        N_ = [t for t in oF_ if t.grp is E]
-        gV = sum(sum(t.in_.values()) for t in N_) / 2  # intra-V, each counted twice
-        gC = sum(t.fc for t in N_)
-        nT = sum2O(N_); nT.memb=gV; nT.cmpr=gC
-        new_oF_ += [nT]
+        t_ = [t for t in oF_ if t.grp is E.grp]
+        if not t_: continue
+        # final membership: mean pairwise V > ave  
+        t_ = [t for t in t_ if (v_ := [v for _t,v in {**t.in_,**t.ex_}.items() if _t in t_ and _t is not t]) and sum(v_)/len(v_) > ave]  # only internal v in final eval?
+        if t_:
+            new_oF_ += [sum2O(t_)]
     return new_oF_
 
 def trace_func(module_dict, module_name=None):
@@ -288,13 +295,13 @@ def F_body_():  # get function bodies from their AST
     def build(node):  # AST → CoF | (type,sub_) | ast_leaf | None
 
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if i is not None and oF_[iF_.get(node.func.id)].body:
+            if (i:= iF_.get(node.func.id) is not None) and oF_[i].body:
                 return oF_[i], 3
         sub_ = [rett for t in ast.iter_child_nodes(node) if (rett:= build(t)) is not None]
         if sub_:
             sub_, fc_ = zip(*sub_); return (type(node), sub_), sum(fc_)+costs.get(type(node), 0)
         if type(node) in costs:
-            return type(node), costs.get(type(node), 0)
+            return node, costs.get(type(node), 0)
 
     for i, F in enumerate(oF_):
         F.caller_ = []
