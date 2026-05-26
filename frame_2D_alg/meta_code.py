@@ -224,52 +224,38 @@ def cluster_oF_():  # cluster Ts if called together, global only
         return M / (D or 1e-7)  # match if same_callers / diff_callers > ave?
 
     # draft:
-    # temporary, preset:
-    E_ = sorted(oF_, key=lambda t: t.fc, reverse=True)[:int(len(oF_)/2)]  # high fc as exemplars? 
-    for T in oF_: T.grp = set([T])
-
-    T_ = oF_
-    for t in T_:  # preset initial T.grp and .exe
-        t.caller_ = set(t.caller_); t.in_,t.ex_ = {},{}  # _T.V s in and outside local grp
-    for _T,T in combinations(T_,2):  # full pairwise V, stored per-node
-        V = comp_callers(_T,T) + comp_body(_T,T)
-        fin = _T.grp == T.grp
-        for t, o in ((_T,T), (T,_T)):
-            if fin: t.in_[o] = V
-            else:   t.ex_[o] = V
-    # not reviewed:
-    for _ in range(4):  # iterative reassignment
-        grpt_ = [[T.grp, 0, 1, 0, 1] for T in T_]   # init [grp, inV, inC, exV, exC], or only from exemplars?
-        change = 0
-        for T in T_:
-            for ind, tv in zip((0,2),(T.in_, T.ex_)):  # accumulate internal and external V based on target group
-                for t, v in tv.items():
-                    for grpt in grpt_:  # check matching group and accumulate v and c
-                        if grpt[0] is t.grp:
-                            grpt[1+ind] += v; grpt[2+ind] += 1  # ind = index of internal or external in grp
-                            break
-
-            # reassign: loop with highest V group, which is most similar group, break when found
-            grpt_ = sorted(grpt_, key=lambda grpt: (grpt[1]/grpt[2])+(grpt[3]/grpt[4]), reverse=True)  # internal V/c + external V/c             
-            for grpt in grpt_:
-                grp,inV,inC,exV,exC = grpt 
-                if grp is T.grp: continue  # skip if same grp, check the subsequent groups again until found
-                if inV/inC + exV/exC < ave: break # V is too small, stop the grouping
-                # reassign T to the best grp with highest V
-                T.grp = grp
-                # reupdate T.in_ and ex_ based on grp's Ts?   
-                change = 1
-                break
-        if not change: break
-
-    new_oF_ = []
-    for E in E_:
-        t_ = [t for t in oF_ if t.grp is E.grp]
-        if not t_: continue
-        # final membership: mean pairwise V > ave  
-        t_ = [t for t in t_ if (v_ := [v for _t,v in {**t.in_,**t.ex_}.items() if _t in t_ and _t is not t]) and sum(v_)/len(v_) > ave]  # only internal v in final eval?
-        if t_:
-            new_oF_ += [sum2O(t_)]
+    E_ = []
+    for t in oF_:
+        t.caller_ = set(t.caller_); t.V_ = {}  # pairwise V to every other oF
+        if t.exe: E_ += [t]
+    for _T,T in combinations(oF_,2):
+        V = (comp_callers(_T,T) + comp_body(_T,T)) * min(_T.fc, T.fc)
+        _T.V_[T] = V
+        T.V_[_T] = V
+    G_ = [[E] for E in E_]
+    for T in oF_:
+        if T.exe: continue
+        G_[np.argmax([T.V_[E] for E in E_])] += [T]  # one-shot avg-linkage: each non-exe joins exemplar with max V to it
+    C_ = [sum2O(G) for G in G_]  # initial composites
+    # cluster_P-like T/C recomp, reform composites: non-degenerative because each C is an AST-merge of its members?
+    Ln, Lc = len(oF_), len(C_); L = Ln*Lc
+    _v__ = np.zeros((Ln, Lc))
+    while True:
+        v__ = np.zeros((Ln, Lc))
+        for j,T in enumerate(oF_):
+            for i,C in enumerate(C_):  # fresh V per iter: substrate (C) changed
+                v__[j,i] = (comp_callers(C,T) + comp_body(C,T)) * min(C.fc, T.fc)
+        C_ = [sum2O(oF_, v__[:,i]) for i in range(Lc)]  # reform: every T contributes weighted by its affinity
+        Vt, dV = v__.sum(), np.abs(v__ - _v__).sum()
+        if Vt * dV * wcP*L <= ave * (Ln + ccP*L): break  # cluster_P convergence pattern
+        _v__ = v__
+    new_oF_ = []  # finalize:
+    for i in range(Lc):
+        N_ = [T for j,T in enumerate(oF_) if v__[j].argmax() == i]  # hard assign
+        if not N_: continue
+        gV = v__[:,i].sum(); gC = sum(t.fc for t in N_)
+        nT = sum2O(N_); nT.memb = gV; nT.cmpr = gC
+        new_oF_ += [nT]
     return new_oF_
 
 def trace_func(module_dict, module_name=None):
@@ -295,13 +281,13 @@ def F_body_():  # get function bodies from their AST
     def build(node):  # AST → CoF | (type,sub_) | ast_leaf | None
 
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if (i:= iF_.get(node.func.id) is not None) and oF_[i].body:
+            if i is not None and oF_[iF_.get(node.func.id)].body:
                 return oF_[i], 3
         sub_ = [rett for t in ast.iter_child_nodes(node) if (rett:= build(t)) is not None]
         if sub_:
             sub_, fc_ = zip(*sub_); return (type(node), sub_), sum(fc_)+costs.get(type(node), 0)
         if type(node) in costs:
-            return node, costs.get(type(node), 0)
+            return type(node), costs.get(type(node), 0)
 
     for i, F in enumerate(oF_):
         F.caller_ = []

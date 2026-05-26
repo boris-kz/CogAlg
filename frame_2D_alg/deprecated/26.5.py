@@ -580,3 +580,19 @@ def cluster_calls1():  # cluster Ts if called together, for global Z only?
             else: new_oF_ += [grp]  # keep old T
         return new_oF_
 
+    E_ = []; T_ = oF_
+    for t in T_:  # preset initial T.grpt and .exe
+        t.caller_ = set(t.caller_); t.in_,t.ex_ = {},{}; t._in_,t._ex_ = {},{}  # in|out local grp
+        if t.exe: E_ += [t]
+    for _T,T in combinations(T_,2):  # full pairwise V, store per node
+        V = (comp_callers(_T,T) + comp_body(_T,T)) * min(_T.fc,T.fc)
+        fin = _T.gt==T.gt  # [grp,V]
+        for t, o in ((_T,T), (T,_T)):
+            if fin: t.in_[o] = V
+            else:   t.ex_[o] = V
+    # grp reassignment loop:
+    for _ in range(4):
+        change = 0
+        for T in T_:
+            for i,V_ in (0,1), (T.in_,T.ex_): pass
+    ...
