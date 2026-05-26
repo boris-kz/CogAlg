@@ -224,44 +224,37 @@ def cluster_oF_():  # cluster Ts if called together, global only
         return M / (D or 1e-7)  # match if same_callers / diff_callers > ave?
 
     # draft:
-    E_ = []; T_ = oF_
-    for t in T_:  # preset initial T.grp and .exe
-        t.caller_ = set(t.caller_); t.in_,t.ex_ = {},{}  # _T.V s in and outside local grp
+    E_ = []
+    for t in oF_:
+        t.caller_ = set(t.caller_); t.V_ = {}  # pairwise V to every other oF
         if t.exe: E_ += [t]
-    for _T,T in combinations(T_,2):  # full pairwise V, stored per-node
-        V = comp_callers(_T,T) + comp_body(_T,T)
-        fin = _T.grp == T.grp
-        for t, o in ((_T,T), (T,_T)):
-            if fin: t.in_[o] = V
-            else:   t.ex_[o] = V
-    # not reviewed:
-    for _ in range(4):  # iterative reassignment
-        change = 0
-        for T in T_:
-            gV = {}  # destination grp -> [sumV, count]
-            for d in (T.in_, T.ex_):
-                for m,v in d.items():
-                    if m.grp not in gV: gV[m.grp] = [0,0]
-                    gV[m.grp][0] += v; gV[m.grp][1] += 1
-            bG = max(gV, key=lambda g: gV[g][0]/gV[g][1])
-            if bG is T.grp: continue
-            full = {**T.in_, **T.ex_}
-            T.in_, T.ex_, T.grp = {}, {}, bG
-            for m,v in full.items():  # repartition both endpoints
-                if T in m.in_: m.in_.pop(T)
-                else: m.ex_.pop(T)
-                same = m.grp is bG
-                (T.in_ if same else T.ex_)[m] = v
-                (m.in_ if same else m.ex_)[T] = v
-            change = 1
-        if not change: break
-
-    new_oF_ = []
-    for E in E_:
-        N_ = [t for t in oF_ if t.grp is E]
-        gV = sum(sum(t.in_.values()) for t in N_) / 2  # intra-V, each counted twice
-        gC = sum(t.fc for t in N_)
-        nT = sum2O(N_); nT.memb=gV; nT.cmpr=gC
+    for _T,T in combinations(oF_,2):
+        V = (comp_callers(_T,T) + comp_body(_T,T)) * min(_T.fc, T.fc)
+        _T.V_[T] = V
+        T.V_[_T] = V
+    G_ = [[E] for E in E_]
+    for T in oF_:
+        if T.exe: continue
+        G_[np.argmax([T.V_[E] for E in E_])] += [T]  # one-shot avg-linkage: each non-exe joins exemplar with max V to it
+    C_ = [sum2O(G) for G in G_]  # initial composites
+    # cluster_P-like T/C recomp, reform composites: non-degenerative because each C is an AST-merge of its members?
+    Ln, Lc = len(oF_), len(C_); L = Ln*Lc
+    _v__ = np.zeros((Ln, Lc))
+    while True:
+        v__ = np.zeros((Ln, Lc))
+        for j,T in enumerate(oF_):
+            for i,C in enumerate(C_):  # fresh V per iter: substrate (C) changed
+                v__[j,i] = (comp_callers(C,T) + comp_body(C,T)) * min(C.fc, T.fc)
+        C_ = [sum2O(oF_, v__[:,i]) for i in range(Lc)]  # reform: every T contributes weighted by its affinity
+        Vt, dV = v__.sum(), np.abs(v__ - _v__).sum()
+        if Vt * dV * wcP*L <= ave * (Ln + ccP*L): break  # cluster_P convergence pattern
+        _v__ = v__
+    new_oF_ = []  # finalize:
+    for i in range(Lc):
+        N_ = [T for j,T in enumerate(oF_) if v__[j].argmax() == i]  # hard assign
+        if not N_: continue
+        gV = v__[:,i].sum(); gC = sum(t.fc for t in N_)
+        nT = sum2O(N_); nT.memb = gV; nT.cmpr = gC
         new_oF_ += [nT]
     return new_oF_
 
