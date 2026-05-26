@@ -114,12 +114,14 @@ class CoF(CF):
             _CoF = CoF._cur.get(None)
             oF = CoF(nF=iF_[func.__name__], root=_CoF)
             oF_[iF_[func.__name__]].call_ += [oF]
-            if _CoF is not None: _CoF.call_ += [oF]
+            if _CoF is not None: 
+                _CoF.call_ += [oF]
+                oF_[iF_[func.__name__]].caller_.add(_CoF)  # caller_ for comp_caller_
             _oF = CoF._cur.set(oF)
             out = func(*a, **kw)
             if oF.call_:
                 tree = flat_(oF)  # if len(tree)-1?
-                sum2O(tree,oF,1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)
+                sum2O(tree,oF,fdata=1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)
             CoF._cur.reset(_oF)
             return out
         inner.wrapped = True
@@ -133,6 +135,7 @@ ave,avd = .3,.5; decay = ave/(ave+avd)  # ave m,d / unit dist, recomputed from d
 wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
 wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
 wTT = np.array([wT,wT*avd])
+wcO, ccO = 5,5  # temporary
 ave_C = 3
 costs = {  # types
     ast.Assign: 2,  # bind name: trivial
@@ -245,16 +248,17 @@ def cluster_oF_():  # cluster Ts if called together, global only
         for j,T in enumerate(oF_):
             for i,C in enumerate(C_):  # fresh V per iter: substrate (C) changed
                 v__[j,i] = (comp_callers(C,T) + comp_body(C,T)) * min(C.fc, T.fc)
-        C_ = [sum2O(oF_, v__[:,i]) for i in range(Lc)]  # reform: every T contributes weighted by its affinity
+        C_ = [sum2O(oF_, w_=v__[:,i]) for i in range(Lc)]  # reform: every T contributes weighted by its affinity
         Vt, dV = v__.sum(), np.abs(v__ - _v__).sum()
-        if Vt * dV * wcP*L <= ave * (Ln + ccP*L): break  # cluster_P convergence pattern
+        if Vt * dV * wcO*L <= ave * (Ln + ccO*L): break  # cluster_P convergence pattern
         _v__ = v__
     new_oF_ = []  # finalize:
     for i in range(Lc):
-        N_ = [T for j,T in enumerate(oF_) if v__[j].argmax() == i]  # hard assign
+        NV_ = [(T,v__[j,i])  for j,T in enumerate(oF_) if v__[j].argmax() == i]  # hard assign
+        N_, V_= zip(*NV_)
         if not N_: continue
         gV = v__[:,i].sum(); gC = sum(t.fc for t in N_)
-        nT = sum2O(N_); nT.memb = gV; nT.cmpr = gC
+        nT = sum2O(N_, w_=np.array(V_)); nT.memb = gV; nT.cmpr = gC
         new_oF_ += [nT]
     return new_oF_
 
@@ -281,7 +285,7 @@ def F_body_():  # get function bodies from their AST
     def build(node):  # AST → CoF | (type,sub_) | ast_leaf | None
 
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if i is not None and oF_[iF_.get(node.func.id)].body:
+            if (i:= iF_.get(node.func.id) is not None) and oF_[i].body:
                 return oF_[i], 3
         sub_ = [rett for t in ast.iter_child_nodes(node) if (rett:= build(t)) is not None]
         if sub_:
@@ -290,18 +294,24 @@ def F_body_():  # get function bodies from their AST
             return type(node), costs.get(type(node), 0)
 
     for i, F in enumerate(oF_):
-        F.caller_ = []
+        F.caller_ = set()
         for node in ast.iter_child_nodes(nF_[i]):  # skip top function definition
             rett = build(node)
             if rett:
                 t, fc = rett; F.body += [t]; F.fc += fc
 
-def sum2O(N_, root=None, fdata=0):  # for w,c,r, fw,fc,fr only?
+def sum2O(N_, root=None, w_=None, fdata=0):  # for w,c,r, fw,fc,fr only?
 
-    c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); w_ = c_/C
-    fc_ = np.array([n.fc for n in N_], dtype=float); fC = fc_.sum(); w_ = fc_/fC  # N = N_[0]
-    # unfinished, use w_ for N summing?
-    return CoF(call_=N_, root=root, fC=fC  )  # fw = Fw
+    if fdata:  # this should be for data only?
+        c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); w_ = c_/C
+    fc_ = np.array([n.fc for n in N_], dtype=float); fC = fc_.sum(); 
+    if w_ is None:  w_ = fc_/fC  # N = N_[0]
+    else:           w_ = w_ / (w_.sum() or eps)
+    # unfinished, use w_ for N summing?  (use w_ for dTT, fw and fr?)
+    oF = CoF(call_=N_, root=root, fc=fC)  # typo?
+    # for centroids  
+    if hasattr(N_[0], 'caller_'): oF.caller_ = set([caller for N in N_ for caller in N.caller_])  # for comp_caller between centroids
+    return oF   # fw = Fw
 
 def add2O(F, n, nested=0):
 
