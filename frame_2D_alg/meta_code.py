@@ -114,12 +114,14 @@ class CoF(CF):
             _CoF = CoF._cur.get(None)
             oF = CoF(nF=iF_[func.__name__], root=_CoF)
             oF_[iF_[func.__name__]].call_ += [oF]
-            if _CoF is not None: _CoF.call_ += [oF]
+            if _CoF is not None:
+                _CoF.call_ += [oF]
+                oF_[iF_[func.__name__]].caller_.add(_CoF)  # caller_ for comp_caller_
             _oF = CoF._cur.set(oF)
             out = func(*a, **kw)
             if oF.call_:
                 tree = flat_(oF)  # if len(tree)-1?
-                sum2O(tree,oF,1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)
+                sum2O(tree,oF,fdata=1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)
             CoF._cur.reset(_oF)
             return out
         inner.wrapped = True
@@ -133,6 +135,7 @@ ave,avd = .3,.5; decay = ave/(ave+avd)  # ave m,d / unit dist, recomputed from d
 wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
 wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
 wTT = np.array([wT,wT*avd])
+wcO, ccO = 5,5  # temporary
 ave_C = 3
 costs = {  # types
     ast.Assign: 2,  # bind name: trivial
@@ -152,12 +155,15 @@ costs = {  # types
     ast.SetComp: 2,  # same as ListComp + hashing per element
     ast.Call: 3,  # frame creation + arg binding + return: overhead beyond the callee body itself
 }
-_names = ['frame_H',  # root function
-          'comp_N_','comp_C_','comp_N','comp_F',  # comp_ functions
-          'get_exemplars','cluster_N','cluster_C','cluster_P',  # clust_ functions
-          'cross_comp','vect_edge','trace_edge','ffeedback','proj_N','comp_slice','slice_edge']  # combined, ancillary
-          # eval Fs?
-oF_ = [CoF(nF=i) for i in range(len(_names))]  # root oF_[0] = frame_H, adds level per call
+_names = ['frame_H','cross_comp','trace_edge',                 # root_, oF_[0] = frame_H, adds level per call
+          'comp_N_','comp_C_','comp_N','comp_F',               # comp_
+          'get_exemplars','cluster_N','cluster_C','cluster_P', # clus_
+          'ffeedback','proj_N',                                # proj_
+          'vect_edge','comp_slice','slice_edge']               # prep_
+          # deep eval Fs?
+typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','proj_','proj_','prep_','prep_','prep_']
+# need to add oF-specific body:
+oF_ = [CoF(nF=i,typ=typ) for i,typ in enumerate(typ_)]
 iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
 nF_ = [None] * len(_names)  # FunctionDef s
 
@@ -223,39 +229,38 @@ def cluster_oF_():  # cluster Ts if called together, global only
         D = sum([c.w * c.c for c in off])
         return M / (D or 1e-7)  # match if same_callers / diff_callers > ave?
 
-    # draft:
-    E_ = []
-    for t in oF_:
-        t.caller_ = set(t.caller_); t.V_ = {}  # pairwise V to every other oF
-        if t.exe: E_ += [t]
+    for t in oF_: t.caller_ = set(t.caller_); t.V_ = {}  # pairwise V to every other oF
     for _T,T in combinations(oF_,2):
         V = (comp_callers(_T,T) + comp_body(_T,T)) * min(_T.fc, T.fc)
         _T.V_[T] = V
         T.V_[_T] = V
-    G_ = [[E] for E in E_]
-    for T in oF_:
-        if T.exe: continue
-        G_[np.argmax([T.V_[E] for E in E_])] += [T]  # one-shot avg-linkage: each non-exe joins exemplar with max V to it
-    C_ = [sum2O(G) for G in G_]  # initial composites
-    # cluster_P-like T/C recomp, reform composites: non-degenerative because each C is an AST-merge of its members?
-    Ln, Lc = len(oF_), len(C_); L = Ln*Lc
+    grp_= []; _T = oF_[0]; grp=[_T]
+    for T in oF_[1:]:
+        if T.typ==_T.typ: grp+=[T]
+        else: grp_+=[grp]; grp=[T]
+        _T=T
+    grp_ += [grp]
+    C_ = [sum2O(g) for g in grp_]  # initial composites
+    Ln,Lc = len(oF_),len(C_); L = Ln*Lc  # -1?
     _v__ = np.zeros((Ln, Lc))
+    # cluster_P analog:
     while True:
         v__ = np.zeros((Ln, Lc))
-        for j,T in enumerate(oF_):
-            for i,C in enumerate(C_):  # fresh V per iter: substrate (C) changed
+        for j,T in enumerate(oF_):  # refine by comp T x G_
+            for i,C in enumerate(C_):
                 v__[j,i] = (comp_callers(C,T) + comp_body(C,T)) * min(C.fc, T.fc)
-        C_ = [sum2O(oF_, v__[:,i]) for i in range(Lc)]  # reform: every T contributes weighted by its affinity
-        Vt, dV = v__.sum(), np.abs(v__ - _v__).sum()
-        if Vt * dV * wcP*L <= ave * (Ln + ccP*L): break  # cluster_P convergence pattern
+        C_ = [sum2O(oF_, w_=v__[:,i]) for i in range(Lc)]  # weighted re-aggregation
+        V, dV = v__.sum(), np.abs(v__-_v__).sum()
+        if V*dV*(wcO*L) <= ave * (Ln+ ccO*L): break  # convergence
         _v__ = v__
-    new_oF_ = []  # finalize:
+    new_oF_ = []  # final hard assign
     for i in range(Lc):
-        N_ = [T for j,T in enumerate(oF_) if v__[j].argmax() == i]  # hard assign
-        if not N_: continue
-        gV = v__[:,i].sum(); gC = sum(t.fc for t in N_)
-        nT = sum2O(N_); nT.memb = gV; nT.cmpr = gC
-        new_oF_ += [nT]
+        t_ = [T for j,T in enumerate(oF_) if v__[j].argmax() == i]
+        if t_:
+            if (gV := v__[:,i].sum()) * ((len(t_)-1)*wL) > ave:
+                nT = sum2O(t_); nT.memb = gV; nT.cmpr = sum(t.fc for t in t_) / t.fc
+                new_oF_ += [nT]
+            else: new_oF_ += t_  # unpack if weak
     return new_oF_
 
 def trace_func(module_dict, module_name=None):
@@ -281,7 +286,7 @@ def F_body_():  # get function bodies from their AST
     def build(node):  # AST → CoF | (type,sub_) | ast_leaf | None
 
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if i is not None and oF_[iF_.get(node.func.id)].body:
+            if (i:= iF_.get(node.func.id) is not None) and oF_[i].body:
                 return oF_[i], 3
         sub_ = [rett for t in ast.iter_child_nodes(node) if (rett:= build(t)) is not None]
         if sub_:
@@ -290,18 +295,24 @@ def F_body_():  # get function bodies from their AST
             return type(node), costs.get(type(node), 0)
 
     for i, F in enumerate(oF_):
-        F.caller_ = []
+        F.caller_ = set()
         for node in ast.iter_child_nodes(nF_[i]):  # skip top function definition
             rett = build(node)
             if rett:
                 t, fc = rett; F.body += [t]; F.fc += fc
 
-def sum2O(N_, root=None, fdata=0):  # for w,c,r, fw,fc,fr only?
+def sum2O(N_, root=None, w_=None, fdata=0):  # for w,c,r, fw,fc,fr only?
 
-    c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); w_ = c_/C
-    fc_ = np.array([n.fc for n in N_], dtype=float); fC = fc_.sum(); w_ = fc_/fC  # N = N_[0]
+    if fdata:
+        c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); w_ = c_/C
+    fc_ = np.array([n.fc for n in N_], dtype=float); fC = fc_.sum()
+    if w_ is None:  w_ = fc_/fC  # N = N_[0]
+    else:           w_ = w_ / (w_.sum() or eps)
     # unfinished, use w_ for N summing?
-    return CoF(call_=N_, root=root, fC=fC  )  # fw = Fw
+    oF = CoF(call_=N_, root=root, fc=fC)  # typo?
+    # for centroids
+    if hasattr(N_[0], 'caller_'): oF.caller_ = set([caller for N in N_ for caller in N.caller_])  # for comp_caller between centroids
+    return oF   # fw = Fw
 
 def add2O(F, n, nested=0):
 

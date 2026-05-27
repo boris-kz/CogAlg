@@ -48,7 +48,7 @@ prefix  _ denotes prior of two same-name vars, multiple _s for relative preceden
 postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized vars are summed small-case vars
 '''
-from meta_code import oF_,CF,CL,CC,CN,CoF, wT,wTT, eps_,eps, ave,avd,decay, trace_func,parse_funcs,cluster_calls,F_body_
+from meta_code import oF_,CF,CL,CC,CN,CoF, wT,wTT, eps_,eps, ave,avd,decay, trace_func,parse_funcs,cluster_oF_,F_body_
 wM,wD,wi, wG,wI,wa, wL,wS,wA = wT
 cFrm, cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cAgg, cVct,cTrc,cBac,cPrj,cCS,cSE = (      # function complexity
 wFrm, wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wAgg, wVct,wTrc,wBac,wPrj,wCS,wSE ) = [F.fc for F in oF_]  # ave gain/call, init = cost
@@ -921,8 +921,8 @@ if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.
     # search frames ( tiles inside image, at this size it should be 4K, or 256K panorama, won't actually work on toucan
     '''
     add oF fffeedback to reform Frm for next frame_H:
-    Frm = cluster_calls()  # new Frm, before or after merge?
-    new_F_, mrg_ = [],[]
+    Frm = cluster_oF_()  # new Frm, before or after merge?
+    new_F_,mrg_ = [],[]
     for i, t in enumerate(oF_):  # vs. combinations(oF_,2)?
         if t in mrg_: continue
         F = Copy_(t, cls=CoF)
