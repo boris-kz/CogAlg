@@ -236,7 +236,7 @@ def cluster_oF_():  # cluster Ts if called together, global only
         T.V_[_T] = V
     grp_= []; _T = oF_[0]; grp=[_T]
     for T in oF_[1:]:
-        if T.typ==_T.typ: grp+=[T]
+        if T.typ==_T.typ and _T.V_[T] > ave: grp+=[T]  # include _T.V_[T]? Else the pairwise T.V_ section above is actually redundant
         else: grp_+=[grp]; grp=[T]
         _T=T
     grp_ += [grp]
@@ -258,10 +258,52 @@ def cluster_oF_():  # cluster Ts if called together, global only
         t_ = [T for j,T in enumerate(oF_) if v__[j].argmax() == i]
         if t_:
             if (gV := v__[:,i].sum()) * ((len(t_)-1)*wL) > ave:
-                nT = sum2O(t_); nT.memb = gV; nT.cmpr = sum(t.fc for t in t_) / t.fc
+                nT = sum2O(t_); nT.memb = gV; nT.cmpr = sum(t.fc for t in t_)  # compression should be just sum of fc?
                 new_oF_ += [nT]
             else: new_oF_ += t_  # unpack if weak
     return new_oF_
+
+
+def split_oF_():  # divisive clustering
+        
+    def comp_prim(_P,P): 
+        match = 0
+        if isinstance(_P, CoF):
+            if isinstance(P, CoF):
+                match = P.typ == _P.typ  # match by type
+        elif isinstance(_P, tuple):
+            if isinstance(P, tuple): 
+                match = _P[0] == P[0]  # match by sub type
+        elif not isinstance(P, CoF) and not isinstance(P, tuple):  # _P is primitive node
+            match = type(_P) == type(P)  # match by node type
+        
+        return match
+
+    def get_fc(P):  # get fc of single prim, similar with build
+        if isinstance(P, CoF): return P.fc
+        if isinstance(P, tuple):
+            return costs.get(P[0], 0) + sum(get_fc(c) for c in P[1])
+        return costs.get(P, 0)
+
+    out = []
+    for oF in oF_:
+        if len(oF.body)>1:  # skip if less than 2 primitives
+            grp_= []; _P = oF.body[0]; grp=[_P]
+            for P in oF.body[1:]:
+                if comp_prim(_P, P): grp+=[P]
+                else:                grp_+=[grp]; grp=[P]
+                _P=P
+            grp_ += [grp]
+            
+            # no refinement iterations yet
+            for grp in grp_:
+                fc = sum([get_fc(prim) for prim in grp])
+                sub = CoF(root=oF, fc=fc,  body=grp)  # not sure on fr, fw, caller_ and call_
+                out += [sub]    
+        else:
+            out += [oF]
+    oF_[:] = out
+
 
 def trace_func(module_dict, module_name=None):
 
@@ -286,13 +328,13 @@ def F_body_():  # get function bodies from their AST
     def build(node):  # AST → CoF | (type,sub_) | ast_leaf | None
 
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if (i:= iF_.get(node.func.id) is not None) and oF_[i].body:
+            if (i:= iF_.get(node.func.id)) is not None and oF_[i].body:  # wrong bracket, else i = boolean
                 return oF_[i], 3
         sub_ = [rett for t in ast.iter_child_nodes(node) if (rett:= build(t)) is not None]
         if sub_:
             sub_, fc_ = zip(*sub_); return (type(node), sub_), sum(fc_)+costs.get(type(node), 0)
         if type(node) in costs:
-            return type(node), costs.get(type(node), 0)
+            return node, costs.get(type(node), 0)
 
     for i, F in enumerate(oF_):
         F.caller_ = set()
@@ -304,12 +346,17 @@ def F_body_():  # get function bodies from their AST
 def sum2O(N_, root=None, w_=None, fdata=0):  # for w,c,r, fw,fc,fr only?
 
     if fdata:
-        c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); w_ = c_/C
+        c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); w_ = c_/C; body = []
+    else:
+        body = [prim for N in N_ for prim in N.body]  # add body for centroid (not sure but splice oFs' body?)
     fc_ = np.array([n.fc for n in N_], dtype=float); fC = fc_.sum()
-    if w_ is None:  w_ = fc_/fC  # N = N_[0]
-    else:           w_ = w_ / (w_.sum() or eps)
+    if w_ is None:  w_ = fc_/fC; fw=0  # N = N_[0]
+    else:           
+        w_ = w_ / (w_.sum() or eps)
+        for N, v in zip(N_,w_): N.fw = v
+        fw = w_
     # unfinished, use w_ for N summing?
-    oF = CoF(call_=N_, root=root, fc=fC)  # typo?
+    oF = CoF(call_=N_, root=root, fc=fC, fw=fw, fr=N_[0].fr+1, body=body)
     # for centroids
     if hasattr(N_[0], 'caller_'): oF.caller_ = set([caller for N in N_ for caller in N.caller_])  # for comp_caller between centroids
     return oF   # fw = Fw
