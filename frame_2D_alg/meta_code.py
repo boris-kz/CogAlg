@@ -175,19 +175,27 @@ def F_body_():  # get function bodies from their AST
         if type(node) in costs:
             return node, costs.get(type(node), 0)
 
-    for i, F in enumerate(oF_):
-        F.caller_ = set()
-        for node in ast.iter_child_nodes(nF_[i]):  # skip top function definition
+    for oF,nF in zip(oF_, nF_):
+        oF.caller_ = set()
+        for node in ast.iter_child_nodes(nF):  # skip top function definition
             rett = build(node)
             if rett:
-                t, fc = rett; F.body += [t]; F.fc += fc
-        return F.body
+                t, fc = rett; oF.body += [t]; oF.fc += fc
+
+def parse_funcs(paths):
+    for path in paths:
+        with open(path, encoding="utf-8") as f:
+            tree = ast.parse(f.read(), filename=path)
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and node.name in iF_:
+                nF_[iF_.get(node.name)] = node
 
 typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','proj_','proj_','prep_','prep_','prep_']
-b_c_= F_body_()
-oF_ = [CoF(nF=i, fc=fc,typ=typ,body=bod) for i,(typ,(bod,fc)) in enumerate(zip(typ_,b_c_))]
-iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
 nF_ = [None] * len(_names)  # FunctionDef s
+iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
+oF_ = [CoF(nF=i,typ=typ) for i,typ in enumerate(typ_)]
+parse_funcs(["agg_recursion.py","comp_slice.py","slice_edge.py"])  # populate nF_ 
+F_body_()
 
 def cluster_oF_():  # cluster Ts if called together, global only
 
@@ -239,7 +247,8 @@ def cluster_oF_():  # cluster Ts if called together, global only
         for j,T in enumerate(oF_):  # refine by comp T x G_, cluster_P analog
             for i,C in enumerate(C_):
                 v__[j,i] = (comp_callers(C,T) + comp_body(C,T)) * min(C.fc, T.fc)
-                for t in C.N_: v__[j, i] += t.V_[T]  # x centroid V + pairwise V?
+                for t in C.N_: 
+                    if t is not T: v__[j, i] += t.V_[T]  # x centroid V + pairwise V?
         C_ = [sum2O(oF_, w_=v__[:,i]) for i in range(Lc)]  # weighted re-aggr
         V, dV = v__.sum(), np.abs(v__-_v__).sum()
         if V*dV*(wcO*L) <= ave * (Ln+ ccO*L): break  # convergence
@@ -300,40 +309,58 @@ def trace_func(module_dict, module_name=None):
             if getattr(obj, 'wrapped', False): continue
             module_dict[name] = CoF.traced(obj)
 
-def parse_funcs(paths):
-    for path in paths:
-        with open(path, encoding="utf-8") as f:
-            tree = ast.parse(f.read(), filename=path)
-        for node in tree.body:
-            if isinstance(node, ast.FunctionDef) and node.name in iF_:
-                nF_[iF_.get(node.name)] = node
 # draft
 def merge(F,f, fsel=1):  # combine aligned ops, if-fork per miss, no inline recursion, f can only be added as a whole
 
+    def create_gate(Sub, sub, F, f):
+        goF = CoF(nF='E', typ='gate_', body=[Sub, sub])
+        goF.caller_ = [getattr(F, 'caller_', set()), getattr(f, 'caller_', set())]  # nested and per Sub, sub?
+        return goF
+
+    def get_fc(sub):  
+        if isinstance(sub, CoF): return sub.fc
+        if isinstance(sub, tuple): return costs.get(sub[0], 0) + sum(get_fc(s) for s in sub[1])
+        return costs.get(type(sub), 0) 
+
     body, add_ = [], []  # replace F.body if eval
-    C = 0; cost = f.fc  # total and fixed-fork costs
+    C = 0
+    i = -1  # for offset when F.Body is empty 
     for i, (Sub,sub) in enumerate(zip(F.body,f.body)):  # op sequence in func or block, init F per f?
-        fork = [] # add comp primitives
-        if Sub.nF=='E':  # previously added gate oF, none yet
-            fork = Sub; fin=0
-            if sub.nF=='E':
-                subt = merge(Sub, sub)  # add2F(Sub,ssub_)?
-                if isinstance(subt, tuple):
-                    sub = subt[1]; C+=sub.fc; body+=[sub]; add_+=[sub]
-                    continue  # skip if merged:
-            for _sub in Sub.body:
-                if _sub.nF==sub.nF: fin=1; break  # no new fork cost?
-            if not fin:
-                add2O(Sub,sub); C+=sub.fc; add_+=[sub]
-        elif Sub.nF != sub.nF:
-            fork = CoF(nF='E',body=[Sub,sub]); C += cost; add_+=[sub]
-        body += [fork or Sub]
+        if isinstance(Sub, CoF) and isinstance(sub, CoF):  # oF or goF
+            if Sub.typ != sub.typ:  # create goF for different typs
+                fork = create_gate(Sub, sub, F, f); C += sub.fc; add_ += [sub]
+            elif Sub.nF == 'E':  # both are gates
+                # Sub is an existing gate oF
+                fork = merge(Sub, sub, fsel=0)
+                C += sub.fc; add_ += [sub]
+            else:  # both are non gates
+                if Sub.nF != sub.nF:  # different type oFs
+                    fork = create_gate(Sub, sub, F, f)
+                    C += sub.fc; add_ += [sub]
+                else:  # same type oFs
+                    fork = Sub
+        elif isinstance(Sub, tuple) and isinstance(sub, tuple):  # subs
+            if Sub[0] is sub[0]:  # same sub type
+                fork = (Sub[0], Sub[1]+sub[1])  # temporary, i guess we need to merge sub[1] a swell
+                C += costs.get(sub[0], 0)
+            else:  # different sub type
+                fork = create_gate(Sub, sub, F, f)
+                C += costs.get(sub[0], 0); add_ += [sub]
+        elif not isinstance(Sub, (CoF, tuple)) and not isinstance(sub, (CoF, tuple)):  # both are ast nodes
+            if type(Sub) is type(sub):  fork = Sub  # same ast type
+            else:
+                fork = create_gate(Sub, sub, F, f)
+                C += costs.get(type(sub), 0); add_ += [sub]
+        else:  # combinations between CoF, tuple and ast node
+            fork = create_gate(Sub, sub, F, f)
+            C += get_fc(sub); add_ += [sub]        
+        body += [fork]
     if len(f.body) > len(F.body): offs = f.body[i+1:]; body+=offs; add_+=offs
     elif len(F.body)>len(f.body): body+= F.body[i+1:]
 
+    F.body = body  # this should be default anyway?
     if fsel and (f.fc / (C or 1e-7) > ave):  # high individual_cost / forking_Cost, else keep old F,f
         if add_: add2O(F, sum2O(add_))
-        F.body = body
         return F,f
     else: return F
 
@@ -349,10 +376,9 @@ def sum2O(F_, root=None, w_=None, fcall_=0):  # for w,c,r, fw,fc,fr only?
     if fcall_:
         c_ = np.array([n.c for n in F_], dtype=float); C = c_.sum(); w_ = c_/C; F.call_ = F_
     else:
-        Body = F_[0].body
-        for f in F_: merge(Body, f.body, fsel=0); F.body=Body
+        for f in F_: merge(F, f, fsel=0)  # Body and F_[0].body are the same
     if hasattr(F_[0],'caller_'): F.caller_ = set([caller for N in F_ for caller in N.caller_])  # for comp_caller between centroids
-    return F, fC   # fw = Fw
+    return F   # fw = Fw (no need to return fC when it can retrieved from F anyway)
 
 def add2O(F, n, nested=0):
 
