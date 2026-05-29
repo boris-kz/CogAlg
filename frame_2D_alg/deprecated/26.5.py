@@ -595,4 +595,31 @@ def cluster_calls1():  # cluster Ts if called together, for global Z only?
         change = 0
         for T in T_:
             for i,V_ in (0,1), (T.in_,T.ex_): pass
-    ...
+
+def merge(F,f, fsel=1):  # combine aligned ops, if-fork per miss, no inline recursion, f can only be added as a whole
+
+    body, add_ = [],[]  # replace F.body: op sequence in func
+    C = 0; cost = f.fc  # total and fork costs
+    for i, (Sub,sub) in enumerate(zip(F.body,f.body)):
+        fork = []  # add comp primitives
+        if Sub.nF=='E':  # previously added gate oF, none yet
+            fork = Sub; fin=0
+            if sub.nF=='E':
+                subt = merge(Sub, sub)  # add2F(Sub,ssub_)?
+                if isinstance(subt, tuple):
+                    sub = subt[1]; C+=sub.fc; body+=[sub]; add_+=[sub]
+                    continue  # skip if merged:
+            for _sub in Sub.body:
+                if _sub.nF==sub.nF: fin=1; break  # no new fork cost?
+            if not fin:
+                add2O(Sub,sub); C+=sub.fc; add_+=[sub]
+        elif Sub.nF != sub.nF:
+            fork = CoF(nF='E',body=[Sub,sub]); C += cost; add_+=[sub]
+        body += [fork or Sub]
+    if len(f.body) > len(F.body): offs = f.body[i+1:]; body+=offs; add_+=offs
+    elif len(F.body)>len(f.body): body+= F.body[i+1:]
+    F.body = body
+    if fsel and (f.fc / (C or 1e-7) > ave):  # high individual_cost / forking_Cost, else keep old F,f
+        if add_: add2O(F, sum2O(add_))
+        return F,f
+    else: return F
