@@ -193,8 +193,8 @@ typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','
 nF_ = [None] * len(_names)  # FunctionDef s
 iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
 oF_ = [CoF(nF=i,typ=typ) for i,typ in enumerate(typ_)]
+parse_funcs(["agg_recursion.py","comp_slice.py","slice_edge.py"])  # populate nF_ before we add body below
 F_body_()  # add F.body from AST
-parse_funcs(["agg_recursion.py","comp_slice.py","slice_edge.py"])  # populate nF_
 
 def comp_body(_n, n, C=0):  # estimated n-merge cost compression, init mean C=3, accum from recursive unpack
 
@@ -247,6 +247,7 @@ def cluster_oF_():  # cluster Ts if called together, global only
                     if t is not T: v__[j,i] += t.V_[T]
         C_ = [sum2O(oF_, w_=v__[:,i]) for i in range(Lc)]  # weighted re-aggr
         V, dV = v__.sum(), np.abs(v__-_v__).sum()
+        # endless loops here, because `v__[j,i] += t.V_[T]`, values getting larger and dV getting larger too
         if V*dV*(wcO*L) <= ave * (Ln+ ccO*L): break  # convergence
         _v__ = v__
     new_oF_ = []  # final hard assign
@@ -262,13 +263,16 @@ def cluster_oF_():  # cluster Ts if called together, global only
 
 def comp_prim(_n,n):
     if isinstance(_n, CoF) or isinstance(n,CoF):
-        return n.nF==_n.nF if (isinstance(n,CoF) and isinstance(n,CoF)) else 0
-    else: return _n[0]==n[0] if isinstance(n,tuple) else type(_n)==type(n)
+        return n.nF==_n.nF if (isinstance(_n,CoF) and isinstance(n,CoF)) else 0
+    else: 
+        if isinstance(_n, tuple) and isinstance(n, tuple): return _n[0]==n[0]  # the prior code has issue because the other _n may not be a tuple and _n[0] can't work
+        if isinstance(_n, tuple) or isinstance(n, tuple): return 0
+        return type(_n)==type(n)
 
 def get_fc(n):
     if isinstance(n, CoF):   return n.fc
     if isinstance(n, tuple): return costs.get(n[0],0) + sum(get_fc(c) for c in n[1])
-    return costs.get(n,0)
+    return costs.get(type(n),0)  # n is node
 
 def split_oF_():  # divisive clustering
     out = []
@@ -287,7 +291,7 @@ def split_oF_():  # divisive clustering
         else: out += [oF]
     oF_[:] = out
 
-def merge(F,f, fsel=1):  # combine aligned ops, if-fork per miss, no inline recursion, f can only be added as a whole
+def merge(F,f, fsel=1):  # combine aligned ops, if-fork per miss, no inline recursion, f can only be added as a whole 
 
     body, add_ = [],[]  # replace F.body: op sequence in func
     C = 0  # i = -1  # offset if F.Body is empty?
@@ -327,7 +331,7 @@ def sum2O(F_, root=None, w_=None, fcall_=0):  # for w,c,r, fw,fc,fr only?
     if fcall_:
         c_ = np.array([n.c for n in F_], dtype=float); C = c_.sum(); w_ = c_/C; F.call_ = F_
     else:
-        Body = F_[0].body
+        Body = copy(F_[0].body)  # shallow copy, else it packs to the first F.body
         for f in F_: merge(Body, f.body, fsel=0); F.body=Body
     if hasattr(F_[0],'caller_'): F.caller_ = set([caller for N in F_ for caller in N.caller_])  # for comp_caller between centroids
     return F   # fw = Fw
