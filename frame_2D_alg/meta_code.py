@@ -253,13 +253,13 @@ def split_oF_():  # divisive clustering
             for grp in grp_:  # single refinement
                 fc = sum([get_fc(prim) for prim in grp])
                 sub = CoF(root=oF, fc=fc, body=grp)  # add special case: form goF from AST tuple?
+                sub.caller_ = copy(oF.caller_)  # all sub under the same oF should have the same caller_
                 out += [sub]
         else: out += [oF]
     oF_[:] = out
 
 def cluster_oF_():  # cluster Ts if called together, global only
 
-    for t in oF_: t.caller_ = set(t.caller_); t.V_ = {}  # pairwise V to every other oF
     ''' for _T, T in combinations(oF_, 2):  # if init with average_linkage vs centroids:
         V = (comp_callers(_T,T) + comp_body(_T,T)) * min(_T.fc,T.fc); _T.V_[T] = V; T.V_[_T] = V '''
     grp_ = {}
@@ -273,7 +273,6 @@ def cluster_oF_():  # cluster Ts if called together, global only
         for j,T in enumerate(oF_):  # refine by comp T x G_, cluster_P analog
             for i,C in enumerate(C_):
                 v__[j,i] = (comp_callers(C,T) + comp_body(C,T)) * min(C.fc,T.fc)  # x centroid V
-                # for t in C.N_: if t is not T: v__[j,i] += t.V_[T]  # += pairwise Vs
         C_ = [sum2O(oF_, w_=v__[:,i]) for i in range(Lc)]  # weighted re-aggr
         V, dV = v__.sum(), np.abs(v__-_v__).sum()
         if V*dV*(wcO*L) <= ave * (Ln+ ccO*L): break  # convergence
@@ -287,27 +286,29 @@ def cluster_oF_():  # cluster Ts if called together, global only
                 nT.memb = gV; fC = sum(t.fc for t in t_); nT.cmpr = fC - fC/len(t_)
                 new_oF_ += [nT]
             else: new_oF_ += t_  # unpack if weak
-    return new_oF_
+    return new_oF_  # after the new oFs, we need recompute iF_, nF_? But their names are different now, not sure how to map them
 
 def merge_oF(F,f, fsel=1):  # combine aligned ops, if-fork per miss, no inline recursion, f can only be added as a whole
 
     body, add_ = [],[]  # replace F.body: op sequence in func
     C = 0  # i = -1  # offset if F.Body is empty?
     for i, (Sub,sub) in enumerate(zip(F.body,f.body)):
-        if Sub.nF=='E':  # gate oF, none yet
+        if isinstance(Sub,CoF) and Sub.nF=='E':  # gate oF, none yet
             fin=0
-            if sub.nF=='E':
+            if isinstance(sub,CoF) and sub.nF=='E':
                 subt = merge_oF(Sub, sub)  # add2F(Sub,ssub_)?
                 if isinstance(subt, tuple):
                     sub = subt[1]; C+=sub.fc; body+=[sub]; add_+=[sub]
                     continue  # skip if merged:
             for _sub in Sub.body:
-                if _sub.nF==sub.nF: fin=1; break  # no new fork?
-            if not fin: add2O(Sub,sub); C+=sub.fc; add_+=[sub]
+                if comp_prim(_sub,sub): fin=1; break  # no new fork?  (use comp_prim because sub may not be CoF)
+            if not fin: 
+                if isinstance(sub, CoF): add2O(Sub,sub)
+                C+=get_fc(sub); add_+=[sub]
             body += [Sub]
         else:  # default
             if comp_prim(Sub,sub): body += [Sub]  # add count?
-            else: body += [(ast.IfExp,(Sub,sub))]; C += costs[sub]; add_+=[sub]
+            else: body += [(ast.IfExp,(Sub,sub))]; C += get_fc(sub); add_+=[sub]
             # new fork
     if len(f.body) > len(F.body): offs = f.body[i+1:]; body+=offs; add_+=offs
     elif len(F.body)>len(f.body): body+= F.body[i+1:]
@@ -329,8 +330,8 @@ def sum2O(F_, root=None, w_=None, fcall_=0):  # for w,c,r, fw,fc,fr only?
     if fcall_:
         c_ = np.array([n.c for n in F_], dtype=float); C = c_.sum(); w_ = c_/C; F.call_ = F_
     else:
-        Body = copy(F_[0].body)
-        for f in F_: merge_oF(Body, f.body, fsel=0); F.body=Body
+        F.body = copy(F_[0].body)  # shallow copy
+        for f in F_[1:]: merge_oF(F, f, fsel=0)
     if hasattr(F_[0],'caller_'): F.caller_ = set([caller for N in F_ for caller in N.caller_])  # for comp_caller between centroids
     return F   # fw = Fw
 
