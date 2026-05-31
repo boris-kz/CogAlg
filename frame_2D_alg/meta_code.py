@@ -87,7 +87,6 @@ class CN(CL):  # full node | graph fork set
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.c)
 
-# process selection:
 def flat_(oF, call_=None):  # all nested call_ s
 
     if call_ is None: call_ = []
@@ -172,7 +171,7 @@ def F_body_():  # get function bodies from their AST
         if sub_:
             sub_, fc_ = zip(*sub_); return (type(node), sub_), sum(fc_)+costs.get(type(node), 0)
         if type(node) in costs:
-            return node, costs.get(type(node), 0)
+            return node, costs.get(type(node),0)
 
     for func,name in zip(oF_,nF_):
         func.caller_ = set()
@@ -227,8 +226,9 @@ def comp_callers(_T, T):  # compute value of callers_overlap + calls_overlap
     return M / (D or 1e-7) # match if same_callers / diff_callers > ave?
 
 def comp_prim(_n,n):
-    if isinstance(_n, CoF) or isinstance(n,CoF):
-        if isinstance(_n, CoF) and isinstance(n, CoF): return n.nF == _n.nF  # refine with comp callers and data
+    if isinstance(_n,CoF) or isinstance(n,CoF):
+        if isinstance(_n,CoF) and isinstance(n,CoF) and n.nF==_n.nF:
+            return comp_callers(_n,n) > ave  # refine by comp data?
         else: return 0
     else:
         if isinstance(_n,tuple) and isinstance(n,tuple): return _n[0] == n[0]
@@ -252,18 +252,15 @@ def split_oF_():  # divisive clustering
             grp_ += [grp]
             for grp in grp_:  # single refinement
                 fc = sum([get_fc(prim) for prim in grp])
-                sub = CoF(root=oF, fc=fc, body=grp)  # add special case: form goF from AST tuple?
-                sub.caller_ = copy(oF.caller_)  # all sub under the same oF should have the same caller_
+                sub = CoF(root=oF,fc=fc,body=grp); sub.caller_ = copy(oF.caller_)
                 out += [sub]
         else: out += [oF]
     oF_[:] = out
 
 def cluster_oF_():  # cluster Ts if called together, global only
 
-    ''' for _T, T in combinations(oF_, 2):  # if init with average_linkage vs centroids:
-        V = (comp_callers(_T,T) + comp_body(_T,T)) * min(_T.fc,T.fc); _T.V_[T] = V; T.V_[_T] = V '''
-    grp_ = {}
-    for T in oF_: grp_.setdefault(T.typ, []).append(T)  # group same-typ oFs
+    grp_ = {}   # group same-typ oFs:
+    for T in oF_: grp_.setdefault(T.typ, []).append(T)
     grp_ = list(grp_.values())
     C_ = [sum2O(g) for g in grp_]  # initial composites
     Ln,Lc = len(oF_),len(C_); L = Ln*Lc  # -1?
@@ -286,12 +283,15 @@ def cluster_oF_():  # cluster Ts if called together, global only
                 nT.memb = gV; fC = sum(t.fc for t in t_); nT.cmpr = fC - fC/len(t_)
                 new_oF_ += [nT]
             else: new_oF_ += t_  # unpack if weak
-    return new_oF_  # after the new oFs, we need recompute iF_, nF_? But their names are different now, not sure how to map them
+    ''' average_linkage:
+    for _T,T in combinations(oF_,2): V = (comp_callers(_T,T) + comp_body(_T,T)) * min(_T.fc,T.fc); _T.V_[T] = V; T.V_[_T] = V 
+    for t in C.N_: if t is not T: v__[j,i] += t.V_[T]  # += pairwise Vs '''
+    return new_oF_
 
 def merge_oF(F,f, fsel=1):  # combine aligned ops, if-fork per miss, no inline recursion, f can only be added as a whole
 
-    body, add_ = [],[]  # replace F.body: op sequence in func
-    C = 0  # i = -1  # offset if F.Body is empty?
+    body,add_ = [],[]  # replace F.body: op sequence in func
+    C = 0  # compression
     for i, (Sub,sub) in enumerate(zip(F.body,f.body)):
         if isinstance(Sub,CoF) and Sub.nF=='E':  # gate oF, none yet
             fin=0
@@ -301,8 +301,8 @@ def merge_oF(F,f, fsel=1):  # combine aligned ops, if-fork per miss, no inline r
                     sub = subt[1]; C+=sub.fc; body+=[sub]; add_+=[sub]
                     continue  # skip if merged:
             for _sub in Sub.body:
-                if comp_prim(_sub,sub): fin=1; break  # no new fork?  (use comp_prim because sub may not be CoF)
-            if not fin: 
+                if comp_prim(_sub,sub): fin=1; break  # no new fork?
+            if not fin:
                 if isinstance(sub, CoF): add2O(Sub,sub)
                 C+=get_fc(sub); add_+=[sub]
             body += [Sub]
@@ -369,4 +369,3 @@ def trace_func(module_dict, module_name=None):
             if obj.__module__ != module_name: continue
             if getattr(obj, 'wrapped', False): continue
             module_dict[name] = CoF.traced(obj)
-
