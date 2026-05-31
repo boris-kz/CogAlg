@@ -244,6 +244,10 @@ def split_oF_():  # divisive clustering
     out = []
     for oF in oF_:
         if (len(oF.body)-1) * wL > ave:  # * split w,c
+            base_caller_ = copy(oF.caller_)
+            for n in oF.body:
+                if isinstance(n, tuple) and n[0] == ast.IfExp:
+                    base_caller_ -=  n[2][0] | n[2][1]  # get the base caller_ without IfExp node's callers
             grp_=[]; _n = oF.body[0]; grp = [_n]
             for n in oF.body[1:]:
                 if comp_prim(_n,n): grp+=[n]
@@ -252,7 +256,10 @@ def split_oF_():  # divisive clustering
             grp_ += [grp]
             for grp in grp_:  # single refinement
                 fc = sum([get_fc(prim) for prim in grp])
-                sub = CoF(root=oF,fc=fc,body=grp); sub.caller_ = copy(oF.caller_)
+                sub = CoF(root=oF,fc=fc,body=grp); sub.caller_ = copy(base_caller_)
+                for prim in grp:
+                    if isinstance(prim, tuple) and prim[0] == ast.IfExp:  # add the IfExp node specific caller_
+                        sub.caller_ += prim[2][0] | prim[2][1]
                 out += [sub]
         else: out += [oF]
     oF_[:] = out
@@ -307,12 +314,15 @@ def merge_oF(F,f, fsel=1):  # combine aligned ops, if-fork per miss, no inline r
                 C+=get_fc(sub); add_+=[sub]
             body += [Sub]
         else:  # default
-            if comp_prim(Sub,sub): body += [Sub]  # add count?
-            else: body += [(ast.IfExp,(Sub,sub))]; C += get_fc(sub); add_+=[sub]
+            if comp_prim(Sub,sub):
+                body += [Sub]  # add count?
+                if isinstance(sub, tuple) and sub[0] == ast.IfExp:
+                    for caller_ in sub[2]: F.caller_ |= caller_   # loop caller_ from IfExp node, add forks' callers into F using set union
+            else: body += [(ast.IfExp,(Sub,sub),(copy(F.caller_), copy(f.caller_)))]; C += get_fc(sub); add_+=[sub]
             # new fork
     if len(f.body) > len(F.body): offs = f.body[i+1:]; body+=offs; add_+=offs
     elif len(F.body)>len(f.body): body+= F.body[i+1:]
-    F.body = body
+    F.body = body; F.caller_ |= f.caller_
     if fsel and (f.fc / (C or 1e-7) > ave):  # high individual_cost / forking_Cost, else keep old F,f
         if add_: add2O(F, sum2O(add_))
         return F,f
@@ -328,11 +338,11 @@ def sum2O(F_, root=None, w_=None, fcall_=0):  # for w,c,r, fw,fc,fr only?
         fw = w_
     F = CoF(N_=F_, root=root, fc=fC, fw=fw, fr=F_[0].fr+1)  # unfinished, use w_ for N summing?
     if fcall_:
+        if hasattr(F_[0],'caller_'): F.caller_ = set([caller for N in F_ for caller in N.caller_])  # for comp_caller between centroids
         c_ = np.array([n.c for n in F_], dtype=float); C = c_.sum(); w_ = c_/C; F.call_ = F_
     else:
-        F.body = copy(F_[0].body)  # shallow copy
+        F.caller_=copy(F_[0].caller_); F.body = copy(F_[0].body)  # shallow copy
         for f in F_[1:]: merge_oF(F, f, fsel=0)
-    if hasattr(F_[0],'caller_'): F.caller_ = set([caller for N in F_ for caller in N.caller_])  # for comp_caller between centroids
     return F   # fw = Fw
 
 def add2O(F, n, nested=0):
