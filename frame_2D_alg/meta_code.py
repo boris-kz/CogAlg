@@ -4,7 +4,7 @@ from functools import wraps
 from copy import copy, deepcopy
 import ast; from itertools import combinations
 '''
-code modification: compare aligned ops between oF_ AST sequences, cluster/merge matches into higher oF typs
+code modification: compare aligned ops between oF_ AST sequences, cluster/split/merge matches into higher oF typs
 '''
 class CBase:
     refs = []
@@ -103,6 +103,7 @@ class CoF(CF):
         f.call_ = kw.get('call_',[])  # called oFs only
         f.body = kw.get('body',[])  # static AST ops + CoF refs in source order
         f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]  # fr if nested oF?
+        f.caller_ = kw.get('caller_', [])
     @staticmethod
     def get(): return CoF._cur.get()  # Frm?
     @staticmethod
@@ -115,7 +116,7 @@ class CoF(CF):
             oF_[iF_[func.__name__]].call_ += [oF]
             if _CoF is not None:
                 _CoF.call_ += [oF]
-                oF_[iF_[func.__name__]].caller_.add(_CoF)  # caller_ for comp_caller_
+                oF_[iF_[func.__name__]].caller_.add(_CoF)  # for comp_caller_
             _oF = CoF._cur.set(oF)
             out = func(*a, **kw)
             if oF.call_:
@@ -125,6 +126,20 @@ class CoF(CF):
             return out
         inner.wrapped = True
         return inner
+    @staticmethod
+    @contextmanager
+    # draft:
+    def gate():  # eval-time goF, mirrors traced but feeds oF_[-1]='E', not iF_
+        _CoF = CoF._cur.get(None)
+        oF = CoF(nF='E', root=_CoF)
+        oF_[-1].call_ += [oF]
+        if _CoF is not None:
+            _CoF.call_ += [oF]; oF_[-1].caller_.add(_CoF)
+        _oF = CoF._cur.set(oF)
+        try: yield oF
+        finally:
+            if oF.call_: tree = flat_(oF); sum2O(tree,oF,fcall_=1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)
+            CoF._cur.reset(_oF)
     def __bool__(f): return bool(f.call_)
 
 eps = 1e-7
@@ -158,8 +173,8 @@ _names = ['frame_H','cross_comp','trace_edge',                 # root_, oF_[0] =
           'comp_N_','comp_C_','comp_N','comp_F',               # comp_
           'get_exemplars','cluster_N','cluster_C','cluster_P', # clus_
           'ffeedback','proj_N',                                # proj_
-          'vect_edge','comp_slice','slice_edge']               # prep_
-          # add gate_: deep eval Fs
+          'vect_edge','comp_slice','slice_edge'                # prep_
+          'gate']  # deep eval Fs                              # gate_
 
 def F_body_():  # get function bodies from their AST
     def build(node):  # AST → CoF | (type,sub_) | ast_leaf | None
@@ -188,7 +203,7 @@ def parse_funcs(paths):
             if isinstance(node, ast.FunctionDef) and node.name in iF_:
                 nF_[iF_.get(node.name)] = node
 
-typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','proj_','proj_','prep_','prep_','prep_']
+typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','proj_','proj_','prep_','prep_','prep_','gate_']
 nF_ = [None] * len(_names)  # FunctionDef s
 iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
 oF_ = [CoF(nF=i,typ=typ) for i,typ in enumerate(typ_)]
@@ -224,11 +239,12 @@ def comp_callers(_T, T):  # compute value of callers_overlap + calls_overlap
     M = sum([c.w * c.c for c in olp])
     D = sum([c.w * c.c for c in off])
     return M / (D or 1e-7) # match if same_callers / diff_callers > ave?
+    # refine by comp data, include coords?
 
 def comp_prim(_n,n):
     if isinstance(_n,CoF) or isinstance(n,CoF):
         if isinstance(_n,CoF) and isinstance(n,CoF) and n.nF==_n.nF:
-            return comp_callers(_n,n) > ave  # refine by comp data?
+            return comp_callers(_n,n) > ave
         else: return 0
     else:
         if isinstance(_n,tuple) and isinstance(n,tuple): return _n[0] == n[0]
@@ -290,7 +306,7 @@ def cluster_oF_():  # cluster Ts if called together, global only
                 nT.memb = gV; fC = sum(t.fc for t in t_); nT.cmpr = fC - fC/len(t_)
                 new_oF_ += [nT]
             else: new_oF_ += t_  # unpack if weak
-    ''' average_linkage:
+    ''' with average_linkage:
     for _T,T in combinations(oF_,2): V = (comp_callers(_T,T) + comp_body(_T,T)) * min(_T.fc,T.fc); _T.V_[T] = V; T.V_[_T] = V 
     for t in C.N_: if t is not T: v__[j,i] += t.V_[T]  # += pairwise Vs '''
     return new_oF_
