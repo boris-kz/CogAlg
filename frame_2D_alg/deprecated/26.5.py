@@ -623,3 +623,18 @@ def merge(F,f, fsel=1):  # combine aligned ops, if-fork per miss, no inline recu
         if add_: add2O(F, sum2O(add_))
         return F,f
     else: return F
+
+    @staticmethod
+    @contextmanager
+    # draft:
+    def gate():  # eval-time goF, mirrors traced but feeds oF_[-1]='E', not iF_
+        _CoF = CoF._cur.get(None)
+        oF = CoF(nF='E', root=_CoF)
+        oF_[-1].call_ += [oF]
+        if _CoF is not None:
+            _CoF.call_ += [oF]; oF_[-1].caller_.add(_CoF)
+        _oF = CoF._cur.set(oF)
+        try: yield oF
+        finally:
+            if oF.call_: tree = flat_(oF); sum2O(tree,oF,fcall_=1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)
+            CoF._cur.reset(_oF)
