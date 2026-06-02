@@ -6,6 +6,35 @@ import ast; from itertools import combinations
 '''
 code modification: compare aligned ops between oF_ AST sequences, cluster/split/merge matches into higher oF typs
 '''
+# moved here because class init needs wTT
+eps = 1e-7
+def eps_(a): return np.where(a==0, eps, a)
+
+ave,avd = .3,.5; decay = ave/(ave+avd)  # ave m,d / unit dist, recomputed from dTT*wTT?
+wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
+wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
+wTT = np.array([wT,wT*avd])
+wcO, ccO = 5,5  # temporary
+ave_C, wL = 3,3
+costs = {  # types
+    ast.Assign: 2,  # bind name: trivial
+    ast.Attribute: 5,  # single dict lookup on object
+    ast.UnaryOp: 2,  # apply one operator to one operand
+    ast.BoolOp: 1,  # short-circuit decision between already-evaluated values
+    ast.Compare: 2,  # compare already-evaluated operands
+    ast.If: 1,  # test + pick branch, body ops counted separately
+    ast.IfExp: 2,  # same as If
+    ast.BinOp: 2,  # apply operator to two already-evaluated operands
+    ast.AugAssign: 2,  # read + op + store, but op and target counted separately
+    ast.Subscript: 5,  # index resolution into container
+    ast.GeneratorExp: 3,  # lazy wrapper, inner loop body counted as child nodes
+    ast.While: 1,  # condition re-evaluation overhead per iteration, body counted separately
+    ast.For: 1,  # iterator protocol: __iter__ + __next__ overhead, body counted separately
+    ast.ListComp: 1,  # same iteration overhead as For + list.append + allocation
+    ast.SetComp: 2,  # same as ListComp + hashing per element
+    ast.Call: 3,  # frame creation + arg binding + return: overhead beyond the callee body itself
+}
+
 class CBase:
     refs = []
     def __init__(obj):
@@ -114,8 +143,10 @@ class CoF(CF):
             if oF.call_:
                 tree = flat_(oF)  # if len(tree)-1?
                 sum2O(tree,oF,fcall_=1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)
-                if _CoF is not None and (j := F_call_i_[_CoF.nF].get(i)) is not None:
-                    F_call_T_[_CoF.nF][j] += oF.dTT  # call return vals, draft
+                if _CoF is not None:
+                    j = F_call_i_[_CoF.nF].get(i)
+                    if j is not None:
+                        F_call_T_[_CoF.nF][j] += oF.dTT
             CoF._cur.reset(_oF)
             return out
         inner.wrapped = True
@@ -131,21 +162,26 @@ def flat_(oF, call_=None):  # all nested call_ s
     return call_
 
 def F_body_():  # get function bodies from their AST
-    def build(node):  # AST → CoF | (type,sub_) | ast_leaf | None
+    def build(node, oF_idx):  # AST → CoF | (type,sub_) | ast_leaf | None
 
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if (i:= iF_.get(node.func.id)) is not None:
+            if (i:= iF_.get(node.func.id)) is not None:     
+                # init gate dTT, pack as flat
+                F_call_T_[oF_idx].append(np.zeros((2, 9)))
+                # pack gate index
+                gate_idx = len(F_call_T_[oF_idx])
+                F_call_i_[oF_idx][i] = gate_idx   # map from node to their gate idx
                 return oF_[i], 3
-        sub_ = [rett for t in ast.iter_child_nodes(node) if (rett:= build(t)) is not None]
+        sub_ = [rett for t in ast.iter_child_nodes(node) if (rett:= build(t, oF_idx)) is not None]
         if sub_:
             sub_, fc_ = zip(*sub_); return (type(node), sub_), sum(fc_)+costs.get(type(node), 0)
         if type(node) in costs:
             return node, costs.get(type(node),0)
 
-    for func,name in zip(oF_,nF_):
+    for i, (func,name) in enumerate(zip(oF_,nF_)):
         func.caller_ = set()
         for node in ast.iter_child_nodes(name):  # skip top function definition
-            rett = build(node)
+            rett = build(node, i)
             if rett:
                 t, fc = rett; func.body += [t]; func.fc += fc
 
@@ -167,38 +203,10 @@ typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','
 nF_ = [None] * len(_names)  # FunctionDef s
 iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
 oF_ = [CoF(nF=i,typ=typ) for i,typ in enumerate(typ_)]
+F_call_T_ = [[] for _ in oF_]
+F_call_i_ = [ {} for _ in oF_ ] 
 parse_funcs(["agg_recursion.py","comp_slice.py","slice_edge.py"])  # populate nF_
 F_body_()  # add F.body from AST
-F_call_T_ = [[np.zeros((2,9)) for p in F.body if isinstance(p,CoF)] for F in oF_]  # sum dTTs per oF.call, via:
-F_call_i_ = [{p.nF: j for j,p in enumerate(c for c in F.body if isinstance(c,CoF))} for F in oF_]  # call_ set?
-
-eps = 1e-7
-def eps_(a): return np.where(a==0, eps, a)
-
-ave,avd = .3,.5; decay = ave/(ave+avd)  # ave m,d / unit dist, recomputed from dTT*wTT?
-wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
-wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
-wTT = np.array([wT,wT*avd])
-wcO, ccO = 5,5  # temporary
-ave_C, wL = 3,3
-costs = {  # types
-    ast.Assign: 2,  # bind name: trivial
-    ast.Attribute: 5,  # single dict lookup on object
-    ast.UnaryOp: 2,  # apply one operator to one operand
-    ast.BoolOp: 1,  # short-circuit decision between already-evaluated values
-    ast.Compare: 2,  # compare already-evaluated operands
-    ast.If: 1,  # test + pick branch, body ops counted separately
-    ast.IfExp: 2,  # same as If
-    ast.BinOp: 2,  # apply operator to two already-evaluated operands
-    ast.AugAssign: 2,  # read + op + store, but op and target counted separately
-    ast.Subscript: 5,  # index resolution into container
-    ast.GeneratorExp: 3,  # lazy wrapper, inner loop body counted as child nodes
-    ast.While: 1,  # condition re-evaluation overhead per iteration, body counted separately
-    ast.For: 1,  # iterator protocol: __iter__ + __next__ overhead, body counted separately
-    ast.ListComp: 1,  # same iteration overhead as For + list.append + allocation
-    ast.SetComp: 2,  # same as ListComp + hashing per element
-    ast.Call: 3,  # frame creation + arg binding + return: overhead beyond the callee body itself
-}
 
 def comp_body(_n, n, C=0):  # estimated n-merge cost compression, init mean C=3, accum from recursive unpack
 
