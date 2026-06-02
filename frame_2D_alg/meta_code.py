@@ -87,14 +87,6 @@ class CN(CL):  # full node | graph fork set
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.c)
 
-def flat_(oF, call_=None):  # all nested call_ s
-
-    if call_ is None: call_ = []
-    for sub in oF.call_:
-        call_ += [sub]
-        if sub.call_: flat_(sub,call_)
-    return call_
-
 class CoF(CF):
     name = "func"
     _cur = contextvars.ContextVar('oF')
@@ -113,7 +105,7 @@ class CoF(CF):
         def inner(*a, **kw):
             _CoF = CoF._cur.get(None)
             oF = CoF(nF=iF_[func.__name__], root=_CoF)
-            oF_[iF_[func.__name__]].call_ += [oF]
+            i = iF_[func.__name__]; oF_[i].call_ += [oF]  # F_call_T_[i][oF.nF] += oF.dTT
             if _CoF is not None:
                 _CoF.call_ += [oF]
                 oF_[iF_[func.__name__]].caller_.add(_CoF)  # for comp_caller_
@@ -122,59 +114,21 @@ class CoF(CF):
             if oF.call_:
                 tree = flat_(oF)  # if len(tree)-1?
                 sum2O(tree,oF,fcall_=1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)
+                if _CoF is not None and (j := F_call_i_[_CoF.nF].get(i)) is not None:
+                    F_call_T_[_CoF.nF][j] += oF.dTT  # call return vals, draft
             CoF._cur.reset(_oF)
             return out
         inner.wrapped = True
         return inner
-    @staticmethod
-    @contextmanager
-    # draft:
-    def gate():  # eval-time goF, mirrors traced but feeds oF_[-1]='E', not iF_
-        _CoF = CoF._cur.get(None)
-        oF = CoF(nF='E', root=_CoF)
-        oF_[-1].call_ += [oF]
-        if _CoF is not None:
-            _CoF.call_ += [oF]; oF_[-1].caller_.add(_CoF)
-        _oF = CoF._cur.set(oF)
-        try: yield oF
-        finally:
-            if oF.call_: tree = flat_(oF); sum2O(tree,oF,fcall_=1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)
-            CoF._cur.reset(_oF)
     def __bool__(f): return bool(f.call_)
 
-eps = 1e-7
-def eps_(a): return np.where(a==0, eps, a)
+def flat_(oF, call_=None):  # all nested call_ s
 
-ave,avd = .3,.5; decay = ave/(ave+avd)  # ave m,d / unit dist, recomputed from dTT*wTT?
-wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
-wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
-wTT = np.array([wT,wT*avd])
-wcO, ccO = 5,5  # temporary
-ave_C, wL = 3,3
-costs = {  # types
-    ast.Assign: 2,  # bind name: trivial
-    ast.Attribute: 5,  # single dict lookup on object
-    ast.UnaryOp: 2,  # apply one operator to one operand
-    ast.BoolOp: 1,  # short-circuit decision between already-evaluated values
-    ast.Compare: 2,  # compare already-evaluated operands
-    ast.If: 1,  # test + pick branch, body ops counted separately
-    ast.IfExp: 2,  # same as If
-    ast.BinOp: 2,  # apply operator to two already-evaluated operands
-    ast.AugAssign: 2,  # read + op + store, but op and target counted separately
-    ast.Subscript: 5,  # index resolution into container
-    ast.GeneratorExp: 3,  # lazy wrapper, inner loop body counted as child nodes
-    ast.While: 1,  # condition re-evaluation overhead per iteration, body counted separately
-    ast.For: 1,  # iterator protocol: __iter__ + __next__ overhead, body counted separately
-    ast.ListComp: 1,  # same iteration overhead as For + list.append + allocation
-    ast.SetComp: 2,  # same as ListComp + hashing per element
-    ast.Call: 3,  # frame creation + arg binding + return: overhead beyond the callee body itself
-}
-_names = ['frame_H','cross_comp','trace_edge',                 # root_, oF_[0] = frame_H, adds level per call
-          'comp_N_','comp_C_','comp_N','comp_F',               # comp_
-          'get_exemplars','cluster_N','cluster_C','cluster_P', # clus_
-          'ffeedback','proj_N',                                # proj_
-          'vect_edge','comp_slice','slice_edge'                # prep_
-          'gate']  # deep eval Fs                              # gate_
+    if call_ is None: call_ = []
+    for sub in oF.call_:
+        call_ += [sub]
+        if sub.call_: flat_(sub,call_)
+    return call_
 
 def F_body_():  # get function bodies from their AST
     def build(node):  # AST → CoF | (type,sub_) | ast_leaf | None
@@ -203,12 +157,48 @@ def parse_funcs(paths):
             if isinstance(node, ast.FunctionDef) and node.name in iF_:
                 nF_[iF_.get(node.name)] = node
 
-typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','proj_','proj_','prep_','prep_','prep_','gate_']
+_names = ['frame_H','cross_comp','trace_edge',                 # root_, oF_[0] = frame_H, adds level per call
+          'comp_N_','comp_C_','comp_N','comp_F',               # comp_
+          'get_exemplars','cluster_N','cluster_C','cluster_P', # clus_
+          'ffeedback','proj_N',                                # proj_
+          'vect_edge','comp_slice','slice_edge']               # prep_
+          # typ per line
+typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','proj_','proj_','prep_','prep_','prep_']
 nF_ = [None] * len(_names)  # FunctionDef s
 iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
 oF_ = [CoF(nF=i,typ=typ) for i,typ in enumerate(typ_)]
 parse_funcs(["agg_recursion.py","comp_slice.py","slice_edge.py"])  # populate nF_
 F_body_()  # add F.body from AST
+F_call_T_ = [[np.zeros((2,9)) for p in F.body if isinstance(p,CoF)] for F in oF_]  # sum dTTs per oF.call, via:
+F_call_i_ = [{p.nF: j for j,p in enumerate(c for c in F.body if isinstance(c,CoF))} for F in oF_]  # call_ set?
+
+eps = 1e-7
+def eps_(a): return np.where(a==0, eps, a)
+
+ave,avd = .3,.5; decay = ave/(ave+avd)  # ave m,d / unit dist, recomputed from dTT*wTT?
+wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
+wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
+wTT = np.array([wT,wT*avd])
+wcO, ccO = 5,5  # temporary
+ave_C, wL = 3,3
+costs = {  # types
+    ast.Assign: 2,  # bind name: trivial
+    ast.Attribute: 5,  # single dict lookup on object
+    ast.UnaryOp: 2,  # apply one operator to one operand
+    ast.BoolOp: 1,  # short-circuit decision between already-evaluated values
+    ast.Compare: 2,  # compare already-evaluated operands
+    ast.If: 1,  # test + pick branch, body ops counted separately
+    ast.IfExp: 2,  # same as If
+    ast.BinOp: 2,  # apply operator to two already-evaluated operands
+    ast.AugAssign: 2,  # read + op + store, but op and target counted separately
+    ast.Subscript: 5,  # index resolution into container
+    ast.GeneratorExp: 3,  # lazy wrapper, inner loop body counted as child nodes
+    ast.While: 1,  # condition re-evaluation overhead per iteration, body counted separately
+    ast.For: 1,  # iterator protocol: __iter__ + __next__ overhead, body counted separately
+    ast.ListComp: 1,  # same iteration overhead as For + list.append + allocation
+    ast.SetComp: 2,  # same as ListComp + hashing per element
+    ast.Call: 3,  # frame creation + arg binding + return: overhead beyond the callee body itself
+}
 
 def comp_body(_n, n, C=0):  # estimated n-merge cost compression, init mean C=3, accum from recursive unpack
 

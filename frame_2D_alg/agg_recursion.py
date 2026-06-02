@@ -371,7 +371,8 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
                 r = (nr*nc + lr*lc + br*bc) /c  # br includes overlap?
                 tt= (nt*nc + lt*lc + bt*bc) /c  # tentative
                 if sum(vt_(tt, Ft.root.wTT*ttcN))*wcN*(len(N_)-1) > (ave+avd)*(r+ccN*(len(N_)-1)):  # apply Fw_ and Fc_ in every eval_?
-                    G_ += [sum2G(ft_,ttcN, CN())]; Gt_+= [[tt,c,r]]  # _C=C+c; _rc=C/_C; rc=c/_C; TT=TT*_rc+tt*rc; R=R*_rc+r*rc; C=_C
+                    G_ += [sum2G(ft_,ttcN, CN())]; Gt_+= [[tt,c,r]]  # evals cluster_C, cluster_P internally
+                    # _C=C+c; _rc=C/_C; rc=c/_C; TT=TT*_rc+tt*rc; R=R*_rc+r*rc; C=_C
         if G_:
             for G in G_: trans_cluster(G)  # splice trans_links, merge L.nt.roots
             C = sum([g[1] for g in Gt_]); TT=np.zeros((2,9)); R=0; r+=1  # + wC?
@@ -561,9 +562,9 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
         if Vn > 0:
             c = G.Lt.c; E_ = get_exemplars({N for L in L_ for N in L.nt}, r,c)
             if Vn *(mdecay(L_)-decay) > (ave+avd)*(lr+1+ccC*L):
-                r+=1; G_,r = cluster_C(G.Nt,E_,r,c)  # higher V, low decay
+                r+=1; G_,r = cluster_C(G.Nt,E_,r,c)  # higher V, low decay, eval cluster_P
             else:     G_,r = cluster_N(G.Nt,E_,r,c)  # updates G
-            L= (len(G_)-1) **2  # full cross_comp?
+            L= (len(G_)-1) **2  # if full cross_comp?
             if G_ and vt_(G.Nt.dTT,G.wTT*tAgg)[0]*(wAgg*L) > ave*(r+cAgg*L) > 0:
                 cross_comp(G.Nt,r)
     if G.Bt:
