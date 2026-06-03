@@ -6,7 +6,6 @@ import ast; from itertools import combinations
 '''
 code modification: compare aligned ops between oF_ AST sequences, cluster/split/merge matches into higher oF typs
 '''
-# moved here because class init needs wTT
 eps = 1e-7
 def eps_(a): return np.where(a==0, eps, a)
 
@@ -34,7 +33,6 @@ costs = {  # types
     ast.SetComp: 2,  # same as ListComp + hashing per element
     ast.Call: 3,  # frame creation + arg binding + return: overhead beyond the callee body itself
 }
-
 class CBase:
     refs = []
     def __init__(obj):
@@ -144,9 +142,8 @@ class CoF(CF):
                 tree = flat_(oF)  # if len(tree)-1?
                 sum2O(tree,oF,fcall_=1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)
                 if _CoF is not None:
-                    j = F_call_i_[_CoF.nF].get(i)
-                    if j is not None:
-                        F_call_T_[_CoF.nF][j] += oF.dTT
+                    F_call_T_[_CoF.nF][F_call_i_[CoF.nF]] += oF.dTT
+                    # or for i,CoF in enumerate(zip(_CoF.call_, flat _CoF.body)?
             CoF._cur.reset(_oF)
             return out
         inner.wrapped = True
@@ -161,27 +158,29 @@ def flat_(oF, call_=None):  # all nested call_ s
         if sub.call_: flat_(sub,call_)
     return call_
 
+def flat_body(body, out=None):
+    if out is None: out = []
+    for p in body:
+        out += [p]
+        if isinstance(p, tuple): flat_body(p[1], out)
+    return out
+
 def F_body_():  # get function bodies from their AST
-    def build(node, oF_idx):  # AST → CoF | (type,sub_) | ast_leaf | None
+    def build(node):  # AST → CoF | (type,sub_) | ast_leaf | None
 
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if (i:= iF_.get(node.func.id)) is not None:     
-                # init gate dTT, pack as flat
-                F_call_T_[oF_idx].append(np.zeros((2, 9)))
-                # pack gate index
-                gate_idx = len(F_call_T_[oF_idx])
-                F_call_i_[oF_idx][i] = gate_idx   # map from node to their gate idx
+            if (i:= iF_.get(node.func.id)) is not None:
                 return oF_[i], 3
-        sub_ = [rett for t in ast.iter_child_nodes(node) if (rett:= build(t, oF_idx)) is not None]
+        sub_ = [rett for t in ast.iter_child_nodes(node) if (rett:= build(t)) is not None]
         if sub_:
             sub_, fc_ = zip(*sub_); return (type(node), sub_), sum(fc_)+costs.get(type(node), 0)
         if type(node) in costs:
             return node, costs.get(type(node),0)
 
-    for i, (func,name) in enumerate(zip(oF_,nF_)):
+    for func,name in zip(oF_,nF_):
         func.caller_ = set()
         for node in ast.iter_child_nodes(name):  # skip top function definition
-            rett = build(node, i)
+            rett = build(node)
             if rett:
                 t, fc = rett; func.body += [t]; func.fc += fc
 
@@ -198,15 +197,18 @@ _names = ['frame_H','cross_comp','trace_edge',                 # root_, oF_[0] =
           'get_exemplars','cluster_N','cluster_C','cluster_P', # clus_
           'ffeedback','proj_N',                                # proj_
           'vect_edge','comp_slice','slice_edge']               # prep_
-          # typ per line
+          # typ/line
 typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','proj_','proj_','prep_','prep_','prep_']
 nF_ = [None] * len(_names)  # FunctionDef s
 iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
 oF_ = [CoF(nF=i,typ=typ) for i,typ in enumerate(typ_)]
-F_call_T_ = [[] for _ in oF_]
-F_call_i_ = [ {} for _ in oF_ ] 
 parse_funcs(["agg_recursion.py","comp_slice.py","slice_edge.py"])  # populate nF_
 F_body_()  # add F.body from AST
+F_call_T_, F_call_i_ = [],[]
+for F in oF_:
+    for i,p in enumerate(flat_body(F.body)):
+        if isinstance(p,CoF): F_call_i_ += [i]; F_call_T_ += [np.zeros((2,9))]  # to sum dTTs per oF.call
+# or F_call_T_ = [[[i, np.zeros((2,9))] for i,p in enumerate(flat_body(F.body)) if isinstance(p,CoF)] for F in oF_]
 
 def comp_body(_n, n, C=0):  # estimated n-merge cost compression, init mean C=3, accum from recursive unpack
 
@@ -237,7 +239,7 @@ def comp_callers(_T, T):  # compute value of callers_overlap + calls_overlap
     M = sum([c.w * c.c for c in olp])
     D = sum([c.w * c.c for c in off])
     return M / (D or 1e-7) # match if same_callers / diff_callers > ave?
-    # refine by comp data, include coords?
+    # refine by comp results: -ve return / caller can remove the callee?
 
 def comp_prim(_n,n):
     if isinstance(_n,CoF) or isinstance(n,CoF):
