@@ -142,7 +142,10 @@ class CoF(CF):
                 tree = flat_(oF)  # if len(tree)-1?
                 sum2O(tree,oF,fcall_=1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)
                 if _CoF is not None:
-                    F_call_T_[_CoF.nF][F_call_i_[CoF.nF]] += oF.dTT
+                    for i, nF in enumerate(F_call_i_[_CoF.nF]):
+                        if nF == oF.nF:  # check for same nF
+                            F_call_T_[_CoF.nF][i] += oF.dTT+1
+                    # F_call_T_[_CoF.nF][F_call_i_[CoF.nF]] += oF.dTT
                     # or for i,CoF in enumerate(zip(_CoF.call_, flat _CoF.body)?
             CoF._cur.reset(_oF)
             return out
@@ -162,7 +165,8 @@ def flat_body(body, out=None):
     if out is None: out = []
     for p in body:
         out += [p]
-        if isinstance(p, tuple): flat_body(p[1], out)
+        if isinstance(p, tuple) and p[0] is not ast.FunctionDef:  # skip nested function' body
+            flat_body(p[1], out)
     return out
 
 def F_body_():  # get function bodies from their AST
@@ -204,10 +208,11 @@ iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
 oF_ = [CoF(nF=i,typ=typ) for i,typ in enumerate(typ_)]
 parse_funcs(["agg_recursion.py","comp_slice.py","slice_edge.py"])  # populate nF_
 F_body_()  # add F.body from AST
-F_call_T_, F_call_i_ = [],[]
+F_call_T_, F_call_i_ = [[] for _ in range(len(oF_))],[[] for _ in range(len(oF_))]
 for F in oF_:
-    for i,p in enumerate(flat_body(F.body)):
-        if isinstance(p,CoF): F_call_i_ += [i]; F_call_T_ += [np.zeros((2,9))]  # to sum dTTs per oF.call
+    for p in flat_body(F.body):
+        if isinstance(p,CoF): 
+            F_call_i_[F.nF] += [p.nF]; F_call_T_[F.nF] += [np.zeros((2,9))]  # to sum dTTs per oF.call
 # or F_call_T_ = [[[i, np.zeros((2,9))] for i,p in enumerate(flat_body(F.body)) if isinstance(p,CoF)] for F in oF_]
 
 def comp_body(_n, n, C=0):  # estimated n-merge cost compression, init mean C=3, accum from recursive unpack
