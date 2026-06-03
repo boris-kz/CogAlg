@@ -6,6 +6,33 @@ import ast; from itertools import combinations
 '''
 code modification: compare aligned ops between oF_ AST sequences, cluster/split/merge matches into higher oF typs
 '''
+eps = 1e-7
+def eps_(a): return np.where(a==0, eps, a)
+
+ave,avd = .3,.5; decay = ave/(ave+avd)  # ave m,d / unit dist, recomputed from dTT*wTT?
+wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
+wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
+wTT = np.array([wT,wT*avd])
+wcO, ccO = 5,5  # temporary
+ave_C, wL = 3,3
+costs = {  # types
+    ast.Assign: 2,  # bind name: trivial
+    ast.Attribute: 5,  # single dict lookup on object
+    ast.UnaryOp: 2,  # apply one operator to one operand
+    ast.BoolOp: 1,  # short-circuit decision between already-evaluated values
+    ast.Compare: 2,  # compare already-evaluated operands
+    ast.If: 1,  # test + pick branch, body ops counted separately
+    ast.IfExp: 2,  # same as If
+    ast.BinOp: 2,  # apply operator to two already-evaluated operands
+    ast.AugAssign: 2,  # read + op + store, but op and target counted separately
+    ast.Subscript: 5,  # index resolution into container
+    ast.GeneratorExp: 3,  # lazy wrapper, inner loop body counted as child nodes
+    ast.While: 1,  # condition re-evaluation overhead per iteration, body counted separately
+    ast.For: 1,  # iterator protocol: __iter__ + __next__ overhead, body counted separately
+    ast.ListComp: 1,  # same iteration overhead as For + list.append + allocation
+    ast.SetComp: 2,  # same as ListComp + hashing per element
+    ast.Call: 3,  # frame creation + arg binding + return: overhead beyond the callee body itself
+}
 class CBase:
     refs = []
     def __init__(obj):
@@ -114,8 +141,9 @@ class CoF(CF):
             if oF.call_:
                 tree = flat_(oF)  # if len(tree)-1?
                 sum2O(tree,oF,fcall_=1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)
-                if _CoF is not None and (j := F_call_i_[_CoF.nF].get(i)) is not None:
-                    F_call_T_[_CoF.nF][j] += oF.dTT  # call return vals, draft
+                if _CoF is not None:
+                    F_call_T_[_CoF.nF][F_call_i_[CoF.nF]] += oF.dTT
+                    # or for i,CoF in enumerate(zip(_CoF.call_, flat _CoF.body)?
             CoF._cur.reset(_oF)
             return out
         inner.wrapped = True
@@ -129,6 +157,13 @@ def flat_(oF, call_=None):  # all nested call_ s
         call_ += [sub]
         if sub.call_: flat_(sub,call_)
     return call_
+
+def flat_body(body, out=None):
+    if out is None: out = []
+    for p in body:
+        out += [p]
+        if isinstance(p, tuple): flat_body(p[1], out)
+    return out
 
 def F_body_():  # get function bodies from their AST
     def build(node):  # AST → CoF | (type,sub_) | ast_leaf | None
@@ -162,43 +197,18 @@ _names = ['frame_H','cross_comp','trace_edge',                 # root_, oF_[0] =
           'get_exemplars','cluster_N','cluster_C','cluster_P', # clus_
           'ffeedback','proj_N',                                # proj_
           'vect_edge','comp_slice','slice_edge']               # prep_
-          # typ per line
+          # typ/line
 typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','proj_','proj_','prep_','prep_','prep_']
 nF_ = [None] * len(_names)  # FunctionDef s
 iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
 oF_ = [CoF(nF=i,typ=typ) for i,typ in enumerate(typ_)]
 parse_funcs(["agg_recursion.py","comp_slice.py","slice_edge.py"])  # populate nF_
 F_body_()  # add F.body from AST
-F_call_T_ = [[np.zeros((2,9)) for p in F.body if isinstance(p,CoF)] for F in oF_]  # sum dTTs per oF.call, via:
-F_call_i_ = [{p.nF: j for j,p in enumerate(c for c in F.body if isinstance(c,CoF))} for F in oF_]  # call_ set?
-
-eps = 1e-7
-def eps_(a): return np.where(a==0, eps, a)
-
-ave,avd = .3,.5; decay = ave/(ave+avd)  # ave m,d / unit dist, recomputed from dTT*wTT?
-wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
-wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
-wTT = np.array([wT,wT*avd])
-wcO, ccO = 5,5  # temporary
-ave_C, wL = 3,3
-costs = {  # types
-    ast.Assign: 2,  # bind name: trivial
-    ast.Attribute: 5,  # single dict lookup on object
-    ast.UnaryOp: 2,  # apply one operator to one operand
-    ast.BoolOp: 1,  # short-circuit decision between already-evaluated values
-    ast.Compare: 2,  # compare already-evaluated operands
-    ast.If: 1,  # test + pick branch, body ops counted separately
-    ast.IfExp: 2,  # same as If
-    ast.BinOp: 2,  # apply operator to two already-evaluated operands
-    ast.AugAssign: 2,  # read + op + store, but op and target counted separately
-    ast.Subscript: 5,  # index resolution into container
-    ast.GeneratorExp: 3,  # lazy wrapper, inner loop body counted as child nodes
-    ast.While: 1,  # condition re-evaluation overhead per iteration, body counted separately
-    ast.For: 1,  # iterator protocol: __iter__ + __next__ overhead, body counted separately
-    ast.ListComp: 1,  # same iteration overhead as For + list.append + allocation
-    ast.SetComp: 2,  # same as ListComp + hashing per element
-    ast.Call: 3,  # frame creation + arg binding + return: overhead beyond the callee body itself
-}
+F_call_T_, F_call_i_ = [],[]
+for F in oF_:
+    for i,p in enumerate(flat_body(F.body)):
+        if isinstance(p,CoF): F_call_i_ += [i]; F_call_T_ += [np.zeros((2,9))]  # to sum dTTs per oF.call
+# or F_call_T_ = [[[i, np.zeros((2,9))] for i,p in enumerate(flat_body(F.body)) if isinstance(p,CoF)] for F in oF_]
 
 def comp_body(_n, n, C=0):  # estimated n-merge cost compression, init mean C=3, accum from recursive unpack
 
@@ -229,7 +239,7 @@ def comp_callers(_T, T):  # compute value of callers_overlap + calls_overlap
     M = sum([c.w * c.c for c in olp])
     D = sum([c.w * c.c for c in off])
     return M / (D or 1e-7) # match if same_callers / diff_callers > ave?
-    # refine by comp data, include coords?
+    # refine by comp results: -ve return / caller can remove the callee?
 
 def comp_prim(_n,n):
     if isinstance(_n,CoF) or isinstance(n,CoF):
