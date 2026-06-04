@@ -48,7 +48,8 @@ prefix  _ denotes prior of two same-name vars, multiple _s for relative preceden
 postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized vars are summed small-case vars
 '''
-from meta_code import oF_,CF,CL,CC,CN,CoF, wT,wTT, eps_,eps, ave,avd,decay, trace_func,parse_funcs,cluster_oF_,F_body_
+from meta_code import (
+    oF_,CF,CL,CC,CN,CoF, wT,wTT, eps_,eps,ave,avd,decay, trace_func,parse_funcs, split_oF_,cluster_oF_,F_body_)
 wM,wD,wi, wG,wI,wa, wL,wS,wA = wT
 cFrm, cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cAgg, cVct,cTrc,cBac,cPrj,cCS,cSE = (      # function complexity
 wFrm, wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wAgg, wVct,wTrc,wBac,wPrj,wCS,wSE ) = [F.fc for F in oF_]  # ave gain/call, init = cost
@@ -846,21 +847,26 @@ def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
     link.m += dddH.m; link.d += dddH.d; link.c += dddH.c; link.dTT += dddH.dTT
     add_H(ddH, dddH)    
 '''
-def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set manually
+def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, fHH=0):
 
-    def base_tile(y,x):  # 1st level, higher levels get Tg s
-        T = frame_blobs_root( comp_pixel( image[y:y+Ly, x:x+Lx]), rV)
-        T = vect_edge(T, rV)  # form, trace PP_
-        if T: cross_comp(T.Nt,T.r)
+    def base_tile(y,x):  # pixels at elev=0, lower frame_H above that
+        if fHH:
+            T = frame_H(image, y,x, Ly,Lx, Y,X, rV, max_elev)  # fHH=0
+        else:
+            T = frame_blobs_root(comp_pixel(image[y:y+Ly, x:x+Lx]), rV)
+            T = vect_edge(T, rV)  # form, trace PP_
+            if T: cross_comp(T.Nt,T.r)
+        if T:
+            T.yx = np.array([y + Ly//2, x + Lx//2]); T.box = np.array([y,x, min(y+Ly,Y),min(x+Lx,X)]); T.span = np.hypot(Ly,Lx) / 2
         return T
 
-    def expand_lev(_iy, _ix, elev, T):  # seed tile is pixels in 1st lev, or Fg in higher levs
+    def expand_lev(_iy,_ix, elev, T):  # seed tile is pixels in 1st lev, or Fg in higher levs
 
         frame = np.full((Ly, Lx), None, dtype=object)  # level scope
         iy,ix = _iy,_ix; cy,cx = (Ly-1)//2, (Lx-1)//2; y,x = cy,cx  # start=mean
         T_, PV__,C,R = [],np.zeros([Ly,Lx]),0,0  # tiles, maps to level frame
         while True:
-            if not elev: T = base_tile(iy, ix)
+            if not elev: T = base_tile(iy, ix, 0)
             if T and sum(vt_(T.dTT, T.wTT*ttFrm))*(wFrm*(len(T.N_)-1)) > (ave+avd)*(T.r+elev+cFrm*(len(T.N_)-1)):
                 frame[y,x] = T; T_ += [T]  # loop adds one tile to level
                 dy_dx = np.array([T.yx[0]-y, T.yx[1]-x])
@@ -870,14 +876,14 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
                     pv__ = PV__.copy(); pv__[frame != None] = 0  # exclude processed
                     y, x = np.unravel_index(pv__.argmax(), PV__.shape)
                     if PV__[y,x] > ave:
-                        iy = _iy + (y-cy) * Ly**elev; ix = _ix + (x-cx) * Lx**elev  # feedback to shifted coords
+                        iy = _iy + (y-cy) * Ly**(elev); ix = _ix + (x-cx) * Lx**(elev)  # shift coords
                         if elev:
-                            T = frame_H(image, iy, ix, Ly, Lx, Y,X, rV, elev)  # up to current level
+                            T = base_tile(iy, ix, elev)  # lower frame_H, up to current level
                     else: break
                 else: break
             else: break
         if T_:
-            TT,C,R = sum_vt(T_, wTT=ttFrm); R += elev; L = len(T_)-1
+            TT,C,R = sum_vt(T_, wTT=ttFrm); R+= elev; L = len(T_)-1
             if sum(vt_(TT,ttFrm))*(wFrm*L) <= (ave+avd)*(R+cFrm*L): T_=[]; C=0; R=0
         return T_,C,R
     elev = 0
@@ -893,7 +899,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
             if cross_comp(lev, rr=elev)[0]:  # spec->tN_,tC_,tL_, proj comb N_'L_?
                 elev += 1
                 if rV > ave:
-                    if elev== max_elev: rV,FTT_ = ffeedback(F)  # from top lev
+                    if elev == max_elev: rV,FTT_ = ffeedback(F)  # data: filters, from top lev
                     for i, tF in enumerate(oF_):
                         if tF: Fw_[i] = tF.fw/tF.c; FTT_[i] = lev.wTT_[i] = tF.wTT
                     ave/=rV; avd/=rV; Fw_,FTT_ = np.array(Fw_) / rV, np.array(FTT_) / rV  # Fc_ is fixed
@@ -902,16 +908,18 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
         else: break
     return F  # for intra-lev feedback
 
-def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
+def ffeedback(frame):  # adjust filters via cross-level wTT ratios; fork: reform oF_ when converged
 
-    rTT = np.divide(frame.H[0].wTT, frame.H[1].wTT)  # wTT_ is not relevant now
-    _wTT = frame.H[1].wTT
-    for lev in frame.H[2:]:  # sum ratios between consecutive-level TTs, top-down in frame H, not lev-selective or sub-lev recursive
-        rTT += np.divide(_wTT,lev.wTT)
-        _wTT = lev.wTT
-    rM = rD = 0
-    rm, rd = vt_(rTT,wTT)
-    return rM+rD, rTT  # add rm,rd?
+    rTT = np.divide(frame.H[0].wTT, frame.H[1].wTT); _wTT = frame.H[1].wTT
+    for lev in frame.H[2:]:  # sum consecutive-level TT ratios, top-down
+        rTT += np.divide(_wTT,lev.wTT); _wTT = lev.wTT
+    rm,rd = vt_(rTT,wTT)
+    if rm+rd > ave:  # add tracking for oF_ reform cycles?
+        split_oF_()  # speed-up code
+        oF_[:] = cluster_oF_()  # compress code
+        for i, F in enumerate(oF_): F.nF = i  # new positions
+        # also rebuid Fw_,FTT_,etc
+    return rm+rd, rTT
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
     trace_func(vars())
@@ -920,14 +928,3 @@ if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.
     Y, X = imread('./images/toucan.jpg').shape
     frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -31, iX=X//2 -31, Ly=64,Lx=64, Y=Y, X=X, rV=1)
     # search frames ( tiles inside image, at this size it should be 4K, or 256K panorama, won't actually work on toucan
-    '''
-    add oF fffeedback to reform Frm for next frame_H:
-    Frm = cluster_oF_()  # new Frm, before or after merge?
-    new_F_,mrg_ = [],[]
-    for i, t in enumerate(oF_):  # vs. combinations(oF_,2)?
-        if t in mrg_: continue
-        F = Copy_(t, cls=CoF)
-        for f in oF_: mrg_ += [merge(F,f)]
-        new_F_ += [F]
-    for i, F in new_F_: F.nF = i
-    '''
