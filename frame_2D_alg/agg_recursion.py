@@ -724,7 +724,8 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
                     G_,TT,C, R = trace_edge([F2N(n) for n in N_], G_,TT,c,3,tile)  # flatten B_-mediated Gs
     oF = CoF.get(); oF.c = C; oF.r = R
     if G_:
-        Nt = CF(nF='Nt', root=tile); Nt.N_ = G_; Nt.dTT = TT; Nt.c = C; Nt.r = 1; tile.Nt = Nt; tile.dTT = TT; tile.c = C; L=len(G_)
+        # preserve H, since CN.H is access from Nt.H
+        Nt = CF(nF='Nt', root=tile); Nt.N_ = G_; Nt.dTT = TT; Nt.c = C; Nt.r = 1; Nt.H = tile.H; tile.Nt = Nt; tile.dTT = TT; tile.c = C; L=len(G_)
         if vt_(TT,ttVct)[0]*(wFrm*L) > ave * (cFrm*L):  # L for trans-comp only?
             return tile
 
@@ -847,10 +848,10 @@ def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
     link.m += dddH.m; link.d += dddH.d; link.c += dddH.c; link.dTT += dddH.dTT
     add_H(ddH, dddH)    
 '''
-def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, fHH=0):
+def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # removed fHH
 
-    def base_tile(y,x):  # pixels at elev=0, lower frame_H above that
-        if fHH:
+    def base_tile(y,x, elev):  # pixels at elev=0, lower frame_H above that
+        if elev:
             T = frame_H(image, y,x, Ly,Lx, Y,X, rV, max_elev)  # fHH=0
         else:
             T = frame_blobs_root(comp_pixel(image[y:y+Ly, x:x+Lx]), rV)
@@ -893,14 +894,16 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, fHH=0):
         tile_,C,R = expand_lev(iY,iX, elev, tile); oF=CoF.get();oF.c += C; oF.r += R
         if tile_:  # sparse higher-scope tile, if expanded
             F = CN(box=np.array([0,0,Y,X]), yx=np.array([Y//2, X//2]))  # same center on all levels
-            F.H =[]; F.N_= tile_
+            F.H =[]; F.N_= tile_; F.c = sum([tile.c for tile in tile_])  # need c to for bool eval
             if elev: [add_H(F.H,T.H, F,fN=1) for T in tile_]  # lower levels
-            F.H += [lev := sum2F(tile_)]  # include top lev, same vals as F?
+            # lev.root should be F?
+            F.H += [lev := sum2F(tile_, root=F, froot=2)]  # include top lev, same vals as F?
             if cross_comp(lev, rr=elev)[0]:  # spec->tN_,tC_,tL_, proj comb N_'L_?
                 elev += 1
                 if rV > ave:
                     if elev == max_elev: rV,FTT_ = ffeedback(F)  # data: filters, from top lev
                     for i, tF in enumerate(oF_):
+                        # need to solve empty fw and c in oF
                         if tF: Fw_[i] = tF.fw/tF.c; FTT_[i] = lev.wTT_[i] = tF.wTT
                     ave/=rV; avd/=rV; Fw_,FTT_ = np.array(Fw_) / rV, np.array(FTT_) / rV  # Fc_ is fixed
                 tile = F  # lev tile_ is next extension seed
