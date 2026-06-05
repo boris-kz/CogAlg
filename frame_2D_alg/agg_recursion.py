@@ -49,7 +49,7 @@ postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized vars are summed small-case vars
 '''
 from meta_code import (
-    oF_,CF,CL,CC,CN,CoF, wT,wTT, eps_,eps,ave,avd,decay, trace_func,parse_funcs, split_oF_,cluster_oF_,F_body_)
+    oF_,CF,CL,CC,CN,CoF, wT,wTT, eps_,eps,decay, trace_func,parse_funcs, split_oF_,cluster_oF_,F_body_)
 wM,wD,wi, wG,wI,wa, wL,wS,wA = wT
 cFrm, cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cAgg, cVct,cTrc,cBac,cPrj,cCS,cSE = (      # function complexity
 wFrm, wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wAgg, wVct,wTrc,wBac,wPrj,wCS,wSE ) = [F.fc for F in oF_]  # ave gain/call, init = cost
@@ -682,7 +682,7 @@ def mdecay(L_):  # slope function
     ddist_ = np.diff([l.span for l in L_])
     return - (dm_/ eps_(ddist_)).mean()  # -dm/ddist
 
-# hand-off from comp_slice:
+# comp_slice hand-off:
 def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame graph, no recursion:
 
     global ave,avd,Fw_,Fc_  # /= projected V change:
@@ -724,8 +724,7 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
                     G_,TT,C, R = trace_edge([F2N(n) for n in N_], G_,TT,c,3,tile)  # flatten B_-mediated Gs
     oF = CoF.get(); oF.c = C; oF.r = R
     if G_:
-        # preserve H, since CN.H is access from Nt.H
-        Nt = CF(nF='Nt', root=tile); Nt.N_ = G_; Nt.dTT = TT; Nt.c = C; Nt.r = 1; Nt.H = tile.H; tile.Nt = Nt; tile.dTT = TT; tile.c = C; L=len(G_)
+        Nt = CF(nF='Nt', root=tile); Nt.N_ = G_; Nt.dTT = TT; Nt.c = C; Nt.r = 1; tile.Nt = Nt; Nt.H = tile.H; tile.dTT = TT; tile.c = C; L=len(G_)
         if vt_(TT,ttVct)[0]*(wFrm*L) > ave * (cFrm*L):  # L for trans-comp only?
             return tile
 
@@ -803,7 +802,8 @@ def proj_focus(PV__, y,x, tile):  # radial accum of projected focus value in PV_
         PV__[row,col] += pV__  # in-place accum pV to rim
         n += 1
 
-def proj_TT(L, cos_d, dist, r, pTT, wTT, dec=1, fdec=0, frec=0):  # accumulate link pTT with iTT or eTT internally, L may be N?
+def proj_TT(L, cos_d, dist, r, pTT, wTT, dec=1, fdec=0, frec=0):
+    # accumulate link pTT with iTT | eTT internally, L may be N?
 
     dec = dist if fdec else ave ** (1 + (dist * dec) / L.span)  # not fully revised, ave = match decay rate / unit distance
     TT = np.array([L.dTT[0] * dec, L.dTT[1] * (cos_d+dec)])  # IxE angle alignment * decay?
@@ -841,24 +841,24 @@ def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
     _rdist = span / _N.span
     rdist  = span / N.span
     prj_DH = add_H(proj_H(_N.derH, _cos_da, _rdist * dec),
-                    proj_H(N.derH, cos_da, rdist * dec))  # comb proj dHs
+                   proj_H(N.derH, cos_da, rdist * dec))  # comb proj dHs
     # add imagination: cross_comp proj derHs?
     # Et+= confirm:
     dddH = comp_H(prj_DH, ddH, rn, link)
     link.m += dddH.m; link.d += dddH.d; link.c += dddH.c; link.dTT += dddH.dTT
     add_H(ddH, dddH)    
 '''
-def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # removed fHH
+def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, fH=0):  # fH=0: tiles, 1:same_filter_levs, 2:same_oF_levs
 
-    def base_tile(y,x, elev):  # pixels at elev=0, lower frame_H above that
-        if elev:
-            T = frame_H(image, y,x, Ly,Lx, Y,X, rV, max_elev)  # fHH=0
-        else:
-            T = frame_blobs_root(comp_pixel(image[y:y+Ly, x:x+Lx]), rV)
-            T = vect_edge(T, rV)  # form, trace PP_
-            if T: cross_comp(T.Nt,T.r)
-        if T:
-            T.yx = np.array([y + Ly//2, x + Lx//2]); T.box = np.array([y,x, min(y+Ly,Y),min(x+Lx,X)]); T.span = np.hypot(Ly,Lx) / 2
+    def base_tile(y,x,T=0):  # pixels at elev=0, lower frame_H above that
+        if fH:
+            T = frame_H(image, y,x, Ly,Lx, Y,X, rV, max_elev, fH-1)
+        else:  # flat H
+            if not T:  # pixels at elev=0
+                T = frame_blobs_root(comp_pixel(image[y:y + Ly, x:x + Lx]), rV)
+                T = vect_edge(T, rV)  # form, trace PP_:
+        if T and not fH:  # pixel-tile, sub-frames keep their own real box
+            T.yx = np.array([y+Ly//2, x+Lx//2]); T.box = np.array([y,x, min(y+Ly,Y),min(x+Lx,X)]); T.span = np.hypot(Ly,Lx) / 2
         return T
 
     def expand_lev(_iy,_ix, elev, T):  # seed tile is pixels in 1st lev, or Fg in higher levs
@@ -867,7 +867,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # removed fHH
         iy,ix = _iy,_ix; cy,cx = (Ly-1)//2, (Lx-1)//2; y,x = cy,cx  # start=mean
         T_, PV__,C,R = [],np.zeros([Ly,Lx]),0,0  # tiles, maps to level frame
         while True:
-            if not elev: T = base_tile(iy, ix, 0)
+            if not elev: T = base_tile(iy, ix)  # T=0
             if T and sum(vt_(T.dTT, T.wTT*ttFrm))*(wFrm*(len(T.N_)-1)) > (ave+avd)*(T.r+elev+cFrm*(len(T.N_)-1)):
                 frame[y,x] = T; T_ += [T]  # loop adds one tile to level
                 dy_dx = np.array([T.yx[0]-y, T.yx[1]-x])
@@ -877,9 +877,9 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # removed fHH
                     pv__ = PV__.copy(); pv__[frame != None] = 0  # exclude processed
                     y, x = np.unravel_index(pv__.argmax(), PV__.shape)
                     if PV__[y,x] > ave:
-                        iy = _iy + (y-cy) * Ly**(elev); ix = _ix + (x-cx) * Lx**(elev)  # shift coords
+                        iy = _iy+ (y-cy)*(T.box[2]-T.box[0]); ix = _ix+ (x-cx)*(T.box[3]-T.box[1])  # step by sub-frame footprint
                         if elev:
-                            T = base_tile(iy, ix, elev)  # lower frame_H, up to current level
+                            T = base_tile(iy,ix,T)  # lower frame_H, up to current level
                     else: break
                 else: break
             else: break
@@ -892,37 +892,38 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # removed fHH
     global ave,avd, Fw_,FTT_  # update from ffeedback:
     while elev < max_elev:
         tile_,C,R = expand_lev(iY,iX, elev, tile); oF=CoF.get();oF.c += C; oF.r += R
-        if tile_:  # sparse higher-scope tile, if expanded
-            F = CN(box=np.array([0,0,Y,X]), yx=np.array([Y//2, X//2]))  # same center on all levels
-            F.H =[]; F.N_= tile_; F.c = sum([tile.c for tile in tile_])  # need c to for bool eval
+        if tile_: # sparse higher-scope tile
+            b__ = np.array([T.box for T in tile_]); box = np.array([*b__[:,:2].min(0),*b__[:,2:].max(0)])  # y,x,Y,X
+            F = CN(box=box, span= np.hypot(box[2]-box[0], box[3]-box[1])/2, yx=tile_[0].yx)  # keep seed T center
+            F.span = np.hypot(box[2]-box[0], box[3]-box[1]) / 2  # mean extent
+            F.H =[]; F.N_= tile_
             if elev: [add_H(F.H,T.H, F,fN=1) for T in tile_]  # lower levels
-            # lev.root should be F?
-            F.H += [lev := sum2F(tile_, root=F, froot=2)]  # include top lev, same vals as F?
+            F.H += [lev := sum2F(tile_)]  # include top lev, same vals as F?
             if cross_comp(lev, rr=elev)[0]:  # spec->tN_,tC_,tL_, proj comb N_'L_?
                 elev += 1
-                if rV > ave:
-                    if elev == max_elev: rV,FTT_ = ffeedback(F)  # data: filters, from top lev
+                if rV * wBac *((elev-1)*wL) > ave*cBac:  # terminate old and form new same_filter_levs, replace elev with with len same_filter_levs
+                    rV, FTT_, new_oF_ = ffeedback(F, rV, elev)  # replace elev with with len same_oF_levs?
                     for i, tF in enumerate(oF_):
-                        # need to solve empty fw and c in oF
                         if tF: Fw_[i] = tF.fw/tF.c; FTT_[i] = lev.wTT_[i] = tF.wTT
                     ave/=rV; avd/=rV; Fw_,FTT_ = np.array(Fw_) / rV, np.array(FTT_) / rV  # Fc_ is fixed
+                    if new_oF_: pass   # terminate old and form new same_oF_levs
                 tile = F  # lev tile_ is next extension seed
             else: break
         else: break
     return F  # for intra-lev feedback
 
-def ffeedback(frame):  # adjust filters via cross-level wTT ratios; fork: reform oF_ when converged
+def ffeedback(frame, rV,elev):  # adjust filters via cross-level wTT ratios; fork: reform oF_ when converged
 
     rTT = np.divide(frame.H[0].wTT, frame.H[1].wTT); _wTT = frame.H[1].wTT
+    oF_ = []
     for lev in frame.H[2:]:  # sum consecutive-level TT ratios, top-down
         rTT += np.divide(_wTT,lev.wTT); _wTT = lev.wTT
     rm,rd = vt_(rTT,wTT)
-    if rm+rd > ave:  # add tracking for oF_ reform cycles?
+    if rV * wBac**2 *((elev-1)*wL) > ave* cBac**2:  # add separate w,c for oF_ reform
         split_oF_()  # speed-up code
-        oF_[:] = cluster_oF_()  # compress code
+        oF_ = cluster_oF_()  # compress code
         for i, F in enumerate(oF_): F.nF = i  # new positions
-        # also rebuid Fw_,FTT_,etc
-    return rm+rd, rTT
+    return rm+rd, rTT, oF_
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
     trace_func(vars())
