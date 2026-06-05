@@ -49,7 +49,7 @@ postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized vars are summed small-case vars
 '''
 from meta_code import (
-    oF_,CF,CL,CC,CN,CoF, wT,wTT, eps_,eps,decay, trace_func,parse_funcs, split_oF_,cluster_oF_,F_body_)
+    oF_,CF,CL,CC,CN,CoF, wT,wTT, eps_,eps,ave, avd,decay, trace_func,parse_funcs, split_oF_,cluster_oF_,F_body_)
 wM,wD,wi, wG,wI,wa, wL,wS,wA = wT
 cFrm, cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cAgg, cVct,cTrc,cBac,cPrj,cCS,cSE = (      # function complexity
 wFrm, wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wAgg, wVct,wTrc,wBac,wPrj,wCS,wSE ) = [F.fc for F in oF_]  # ave gain/call, init = cost
@@ -724,7 +724,7 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
                     G_,TT,C, R = trace_edge([F2N(n) for n in N_], G_,TT,c,3,tile)  # flatten B_-mediated Gs
     oF = CoF.get(); oF.c = C; oF.r = R
     if G_:
-        Nt = CF(nF='Nt', root=tile); Nt.N_ = G_; Nt.dTT = TT; Nt.c = C; Nt.r = 1; tile.Nt = Nt; Nt.H = tile.H; tile.dTT = TT; tile.c = C; L=len(G_)
+        Nt = CF(nF='Nt', root=tile); Nt.N_ = G_; Nt.dTT = TT; Nt.c = C; Nt.r = 1; Nt.H = tile.H; tile.Nt = Nt; Nt.H = tile.H; tile.dTT = TT; tile.c = C; L=len(G_)
         if vt_(TT,ttVct)[0]*(wFrm*L) > ave * (cFrm*L):  # L for trans-comp only?
             return tile
 
@@ -868,7 +868,8 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, fH=0):  # fH=0: tiles, 1:s
         T_, PV__,C,R = [],np.zeros([Ly,Lx]),0,0  # tiles, maps to level frame
         while True:
             if not elev: T = base_tile(iy, ix)  # T=0
-            if T and sum(vt_(T.dTT, T.wTT*ttFrm))*(wFrm*(len(T.N_)-1)) > (ave+avd)*(T.r+elev+cFrm*(len(T.N_)-1)):
+            # if T and sum(vt_(T.dTT, T.wTT*ttFrm))*(wFrm*(len(T.N_)-1)) > (ave+avd)*(T.r+elev+cFrm*(len(T.N_)-1)):
+            if T:
                 frame[y,x] = T; T_ += [T]  # loop adds one tile to level
                 dy_dx = np.array([T.yx[0]-y, T.yx[1]-x])
                 pTT = proj_N(T, np.hypot(*dy_dx), dy_dx, elev,T.c)
@@ -888,7 +889,8 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, fH=0):  # fH=0: tiles, 1:s
             if sum(vt_(TT,ttFrm))*(wFrm*L) <= (ave+avd)*(R+cFrm*L): T_=[]; C=0; R=0
         return T_,C,R
     elev = 0
-    F,tile = [],[]  # frame, seed lower tile, if any
+    tile = []  # seed lower tile, if any
+    F= CN(); FoF = CN(root=F); Fave = CN(root=FoF)  # frame, packs same_filter_levs, packs same_oF_levs
     global ave,avd, Fw_,FTT_  # update from ffeedback:
     while elev < max_elev:
         tile_,C,R = expand_lev(iY,iX, elev, tile); oF=CoF.get();oF.c += C; oF.r += R
@@ -896,20 +898,26 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, fH=0):  # fH=0: tiles, 1:s
             b__ = np.array([T.box for T in tile_]); box = np.array([*b__[:,:2].min(0),*b__[:,2:].max(0)])  # y,x,Y,X
             F = CN(box=box, span= np.hypot(box[2]-box[0], box[3]-box[1])/2, yx=tile_[0].yx)  # keep seed T center
             F.span = np.hypot(box[2]-box[0], box[3]-box[1]) / 2  # mean extent
-            F.H =[]; F.N_= tile_
-            if elev: [add_H(F.H,T.H, F,fN=1) for T in tile_]  # lower levels
-            F.H += [lev := sum2F(tile_)]  # include top lev, same vals as F?
+            F.N_= tile_
+            if elev: [add_H(Fave.H,T.H, F,fN=1) for T in tile_]  # lower levels
+            Fave.N_ += [lev := sum2F(tile_)]  # include top lev, same vals as F?
             if cross_comp(lev, rr=elev)[0]:  # spec->tN_,tC_,tL_, proj comb N_'L_?
                 elev += 1
-                if rV * wBac *((elev-1)*wL) > ave*cBac:  # terminate old and form new same_filter_levs, replace elev with with len same_filter_levs
-                    rV, FTT_, new_oF_ = ffeedback(F, rV, elev)  # replace elev with with len same_oF_levs?
+                if rV * wBac *((elev-1)*wL) > ave*cBac:  # terminate old and form new same_filter_levs, replace elev with with len same_filter_levs    
+                    rV, FTT_, new_oF_ = ffeedback(Fave, rV, elev)  # replace elev with with len same_oF_levs?
+                    FoF.N_ += [sum2F(Fave.N_)]; Fave = CN(root=FoF)
                     for i, tF in enumerate(oF_):
                         if tF: Fw_[i] = tF.fw/tF.c; FTT_[i] = lev.wTT_[i] = tF.wTT
                     ave/=rV; avd/=rV; Fw_,FTT_ = np.array(Fw_) / rV, np.array(FTT_) / rV  # Fc_ is fixed
-                    if new_oF_: pass   # terminate old and form new same_oF_levs
+                    if new_oF_:  # terminate old and form new same_oF_levs
+                        F.H += [sum2F(FoF.H)]; FoF = CN(root=F)
                 tile = F  # lev tile_ is next extension seed
             else: break
         else: break
+    # auto terminates before return?
+    if Fave.N_:
+        FoF.N_ += [sum2F(Fave.N_)]; F.H += [sum2F(FoF.N_)]
+    
     return F  # for intra-lev feedback
 
 def ffeedback(frame, rV,elev):  # adjust filters via cross-level wTT ratios; fork: reform oF_ when converged
