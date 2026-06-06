@@ -5,6 +5,7 @@ from itertools import zip_longest, combinations, product  # from multiprocessing
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
+from meta_code import oF_,CF,CL,CC,CN,CoF, wT,wTT, eps_,eps,ave,avd,decay, trace_func,parse_funcs, split_oF_,cluster_oF_,F_body_
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -48,8 +49,6 @@ prefix  _ denotes prior of two same-name vars, multiple _s for relative preceden
 postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized vars are summed small-case vars
 '''
-from meta_code import (
-    oF_,CF,CL,CC,CN,CoF, wT,wTT, eps_,eps,decay, trace_func,parse_funcs, split_oF_,cluster_oF_,F_body_)
 wM,wD,wi, wG,wI,wa, wL,wS,wA = wT
 cFrm, cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cAgg, cVct,cTrc,cBac,cPrj,cCS,cSE = (      # function complexity
 wFrm, wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wAgg, wVct,wTrc,wBac,wPrj,wCS,wSE ) = [F.fc for F in oF_]  # ave gain/call, init = cost
@@ -541,7 +540,7 @@ def add2F(F, n, merge=0, fr=0, fo=0):  # unpack for batching in sum2F
 def add_H(H,h, root, fN=0):
     for Lev,lev in zip_longest(H, h):  # bottom-up
         if lev:
-            if Lev: add2F(Lev,lev,1)
+            if Lev: add2F(Lev,lev,1)  # unpack nested Hs in add2H
             else: H.append(Copy_(lev, root, cls=(CF,CN)[fN]))
 
 def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
@@ -724,7 +723,7 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
                     G_,TT,C, R = trace_edge([F2N(n) for n in N_], G_,TT,c,3,tile)  # flatten B_-mediated Gs
     oF = CoF.get(); oF.c = C; oF.r = R
     if G_:
-        Nt = CF(nF='Nt', root=tile); Nt.N_ = G_; Nt.dTT = TT; Nt.c = C; Nt.r = 1; tile.Nt = Nt; Nt.H = tile.H; tile.dTT = TT; tile.c = C; L=len(G_)
+        Nt = CF(nF='Nt', root=tile); Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=1; tile.Nt=Nt; Nt.H=tile.H; tile.dTT=TT; tile.c=C; L=len(G_)
         if vt_(TT,ttVct)[0]*(wFrm*L) > ave * (cFrm*L):  # L for trans-comp only?
             return tile
 
@@ -823,7 +822,7 @@ def proj_N(N, dist, A, r, _c, dec=1):  # arg rc += N.rc+Nw, recursively specify 
 
     oF = CoF.get(); oF.c = _c; oF.r = r
     cos_d = (N.angl[0].dot(A) / ((np.hypot(*N.angl[0]) * dist) or eps)) * N.angl[1] if N.angl else 0  # int x ext angle alignment, mean=0
-    iTT, eTT = np.zeros((2,9)), np.zeros((2,9))
+    iTT,eTT = np.zeros((2,9)),np.zeros((2,9))
     wTT = oF.wTT*ttPrj
     for L in N.L_+ N.B_: proj_TT(L, cos_d, dist, L.r+r, iTT, wTT, dec)  # accums TT internally
     if hasattr(N.Ct,'Lt') and N.Ct.Lt: [proj_TT(L,cos_d,dist,L.r+r,iTT,wTT,dec) for L in N.Ct.Lt.N_]  # C-to-N links
@@ -868,11 +867,11 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, fH=0):  # fH=0: tiles, 1:s
         T_, PV__,C,R = [],np.zeros([Ly,Lx]),0,0  # tiles, maps to level frame
         while True:
             if not elev: T = base_tile(iy, ix)  # T=0
-            if T and sum(vt_(T.dTT, T.wTT*ttFrm))*(wFrm*(len(T.N_)-1)) > (ave+avd)*(T.r+elev+cFrm*(len(T.N_)-1)):
-                frame[y,x] = T; T_ += [T]  # loop adds one tile to level
+            if T and sum(vt_(T.dTT,T.wTT*ttFrm)) *((len(T.N_)-1)*wL) *wFrm > (ave+avd)*(T.r+cFrm):  # complex gate, make incremental?
+                frame[y,x] =T; T_+=[T]  # loop adds one tile to level
                 dy_dx = np.array([T.yx[0]-y, T.yx[1]-x])
                 pTT = proj_N(T, np.hypot(*dy_dx), dy_dx, elev,T.c)
-                if 0 < sum(vt_(pTT,T.wTT*ttFrm))*(elev+cFrm) < ave:  # extend lev by combined proj T_
+                if 0 < sum(vt_(pTT,T.wTT*ttFrm)) * wFrm < ave * cFrm:  # extend lev by combined proj T_
                     proj_focus(PV__,y,x, T)  # PV__+= pV__
                     pv__ = PV__.copy(); pv__[frame != None] = 0  # exclude processed
                     y, x = np.unravel_index(pv__.argmax(), PV__.shape)
@@ -884,46 +883,54 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, fH=0):  # fH=0: tiles, 1:s
                 else: break
             else: break
         if T_:
-            TT,C,R = sum_vt(T_, wTT=ttFrm); R+= elev; L = len(T_)-1
-            if sum(vt_(TT,ttFrm))*(wFrm*L) <= (ave+avd)*(R+cFrm*L): T_=[]; C=0; R=0
-        return T_,C,R
+            TT,C,R = sum_vt(T_, wTT=ttFrm); R+= elev
+            if vt_(TT,ttFrm)*(C*wFrm*(len(T_)-1)*wL) <= (ave+avd)*(R+cFrm):
+                return [],0,0  # cancel weak frame, null T_,C,R
     elev = 0
-    F,tile = [],[]  # frame, seed lower tile, if any
+    Fr, tile = [],[]  # seed with lower tile, if any
     global ave,avd, Fw_,FTT_  # update from ffeedback:
     while elev < max_elev:
         tile_,C,R = expand_lev(iY,iX, elev, tile); oF=CoF.get();oF.c += C; oF.r += R
-        if tile_: # sparse higher-scope tile
-            b__ = np.array([T.box for T in tile_]); box = np.array([*b__[:,:2].min(0),*b__[:,2:].max(0)])  # y,x,Y,X
-            F = CN(box=box, span= np.hypot(box[2]-box[0], box[3]-box[1])/2, yx=tile_[0].yx)  # keep seed T center
-            F.span = np.hypot(box[2]-box[0], box[3]-box[1]) / 2  # mean extent
-            F.H =[]; F.N_= tile_
-            if elev: [add_H(F.H,T.H, F,fN=1) for T in tile_]  # lower levels
-            F.H += [lev := sum2F(tile_)]  # include top lev, same vals as F?
-            if cross_comp(lev, rr=elev)[0]:  # spec->tN_,tC_,tL_, proj comb N_'L_?
+        if tile_: # sparse,2D
+            Fr = sum2F(tile_)  # higher-scope tile ( same_oF_levs ( same_filter_levs
+            if cross_comp(Fr, rr=elev)[0]:  # spec->tN_,tC_,tL_, proj comb N_'L_?
                 elev += 1
-                if rV * wBac *((elev-1)*wL) > ave*cBac:  # terminate old and form new same_filter_levs, replace elev with with len same_filter_levs
-                    rV, FTT_, new_oF_ = ffeedback(F, rV, elev)  # replace elev with with len same_oF_levs?
-                    for i, tF in enumerate(oF_):
-                        if tF: Fw_[i] = tF.fw/tF.c; FTT_[i] = lev.wTT_[i] = tF.wTT
-                    ave/=rV; avd/=rV; Fw_,FTT_ = np.array(Fw_) / rV, np.array(FTT_) / rV  # Fc_ is fixed
-                    if new_oF_: pass   # terminate old and form new same_oF_levs
-                tile = F  # lev tile_ is next extension seed
+                if rV * wBac *((elev-1)*wL) > ave*cBac:  # flat elev
+                    rV, FTT_ = ffeedback(Fr, rV, elev)  # terminate old, form new oH: same_oF_levs ( aH: same_filter_levs
+                tile = Fr  # lev tile_ is next extension seed
             else: break
         else: break
-    return F  # for intra-lev feedback
+    return Fr  # for intra-lev feedback
 
+# draft
 def ffeedback(frame, rV,elev):  # adjust filters via cross-level wTT ratios; fork: reform oF_ when converged
 
-    rTT = np.divide(frame.H[0].wTT, frame.H[1].wTT); _wTT = frame.H[1].wTT
-    oF_ = []
-    for lev in frame.H[2:]:  # sum consecutive-level TT ratios, top-down
+    global ave,avd, Fw_,FTT_
+    H = frame.H
+    rTT = np.divide(H[0].wTT, H[1].wTT); _wTT = H[1].wTT
+    for lev in H[2:]:
         rTT += np.divide(_wTT,lev.wTT); _wTT = lev.wTT
-    rm,rd = vt_(rTT,wTT)
-    if rV * wBac**2 *((elev-1)*wL) > ave* cBac**2:  # add separate w,c for oF_ reform
-        split_oF_()  # speed-up code
-        oF_ = cluster_oF_()  # compress code
-        for i, F in enumerate(oF_): F.nF = i  # new positions
-    return rm+rd, rTT, oF_
+    rm,rd = vt_(rTT,wTT); rV = rm+rd
+    if abs(rV-1) * wBac > ave * cBac:  # filters actually update: terminate old aH
+        frame.H = wrap(frame.H,'aH')   # same_filter_levs
+        for i, tF in enumerate(oF_):
+            if tF: Fw_[i] = tF.fw/tF.c; FTT_[i] = frame.wTT_[i] = tF.wTT
+        ave /= rV; avd /= rV
+        Fw_ = np.array(Fw_)/rV; FTT_ = np.array(FTT_)/rV
+        if rV * wBac**2 *((elev-1)*wL) > ave* cBac**2:  # oF_ reform
+            split_oF_(); oF_n = cluster_oF_()
+            for i, F in enumerate(oF_n): F.nF = i
+            frame.H = wrap(frame.H,'oH', in_=('oH',))  # same_oF_levs = trailing aHs
+    else: rV = 1  # no update, no termination, caller no-op
+    return rV, rTT
+
+def wrap(H, nF, in_=('aH','oH')):  # terminate: group trailing levs formed under old regime
+        i = next((j+1 for j in reversed(range(len(H))) if H[j].nF in in_), 0)  # end of last closed group
+        if len(H) > i:
+            G = CN(root=frame,nF=nF); G.H = H[i:]; G.dTT,G.c,G.r = sum_vt(G.H); G.m,G.d = vt_(G.dTT)
+            G.wTT = copy(frame.wTT)  # old-regime stamp: cross-regime rTT, add_H alignment
+            return H[:i] + [G]
+        return H
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
     trace_func(vars())

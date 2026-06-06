@@ -102,7 +102,6 @@ class CN(CL):  # full node | graph fork set
     def __init__(n, **kw):
         n.Nt,n.Bt,n.Ct,n.Lt,n.Xt,n.Rt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Ct','Lt','Xt','Rt')))  # CN if nest, Ct||Nt
         super().__init__(**kw)
-        n.H = kw.get('H',[])  # hierarchy: lower CF levs/ Nt||Ct
         n.box = kw.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
         n.mang= kw.get('mang',1) # ave match of angles in L_, =1 in links
         n.sub = kw.get('sub',0)  # composition depth relative to top-composition peers?
@@ -111,6 +110,7 @@ class CN(CL):  # full node | graph fork set
         n.compared = kw.get('compared',set())
         n.root_ = kw.get('root_',[])  # reciprocal roots, Cs not Bs?
         n.typ = kw.get('typ',3)  # full comp
+        n.H = kw.get('H',[])  # hierarchy: lower CF levs/ Nt||Ct, each lev can be H
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.c)
 

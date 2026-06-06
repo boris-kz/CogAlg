@@ -51,9 +51,12 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
     while elev < max_elev:
         tile_,C,R = expand_lev(iY,iX, elev, tile); oF=CoF.get();oF.c += C; oF.r += R
         if tile_:  # sparse higher-scope tile, if expanded
-            F = CN(box=np.array([0,0,Y,X]), yx=np.array([Y//2, X//2]))  # same center on all levels
+            b__ = np.array([T.box for T in tile_])
+            box = np.array([*b__[:, :2].min(0), *b__[:, 2:].max(0)])  # y,x,Y,X
+            Fr = CN(box=box, span=np.hypot(box[2] - box[0], box[3] - box[1]) / 2, yx=tile_[0].yx)  # keep seed T center
+            Fr.span = np.hypot(box[2] - box[0], box[3] - box[1]) / 2  # mean extent
             F.H =[]; F.N_= tile_
-            if elev: [add_H(F.H,T.H, F,fN=1) for T in tile_]  # lower levels
+            if elev: [add_H(Fr.H, T.H, Fr, fN=1) for T in tile_]  # lower level tiles, add_H unpacks nested oH(aH
             F.H += [lev := sum2F(tile_)]  # include top lev, same vals as F?
             if cross_comp(lev, rr=elev)[0]:  # spec->tN_,tC_,tL_, proj comb N_'L_?
                 elev += 1
