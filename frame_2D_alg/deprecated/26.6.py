@@ -70,13 +70,38 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # all initial args set m
         else: break
     return F  # for intra-lev feedback
 
-def ffeedback(frame):  # adjust filters: all aves *= rV, ultimately differential backprop per ave?
+def ffeedback(frame, rV,elev):  # adjust filters via cross-level wTT ratios; fork: reform oF_ when converged
 
-    rTT = np.divide(frame.H[0].wTT, frame.H[1].wTT)  # wTT_ is not relevant now
-    _wTT = frame.H[1].wTT
-    for lev in frame.H[2:]:  # sum ratios between consecutive-level TTs, top-down in frame H, not lev-selective or sub-lev recursive
-        rTT += np.divide(_wTT,lev.wTT)
-        _wTT = lev.wTT
-    rM = rD = 0
-    rm, rd = vt_(rTT,wTT)
-    return rM+rD, rTT  # add rm,rd?
+    global ave,avd, Fw_,FTT_
+    H = frame.H
+    rTT = np.divide(H[0].wTT, H[1].wTT); _wTT = H[1].wTT
+    for lev in H[2:]:  # exclude packed levs?
+        rTT += np.divide(_wTT,lev.wTT); _wTT = lev.wTT
+    rm,rd = vt_(rTT,wTT); rV = rm+rd
+    if rV * wBac > ave * cBac:  # filter update terminates old aH
+        if len(H) > (i := next((j+1 for j in reversed(range(len(H))) if H[j].nF in ('aH','oH')),0)):  # list tail
+            aH = sum2F(frame.H[i:], nF='aH'); aH.wTT=frame.wTT  # default CN, conditional sum?
+            frame.H += [aH]  # same_filter_levs
+        for i, tF in enumerate(oF_):
+            if tF: Fw_[i] = tF.fw/tF.c; FTT_[i] = frame.wTT_[i] = tF.wTT
+        ave /= rV; avd /= rV
+        Fw_ = np.array(Fw_)/rV; FTT_ = np.array(FTT_)/rV
+        if rV * wBac**2 > ave* cBac**2:  # oF_ reform terminates old oH
+            split_oF_(); oF_n = cluster_oF_()
+            for i, F in enumerate(oF_n): F.nF = i
+            if len(H) > (i := next((j+1 for j in reversed(range(len(H))) if H[j].nF=='oH'),0)):
+                if a_ := [l for l in H[i:] if l.nF=='aH']:
+                    oH = sum2F(a_, nF='oH'); oH.wTT=frame.wTT; frame.H += [oH]  # same_oF_levs
+    else: rV = 1  # no-op
+    return rV, rTT
+
+def wrap(H, nF, in_=('aH', 'oH')):  # terminate: group trailing levs formed under old regime
+        i = next((j + 1 for j in reversed(range(len(H))) if H[j].nF in in_), 0)  # end of last closed group
+        if len(H) > i:
+            G = CN(root=frame, nF=nF);
+            G.H = H[i:];
+            G.dTT, G.c, G.r = sum_vt(G.H);
+            G.m, G.d = vt_(G.dTT)
+            G.wTT = copy(frame.wTT)  # old-regime stamp: cross-regime rTT, add_H alignment
+            return H[:i] + [G]
+        return H
