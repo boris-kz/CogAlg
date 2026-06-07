@@ -137,9 +137,6 @@ class CoF(CF):
                 oF_[iF_[func.__name__]].caller_.add(_CoF)  # for comp_caller_
             _oF = CoF._cur.set(oF)
             out = func(*a, **kw)  # comp_slice and slice_edge is not under traced yet
-            if out:  # not None
-                *out, (N_, rTT, c, r) = out
-                oF.N_ = N_; oF.rTT = rTT; oF.c += c; oF.r += r  # always rTT now?
             if oF.call_:
                 tree = flat_(oF)  # if len(tree)-1?
                 sum2O(tree,oF,fcall_=1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)
