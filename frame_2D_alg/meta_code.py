@@ -76,7 +76,6 @@ class CL(CF):  # typ=1, add kern+positionals for base comp, Rt,Nt,Bt,Ct from com
     name = "link"
     def __init__(l, **kw):
         super().__init__(**kw)
-        l.nt = kw.get('nt',[])  # nodet
         l.yx = kw.get('yx', np.zeros(2))  # mean nodet? comp box is not meaningful?
         l.kern = kw.get('kern',np.zeros(4))  # I,G,A diffs in links
         l.span = kw.get('span',1)  # distance in nodet or aRad, comp with kern or len(N_)
