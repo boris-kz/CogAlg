@@ -861,7 +861,7 @@ def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
 '''
 def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, fH=0):  # fH=0: tiles, 1:same_filter_levs, 2:same_oF_levs
 
-    def base_tile(y,x,T=0):  # pixels at elev=0, lower frame_H above that
+    def base_tile(y,x,T=0, rV=1):  # pixels at elev=0, lower frame_H above that
         if fH:
             T = frame_H(image, y,x, Ly,Lx, Y,X, rV, max_elev, fH-1)
         else:  # flat H
@@ -872,7 +872,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, fH=0):  # fH=0: tiles, 1:s
             T.yx = np.array([y+Ly//2, x+Lx//2]); T.box = np.array([y,x, min(y+Ly,Y),min(x+Lx,X)]); T.span = np.hypot(Ly,Lx) / 2
         return T
 
-    def expand_lev(_iy,_ix, elev, T):  # seed tile is pixels in 1st lev, or Fg in higher levs
+    def expand_lev(_iy,_ix, elev, T, rV):  # seed tile is pixels in 1st lev, or Fg in higher levs
 
         frame = np.full((Ly, Lx), None, dtype=object)  # level scope
         iy,ix = _iy,_ix; cy,cx = (Ly-1)//2, (Lx-1)//2; y,x = cy,cx  # start=mean
@@ -897,12 +897,16 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, fH=0):  # fH=0: tiles, 1:s
         if T_:
             TT,C,R = sum_vt(T_, wTT=ttFrm); R+= elev
             if sum(vt_(TT,ttFrm))*(C*wFrm) > (ave+avd)*(R+cFrm):   # cancel weak frame, null T_,C,R
-                return T_,C,R
-        return [], 0, 0
+                if T:
+                    rTT = np.zeros((2,9))
+                    for t in T_: rTT += np.divide(T.dTT, t.dTT)
+                    rV = vt_(rTT /len(T_))[0]  # m of the ratio
+                return T_,C,R,rV
+        return [], 0, 0, rV
     elev = 0
     Fr, tile = [],[]; global ave,avd  # update from ffeedback:
     while elev < max_elev:
-        tile_,C,R = expand_lev(iY,iX, elev, tile)  # project from seed tile
+        tile_,C,R, rV = expand_lev(iY,iX, elev, tile, rV)  # project from seed tile (use rV from prior loop or input rV)
         if tile_: # sparse,2D
             Fr = sum2F(tile_)  # higher-scope tile( oH( aH
             if cross_comp(Fr.Nt, rr=elev)[0]:  # spec-> tN_,tC_,tL_, proj comb N_'L_?
@@ -933,7 +937,7 @@ def pack_seg(frame, nF, w, c):  # drift-gated regime termination for aH and oH
     if len(tail) > 1:
         D = np.sum(np.abs(sum(tail[0].dTT-t.dTT for t in tail[1:])) * wTT)  # drift
         if (vD := D*w - ave*c) > 0:  # regime stale
-            seg = CN(nF=nF, H=tail, root=frame); seg.dTT = tail[-1].dTT; seg.c = sum(l.c for l in tail)  # default regime summary
+            seg = CN(nF=nF, H=tail, root=frame); seg.dTT = tail[-1].dTT; seg.c = sum([l.c for l in tail])  # default regime summary
             if vD > ave: seg.dTT,seg.c,seg.r = sum_vt(tail); seg.m,seg.d = vt_(seg.dTT)  # deep summary
             frame.H = H[:i]+[seg]  # append
             return seg
