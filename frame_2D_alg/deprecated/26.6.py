@@ -105,3 +105,28 @@ def wrap(H, nF, in_=('aH', 'oH')):  # terminate: group trailing levs formed unde
             G.wTT = copy(frame.wTT)  # old-regime stamp: cross-regime rTT, add_H alignment
             return H[:i] + [G]
         return H
+
+def ffeedback1(frame):  # adjust filters via cross-level wTT ratios; fork: reform oF_ when aH chain converged
+
+    global ave,avd; H = frame.H
+    i = next((j+1 for j in reversed(range(len(H))) if H[j].nF in ('aH','oH')), 0)  # open tail start, prior levs are packed
+    if len(tail:= H[i:]) > 1:
+        _dTT = tail[0].dTT  # drift anchor
+        D = np.sum(np.abs(sum(_dTT - lev.dTT for lev in tail[1:])) * wTT)  # drift
+        if (vD := D * wBac > ave * cBac) > 0:  # filter update
+            aH = CN(nF='aH', H=tail, root=frame)
+            if vD > ave: aH.dTT,aH.c,aH.r = sum_vt(tail); aH.m,aH.d = vt_(aH.dTT)  # deep summary
+            frame.H = H[:i] + [aH]  # same_filter_levs
+            DTT = aH.dTT if aH.c else tail[-1].dTT  # end or summary
+            ave, avd = vt_(DTT)  # if cross drift M? other filters are ave coefs
+    # reform tail aH_'oF_:
+    i = next((j+1 for j in reversed(range(len(frame.H))) if frame.H[j].nF=='oH'), 0)  # aH chain
+    if len(aH_ := [l for l in frame.H[i:] if l.nF=='aH']) > 1:
+        _dTT = aH_[0].dTT
+        D = np.sum(np.abs(sum(_dTT - a.dTT for a in aH_[1:])) * wTT)  # cross-regime drift
+        if (vD := D*wBac**2 - ave*cBac**2) > 0:  # code stale -> reform oF_, oH:
+            oH = CN(nF='oH', H=aH_, root=frame); oH.dTT = aH_[-1].dTT
+            if vD > ave: oH.dTT,oH.c,oH.r = sum_vt(aH_); oH.m,oH.d = vt_(oH.dTT)
+            frame.H = frame.H[:i] + [oH] + frame.H[i+len(aH_):]  # same_oF_levs, open tail follows
+            split_oF_(); cluster_oF_()  # recompute code structure = the oF_ coefs
+    oF = CoF.get(); oF.N_=H; oF.dTT=frame.dTT; oF.c=frame.c; oF.r=frame.r

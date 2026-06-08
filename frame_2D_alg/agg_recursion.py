@@ -735,7 +735,7 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
                 if sum(vt_(sum_vt(N_,wTT=ttVct)[0])) * (wVct*L) > (ave+avd) * (3+cVct*L):
                     G_,TT,C, R = trace_edge([F2N(n) for n in N_], G_,TT,c,3,tile)  # flatten B_-mediated Gs
     if G_:
-        Nt = CF(nF='Nt', root=tile); Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=1; Nt.H=tile.H; tile.Nt=Nt; tile.dTT=TT; tile.c=C; L=len(G_)  # update H before reassign Nt
+        Nt = CF(nF='Nt', root=tile); Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=1; Nt.H=tile.H; tile.Nt=Nt; tile.dTT=TT; tile.c=C; L=len(G_)
         if vt_(TT,ttVct)[0]*(wFrm*L) > ave * (cFrm*L):  # L for trans-comp only?
             oF = CoF.get(); oF.N_=[N for G in G_ for N in G.N_]; oF.dTT=TT; oF.c+=C; oF.r+=R
             return tile
@@ -781,7 +781,7 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
                 G_ += [sum2G([(n_,'Nt',ntt,nc,r)]+([(l_,'Lt',ltt,lc,r)] if l_ else []), ttTrc, root)]
             else:
                 for N in n_: N.fin=0; N.root=root
-    if sum(vt_(TT,root.wTT*ttTrc))*wTrc > (ave+avd)*(r+1+cTrc): _G_+=G_; _TT+=TT;_C+=C  # eval per edge, concat in tile?  
+    if sum(vt_(TT,root.wTT*ttTrc))*wTrc > (ave+avd)*(r+1+cTrc): _G_+=G_; _TT+=TT;_C+=C  # eval per edge, concat in tile?
     oF = CoF.get(); oF.N_= G_ or N_; oF.dTT=_TT; oF.c+=_C; oF.r+=r+R/_C
     return _G_, _TT, _C, r+R/_C
 
@@ -818,7 +818,7 @@ def proj_TT(L, cos_d, dist, r, pTT, wTT, dec=1, fdec=0, frec=0):
     # accumulate link pTT with iTT | eTT internally, L may be N?
 
     dec = dist if fdec else ave ** (1 + (dist * dec) / L.span)  # not fully revised, ave = match decay rate / unit distance
-    TT = np.array([L.dTT[0] * dec, L.dTT[1] * (cos_d+dec)])  # IxE angle alignment * decay?
+    TT = np.array([L.dTT[0] * dec, L.dTT[1] * cos_d * dec])  # IxE angle alignment * decay?
     cert = abs(sum(vt_(TT,wTT)) * wPrj)  # approximation
     if cert > (ave+avd)*(r+cPrj): # certainty margin
         pTT+=TT; return
@@ -829,7 +829,7 @@ def proj_TT(L, cos_d, dist, r, pTT, wTT, dec=1, fdec=0, frec=0):
     if L.Bt:  # + trans-link tNt, tBt, tCt?
         TT = L.Bt.dTT
         if TT is not None:
-            pTT += np.array([TT[0] * dec, TT[1] * (cos_d+dec)])
+            pTT += np.array([TT[0] * dec, TT[1] * cos_d * dec])
 
 def proj_N(N, dist, A, r, _c, dec=1):  # arg rc += N.rc+Nw, recursively specify N projection val, add pN if comp_pN?
 
@@ -896,61 +896,47 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, fH=0):  # fH=0: tiles, 1:s
             else: break
         if T_:
             TT,C,R = sum_vt(T_, wTT=ttFrm); R+= elev
-            if sum(vt_(TT,ttFrm))*(C*wFrm*(len(T_)-1)*wL) > (ave+avd)*(R+cFrm):   # cancel weak frame, null T_,C,R
+            if sum(vt_(TT,ttFrm))*(C*wFrm) > (ave+avd)*(R+cFrm):   # cancel weak frame, null T_,C,R
                 return T_,C,R
         return [], 0, 0
     elev = 0
-    Fr, tile = [],[]  # seed with lower tile, if any
-    global ave,avd  # update from ffeedback:
+    Fr, tile = [],[]; global ave,avd  # update from ffeedback:
     while elev < max_elev:
-        tile_,C,R = expand_lev(iY,iX, elev, tile)
+        tile_,C,R = expand_lev(iY,iX, elev, tile)  # project from seed tile
         if tile_: # sparse,2D
             Fr = sum2F(tile_)  # higher-scope tile( oH( aH
-            if cross_comp(Fr.Nt, rr=elev)[0]:  # spec->tN_,tC_,tL_, proj comb N_'L_?
-                elev += 1
-                if rV * wBac *((elev-1)*wL) > ave*cBac:  # flat elev
-                    rV = ffeedback(Fr)  # terminate old, form new oH: same_oF_levs ( aH: same_filter_levs
-                tile = Fr  # lev tile_ is next extension seed
+            if cross_comp(Fr.Nt, rr=elev)[0]:  # spec-> tN_,tC_,tL_, proj comb N_'L_?
+                elev += 1  # flat
+                if rV*wBac > ave*cBac: ffeedback(Fr)  # terminate old, form new oH(aH
+                tile = Fr  # next-extension seed
             else: break
         else: break
     if Fr: oF = CoF.get(); oF.N_=[Fr]; oF.dTT=Fr.dTT; oF.c+=Fr.c; oF.r+=Fr.r
     return Fr  # intra-lev feedback
 
-def ffeedback(frame):  # adjust filters via cross-level wTT ratios; fork: reform oF_ when aH chain converged
+def ffeedback(frame):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
 
     global ave,avd
-    def drift(lev_, _wTT):  # ratio chain over wTT stamps
-        rTT,dTT,k = np.zeros((2,9)),np.zeros((2,9)),0
-        for lev in lev_:  # lev.wTT = CoF.get().wTT at creation?
-            # r_ is always 1 because all levs have the same wTT
-            r_ = np.divide(_wTT, eps_(lev.wTT)); rTT += r_; dTT += np.abs(r_-1); _wTT = lev.wTT; k += 1
-        return np.sum(rTT*wTT)/(k*np.sum(wTT)), np.sum(dTT*wTT)/np.sum(wTT), _wTT  # mean ratio: 1-centered, drift: 0-centered, endpoint
+    if aH := pack_seg(frame,'aH',wBac, cBac):
+        ave,avd = vt_(aH.dTT)  # filters *= ave
+        if pack_seg(frame,'oH', wBac, cBac**2):
+            split_oF_(); cluster_oF_()  # reform oF_
+
+    oF = CoF.get(); oF.N_=frame.H; oF.dTT=frame.dTT; oF.c=frame.c; oF.r=frame.r
+
+def pack_seg(frame, nF, w, c):  # drift-gated regime termination for aH and oH
+
     H = frame.H
-    rV = 1
-    i = next((j+1 for j in reversed(range(len(H))) if H[j].nF in ('aH','oH')), 0)  # open tail start, prior levs are packed
-    if (tail := H[i:]) and (i or len(tail) > 1):
-        rV,rD,eTT = drift(tail if i else tail[1:], H[i-1].wTT if i else tail[0].wTT)  # needs lev.wTT stamped at creation
-        if rD * wBac > ave * cBac:  # filters update ->aH:
-            aH = CN(nF='aH',root=frame); aH.H = tail; aH.wTT = copy(eTT)  # stamps: chain endpoint, old per-oF set
-            if rD * wBac > ave * (cBac+1):  # 1: nesting cost
-                aH.dTT,aH.c,aH.r = sum_vt(tail); aH.m,aH.d = vt_(aH.dTT)
-            frame.H = H[:i] + [aH]  # same_filter_levs
-            # we don't need Fw_, wTT_ and FTT_ now? They should be accessed from oF anyway
-            ave/=rV; avd/=rV
-        else: rV = 1  # no update, no termination
-    # oF_ reform, any tail gate:
-    i = next((j+1 for j in reversed(range(len(frame.H))) if frame.H[j].nF=='oH'), 0)
-    if len(aH_ := [l for l in frame.H[i:] if l.nF=='aH']) > 1:  # contiguous from i
-        aV,aD,eTT = drift(aH_[1:], aH_[0].wTT)  # cross-regime drift over aH
-        if aD * wBac**2 < ave * cBac**2:  # stable regimes -> reform oH  (why not stable for aH too?)
-            split_oF_(); oF_n = cluster_oF_()  # still not rebound
-            for j, F in enumerate(oF_n): F.nF = j
-            oH = CN(nF='oH',root=frame); oH.H = aH_; oH.wTT = copy(eTT)
-            if all(a.c for a in aH_): oH.dTT,oH.c,oH.r = sum_vt(aH_); oH.m,oH.d = vt_(oH.dTT)
-            # else fill cascades on demand
-            frame.H = frame.H[:i] + [oH] + frame.H[i+len(aH_):]  # same_oF_levs, open tail follows
-    oF = CoF.get(); oF.N_=H; oF.dTT=frame.dTT; oF.c=frame.c; oF.r=frame.r
-    return rV
+    nSeg = ('aH','oH') if nF=='aH' else ('oH',)
+    i = next((j+1 for j in reversed(range(len(H))) if H[j].nF in nSeg), 0)  # packed levs
+    tail = H[i:] if nF=='aH' else [l for l in H[i:] if l.nF=='aH']  # levs or aH_
+    if len(tail) > 1:
+        D = np.sum(np.abs(sum(tail[0].dTT-t.dTT for t in tail[1:])) * wTT)  # drift
+        if (vD := D*w - ave*c) > 0:  # regime stale
+            seg = CN(nF=nF, H=tail, root=frame); seg.dTT = tail[-1].dTT; seg.c = sum(l.c for l in tail)  # default regime summary
+            if vD > ave: seg.dTT,seg.c,seg.r = sum_vt(tail); seg.m,seg.d = vt_(seg.dTT)  # deep summary
+            frame.H = H[:i]+[seg]  # append
+            return seg
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
     trace_func(vars())
