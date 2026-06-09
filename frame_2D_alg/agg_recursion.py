@@ -140,7 +140,7 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
                 Link = comp_N(_N,N, lr,c,full=not tnF, A=dy_dx, span=dist, rL=root,L_=L_,N_=N_, acc=acc)
                 Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT)  # relative prediction error to fit oF, direction-agnostic
             else:
-                pL = CN(typ=-1, N_=[_N,N], dTT=pTT,m=m,d=d,c=c,r=lr, angl=[dy_dx,1],span=dist)
+                pL = CN(typ=-1, dTT=pTT,m=m,d=d,c=c,r=lr, angl=[dy_dx,1],span=dist); pL.N_ = [_N,N]  # Nt.N_ needs separate assignment
                 L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.N_; acc[0]+=pTT*pL.c; acc[1]+=pL.c; acc[2]+=pL.r*pL.c  # all +ve
                 # no oF val, ~= links in clustering
         else: break  # beyond initial induction range, re-sort by proj_V?
@@ -512,12 +512,13 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CC
                 kern=n.kern*w; span=n.span*w; yx=n.yx*w; angl = copy(n.angl[0]) if n.angl is not None else None
                 if typ==3: box=copy(n.box)
     F = (cls_[typ])(dTT=TT, c=C, r=R, nF=nF)
+    if isinstance(F, CN): F.Nt.dTT = copy(TT); F.Nt.c = C; F.Nt.r = R  # update Nt's params
     if typ:
         F.N_ = n_; F.kern=kern; F.span=span; F.yx=yx
         if angl is not None: F.angl = [angl, np.sign(F.dTT[1] @ ttcP[1])]
         if typ == 3:
             if not F.Nt:  # direct H, frame only?
-                for N in N_: add_H(F.H, N.H, F)  # concat lower levs
+                for N in N_: add_H(F.H, N.H, F, fN = 1 if (N.H and isinstance(N.H[0],CN)) else 0)  # concat lower levs (follow existing H's type)
                 F.H += [sum2F([n for N in N_ for n in N.N_], F)]  # add top lev
             F.m_,F.d_ = m_,d_; F.m, F.d = sum(m_),sum(d_)
             F.box = box
@@ -607,7 +608,8 @@ def add_Nt(G, Nt, merge=0):  # in sum2G
         add_H(G.H if merge else G.H[:-1], Nt.H, G)  # else top lev = Nt.N_
     N_ = Nt.N_
     if merge: G.N_ += N_
-    else:     G.H += [sum2F(N_+ (G.H.pop().N_ if G.H else []), G)]  # init or extend top level
+    # i don't think we need this else now. G.Nt.N_ is always = Nt.N_ here, we don't need to add top level into H
+    # else: G.H += [sum2F(N_+ (G.H.pop().N_ if G.H else []), G)]  # init or extend top level
     yx_ = []; C = G.c + Nt.c  # G is empty?
     for N in N_:
         N.fin = 1; N.root = G; c = N.c
@@ -887,7 +889,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # fH=0: tiles, 1:same_fi
                     if PV__[y,x] > ave:
                         iy = _iy+ (y-cy)*(T.box[2]-T.box[0]); ix = _ix+ (x-cx)*(T.box[3]-T.box[1])  # step by sub-frame footprint
                         if elev:
-                            T = base_tile(iy,ix, elev)  # lower frame_H, up to current level
+                            T = base_tile(iy,ix, elev)  # lower frame_H, up to current level (this may update filters and oF too? So that feedback should be for top layer only?)
                     else: break
                 else: break
             else: break
@@ -921,7 +923,7 @@ def ffeedback(frame, aTT,oTT):  # recompute filters from regime drift; fork: ref
         if oH := pack_seg(frame,'oH', wBac, cBac**2, oTT):
             split_oF_(); cluster_oF_()  # reform oF_
             oTT = oH.dTT
-    oF = CoF.get(); oF.N_=frame.H; oF.dTT=frame.dTT; oF.c=frame.c; oF.r=frame.r
+    oF = CoF.get(); oF.N_=frame.H; oF.dTT+=frame.dTT; oF.c+=frame.c; oF.r+=frame.r
     return aTT,oTT
 
 def pack_seg(frame, nF, w, c, _dTT):  # drift-gated regime termination for aH and oH
