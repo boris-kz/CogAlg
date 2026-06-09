@@ -20,10 +20,10 @@ High-contrast links are correlation clustered to form a boundary per node connec
 This is followed by centroid-based expansion and divisive sub-clustering.
 
 each level may extend clustering through 4 increasingly fuzzy stages, each seeded by prior-stage output:
-- select sparse exemplars to seed the clusters, top k for parallelization (get_exemplars), not clustering?
-- connectivity-based agglomerative clustering, followed by divisive clustering (cluster_N), 
-- centroid-based marginally fuzzy and extensible clustering, in divisive phase (cluster_C), init ave_linkage?
-- centroid-parallel fully fuzzy FCM-like refine, if significant global overlap (cluster_P).
+- select sparse exemplars to seed the clusters, top k for parallelization (get_exemplars), no clustering?
+- connectivity-based agglomerative ( divisive clustering (cluster_N), 
+- centroid-based marginally fuzzy and extensible clustering, in divisive phase (cluster_C), or ave_linkage?
+- centroid-parallel fully fuzzy FCM-like refine, if significant global overlap (cluster_P), no higher stage?
 
 Clustering forms hierarchical graphs, each a dual tree of down-forking elements: node_H, and up-forking clusters: root_H:
 https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/generic%20graph.drawio.png
@@ -859,17 +859,14 @@ def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
     link.m += dddH.m; link.d += dddH.d; link.c += dddH.c; link.dTT += dddH.dTT
     add_H(ddH, dddH)    
 '''
-def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, fH=0):  # fH=0: tiles, 1:same_filter_levs, 2:same_oF_levs
+def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):  # fH=0: tiles, 1:same_filter_levs, 2:same_oF_levs
 
-    def base_tile(y,x,T=0):  # pixels at elev=0, lower frame_H above that
-        if fH:
-            T = frame_H(image, y,x, Ly,Lx, Y,X, rV, max_elev, fH-1)
-        else:  # flat H
-            if not T:  # pixels at elev=0
-                T = frame_blobs_root(comp_pixel(image[y:y + Ly, x:x + Lx]), rV)
-                T = vect_edge(T, rV)  # form, trace PP_:
-        if T and not fH:  # pixel-tile, sub-frames keep their own real box
-            T.yx = np.array([y+Ly//2, x+Lx//2]); T.box = np.array([y,x, min(y+Ly,Y),min(x+Lx,X)]); T.span = np.hypot(Ly,Lx) / 2
+    def base_tile(y,x, elev):  # lower T if elev else pixels
+        if elev:
+            T = frame_H(image, y,x, Ly,Lx, Y,X, rV, max_elev=elev)  # smaller-scope unit
+        else:
+            T = vect_edge(frame_blobs_root(comp_pixel(image[y:y+Ly, x:x+Lx]), rV), rV)
+            if T: T.yx=np.array([y+Ly//2,x+Lx//2]); T.box=np.array([y,x,min(y+Ly,Y),min(x+Lx,X)]); T.span=np.hypot(Ly,Lx)/2
         return T
 
     def expand_lev(_iy,_ix, elev, T):  # seed tile is pixels in 1st lev, or Fg in higher levs
@@ -878,19 +875,19 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, fH=0):  # fH=0: tiles, 1:s
         iy,ix = _iy,_ix; cy,cx = (Ly-1)//2, (Lx-1)//2; y,x = cy,cx  # start=mean
         T_, PV__,C,R = [],np.zeros([Ly,Lx]),0,0  # tiles, maps to level frame
         while True:
-            if not elev: T = base_tile(iy, ix)  # T=0
-            if T and sum(vt_(T.dTT,T.wTT*ttFrm)) *((len(T.N_)-1)*wL) *wFrm > (ave+avd)*(T.r+cFrm):  # complex gate, make incremental?
+            if not elev: T = base_tile(iy,ix,0)  # T=0
+            if T and sum(vt_(T.dTT, T.wTT*ttFrm)) * wFrm > (ave+avd)*(T.r+cFrm):  # complex gate, make incremental?
                 frame[y,x] =T; T_+=[T]  # loop adds one tile to level
                 dy_dx = np.array([T.yx[0]-y, T.yx[1]-x])
                 pTT = proj_N(T, np.hypot(*dy_dx), dy_dx, elev,T.c)
-                if 0 < sum(vt_(pTT,T.wTT*ttFrm)) * wFrm < ave * cFrm:  # extend lev by combined proj T_
+                if 0 < sum(vt_(pTT, T.wTT*ttFrm)) * wFrm < ave * cFrm:  # extend lev by combined proj T_
                     proj_focus(PV__,y,x, T)  # PV__+= pV__
                     pv__ = PV__.copy(); pv__[frame != None] = 0  # exclude processed
                     y, x = np.unravel_index(pv__.argmax(), PV__.shape)
                     if PV__[y,x] > ave:
                         iy = _iy+ (y-cy)*(T.box[2]-T.box[0]); ix = _ix+ (x-cx)*(T.box[3]-T.box[1])  # step by sub-frame footprint
                         if elev:
-                            T = base_tile(iy,ix,T)  # lower frame_H, up to current level
+                            T = base_tile(iy,ix, elev)  # lower frame_H, up to current level
                     else: break
                 else: break
             else: break
@@ -900,39 +897,41 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, fH=0):  # fH=0: tiles, 1:s
                 return T_,C,R
         return [], 0, 0
     elev = 0
-    Fr, tile = [],[]; global ave,avd  # update from ffeedback:
+    aTT = oTT = np.zeros((2,9))  # regime refs across levs
+    tile, Fr = [],[]; global ave,avd  # update / ffeedback
     while elev < max_elev:
         tile_,C,R = expand_lev(iY,iX, elev, tile)  # project from seed tile
         if tile_: # sparse,2D
             Fr = sum2F(tile_)  # higher-scope tile( oH( aH
             if cross_comp(Fr.Nt, rr=elev)[0]:  # spec-> tN_,tC_,tL_, proj comb N_'L_?
-                elev += 1  # flat
-                if rV*wBac > ave*cBac: ffeedback(Fr)  # terminate old, form new oH(aH
-                tile = Fr  # next-extension seed
+                if elev:
+                    aTT,oTT = ffeedback(Fr, aTT,oTT)  # term,form oH(aH
+                elev += 1; tile = Fr  # next-extension seed
             else: break
         else: break
     if Fr: oF = CoF.get(); oF.N_=[Fr]; oF.dTT=Fr.dTT; oF.c+=Fr.c; oF.r+=Fr.r
     return Fr  # intra-lev feedback
 
-def ffeedback(frame):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
+def ffeedback(frame, aTT,oTT):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
 
     global ave,avd
-    if aH := pack_seg(frame,'aH',wBac, cBac):
-        ave,avd = vt_(aH.dTT)  # filters *= ave
-        if pack_seg(frame,'oH', wBac, cBac**2):
+    if aH := pack_seg(frame,'aH',wBac, cBac, aTT):
+        ave, avd = vt_(aH.dTT)  # filters *= ave
+        aTT = aH.dTT
+        if oH := pack_seg(frame,'oH', wBac, cBac**2, oTT):
             split_oF_(); cluster_oF_()  # reform oF_
-
+            oTT = oH.dTT
     oF = CoF.get(); oF.N_=frame.H; oF.dTT=frame.dTT; oF.c=frame.c; oF.r=frame.r
+    return aTT,oTT
 
-def pack_seg(frame, nF, w, c):  # drift-gated regime termination for aH and oH
+def pack_seg(frame, nF, w, c, _dTT):  # drift-gated regime termination for aH and oH
 
     H = frame.H
-    nSeg = ('aH','oH') if nF=='aH' else ('oH',)
-    i = next((j+1 for j in reversed(range(len(H))) if H[j].nF in nSeg), 0)  # packed levs
-    tail = H[i:] if nF=='aH' else [l for l in H[i:] if l.nF=='aH']  # levs or aH_
-    if len(tail) > 1:
-        D = np.sum(np.abs(sum(tail[0].dTT-t.dTT for t in tail[1:])) * wTT)  # drift
-        if (vD := D*w - ave*c) > 0:  # regime stale
+    n = ('aH','oH') if nF=='aH' else ('oH',)
+    i = next((j+1 for j in reversed(range(len(H))) if H[j].nF in n), 0)  # packed levs
+    if tail := H[i:] if nF=='aH' else [l for l in H[i:] if l.nF=='aH']:  # lev_| aH_
+        D = sum(np.sum(np.abs(t.dTT-_dTT) * wTT) for t in tail)  # drift
+        if (vD := D*w - ave*c) > 0:  # update value
             seg = CN(nF=nF, H=tail, root=frame); seg.dTT = tail[-1].dTT; seg.c = sum(l.c for l in tail)  # default regime summary
             if vD > ave: seg.dTT,seg.c,seg.r = sum_vt(tail); seg.m,seg.d = vt_(seg.dTT)  # deep summary
             frame.H = H[:i]+[seg]  # append

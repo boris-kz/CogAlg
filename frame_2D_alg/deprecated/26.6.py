@@ -130,3 +130,15 @@ def ffeedback1(frame):  # adjust filters via cross-level wTT ratios; fork: refor
             frame.H = frame.H[:i] + [oH] + frame.H[i+len(aH_):]  # same_oF_levs, open tail follows
             split_oF_(); cluster_oF_()  # recompute code structure = the oF_ coefs
     oF = CoF.get(); oF.N_=H; oF.dTT=frame.dTT; oF.c=frame.c; oF.r=frame.r
+
+    def base_tile(y,x,T=0):  # pixels at elev=0, lower frame_H above that
+        if fH:
+            T = frame_H(image, y,x, Ly,Lx, Y,X, rV, max_elev, fH-1)
+        else:  # flat H
+            if not T:  # pixels at elev=0
+                T = frame_blobs_root(comp_pixel(image[y:y + Ly, x:x + Lx]), rV)
+                T = vect_edge(T, rV)  # form, trace PP_:
+        if T and not fH:  # pixel-tile, sub-frames keep their own real box
+            T.yx = np.array([y+Ly//2, x+Lx//2]); T.box = np.array([y,x, min(y+Ly,Y),min(x+Lx,X)]); T.span = np.hypot(Ly,Lx) / 2
+        return T
+
