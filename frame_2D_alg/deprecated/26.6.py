@@ -142,3 +142,15 @@ def ffeedback1(frame):  # adjust filters via cross-level wTT ratios; fork: refor
             T.yx = np.array([y+Ly//2, x+Lx//2]); T.box = np.array([y,x, min(y+Ly,Y),min(x+Lx,X)]); T.span = np.hypot(Ly,Lx) / 2
         return T
 
+def add_Nt(G, Nt):  # in sum2G and trans_cluster
+
+    yx_ = []; C = G.c + Nt.c  # but G is not empty in trans_comp?
+    for N in Nt.N_:
+        N.fin = 1; N.root = G; c = N.c
+        if hasattr(N,'m_'):
+            if not hasattr(G,'m_'): G.root_,G.m_,G.d_ = [],[],[]  # or G.rm_,G.rd_?
+            G.C_ += N.root_; G.m_+= N.m_; G.d_+= N.d_  # Ct || Nt
+        G.kern = (G.kern*(C-c) + N.kern*c) / C  # massive?
+        G.box = extend_box(G.box, N.box)
+        yx_ = (G.yx*(C-c) + N.yx*c) / C  # replace with:
+    G.yx = yx = np.mean(yx_, axis=0); dy_,dx_ = (np.array(yx_)-yx).T  # weigh by c?

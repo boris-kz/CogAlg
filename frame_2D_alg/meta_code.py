@@ -109,7 +109,7 @@ class CN(CL):  # full node | graph fork set
         n.compared = kw.get('compared',set())
         n.root_ = kw.get('root_',[])  # reciprocal roots, Cs not Bs?
         n.typ = kw.get('typ',3)  # full comp
-        n.H = kw.get('H',[])  # hierarchy: lower CF levs/ Nt||Ct, each lev can be H
+        n.H = kw.get('H',[])  # hierarchy= packed N_s: lower CFs / Nt||Ct, may be nested
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.c)
 
@@ -186,13 +186,13 @@ def parse_funcs(paths):
                 nF_[iF_.get(node.name)] = node
 
 _names = ['frame_H','cross_comp','trace_edge',                 # root_, oF_[0] = frame_H, adds level per call
-          'comp_N_','comp_C_','comp_N','comp_F',               # comp_
-          'get_exemplars','cluster_N','cluster_C','cluster_P', # clus_
-          'ffeedback','proj_N',                                # proj_
+          'comp_N_','comp_C_','comp_N','comp_F',               # comp_: incrementally distant, nested
+          'get_exemplars','cluster_N','cluster_C','cluster_P', # clus_: incrementally fuzzy, parallel
+          'ffeedback','proj_N',                                # fbac_: update filters) coords) funcs
           'vect_edge','comp_slice','slice_edge']               # prep_
           # typ/line
-typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','proj_','proj_','prep_','prep_','prep_']
-nF_ = [None] * len(_names)  # FunctionDef s
+typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','fbac_','fbac_','prep_','prep_','prep_']
+nF_ = [None]*len(_names)  # FunctionDefs
 iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
 oF_ = [CoF(nF=i,typ=typ) for i,typ in enumerate(typ_)]
 parse_funcs(["agg_recursion.py","comp_slice.py","slice_edge.py"])  # populate nF_
