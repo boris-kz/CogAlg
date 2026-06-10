@@ -85,7 +85,7 @@ def cross_comp(root, rr):  # core function mediating recursive rng+ and der+ cro
 
     N_,G_ = root.N_,[]; fC = N_[0].typ==2  # root is Ft, converted below, rc=rdn+olp, comp N_|B_|C_:
     # comp_ s update root oF:
-    L_,TT,c,r,TTd,cd,rd = comp_C_(N_,rr,fC=1) if fC else comp_N_(combinations(N_,2),rr)
+    L_,TT,c,r,TTd,cd,rd = comp_C_(N_,rr,fC=1) if fC else comp_N_(combinations(N_,2),rr)  # TTd, cd and rd are redundant now?
     if L_: # Lm_, no +|- Ft.Lt?
         root.L_ = L_; L= len(L_)-1  # val=m+d /clust, m/comp
         if sum(vt_(TT,ttE)) * (wE*L) > (ave+avd) * (r+cE*L):  # or oF.gF evals?
@@ -149,7 +149,7 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
     # call trace:
     if L_ := [n for n in L_ if n.typ>-1]: sum2F(L_,CoF.get())  # skip pLs, oF.call_+=[oF], adds data
     TT,cm,rm, TTd,cd,rd = acc
-    oF = CoF.get(); oF.N_=N_; oF.dTT=TT; oF.c+=c; oF.r+=r
+    oF = CoF.get(); oF.N_=N_; oF.dTT=TT; oF.c+=cm; oF.r+=rm  # cm and rm?
     return L_,TT,cm,rm/(cm or eps), TTd,cd,rd/(cd or eps)
 
 def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s, levels
@@ -187,10 +187,10 @@ def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
             tc += c; tr += r*c
             comp_N(_C,C,_r, c ,A=dy_dx,span=dist,L_=L_,N_=N_,acc=acc)  # simplified for typ=3
     for N in list(set(N_)):
-        if N.rim: sum2F(N.rim, N.Rt)
+        if N.rim: sum2F(N.rim, N.Rt)  # Rt.m is never updated, but we need them in get_exemplar? N.Rt = sum2F(N.rim)?
     if L_: sum2F(L_,CoF.get())
     TTm,cm,rm,TTd,cd,rd = acc
-    oF = CoF.get(); oF.N_ = N_; oF.dTT=TTm; oF.c+=c; oF.r+=r
+    oF = CoF.get(); oF.N_ = N_; oF.dTT=TTm; oF.c+=cm; oF.r+=rm  # cm and rm?
     return L_,TTm,cm, rm/(cm or eps), TTd,cd, rd/(cd or eps)  # L_ is Lm now
 
 def comp_N(_N,N, r,_c, full=1, A=np.zeros(2),span=None, rL=None, L_=None, N_=None, acc=None):
@@ -323,9 +323,9 @@ def get_exemplars(N_,_r,_c):  # multi-layer non-maximum suppression -> sparse se
         else:
             break  # the rest of N_ is weaker, trace via rims
     oF = CoF.get(); oF.N_ = N_
-    if E_:  sum2F(E_,oF)  # or default with wc cost?
+    if E_:  sum2F(list(E_),oF)  # or default with wc cost?  (N = N_[0] needs list in sum2F)
     else: E_ = [N_[0]]  # no inhibition, any N can be seed
-    return E_, (N_, np.sum([E.dTT for E in E_],axis=0), sum([E.c for E in E_]), sum([E.r for E in E_]))
+    return E_
 
 def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace iL_ with E_?
 
@@ -425,11 +425,14 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
                     k=n._root_.index(_C); up += abs(n._m_[k]-m) + abs(n._d_[k]-d)
                 else: up += m+abs(d)
             r = _r+ R/T  # loop-local, not ave?
-            if M*(_C.m+ wC_*len(n_)+wC_*len(n_)) > Ave*(r+_C.r+ cC_*len(n_)):  # else: Up+= sum(_C._m_)+ sum([abs(d) for d in _C._d_])?
+            # duplicated wC_*len(n_)?
+            if M*(_C.m + wC_*len(n_)) > Ave*(r+_C.r+ cC_*len(n_)):  # else: Up+= sum(_C._m_)+ sum([abs(d) for d in _C._d_])?
                 for n in [_n for n in n_ for l in n.rim for _n in l.N_ if _n is not n]:
                     N__ += [n]  # +|-Ls
                 C = sum2F(n_, Ft,m_,d_)  # C.N_ = n_
                 C._N_ = list(set(N__)- set(n_))  # new frontier
+                for n, m, d in zip(n_, m_, d_):  # now n.m_, d_ and root_ are always empty, we need to assign those after sum2F?
+                    n.root_ += [C]; n.m_ += [m]; n.d_ += [d]
                 if D<Avd: out_+=[C]  # output if stable
                 else:     C_ += [C]  # reform
                 DTT+=dTT; mat+=M; dif+=D; cnt+=T; rdn+=R; Up+=up
@@ -520,14 +523,16 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CC
         F.N_ = n_; F.kern=kern; F.span=span; F.yx=yx
         if angl is not None: F.angl = [angl, np.sign(F.dTT[1] @ ttcP[1])]
         if typ==3:  # frame?
-            for N in N_: add_H(F.H, N.H, F)  # concat lower levs
+            for N in N_:
+                if N.H: add_H(F.H, N.H, F, fN=isinstance(N.H[0], CN))  # concat lower levs
             F.H += [sum2F([n for N in N_ for n in N.N_], F)]  # top lev
+            # if typ == 3, we shouldn't have m_ and d_ here? This should be in if fC?
             F.m_,F.d_ = m_,d_; F.m, F.d = sum(m_),sum(d_)
             F.box = box
         else:
             F.m, F.d = vt_(TT)  # link or centroid
     else: F.N_=n_; F.m,F.d = vt_(TT)
-    if root:
+    if root is not None:  # prevent skipping empty root, such as "sum2F(N.rim, N.Rt)"
         F.wTT = root.wTT
         if typ!=2: add2F(root,F,2)  # skip centroids
         if typ==3 and getattr(root,'C_', None): root.Ct = sum2F(root.C_)
@@ -549,7 +554,7 @@ def add2F(F, n, merge=0, fr=0, fo=0):  # unpack for batching in sum2F
     if merge <2:
         if fo: F.typ_+= [n]
         else: F.N_ += (n.N_ if merge else [n])
-    if hasattr(F,'H') and getattr(n,'H',None): add_H(F.H, n.H)
+    if hasattr(F,'H') and getattr(n,'H',None): add_H(F.H, n.H, F)
     if hasattr(n,'C_'): F.C_ = getattr(F,'C_',[]) + n.C_  # same for L_?
     return F
 
@@ -622,7 +627,7 @@ def add_Lt(G, Lt,wTT):  # addition to Q2R
     L_ = Lt.N_
     if Lt.m * wN > ave*(cN+Lt.r):  # comp typ -1 pre-links
         L_,pL_ = [],[]; [L_.append(L) if L.typ==1 else pL_.append(L) for L in Lt.N_]
-        if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0]* ave*wN > ave*(cN * np.mean([L.r for L in pL_])):
+        if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0]* ave*wN > ave*(cN * np.mean([L.r for L in pL_])):  # * ave on both sides, which cancel out each other?
             for L in pL_: L_ += [comp_N(*L.N_, G.r,L.c,1, L.angl[0], L.span)]
             sum2F(L_,Lt); add2F(G, Lt, merge=2)
     A = np.sum([l.angl[0] for l in L_], axis=0) if L_ else np.zeros(2)
@@ -859,7 +864,7 @@ def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
 def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4):
 
     def base_tile(y,x, elev):  # lower tile if elev else pixels
-        if elev:
+        if elev:  # no direct cross_comp in base_tile now?
             T = frame_H(image, y,x, Ly,Lx, Y,X, rV, max_elev=elev)  # tile
         else:
             T = vect_edge(frame_blobs_root(comp_pixel(image[y:y+Ly, x:x+Lx]), rV), rV)
