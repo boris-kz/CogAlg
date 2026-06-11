@@ -154,3 +154,39 @@ def add_Nt(G, Nt):  # in sum2G and trans_cluster
         G.box = extend_box(G.box, N.box)
         yx_ = (G.yx*(C-c) + N.yx*c) / C  # replace with:
     G.yx = yx = np.mean(yx_, axis=0); dy_,dx_ = (np.array(yx_)-yx).T  # weigh by c?
+
+def fill_frame(_iy,_ix, elev, T):  # seed tile is lower frame if elev else pixels
+
+        frame = np.full((Ly,Lx),None, dtype=object)  # level scope
+        cy,cx = (Ly-1)//2, (Lx-1)//2; y,x = cy,cx  # start=mean
+        T_, PV__,C,R = [],np.zeros([Ly,Lx]),0,0  # tiles, maps to level frame
+        while True:
+            if not elev:  # init pixel-level seed tile
+                T = base_tile(_iy,_ix)
+            if T and sum(vt_(T.dTT,T.wTT*ttFrm)) * wFrm > (ave+avd)*(T.r+cFrm):  # complex gate, make incremental?
+                frame[y,x]=T; T+=[T]  # loop adds one tile to level
+                dy_dx = np.array([T.yx[0]-y, T.yx[1]-x])
+                pTT = proj_N(T, np.hypot(*dy_dx), dy_dx, elev,T.c)
+                if 0 < sum(vt_(pTT, T.wTT*ttFrm)) * wFrm < ave * cFrm:  # extend lev by combined proj T_
+                    proj_focus(PV__,y,x, T)  # PV__+= pV__
+                    pv__ = PV__.copy(); pv__[frame != None] = 0  # exclude processed
+                    y, x = np.unravel_index(pv__.argmax(), PV__.shape)
+                    if PV__[y,x] > ave:
+                        iy = _iy+ (y-cy)*(T.box[2]-T.box[0]); ix = _ix+ (x-cx)*(T.box[3]-T.box[1])  # step by sub-frame footprint
+                        nxt_T = base_tile(iy,ix); _elev = 0  # expand to current level
+                        while nxt_T and _elev < elev:
+                            t_,c,r = fill_frame(iy,ix, _elev, nxt_T)
+                            if not t_: break  # eval / c,r?
+                            nxt_T = sum2F(t_)
+                            if cross_comp(nxt_T.Nt, rr=_elev)[0]: _elev += 1
+                            else: break  # discard nxt_T?
+                        T = nxt_T
+                    else: break
+                else: break
+            else: break
+        if T_:
+            TT,C,R = sum_vt(T_, wTT=ttFrm); R+= elev
+            if sum(vt_(TT,ttFrm))*(C*wFrm) > (ave+avd)*(R+cFrm):   # cancel weak frame, null T_,C,R
+                return T_,C,R
+        return [], 0, 0
+
