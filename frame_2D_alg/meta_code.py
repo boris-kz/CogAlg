@@ -13,6 +13,30 @@ ave,avd = .3,.5; decay = ave/(ave+avd)  # ave m,d / unit dist, recomputed from d
 wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
 wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
 wTT = np.array([wT,wT*avd])
+
+def vt_(TT, wTT=wTT):  # base eval: multi-variate rel match, rel diff for membership
+
+    m_,d_ = TT; ad_ = np.abs(d_); t_ = eps_(m_+ad_)  # ~ max comparand
+    m = m_/t_ @ wTT[0]; d = ad_/t_ @ wTT[1]  # norm by co-derived val
+    return m, d
+
+def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
+
+    C = sum(n.c for n in N_); R = 0; TT = np.zeros((2,9))
+    for n in N_:
+        w = n.c/C; TT += (n.rTT if fr else n.dTT)*w; R += n.r*w
+    if fm:
+        m,d = vt_(TT, wTT)
+        if fdiv: m/= ave*R; d/= avd*R  # in 0-inf for summation
+        else:    m-= ave*R; d-= avd*R  # in -1:1 without r
+        return   m,d,TT,C,R
+    else: return TT,C,R
+'''
+    oF = CoF.get()
+    C = oF.c + L.c + L.Nt.c + L.Lt.c + L.Bt.c + L.Ct.c; dTT, R = np.zeros((2,9))
+    for F in oF, L, L.Nt, L.Lt, L.Bt, L.Ct: rc = F.c/C; dTT+=F.dTT*rc; R+=F.r*rc
+    oF.N_ += [L]; oF.dTT=dTT; oF.c=C; oF.r=R
+'''
 wcO, ccO = 5,5  # temporary
 ave_C, wL = 3,3
 costs = {  # types
@@ -142,7 +166,7 @@ class CoF(CF):
                 sum2O(tree,oF,fcall_=1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)
                 if _CoF is not None:
                     if (j := F_call_i_[_CoF.nF].get(inspect.currentframe().f_back.f_lineno)) is not None:  # get callee site
-                        F_call_T_[_CoF.nF][j] += oF.dTT  # sum results per callee to refine the code
+                        F_call_T_[_CoF.nF][j] += oF.dTT  # add,c,r: results per callee to refine the code
             CoF._cur.reset(_oF)
             return out
         inner.wrapped = True
