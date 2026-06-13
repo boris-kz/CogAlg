@@ -121,7 +121,8 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
                 Link = comp_N(_N,N, lr,c,full=not tnF, A=dy_dx, span=dist, rL=root,L_=L_,N_=N_, acc=acc)
                 Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT)  # relative prediction error to fit oF, direction-agnostic
             else:
-                pL = CN(typ=-1, dTT=pTT,m=m,d=d,c=c,r=lr, angl=[dy_dx,1],span=dist); pL.N_ = [_N,N]
+                # why this is CN here?
+                pL = CL(typ=-1, dTT=pTT,m=m,d=d,c=c,r=lr, angl=[dy_dx,1],span=dist); pL.N_ = [_N,N]
                 L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.N_; acc[0]+=pTT*pL.c; acc[1]+=pL.c; acc[2]+=pL.r*pL.c  # all +ve
                 # no oF val, ~= links in clustering
         else: break  # beyond initial induction range, re-sort by proj_V?
@@ -184,7 +185,8 @@ def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None, L_=None, N_=None
     if N.typ==3 and _N.typ==3 and m*wF > ave*(r+cF):
         dH,htt,C,R = comp_H(_N,N, L); c+=C; r+=R; m+= vt_(htt,ttN_)[0]  # tentative dH, replace if subcomp
     if N.typ and m*wN_ > ave*(r+cN_):  # skip PPs
-        F2N(L)  # add tFs for subcomp
+        # F2N(L)  # add tFs for subcomp ( the previous update is not included?)
+        for ft in ('Nt','Lt','Ct','Bt','Xt','Rt'): setattr(L, ft, CF(root=L))
         if N.typ==1:
             for _n,n in product(_N.N_,N.N_): L.Nt.fb_ += [comp_N(_n,n,r,c)]  # link sub-comp
         else:
@@ -294,9 +296,7 @@ def get_exemplars(N_,_r,_c):  # multi-layer non-maximum suppression -> sparse se
             Inh_.update(set(N.rim))  # extend inhibition zone
         else:
             break  # the rest of N_ is weaker, trace via rims
-    oF = CoF.get(); oF.N_ = N_
-    if E_:  sum2F(list(E_),oF)  # or default with wc cost?
-    else: E_ = [N_[0]]  # no inhibition, any N can be seed
+    else: E_ = set([N_[0]])  # no inhibition, any N can be seed
     return E_
 
 def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace iL_ with E_?
@@ -309,14 +309,15 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
         return M, D
     def trans_cluster(G):
         for L in G.L_:
-            for tFt in L.Nt,L.Bt,L.Ct:  # Lt doesn't form trans-links, Ct is not root-constrained?
-                for tL in tFt.N_:
-                    if tL.m*wcN> ave*ccN:  # merge trans_link.N_.roots
-                        rt0 = getattr(tL.N_[0].root,'root',None); rt1 = getattr(tL.N_[1].root,'root',None)  # CNs
-                        if rt0 and rt1 and rt0 != rt1:
-                            if rt1.H: add_H(rt0.H, rt1.H, rt0, fN=1)
-                            rt0.N_ += rt1.N_; add_Nt(rt0)  # recompute Nt attrs / G
-            L.Nt,L.Bt,L.Ct = CF(),CF(),CF()
+            if hasattr(L, 'Nt'):  # has subcomp
+                for tFt in L.Nt,L.Bt,L.Ct:  # Lt doesn't form trans-links, Ct is not root-constrained?
+                    for tL in tFt.N_:
+                        if tL.m*wcN> ave*ccN:  # merge trans_link.N_.roots
+                            rt0 = getattr(tL.N_[0].root,'root',None); rt1 = getattr(tL.N_[1].root,'root',None)  # CNs
+                            if rt0 and rt1 and rt0 != rt1:
+                                if rt1.H: add_H(rt0.H, rt1.H, rt0, fN=1)
+                                rt0.N_ += rt1.N_; add_Nt(rt0)  # recompute Nt attrs / G
+                L.Nt,L.Bt,L.Ct = CF(),CF(),CF()
             # merge roots
     G_= []  # add prelink pL_,pN_? include merged Cs, in feature space for Cs
     if _N_ and sum(vt_(Ft.dTT, Ft.root.wTT * ttcN)) * wcN * (len(_N_) - 1) > (ave + avd) * (r + ccN *  (len(_N_) - 1))  > 0:  #| fL?
@@ -368,9 +369,6 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
             sum2F(C_, root=Ft.root.Ct)  # Ct.r includes overlap?
             L_ = [L for C in C_ for L in C.L_]  # C-to-N links
             if L_: Ft.root.Ct.Lt = sum2F(L_,root=Ft.root.Ct)
-    # clust_val = selectivity vs all comps in root.Lt
-    sel_TT = (Ft.dTT*Ft.c - Ft.root.Lt.dTT*Ft.root.Lt.c) / eps_(Ft.root.Lt.dTT * Ft.root.Lt.c)
-    oF = CoF.get(); oF.N_=copy(G_); oF.rTT=sel_TT; oF.c = Ft.root.c - Ft.c; oF.r=sum([G.r * G.c for G in G_])/oF.c  # sum_vt?
     return G_, r
 
 def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
@@ -423,8 +421,6 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
         if vt_(DTT,Ft.root.wTT*ttcC)[0]*wcC*(len(out_)-1) > ave*(r+ccC*(len(out_)-1)):
             Ct = sum2F([F2N(C) for C in out_]); Ft.root.Ct = Ct; Ct.root = Ft.root
             _,r = cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
-            sel_TT = (Ct.dTT*Ct.c - Ft.dTT*Ft.c) / eps_(Ct.dTT * Ct.c)
-            oF = CoF.get(); oF.N_=out_; oF.rTT=sel_TT; oF.r=Ct.r; oF.c = Ft.c-Ct.c  # data, select in Nt.N_?
     return out_, r
 
 def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine, may add proj_C
@@ -464,14 +460,14 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
                 out_ += [C]
     if out_:
         merg_ = []
+        for out in out_: F2N(out)
         for _C, C in combinations(out_,r=2):
             if _C in merg_ or C in merg_: continue
             c = min(C.c,_C.c); r = (C.r+_C.r)/2; dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx)
             L = comp_N(_C,C,r,c, A=dy_dx,span=dist)
-            if vt_(L.dTT,ttF)[0]*wF < avd*(r+cF): add2F(_C,C,1); merg_ += [C]
+            if vt_(L.dTT,ttF)[0]*wF < avd*(r+cF): add2F(_C,C,1); merg_ += [C]  # we need to reset their rim for the next cross_comp?
         out_= list(set(out_)-set(merg_))
         dCt = sum2F(list(set(_C_)-set(out_)))  # compress
-        oF = CoF.get(); oF.N_=C_; oF.rTT=dCt.dTT; oF.r=dCt.r; oF.c=_c-dCt.c
         return out_
 
 def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CC/CN
@@ -715,7 +711,6 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
     if G_:
         Nt = CF(nF='Nt', root=tile); Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=1; Nt.H=tile.H; tile.Nt=Nt; tile.dTT=TT; tile.c=C; L=len(G_)
         if vt_(TT,ttVct)[0]*(wFrm*L) > ave * (cFrm*L):  # L for trans-comp only?
-            oF = CoF.get(); oF.N_=[N for G in G_ for N in G.N_]; oF.dTT=TT; oF.c+=C; oF.r+=R
             return tile
 
 def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary/skeleton?
@@ -760,7 +755,6 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
             else:
                 for N in n_: N.fin=0; N.root=root
     if sum(vt_(TT,root.wTT*ttTrc))*wTrc > (ave+avd)*(r+1+cTrc): _G_+=G_; _TT+=TT;_C+=C  # eval per edge, concat in tile?
-    oF = CoF.get(); oF.N_= G_ or N_; oF.dTT=_TT; oF.c+=_C; oF.r+=r+R/_C
     return _G_, _TT, _C, r+R/_C
 
 '''
@@ -838,9 +832,7 @@ def proj_N(N, dist, A, r, _c, dec=1):  # arg rc += N.rc+Nw, recursively specify 
     for L in N.rim:
         proj_TT(L, cos_d,dist,L.r+r,eTT,wTT,dec); c+=L.c
     pTT = iTT + eTT  # proj int,ext links, work the same?
-    oF = CoF.get(); oF.N_=[N]; oF.dTT=pTT; oF.c+=_c; oF.r+=r
-
-    return pTT, c* decay ** (1+ dist/N.span)  # only c decays? info_gain = N.m * average link uncertainty, should be separate
+    return pTT, c* decay ** (1+ dist/N.span), [N], _c, r   # only c decays? info_gain = N.m * average link uncertainty, should be separate
 
 def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
 
@@ -852,7 +844,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
         T_ = []
         while T and sum(vt_(T.dTT, T.wTT*ttFrm*T.c)) * wFrm > (ave+avd)*(T.r+(cFrm*T.c)):
             frame[y,x]=T; T_+=[T]; dy_dx = T.box[2:] -T.box[:2]
-            pTT, pc = proj_N(T, np.hypot(*dy_dx), dy_dx, elev, T.c)
+            pTT, pc, *_ = proj_N(T, np.hypot(*dy_dx), dy_dx, elev, T.c)
             if 0 < sum(vt_(pTT, T.wTT*ttFrm)) * (wFrm*pc) < ave * (cFrm*T.c):
                 proj_focus(PV__,y,x, T)
                 pv__ = PV__.copy(); pv__[frame != None] = 0
@@ -913,9 +905,7 @@ def pack_seg(frame, nF, w, c, _dTT):  # drift-gated regime termination for aH an
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
     trace_func(vars()); comp_slice = CoF.traced(comp_slice); slice_edge = CoF.traced(slice_edge)
-
     parse_funcs(["agg_recursion.py","comp_slice.py","slice_edge.py"])  # populate nF_
-    F_body_()  # fill with AST
     Y, X = imread('./images/toucan.jpg').shape
     frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -31, iX=X//2 -31, Ly=64,Lx=64, Y=Y, X=X, rV=1, ffb=1)
     # search frames ( tiles inside image, at this size it should be 4K, or 256K panorama, won't actually work on toucan
