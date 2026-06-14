@@ -146,7 +146,10 @@ def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
                     C0,C1 = L.N_
                     if C0 is C1 or C1 in merg_ or C0 in merg_: continue  # not merged
                     add2F(C0,C1,1); merg_ += [C1]
-                    for l in C1.rim: l.N_ = [C0 if n is C1 else n for n in l.N_]
+                    for l in C1.rim: 
+                        l.N_ = [C0 if n is C1 else n for n in l.N_]  # replace nt
+                        if l not in C0.rim: C0.rim += [l]  # merge rim
+                    for n in C1.N_: n.root_[n.root_.index(C1)] = C0  # the position of m and d should remain the same, and only root_ needs to be updated
                 else: L_ = L_[i:]; break
             if merg_: N_ = list(set(N_) - set(merg_))
     else:
@@ -185,7 +188,7 @@ def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None, L_=None, N_=None
             for i,(_Ft,Ft, tnF) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct),('Nt','Lt','Bt','Ct'))):
                 if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1  # unique Nt,Lt, rL spec in comp_F
         if dn_:
-            [add_H(L.H, d.H, L) for d in dn_ if d.H]
+            [add_H(L.H, d.H, L) for d in dn_ if d.H]  # mostly empty here, except agg+++
             L.H += [sum2F(dn_,None)]  # top lev
             if len(L.H)==1 and _N.H and N.H: comp_H(_N.H,N.H,L)  # cheap version if no deeper comp_N
     if full:
@@ -207,7 +210,7 @@ def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None, L_=None, N_=None
 def comp_F(_F, F, ir=0, rL=None):
 
     ddTT = comp_derT(_F.dTT[1],F.dTT[1]); r=(_F.r+F.r)/2; m,d = vt_(ddTT,ttF); r+=ir
-    dF = CF(dTT=ddTT, m=m,d=d,r=r,c=min(_F.c,F.c),nF=F.nF)
+    dF = CF(dTT=ddTT, m=m,d=d,r=r,c=min(_F.c,F.c),nF=F.nF); dF.H = []
     if _F.nF == F.nF:  # sub-comp
         _N_,N_=_F.N_,F.N_; nF=F.nF; l = nF=='Lt'
         if  _N_ and N_:
@@ -301,8 +304,8 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
         return M, D
     def trans_cluster(G):
         for L in G.L_:
-            if hasattr(L, 'Nt'):  # has subcomp
-                for tFt in L.Nt,L.Bt,L.Ct:  # Lt doesn't form trans-links, Ct is not root-constrained?
+            for lev in L.H:  # each lev.N_ packs subs from Nt, Bt and Ct forks
+                for tFt in lev.N_:  # Lt doesn't form trans-links, Ct is not root-constrained?
                     for tL in tFt.N_:
                         if tL.m*wcN> ave*ccN:  # merge trans_link.N_.roots
                             rt0 = getattr(tL.N_[0].root,'root',None); rt1 = getattr(tL.N_[1].root,'root',None)  # CNs
@@ -411,7 +414,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
         for n in [N for C in out_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals:
             n.exe = (n.d if n.typ==1 else n.m) + np.sum(n.m_) - ave
         if vt_(DTT,Ft.root.wTT*ttcC)[0]*wcC*(len(out_)-1) > ave*(r+ccC*(len(out_)-1)):
-            Ct = sum2F([F2N(C) for C in out_]); Ft.root.Ct = Ct; Ct.root = Ft.root
+            Ct = sum2F(out_); Ft.root.Ct = Ct; Ct.root = Ft.root
             _,r = cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
     return out_, r
 
@@ -461,7 +464,7 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
                 out_ += [C]
     if out_:
         dCt = sum2F(list(set(_C_)-set(out_)))  # compress, out_ for CoF?
-        return out_
+        return out_, dCt
 
 def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CC/CN
 
@@ -483,6 +486,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CC
                 if typ==3: box=copy(n.box)
     F = (cls_[typ])(c=C, r=R, nF=nF)
     if isinstance(F, CN): F.Nt.dTT = copy(TT); F.Nt.c = C; F.Nt.r = R  # update Nt's params
+    else: F.dTT = copy(TT); F.c = C; F.r = R  # this is missed out?
     if typ:
         F.N_ = n_; F.kern=kern; F.span=span; F.yx=yx
         if angl is not None: F.angl = [angl, np.sign(F.dTT[1] @ ttcP[1])]
@@ -823,7 +827,7 @@ def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N
     if hasattr(N.Ct,'Lt') and N.Ct.Lt:
         for L in N.Ct.Lt.N_: proj_TT(L,cos_d,dist,L.r+_r,iTT,wTT,dec); c+=L.c
     for L in N.rim:
-        proj_TT(L, cos_d,dist,L.r+r,eTT,wTT,dec); c+=L.c
+        proj_TT(L, cos_d,dist,L.r+_r,eTT,wTT,dec); c+=L.c
     pTT = iTT + eTT  # proj int,ext links, work the same?
     return pTT, c* decay ** (1+ dist/N.span), [N],_c,_r   # only c decays? info_gain = N.m * average link uncertainty, should be separate
 

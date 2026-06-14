@@ -105,6 +105,7 @@ class CL(CF):  # typ=1, add kern+positionals for base comp, Rt,Nt,Bt,Ct from com
         l.span = kw.get('span',1)  # distance in nodet or aRad, comp with kern or len(N_)
         l.angl = kw.get('angl',None)  # (dy,dx),dir, sum from L_, rarely?
         l.typ  = kw.get('typ',1)
+        l.H = kw.get('H',[])  # default in L now 
 
 class CC(CL):  # typ=2, adds arrays per N_
     name = "cent"
@@ -133,7 +134,7 @@ class CN(CL):  # full node | graph fork set
         n.compared = kw.get('compared',set())
         n.root_ = kw.get('root_',[])  # reciprocal roots, Cs not Bs?
         n.typ = kw.get('typ',3)  # full comp
-        n.H = kw.get('H',[])  # hierarchy= packed N_s: lower CFs / Nt||Ct, may be nested
+        # n.H = kw.get('H',[])  # hierarchy= packed N_s: lower CFs / Nt||Ct, may be nested
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.c)
 
@@ -162,15 +163,20 @@ class CoF(CF):
             _oF = CoF._cur.set(oF)
             out = func(*a, **kw)
             if out:
+                # comp_slice and slice_edge are added from the function body?
                 _TT,_c = (_CoF.dTT,_CoF.c) if _CoF is not None else (np.zeros((2,9)),0)
                 N_,TT,c,r = [],np.zeros((2,9)),0,1
                 if isinstance(out, tuple):
-                    if isinstance(out[0], np.ndarray): TT,_,N_,c,r = out  # for proj_N
+                    if func.__name__ == 'cluster_P': TT,c,r = out[1].dTT, out[1].c, out[1].r  # from dCt
+                    elif isinstance(out[0], np.ndarray): TT,_,N_,c,r = out  # for proj_N
                     elif N_ := out[0]: TT,c,r = sum_vt(N_)  # default
                 elif isinstance(out, set):
                     if N_:= list(out): TT,c,r = sum_vt(N_)  # get_exemplar
+                elif isinstance(out, CF):  # frame_H, vect_edge, comp_N, comp_F
+                    if func.__name__ == 'vect_edge': N_, TT, c, r = out.N_, out.Nt.dTT, out.Nt.c, out.Nt.r  # get from tile.Nt instead
+                    else: N_, TT, c, r  = [out], out.dTT, out.c, out.r
                 # all this should be computed for the output?
-                dc = (_c-c) or eps; oF.c = dc; oF.dTT = (_TT*_c-TT*c) / dc
+                dc = (c-_c) or eps; oF.c = dc; oF.r = r; oF.dTT = (TT*c-_TT*_c) / dc  # should be out - root?
             if oF.call_:
                 tree = flat_(oF)  # if len(tree)-1?
                 sum2O(tree,oF,fcall_=1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)
