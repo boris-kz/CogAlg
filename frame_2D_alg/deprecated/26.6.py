@@ -190,3 +190,23 @@ def fill_frame(_iy,_ix, elev, T):  # seed tile is lower frame if elev else pixel
                 return T_,C,R
         return [], 0, 0
 
+def comp_N():
+    if N.typ and m* wN_*c > ave*(r+cN_):  # skip PPs
+        sub_ = []  # cross_comp N_| Fts -> top Lev
+        if N.typ==1:  # L
+            for _n,n in product(_N.N_,N.N_): sub_ += [comp_N(_n,n,r,c, rL=L)]  # CN L.nt, rL spec in comp.N
+        else:
+            for i,(_Ft,Ft, tnF) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct),('Nt','Lt','Bt','Ct'))):
+                if _Ft and Ft: sub_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1  # unique Nt,Lt, rL spec in comp_F
+        # if sub_:
+        for tLev in L.H:  # trans-levs added above
+            ffb = 0
+            for tFt in tLev.N_:  # trans-forks
+                if tFt.N_:  # curr fb_, python-batched bottom-up
+                    ffb = 1; tFt.dTT,tFt.c,tFt.r = sum_vt(tFt.N_)  # update tFt
+            if ffb: tLev.dTT,tLev.c,tLev.r = sum_vt(tLev.N_)  # update tLev, no L+=Ft
+'''
+oF.m = val dTT, or
+if proj comp: F.root.wTT *= rdpTT * (F.c/ F.root.c)  # c-weighted feedback
+if select clust: (F.m - F.root.Lt.m) * (F.root.c-Ft.c)  # clustering value = loss reduction: root.Lt.m < selective F.m, add dval? 
+'''

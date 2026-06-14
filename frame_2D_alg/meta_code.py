@@ -161,6 +161,16 @@ class CoF(CF):
                 oF_[iF_[func.__name__]].caller_.add(_CoF)  # for comp_caller_
             _oF = CoF._cur.set(oF)
             out = func(*a, **kw)
+            if out:
+                _TT,_c = (_CoF.dTT,_CoF.c) if _CoF is not None else (np.zeros((2,9)),0)
+                N_,TT,c,r = [],np.zeros((2,9)),0,1
+                if isinstance(out, tuple):
+                    if isinstance(out[0], np.ndarray): TT,_,N_,c,r = out  # for proj_N
+                    elif N_ := out[0]: TT,c,r = sum_vt(N_)  # default
+                elif isinstance(out, set):
+                    if N_:= list(out): TT,c,r = sum_vt(N_)  # get_exemplar
+                # all this should be computed for the output?
+                dc = (_c-c) or eps; oF.c = dc; oF.dTT = (_TT*_c-TT*c) / dc
             if oF.call_:
                 tree = flat_(oF)  # if len(tree)-1?
                 sum2O(tree,oF,fcall_=1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)
