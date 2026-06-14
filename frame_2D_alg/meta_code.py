@@ -135,7 +135,6 @@ class CN(CL):  # full node | graph fork set
         n.typ = kw.get('typ',3)  # full comp
         n.H = kw.get('H',[])  # hierarchy= packed N_s: lower CFs / Nt||Ct, may be nested
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
-
     def __bool__(n): return bool(n.c)
 
 class CoF(CF):
@@ -163,35 +162,15 @@ class CoF(CF):
             _oF = CoF._cur.set(oF)
             out = func(*a, **kw)
             if out:
-                if _CoF is not None:  _TT, _c  = _CoF.dTT, _CoF.c    
-                else:                 _TT, _c = np.zeros((2,9)), 0       
-                N_, TT, c, r = [], np.zeros((2,9)), 0, 1
-                if isinstance(out, tuple): 
-                    if isinstance(out[0], np.ndarray): 
-                        TT, _, N_, c, r = out  # unique case for proj_N
-                    else:                              
-                        N_ = out[0]
-                        if N_: TT, c, r = sum_vt(N_) 
-                elif isinstance(out, set):  # get_exemplar
-                    N_ = list(out)
-                    if N_: TT, c, r = sum_vt(N_) 
-                else:    
-                    if isinstance(out, list):  # PPt_, from comp_slice
-                        N_ = out
-                        for PPt in out:
-                            P_,L_,B_,verT,latT,A,S,box,yx, m,d,c = PPt
-                            [mM, mD, mI, mG, mA, mL], [dM, dD, dI, dG, dA, dL] = verT  # re-pack in dTT:
-                            TT += np.array([ np.array([mM, mD, mL, mI, mG, mA, mL, mL / 2, 0]),  # extA=0
-                                             np.array([dM, dD, dL, dI, dG, dA, dL, dL / 2, 0])])
-                            c += c
-                    elif not isinstance(out, CF):  # edge, from slice_edge
-                        I, G, Dy, Dx, Y, X = out.latuple
-                        # we only have kern here, not sure how to compute delta TT
-                        out.c = len(out.P_)
-                    else:    
-                        N_ += [out]; TT, c, r = sum_vt(N_)  # CF or edge from slice_edge
-                oF.dTT = (TT*c - _TT*_c) / eps_(_TT*_c)  # why dTT is current - root, while c is root - current?
-                oF.c   = _c - c; oF.r = r; oF.N_ = N_
+                _TT,_c = (_CoF.dTT,_CoF.c) if _CoF is not None else (np.zeros((2,9)),0)
+                N_,TT,c,r = [],np.zeros((2,9)),0,1
+                if isinstance(out, tuple):
+                    if isinstance(out[0], np.ndarray): TT,_,N_,c,r = out  # for proj_N
+                    elif N_ := out[0]: TT,c,r = sum_vt(N_)  # default
+                elif isinstance(out, set):
+                    if N_:= list(out): TT,c,r = sum_vt(N_)  # get_exemplar
+                # all this should be computed for the output?
+                dc = (_c-c) or eps; oF.c = dc; oF.dTT = (_TT*_c-TT*c) / dc
             if oF.call_:
                 tree = flat_(oF)  # if len(tree)-1?
                 sum2O(tree,oF,fcall_=1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)

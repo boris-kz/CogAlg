@@ -80,11 +80,7 @@ def cross_comp(root, rr):  # core function mediating recursive rng+ and der+ cro
                 if vt_(TT,tAgg)[0]*(wAgg*L) > ave* (r+cAgg*L):
                     G_,r = cross_comp(root.Nt,r) # agg+
     return G_, r  # -> traced, + gating val?
-'''
-oF.m = val dTT, or
-if proj comp: F.root.wTT *= rdpTT * (F.c/ F.root.c)  # c-weighted feedback
-if select clust: (F.m - F.root.Lt.m) * (F.root.c-Ft.c)  # clustering value = loss reduction: root.Lt.m < selective F.m, add dval? 
-'''
+
 def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, max dist depends on prior match
 
     pairs, TT,cm,rm = [],np.zeros((2,9)), 0,0
@@ -121,15 +117,14 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
                 Link = comp_N(_N,N, lr,c,full=not tnF, A=dy_dx, span=dist, rL=root,L_=L_,N_=N_, acc=acc)
                 Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT)  # relative prediction error to fit oF, direction-agnostic
             else:
-                # why this is CN here?
                 pL = CL(typ=-1, dTT=pTT,m=m,d=d,c=c,r=lr, angl=[dy_dx,1],span=dist); pL.N_ = [_N,N]
-                L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.N_; acc[0]+=pTT*pL.c; acc[1]+=pL.c; acc[2]+=pL.r*pL.c  # all +ve
-                # no oF val, ~= links in clustering
+                L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.N_; acc[0]+=pTT*pL.c; acc[1]+=pL.c; acc[2]+=pL.r*pL.c
+                # oF.N_ is +-Ls?
         else: break  # beyond initial induction range, re-sort by proj_V?
     for N in set(N_):
         if N.rim: N.Rt = sum2F(N.rim)
     TT,cm,rm, TTd,cd,rd = acc
-    return L_,TT,cm,rm/(cm or eps)  # oF.N_ should be +-Ls, !pLs
+    return L_,TT,cm,rm/(cm or eps)  # oF.N_=L_, !pLs
 
 def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s, levels
 
@@ -144,7 +139,7 @@ def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
             else:
                 dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx)
                 comp_N(_C,C,_r,c, A=dy_dx,span=dist,L_=L_,N_=N_,acc=acc)
-        if fC: # merge similar distant centroids
+        if fC:  # merge
             L_ = sorted(L_, key=lambda dC: dC.d); _C_= C_; C_, merg_ = [],[]  # from min D
             for i, L in enumerate(L_):
                 if vt_(L.dTT,ttF)[0]*wF < avd*(_r+cF):
@@ -182,29 +177,26 @@ def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None, L_=None, N_=None
 
     TT= base_comp(_N,N)[0] if full else comp_derT(_N.dTT[1],N.dTT[1]); m,d = vt_(TT, ttN_)
     L = CL(N_=[_N,N], dTT=TT,m=m,d=d,c=c,r=r, root=rL)
-    if N.typ==3 and _N.typ==3 and m*wF > ave*(r+cF):
-        dH,htt,C,R = comp_H(_N,N, L); c+=C; r+=R; m+= vt_(htt,ttN_)[0]  # tentative dH, replace if subcomp
-    if N.typ and m*wN_ > ave*(r+cN_):  # skip PPs
-        # F2N(L)  # add tFs for subcomp ( the previous update is not included?)
-        for ft in ('Nt','Lt','Ct','Bt','Xt','Rt'): setattr(L, ft, CF(root=L))
-        if N.typ==1:
-            for _n,n in product(_N.N_,N.N_): L.Nt.fb_ += [comp_N(_n,n,r,c)]  # link sub-comp
+    if N.typ and m* wN_*c > ave*(r+cN_):  # skip PPs
+        dn_ = []  # cross_comp N_|Ft_ -> top dLev
+        if N.typ == 1:
+            for _n,n in product(_N.N_,N.N_): dn_ += [comp_N(_n,n,r,c, rL=L)]  # CN L.nt, rL spec in comp.N
         else:
             for i,(_Ft,Ft, tnF) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct),('Nt','Lt','Bt','Ct'))):
-                if _Ft and Ft:  # sub-comp
-                    dFt = comp_F(_Ft,Ft,r,L); getattr(L,tnF).fb_ += dFt.N_  # tFt feedback
-                    r += (i or 1) -1  # Nt,Lt are not redundant
-        for fb_, nF in zip((L.Nt.fb_,L.Lt.fb_,L.Bt.fb_,L.Ct.fb_), ('Nt','Lt','Bt','Ct')):
-            if fb_: # L.Ft += trans-Ls, python-batched bottom-up:
-                sum2F(fb_,getattr(L,nF))  # keep L.N_, no L+=Ft
+                if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1  # unique Nt,Lt, rL spec in comp_F
+        if dn_:
+            [add_H(L.H, d.H, L) for d in dn_ if d.H]
+            L.H += [sum2F(dn_,None)]  # top lev
+            if len(L.H)==1 and _N.H and N.H: comp_H(_N.H,N.H,L)  # cheap version if no deeper comp_N
     if full:
         if span is None: span = np.hypot(*_N.yx - N.yx)
         yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
         box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
         angl = [A, np.sign(TT[1] @ ttN_[1])]
         L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2
-    for n, _n in (_N,N),(N,_N):
-        n.rim += [L]; n.compared.add(_n)  # or unique comps?
+    if N.typ==3:
+        for n, _n in (_N,N),(N,_N):
+            n.rim += [L]; n.compared.add(_n)  # or unique comps?
     if L_ is not None:
         N_+= [_N,N]  # for sum_vt(rim)
         if   L.m > ave: acc[0]+=L.dTT*L.c; acc[1]+=L.c; acc[2]+=L.r*L.c; L_ += [L];
@@ -215,7 +207,7 @@ def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None, L_=None, N_=None
 def comp_F(_F, F, ir=0, rL=None):
 
     ddTT = comp_derT(_F.dTT[1],F.dTT[1]); r=(_F.r+F.r)/2; m,d = vt_(ddTT,ttF); r+=ir
-    dF = CF(dTT=ddTT, m=m,d=d,r=r,c=min(_F.c,F.c))
+    dF = CF(dTT=ddTT, m=m,d=d,r=r,c=min(_F.c,F.c),nF=F.nF)
     if _F.nF == F.nF:  # sub-comp
         _N_,N_=_F.N_,F.N_; nF=F.nF; l = nF=='Lt'
         if  _N_ and N_:
@@ -433,10 +425,19 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
         for c,m,d in zip(N.root_,N.m_,N.d_):
             if c: i= _C_.index(c); _md__[j,i] = m,d
     while True:
-        md__ = np.zeros_like(_md__)
+        md__ = np.zeros_like(_md__); O = 0
         for j,N in enumerate(N_):
             for i,C in enumerate(_C_):
-                TT,_ = base_comp(C,N); md__[j,i] = vt_(TT, ttcP)  # use rc?
+                TT,_ = base_comp(C,N); md__[j,i] = vt_(TT, ttcP)  # use rc? sum overlap to eval for split ) merge?
+        # split eval by higher-filter, diffs, still fully fuzzy?
+        if O:  # merge eval by comp_C_ to reduce redundancy:
+            merg_ = []
+            for _C, C in combinations(_C_,r=2):
+                if _C in merg_ or C in merg_: continue
+                c = min(C.c,_C.c); r = (C.r+_C.r)/2; dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx)
+                L = comp_N(_C,C,r,c, A=dy_dx,span=dist)
+                if vt_(L.dTT,ttF)[0]*wF < avd*(r+cF): add2F(_C,C,1); merg_ += [C]
+            _C_= list(set(_C_)-set(merg_))
         C_ = [sum2F(N_, root, md__[:,i,0], md__[:,i,1]) for i in range(Lc)]
         Mt = md__[:,:,0].sum()  # total V
         dM = np.abs(md__[:,:,0] -_md__[:,:,0]).sum()
@@ -459,15 +460,7 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
                     L.N_ = [N,C]; C.L_ += [L]
                 out_ += [C]
     if out_:
-        merg_ = []
-        for out in out_: F2N(out)
-        for _C, C in combinations(out_,r=2):
-            if _C in merg_ or C in merg_: continue
-            c = min(C.c,_C.c); r = (C.r+_C.r)/2; dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx)
-            L = comp_N(_C,C,r,c, A=dy_dx,span=dist)
-            if vt_(L.dTT,ttF)[0]*wF < avd*(r+cF): add2F(_C,C,1); merg_ += [C]  # we need to reset their rim for the next cross_comp?
-        out_= list(set(out_)-set(merg_))
-        dCt = sum2F(list(set(_C_)-set(out_)))  # compress
+        dCt = sum2F(list(set(_C_)-set(out_)))  # compress, out_ for CoF?
         return out_
 
 def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CC/CN
@@ -820,19 +813,19 @@ def proj_TT(L, cos_d, dist, r, pTT, wTT, dec=1, fdec=0, frec=0):  # accumulate l
         if TT is not None:
             pTT += np.array([TT[0] * dec, TT[1] * cos_d * dec])
 
-def proj_N(N, dist, A, r, _c, dec=1):  # arg rc += N.rc+Nw, recursively specify N projection val, add pN if comp_pN?
+def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N projection val, add pN if comp_pN?
 
     cos_d = (N.angl[0].dot(A) / ((np.hypot(*N.angl[0]) * dist) or eps)) * N.angl[1] if N.angl else 0  # int x ext angle alignment, mean=0
     iTT, eTT = np.zeros((2,9)),np.zeros((2,9)); c = 0
     wTT = CoF.get().wTT*ttPrj
     for L in N.L_+ N.B_:  # proj C-to-N links:
-        proj_TT(L, cos_d, dist, L.r+r, iTT, wTT, dec); c+=L.c  # accum iTT internally
+        proj_TT(L, cos_d, dist, L.r+_r, iTT, wTT, dec); c+=L.c  # accum iTT internally
     if hasattr(N.Ct,'Lt') and N.Ct.Lt:
-        for L in N.Ct.Lt.N_: proj_TT(L,cos_d,dist,L.r+r,iTT,wTT,dec); c+=L.c
+        for L in N.Ct.Lt.N_: proj_TT(L,cos_d,dist,L.r+_r,iTT,wTT,dec); c+=L.c
     for L in N.rim:
         proj_TT(L, cos_d,dist,L.r+r,eTT,wTT,dec); c+=L.c
     pTT = iTT + eTT  # proj int,ext links, work the same?
-    return pTT, c* decay ** (1+ dist/N.span), [N], _c, r   # only c decays? info_gain = N.m * average link uncertainty, should be separate
+    return pTT, c* decay ** (1+ dist/N.span), [N],_c,_r   # only c decays? info_gain = N.m * average link uncertainty, should be separate
 
 def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
 
@@ -872,9 +865,9 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
         if tile_: # sparse,2D
             Fr = sum2F(tile_)  # higher-scope tile( oH( aH
             if cross_comp(Fr.Nt, rr=0)[0]:  # spec-> tN_,tC_,tL_, proj comb N_'L_?
-                if elev and ffb:  # ffb=1 in main, no ffeedback in added tiles
-                    aTT,oTT = ffeedback(Fr, aTT,oTT)  # term,form oH(aH
-                elev +=1; T = Fr  # next-extension seed
+                if elev and ffb:  # ffb =1 in main, no ffeedback in added tiles
+                    Fr, aTT,oTT = ffeedback(Fr, aTT,oTT)  # term,form oH(aH
+                elev +=1; T=Fr  # next-extension seed
             else: break
         else: break
     return Fr  # intra-lev feedback
@@ -888,7 +881,7 @@ def ffeedback(frame, aTT,oTT):  # recompute filters from regime drift; fork: ref
         if oH := pack_seg(frame,'oH', wBac, cBac**2, oTT):
             split_oF_(); cluster_oF_()  # reform oF_
             oTT = oH.dTT
-    return frame, aTT,oTT  # frame=node
+    return frame, aTT,oTT  # frame in oF.N_?
 
 def pack_seg(frame, nF, w, c, _dTT):  # drift-gated regime termination for aH and oH
 
