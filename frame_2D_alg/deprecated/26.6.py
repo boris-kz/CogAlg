@@ -210,3 +210,51 @@ oF.m = val dTT, or
 if proj comp: F.root.wTT *= rdpTT * (F.c/ F.root.c)  # c-weighted feedback
 if select clust: (F.m - F.root.Lt.m) * (F.root.c-Ft.c)  # clustering value = loss reduction: root.Lt.m < selective F.m, add dval? 
 '''
+def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine, may add proj_C
+
+    cnt = 0  # r = root.r+1?:
+    N_ = list(set([N for C in _C_ for N in C.N_]))  # all Ns are in all Cs
+    Ln,Lc = len(N_),len(_C_); L=Lc*Ln  # localy constant
+    _md__ = np.zeros((Ln, Lc, 2))  # NxC
+    for j, N in enumerate(N_):
+        for c,m,d in zip(N.root_,N.m_,N.d_):
+            if c: i= _C_.index(c); _md__[j,i] = m,d
+    while True:
+        md__ = np.zeros_like(_md__); O = 0
+        for j,N in enumerate(N_):
+            for i,C in enumerate(_C_):
+                TT,_ = base_comp(C,N); md__[j,i] = vt_(TT, ttcP)  # use rc?
+                # sum overlap to eval for split ) merge?
+        if O:   # merge eval by comp to reduce redundancy, split eval by higher filter
+            mrg_ = []
+            for _C, C in combinations(_C_,r=2):
+                if _C in mrg_ or C in mrg_: continue  # not needed?
+                c = min(C.c,_C.c); r = (C.r+_C.r)/2; dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx)
+                L = comp_N(_C,C,r,c, A=dy_dx,span=dist)
+                if L.m*wF < avd*(r+cF): add2F(_C,C,1); mrg_ += [C]
+            _C_= list(set(_C_)-set(mrg_))
+        C_ = [sum2F(N_, root, md__[:,i,0], md__[:,i,1]) for i in range(Lc)]
+        Mt = md__[:,:,0].sum()  # total V
+        dM = np.abs(md__[:,:,0] -_md__[:,:,0]).sum()
+        dD = np.abs(md__[:,:,1] -_md__[:,:,1]).sum()  # updates
+        cnt += 1
+        if Mt * (dM+dD) * (wcP*L) > ave * (root.r+ccP*L):
+            _C_ = C_; _md__ = md__
+        else: break  # weak * converged
+    out_ = []
+    for N in N_: N.root_ = []  # replace with out_ Cs:
+    for i, _C in enumerate(C_):
+        if _C.m > ave * _C.r:  # prune, add olp as stronger ms?
+            N_,m_,d_ = [],[],[]
+            for N, m,d in zip(_C.N_, md__[:,i,0], md__[:,i,1]):
+                if m*N.c > ave*N.r: N_+=[N]; m_+=[m]; d_+=[d]
+            if N_:
+                C = sum2F(N_,root, m_,d_)
+                for N in N_:
+                    L = CN(typ=1, dTT=N.dTT,c=N.c,r=N.r,m=N.m,d=N.d, span=np.hypot(*(dy_dx:=C.yx-N.yx)), angl=[dy_dx,np.sign(N.dTT[1]@ttcN[1])])
+                    L.N_ = [N,C]; C.L_ += [L]
+                out_ += [C]
+    if out_:
+        dCt = sum2F(list(set(_C_)-set(out_)))  # compress, out_ for CoF?
+        return out_, dCt
+

@@ -31,12 +31,7 @@ def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
         else:    m-= ave*R; d-= avd*R  # in -1:1 without r
         return   m,d,TT,C,R
     else: return TT,C,R
-'''
-    oF = CoF.get()
-    C = oF.c + L.c + L.Nt.c + L.Lt.c + L.Bt.c + L.Ct.c; dTT, R = np.zeros((2,9))
-    for F in oF, L, L.Nt, L.Lt, L.Bt, L.Ct: rc = F.c/C; dTT+=F.dTT*rc; R+=F.r*rc
-    oF.N_ += [L]; oF.dTT=dTT; oF.c=C; oF.r=R
-'''
+
 wcO, ccO = 5,5  # temporary
 ave_C, wL = 3,3
 costs = {  # types
@@ -87,11 +82,11 @@ class CF(CBase):  # clustering fork: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, 
         super().__init__()
         if not hasattr(f,'N_'): f.N_ = kw.get('N_',[])  # flat top lev, calls in oF, all sub-forks added conditionally
         if not hasattr(f,'L_'): f.L_ = kw.get('L_',[])  # +-Ls in levs or cLs in C
+        f.H = kw.get('H',[])  # hierarchy = packed N_ | L_s: lower CFs / Nt||Ct, may be nested
         f.nF = kw.get('nF','Nt')
         f.dTT = kw.get('dTT',np.zeros((2,9))); f.m, f.d, f.c, f.r = [kw.get(x,0) for x in ('m','d','c','r')]  # rdpTT in oF?
         f.wTT = kw.get('wTT',wTT)  # mean wTT = 1?
         f.w = kw.get('w',0)  # membership weight
-        f.fb_ = kw.get('fb_',[])
         f.typ = kw.get('typ',0)  # blocks sub_comp
         f.root = kw.get('root',None)  # convert to list in typ oFs?
     def __bool__(f): return bool(f.c)  # N_ may be empty?
@@ -133,7 +128,6 @@ class CN(CL):  # full node | graph fork set
         n.compared = kw.get('compared',set())
         n.root_ = kw.get('root_',[])  # reciprocal roots, Cs not Bs?
         n.typ = kw.get('typ',3)  # full comp
-        n.H = kw.get('H',[])  # hierarchy= packed N_s: lower CFs / Nt||Ct, may be nested
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.c)
 
@@ -160,17 +154,7 @@ class CoF(CF):
                 _CoF.call_ += [oF]
                 oF_[iF_[func.__name__]].caller_.add(_CoF)  # for comp_caller_
             _oF = CoF._cur.set(oF)
-            out = func(*a, **kw)
-            if out:
-                _TT,_c = (_CoF.dTT,_CoF.c) if _CoF is not None else (np.zeros((2,9)),0)
-                N_,TT,c,r = [],np.zeros((2,9)),0,1
-                if isinstance(out, tuple):
-                    if isinstance(out[0], np.ndarray): TT,_,N_,c,r = out  # for proj_N
-                    elif N_ := out[0]: TT,c,r = sum_vt(N_)  # default
-                elif isinstance(out, set):
-                    if N_:= list(out): TT,c,r = sum_vt(N_)  # get_exemplar
-                # all this should be computed for the output?
-                dc = (_c-c) or eps; oF.c = dc; oF.dTT = (_TT*_c-TT*c) / dc
+            if out := func(*a, **kw): oF.N_, oF.TT, oF.c, oF.r = out
             if oF.call_:
                 tree = flat_(oF)  # if len(tree)-1?
                 sum2O(tree,oF,fcall_=1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)

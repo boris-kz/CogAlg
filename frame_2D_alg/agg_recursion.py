@@ -130,6 +130,7 @@ def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
 
     N_,L_,tc,tr = [],[],0,0; acc = [np.zeros((2,9)),0,0,np.zeros((2,9)),0,0]
     if fall:
+        mrg_ = []
         pairs = product(C_,_C_) if _C_ else combinations(C_,r=2)  # comp between | within list
         for _C, C in pairs:
             c = min(C.c,_C.c); r = (C.r+_C.r)/2  # comp weight
@@ -138,17 +139,11 @@ def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
                 dtt = np.array([C.dTT[1],np.zeros(9)]); acc[0]+=dtt; acc[1]+=c; acc[2]+=1  # overlap=match
             else:
                 dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx)
-                comp_N(_C,C,_r,c, A=dy_dx,span=dist,L_=L_,N_=N_,acc=acc)
-        if fC:  # merge
-            L_ = sorted(L_, key=lambda dC: dC.d); _C_= C_; C_, merg_ = [],[]  # from min D
-            for i, L in enumerate(L_):
-                if vt_(L.dTT,ttF)[0]*wF < avd*(_r+cF):
-                    C0,C1 = L.N_
-                    if C0 is C1 or C1 in merg_ or C0 in merg_: continue  # not merged
-                    add2F(C0,C1,1); merg_ += [C1]
-                    for l in C1.rim: l.N_ = [C0 if n is C1 else n for n in l.N_]
-                else: L_ = L_[i:]; break
-            if merg_: N_ = list(set(N_) - set(merg_))
+                L = comp_N(_C,C,_r,c, A=dy_dx,span=dist,L_=L_,N_=N_,acc=acc)
+                if fC and L.m*wF > ave*(L.r+cF):
+                    add2F(_C,C,1); mrg_ += [C]  # may not already be merged
+                    for n in C.N_: n.root_[n.root_.index(C)] = _C  # keep m,d positions
+            if mrg_: N_ = list(set(N_) - set(mrg_))
     else:
         # adjacent | distance-constrained cross_comp along eigenvector: sort by max attr, or original yx in sub+, proj C.L_?
         for C in C_: C.compared=set()
@@ -185,9 +180,9 @@ def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None, L_=None, N_=None
             for i,(_Ft,Ft, tnF) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct),('Nt','Lt','Bt','Ct'))):
                 if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1  # unique Nt,Lt, rL spec in comp_F
         if dn_:
-            [add_H(L.H, d.H, L) for d in dn_ if d.H]
+            [add_H(L.H, d.H, L) for d in dn_ if d.H]  # lower levs
+            if not L.H and _N.H and N.H: comp_H(_N.H, N.H, L)  # cheap version if no deeper comp_N?
             L.H += [sum2F(dn_,None)]  # top lev
-            if len(L.H)==1 and _N.H and N.H: comp_H(_N.H,N.H,L)  # cheap version if no deeper comp_N
     if full:
         if span is None: span = np.hypot(*_N.yx - N.yx)
         yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
@@ -301,8 +296,8 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
         return M, D
     def trans_cluster(G):
         for L in G.L_:
-            if hasattr(L, 'Nt'):  # has subcomp
-                for tFt in L.Nt,L.Bt,L.Ct:  # Lt doesn't form trans-links, Ct is not root-constrained?
+            for lev in L.H:
+                for tFt in lev.N_:  # Lt doesn't form trans-links, Ct is not root-constrained?
                     for tL in tFt.N_:
                         if tL.m*wcN> ave*ccN:  # merge trans_link.N_.roots
                             rt0 = getattr(tL.N_[0].root,'root',None); rt1 = getattr(tL.N_[1].root,'root',None)  # CNs
@@ -411,41 +406,45 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
         for n in [N for C in out_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals:
             n.exe = (n.d if n.typ==1 else n.m) + np.sum(n.m_) - ave
         if vt_(DTT,Ft.root.wTT*ttcC)[0]*wcC*(len(out_)-1) > ave*(r+ccC*(len(out_)-1)):
-            Ct = sum2F([F2N(C) for C in out_]); Ft.root.Ct = Ct; Ct.root = Ft.root
+            Ct = sum2F(out_); Ft.root.Ct = Ct; Ct.root = Ft.root
             _,r = cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
     return out_, r
 
-def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine, may add proj_C
+def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
 
-    cnt = 0  # r = root.r+1?:
-    N_ = list(set([N for C in _C_ for N in C.N_]))  # all Ns are in all Cs
-    Ln,Lc = len(N_),len(_C_); L=Lc*Ln  # localy constant
-    _md__ = np.zeros((Ln, Lc, 2))  # NxC
+    cnt = 0; Ln = len(N_:= list(set([N for C in _C_ for N in C.N_])))  # all Ns are in all Cs
+    _md__ = np.zeros((Ln, len(_C_), 2))  # NxC, cols aligned to _C_
     for j, N in enumerate(N_):
         for c,m,d in zip(N.root_,N.m_,N.d_):
-            if c: i= _C_.index(c); _md__[j,i] = m,d
+            if c in _C_: _md__[j,_C_.index(c)] = m,d
     while True:
-        md__ = np.zeros_like(_md__); O = 0
+        Lc = len(_C_); L = Lc*Ln  # Lc,L,md__ per cycle since _C_ varies
+        md__ = np.zeros((Ln,Lc,2)); O = 0
         for j,N in enumerate(N_):
-            for i,C in enumerate(_C_):
-                TT,_ = base_comp(C,N); md__[j,i] = vt_(TT, ttcP)  # use rc? sum overlap to eval for split ) merge?
-        # split eval by higher-filter, diffs, still fully fuzzy?
-        if O:  # merge eval by comp_C_ to reduce redundancy:
-            merg_ = []
-            for _C, C in combinations(_C_,r=2):
-                if _C in merg_ or C in merg_: continue
-                c = min(C.c,_C.c); r = (C.r+_C.r)/2; dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx)
-                L = comp_N(_C,C,r,c, A=dy_dx,span=dist)
-                if vt_(L.dTT,ttF)[0]*wF < avd*(r+cF): add2F(_C,C,1); merg_ += [C]
-            _C_= list(set(_C_)-set(merg_))
-        C_ = [sum2F(N_, root, md__[:,i,0], md__[:,i,1]) for i in range(Lc)]
+            for i,C in enumerate(_C_): md__[j,i] = vt_(base_comp(C,N)[0], ttcP)
+            m_ = md__[j,:,0]; O += m_.sum() - m_.max()  # cross-C ambiguity, gates split/merge
+        C_ = [sum2F(N_, root, md__[:,i,0], md__[:,i,1]) for i in range(Lc)]  # mean shift, aligned to md__
         Mt = md__[:,:,0].sum()  # total V
-        dM = np.abs(md__[:,:,0] -_md__[:,:,0]).sum()
-        dD = np.abs(md__[:,:,1] -_md__[:,:,1]).sum()  # updates
+        conv = md__.shape==_md__.shape and Mt* np.abs(md__-_md__).sum()* (wcP*L) <= ave*(root.r+ccP*L)  # convergence
+        nC_, updt = C_,0
+        if O*wcP > ave*(root.r+ccP*L):  # redundancy|structure: revise count
+            mrg_,new_ = [],[]
+            for i,C in enumerate(C_):
+                if C in mrg_: continue
+                for _C in C_[i+1:]:  # merge redundant (similar) Cs
+                    if _C in mrg_: continue
+                    lk = comp_N(C,_C,(C.r+_C.r)/2, min(C.c,_C.c), A=(a:=_C.yx-C.yx), span=np.hypot(*a))
+                    if lk.m*wF > ave*(lk.r+cF): add2F(C,_C,1); mrg_+=[_C]
+                if C.d * wF > avd * (C.r+cF)*2:  # split C spanning 2 diff-modes, higher filter
+                    mpos = md__[:,i,1]>0  # member diff sign = side of principal axis
+                    for mask in (mpos,~mpos):
+                        sub = [N_[k] for k in np.where(mask)[0]]
+                        if sub: new_+= [sum2F(sub,root, md__[mask,i,0],md__[mask,i,1])]
+                    mrg_+=[C]
+            updt = bool(mrg_ or new_); nC_ = list(set(C_)-set(mrg_))+ new_
         cnt += 1
-        if Mt* (dM+dD)* (wcP*L) > ave* (root.r+ccP*L):
-            _C_ = C_; _md__ = md__
-        else: break  # weak * converged
+        if conv and not updt: break  # stable memberships & count: C_,md__ used below
+        _C_,_md__ = nC_,md__
     out_ = []
     for N in N_: N.root_ = []  # replace with out_ Cs:
     for i, _C in enumerate(C_):
@@ -461,7 +460,7 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
                 out_ += [C]
     if out_:
         dCt = sum2F(list(set(_C_)-set(out_)))  # compress, out_ for CoF?
-        return out_
+        return out_, dCt
 
 def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CC/CN
 
@@ -481,8 +480,8 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CC
             if typ:
                 kern=n.kern*w; span=n.span*w; yx=n.yx*w; angl = copy(n.angl[0]) if n.angl is not None else None
                 if typ==3: box=copy(n.box)
-    F = (cls_[typ])(c=C, r=R, nF=nF)
-    if isinstance(F, CN): F.Nt.dTT = copy(TT); F.Nt.c = C; F.Nt.r = R  # update Nt's params
+    F = (cls_[typ])(dTT=TT, c=C, r=R, nF=nF)
+    if typ==3: F.Nt.dTT = copy(TT); F.Nt.c = C; F.Nt.r = R  # redundant?
     if typ:
         F.N_ = n_; F.kern=kern; F.span=span; F.yx=yx
         if angl is not None: F.angl = [angl, np.sign(F.dTT[1] @ ttcP[1])]
@@ -823,7 +822,7 @@ def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N
     if hasattr(N.Ct,'Lt') and N.Ct.Lt:
         for L in N.Ct.Lt.N_: proj_TT(L,cos_d,dist,L.r+_r,iTT,wTT,dec); c+=L.c
     for L in N.rim:
-        proj_TT(L, cos_d,dist,L.r+r,eTT,wTT,dec); c+=L.c
+        proj_TT(L, cos_d,dist,L.r+_r,eTT,wTT,dec); c+=L.c
     pTT = iTT + eTT  # proj int,ext links, work the same?
     return pTT, c* decay ** (1+ dist/N.span), [N],_c,_r   # only c decays? info_gain = N.m * average link uncertainty, should be separate
 
