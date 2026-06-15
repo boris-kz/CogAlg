@@ -154,7 +154,7 @@ class CoF(CF):
                 _CoF.call_ += [oF]
                 oF_[iF_[func.__name__]].caller_.add(_CoF)  # for comp_caller_
             _oF = CoF._cur.set(oF)
-            if out := func(*a, **kw): oF.N_, oF.TT, oF.c, oF.r = out
+            if out := func(*a, **kw): *_, oF.N_, oF.dTT, oF.c, oF.r = out  # should be dTT?
             if oF.call_:
                 tree = flat_(oF)  # if len(tree)-1?
                 sum2O(tree,oF,fcall_=1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)
