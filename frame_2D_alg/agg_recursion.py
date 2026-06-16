@@ -170,19 +170,18 @@ def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None, L_=None, N_=None
             tt += ltt*lc; C+=lc; R+=lr*lc
         return dH,tt,C, (r* Link.c+R)/ (Link.c+C)  # same norm for tt?
 
-    TT= base_comp(_N,N)[0] if full else comp_derT(_N.dTT[1],N.dTT[1]); m,d = vt_(TT, ttN_)
+    TT = base_comp(_N,N)[0] if full else comp_derT(_N.dTT[1],N.dTT[1]); m,d = vt_(TT, ttN_)
     L = CL(N_=[_N,N], dTT=TT,m=m,d=d,c=c,r=r, root=rL)
-    if N.typ and m* wN_*c > ave*(r+cN_):  # skip PPs
-        dn_ = []  # cross_comp N_|Ft_ -> top dLev
-        if N.typ == 1:
+    if N.typ and m* wN_*c > ave*(r+cN_):  # skip PPs, maybe Nts?
+        dn_ = []  # cross_comp N_| Ft_-> top dLev
+        if N.typ <3:  # L | C | Nt?
             for _n,n in product(_N.N_,N.N_): dn_ += comp_N(_n,n,r,c, rL=L)[0]  # CN L.nt, rL spec in comp.N
-        elif N.typ == 3:
-            # skip Cs here? Cs don't have Fts?
+        else:  # CN
             for i,(_Ft,Ft, tnF) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct),('Nt','Lt','Bt','Ct'))):
                 if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)[0][0]]; r+=(i or 1)-1  # unique Nt,Lt, rL spec in comp_F
         if dn_:
             [add_H(L.H, d.H, L) for d in dn_ if d.H]  # lower levs
-            if not L.H and _N.H and N.H: comp_H(_N.H, N.H, L)  # cheap version if no deeper comp_N?
+            if not L.H and _N.H and N.H: comp_H(_N.H, N.H, L)  # cheap scan if no deeper comp_N?
             L.H += [sum2F(dn_,L)]  # top lev
     if full:
         if span is None: span = np.hypot(*_N.yx - N.yx)
@@ -411,6 +410,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
             *_,r = cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
     return out_, *sum_vt(out_)[:-1], r  # only r is from deeper cross_comp?
 
+# draft:
 def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
 
     cnt = 0; Ln = len(N_:= list(set([N for C in _C_ for N in C.N_])))  # all Ns are in all Cs
@@ -427,25 +427,23 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
         C_ = [sum2F(N_, root, md__[:,i,0], md__[:,i,1]) for i in range(Lc)]  # mean shift, aligned to md__
         Mt = md__[:,:,0].sum()  # total V
         conv = md__.shape==_md__.shape and Mt* np.abs(md__-_md__).sum()* (wcP*L) <= ave*(root.r+ccP*L)  # convergence
-        nC_, updt = C_,0
         if O*wcP > ave*(root.r+ccP*L):  # redundancy|structure: revise count
-            mrg_,new_ = [],[]
-            for i,C in enumerate(C_):
-                if C in mrg_: continue
-                for _C in C_[i+1:]:  # merge redundant (similar) Cs
-                    if _C in mrg_: continue
-                    lk = comp_N(C,_C,(C.r+_C.r)/2, min(C.c,_C.c), A=(a:=_C.yx-C.yx), span=np.hypot(*a))[0][0]
-                    if lk.m*wF > ave*(lk.r+cF): add2F(C,_C,1); mrg_+=[_C]
-                if C.d * wF > avd * (C.r+cF)*2:  # split C spanning 2 diff-modes, higher filter
-                    mpos = md__[:,i,1]>0  # member diff sign = side of principal axis
-                    for mask in (mpos,~mpos):  # max 2 split C per iteration
-                        sub = [N_[k] for k in np.where(mask)[0]]
-                        if sub: new_+= [sum2F(sub,root, md__[mask,i,0],md__[mask,i,1])]
-                    mrg_+=[C]
-            updt = bool(mrg_ or new_); nC_ = list(set(C_)-set(mrg_))+ new_
+            removed = []
+            for i,_C in enumerate(C_):
+                if _C in removed: continue
+                for C in C_[i+1:]:  # merge similar Cs
+                    if C in removed: continue
+                    l = comp_N(C,_C,(C.r+_C.r)/2, min(C.c,_C.c), A=(a:=_C.yx-C.yx), span=np.hypot(*a))[0][0]
+                    if l.m*wF > ave*(l.r+cF):
+                        add2F(_C,C,1); removed +=[C]
+            if removed: C_ = list(set(C_)-set(removed))
+        _C_ = [c for c in C_ if c.m * wcP > ave * c.r * ccP]  # prune
+        new_ = []  # draft seed Ns straddling >=2 Cs with strong ~equal m?
+        for j, N in enumerate(N_):
+            if np.sort(md__[j, :, 0])[-2:].min() * wcP > ave * (N.r + ccP): new_ += [Copy_(N, root, init=1, cls=CC)]
+        _md__ = md__
         cnt += 1
-        if conv and not updt: break  # stable memberships & count: C_,md__ used below
-        _C_,_md__ = nC_,md__
+        if conv: break  # stable memberships
     out_ = []
     for N in N_: N.root_ = []  # replace with out_ Cs:
     for i, _C in enumerate(C_):
@@ -777,7 +775,7 @@ def proj_focus(PV__, y,x, tile):  # radial accum of projected focus value in PV_
     V = (m-ave + d-avd) * c
     dy,dx = tile.angl[0]; a = dy / (dx or eps)  # average link_ orientation, projection
     Dec = decay ** (np.hypot(*(tile.box[2:]-tile.box[:2])) / wYX)
-    H, W = PV__.shape  # = win__
+    H,W = PV__.shape  # = win__
     n = 1  # radial distance
     while y-n>=0 and x-n>=0 and y+n<H and x+n<W:  # rim is within frame
         dec = Dec ** n
@@ -853,9 +851,9 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
                 return T_,C,R
         return [], 0, 0
 
-    global ave,avd; aTT=oTT=np.zeros((2,9))  # regime refs across levs, update / ffeedback
+    global ave,avd; aTT=oTT=np.zeros((2,9))  # regime refs across levs / ffeedback
     elev,Fr = 0,[]
-    if T := vect_edge(frame_blobs_root(comp_pixel(image[iY:iY+Ly, iX:iX+Lx]), rV), rV):  # init pixel tile
+    if T := vect_edge(frame_blobs_root(comp_pixel(image[iY:iY+Ly, iX:iX+Lx]), rV), rV):  # initial pixel tile
         T = T[0]; T.yx = np.array([iY+Ly//2, iX+Lx//2]); T.box = np.array([iY,iX, min(iY+Ly,Y), min(iX+Lx,X)]); T.span = np.hypot(Ly,Lx)/2
         if not cross_comp(T.Nt, rr=0)[0]:
             T = []
