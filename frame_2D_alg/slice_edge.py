@@ -49,9 +49,8 @@ def slice_edge(edge, rV=1):
         yx_ = [yx for yx in yx_ if yx not in edge.rootd]    # remove merged maxes if any
     edge.P_.sort(key=lambda P: P.yx, reverse=True)
     trace_P_adjacency(edge)
-    if __name__ != "__main__": del edge.rootd   # keep for visual verification in slice_edge only
-    oF = CoF.get(); oF.N_=edge.P_; oF.dTT=edge.latuple; oF.c=len(edge.P_); oF.r=1
-    return edge
+    if __name__ != "__main__": del edge.rootd  # for visual verification only
+    return edge, edge.P_, edge.latuple, len(edge.P_), 1  # latuple is not converted to TT format
 
 def select_max(edge):
     axisd = {}  # map yx to axis
