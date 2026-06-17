@@ -82,7 +82,7 @@ class CF(CBase):  # clustering fork: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, 
         super().__init__()
         if not hasattr(f,'N_'): f.N_ = kw.get('N_',[])  # flat top lev, calls in oF, all sub-forks added conditionally
         if not hasattr(f,'L_'): f.L_ = kw.get('L_',[])  # +-Ls in levs or cLs in C
-        f.H = kw.get('H',[])  # hierarchy = packed N_ | L_s: lower CFs / Nt||Ct, may be nested
+        f.H = kw.get('H',[])  # hierarchy = packed N_|L_s: lower CFs/ Nt||Ct, nestable, H[0]= redundant f.N_ if not empty
         f.nF = kw.get('nF','Nt')
         f.dTT = kw.get('dTT',np.zeros((2,9))); f.m, f.d, f.c, f.r = [kw.get(x,0) for x in ('m','d','c','r')]  # rdpTT in oF?
         f.wTT = kw.get('wTT',wTT)  # mean wTT = 1?
@@ -154,7 +154,8 @@ class CoF(CF):
                 _CoF.call_ += [oF]
                 oF_[iF_[func.__name__]].caller_.add(_CoF)  # for comp_caller_
             _oF = CoF._cur.set(oF)
-            if out := func(*a, **kw): *_, oF.N_, oF.dTT, oF.c, oF.r = out
+            if out := func(*a, **kw):
+                oF.N_, oF.dTT, oF.c, oF.r, oF.w = out[-1]  # w is gating val, then += vt_(dTT)[0]
             if oF.call_:
                 tree = flat_(oF)  # if len(tree)-1?
                 sum2O(tree,oF,fcall_=1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)

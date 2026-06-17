@@ -258,3 +258,30 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
         dCt = sum2F(list(set(_C_)-set(out_)))  # compress, out_ for CoF?
         return out_, dCt
 
+def ffeedback2(frame, aTT,oTT):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
+
+    global ave,avd
+    _aTT, _oTT = copy(aTT), copy(oTT)
+    if aH := pack_seg(frame,'aH',wBac, cBac, aTT):
+        ave, avd = vt_(aH.dTT)  # filters *= ave
+        aTT = aH.dTT
+        if oH := pack_seg(frame,'oH', wBac, cBac**2, oTT):
+            split_oF_(); cluster_oF_()  # reform oF_
+            oTT = oH.dTT
+    return frame, aTT+oTT, [frame], aTT+oTT, frame.c, frame.r, {}  # frame in oF.N_? (not sure, sum Tts here?)
+
+def proj_TT(L, cos_d, dist, r, pTT, wTT, dec=1, fdec=0, frec=0):  # accumulate link pTT with iTT | eTT internally, L may be N
+
+    dec = dist if fdec else ave ** (1+ dist*dec / L.span)  # not fully revised, ave = match decay rate / unit distance
+    TT = np.array([L.dTT[0] * dec, L.dTT[1] * cos_d * dec])  # IxE angle alignment * decay?
+    cert = abs(sum(vt_(TT,wTT)) * wPrj)  # approximation
+    if cert > (ave+avd)*(r+cPrj): # certainty margin
+        pTT+=TT; return
+    if not frec:  # non-recursive
+        for lev in L.Nt.N_:  # refine pTT
+            proj_TT(lev, cos_d, dec, r+1, pTT, wTT, fdec=1, frec=1)
+    pTT+=TT  # L.dTT is redundant to H, neither is redundant to Bt,Ct
+    if L.Bt: # + trans-link tNt, tBt, tCt?
+        TT = L.Bt.dTT
+        if TT is not None:
+            pTT += np.array([TT[0] * dec, TT[1] * cos_d * dec])
