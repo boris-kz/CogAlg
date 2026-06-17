@@ -148,7 +148,7 @@ class CoF(CF):
         @wraps(func)
         def inner(*a, **kw):
             _CoF = CoF._cur.get(None)
-            oF = CoF(nF=iF_[func.__name__], root=_CoF)
+            oF = CoF(nF=iF_[func.__name__], root=_CoF); oF.gV_ = {}
             i = iF_[func.__name__]; oF_[i].call_ += [oF]  # F_call_T_[i][oF.nF] += oF.dTT
             if _CoF is not None:
                 _CoF.call_ += [oF]
@@ -156,6 +156,7 @@ class CoF(CF):
             _oF = CoF._cur.set(oF)
             if out := func(*a, **kw):
                 oF.N_, oF.dTT, oF.c, oF.r, oF.w = out[-1]  # w is gating val, then += vt_(dTT)[0]
+                # oF.w = sum(oF.gV_.values())  # gate method
             if oF.call_:
                 tree = flat_(oF)  # if len(tree)-1?
                 sum2O(tree,oF,fcall_=1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)
@@ -220,6 +221,14 @@ def call_sites(fd):  # FunctionDef
     return [n for n in ast.walk(fd) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id in iF_]
 F_call_T_ = [[np.zeros((2,9)) for _ in call_sites(fd)] for fd in nF_]  # dTT computed per callee
 F_call_i_ = [{n.lineno: j for j,n in enumerate(call_sites(fd))} for fd in nF_]
+
+
+def gate(v):  
+    oF = CoF.get()
+    if oF is not None:
+        l = inspect.currentframe().f_back.f_lineno
+        oF.gV_[l] = oF.gV_.get(l, 0) + v
+    return v > 0
 
 def comp_body(_n, n, C=0):  # estimated n-merge cost compression, init mean C=3, accum from recursive unpack
 
