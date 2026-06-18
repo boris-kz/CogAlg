@@ -156,7 +156,6 @@ class CoF(CF):
                 oF_[iF_[func.__name__]].caller_.add(_CoF)  # for comp_caller_
             _oF = CoF._cur.set(oF)
             if out := func(*a, **kw):
-                oF.N_, oF.dTT, oF.c, oF.r = out[-1]  # replace with Fvt()?
                 oF.w = vt_(oF.dTT)[0] + sum(oF.gv_)
             if oF.call_:
                 tree = flat_(oF)  # if len(tree)-1?
@@ -173,7 +172,13 @@ class CoF(CF):
 def gv_(v, i):
     oF = CoF.get()
     if v > 0: return v
-    else: oF.gv_[i] -= v  # then oF.w = vt_(oF.dTT)[0] + sum(oF.gv_)
+    else: 
+        while (len(oF.gv_)<=i): oF.gv_ += [0]  # init empty gv_, then we can skip the step to init from checking oF.body
+        oF.gv_[i] -= v  # then oF.w = vt_(oF.dTT)[0] + sum(oF.gv_)
+
+def Fvt(N_, TT, c, r):
+    oF = CoF.get()
+    oF.N_, oF.dTT, oF.c, oF.r = N_, TT, c, r 
 
 def flat_(oF, call_=None):  # all nested call_ s
 
@@ -380,6 +385,7 @@ def add2O(F, n, nested=0):
 
 def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to the sum, recompute to convergence
 
+    aa=1
     wTT,_wTT = [],np.ones((2,9)); coT = np.abs(dTT[0])+np.abs(dTT[1])  # complemented vals
     while True:
         for fd, _wT, dT in zip((0,1), _wTT, dTT):
@@ -392,6 +398,10 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
         if np.sum(np.abs(wTT-_wTT)) < ave * r:  # if np.linalg.norm(wT - _wT, 1) < r?
             break
         _wTT = np.array(wTT); wTT = []
+    
+        aa+=1
+        if aa>5:
+            break
     return _wTT  # single-mode dTT, extend to 2D-3D lev cycles in H, cross-level param max / centroid?
 
 def trace_func(module_dict, module_name=None):
