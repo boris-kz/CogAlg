@@ -3,7 +3,7 @@ from collections import defaultdict
 from itertools import combinations
 from math import atan2, cos, floor, pi
 from frame_blobs import frame_blobs_root, intra_blob_root, CBase, imread, unpack_blob_
-from meta_code import CoF, Fvt
+from meta_code import CoF, Fvt_
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
 Potential object is proximate low-gradient (flat) blobs, with rough / thick boundary of adjacent high-gradient (edge) blobs.
@@ -50,7 +50,7 @@ def slice_edge(edge, rV=1):
     edge.P_.sort(key=lambda P: P.yx, reverse=True)
     trace_P_adjacency(edge)
     if __name__ != "__main__": del edge.rootd  # for visual verification only
-    Fvt(edge.P_, edge.latuple, len(edge.P_), 1)  # latuple is not converted to TT format
+    Fvt_(edge.P_, edge.latuple, len(edge.P_), 1)  # latuple is not converted to TT format
     return edge
 
 def select_max(edge):

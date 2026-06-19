@@ -141,6 +141,7 @@ class CoF(CF):
         f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]  # fr if nested oF?
         f.caller_ = kw.get('caller_', [])
         f.gv_ = kw.get('gv_',[])  # gating vals per callee
+        f.vt_ = kw.get('vt_',[])  # vals per call
     @staticmethod
     def get(): return CoF._cur.get()  # Frm?
     @staticmethod
@@ -156,10 +157,13 @@ class CoF(CF):
                 oF_[iF_[func.__name__]].caller_.add(_CoF)  # for comp_caller_
             _oF = CoF._cur.set(oF)
             if out := func(*a, **kw):
+                C = oF.c; TT=np.zeros((2,9)); R=0
+                for tt,c,r in oF.vt_: w= c/C; TT+=tt*w; R+=r*w
+                oF.dTT,oF.r = TT,R
                 oF.w = vt_(oF.dTT)[0] + sum(oF.gv_)
             if oF.call_:
                 tree = flat_(oF)  # if len(tree)-1?
-                sum2O(tree,oF,fcall_=1); wtt = getattr(oF,'rTT',oF.dTT); oF.wTT = cent_TT(wtt,oF.r)
+                tt,_,r = sum_vt(tree); oF.wTT = cent_TT(tt, r)  # subtree dTT/r, not own
                 if _CoF is not None:
                     if (j := F_call_i_[_CoF.nF].get(inspect.currentframe().f_back.f_lineno)) is not None:  # get callee site
                         F_call_T_[_CoF.nF][j] += oF.dTT  # add,c,r: results per callee to refine the code
@@ -169,16 +173,13 @@ class CoF(CF):
         return inner
     def __bool__(f): return bool(f.call_)
 
-def gv_(v, i):
+def Fvt_(N_,TT,c,r):
+    oF = CoF.get(); oF.N_+=N_; oF.c+=c; oF.vt_ += [[TT,c,r]]  # data per call
+
+def gv_(v,i):
     oF = CoF.get()
     if v > 0: return v
-    else: 
-        while (len(oF.gv_)<=i): oF.gv_ += [0]  # init empty gv_, then we can skip the step to init from checking oF.body
-        oF.gv_[i] -= v  # then oF.w = vt_(oF.dTT)[0] + sum(oF.gv_)
-
-def Fvt(N_, TT, c, r):
-    oF = CoF.get()
-    oF.N_, oF.dTT, oF.c, oF.r = N_, TT, c, r 
+    else: oF.gv_[i] -= v  # then oF.w = vt_(oF.dTT)[0] + sum(oF.gv_)
 
 def flat_(oF, call_=None):  # all nested call_ s
 
@@ -357,7 +358,7 @@ def merge_oF(F,f, fsel=1):  # combine aligned ops, if-fork per miss, no inline r
         return F,f
     else: return F
 
-def sum2O(F_, root=None, w_=None, fcall_=0):  # for w,c,r, fw,fc,fr only?
+def sum2O(F_, root=None, w_=None, fcall_=0):  # for fw,fc,fr only, dTT,r,w from vt_
 
     fc_ = np.array([n.fc for n in F_], dtype=float); fC = fc_.sum()
     if w_ is None:  w_ = fc_/fC; fw=0
@@ -385,7 +386,6 @@ def add2O(F, n, nested=0):
 
 def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to the sum, recompute to convergence
 
-    aa=1
     wTT,_wTT = [],np.ones((2,9)); coT = np.abs(dTT[0])+np.abs(dTT[1])  # complemented vals
     while True:
         for fd, _wT, dT in zip((0,1), _wTT, dTT):
@@ -398,10 +398,6 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
         if np.sum(np.abs(wTT-_wTT)) < ave * r:  # if np.linalg.norm(wT - _wT, 1) < r?
             break
         _wTT = np.array(wTT); wTT = []
-    
-        aa+=1
-        if aa>5:
-            break
     return _wTT  # single-mode dTT, extend to 2D-3D lev cycles in H, cross-level param max / centroid?
 
 def trace_func(module_dict, module_name=None):
