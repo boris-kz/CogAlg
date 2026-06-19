@@ -50,9 +50,9 @@ postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized vars are summed small-case vars
 '''
 wM,wD,wi, wG,wI,wa, wL,wS,wA = wT
-cFrm,cAgg,cTrc, cN_,cC_,cN,cF, cE,ccN,ccC,ccP, cBac,cPrj, cVct,cCS,cSE = (      # function complexity
-wFrm,wAgg,wTrc, wN_,wC_,wN,wF, wE,wcN,wcC,wcP, wBac,wPrj, wVct,wCS,wSE ) = [F.fc for F in oF_]  # ave gain/call, init = cost
-ttFrm,tAgg,ttTrc, ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP, ttBac,ttPrj, ttVct,ttCs,ttSE = [F.dTT for F in oF_]
+cFrm,cAgg,cTrc, cN_,cC_,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct,cCS,cSE = (      # function complexity
+wFrm,wAgg,wTrc, wN_,wC_,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct,wCS,wSE ) = [F.fc for F in oF_]  # ave gain/call, init = cost
+ttFrm,tAgg,ttTrc, ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj, ttVct,ttCs,ttSE = [F.dTT for F in oF_]
 ''' 
   cycle:
 - cross-comp nodes, evaluate incremental-derivation cross-comp of new >ave difference links, recursively. 
@@ -105,8 +105,9 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
         pTT = proj_V(_N,N, dist, dy_dx, root.m if root!=2 else decay** (dist/((_N.span+N.span)/2)))  # based on current rim
         lr = r+ (N.r+_N.r)/2; m,d = vt_(pTT,ttN_)  # +|-match certainty
         if m > 0:
-            if gv_(abs(m)*wN - ave*(r+cN),1):  # comp if marginally predictable, update N.Rt pair eval, ave / proj surprise value?
-                Link = comp_N(_N,N, lr, c, full=not tnF, A=dy_dx, span=dist, rL=root,L_=L_,N_=N_)
+            if gv_(abs(m)*wN - ave*(r+cN),0):  # comp if marginally predictable, update N.Rt pair eval, ave / proj surprise value?
+                Link = comp_N(_N,N, lr, c, full=not tnF, A=dy_dx, span=dist, rL=root)
+                N_+= [_N,N]  # for sum_vt(rim)
                 Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT)  # relative prediction error to fit oF, direction-agnostic
             else:
                 pL = CL(typ=-1, N_=[_N,N],dTT=pTT,m=m,d=d,c=c,r=lr, angl=[dy_dx,1],span=dist)
@@ -115,13 +116,13 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
         else: break  # beyond initial induction range, re-sort by proj_V?
     for N in set(N_):
         if N.rim: N.Rt = sum2F(N.rim)
-    vT = sum_vt(L_)
-    Fvt_(L_, *vT)  # same here
-    return L_,*vT  # oF.N_=L_, !pLs
+    Fvt_(L_, *sum_vt(L_))  # pos + neg vals for oF
+    pL_ = [L for L in L_ if (L.m>ave or L.typ==-1)]
+    return pL_, *sum_vt(pL_)  # oF.N_=L_, !pLs  (return only pLs and pL's values? )
 
 def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s, levels
 
-    N_,L_,tc,tr = [],[],0,0; acc = [np.zeros((2,9)),0,0,np.zeros((2,9)),0,0]
+    N_,L_,tc,tr = [],[],0,0; TTm,cm,rm = np.zeros((2,9)),0,0
     if fall:
         mrg_ = []
         pairs = product(C_,_C_) if _C_ else combinations(C_,r=2)  # comp between | within list
@@ -129,10 +130,11 @@ def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
             c = min(C.c,_C.c); r = (C.r+_C.r)/2  # comp weight
             tc += c; tr += r*c
             if _C is C:
-                dtt = np.array([C.dTT[1],np.zeros(9)]); acc[0]+=dtt; acc[1]+=c; acc[2]+=1  # overlap=match
+                dtt = np.array([C.dTT[1],np.zeros(9)]); TTm+=dtt; cm+=c; rm+=1  # overlap=match
             else:
                 dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx)
-                L = comp_N(_C,C,_r,c, A=dy_dx,span=dist,L_=L_,N_=N_,acc=acc)
+                L = comp_N(_C,C,_r,c, A=dy_dx,span=dist); L_+=[L]; N_+=[_C,C]
+                if L.m>ave: TTm+=L.dTT; cm+=L.c; rm+=L.r
                 if fC and gv_(L.m*wF- ave*(L.r+cF),0):
                     add2F(_C,C,1); mrg_ += [C]  # may not already be merged
                     for n in C.N_: n.root_[n.root_.index(C)] = _C  # keep m,d positions
@@ -146,14 +148,14 @@ def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
             if _C in C.compared: continue
             dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx); c = min(C.c,_C.c); r = (C.r+_C.r)/2  # tc += c; acc[1]+=c
             tc += c; tr += r*c
-            comp_N(_C,C,_r, c ,A=dy_dx,span=dist,L_=L_,N_=N_,acc=acc)  # simplified for typ=3
+            comp_N(_C,C,_r, c ,A=dy_dx,span=dist); L_+=[L]; N_ +=[_C,C]  # simplified for typ=3
+            if L.m>ave: TTm+=L.dTT; cm+=L.c; rm+=L.r
     for N in list(set(N_)):
         if N.rim: N.Rt = sum2F(N.rim)
-    TTm,cm,rm,*_ = acc
-    Fvt_(L_, *sum_vt(L_))
-    return L_,TTm,cm, rm/(cm or eps)  # oF.N_ should be +-Ls
+    Fvt_(L_, *sum_vt(L_)); pL_ = [L for L in L_ if L.m>ave]
+    return pL_,TTm,cm, rm/(cm or eps)  # oF.N_ should be +-Ls
 
-def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None, L_=None, N_=None, acc=None):
+def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None):
 
     def comp_H(_Nt,Nt, Link):  # tentative pre-comp, before comp N_?
         dH, tt, C,R = [],np.zeros((2,9)),0,0
@@ -187,11 +189,6 @@ def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None, L_=None, N_=None
     if N.typ==3:
         for n, _n in (_N,N),(N,_N):
             n.rim += [L]; n.compared.add(_n)  # or unique comps?
-    if L_ is not None:
-        N_+= [_N,N]  # for sum_vt(rim)
-        if   L.m > ave: acc[0]+=L.dTT*L.c; acc[1]+=L.c; acc[2]+=L.r*L.c; L_ += [L];
-        elif L.typ==1 and L.d > avd: acc[3]+=L.dTT*L.c; acc[4]+=L.c; acc[5]+=L.r*L.c
-        # no pLs?
     Fvt_([L], L.dTT, L.c, L.r)
     return L
 
@@ -542,18 +539,19 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
     if G.Lt:  # sub+
         Lt = G.Lt; L_,lm,ld,lr = Lt.N_,Lt.m,Lt.d,Lt.r; L=len(L_)
         Vn = (lm+ld)* (wcN*L) - (ave+avd)* (lr+1+ccN*L)
-        if Vn > 0:
+        if gv_(Vn, 0):  # this gate for both below? Or we need a separate gv_ below again?
             c = G.Lt.c; E_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)
             if Vn *(mdecay(L_)-decay) > (ave+avd)*(lr+1+ccC*L):  # parse oF here to sum gV?
                 r+=1; G_,r = cluster_C(G.Nt,E_,r,c)  # higher V, low decay, eval cluster_P
             else:     G_,r = cluster_N(G.Nt,E_,r,c)  # updates G
             L= (len(G_)-1) **2  # if full cross_comp?
-            if G_ and vt_(G.Nt.dTT,G.wTT*tAgg)[0]*(wAgg*L) > ave*(r+cAgg*L) > 0:
+            if G_ and gv_(vt_(G.Nt.dTT,G.wTT*tAgg)[0]*(wAgg*L) - ave*(r+cAgg*L),1):
                 cross_comp(G.Nt,r)
     if G.Bt:
         Bt = G.Bt; bd,br,L = Bt.d,Bt.r,len(Bt.N_); rroot = root.root if root.root else 0
         if N.typ!=1 and bd*(wAgg*L) > avd*(br+cAgg*L): [F2N(L) for L in Bt.N_]; cross_comp(Bt, br)  # no ddfork
-        if rroot: Bt.brrw = Bt.m * (rroot.m * (decay * (rroot.span/G.span)))  # external lend only, subtract from root?
+        if rroot: Bt.brrw = Bt.m * (rroot.m * (decay * (rroot.span/G.span)))  # external lend only, subtract from root? 
+    Fvt_([G], G.dTT, G.c, G.r)
     return G
 
 def comb_Ft(Nt, Lt, Bt, Ct, root,wTT):  # from sum2G, default Nt

@@ -152,13 +152,16 @@ class CoF(CF):
             _CoF = CoF._cur.get(None)
             oF = CoF(nF=iF_[func.__name__], root=_CoF)
             i = iF_[func.__name__]; oF_[i].call_ += [oF]  # F_call_T_[i][oF.nF] += oF.dTT
+            oF.gv_ = np.zeros(oF_[i].gi)
             if _CoF is not None:
                 _CoF.call_ += [oF]
                 oF_[iF_[func.__name__]].caller_.add(_CoF)  # for comp_caller_
             _oF = CoF._cur.set(oF)
             if out := func(*a, **kw):
                 C = oF.c; TT=np.zeros((2,9)); R=0
-                for tt,c,r in oF.vt_: w= c/C; TT+=tt*w; R+=r*w
+                for tt,c,r in oF.vt_: 
+                    if func.__name__ in ('comp_slice', 'slice_edge'): continue   # skip for now since incompatible TT
+                    w= c/(C or eps); TT+=tt*w; R+=r*w
                 oF.dTT,oF.r = TT,R
                 oF.w = vt_(oF.dTT)[0] + sum(oF.gv_)
             if oF.call_:
@@ -192,8 +195,9 @@ def flat_(oF, call_=None):  # all nested call_ s
 def F_body_():
     # form function body
     def build(node):  # AST → CoF | (type,sub_) | ast_leaf | None
-
+        nonlocal gi
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id == 'gv_': gi += 1
             if (i:= iF_.get(node.func.id)) is not None:
                 return oF_[i], 3
         sub_ = [rett for t in ast.iter_child_nodes(node) if (rett:= build(t)) is not None]
@@ -203,11 +207,13 @@ def F_body_():
             return node, costs.get(type(node),0)
 
     for func,name in zip(oF_,nF_):
+        gi = 0
         func.caller_ = set()
         for node in ast.iter_child_nodes(name):  # skip top function definition
             rett = build(node)
             if rett:
                 t, fc = rett; func.body += [t]; func.fc += fc
+        func.gi = gi  # max gv_ number
 
 def parse_funcs(paths):
     for path in paths:
@@ -219,11 +225,11 @@ def parse_funcs(paths):
 
 _names = ['frame_H','cross_comp','trace_edge',                 # root_, oF_[0] = frame_H, adds level per call
           'comp_N_','comp_C_','comp_N','comp_F',               # comp_: incrementally distant, nested
-          'get_exemplars','cluster_N','cluster_C','cluster_P', # clus_: incrementally fuzzy, parallel
+          'get_exemplars','cluster_N','cluster_C','cluster_P','sum2G', # clus_: incrementally fuzzy, parallel
           'ffeedback','proj_N',                                # fbac_: update filters) coords) funcs
           'vect_edge','comp_slice','slice_edge']               # prep_
           # typ/line
-typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','fbac_','fbac_','prep_','prep_','prep_']
+typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','clus_','fbac_','fbac_','prep_','prep_','prep_']
 nF_ = [None]*len(_names)  # FunctionDefs
 iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
 oF_ = [CoF(nF=i,typ=typ) for i,typ in enumerate(typ_)]
