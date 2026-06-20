@@ -105,10 +105,9 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
         pTT = proj_V(_N,N, dist, dy_dx, root.m if root!=2 else decay** (dist/((_N.span+N.span)/2)))  # based on current rim
         lr = r+ (N.r+_N.r)/2; m,d = vt_(pTT,ttN_)  # +|-match certainty
         if m > 0:
-            if gv_(abs(m)*wN - ave*(r+cN),0):  # comp if marginally predictable, update N.Rt pair eval, ave / proj surprise value?
+            if gv_(abs(m)*wN - ave*(r+cN), 0):  # comp if marginally predictable, update N.Rt pair eval, ave / proj surprise value?
                 Link = comp_N(_N,N, lr, c, full=not tnF, A=dy_dx, span=dist, rL=root)
-                N_+= [_N,N]  # for sum_vt(rim)
-                Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT)  # relative prediction error to fit oF, direction-agnostic
+                N_+= [_N,N]; Link.rTT = np.abs(pTT-Link.dTT)/ eps_(Link.dTT)  # relative prediction error to fit oF, direction-agnostic
             else:
                 pL = CL(typ=-1, N_=[_N,N],dTT=pTT,m=m,d=d,c=c,r=lr, angl=[dy_dx,1],span=dist)
                 L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.N_  # add neg C?
@@ -148,7 +147,7 @@ def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
             if _C in C.compared: continue
             dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx); c = min(C.c,_C.c); r = (C.r+_C.r)/2  # tc += c; acc[1]+=c
             tc += c; tr += r*c
-            comp_N(_C,C,_r, c ,A=dy_dx,span=dist); L_+=[L]; N_ +=[_C,C]  # simplified for typ=3
+            L = comp_N(_C,C,_r, c ,A=dy_dx,span=dist); L_+=[L]; N_ +=[_C,C]  # simplified for typ=3
             if L.m>ave: TTm+=L.dTT; cm+=L.c; rm+=L.r
     for N in list(set(N_)):
         if N.rim: N.Rt = sum2F(N.rim)
@@ -537,20 +536,19 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
     G = comb_Ft(*Ft_, root, wTT=fTT)
     N_ = G.N_; N=N_[0]; G.sub = N.sub+1 if G.L_ else N.sub; r=G.r
     if G.Lt:  # sub+
-        Lt = G.Lt; L_,lm,ld,lr = Lt.N_,Lt.m,Lt.d,Lt.r; L=len(L_)
-        Vn = (lm+ld)* (wcN*L) - (ave+avd)* (lr+1+ccN*L)
-        if gv_(Vn, 0):  # this gate for both below? Or we need a separate gv_ below again?
+        Lt = G.Lt; L_,lm,ld,lr = Lt.N_,Lt.m,Lt.d,Lt.r; L=len(L_); Av = ave+avd
+        if gv_(Vn := (lm+ld)*(wcN*L) - Av* (lr+1+ccN*L), 0):  # default cluster_N
             c = G.Lt.c; E_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)
-            if Vn *(mdecay(L_)-decay) > (ave+avd)*(lr+1+ccC*L):  # parse oF here to sum gV?
-                r+=1; G_,r = cluster_C(G.Nt,E_,r,c)  # higher V, low decay, eval cluster_P
-            else:     G_,r = cluster_N(G.Nt,E_,r,c)  # updates G
+            if gv_(Vn* (wcC-wcN)* (mdecay(L_)-decay) - Av* (lr+1+(ccC-ccN)*L), 1):
+                r +=1; G_,r = cluster_C(G.Nt,E_,r,c)  # higher V, low decay, eval cluster_P
+            else:      G_,r = cluster_N(G.Nt,E_,r,c)  # updates G
             L= (len(G_)-1) **2  # if full cross_comp?
-            if G_ and gv_(vt_(G.Nt.dTT,G.wTT*tAgg)[0]*(wAgg*L) - ave*(r+cAgg*L),1):
+            if G_ and gv_(vt_(G.Nt.dTT,G.wTT*tAgg)[0]*(wAgg*L) - ave*(r+cAgg*L), 2):
                 cross_comp(G.Nt,r)
     if G.Bt:
         Bt = G.Bt; bd,br,L = Bt.d,Bt.r,len(Bt.N_); rroot = root.root if root.root else 0
         if N.typ!=1 and bd*(wAgg*L) > avd*(br+cAgg*L): [F2N(L) for L in Bt.N_]; cross_comp(Bt, br)  # no ddfork
-        if rroot: Bt.brrw = Bt.m * (rroot.m * (decay * (rroot.span/G.span)))  # external lend only, subtract from root? 
+        if rroot: Bt.brrw = Bt.m * (rroot.m * (decay * (rroot.span/G.span)))  # external lend only, subtract from root?
     Fvt_([G], G.dTT, G.c, G.r)
     return G
 

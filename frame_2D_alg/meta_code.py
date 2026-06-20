@@ -159,7 +159,7 @@ class CoF(CF):
             _oF = CoF._cur.set(oF)
             if out := func(*a, **kw):
                 C = oF.c; TT=np.zeros((2,9)); R=0
-                for tt,c,r in oF.vt_: 
+                for tt,c,r in oF.vt_:
                     if func.__name__ in ('comp_slice', 'slice_edge'): continue   # skip for now since incompatible TT
                     w= c/(C or eps); TT+=tt*w; R+=r*w
                 oF.dTT,oF.r = TT,R
@@ -364,7 +364,7 @@ def merge_oF(F,f, fsel=1):  # combine aligned ops, if-fork per miss, no inline r
         return F,f
     else: return F
 
-def sum2O(F_, root=None, w_=None, fcall_=0):  # for fw,fc,fr only, dTT,r,w from vt_
+def sum2O(F_, root=None, w_=None, fcall_=0):  # for fw,fc,fr only (dTT,r,w are from vt_)
 
     fc_ = np.array([n.fc for n in F_], dtype=float); fC = fc_.sum()
     if w_ is None:  w_ = fc_/fC; fw=0
