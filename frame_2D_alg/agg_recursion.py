@@ -50,9 +50,9 @@ postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized vars are summed small-case vars
 '''
 wM,wD,wi, wG,wI,wa, wL,wS,wA = wT
-cFrm,cAgg,cTrc, cN_,cC_,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct,cCS,cSE = (      # function complexity
-wFrm,wAgg,wTrc, wN_,wC_,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct,wCS,wSE ) = [F.fc for F in oF_]  # ave gain/call, init = cost
-ttFrm,tAgg,ttTrc, ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj, ttVct,ttCs,ttSE = [F.dTT for F in oF_]
+cFrm,cAgg,cTrc, cN_,cC_,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (      # function complexity
+wFrm,wAgg,wTrc, wN_,wC_,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init = cost
+ttFrm,tAgg,ttTrc, ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj, ttVct = [F.dTT for F in oF_]
 ''' 
   cycle:
 - cross-comp nodes, evaluate incremental-derivation cross-comp of new >ave difference links, recursively. 
@@ -65,9 +65,9 @@ ttFrm,tAgg,ttTrc, ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj, ttVct
 '''
 def cross_comp(root, rr, fC=0):  # core function mediating recursive rng+ and der+ cross-comp and clustering
 
-    N_,G_,gV = root.N_,[],0  # root is Ft, converted below, rc=rdn+olp, comp N_| B_| C_:
+    N_,G_ = root.N_,[]  # root is Ft, converted below, rc=rdn+olp, comp N_| B_| C_:
     L_,TT,c,r, cLt = comp_C_(N_,rr,fC=1) if fC else comp_N_(combinations(N_,2),rr)
-    Fvt_(cLt, *sum_vt(cLt))  # copy default results from comp_
+    Fvt_(*cLt)  # copy default results from comp_
     if L_:  # +ve only
         root.L_ = L_; L= len(L_)-1  # val=m+d /clust, m/comp
         if gv_(sum(vt_(TT,ttE))*(wE*L) - (ave+avd)*(r+cE*L), 0):  # if +ve, store neg gate values
@@ -115,9 +115,9 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
         else: break  # beyond initial induction range, re-sort by proj_V?
     for N in set(N_):
         if N.rim: N.Rt = sum2F(N.rim)
-    Fvt_(L_, *sum_vt(L_))  # pos + neg vals for oF
+    Lt = sum_vt(L_); Fvt_(L_,*Lt)  # pos + neg vals for oF
     pL_ = [L for L in L_ if (L.m>ave or L.typ==-1)]
-    return pL_, *sum_vt(pL_)  # oF.N_=L_, !pLs  (return only pLs and pL's values? )
+    return pL_, *sum_vt(pL_), (L_, *Lt)  # oF.N_=L_, !pLs  (return only pLs and pL's values? )
 
 def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s, levels
 
@@ -151,8 +151,8 @@ def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
             if L.m>ave: TTm+=L.dTT; cm+=L.c; rm+=L.r
     for N in list(set(N_)):
         if N.rim: N.Rt = sum2F(N.rim)
-    Fvt_(L_, *sum_vt(L_)); pL_ = [L for L in L_ if L.m>ave]
-    return pL_,TTm,cm, rm/(cm or eps)  # oF.N_ should be +-Ls
+    Lt = sum_vt(L_); Fvt_(L_, *Lt); pL_ = [L for L in L_ if L.m>ave]
+    return pL_,TTm,cm, rm/(cm or eps), (L_, *Lt)  # oF.N_ should be +-Ls
 
 def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None):
 
@@ -601,8 +601,8 @@ def F2N(F):  # convert for cross_comp
     if F.typ==0:  # CF | PP, no overlap for Cs
         Na_.update(kern=np.zeros(4), span=1, angl=None, yx=np.zeros(2))
     for k,v in Na_.items(): setattr(F, k, copy(v))
+    for ft in ('Lt','Ct','Bt','Xt','Rt'): setattr(F, ft, CF(root=F))  # prevent Ct error in sum2F below
     if L_: F.H += [sum2F(L_, F)]
-    for ft in ('Lt','Ct','Bt','Xt','Rt'): setattr(F, ft, CF(root=F))
     return F
 
 def Copy_(N, root=None, r=1, cls=None, init=0, typ=None, froot=0):
@@ -659,13 +659,14 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
 
     global ave,avd,Fw_,Fc_  # /= projected V change:
     def PP2N(PP):
-        P_,L_,B_,verT,latT,A,S,box,yx, m,d,c = PP
+        P_,L_,B_,verT,latT,A,S,box,yx, m,d = PP
         kern = np.array(latT[:4])
         [mM, mD, mI, mG, mA, mL], [dM, dD, dI, dG, dA, dL] = verT  # re-pack in dTT:
         dTT = np.array([ np.array([mM, mD, mL, mI, mG, mA, mL, mL / 2, 0]),  # extA=0
                          np.array([dM, dD, dL, dI, dG, dA, dL, dL / 2, 0])])
         y,x,Y,X = box; dy,dx = Y+1-y, X+1-x
         A = [np.array(A), np.sign(dTT[1] @ ttVct[1])]  # append sign
+        c = sum(P.latT[-1] for P in P_) if hasattr(P_[0], 'latT') else sum(P.latT[-1] for dP in P_ for P in dP.nt)
         PP = CL(typ=0, dTT=dTT,m=m,d=d,c=c,r=1, kern=kern,yx=yx,angl=A,span=np.hypot(dy/2,dx/2))  # set root in trace_edge
         m_, d_ = np.zeros(6), np.zeros(6); PP.B_ = B_
         for B in B_: m_ += B.verT[0]; d_ += B.verT[1];
@@ -681,9 +682,9 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
     blob_ = tile.N_; G_,TT,C,R = [],np.zeros((2,9)),0,0
     for blob in blob_:
         if not blob.sign:
-            if gv_(blob.G * wSE - ave * cSE, 0):
+            if gv_(blob.G * wVct - ave * cVct, 0):  # with removed comp_slice and slice_edge, using w and c from vect_edge here?
                 edge = slice_edge(blob, rV); L = len(edge.P_)-1
-                if gv_(edge.G * (wCS*L) - sum([P.latT[4] for P in edge.P_]) * (cCS*L),1):
+                if gv_(edge.G * (wVct*L) - sum([P.latT[4] for P in edge.P_]) * (cVct*L),1):
                     PPm_ = comp_slice(edge, rV, ttVct)  # add comp_slice's weights?
                     N_ = [PP2N(PPm) for PPm in PPm_]
                     c = sum([PPm.c for PPm in N_]); C += c
@@ -698,6 +699,8 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
     if G_:
         Nt = CF(nF='Nt', root=tile); Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=1; Nt.H=tile.H; tile.Nt=Nt; tile.dTT=TT; tile.c=C; L=len(G_)
         if vt_(TT,ttVct)[0]*(wFrm*L) > ave * (cFrm*L):  # L for trans-comp only?
+            A_ = [G.angl[0] for G in G_ if G.angl]
+            tile.angl = [np.sum(A_, axis=0) if A_ else np.zeros(2), np.sign(tile.dTT[1] @ ttVct[1])] 
             Fvt_(tile.N_, TT ,C, 1)
             return tile
 
@@ -894,8 +897,8 @@ def pack_seg(frame, nF, w, c, _dTT):  # drift-gated regime termination for aH an
             return seg
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
-    trace_func(vars()); comp_slice = CoF.traced(comp_slice); slice_edge = CoF.traced(slice_edge)
-    parse_funcs(["agg_recursion.py","comp_slice.py","slice_edge.py"])  # populate nF_
+    trace_func(vars())
+    parse_funcs(["agg_recursion.py"])  # populate nF_
     Y, X = imread('./images/toucan.jpg').shape
     frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -31, iX=X//2 -31, Ly=64,Lx=64, Y=Y, X=X, rV=1, ffb=1)
     # search frames ( tiles inside image, at this size it should be 4K, or 256K panorama, won't actually work on toucan

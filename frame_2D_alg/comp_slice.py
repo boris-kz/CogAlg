@@ -86,7 +86,6 @@ def comp_slice(edge, rV=1, ww_t=None):  # root function
         edge.link_, dverT, dm, dd = form_PP_(edge.dP_, fd=1)  # separate PPd_ per edge
         edge.verT = mverT + dverT
         edge.m, edge.d = mm + dm, md + dd
-    Fvt_(PPt, edge.verT, edge, 1)  # verT is not converted to TT
     return PPt
 
 def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val

@@ -50,7 +50,6 @@ def slice_edge(edge, rV=1):
     edge.P_.sort(key=lambda P: P.yx, reverse=True)
     trace_P_adjacency(edge)
     if __name__ != "__main__": del edge.rootd  # for visual verification only
-    Fvt_(edge.P_, edge.latuple, len(edge.P_), 1)  # latuple is not converted to TT format
     return edge
 
 def select_max(edge):
