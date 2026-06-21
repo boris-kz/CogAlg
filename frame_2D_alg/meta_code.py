@@ -159,9 +159,7 @@ class CoF(CF):
             _oF = CoF._cur.set(oF)
             if out := func(*a, **kw):
                 C = oF.c; TT=np.zeros((2,9)); R=0
-                for tt,c,r in oF.vt_:
-                    if func.__name__ in ('comp_slice', 'slice_edge'): continue   # skip for now since incompatible TT
-                    w= c/(C or eps); TT+=tt*w; R+=r*w
+                for tt,c,r in oF.vt_: w= c/(C or eps); TT+=tt*w; R+=r*w
                 oF.dTT,oF.r = TT,R
                 oF.w = vt_(oF.dTT)[0] + sum(oF.gv_)
             if oF.call_:
@@ -227,13 +225,13 @@ _names = ['frame_H','cross_comp','trace_edge',                 # root_, oF_[0] =
           'comp_N_','comp_C_','comp_N','comp_F',               # comp_: incrementally distant, nested
           'get_exemplars','cluster_N','cluster_C','cluster_P','sum2G', # clus_: incrementally fuzzy, parallel
           'ffeedback','proj_N',                                # fbac_: update filters) coords) funcs
-          'vect_edge','comp_slice','slice_edge']               # prep_
+          'vect_edge']               # prep_
           # typ/line
-typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','clus_','fbac_','fbac_','prep_','prep_','prep_']
+typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','clus_','fbac_','fbac_','prep_']
 nF_ = [None]*len(_names)  # FunctionDefs
 iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
 oF_ = [CoF(nF=i,typ=typ) for i,typ in enumerate(typ_)]
-parse_funcs(["agg_recursion.py","comp_slice.py","slice_edge.py"])  # populate nF_
+parse_funcs(["agg_recursion.py"])  # populate nF_
 F_body_()  # add F.body from AST
 def call_sites(fd):  # FunctionDef
     return [n for n in ast.walk(fd) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id in iF_]

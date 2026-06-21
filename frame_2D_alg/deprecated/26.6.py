@@ -258,6 +258,80 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
         dCt = sum2F(list(set(_C_)-set(out_)))  # compress, out_ for CoF?
         return out_, dCt
 
+def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
+
+    PPt_ = []; M, D = eps, eps; VerT = np.full((2,6),eps)
+
+    for P in iP_: P.fin = 0
+    for P in iP_:  # dP from link_ if fd
+        if P.fin: continue
+        _prim_ = P.prim; _lrim_ = P.lrim; B_ = []
+        if fd: m, d = P.m, P.d  # summed verT, min L in dP
+        else:  I,G,Dy,Dx,M,D,L = P.latT; m, d = M, G+abs(D)
+        _P_ = {P}; link_ = set()
+        verT = np.full((2,6),eps)
+        while _prim_:
+            prim_,lrim_ = set(),set()
+            for _P,_link in zip(_prim_,_lrim_):
+                if _P.fin: continue
+                if [_link.m, _link.d][fd] > [ave,avd][fd]:
+                    _P_.add(_P); link_.add(_link)
+                    verT += _link.verT
+                    if fd: _m, _d = _P.m, _P.d
+                    else: _I,_G,_Dy,_Dx,_M,_D,_L = _P.latT; _m, _d = _M,_G+abs(_D)
+                    m += _m; d += _d  # intra-P similarity and variance
+                    prim_.update(set(_P.prim) - _P_)
+                    lrim_.update(set(_P.lrim) - link_)
+                    _P.fin = 1
+                else: B_ += [_link]  # PP boundary-> comb_B
+            _prim_, _lrim_ = prim_, lrim_
+        M += m; D += d; VerT += verT
+        PPt_ += [sum2PP(list(_P_), list(link_), list(set(B_)), m, d)]
+
+    return PPt_, VerT, M, D
+
+def comp_P_(edge):  # form links from prelinks
+
+    edge.rng = 1
+    for _P, pre_ in edge.pre__.items():
+        for P in pre_:  # prelinks
+            dy,dx = np.subtract(P.yx,_P.yx)  # between node centers
+            if abs(dy)+abs(dx) <= edge.rng * 2: # <max Manhattan distance
+                angle=[dy,dx]; distance=np.hypot(dy,dx)
+                verT, m, d = comp_latT(_P.latT, P.latT, len(_P.dert_), len(P.dert_))
+                dP = convert_to_dP(_P,P, verT, angle,distance, m, d)
+                _P.rim += [dP]  # up only
+                edge.dP_ += [dP]  # to form PPd_ by dval, separate from PPm_
+    del edge.pre__
+
+def comp_dP_(edge, _M):  # node_- mediated: comp node.rim dPs, call from form_PP_
+
+    rM = _M / ave  # dP D borrows from normalized PP M
+    for _dP in edge.dP_: _dP.prim = []; _dP.lrim = []
+    for _dP in edge.dP_:
+        D, M = _dP.d, _dP.m
+        if D/M * rM > avd:
+            _P, P = _dP.nt  # _P is lower
+            rc = M/_M; minn = min(_M,M)
+            for dP in P.rim:  # higher links
+                if dP not in edge.dP_: continue  # skip removed node links
+                verT, m, d = comp_verT(_dP.verT[1], dP.verT[1]*rc, minn)
+                angle = np.subtract(dP.yx,_dP.yx)  # dy,dx of node centers
+                distance = np.hypot(*angle)  # between node centers
+                # up only:
+                _dP.lrim += [convert_to_dP(_dP,dP, verT, angle, distance, m, d)]
+                _dP.prim += [dP]
+
+def convert_to_dP(_P,P, verT, angle, distance, m, d):
+
+    link = CdP(nt=[_P,P], m=m, d=d, verT=verT, angle=angle, span=distance, yx=np.add(_P.yx, P.yx)/2)
+    # Ps are dPs
+    _P.verT+= link.verT; P.verT += link.verT
+    _P.lrim += [link];   P.lrim += [link]
+    _P.prim += [P];      P.prim +=[_P]
+    link.L = min(_P.latT[-1],P.latT[-1]) if isinstance(_P,CP) else min(_P.L,P.L)  # P is CdP
+    return link
+
 def ffeedback2(frame, aTT,oTT):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
 
     global ave,avd
