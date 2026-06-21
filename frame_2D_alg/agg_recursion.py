@@ -106,7 +106,7 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
         lr = r+ (N.r+_N.r)/2; m,d = vt_(pTT,ttN_)  # +|-match certainty
         if m > 0:
             if gv_(abs(m)*wN - ave*(r+cN), 0):  # comp if marginally predictable, update N.Rt pair eval, ave / proj surprise value?
-                Link = comp_N(_N,N, lr, c, full=not tnF, A=dy_dx, span=dist, rL=root)
+                Link = comp_N(_N,N, lr, c, full=not tnF, A=dy_dx, span=dist, rL=root); L_+=[Link]  # sorry, this is missed out
                 N_+= [_N,N]; Link.rTT = np.abs(pTT-Link.dTT)/ eps_(Link.dTT)  # relative prediction error to fit oF, direction-agnostic
             else:
                 pL = CL(typ=-1, N_=[_N,N],dTT=pTT,m=m,d=d,c=c,r=lr, angl=[dy_dx,1],span=dist)
@@ -204,7 +204,7 @@ def comp_F(_F, F, ir=0, rL=None):
             L = len(Np_)-1
             if gv_(np.mean([rL.m,m])* (wF*L) - ave* (r+cF*L), 0):
                 if l: L_= [L for Np in Np_ for L in comp_F(*Np, r,rL=dF).N_]; TT,C,R = sum_vt(L_, wTT=ttF)
-                else: L_,TT,C,R = comp_N_(Np_,r,nF,rL)
+                else: L_,TT,C,R,_ = comp_N_(Np_,r,nF,rL)
                 if L_:
                     add2F(dF,CF(N_=L_,dTT=TT,c=C,r=R),merge=1); add2F(rL,dF,merge=2)
     Fvt_([dF], dF.dTT, dF.c, dF.r)
@@ -291,7 +291,7 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
         return M, D
     def trans_cluster(G):
         for L in G.L_:
-            for lev in L.H:
+            for lev in L.H[1:]:  # skip base L's lev
                 for tFt in lev.N_:  # Lt doesn't form trans-links, Ct is not root-constrained?
                     for tL in tFt.N_:
                         if tL.m*wcN> ave*ccN:  # merge trans_link.N_.roots
@@ -404,7 +404,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
         if gv_(vt_(DTT,Ft.root.wTT*ttcC)[0]*wcC*(len(out_)-1) - ave*(r+ccC*(len(out_)-1)), 1):
             Ct = sum2F(out_); Ft.root.Ct = Ct; Ct.root = Ft.root
             cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
-    Fvt_(out_, *sum_vt(out_)[:-1], r)
+    if out_: Fvt_(out_, *sum_vt(out_)[:-1], r)  # skip empty out_
     return out_,r  # only r is from deeper cross_comp?
 
 def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
@@ -863,7 +863,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
                 elev +=1; T=Fr  # next-extension seed
             else: break
         else: break
-    Fvt_([Fr],Fr.dTT, Fr.c, Fr.r)
+    if Fr: Fvt_([Fr],Fr.dTT, Fr.c, Fr.r)  # skip if Fr is not filled
     return Fr  # intra-lev feedback
 
 def ffeedback(frame, _aTT,_oTT, _aH,_oH):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
@@ -874,7 +874,7 @@ def ffeedback(frame, _aTT,_oTT, _aH,_oH):  # recompute filters from regime drift
     # H init @ 1st term:
     if aH := pack_seg(frame,'aH',wBac, cBac, aTT):
         dTT = aH.dTT-_aTT; _aTT=aTT; dc= aH.c-_ac; dr= aH.r-_ar
-        ave, avd = vt_(aH.dTT)
+        ave, avd = vt_(aH.dTT)  # we never update aTT or dTT here? it should be updated to oH or aH.dTT?
         # filters *= ave
         if oH := pack_seg(frame,'oH', wBac, cBac**2, oTT):
             dTT += oH.dTT-_oTT; _oTT=oTT; dc+=oH.c-_oc; dr+=oH.r-_or
