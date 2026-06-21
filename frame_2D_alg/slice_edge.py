@@ -3,7 +3,6 @@ from collections import defaultdict
 from itertools import combinations
 from math import atan2, cos, floor, pi
 from frame_blobs import frame_blobs_root, intra_blob_root, CBase, imread, unpack_blob_
-from meta_code import CoF, Fvt_
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
 Potential object is proximate low-gradient (flat) blobs, with rough / thick boundary of adjacent high-gradient (edge) blobs.

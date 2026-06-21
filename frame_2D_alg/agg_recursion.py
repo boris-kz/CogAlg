@@ -67,7 +67,7 @@ def cross_comp(root, rr, fC=0):  # core function mediating recursive rng+ and de
 
     N_,G_ = root.N_,[]  # root is Ft, converted below, rc=rdn+olp, comp N_| B_| C_:
     L_,TT,c,r, cLt = comp_C_(N_,rr,fC=1) if fC else comp_N_(combinations(N_,2),rr)
-    Fvt_(*cLt)  # copy default results from comp_
+    Fvt_(*cLt)  # copy default results from comp_s
     if L_:  # +ve only
         root.L_ = L_; L= len(L_)-1  # val=m+d /clust, m/comp
         if gv_(sum(vt_(TT,ttE))*(wE*L) - (ave+avd)*(r+cE*L), 0):  # if +ve, store neg gate values
@@ -115,9 +115,10 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
         else: break  # beyond initial induction range, re-sort by proj_V?
     for N in set(N_):
         if N.rim: N.Rt = sum2F(N.rim)
-    Lt = sum_vt(L_); Fvt_(L_,*Lt)  # pos + neg vals for oF
-    pL_ = [L for L in L_ if (L.m>ave or L.typ==-1)]
-    return pL_, *sum_vt(pL_), (L_, *Lt)  # oF.N_=L_, !pLs  (return only pLs and pL's values? )
+    Lt = sum_vt(L_)
+    Fvt_(L_, *Lt)  # +-ve Ls for oF
+    pL_ = [L for L in L_ if (L.m > ave or L.typ == -1)]
+    return pL_,*sum_vt(pL_), (L_,*Lt)  # oF.N_=L_,  # +ve only, redundant +-ve for oF
 
 def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s, levels
 
@@ -601,7 +602,7 @@ def F2N(F):  # convert for cross_comp
     if F.typ==0:  # CF | PP, no overlap for Cs
         Na_.update(kern=np.zeros(4), span=1, angl=None, yx=np.zeros(2))
     for k,v in Na_.items(): setattr(F, k, copy(v))
-    for ft in ('Lt','Ct','Bt','Xt','Rt'): setattr(F, ft, CF(root=F))  # prevent Ct error in sum2F below
+    for ft in ('Lt','Ct','Bt','Xt','Rt'): setattr(F, ft, CF(root=F))
     if L_: F.H += [sum2F(L_, F)]
     return F
 
@@ -659,14 +660,13 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
 
     global ave,avd,Fw_,Fc_  # /= projected V change:
     def PP2N(PP):
-        P_,L_,B_,verT,latT,A,S,box,yx, m,d = PP
+        P_,L_,B_,verT,latT,A,S,box,yx, m,d,c = PP
         kern = np.array(latT[:4])
         [mM, mD, mI, mG, mA, mL], [dM, dD, dI, dG, dA, dL] = verT  # re-pack in dTT:
         dTT = np.array([ np.array([mM, mD, mL, mI, mG, mA, mL, mL / 2, 0]),  # extA=0
                          np.array([dM, dD, dL, dI, dG, dA, dL, dL / 2, 0])])
         y,x,Y,X = box; dy,dx = Y+1-y, X+1-x
         A = [np.array(A), np.sign(dTT[1] @ ttVct[1])]  # append sign
-        c = sum(P.latT[-1] for P in P_) if hasattr(P_[0], 'latT') else sum(P.latT[-1] for dP in P_ for P in dP.nt)
         PP = CL(typ=0, dTT=dTT,m=m,d=d,c=c,r=1, kern=kern,yx=yx,angl=A,span=np.hypot(dy/2,dx/2))  # set root in trace_edge
         m_, d_ = np.zeros(6), np.zeros(6); PP.B_ = B_
         for B in B_: m_ += B.verT[0]; d_ += B.verT[1];
@@ -682,7 +682,7 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
     blob_ = tile.N_; G_,TT,C,R = [],np.zeros((2,9)),0,0
     for blob in blob_:
         if not blob.sign:
-            if gv_(blob.G * wVct - ave * cVct, 0):  # with removed comp_slice and slice_edge, using w and c from vect_edge here?
+            if gv_(blob.G * wVct - ave * cVct, 0):  # proxy for comp_slice and slice_edge
                 edge = slice_edge(blob, rV); L = len(edge.P_)-1
                 if gv_(edge.G * (wVct*L) - sum([P.latT[4] for P in edge.P_]) * (cVct*L),1):
                     PPm_ = comp_slice(edge, rV, ttVct)  # add comp_slice's weights?
@@ -700,7 +700,7 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
         Nt = CF(nF='Nt', root=tile); Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=1; Nt.H=tile.H; tile.Nt=Nt; tile.dTT=TT; tile.c=C; L=len(G_)
         if vt_(TT,ttVct)[0]*(wFrm*L) > ave * (cFrm*L):  # L for trans-comp only?
             A_ = [G.angl[0] for G in G_ if G.angl]
-            tile.angl = [np.sum(A_, axis=0) if A_ else np.zeros(2), np.sign(tile.dTT[1] @ ttVct[1])] 
+            tile.angl = [np.sum(A_, axis=0) if A_ else np.zeros(2), np.sign(tile.dTT[1] @ ttVct[1])]
             Fvt_(tile.N_, TT ,C, 1)
             return tile
 
@@ -859,7 +859,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
             Fr = sum2F(tile_)  # higher-scope tile( oH( aH
             if cross_comp(Fr.Nt, rr=0):  # spec-> tN_,tC_,tL_, proj comb N_'L_?
                 if elev and ffb:  # ffb =1 in main, no ffeedback in added tiles
-                    Fr,aTT,oTT,aH,oH,_ = ffeedback(Fr, aTT,oTT,aH,oH)  # term,form oH(aH
+                    Fr,aTT,oTT,aH,oH = ffeedback(Fr, aTT,oTT,aH,oH)  # term,form oH(aH
                 elev +=1; T=Fr  # next-extension seed
             else: break
         else: break
