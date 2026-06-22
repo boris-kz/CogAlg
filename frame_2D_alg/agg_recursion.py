@@ -16,12 +16,11 @@ rng+: incremental-range cross-comp nodes: edge segments at < max distance, clust
 der+: incremental-derivation cross-comp links, from node cross-comp, if abs_diff * relative_adjacent_match
 
 Clustering compressively groups the elements into compositional hierarchy, initially by pair-wise similarity or density thereof.
-High-contrast links are correlation clustered to form a boundary per node connectivity cluster.
-This is followed by centroid-based expansion and divisive sub-clustering.
+High-contrast links are correlation clustered to form a boundary per connectivity cluster of the nodes.
+Each level may extend clustering through 4 increasingly fuzzy stages, each seeded by prior-stage output:
 
-each level may extend clustering through 4 increasingly fuzzy stages, each seeded by prior-stage output:
 - select sparse exemplars to seed the clusters, top k for parallelization (get_exemplars), no clustering?
-- connectivity-based agglomerative ( divisive clustering (cluster_N), 
+- connectivity-based agglomerative ( divisive clustering in cluster_N, with boundary link clustering in Bt
 - centroid-based marginally fuzzy and extensible clustering, in divisive phase (cluster_C), or ave_linkage?
 - centroid-parallel fully fuzzy FCM-like refine, if significant global overlap (cluster_P), no higher stage?
 
@@ -107,7 +106,8 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
         if m > 0:
             if gv_(abs(m)*wN - ave*(r+cN), 0):  # comp if marginally predictable, update N.Rt pair eval, ave / proj surprise value?
                 Link = comp_N(_N,N, lr, c, full=not tnF, A=dy_dx, span=dist, rL=root)
-                N_+= [_N,N]; Link.rTT = np.abs(pTT-Link.dTT)/ eps_(Link.dTT)  # relative prediction error to fit oF, direction-agnostic
+                Link.rTT = np.abs(pTT - Link.dTT) / eps_(Link.dTT)  # relative prediction error to fit oF, direction-agnostic
+                L_+= [Link]; N_+= [_N,N]
             else:
                 pL = CL(typ=-1, N_=[_N,N],dTT=pTT,m=m,d=d,c=c,r=lr, angl=[dy_dx,1],span=dist)
                 L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.N_  # add neg C?
@@ -204,7 +204,7 @@ def comp_F(_F, F, ir=0, rL=None):
             L = len(Np_)-1
             if gv_(np.mean([rL.m,m])* (wF*L) - ave* (r+cF*L), 0):
                 if l: L_= [L for Np in Np_ for L in comp_F(*Np, r,rL=dF).N_]; TT,C,R = sum_vt(L_, wTT=ttF)
-                else: L_,TT,C,R = comp_N_(Np_,r,nF,rL)
+                else: L_,TT,C,R,_ = comp_N_(Np_,r,nF,rL)
                 if L_:
                     add2F(dF,CF(N_=L_,dTT=TT,c=C,r=R),merge=1); add2F(rL,dF,merge=2)
     Fvt_([dF], dF.dTT, dF.c, dF.r)
@@ -281,7 +281,7 @@ def get_exemplars(N_,_r,_c):  # multi-layer non-maximum suppression -> sparse se
     Fvt_(E_,*sum_vt(E_))
     return E_
 
-def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace iL_ with E_?
+def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace iL_ with E_?
 
     def nt_vt(n,_n):
         M, D = 0,0  # exclusive match, contrast
@@ -291,7 +291,7 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
         return M, D
     def trans_cluster(G):
         for L in G.L_:
-            for lev in L.H:
+            for lev in L.H[1:]:  # L.H[0] is direct ders
                 for tFt in lev.N_:  # Lt doesn't form trans-links, Ct is not root-constrained?
                     for tL in tFt.N_:
                         if tL.m*wcN> ave*ccN:  # merge trans_link.N_.roots
@@ -301,11 +301,11 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
                                 rt0.N_ += rt1.N_; add_Nt(rt0)  # recompute Nt attrs / G
                 L.Nt,L.Bt,L.Ct = CF(),CF(),CF()
             # merge roots
-    G_= []  # add prelink pL_,pN_? include merged Cs, in feature space for Cs
-    if _N_ and sum(vt_(Ft.dTT, Ft.root.wTT * ttcN)) * wcN * (len(_N_) - 1) > (ave + avd) * (r + ccN *  (len(_N_) - 1))  > 0:  #| fL?
+    G_ = []  # add prelink pL_,pN_? include merged Cs, in feature space for Cs
+    if sum(vt_(Ft.dTT, Ft.root.wTT*ttcN)) * wcN > (ave+avd)*(_r+ccN)  > 0:  # this gate should be external to cluster_N?
         for N in _N_:
             N.fin=0; N.exe=1; sum2F(N.rim,N.Rt)  # only if N was added in trans-cluster?
-        G_=[]; Gt_=[]; in_= set()  # root attrs
+        G_=[]; Gt_=[]; in_ = set()  # root attrs
         for N in _N_:  # form G per remaining N
             if N.fin or (Ft.root.root and not N.exe): continue  # no exemplars in Fg
             N_ = [N]; L_,B_ = [],[]; N.fin=1  # init G
@@ -316,7 +316,7 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
                     _N = L.N_[0] if L.N_[1].fin else L.N_[1]; in_.add(L)
                     if not _N.fin and _N in Ft.N_:
                         m,d = nt_vt(*L.N_)
-                        if m > ave * (r-1):  # cluster nt, L,C_ by combined rim density, add gv_?
+                        if m > ave * (_r-1):  # cluster nt, L,C_ by combined rim density, add gv_?
                             span = np.sqrt(len(N_))  # approx span
                             if span > 3:  # refine by rim connectivity / norm span
                                 iM = sum([L.m for L in _N.rim if (L.N_[0] if L.N_[1] is _N else L.N_[1]) in N_])
@@ -339,11 +339,11 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
                     # _C=C+c; _rc=C/_C; rc=c/_C; TT=TT*_rc+tt*rc; R=R*_rc+r*rc; C=_C
         if G_:
             for G in G_: trans_cluster(G)  # splice trans_links, merge L.N_.roots
-            C = sum([g[1] for g in Gt_]); TT=np.zeros((2,9)); R=0; r+=1  # + wC?
+            C = sum([g[1] for g in Gt_]); TT=np.zeros((2,9)); R=0; _r+=1  # + wC?
             for tt,c,gr in Gt_: w=c/C; TT+=tt*w; R+=gr*w
             L = len(G_)-1
             if gv_(sum(vt_(TT, Ft.root.wTT*ttcN))*(wcN*L) - (ave+avd)*(r+R+ccN*L), 1):  # reform root,Nt, no other forks yet:
-                rG = Ft.root; Nt=rG.Nt; Nt.N_=G_; Nt.dTT=TT; Nt.r=R
+                rG = Ft.root; Nt=rG.Nt; Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=R
                 rG.dTT=TT; rG.c=C; rG.r=R
         # combine C_:
         C_ = [C for N in (G_ if G_ else _N_) for C in N.Ct.N_]
@@ -351,8 +351,8 @@ def cluster_N(Ft, _N_, r,_c):  # flood-fill node | link clusters, flat, replace 
             sum2F(C_, root=Ft.root.Ct)  # Ct.r includes overlap?
             L_ = [L for C in C_ for L in C.L_]  # C-to-N links
             if L_: Ft.root.Ct.Lt = sum2F(L_,root=Ft.root.Ct)
-    Fvt_(G_,*sum_vt(G_)[:-1], r)
-    return G_,r
+    Fvt_(G_,*sum_vt(G_)[:-1], _r)
+    return G_,_r
 
 def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
 
@@ -378,13 +378,12 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
                     k=n._root_.index(_C); up += abs(n._m_[k]-m) + abs(n._d_[k]-d)
                 else: up += m+abs(d)
             r = _r+ R/T  # loop-local, not ave?
-            if M*(_C.m+wC_*len(n_)) > Ave*(r+_C.r+ cC_*len(n_)):  # else: Up+= sum(_C._m_)+ sum([abs(d) for d in _C._d_])?
-                for n in [_n for n in n_ for l in n.rim for _n in l.N_ if _n is not n]:
-                    N__ += [n]  # +|-Ls
+            if M * (_C.m+wC_*len(n_)) > Ave * (r+_C.r+ cC_*len(n_)):  # else: Up+= sum(_C._m_)+ sum([abs(d) for d in _C._d_])?
+                N__ += [_n for n in n_ for l in n.rim for _n in l.N_ if _n is not n]  # extend frontier with +|-Ls
                 C = sum2F(n_, Ft,m_,d_)  # C.N_ = n_
-                C._N_ = list(set(N__)- set(n_))  # new frontier
-                if D<Avd: out_+=[C]  # output if stable
-                else:     C_ += [C]  # reform
+                C._N_ = list(set(N__) - set(n_))  # new frontier
+                if D < Avd: out_+=[C]  # output if stable
+                else:       C_ += [C]  # reform
                 DTT+=dTT; mat+=M; dif+=D; cnt+=T; rdn+=R; Up+=up
         r = _r+ rdn/(cnt or eps)
         L = len(out_+ C_); olp = sum([len(N.root_) for N in N_])  # rdn+=olp, prioritize stronger?
@@ -404,7 +403,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
         if gv_(vt_(DTT,Ft.root.wTT*ttcC)[0]*wcC*(len(out_)-1) - ave*(r+ccC*(len(out_)-1)), 1):
             Ct = sum2F(out_); Ft.root.Ct = Ct; Ct.root = Ft.root
             cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
-    Fvt_(out_, *sum_vt(out_)[:-1], r)
+    if out_: Fvt_(out_, *sum_vt(out_)[:-1], r)
     return out_,r  # only r is from deeper cross_comp?
 
 def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
@@ -577,7 +576,7 @@ def add_Nt(G):  # in sum2G and trans_cluster
         if hasattr(N,'m_'):
             if not hasattr(G,'m_'): G.root_,G.m_,G.d_ = [],[],[]
             G.C_ += N.root_; G.m_+= N.m_; G.d_+= N.d_  # Ct || Nt
-        G.kern += N.kern*w; yx = N.yx*w; G.yx += yx; yx_ += [yx]
+        G.kern += N.kern*w; yx = N.yx; G.yx+=yx; yx_+=[yx]  # * w?
         G.box = extend_box(G.box, N.box)
     G.span = (c_ @ np.hypot(*(np.array(yx_)-G.yx).T)) / C if len(N_)>1 else N_[0].span
 
@@ -863,25 +862,25 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
                 elev +=1; T=Fr  # next-extension seed
             else: break
         else: break
-    Fvt_([Fr],Fr.dTT, Fr.c, Fr.r)
+    if Fr: Fvt_([Fr],Fr.dTT, Fr.c, Fr.r)
     return Fr  # intra-lev feedback
 
-def ffeedback(frame, _aTT,_oTT, _aH,_oH):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
+def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
 
     global ave, avd
-    aTT = oTT = oH = dTT = dc = dr = 0
-    _ac,_ar = (_aH.c,_aH.r) if _aH else (0,0); _oc,_or = (_oH.c,_oH.r) if _oH else (0,0)
+    dTT = dc = dr = 0
+    _ac,_ar = (aL.c,aL.r) if aL else (0,0); _oc,_or = (oL.c,oL.r) if oL else (0,0)
     # H init @ 1st term:
-    if aH := pack_seg(frame,'aH',wBac, cBac, aTT):
-        dTT = aH.dTT-_aTT; _aTT=aTT; dc= aH.c-_ac; dr= aH.r-_ar
-        ave, avd = vt_(aH.dTT)
+    if aL := pack_seg(frame,'aH',wBac, cBac, aTT):  # L: new level
+        dTT = aL.dTT-aTT; aTT=aL.dTT; dc= aL.c-_ac; dr= aL.r-_ar
+        ave, avd = vt_(aTT)
         # filters *= ave
-        if oH := pack_seg(frame,'oH', wBac, cBac**2, oTT):
-            dTT += oH.dTT-_oTT; _oTT=oTT; dc+=oH.c-_oc; dr+=oH.r-_or
-            split_oF_(); cluster_oF_()
+        if oL := pack_seg(frame,'oH', wBac, cBac**2, oTT):
+            dTT += oL.dTT-oTT; oTT=oL.oTT; dc+=oL.c-_oc; dr+=oL.r-_or
+            split_oF_(); cluster_oF_()  # add eval?
             # reform oF_
     Fvt_([frame],dTT,dc,dr)
-    return frame, aTT or _aTT, oTT or _oTT, aH or _aH, oH or _oH
+    return frame, aTT, oTT, aL, oL
 
 def pack_seg(frame, nF, w, c, _dTT):  # drift-gated regime termination for aH and oH
 
