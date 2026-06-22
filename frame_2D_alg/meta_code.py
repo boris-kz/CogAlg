@@ -284,19 +284,24 @@ def get_fc(n):
     if isinstance(n, tuple): return costs.get(n[0],0) + sum(get_fc(c) for c in n[1])
     return costs.get(type(n),0)
 
+def get_gi(n):
+    if isinstance(n,tuple): return sum(get_gi(c) for c in n[1])
+    if isinstance(n,ast.Call) and n.function.id == 'gv_': return 1
+    return 0
+
 def split_oF_():  # divisive clustering
     out = []
     for oF in oF_:
         if (len(oF.body)-1) * wL > ave:  # * split w,c
-            grp_=[]; _n = oF.body[0]; grp = [_n]
+            grp_=[]; _n = oF.body[0]; grp = [_n]; gi_ = []; gi = get_gi(_n)
             for n in oF.body[1:]:
-                if comp_prim(_n,n): grp+=[n]
-                else: grp_+= [grp]; grp=[n]
+                if comp_prim(_n,n): grp+=[n]; gi += get_gi(n)
+                else: grp_+= [grp]; grp=[n]; gi_+=[gi]; gi=get_gi(n)
                 _n=n
             grp_ += [grp]
-            for grp in grp_:  # single refinement
+            for gi, grp in zip(gi_,grp_):  # single refinement
                 fc = sum([get_fc(prim) for prim in grp])
-                sub = CoF(root=oF,fc=fc,body=grp); sub.caller_ = copy(oF.caller_)
+                sub = CoF(root=oF,fc=fc,body=grp); sub.caller_ = copy(oF.caller_); sub.gi = gi
                 out += [sub]
         else: out += [oF]
     oF_[:] = out
@@ -376,6 +381,7 @@ def sum2O(F_, root=None, w_=None, fcall_=0):  # for fw,fc,fr only (dTT,r,w are f
     else:
         F.body = copy(F_[0].body)  # shallow copy
         for f in F_[1:]: merge_oF(F, f, fsel=0)
+        F.gi = sum(F.gi for F in F_)
     if hasattr(F_[0],'caller_'): F.caller_ = set([caller for N in F_ for caller in N.caller_])  # for comp_caller between centroids
     return F   # fw = Fw
 
