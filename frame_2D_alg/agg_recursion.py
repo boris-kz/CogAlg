@@ -320,10 +320,10 @@ def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace
                             span = np.sqrt(len(N_))  # approx span
                             if span > 3:  # refine by rim connectivity / norm span
                                 iM = sum([L.m for L in _N.rim if (L.N_[0] if L.N_[1] is _N else L.N_[1]) in N_])
-                                if iM / (span*decay) < ave * (r-1): continue  # normalized N-to-N_ match, sum for sum2G?
+                                if iM / (span*decay) < ave * (_r-1): continue  # normalized N-to-N_ match, sum for sum2G?
                             N_ += [_N]; L_ += [L]; _N.fin = 1
                             _L_+= [l for l in _N.rim if l not in in_ and (l.N_[0].fin ^ l.N_[1].fin)]   # new frontier links, +|-?
-                        elif d > avd * (r-1): B_ += [L]  # contrast value, exclusive?
+                        elif d > avd * (_r-1): B_ += [L]  # contrast value, exclusive?
                 __L_ = list(set(_L_))
             if N_:
                 ft_ = []
@@ -342,7 +342,7 @@ def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace
             C = sum([g[1] for g in Gt_]); TT=np.zeros((2,9)); R=0; _r+=1  # + wC?
             for tt,c,gr in Gt_: w=c/C; TT+=tt*w; R+=gr*w
             L = len(G_)-1
-            if gv_(sum(vt_(TT, Ft.root.wTT*ttcN))*(wcN*L) - (ave+avd)*(r+R+ccN*L), 1):  # reform root,Nt, no other forks yet:
+            if gv_(sum(vt_(TT, Ft.root.wTT*ttcN))*(wcN*L) - (ave+avd)*(_r+R+ccN*L), 1):  # reform root,Nt, no other forks yet:
                 rG = Ft.root; Nt=rG.Nt; Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=R
                 rG.dTT=TT; rG.c=C; rG.r=R
         # combine C_:
@@ -536,8 +536,8 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
     G = comb_Ft(*Ft_, root, wTT=fTT)
     N_ = G.N_; N=N_[0]; G.sub = N.sub+1 if G.L_ else N.sub; r=G.r
     if G.Lt:  # sub+
-        Lt = G.Lt; L_,lm,ld,lr = Lt.N_,Lt.m,Lt.d,Lt.r; L=len(L_); Av = ave+avd
-        if gv_(Vn := (lm+ld)*(wcN*L) - Av* (lr+1+ccN*L), 0):  # default cluster_N
+        Lt = G.Lt; L_,lm,ld,lr = Lt.N_,Lt.m,Lt.d,Lt.r; L=len(L_)-1; Av = ave+avd
+        if gv_(Vn := (lm+ld)*wcN - Av* (lr+1+ccN*L),0):  # for cluster_N
             c = G.Lt.c; E_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)
             if gv_(Vn* (wcC-wcN)* (mdecay(L_)-decay) - Av* (lr+1+(ccC-ccN)*L), 1):
                 r +=1; G_,r = cluster_C(G.Nt,E_,r,c)  # higher V, low decay, eval cluster_P

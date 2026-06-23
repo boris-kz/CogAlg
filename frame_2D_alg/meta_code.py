@@ -17,7 +17,7 @@ wTT = np.array([wT,wT*avd])
 def vt_(TT, wTT=wTT):  # base eval: multi-variate rel match, rel diff for membership
 
     m_,d_ = TT; ad_ = np.abs(d_); t_ = eps_(m_+ad_)  # ~ max comparand
-    m = m_/t_ @ wTT[0]; d = ad_/t_ @ wTT[1]  # norm by co-derived val
+    m = (m_/t_) @ wTT[0]; d = (ad_/t_) @ wTT[1]  # /= total: rdn, explicit borrowing in Gs only?
     return m, d
 
 def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
@@ -271,32 +271,29 @@ def comp_callers(_T, T):  # compute value of callers_overlap + calls_overlap
 
 def comp_prim(_n,n):
     if isinstance(_n,CoF) or isinstance(n,CoF):
-        if isinstance(_n,CoF) and isinstance(n,CoF) and n.nF==_n.nF:
-            return comp_callers(_n,n) > ave
-        else: return 0
+        return comp_callers(_n,n) > ave if isinstance(_n,CoF) and isinstance(n,CoF) and n.nF==_n.nF else 0
     else:
-        if isinstance(_n,tuple) and isinstance(n,tuple): return _n[0] == n[0]
-        if isinstance(_n,tuple) or isinstance(n, tuple): return 0
-        return type(_n) == type(n)
+        return _n[0]==n[0] if isinstance(_n,tuple) and isinstance(n,tuple) else 0 if isinstance(_n,tuple) or isinstance(n,tuple) else type(_n)==type(n)
 
 def get_fc(n):
-    if isinstance(n, CoF):   return n.fc
-    if isinstance(n, tuple): return costs.get(n[0],0) + sum(get_fc(c) for c in n[1])
-    return costs.get(type(n),0)
+    return n.fc if isinstance(n,CoF) else costs.get(n[0],0)+sum(get_fc(c) for c in n[1]) if isinstance(n,tuple) else costs.get(type(n),0)
+
+def get_gi(n):
+    return sum(get_gi(c) for c in n[1]) if isinstance(n,tuple) else isinstance(n,ast.Call) and n.function.id == 'gv_'
 
 def split_oF_():  # divisive clustering
     out = []
     for oF in oF_:
         if (len(oF.body)-1) * wL > ave:  # * split w,c
-            grp_=[]; _n = oF.body[0]; grp = [_n]
+            grp_=[]; _n = oF.body[0]; grp = [_n]; gi_ = []; gi = get_gi(_n)
             for n in oF.body[1:]:
-                if comp_prim(_n,n): grp+=[n]
-                else: grp_+= [grp]; grp=[n]
+                if comp_prim(_n,n): grp+=[n]; gi += get_gi(n)
+                else: grp_+= [grp]; grp=[n]; gi_+=[gi]; gi=get_gi(n)
                 _n=n
             grp_ += [grp]
-            for grp in grp_:  # single refinement
+            for gi, grp in zip(gi_,grp_):  # single refinement
                 fc = sum([get_fc(prim) for prim in grp])
-                sub = CoF(root=oF,fc=fc,body=grp); sub.caller_ = copy(oF.caller_)
+                sub = CoF(root=oF,fc=fc,body=grp); sub.caller_ = copy(oF.caller_); sub.gi = gi
                 out += [sub]
         else: out += [oF]
     oF_[:] = out
@@ -376,6 +373,7 @@ def sum2O(F_, root=None, w_=None, fcall_=0):  # for fw,fc,fr only (dTT,r,w are f
     else:
         F.body = copy(F_[0].body)  # shallow copy
         for f in F_[1:]: merge_oF(F, f, fsel=0)
+        F.gi = sum(F.gi for F in F_)
     if hasattr(F_[0],'caller_'): F.caller_ = set([caller for N in F_ for caller in N.caller_])  # for comp_caller between centroids
     return F   # fw = Fw
 
