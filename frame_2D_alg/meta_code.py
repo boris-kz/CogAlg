@@ -17,7 +17,7 @@ wTT = np.array([wT,wT*avd])
 def vt_(TT, wTT=wTT):  # base eval: multi-variate rel match, rel diff for membership
 
     m_,d_ = TT; ad_ = np.abs(d_); t_ = eps_(m_+ad_)  # ~ max comparand
-    m = m_/t_ @ wTT[0]; d = ad_/t_ @ wTT[1]  # norm by co-derived val
+    m = (m_/t_) @ wTT[0]; d = (ad_/t_) @ wTT[1]  # /= total: rdn, explicit borrowing in Gs only?
     return m, d
 
 def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
@@ -271,18 +271,15 @@ def comp_callers(_T, T):  # compute value of callers_overlap + calls_overlap
 
 def comp_prim(_n,n):
     if isinstance(_n,CoF) or isinstance(n,CoF):
-        if isinstance(_n,CoF) and isinstance(n,CoF) and n.nF==_n.nF:
-            return comp_callers(_n,n) > ave
-        else: return 0
+        return comp_callers(_n,n) > ave if isinstance(_n,CoF) and isinstance(n,CoF) and n.nF==_n.nF else 0
     else:
-        if isinstance(_n,tuple) and isinstance(n,tuple): return _n[0] == n[0]
-        if isinstance(_n,tuple) or isinstance(n, tuple): return 0
-        return type(_n) == type(n)
+        return _n[0]==n[0] if isinstance(_n,tuple) and isinstance(n,tuple) else 0 if isinstance(_n,tuple) or isinstance(n,tuple) else type(_n)==type(n)
 
 def get_fc(n):
-    if isinstance(n, CoF):   return n.fc
-    if isinstance(n, tuple): return costs.get(n[0],0) + sum(get_fc(c) for c in n[1])
-    return costs.get(type(n),0)
+    return n.fc if isinstance(n,CoF) else costs.get(n[0],0)+sum(get_fc(c) for c in n[1]) if isinstance(n,tuple) else costs.get(type(n),0)
+
+def get_gi(n):
+    return sum(get_gi(c) for c in n[1]) if isinstance(n,tuple) else isinstance(n,ast.Call) and n.function.id == 'gv_'
 
 def get_gi(n):
     if isinstance(n,tuple): return sum(get_gi(c) for c in n[1])

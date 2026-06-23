@@ -342,7 +342,7 @@ def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace
             C = sum([g[1] for g in Gt_]); TT=np.zeros((2,9)); R=0; _r+=1  # + wC?
             for tt,c,gr in Gt_: w=c/C; TT+=tt*w; R+=gr*w
             L = len(G_)-1
-            if gv_(sum(vt_(TT, Ft.root.wTT*ttcN))*(wcN*L) - (ave+avd)*(r+R+ccN*L), 1):  # reform root,Nt, no other forks yet:
+            if gv_(sum(vt_(TT, Ft.root.wTT*ttcN))*(wcN*L) - (ave+avd)*(_r+R+ccN*L), 1):  # reform root,Nt, no other forks yet:
                 rG = Ft.root; Nt=rG.Nt; Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=R
                 rG.dTT=TT; rG.c=C; rG.r=R
         # combine C_:
@@ -536,9 +536,8 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
     G = comb_Ft(*Ft_, root, wTT=fTT)
     N_ = G.N_; N=N_[0]; G.sub = N.sub+1 if G.L_ else N.sub; r=G.r
     if G.Lt:  # sub+
-        Lt = G.Lt; L_,lm,ld,lr = Lt.N_,Lt.m,Lt.d,Lt.r; L=len(L_); Av = ave+avd
-        # we need at least 2 Ls for mdecay below when using np.diff, so eval with L-1?
-        if gv_(Vn := (lm+ld)*(wcN*(L-1)) - Av* (lr+1+ccN*(L-1)), 0):  # default cluster_N
+        Lt = G.Lt; L_,lm,ld,lr = Lt.N_,Lt.m,Lt.d,Lt.r; L=len(L_)-1; Av = ave+avd
+        if gv_(Vn := (lm+ld)*wcN - Av* (lr+1+ccN*L),0):  # for cluster_N
             c = G.Lt.c; E_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)
             if gv_(Vn* (wcC-wcN)* (mdecay(L_)-decay) - Av* (lr+1+(ccC-ccN)*L), 1):
                 r +=1; G_,r = cluster_C(G.Nt,E_,r,c)  # higher V, low decay, eval cluster_P
@@ -873,11 +872,11 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
     _ac,_ar = (aL.c,aL.r) if aL else (0,0); _oc,_or = (oL.c,oL.r) if oL else (0,0)
     # H init @ 1st term:
     if aL := pack_seg(frame,'aH',wBac, cBac, aTT):  # L: new level
-        dTT = aL.dTT-aTT; aTT=aL.H[-1].dTT; dc= aL.c-_ac; dr= aL.r-_ar  # should be aL.H[-1] for the last terminated level?
+        dTT = aL.dTT-aTT; aTT=aL.dTT; dc= aL.c-_ac; dr= aL.r-_ar
         ave, avd = vt_(aTT)
         # filters *= ave
         if oL := pack_seg(frame,'oH', wBac, cBac**2, oTT):
-            dTT += oL.dTT-oTT; oTT=oL.H[-1].dTT; dc+=oL.c-_oc; dr+=oL.r-_or
+            dTT += oL.dTT-oTT; oTT=oL.oTT; dc+=oL.c-_oc; dr+=oL.r-_or
             split_oF_(); cluster_oF_()  # add eval?
             # reform oF_
     Fvt_([frame],dTT,dc,dr)
