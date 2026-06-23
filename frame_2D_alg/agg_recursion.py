@@ -51,7 +51,7 @@ capitalized vars are summed small-case vars
 wM,wD,wi, wG,wI,wa, wL,wS,wA = wT
 cFrm,cAgg,cTrc, cN_,cC_,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (      # function complexity
 wFrm,wAgg,wTrc, wN_,wC_,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init = cost
-ttFrm,tAgg,ttTrc, ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj, ttVct = [F.dTT for F in oF_]
+ttFrm,tAgg,ttTrc, ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj, ttVct = [F.wTT for F in oF_]  # this should be oF.wTT?
 ''' 
   cycle:
 - cross-comp nodes, evaluate incremental-derivation cross-comp of new >ave difference links, recursively. 
@@ -454,7 +454,7 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
     if out_:
         dCt = sum2F(list(set(_C_)-set(out_)))  # compress, out_ for CoF?
         Fvt_([dCt], dCt.dTT, dCt.c, dCt.r)
-        return out_
+    return out_  # prevent return None
 
 def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CC/CN
 
@@ -482,8 +482,9 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CC
         if typ==3:  # frame?
             for N in N_: add_H(F.H, N.H, F)  # concat lower levs
             F.H += [sum2F([n for N in N_ for n in N.N_], F)]  # top lev
-            if m_: F.m_,F.d_ = m_,d_; F.m, F.d = sum(m_),sum(d_)  # m_, d_ may empty here
-            else:  F.m, F.d = vt_(TT)   # consolidate all vt_(TT) with a flag like Fvt_?
+            # np.any eval for numpy array
+            if np.any(m_): F.m_,F.d_ = m_,d_; F.m, F.d = sum(m_),sum(d_)  # m_, d_ may empty here
+            else:          F.m, F.d = vt_(TT)   # consolidate all vt_(TT) with a flag like Fvt_?
             F.box = box
         else:
             F.m, F.d = vt_(TT)  # link or centroid
@@ -538,7 +539,7 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
     if G.Lt:  # sub+
         Lt = G.Lt; L_,lm,ld,lr = Lt.N_,Lt.m,Lt.d,Lt.r; L=len(L_)-1; Av = ave+avd
         if gv_(Vn := (lm+ld)*wcN - Av* (lr+1+ccN*L),0):  # for cluster_N
-            c = G.Lt.c; E_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)
+            c = G.Lt.c; E_ = get_exemplars({N for link in L_ for N in link.N_}, r,c)  # prevent replace the L number above
             if gv_(Vn* (wcC-wcN)* (mdecay(L_)-decay) - Av* (lr+1+(ccC-ccN)*L), 1):
                 r +=1; G_,r = cluster_C(G.Nt,E_,r,c)  # higher V, low decay, eval cluster_P
             else:      G_,r = cluster_N(G.Nt,E_,r,c)  # updates G
@@ -601,7 +602,8 @@ def F2N(F):  # convert for cross_comp
     if F.typ==0:  # CF | PP, no overlap for Cs
         Na_.update(kern=np.zeros(4), span=1, angl=None, yx=np.zeros(2))
     for k,v in Na_.items(): setattr(F, k, copy(v))
-    for ft in ('Lt','Ct','Bt','Xt','Rt'): setattr(F, ft, CF(root=F))
+    # special case for PP, where they have pre-init Bt boundary
+    [setattr(F, ft, CF(root=F)) for ft in ('Lt','Ct','Bt','Xt','Rt') if not getattr(F, ft, None)]
     if L_: F.H += [sum2F(L_, F)]
     return F
 
@@ -694,7 +696,7 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
                             N.Bt.N_ = PPd_; [setattr(B,'root',N.Bt) for B in PPd_]
                     L = len(PPm_)-1
                     if gv_(sum(vt_(sum_vt(N_,wTT=ttVct)[0])) * (wVct*L) - (ave+avd) * (3+cVct*L),2):
-                        G_,TT,C,R = trace_edge([F2N(n) for n in N_], G_,TT,c,3,tile)  # flatten B_-mediated Gs
+                        G_,TT,c,R = trace_edge([F2N(n) for n in N_], G_,TT,c,3,tile); C += c  # flatten B_-mediated Gs  (sum to the main C instead of replace it?)
     if G_:
         Nt = CF(nF='Nt', root=tile); Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=1; Nt.H=tile.H; tile.Nt=Nt; tile.dTT=TT; tile.c=C; L=len(G_)
         if vt_(TT,ttVct)[0]*(wFrm*L) > ave * (cFrm*L):  # L for trans-comp only?
@@ -876,7 +878,7 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
         ave, avd = vt_(aTT)
         # filters *= ave
         if oL := pack_seg(frame,'oH', wBac, cBac**2, oTT):
-            dTT += oL.dTT-oTT; oTT=oL.oTT; dc+=oL.c-_oc; dr+=oL.r-_or
+            dTT += oL.dTT-oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or  # typo
             split_oF_(); cluster_oF_()  # add eval?
             # reform oF_
     Fvt_([frame],dTT,dc,dr)

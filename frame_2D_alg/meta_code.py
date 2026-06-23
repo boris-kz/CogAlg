@@ -152,7 +152,7 @@ class CoF(CF):
             _CoF = CoF._cur.get(None)
             oF = CoF(nF=iF_[func.__name__], root=_CoF)
             i = iF_[func.__name__]; oF_[i].call_ += [oF]  # F_call_T_[i][oF.nF] += oF.dTT
-            oF.gv_ = np.zeros(oF_[i].gi)
+            oF.gv_ = np.zeros(len(oF_[i].gv_map))
             if _CoF is not None:
                 _CoF.call_ += [oF]
                 oF_[iF_[func.__name__]].caller_.add(_CoF)  # for comp_caller_
@@ -177,8 +177,9 @@ class CoF(CF):
 def Fvt_(N_,TT,c,r):
     oF = CoF.get(); oF.N_+=N_; oF.c+=c; oF.vt_ += [[TT,c,r]]  # data per call
 
-def gv_(v,i):
+def gv_(v):
     oF = CoF.get()
+    i = oF_[oF.nF].gv_map[inspect.currentframe().f_back.f_lineno]
     if v > 0: return v
     else: oF.gv_[i] -= v  # then oF.w = vt_(oF.dTT)[0] + sum(oF.gv_)
 
@@ -192,26 +193,25 @@ def flat_(oF, call_=None):  # all nested call_ s
 
 def F_body_():
     # form function body
-    def build(node):  # AST → CoF | (type,sub_) | ast_leaf | None
+    def build(func, node):  # AST → CoF | (type,sub_) | ast_leaf | None
         nonlocal gi
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if node.func.id == 'gv_': gi += 1
+            if node.func.id == 'gv_': func.gv_map[node.lineno] = gi; gi += 1
             if (i:= iF_.get(node.func.id)) is not None:
                 return oF_[i], 3
-        sub_ = [rett for t in ast.iter_child_nodes(node) if (rett:= build(t)) is not None]
+        sub_ = [rett for t in ast.iter_child_nodes(node) if (rett:= build(func, t)) is not None]
         if sub_:
             sub_, fc_ = zip(*sub_); return (type(node), sub_), sum(fc_)+costs.get(type(node), 0)
         if type(node) in costs:
             return node, costs.get(type(node),0)
 
     for func,name in zip(oF_,nF_):
-        gi = 0
+        gi = 0; func.gv_map = {}
         func.caller_ = set()
         for node in ast.iter_child_nodes(name):  # skip top function definition
-            rett = build(node)
+            rett = build(func, node)
             if rett:
                 t, fc = rett; func.body += [t]; func.fc += fc
-        func.gi = gi  # max gv_ number
 
 def parse_funcs(paths):
     for path in paths:
@@ -278,27 +278,28 @@ def comp_prim(_n,n):
 def get_fc(n):
     return n.fc if isinstance(n,CoF) else costs.get(n[0],0)+sum(get_fc(c) for c in n[1]) if isinstance(n,tuple) else costs.get(type(n),0)
 
-def get_gi(n):
-    return sum(get_gi(c) for c in n[1]) if isinstance(n,tuple) else isinstance(n,ast.Call) and n.function.id == 'gv_'
-
-def get_gi(n):
-    if isinstance(n,tuple): return sum(get_gi(c) for c in n[1])
-    if isinstance(n,ast.Call) and n.function.id == 'gv_': return 1
-    return 0
+def get_gvmap(gv_map,n,gi=0):
+    if isinstance(n,tuple): 
+        for c in n[1]: gi = get_gvmap(gv_map, c, gi)
+        return gi             
+    if isinstance(n,ast.Call) and n.function.id == 'gv_':
+        gv_map[n.lineno] = gi
+        return gi + 1
+    return gi
 
 def split_oF_():  # divisive clustering
     out = []
     for oF in oF_:
         if (len(oF.body)-1) * wL > ave:  # * split w,c
-            grp_=[]; _n = oF.body[0]; grp = [_n]; gi_ = []; gi = get_gi(_n)
+            grp_=[]; _n = oF.body[0]; grp = [_n] ; gv_map = {}; gi=get_gvmap(gv_map, _n); gv_map_ = []
             for n in oF.body[1:]:
-                if comp_prim(_n,n): grp+=[n]; gi += get_gi(n)
-                else: grp_+= [grp]; grp=[n]; gi_+=[gi]; gi=get_gi(n)
+                if comp_prim(_n,n): grp+=[n]; gi=get_gvmap(gv_map,n, gi)
+                else: grp_+= [grp]; grp=[n]; gv_map_ += [gv_map]; gv_map = {}; gi=get_gvmap(gv_map,n)
                 _n=n
-            grp_ += [grp]
-            for gi, grp in zip(gi_,grp_):  # single refinement
+            grp_ += [grp]; gv_map_ += [gv_map]
+            for gv_map, grp in zip(gv_map_,grp_):  # single refinement
                 fc = sum([get_fc(prim) for prim in grp])
-                sub = CoF(root=oF,fc=fc,body=grp); sub.caller_ = copy(oF.caller_); sub.gi = gi
+                sub = CoF(root=oF,fc=fc,body=grp); sub.caller_ = copy(oF.caller_); sub.gv_map = gv_map
                 out += [sub]
         else: out += [oF]
     oF_[:] = out
@@ -378,7 +379,8 @@ def sum2O(F_, root=None, w_=None, fcall_=0):  # for fw,fc,fr only (dTT,r,w are f
     else:
         F.body = copy(F_[0].body)  # shallow copy
         for f in F_[1:]: merge_oF(F, f, fsel=0)
-        F.gi = sum(F.gi for F in F_)
+        F.gv_map = {}; gi = 0
+        for n in F.body: gi = get_gvmap(F.gv_map, n, gi)
     if hasattr(F_[0],'caller_'): F.caller_ = set([caller for N in F_ for caller in N.caller_])  # for comp_caller between centroids
     return F   # fw = Fw
 
