@@ -17,7 +17,7 @@ wTT = np.array([wT,wT*avd])
 def vt_(TT, wTT=wTT):  # base eval: multi-variate rel match, rel diff for membership
 
     m_,d_ = TT; ad_ = np.abs(d_); t_ = eps_(m_+ad_)  # ~ max comparand
-    m = (m_/t_) @ wTT[0]; d = (ad_/t_) @ wTT[1]  # /= total: rdn, explicit borrowing in Gs only?
+    m = (m_/t_) @ wTT[0]; d = (ad_/t_) @ wTT[1]  # /= total = rdn, borrow in G.Bt only?
     return m, d
 
 def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
@@ -140,8 +140,8 @@ class CoF(CF):
         f.body = kw.get('body',[])  # static AST ops + CoF refs in source order
         f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]  # fr if nested oF?
         f.caller_ = kw.get('caller_', [])
-        f.gv_ = kw.get('gv_',[])  # gating vals per callee
         f.vt_ = kw.get('vt_',[])  # vals per call
+        f.gv_ = kw.get('gv_',0)  # sum gating vals
     @staticmethod
     def get(): return CoF._cur.get()  # Frm?
     @staticmethod
@@ -152,7 +152,6 @@ class CoF(CF):
             _CoF = CoF._cur.get(None)
             oF = CoF(nF=iF_[func.__name__], root=_CoF)
             i = iF_[func.__name__]; oF_[i].call_ += [oF]  # F_call_T_[i][oF.nF] += oF.dTT
-            oF.gv_ = np.zeros(oF_[i].gi)
             if _CoF is not None:
                 _CoF.call_ += [oF]
                 oF_[iF_[func.__name__]].caller_.add(_CoF)  # for comp_caller_
@@ -177,10 +176,20 @@ class CoF(CF):
 def Fvt_(N_,TT,c,r):
     oF = CoF.get(); oF.N_+=N_; oF.c+=c; oF.vt_ += [[TT,c,r]]  # data per call
 
-def gv_(v,i):
+def gv_(v):
     oF = CoF.get()
+    i = oF_[oF.nF].gv_map[inspect.currentframe().f_back.f_lineno]
     if v > 0: return v
     else: oF.gv_[i] -= v  # then oF.w = vt_(oF.dTT)[0] + sum(oF.gv_)
+
+def gv_sites(fdef):  # g_[i] <-> oF.gv_[i], same order as build
+    g_ = []  # to eval gate by oF.gv_[i] after accumulation
+    def rec(node):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id == 'gv_': g_.append(node)
+            if node.func.id in iF_: return   # build substitutes callee, no descent
+        for child in ast.iter_child_nodes(node): rec(child)
+    rec(fdef); return g_
 
 def flat_(oF, call_=None):  # all nested call_ s
 
@@ -190,28 +199,23 @@ def flat_(oF, call_=None):  # all nested call_ s
         if sub.call_: flat_(sub,call_)
     return call_
 
-def F_body_():
-    # form function body
-    def build(node):  # AST → CoF | (type,sub_) | ast_leaf | None
-        nonlocal gi
+def F_body_():  # form function body by AST tracing
+
+    def build(func, node):  # AST → CoF | (type,sub_) | ast_leaf | None
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if node.func.id == 'gv_': gi += 1
-            if (i:= iF_.get(node.func.id)) is not None:
-                return oF_[i], 3
-        sub_ = [rett for t in ast.iter_child_nodes(node) if (rett:= build(t)) is not None]
+            if node.func.id=='gv_': func.gv_ += [0]
+            if (i := iF_.get(node.func.id)) is not None: return oF_[i],3
+        sub_ = [rett for t in ast.iter_child_nodes(node) if (rett := build(func,t)) is not None]
         if sub_:
-            sub_, fc_ = zip(*sub_); return (type(node), sub_), sum(fc_)+costs.get(type(node), 0)
-        if type(node) in costs:
-            return node, costs.get(type(node),0)
+            sub_,fc_= zip(*sub_); return (type(node), sub_), sum(fc_)+costs.get(type(node), 0)
+        if type(node) in costs: return node, costs.get(type(node),0)
 
     for func,name in zip(oF_,nF_):
-        gi = 0
         func.caller_ = set()
         for node in ast.iter_child_nodes(name):  # skip top function definition
-            rett = build(node)
+            rett = build(func, node)
             if rett:
                 t, fc = rett; func.body += [t]; func.fc += fc
-        func.gi = gi  # max gv_ number
 
 def parse_funcs(paths):
     for path in paths:
@@ -221,12 +225,11 @@ def parse_funcs(paths):
             if isinstance(node, ast.FunctionDef) and node.name in iF_:
                 nF_[iF_.get(node.name)] = node
 
-_names = ['frame_H','cross_comp','trace_edge',                 # root_, oF_[0] = frame_H, adds level per call
-          'comp_N_','comp_C_','comp_N','comp_F',               # comp_: incrementally distant, nested
+_names = ['frame_H','cross_comp','trace_edge',                         # root_, oF_[0] = frame_H, adds level per call
+          'comp_N_','comp_C_','comp_N','comp_F',                       # comp_: incrementally distant, nested
           'get_exemplars','cluster_N','cluster_C','cluster_P','sum2G', # clus_: incrementally fuzzy, parallel
-          'ffeedback','proj_N',                                # fbac_: update filters) coords) funcs
-          'vect_edge']               # prep_
-          # typ/line
+          'ffeedback','proj_N',                                        # fbac_: update filters) coords) funcs
+          'vect_edge']                                                 # prep_
 typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','clus_','fbac_','fbac_','prep_']
 nF_ = [None]*len(_names)  # FunctionDefs
 iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
@@ -278,22 +281,19 @@ def comp_prim(_n,n):
 def get_fc(n):
     return n.fc if isinstance(n,CoF) else costs.get(n[0],0)+sum(get_fc(c) for c in n[1]) if isinstance(n,tuple) else costs.get(type(n),0)
 
-def get_gi(n):
-    return sum(get_gi(c) for c in n[1]) if isinstance(n,tuple) else isinstance(n,ast.Call) and n.function.id == 'gv_'
-
 def split_oF_():  # divisive clustering
     out = []
     for oF in oF_:
         if (len(oF.body)-1) * wL > ave:  # * split w,c
-            grp_=[]; _n = oF.body[0]; grp = [_n]; gi_ = []; gi = get_gi(_n)
+            _n= oF.body[0]; grp=[_n]; grp_=[]
             for n in oF.body[1:]:
-                if comp_prim(_n,n): grp+=[n]; gi += get_gi(n)
-                else: grp_+= [grp]; grp=[n]; gi_+=[gi]; gi=get_gi(n)
+                if comp_prim(_n,n): grp+=[n]
+                else: grp_+= [grp]; grp =[n]
                 _n=n
             grp_ += [grp]
-            for gi, grp in zip(gi_,grp_):  # single refinement
+            for grp in grp_:  # single refinement
                 fc = sum([get_fc(prim) for prim in grp])
-                sub = CoF(root=oF,fc=fc,body=grp); sub.caller_ = copy(oF.caller_); sub.gi = gi
+                sub = CoF(root=oF,fc=fc,body=grp); sub.caller_ = copy(oF.caller_)
                 out += [sub]
         else: out += [oF]
     oF_[:] = out
@@ -373,7 +373,6 @@ def sum2O(F_, root=None, w_=None, fcall_=0):  # for fw,fc,fr only (dTT,r,w are f
     else:
         F.body = copy(F_[0].body)  # shallow copy
         for f in F_[1:]: merge_oF(F, f, fsel=0)
-        F.gi = sum(F.gi for F in F_)
     if hasattr(F_[0],'caller_'): F.caller_ = set([caller for N in F_ for caller in N.caller_])  # for comp_caller between centroids
     return F   # fw = Fw
 
