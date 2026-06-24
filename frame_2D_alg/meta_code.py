@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from functools import wraps
 from copy import copy, deepcopy
 import ast; from itertools import combinations
+import executing
 '''
 code modification: compare aligned ops between oF_ AST sequences, cluster/split/merge matches into higher oF typs
 '''
@@ -141,7 +142,7 @@ class CoF(CF):
         f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]  # fr if nested oF?
         f.caller_ = kw.get('caller_', [])
         f.vt_ = kw.get('vt_',[])  # vals per call
-        f.gv_ = kw.get('gv_',0)  # sum gating vals
+        f.gv_ = kw.get('gv_',[])  # sum gating vals
     @staticmethod
     def get(): return CoF._cur.get()  # Frm?
     @staticmethod
@@ -152,6 +153,7 @@ class CoF(CF):
             _CoF = CoF._cur.get(None)
             oF = CoF(nF=iF_[func.__name__], root=_CoF)
             i = iF_[func.__name__]; oF_[i].call_ += [oF]  # F_call_T_[i][oF.nF] += oF.dTT
+            oF.gv_ = copy(oF_[i].gv_)
             if _CoF is not None:
                 _CoF.call_ += [oF]
                 oF_[iF_[func.__name__]].caller_.add(_CoF)  # for comp_caller_
@@ -178,18 +180,13 @@ def Fvt_(N_,TT,c,r):
 
 def gv_(v):
     oF = CoF.get()
-    i = oF_[oF.nF].gv_map[inspect.currentframe().f_back.f_lineno]
+    n = executing.Source.executing(inspect.currentframe().f_back).node  # get current gv_ ast node
+    toF = oF_[oF.nF]
+    for i, g in enumerate(toF.g_): 
+        if g.lineno == n.lineno: break
     if v > 0: return v
-    else: oF.gv_[i] -= v  # then oF.w = vt_(oF.dTT)[0] + sum(oF.gv_)
+    else:     oF.gv_[i] -=v; toF.gv_[i] -= v  # then oF.w = vt_(oF.dTT)[0] + sum(oF.gv_)  (should be accumulating to the typ oF in oF_?)
 
-def gv_sites(fdef):  # g_[i] <-> oF.gv_[i], same order as build
-    g_ = []  # to eval gate by oF.gv_[i] after accumulation
-    def rec(node):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if node.func.id == 'gv_': g_.append(node)
-            if node.func.id in iF_: return   # build substitutes callee, no descent
-        for child in ast.iter_child_nodes(node): rec(child)
-    rec(fdef); return g_
 
 def flat_(oF, call_=None):  # all nested call_ s
 
@@ -203,7 +200,7 @@ def F_body_():  # form function body by AST tracing
 
     def build(func, node):  # AST → CoF | (type,sub_) | ast_leaf | None
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if node.func.id=='gv_': func.gv_ += [0]
+            if node.func.id=='gv_': func.gv_ += [0]; func.g_ += [node]
             if (i := iF_.get(node.func.id)) is not None: return oF_[i],3
         sub_ = [rett for t in ast.iter_child_nodes(node) if (rett := build(func,t)) is not None]
         if sub_:
@@ -211,7 +208,7 @@ def F_body_():  # form function body by AST tracing
         if type(node) in costs: return node, costs.get(type(node),0)
 
     for func,name in zip(oF_,nF_):
-        func.caller_ = set()
+        func.caller_ = set(); func.g_ = []  # only need g_ in type oF
         for node in ast.iter_child_nodes(name):  # skip top function definition
             rett = build(func, node)
             if rett:
@@ -297,6 +294,7 @@ def split_oF_():  # divisive clustering
                 out += [sub]
         else: out += [oF]
     oF_[:] = out
+    # after split here, nF and iF will be no longer relevant
 
 def cluster_oF_():  # cluster Ts if called together, global only
 
