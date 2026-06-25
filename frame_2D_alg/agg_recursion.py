@@ -1,11 +1,12 @@
 import numpy as np, inspect, contextvars
+import ast
 from copy import copy, deepcopy
 from math import atan2, cos, pi  # from functools import reduce
 from itertools import zip_longest, combinations, product  # from multiprocessing import Pool, Manager
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
-from meta_code import oF_,CF,CL,CC,CN,CoF, wT,wTT, eps_,eps,ave,avd,decay, trace_func,parse_funcs, split_oF_,cluster_oF_,F_body_, vt_,sum_vt, gv_, Fvt_
+from meta_code import oF_,CF,CL,CC,CN,CoF, wT,wTT, eps_,eps,decay, compile_oF, call_sites, trace_func,parse_funcs, split_oF_,cluster_oF_,build, vt_,sum_vt, gv_, Fvt_
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -876,9 +877,20 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
         ave, avd = vt_(aTT)
         # filters *= ave
         if oL := pack_seg(frame,'oH', wBac, cBac**2, oTT):
-            dTT += oL.dTT-oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
-            split_oF_(); cluster_oF_()  # add eval?
-            # reform oF_
+            dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
+            sF_, rF_ = split_oF_()  # splits, remaining oF_s
+            smF_,rF_ = cluster_oF_(sF_+ rF_)  # splits+merges + remaining
+            oF_ = smF_+rF_  # total dict oF_, not verified:
+            for F in oF_: oF_[F] = oF_.get(oF_[F], oF_[F])   # collapse A->A'->A''
+            for oF in oF_:  # update all fDefs in new + remaining oFs
+                cs = call_sites(oF.fdef)
+                if not oF.body or any(n.func.id in oF_ for n in cs):
+                    for n in cs:
+                        if n.func.id in oF_: n.func.id = oF_[n.func.id]
+                    oF.body=[]; oF.fc=0; oF.g_=[]
+                    for node in ast.iter_child_nodes(oF.fdef):
+                        if (r := build(oF,node)): t,fc=r; oF.body += [t]; oF.fc += fc
+                    compile_oF(oF)
     Fvt_([frame],dTT,dc,dr)
     return frame, aTT, oTT, aL, oL
 

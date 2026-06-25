@@ -332,18 +332,6 @@ def convert_to_dP(_P,P, verT, angle, distance, m, d):
     link.L = min(_P.latT[-1],P.latT[-1]) if isinstance(_P,CP) else min(_P.L,P.L)  # P is CdP
     return link
 
-def ffeedback2(frame, aTT,oTT):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
-
-    global ave,avd
-    _aTT, _oTT = copy(aTT), copy(oTT)
-    if aH := pack_seg(frame,'aH',wBac, cBac, aTT):
-        ave, avd = vt_(aH.dTT)  # filters *= ave
-        aTT = aH.dTT
-        if oH := pack_seg(frame,'oH', wBac, cBac**2, oTT):
-            split_oF_(); cluster_oF_()  # reform oF_
-            oTT = oH.dTT
-    return frame, aTT+oTT, [frame], aTT+oTT, frame.c, frame.r, {}  # frame in oF.N_? (not sure, sum Tts here?)
-
 def proj_TT(L, cos_d, dist, r, pTT, wTT, dec=1, fdec=0, frec=0):  # accumulate link pTT with iTT | eTT internally, L may be N
 
     dec = dist if fdec else ave ** (1+ dist*dec / L.span)  # not fully revised, ave = match decay rate / unit distance
@@ -412,3 +400,31 @@ class CoF(CF):
         inner.wrapped = True
         return inner
     def __bool__(f): return bool(f.call_)
+
+def gv_sites(fdef, fi=1):  # g_[i] <-> oF.gv_[i], same order as build
+    g_ = []                # eval gate / oF.gv_[i] after accumulation
+    def rec(node):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id == 'gv_':
+                if fi: node.args[-1].value = len(g_)   # overwrite gv_ index
+                g_.append(node)
+            if node.func.id in iF_: return   # build substitutes callee, no descent
+        for child in ast.iter_child_nodes(node): rec(child)
+    rec(fdef); return g_
+
+def ffeedback2(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
+
+    global ave, avd
+    dTT = dc = dr = 0
+    _ac,_ar = (aL.c,aL.r) if aL else (0,0); _oc,_or = (oL.c,oL.r) if oL else (0,0)
+    # H init @ 1st term:
+    if aL := pack_seg(frame,'aH',wBac, cBac, aTT):  # L: new level
+        dTT = aL.dTT-aTT; aTT=aL.dTT; dc= aL.c-_ac; dr= aL.r-_ar
+        ave, avd = vt_(aTT)
+        # filters *= ave
+        if oL := pack_seg(frame,'oH', wBac, cBac**2, oTT):
+            dTT += oL.dTT-oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
+            split_oF_(); cluster_oF_()  # add eval?
+            # reform oF_
+    Fvt_([frame],dTT,dc,dr)
+    return frame, aTT, oTT, aL, oL

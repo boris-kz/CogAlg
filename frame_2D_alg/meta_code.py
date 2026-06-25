@@ -3,7 +3,6 @@ from contextlib import contextmanager
 from functools import wraps
 from copy import copy, deepcopy
 import ast; from itertools import combinations
-import executing
 '''
 code modification: compare aligned ops between oF_ AST sequences, cluster/split/merge matches into higher oF typs
 '''
@@ -142,7 +141,7 @@ class CoF(CF):
         f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]  # fr if nested oF?
         f.caller_ = kw.get('caller_', [])
         f.vt_ = kw.get('vt_',[])  # vals per call
-        f.gv_ = kw.get('gv_',[])  # sum gating vals
+        f.gv_ = kw.get('gv_',0)  # sum gating vals
     @staticmethod
     def get(): return CoF._cur.get()  # Frm?
     @staticmethod
@@ -153,7 +152,6 @@ class CoF(CF):
             _CoF = CoF._cur.get(None)
             oF = CoF(nF=iF_[func.__name__], root=_CoF)
             i = iF_[func.__name__]; oF_[i].call_ += [oF]  # F_call_T_[i][oF.nF] += oF.dTT
-            oF.gv_ = copy(oF_[i].gv_)
             if _CoF is not None:
                 _CoF.call_ += [oF]
                 oF_[iF_[func.__name__]].caller_.add(_CoF)  # for comp_caller_
@@ -178,15 +176,10 @@ class CoF(CF):
 def Fvt_(N_,TT,c,r):
     oF = CoF.get(); oF.N_+=N_; oF.c+=c; oF.vt_ += [[TT,c,r]]  # data per call
 
-def gv_(v):
+def gv_(v, i):
     oF = CoF.get()
-    n = executing.Source.executing(inspect.currentframe().f_back).node  # get current gv_ ast node
-    toF = oF_[oF.nF]
-    for i, g in enumerate(toF.g_): 
-        if g.lineno == n.lineno: break
     if v > 0: return v
-    else:     oF.gv_[i] -=v; toF.gv_[i] -= v  # then oF.w = vt_(oF.dTT)[0] + sum(oF.gv_)  (should be accumulating to the typ oF in oF_?)
-
+    else: oF.gv_[i] -= v  # then oF.w = vt_(oF.dTT)[0] + sum(oF.gv_)
 
 def flat_(oF, call_=None):  # all nested call_ s
 
@@ -196,19 +189,24 @@ def flat_(oF, call_=None):  # all nested call_ s
         if sub.call_: flat_(sub,call_)
     return call_
 
+def build(func, node):  # AST → CoF | (type,sub_) | ast_leaf | None
+
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        if node.func.id=='gv_':
+            func.g_+=[node]; l=len(func.g_)  # func.g_[i] <-> oF.gv_[i]
+            node.args[-1].value = l  # read by recompiled fdef
+            sub_ = [r for t in ast.iter_child_nodes(node) if (r := build(func,t)) is not None]
+            sub_,fc_ = zip(*sub_) if sub_ else ((),())
+            return (('gv_',l), sub_), sum(fc_)+costs.get(ast.Call,0)
+        if (i := iF_.get(node.func.id)) is not None: return oF_[i],3
+    sub_ = [rett for t in ast.iter_child_nodes(node) if (rett := build(func,t)) is not None]
+    if sub_:
+        sub_,fc_= zip(*sub_); return (type(node), sub_), sum(fc_)+costs.get(type(node), 0)
+    if type(node) in costs: return node, costs.get(type(node),0)
+
 def F_body_():  # form function body by AST tracing
 
-    def build(func, node):  # AST → CoF | (type,sub_) | ast_leaf | None
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if node.func.id=='gv_': func.gv_ += [0]; func.g_ += [node]
-            if (i := iF_.get(node.func.id)) is not None: return oF_[i],3
-        sub_ = [rett for t in ast.iter_child_nodes(node) if (rett := build(func,t)) is not None]
-        if sub_:
-            sub_,fc_= zip(*sub_); return (type(node), sub_), sum(fc_)+costs.get(type(node), 0)
-        if type(node) in costs: return node, costs.get(type(node),0)
-
     for func,name in zip(oF_,nF_):
-        func.caller_ = set(); func.g_ = []  # only need g_ in type oF
         for node in ast.iter_child_nodes(name):  # skip top function definition
             rett = build(func, node)
             if rett:
@@ -232,7 +230,10 @@ nF_ = [None]*len(_names)  # FunctionDefs
 iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
 oF_ = [CoF(nF=i,typ=typ) for i,typ in enumerate(typ_)]
 parse_funcs(["agg_recursion.py"])  # populate nF_
-F_body_()  # add F.body from AST
+# AST -> F.body:
+for func,fdef in zip(oF_,nF_):
+    for node in ast.iter_child_nodes(fdef):
+        if (r := build(func,node)): t,fc = r; func.body += [t]; func.fc += fc
 def call_sites(fd):  # FunctionDef
     return [n for n in ast.walk(fd) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id in iF_]
 F_call_T_ = [[np.zeros((2,9)) for _ in call_sites(fd)] for fd in nF_]  # dTT computed per callee
@@ -279,7 +280,7 @@ def get_fc(n):
     return n.fc if isinstance(n,CoF) else costs.get(n[0],0)+sum(get_fc(c) for c in n[1]) if isinstance(n,tuple) else costs.get(type(n),0)
 
 def split_oF_():  # divisive clustering
-    out = []
+    sub_ = {}
     for oF in oF_:
         if (len(oF.body)-1) * wL > ave:  # * split w,c
             _n= oF.body[0]; grp=[_n]; grp_=[]
@@ -291,15 +292,15 @@ def split_oF_():  # divisive clustering
             for grp in grp_:  # single refinement
                 fc = sum([get_fc(prim) for prim in grp])
                 sub = CoF(root=oF,fc=fc,body=grp); sub.caller_ = copy(oF.caller_)
-                out += [sub]
-        else: out += [oF]
-    oF_[:] = out
-    # after split here, nF and iF will be no longer relevant
+                sub_.update(sub)
+        else: sub_.update(oF)
+    return sub_
 
-def cluster_oF_():  # cluster Ts if called together, global only
+def cluster_oF_(oF_):  # cluster Ts if called together, global only
 
     grp_ = {}   # group same-typ oFs:
-    for T in oF_: grp_.setdefault(T.typ, []).append(T)
+    for T in oF_:  # updated in split_oF_
+        grp_.setdefault(T.typ, []).append(T)
     grp_ = list(grp_.values())
     C_ = [sum2O(g) for g in grp_]  # initial composites
     Ln,Lc = len(oF_),len(C_); L = Ln*Lc  # -1?
@@ -398,6 +399,12 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
             break
         _wTT = np.array(wTT); wTT = []
     return _wTT  # single-mode dTT, extend to 2D-3D lev cycles in H, cross-level param max / centroid?
+
+def compile_oF(oF):  # mutated fdef -> live traced callable
+
+    ast.fix_missing_locations(oF.fdef)
+    exec(compile(ast.Module(body=[oF.fdef], type_ignores=[]), '<oF>', 'exec'), oF.g)
+    oF.g[oF.fdef.name] = CoF.traced(oF.g[oF.fdef.name])
 
 def trace_func(module_dict, module_name=None):
 
