@@ -6,7 +6,7 @@ from itertools import zip_longest, combinations, product  # from multiprocessing
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
-from meta_code import oF_,CF,CL,CC,CN,CoF, wT,wTT, eps_,eps,decay, compile_oF, call_sites, trace_func,parse_funcs, split_oF_,cluster_oF_,build, vt_,sum_vt, gv_, Fvt_
+from meta_code import oF_,nF_,CF,CL,CC,CN,CoF, wT,wTT, eps_,eps,ave,avd,decay, compile_oF, call_sites, trace_func,parse_funcs, split_oF_,cluster_oF_,build, vt_,sum_vt, gv_, Fvt_, inject_oF_, cent_TT
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -70,14 +70,14 @@ def cross_comp(root, rr, fC=0):  # core function mediating recursive rng+ and de
     Fvt_(*cLt)  # copy default results from comp_s
     if L_:  # +ve only
         root.L_ = L_; L= len(L_)-1  # val=m+d /clust, m/comp
-        if gv_(sum(vt_(TT,ttE))*(wE*L) - (ave+avd)*(r+cE*L), 0):  # if +ve, store neg gate values
+        if gv_(sum(vt_(TT,ttE))*(wE*L) - (ave+avd)*(r+cE*L)):  # if +ve, store neg gate values
             E_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)
             G_,r = cluster_N(root, E_,r,c)  # cluster_C, _P, eval?
             if G_:
                 if not root.typ: F2N(root)  # promote at 1st sub+ or agg+
                 root.H += [sum2F(L_,root,froot=1)]  # dLev per L_
                 root.Nt = sum2F(G_,root,froot=2); L=len(G_)-1  #| C_?
-                if gv_(vt_(TT,tAgg)[0]* (wAgg*L) - ave* (r+cAgg*L), 1):  # in gv_[1]
+                if gv_(vt_(TT,tAgg)[0]* (wAgg*L) - ave* (r+cAgg*L)):  # in gv_[1]
                     G_ = cross_comp(root.Nt,r)  # agg+
     return G_  # last term for oF
 
@@ -105,7 +105,7 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
         pTT = proj_V(_N,N, dist, dy_dx, root.m if root!=2 else decay** (dist/((_N.span+N.span)/2)))  # based on current rim
         lr = r+ (N.r+_N.r)/2; m,d = vt_(pTT,ttN_)  # +|-match certainty
         if m > 0:
-            if gv_(abs(m)*wN - ave*(r+cN), 0):  # comp if marginally predictable, update N.Rt pair eval, ave / proj surprise value?
+            if gv_(abs(m)*wN - ave*(r+cN)):  # comp if marginally predictable, update N.Rt pair eval, ave / proj surprise value?
                 Link = comp_N(_N,N, lr, c, full=not tnF, A=dy_dx, span=dist, rL=root)
                 Link.rTT = np.abs(pTT - Link.dTT) / eps_(Link.dTT)  # relative prediction error to fit oF, direction-agnostic
                 L_+= [Link]; N_+= [_N,N]
@@ -136,7 +136,7 @@ def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
                 dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx)
                 L = comp_N(_C,C,_r,c, A=dy_dx,span=dist); L_+=[L]; N_+=[_C,C]
                 if L.m>ave: TTm+=L.dTT; cm+=L.c; rm+=L.r
-                if fC and gv_(L.m*wF- ave*(L.r+cF),0):
+                if fC and gv_(L.m*wF- ave*(L.r+cF)):
                     add2F(_C,C,1); mrg_ += [C]  # may not already be merged
                     for n in C.N_: n.root_[n.root_.index(C)] = _C  # keep m,d positions
             if mrg_: N_ = list(set(N_) - set(mrg_))
@@ -169,7 +169,7 @@ def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None):
 
     TT = base_comp(_N,N)[0] if full else comp_derT(_N.dTT[1],N.dTT[1]); m,d = vt_(TT, ttN_)
     L = CL(N_=[_N,N], dTT=TT,m=m,d=d,c=c,r=r, root=rL)
-    if N.typ and gv_(m* wN_*c - ave*(r+cN_), 0):  # skip PPs, may comp Nts?
+    if N.typ and gv_(m* wN_*c - ave*(r+cN_)):  # skip PPs, may comp Nts?
         L.H = [Copy_(L)]  # lev0 to preserve resolution before adding deeper tLevs, min len H = 2
         dn_ = []  # cross_comp N_| Ft_-> top tLev
         if N.typ <3:  # L | C | Nt?
@@ -203,7 +203,7 @@ def comp_F(_F, F, ir=0, rL=None):
             if l: Np_ = [[_n,n] for _n,n in zip(_N_,N_) if _n and n]  # same forks
             else: Np_ = list(product(_N_,N_))  # pairs
             L = len(Np_)-1
-            if gv_(np.mean([rL.m,m])* (wF*L) - ave* (r+cF*L), 0):
+            if gv_(np.mean([rL.m,m])* (wF*L) - ave* (r+cF*L)):
                 if l: L_= [L for Np in Np_ for L in comp_F(*Np, r,rL=dF).N_]; TT,C,R = sum_vt(L_, wTT=ttF)
                 else: L_,TT,C,R,_ = comp_N_(Np_,r,nF,rL)
                 if L_:
@@ -335,7 +335,7 @@ def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace
                 c = nc + lc + bc
                 r = (nr*nc + lr*lc + br*bc) /c  # br includes overlap?
                 tt= (nt*nc + lt*lc + bt*bc) /c  # tentative
-                if gv_(sum(vt_(tt, Ft.root.wTT*ttcN))*wcN*(len(N_)-1) - (ave+avd)*(r+ccN*(len(N_)-1)),0):  # apply Fw_ and Fc_ in every eval_?
+                if gv_(sum(vt_(tt, Ft.root.wTT*ttcN))*wcN*(len(N_)-1) - (ave+avd)*(r+ccN*(len(N_)-1))):  # apply Fw_ and Fc_ in every eval_?
                     G_ += [sum2G(ft_,ttcN, CN())]; Gt_+= [[tt,c,r]]  # evals cluster_C, cluster_P internally
                     # _C=C+c; _rc=C/_C; rc=c/_C; TT=TT*_rc+tt*rc; R=R*_rc+r*rc; C=_C
         if G_:
@@ -343,7 +343,7 @@ def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace
             C = sum([g[1] for g in Gt_]); TT=np.zeros((2,9)); R=0; _r+=1  # + wC?
             for tt,c,gr in Gt_: w=c/C; TT+=tt*w; R+=gr*w
             L = len(G_)-1
-            if gv_(sum(vt_(TT, Ft.root.wTT*ttcN))*(wcN*L) - (ave+avd)*(_r+R+ccN*L), 1):  # reform root,Nt, no other forks yet:
+            if gv_(sum(vt_(TT, Ft.root.wTT*ttcN))*(wcN*L) - (ave+avd)*(_r+R+ccN*L)):  # reform root,Nt, no other forks yet:
                 rG = Ft.root; Nt=rG.Nt; Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=R
                 rG.dTT=TT; rG.c=C; rG.r=R
         # combine C_:
@@ -388,7 +388,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
                 DTT+=dTT; mat+=M; dif+=D; cnt+=T; rdn+=R; Up+=up
         r = _r+ rdn/(cnt or eps)
         L = len(out_+ C_); olp = sum([len(N.root_) for N in N_])  # rdn+=olp, prioritize stronger?
-        if gv_((mat+dif)* (wcP*L) - Ave* (r+olp+ ccP*L),0):
+        if gv_((mat+dif)* (wcP*L) - Ave* (r+olp+ ccP*L)):
             out_+=C_; T=sum([f.c for f in out_])
             out_ = cluster_P(out_,T, Ft)  # refine all memberships in parallel by global backprop
             break
@@ -401,7 +401,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
     if out_:
         for n in [N for C in out_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals:
             n.exe = (n.d if n.typ==1 else n.m) + np.sum(n.m_) - ave
-        if gv_(vt_(DTT,Ft.root.wTT*ttcC)[0]*wcC*(len(out_)-1) - ave*(r+ccC*(len(out_)-1)), 1):
+        if gv_(vt_(DTT,Ft.root.wTT*ttcC)[0]*wcC*(len(out_)-1) - ave*(r+ccC*(len(out_)-1))):
             Ct = sum2F(out_); Ft.root.Ct = Ct; Ct.root = Ft.root
             cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
     if out_: Fvt_(out_, *sum_vt(out_)[:-1], r)
@@ -425,7 +425,7 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
         Mt = md__[:,:,0].sum()  # total V
         conv = md__.shape==_md__.shape and Mt* np.abs(md__-_md__).sum()* (wcP*L) <= ave*(root.r+ccP*L)  # convergence
         removed = []
-        if gv_(O*wcP - ave*(root.r+ccP*L), 0):  # merge redundant Cs
+        if gv_(O*wcP - ave*(root.r+ccP*L)):  # merge redundant Cs
             for i,_C in enumerate(C_):
                 if _C in removed: continue
                 for C in C_[i+1:]:
@@ -538,13 +538,13 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
     N_ = G.N_; N=N_[0]; G.sub = N.sub+1 if G.L_ else N.sub; r=G.r
     if G.Lt:  # sub+
         Lt = G.Lt; L_,lm,ld,lr = Lt.N_,Lt.m,Lt.d,Lt.r; L=len(L_)-1; Av = ave+avd
-        if gv_(Vn := (lm+ld)*wcN - Av* (lr+1+ccN*L),0):  # for cluster_N
+        if gv_(Vn := (lm+ld)*wcN - Av* (lr+1+ccN*L)):  # for cluster_N
             c = G.Lt.c; E_ = get_exemplars({N for link in L_ for N in link.N_}, r,c)
-            if gv_(Vn* (wcC-wcN)* (mdecay(L_)-decay) - Av* (lr+1+(ccC-ccN)*L), 1):
+            if gv_(Vn* (wcC-wcN)* (mdecay(L_)-decay) - Av* (lr+1+(ccC-ccN)*L)):
                 r +=1; G_,r = cluster_C(G.Nt,E_,r,c)  # higher V, low decay, eval cluster_P
             else:      G_,r = cluster_N(G.Nt,E_,r,c)  # updates G
             L= (len(G_)-1) **2  # if full cross_comp?
-            if G_ and gv_(vt_(G.Nt.dTT,G.wTT*tAgg)[0]*(wAgg*L) - ave*(r+cAgg*L), 2):
+            if G_ and gv_(vt_(G.Nt.dTT,G.wTT*tAgg)[0]*(wAgg*L) - ave*(r+cAgg*L)):
                 cross_comp(G.Nt,r)
     if G.Bt:
         Bt = G.Bt; bd,br,L = Bt.d,Bt.r,len(Bt.N_); rroot = root.root if root.root else 0
@@ -682,9 +682,9 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
     blob_ = tile.N_; G_,TT,C,R = [],np.zeros((2,9)),0,0
     for blob in blob_:
         if not blob.sign:
-            if gv_(blob.G * wVct - ave * cVct, 0):  # proxy for comp_slice and slice_edge
+            if gv_(blob.G * wVct - ave * cVct):  # proxy for comp_slice and slice_edge
                 edge = slice_edge(blob, rV); L = len(edge.P_)-1
-                if gv_(edge.G * (wVct*L) - sum([P.latT[4] for P in edge.P_]) * (cVct*L),1):
+                if gv_(edge.G * (wVct*L) - sum([P.latT[4] for P in edge.P_]) * (cVct*L)):
                     PPm_ = comp_slice(edge, rV, ttVct)  # add comp_slice's weights?
                     N_ = [PP2N(PPm) for PPm in PPm_]
                     c = sum([PPm.c for PPm in N_]); C += c
@@ -694,7 +694,7 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
                             PPd_ = [B.root for B in N.B_]; sum2F(PPd_,N.Bt)
                             N.Bt.N_ = PPd_; [setattr(B,'root',N.Bt) for B in PPd_]
                     L = len(PPm_)-1
-                    if gv_(sum(vt_(sum_vt(N_,wTT=ttVct)[0])) * (wVct*L) - (ave+avd) * (3+cVct*L),2):
+                    if gv_(sum(vt_(sum_vt(N_,wTT=ttVct)[0])) * (wVct*L) - (ave+avd) * (3+cVct*L)):
                         G_,TT,c,R = trace_edge([F2N(n) for n in N_], G_,TT,c,3,tile); C += c  # flatten B_-mediated Gs
     if G_:
         Nt = CF(nF='Nt', root=tile); Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=1; Nt.H=tile.H; tile.Nt=Nt; tile.dTT=TT; tile.c=C; L=len(G_)
@@ -740,7 +740,7 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
     G_, TT,C,R = [],np.zeros((2,9)),0,0
     for n_,ntt,nc,l_,ltt,lc,merged in Gt_:
         if not merged:
-            if gv_(vt_(ntt+ltt,ttTrc)[0] - ave*r, 0):  # wrap singletons too
+            if gv_(vt_(ntt+ltt,ttTrc)[0] - ave*r):  # wrap singletons too
                 TT += ntt+ltt; C += nc+lc; R += r*(nc+lc)  # add Bt?
                 G_ += [sum2G([(n_,'Nt',ntt,nc,r)]+([(l_,'Lt',ltt,lc,r)] if l_ else []), ttTrc, root)]
             else:
@@ -828,14 +828,14 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
         cy,cx = (Ly-1)//2,(Lx-1)//2; y,x = cy,cx  # start=mean
         PV__ = np.zeros([Ly,Lx])
         T_ = []
-        while T and gv_(sum(vt_(T.dTT, T.wTT*ttFrm*T.c)) * wFrm - (ave+avd)*(T.r+(cFrm*T.c)),0):
+        while T and gv_(sum(vt_(T.dTT, T.wTT*ttFrm*T.c)) * wFrm - (ave+avd)*(T.r+(cFrm*T.c))):
             frame[y,x]=T; T_+=[T]; dy_dx = T.box[2:] -T.box[:2]
             pTT, pc = proj_N(T, np.hypot(*dy_dx), dy_dx, elev, T.c)
-            if gv_(ave * (cFrm*T.c) - sum(vt_(pTT, T.wTT*ttFrm)) * (wFrm*pc),1):
+            if gv_(ave * (cFrm*T.c) - sum(vt_(pTT, T.wTT*ttFrm)) * (wFrm*pc)):
                 proj_focus(PV__,y,x, T)
                 pv__ = PV__.copy(); pv__[frame != None] = 0
                 y,x = np.unravel_index(pv__.argmax(), PV__.shape)
-                if gv_(PV__[y,x] - ave,2):
+                if gv_(PV__[y,x] - ave):
                     iy = _iy+ (y-cy)*(T.box[2]-T.box[0]); ix = _ix+ (x-cx)*(T.box[3]-T.box[1])
                     T = frame_H(image, iy,ix, Ly,Lx, Y,X, rV, max_elev=elev)[0]  # expand new tile to current level, no fb
                 else: break
@@ -868,7 +868,15 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
 
 def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
 
-    global ave, avd
+    global ave, avd, oF_
+    # this should be here to update toF only? Right before the ffeedback.
+    for oF in oF_:
+        C = oF.c; TT=np.zeros((2,9)); R=0
+        for tt,c,r in oF.vt_: w= c/(C or eps); TT+=tt*w; R+=r*w
+        oF.dTT,oF.r = TT,R
+        oF.w = vt_(oF.dTT)[0] + sum(oF.gv_)
+        oF.wTT = cent_TT(tt, r)
+    
     dTT = dc = dr = 0
     _ac,_ar = (aL.c,aL.r) if aL else (0,0); _oc,_or = (oL.c,oL.r) if oL else (0,0)
     # H init @ 1st term:
@@ -880,17 +888,15 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
             dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
             sF_, rF_ = split_oF_()  # splits, remaining oF_s
             smF_,rF_ = cluster_oF_(sF_+ rF_)  # splits+merges + remaining
-            oF_ = smF_+rF_  # total dict oF_, not verified:
-            for F in oF_: oF_[F] = oF_.get(oF_[F], oF_[F])   # collapse A->A'->A''
-            for oF in oF_:  # update all fDefs in new + remaining oFs
+            oF_ = []; _oF_ = smF_+rF_  # total dict oF_, not verified:
+            for F in _oF_: _oF_[F] = _oF_.get(_oF_[F], _oF_[F])   # collapse A->A'->A''
+            for oF in _oF_:  # update all fDefs in new + remaining oFs
                 cs = call_sites(oF.fdef)
                 if not oF.body or any(n.func.id in oF_ for n in cs):
                     for n in cs:
-                        if n.func.id in oF_: n.func.id = oF_[n.func.id]
-                    oF.body=[]; oF.fc=0; oF.g_=[]
-                    for node in ast.iter_child_nodes(oF.fdef):
-                        if (r := build(oF,node)): t,fc=r; oF.body += [t]; oF.fc += fc
-                    compile_oF(oF)
+                        if n.func.id in oF_: n.func.id = oF_[n.func.id]      
+                    oF_ += [oF]
+            inject_oF_(oF_, globals())
     Fvt_([frame],dTT,dc,dr)
     return frame, aTT, oTT, aL, oL
 
@@ -908,8 +914,10 @@ def pack_seg(frame, nF, w, c, _dTT):  # drift-gated regime termination for aH an
             return seg
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
-    trace_func(vars())
-    parse_funcs(["agg_recursion.py"])  # populate nF_
+    trace_func(vars()); g = vars()   
+    parse_funcs(["agg_recursion.py"])   # populate nF_
+    for oF in oF_: oF.fdef = nF_[oF.nF]  # update fdef with ast node
+    inject_oF_(oF_, g)
     Y, X = imread('./images/toucan.jpg').shape
     frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -31, iX=X//2 -31, Ly=64,Lx=64, Y=Y, X=X, rV=1, ffb=1)
     # search frames ( tiles inside image, at this size it should be 4K, or 256K panorama, won't actually work on toucan
