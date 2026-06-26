@@ -428,3 +428,63 @@ def ffeedback2(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; f
             # reform oF_
     Fvt_([frame],dTT,dc,dr)
     return frame, aTT, oTT, aL, oL
+
+def sum_vt(N_, fg=0, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
+
+    C = sum(n.c for n in N_); R = gV = 0; TT = np.zeros((2,9))
+    for n in N_:
+        w = n.c / C; TT += (n.rTT if fr else n.dTT)*w; R += n.r*w
+        if fg: gV += sum(n.gv_) * w
+    if fm:
+        m,d = vt_(TT, wTT)
+        if fdiv: m/= ave*R; d/= avd*R  # in 0-inf for summation
+        else:    m-= ave*R; d-= avd*R  # in -1:1 without r
+        if fg:   m+= gV
+        return   m,d,TT,C,R
+    else: return TT,C,R
+
+class CoF(CF):
+    name = "func"
+    _cur = contextvars.ContextVar('oF')
+    def __init__(f, **kw):
+        super().__init__(**kw)
+        f.call_ = kw.get('call_',[])  # called oFs only
+        f.body = kw.get('body',[])  # static AST ops + CoF refs in source order
+        f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]  # fr if nested oF?
+        f.caller_ = kw.get('caller_', [])
+        f.vt_ = kw.get('vt_',[])  # vals per call
+        f.gv_ = kw.get('gv_',0)  # sum gating vals
+    @staticmethod
+    def get(): return CoF._cur.get()  # Frm?
+    @staticmethod
+    def traced(func):
+        if getattr(func, 'wrapped', False): return func
+        @wraps(func)
+        def inner(*a, **kw):
+            _CoF = CoF._cur.get(None)
+            oF = CoF(nF=iF_[func.__name__], root=_CoF)
+            i = iF_[func.__name__]; oF_[i].call_ += [oF]  # F_call_T_[i][oF.nF] += oF.dTT
+            if _CoF is not None:
+                _CoF.call_ += [oF]
+                oF_[iF_[func.__name__]].caller_.add(_CoF)  # for comp_caller_
+            _oF = CoF._cur.set(oF)
+            if out := func(*a, **kw):
+                C = oF.c; TT=np.zeros((2,9)); R=0
+                for tt,c,r in oF.vt_: w= c/(C or eps); TT+=tt*w; R+=r*w
+                oF.dTT,oF.r = TT,R
+                oF.w = vt_(oF.dTT)[0] + sum(oF.gv_)
+            if oF.call_:
+                tree = flat_(oF)  # if len(tree)-1?
+                tt,_,r = sum_vt(tree); oF.wTT = cent_TT(tt, r)  # subtree dTT/r, not own
+                if _CoF is not None:
+                    if (j := F_call_i_[_CoF.nF].get(inspect.currentframe().f_back.f_lineno)) is not None:  # get callee site
+                        F_call_T_[_CoF.nF][j] += oF.dTT  # add,c,r: results per callee to refine the code
+            CoF._cur.reset(_oF)
+            return out
+        inner.wrapped = True
+        return inner
+    def __bool__(f): return bool(f.call_)
+
+def Fvt_(N_,TT,c,r):  # buffers call data
+    oF = CoF.get(); oF.N_+=N_; oF.c+=c; oF.vt_ += [[TT,c,r]]
+

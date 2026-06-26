@@ -6,7 +6,7 @@ from itertools import zip_longest, combinations, product  # from multiprocessing
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
-from meta_code import oF_,nF_,CF,CL,CC,CN,CoF, wT,wTT, eps_,eps,ave,avd,decay, compile_oF, call_sites, trace_func,parse_funcs, split_oF_,cluster_oF_,build, vt_,sum_vt, gv_, Fvt_, inject_oF_, cent_TT
+from meta_code import nF_,CF,CL,CC,CN,CoF,wT,wTT, eps_,eps,ave,avd,decay, trace_func,parse_funcs, call_sites, split_oF_,cluster_oF_,inject_oF_,gv_, vt_,sum_vt
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -53,6 +53,22 @@ wM,wD,wi, wG,wI,wa, wL,wS,wA = wT
 cFrm,cAgg,cTrc, cN_,cC_,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (      # function complexity
 wFrm,wAgg,wTrc, wN_,wC_,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init = cost
 ttFrm,tAgg,ttTrc, ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj, ttVct = [F.wTT for F in oF_]
+
+def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to the sum, recompute to convergence
+
+    wTT,_wTT = [],np.ones((2,9)); coT = np.abs(dTT[0])+np.abs(dTT[1])  # complemented vals
+    while True:
+        for fd, _wT, dT in zip((0,1), _wTT, dTT):
+            vT = np.abs(dT)  # if -m: wrong, or surprise value?
+            rvT = vT / eps_(coT) * _wT  # weighted normalized vals
+            mean = rvT.mean() or eps  # scalar
+            invdev_ = np.minimum(rvT / mean, mean / eps_(rvT))
+            wT = invdev_ / (invdev_.mean() or eps)   # mean(wT)=1
+            wTT += [wT]
+        if np.sum(np.abs(wTT-_wTT)) < ave * r:  # if np.linalg.norm(wT - _wT, 1) < r?
+            break
+        _wTT = np.array(wTT); wTT = []
+    return _wTT  # single-mode dTT, extend to 2D-3D lev cycles in H, cross-level param max / centroid?
 ''' 
   cycle:
 - cross-comp nodes, evaluate incremental-derivation cross-comp of new >ave difference links, recursively. 
@@ -66,8 +82,8 @@ ttFrm,tAgg,ttTrc, ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj, ttVct
 def cross_comp(root, rr, fC=0):  # core function mediating recursive rng+ and der+ cross-comp and clustering
 
     N_,G_ = root.N_,[]  # root is Ft, converted below, rc=rdn+olp, comp N_| B_| C_:
-    L_,TT,c,r, cLt = comp_C_(N_,rr,fC=1) if fC else comp_N_(combinations(N_,2),rr)
-    Fvt_(*cLt)  # copy default results from comp_s
+    L_,TT,c,r, cLT = comp_C_(N_,rr,fC=1) if fC else comp_N_(combinations(N_,2),rr)
+    oF_[CoF.get().nF].vT_ += [[*cLT]]  # copy default results from comp_s
     if L_:  # +ve only
         root.L_ = L_; L= len(L_)-1  # val=m+d /clust, m/comp
         if gv_(sum(vt_(TT,ttE))*(wE*L) - (ave+avd)*(r+cE*L)):  # if +ve, store neg gate values
@@ -77,9 +93,9 @@ def cross_comp(root, rr, fC=0):  # core function mediating recursive rng+ and de
                 if not root.typ: F2N(root)  # promote at 1st sub+ or agg+
                 root.H += [sum2F(L_,root,froot=1)]  # dLev per L_
                 root.Nt = sum2F(G_,root,froot=2); L=len(G_)-1  #| C_?
-                if gv_(vt_(TT,tAgg)[0]* (wAgg*L) - ave* (r+cAgg*L)):  # in gv_[1]
+                if gv_(vt_(TT,tAgg)[0]* (wAgg*L) - ave* (r+cAgg*L)):
                     G_ = cross_comp(root.Nt,r)  # agg+
-    return G_  # last term for oF
+    return G_
 
 def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, max dist depends on prior match
 
@@ -116,10 +132,10 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
         else: break  # beyond initial induction range, re-sort by proj_V?
     for N in set(N_):
         if N.rim: N.Rt = sum2F(N.rim)
-    Lt = sum_vt(L_)
-    Fvt_(L_, *Lt)  # +-ve Ls for oF
+    LT = sum_vt(L_)
+    oF_[CoF.get().nF].vT_ += [[*LT]]  # +-ve Ls for oF, no oF.N_?
     pL_ = [L for L in L_ if (L.m > ave or L.typ == -1)]
-    return pL_,*sum_vt(pL_), (L_,*Lt)  # oF.N_=L_,  # +ve only, redundant +-ve for oF
+    return pL_,*sum_vt(pL_), LT  # +ve only, redundant +-ve for oF
 
 def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s, levels
 
@@ -869,14 +885,12 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
 def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
 
     global ave, avd, oF_
-    # this should be here to update toF only? Right before the ffeedback.
     for oF in oF_:
-        C = oF.c; TT=np.zeros((2,9)); R=0
-        for tt,c,r in oF.vt_: w= c/(C or eps); TT+=tt*w; R+=r*w
-        oF.dTT,oF.r = TT,R
-        oF.w = vt_(oF.dTT)[0] + sum(oF.gv_)
-        oF.wTT = cent_TT(tt, r)
-    
+        if not oF.vt_: continue
+        oF.dTT, oF.c, oF.r = sum_vt(oF.vt_)  # vs sum_vt(oF.call_)
+        tt = oF.dTT * oF.wTT * oF.c  # extensive values
+        oF.m, oF.d = sum(tt[0]), sum(abs(tt[1]))
+        oF.w = oF.m + oF.d + sum(oF.gv_)
     dTT = dc = dr = 0
     _ac,_ar = (aL.c,aL.r) if aL else (0,0); _oc,_or = (oL.c,oL.r) if oL else (0,0)
     # H init @ 1st term:
@@ -888,15 +902,15 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
             dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
             sF_, rF_ = split_oF_()  # splits, remaining oF_s
             smF_,rF_ = cluster_oF_(sF_+ rF_)  # splits+merges + remaining
-            oF_ = []; _oF_ = smF_+rF_  # total dict oF_, not verified:
-            for F in _oF_: _oF_[F] = _oF_.get(_oF_[F], _oF_[F])   # collapse A->A'->A''
-            for oF in _oF_:  # update all fDefs in new + remaining oFs
-                cs = call_sites(oF.fdef)
-                if not oF.body or any(n.func.id in oF_ for n in cs):
+            oF_ =[]; _oF_ = smF_+rF_  # dict oF_
+            for F in _oF_: _oF_[F] = _oF_.get(_oF_[F],_oF_[F])  # collapse A->A'->A''?
+            for F in _oF_:  # update fDefs
+                cs = call_sites(F.fdef)
+                if not F.body or any(n.func.id in oF_ for n in cs):
                     for n in cs:
-                        if n.func.id in oF_: n.func.id = oF_[n.func.id]      
-                    oF_ += [oF]
-            inject_oF_(oF_, globals())
+                        if n.func.id in oF_: n.func.id = oF_[n.func.id]
+                    oF_ += [F]
+            if oF_: inject_oF_(oF_, globals())
     Fvt_([frame],dTT,dc,dr)
     return frame, aTT, oTT, aL, oL
 
@@ -914,7 +928,7 @@ def pack_seg(frame, nF, w, c, _dTT):  # drift-gated regime termination for aH an
             return seg
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
-    trace_func(vars()); g = vars()   
+    trace_func(vars()); g = vars()
     parse_funcs(["agg_recursion.py"])   # populate nF_
     for oF in oF_: oF.fdef = nF_[oF.nF]  # update fdef with ast node
     inject_oF_(oF_, g)

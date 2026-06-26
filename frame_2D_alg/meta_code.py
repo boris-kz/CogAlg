@@ -95,11 +95,11 @@ class CL(CF):  # typ=1, add kern+positionals for base comp, Rt,Nt,Bt,Ct from com
     name = "link"
     def __init__(l, **kw):
         super().__init__(**kw)
-        l.yx = kw.get('yx', np.zeros(2))  # mean nodet? comp box is not meaningful?
         l.kern = kw.get('kern',np.zeros(4))  # I,G,A diffs in links
         l.span = kw.get('span',1)  # distance in nodet or aRad, comp with kern or len(N_)
         l.angl = kw.get('angl',None)  # (dy,dx),dir, sum from L_, rarely?
         l.typ  = kw.get('typ',1)
+        l.yx   = kw.get('yx', np.zeros(2))  # mean nodet? comp box is not meaningful?
 
 class CC(CL):  # typ=2, adds arrays per N_
     name = "cent"
@@ -140,9 +140,9 @@ class CoF(CF):
         f.body = kw.get('body',[])  # static AST ops + CoF refs in source order
         f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]  # fr if nested oF?
         f.caller_ = kw.get('caller_', set())
-        f.vt_ = kw.get('vt_',[])  # vals per call
+        f.vT_ = kw.get('vt_',[])  # TT,c,r per call
         f.gv_ = kw.get('gv_',[])  # sum gating vals
-        f.g_ = kw.get('g_',[])  # sum gating vals
+        f.g_  = kw.get('g_', [])  # callee gates
     @staticmethod
     def get(): return CoF._cur.get()  # Frm?
     @staticmethod
@@ -158,49 +158,23 @@ class CoF(CF):
                 oF_[iF_[func.__name__]].caller_.add(_CoF)  # for comp_caller_
             _oF = CoF._cur.set(oF)
             out = func(*a, **kw)
-            """
-            if out := func(*a, **kw):
-                C = oF.c; TT=np.zeros((2,9)); R=0
-                for tt,c,r in oF.vt_: w= c/(C or eps); TT+=tt*w; R+=r*w
-                oF.dTT,oF.r = TT,R
-                oF.w = vt_(oF.dTT)[0] + sum(oF.gv_)
-            if oF.call_:
-                tree = flat_(oF)  # if len(tree)-1?
-                tt,_,r = sum_vt(tree); oF.wTT = cent_TT(tt, r)  # subtree dTT/r, not own
-                if _CoF is not None:
-                    if (j := F_call_i_[_CoF.nF].get(inspect.currentframe().f_back.f_lineno)) is not None:  # get callee site
-                        F_call_T_[_CoF.nF][j] += oF.dTT  # add,c,r: results per callee to refine the code
-            
-            """
             CoF._cur.reset(_oF)
             return out
         inner.wrapped = True
         return inner
     def __bool__(f): return bool(f.call_)
 
-def Fvt_(N_,TT,c,r):
-    oF = CoF.get(); toF = oF_[oF.nF]  
-    toF.N_+=N_; toF.c+=c; toF.vt_ += [[TT,c,r]]  # data per call
-
 def gv_(v, i=None):
-    toF = oF_[CoF.get().nF]
+
     if v > 0: return v
-    else: toF.gv_[i] -= v  # then oF.w = vt_(oF.dTT)[0] + sum(oF.gv_)
-
-def flat_(oF, call_=None):  # all nested call_ s
-
-    if call_ is None: call_ = []
-    for sub in oF.call_:
-        call_ += [sub]
-        if sub.call_: flat_(sub,call_)
-    return call_
+    else: oF_[CoF.get().nF].gv_[i] -= v  # double -ve -> +ve
 
 def build(func, node):  # AST → CoF | (type,sub_) | ast_leaf | None
 
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
         if node.func.id=='gv_':
             func.gv_+=[0]; func.g_+=[node]; l=len(func.g_)  # func.g_[i] <-> oF.gv_[i]
-            node.args.append(ast.Constant(value=l-1))  # gv_(v): add the i index (we must not parse i to the gv_)
+            node.args.append(ast.Constant(value=l-1))  # add gv_(i)
             sub_ = [r for t in ast.iter_child_nodes(node) if (r := build(func,t)) is not None]
             sub_,fc_ = zip(*sub_) if sub_ else ((),())
             return (('gv_',l), sub_), sum(fc_)+costs.get(ast.Call,0)
@@ -320,7 +294,7 @@ def cluster_oF_(oF_):  # cluster Ts if called together, global only
         V, dV = v__.sum(), np.abs(v__-_v__).sum()
         if V*dV*(wcO*L) <= ave * (Ln+ ccO*L): break  # convergence
         _v__ = v__
-    smF_, rF_ = [], []  # final hard assign
+    smF_,rF_ = [],[]  # final hard assign
     for i in range(Lc):
         t_ = [T for j,T in enumerate(oF_) if v__[j].argmax() == i]
         if t_:
@@ -333,6 +307,17 @@ def cluster_oF_(oF_):  # cluster Ts if called together, global only
     for _T,T in combinations(oF_,2): V = (comp_callers(_T,T) + comp_body(_T,T)) * min(_T.fc,T.fc); _T.V_[T] = V; T.V_[_T] = V 
     for t in C.N_: if t is not T: v__[j,i] += t.V_[T]  # += pairwise Vs '''
     return smF_, rF_
+
+def inject_oF_(oF_, g):  # inject AST in g, recompile g[name]
+
+    for oF in oF_:
+        oF.fdef = nF_[oF.nF]; oF.g = g
+        oF.body=[]; oF.fc=0; oF.g_=[]; oF.gv_=[]
+        for node in ast.iter_child_nodes(oF.fdef):
+            if (r := build(oF,node)): t,fc = r; oF.body += [t]; oF.fc += fc
+        ast.fix_missing_locations(oF.fdef)
+        exec( compile( ast.Module(body=[oF.fdef], type_ignores=[]), '<oF>', 'exec'), oF.g)
+        oF.g[oF.fdef.name] = CoF.traced(oF.g[oF.fdef.name])
 
 def merge_oF(F,f, fsel=1):  # combine aligned ops, if-fork per miss, no inline recursion, f can only be added as a whole
 
@@ -389,38 +374,6 @@ def add2O(F, n, nested=0):
         F.fc=n.fc; F.fr=n.fr; F.fw=n.fw
     if nested: F.call_ += [n]  # else add forks?
     return F
-
-def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to the sum, recompute to convergence
-
-    wTT,_wTT = [],np.ones((2,9)); coT = np.abs(dTT[0])+np.abs(dTT[1])  # complemented vals
-    while True:
-        for fd, _wT, dT in zip((0,1), _wTT, dTT):
-            vT = np.abs(dT)  # if -m: wrong, or surprise value?
-            rvT = vT / eps_(coT) * _wT  # weighted normalized vals
-            mean = rvT.mean() or eps  # scalar
-            invdev_ = np.minimum(rvT / mean, mean / eps_(rvT))
-            wT = invdev_ / (invdev_.mean() or eps)   # mean(wT)=1
-            wTT += [wT]
-        if np.sum(np.abs(wTT-_wTT)) < ave * r:  # if np.linalg.norm(wT - _wT, 1) < r?
-            break
-        _wTT = np.array(wTT); wTT = []
-    return _wTT  # single-mode dTT, extend to 2D-3D lev cycles in H, cross-level param max / centroid?
-
-def compile_oF(oF):  # mutated fdef -> live traced callable
-
-    ast.fix_missing_locations(oF.fdef)
-    exec(compile(ast.Module(body=[oF.fdef], type_ignores=[]), '<oF>', 'exec'), oF.g)
-    oF.g[oF.fdef.name] = CoF.traced(oF.g[oF.fdef.name])
-
-
-def inject_oF_(oF_, g):
-
-    for oF in oF_:
-        oF.fdef = nF_[oF.nF]; oF.g = g
-        oF.body=[]; oF.fc=0; oF.g_=[]; oF.gv_=[]
-        for node in ast.iter_child_nodes(oF.fdef):
-            if (r := build(oF, node)): t,fc = r; oF.body += [t]; oF.fc += fc  
-        compile_oF(oF)  # exec injected AST into g; g[name] = traced(recompiled)
 
 def trace_func(module_dict, module_name=None):
 
