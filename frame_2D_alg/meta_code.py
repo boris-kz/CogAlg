@@ -21,10 +21,13 @@ def vt_(TT, wTT=wTT):  # base eval: multi-variate rel match, rel diff for member
     return m, d
 
 def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
-
-    C = sum(n.c for n in N_); R = 0; TT = np.zeros((2,9))
+    fvT = isinstance(list(N_)[0] ,list)  # list to convert set from input E (get_exemplar)
+    C = sum((n[1] if fvT else n.c) for n in N_)
+    R = 0; TT = np.zeros((2,9))
     for n in N_:
-        w = n.c/C; TT += (n.rTT if fr else n.dTT)*w; R += n.r*w
+        if fvT: tt, c, r = n 
+        else:   tt, c, r = (n.rTT if fr else n.dTT), n.c, n.r
+        w = c/C; TT += tt*w; R += r*w
     if fm:
         m,d = vt_(TT, wTT)
         if fdiv: m/= ave*R; d/= avd*R  # in 0-inf for summation

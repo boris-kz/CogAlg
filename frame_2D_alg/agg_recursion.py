@@ -6,7 +6,7 @@ from itertools import zip_longest, combinations, product  # from multiprocessing
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
-from meta_code import nF_,CF,CL,CC,CN,CoF,wT,wTT, eps_,eps,ave,avd,decay, trace_func,parse_funcs, call_sites, split_oF_,cluster_oF_,inject_oF_,gv_, vt_,sum_vt
+from meta_code import oF_,nF_,CF,CL,CC,CN,CoF,wT,wTT, eps_,eps,ave,avd,decay, trace_func,parse_funcs, call_sites, split_oF_,cluster_oF_,inject_oF_,gv_, vt_,sum_vt
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -83,7 +83,7 @@ def cross_comp(root, rr, fC=0):  # core function mediating recursive rng+ and de
 
     N_,G_ = root.N_,[]  # root is Ft, converted below, rc=rdn+olp, comp N_| B_| C_:
     L_,TT,c,r, cLT = comp_C_(N_,rr,fC=1) if fC else comp_N_(combinations(N_,2),rr)
-    oF_[CoF.get().nF].vT_ += [[*cLT]]  # copy default results from comp_s
+    if cLT: oF_[CoF.get().nF].vT_ += [[*cLT]]  # copy default results from comp_s
     if L_:  # +ve only
         root.L_ = L_; L= len(L_)-1  # val=m+d /clust, m/comp
         if gv_(sum(vt_(TT,ttE))*(wE*L) - (ave+avd)*(r+cE*L)):  # if +ve, store neg gate values
@@ -132,10 +132,12 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
         else: break  # beyond initial induction range, re-sort by proj_V?
     for N in set(N_):
         if N.rim: N.Rt = sum2F(N.rim)
-    LT = sum_vt(L_)
-    oF_[CoF.get().nF].vT_ += [[*LT]]  # +-ve Ls for oF, no oF.N_?
-    pL_ = [L for L in L_ if (L.m > ave or L.typ == -1)]
-    return pL_,*sum_vt(pL_), LT  # +ve only, redundant +-ve for oF
+    if L_: 
+        LT = sum_vt(L_)
+        oF_[CoF.get().nF].vT_ += [[*LT]]  # +-ve Ls for oF, no oF.N_?
+        pL_ = [L for L in L_ if (L.m > ave or L.typ == -1)]
+        return pL_,*sum_vt(pL_), LT  # +ve only, redundant +-ve for oF
+    else: return [],0,0,0,[]
 
 def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s, levels
 
@@ -169,8 +171,12 @@ def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
             if L.m>ave: TTm+=L.dTT; cm+=L.c; rm+=L.r
     for N in list(set(N_)):
         if N.rim: N.Rt = sum2F(N.rim)
-    Lt = sum_vt(L_); Fvt_(L_, *Lt); pL_ = [L for L in L_ if L.m>ave]
-    return pL_,TTm,cm, rm/(cm or eps), (L_, *Lt)  # oF.N_ should be +-Ls
+    if L_:
+        LT = sum_vt(L_)
+        oF_[CoF.get().nF].vT_ += [[*LT]]
+        pL_ = [L for L in L_ if L.m>ave]
+        return pL_,TTm,cm, rm/(cm or eps), LT  # oF.N_ should be +-Ls
+    else: return [],0,0,0,[]
 
 def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None):
 
@@ -206,7 +212,7 @@ def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None):
     if N.typ==3:
         for n, _n in (_N,N),(N,_N):
             n.rim += [L]; n.compared.add(_n)  # or unique comps?
-    Fvt_([L], L.dTT, L.c, L.r)
+    oF_[CoF.get().nF].vT_ += [[L.dTT, L.c, L.r]]
     return L
 
 def comp_F(_F, F, ir=0, rL=None):
@@ -224,7 +230,7 @@ def comp_F(_F, F, ir=0, rL=None):
                 else: L_,TT,C,R,_ = comp_N_(Np_,r,nF,rL)
                 if L_:
                     add2F(dF,CF(N_=L_,dTT=TT,c=C,r=R),merge=1); add2F(rL,dF,merge=2)
-    Fvt_([dF], dF.dTT, dF.c, dF.r)
+    oF_[CoF.get().nF].vT_ += [[dF.dTT, dF.c, dF.r]]
     return dF  # no cross-fork N_, no L ext updates?
 
 def base_comp(_N,N):  # comp Et, kern, extT, dTT
@@ -295,7 +301,7 @@ def get_exemplars(N_,_r,_c):  # multi-layer non-maximum suppression -> sparse se
         else:
             break  # the rest of N_ is weaker, trace via rims
     else: E_ = set([N_[0]])  # no inhibition, any N can be seed
-    Fvt_(E_,*sum_vt(E_))
+    oF_[CoF.get().nF].vT_ += [[*sum_vt(E_)]]
     return E_
 
 def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace iL_ with E_?
@@ -367,8 +373,8 @@ def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace
         if C_:
             sum2F(C_, root=Ft.root.Ct)  # Ct.r includes overlap?
             L_ = [L for C in C_ for L in C.L_]  # C-to-N links
-            if L_: Ft.root.Ct.Lt = sum2F(L_,root=Ft.root.Ct)
-    Fvt_(G_,*sum_vt(G_)[:-1], _r)
+            if L_: Ft.root.Ct.Lt = sum2F(L_,root=Ft.root.Ct) 
+    if G_: oF_[CoF.get().nF].vT_ += [[*sum_vt(G_)[:-1], _r]]
     return G_,_r
 
 def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
@@ -420,7 +426,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
         if gv_(vt_(DTT,Ft.root.wTT*ttcC)[0]*wcC*(len(out_)-1) - ave*(r+ccC*(len(out_)-1))):
             Ct = sum2F(out_); Ft.root.Ct = Ct; Ct.root = Ft.root
             cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
-    if out_: Fvt_(out_, *sum_vt(out_)[:-1], r)
+    if out_: oF_[CoF.get().nF].vT_ += [[*sum_vt(out_)[:-1], r]]
     return out_,r  # only r is from deeper cross_comp?
 
 def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
@@ -470,7 +476,7 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
                 out_ += [C]
     if out_:
         dCt = sum2F(list(set(_C_)-set(out_)))  # compress, out_ for CoF?
-        Fvt_([dCt], dCt.dTT, dCt.c, dCt.r)
+        oF_[CoF.get().nF].vT_ += [[dCt.dTT, dCt.c, dCt.r]]
     return out_
 
 def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CC/CN
@@ -566,7 +572,7 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
         Bt = G.Bt; bd,br,L = Bt.d,Bt.r,len(Bt.N_); rroot = root.root if root.root else 0
         if N.typ!=1 and bd*(wAgg*L) > avd*(br+cAgg*L): [F2N(L) for L in Bt.N_]; cross_comp(Bt, br)  # no ddfork
         if rroot: Bt.brrw = Bt.m * (rroot.m * (decay * (rroot.span/G.span)))  # external lend only, need to subtract from root?
-    Fvt_([G], G.dTT, G.c, G.r)
+    oF_[CoF.get().nF].vT_ += [[G.dTT, G.c, G.r]]
     return G
 
 def comb_Ft(Nt, Lt, Bt, Ct, root,wTT):  # from sum2G, default Nt
@@ -717,7 +723,7 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
         if vt_(TT,ttVct)[0]*(wFrm*L) > ave * (cFrm*L):  # L for trans-comp only?
             A_ = [G.angl[0] for G in G_ if G.angl]
             tile.angl = [np.sum(A_, axis=0) if A_ else np.zeros(2), np.sign(tile.dTT[1] @ ttVct[1])]
-            Fvt_(tile.N_, TT ,C, 1)
+            oF_[CoF.get().nF].vT_ += [[TT ,C, 1]]
             return tile
 
 def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary/skeleton?
@@ -762,7 +768,7 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
             else:
                 for N in n_: N.fin=0; N.root=root
     if sum(vt_(TT,root.wTT*ttTrc))*wTrc > (ave+avd)*(r+1+cTrc): _G_+=G_; _TT+=TT;_C+=C  # eval per edge, concat in tile?
-    Fvt_(_G_, *sum_vt(_G_))
+    oF_[CoF.get().nF].vT_ += [[*sum_vt(_G_)]]
     return _G_, _TT, _C, r+R/_C
 
 '''
@@ -833,7 +839,7 @@ def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N
         proj_TT(L, cos_d,dist,L.r+_r,eTT,wTT,dec); c+=L.c
     pTT = iTT + eTT  # proj int,ext links, work the same?
     pc = c* decay ** (1+ dist/N.span)
-    Fvt_([N],pTT,pc,_r)
+    oF_[CoF.get().nF].vT_ += [[pTT,pc,_r]]
     return pTT,pc  # only c decays? info_gain = N.m * average link uncertainty, should be separate
 
 def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
@@ -879,18 +885,19 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
                 elev +=1; T=Fr  # next-extension seed
             else: break
         else: break
-    if Fr: Fvt_([Fr],Fr.dTT, Fr.c, Fr.r)
+    if Fr: oF_[CoF.get().nF].vT_ += [[Fr.dTT, Fr.c, Fr.r]]
     return Fr  # intra-lev feedback
 
 def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
 
     global ave, avd, oF_
     for oF in oF_:
-        if not oF.vt_: continue
-        oF.dTT, oF.c, oF.r = sum_vt(oF.vt_)  # vs sum_vt(oF.call_)
+        if not oF.vT_: continue
+        oF.dTT, oF.c, oF.r = sum_vt(oF.vT_)  # vs sum_vt(oF.call_)
         tt = oF.dTT * oF.wTT * oF.c  # extensive values
         oF.m, oF.d = sum(tt[0]), sum(abs(tt[1]))
         oF.w = oF.m + oF.d + sum(oF.gv_)
+        oF.wTT = cent_TT(oF.dTT, oF.r)  # we still need this?
     dTT = dc = dr = 0
     _ac,_ar = (aL.c,aL.r) if aL else (0,0); _oc,_or = (oL.c,oL.r) if oL else (0,0)
     # H init @ 1st term:
@@ -911,7 +918,7 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
                         if n.func.id in oF_: n.func.id = oF_[n.func.id]
                     oF_ += [F]
             if oF_: inject_oF_(oF_, globals())
-    Fvt_([frame],dTT,dc,dr)
+    oF_[CoF.get().nF].vT_ += [[dTT,dc,dr]]
     return frame, aTT, oTT, aL, oL
 
 def pack_seg(frame, nF, w, c, _dTT):  # drift-gated regime termination for aH and oH
