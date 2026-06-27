@@ -21,10 +21,13 @@ def vt_(TT, wTT=wTT):  # base eval: multi-variate rel match, rel diff for member
     return m, d
 
 def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
-
-    C = sum(n.c for n in N_); R = 0; TT = np.zeros((2,9))
+    fvT = isinstance(list(N_)[0] ,list)  # list to convert set from input E (get_exemplar)
+    C = sum((n[1] if fvT else n.c) for n in N_)
+    R = 0; TT = np.zeros((2,9))
     for n in N_:
-        w = n.c/C; TT += (n.rTT if fr else n.dTT)*w; R += n.r*w
+        if fvT: tt, c, r = n 
+        else:   tt, c, r = (n.rTT if fr else n.dTT), n.c, n.r
+        w = c/C; TT += tt*w; R += r*w
     if fm:
         m,d = vt_(TT, wTT)
         if fdiv: m/= ave*R; d/= avd*R  # in 0-inf for summation
@@ -142,7 +145,8 @@ class CoF(CF):
         f.caller_ = kw.get('caller_', set())
         f.g_ = kw.get('g_', [])  # callee gates
         f.gV_= kw.get('gv_',[])  # sum gating vals
-        f.V_ = kw.get('vt_',[])  # sum(vt_(TT) * c/r
+        f.V_ = kw.get('V_',[])  # sum(vt_(TT) * c/r
+        f.C_ = kw.get('C_',[])  # c * w
     @staticmethod
     def get(): return CoF._cur.get()  # Frm?
     @staticmethod
@@ -167,13 +171,13 @@ class CoF(CF):
 def gv_(v, i=None):
 
     if v > 0: return v
-    else: oF_[CoF.get().nF].gv_[i] -= v  # double -ve -> +ve
+    else: oF_[CoF.get().nF].gV_[i] -= v  # double -ve -> +ve
 
 def build(func, node):  # AST → CoF | (type,sub_) | ast_leaf | None
 
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
         if node.func.id=='gv_':
-            func.gv_+=[0]; func.g_+=[node]; l=len(func.g_)  # func.g_[i] <-> oF.gv_[i]
+            func.gV_+=[0]; func.g_+=[node]; l=len(func.g_)  # func.g_[i] <-> oF.gv_[i]
             node.args.append(ast.Constant(value=l-1))  # add gv_(i)
             sub_ = [r for t in ast.iter_child_nodes(node) if (r := build(func,t)) is not None]
             sub_,fc_ = zip(*sub_) if sub_ else ((),())
@@ -259,8 +263,7 @@ def comp_prim(_n,n):
 def get_fc(n):
     return n.fc if isinstance(n,CoF) else costs.get(n[0],0)+sum(get_fc(c) for c in n[1]) if isinstance(n,tuple) else costs.get(type(n),0)
 
-def split_oF_():  # divisive clustering
-    sF_, rF_ = [], []
+def split_oF_(_oF_):  # divisive clustering
     for oF in oF_:
         if (len(oF.body)-1) * wL > ave:  # * split w,c
             _n= oF.body[0]; grp=[_n]; grp_=[]
@@ -271,42 +274,41 @@ def split_oF_():  # divisive clustering
             grp_ += [grp]
             for grp in grp_:  # single refinement
                 fc = sum([get_fc(prim) for prim in grp])
-                sub = CoF(root=oF,fc=fc,body=grp); sub.caller_ = copy(oF.caller_)
-                sF_ += [sub]
-        else: rF_ += [oF]
-    return sF_, rF_
+                # typ remain unchanged?
+                sub = CoF(root=oF,fc=fc,body=grp,typ=oF.typ); sub.caller_ = copy(oF.caller_)
+                sub.fdef = set([oF.fdef])  # inherit node from oF
+                _oF_[sub] = sub
+        else: _oF_[oF] = oF
 
-def cluster_oF_(oF_):  # cluster Ts if called together, global only
+def cluster_oF_(_oF_):  # cluster Ts if called together, global only
 
     grp_ = {}   # group same-typ oFs:
-    for T in oF_:  # updated in split_oF_
-        grp_.setdefault(T.typ, []).append(T)
+    for T in list(_oF_):  # updated in split_oF_
+        grp_.setdefault(T.typ, []).append(T)  # group by types only?
     grp_ = list(grp_.values())
     C_ = [sum2O(g) for g in grp_]  # initial composites
-    Ln,Lc = len(oF_),len(C_); L = Ln*Lc  # -1?
+    Ln,Lc = len(_oF_),len(C_); L = Ln*Lc  # -1?
     _v__ = np.zeros((Ln, Lc))
     while True:
         v__ = np.zeros((Ln, Lc))
-        for j,T in enumerate(oF_):  # refine by comp T x G_, cluster_P analog
+        for j,T in enumerate(list(_oF_)):  # refine by comp T x G_, cluster_P analog
             for i,C in enumerate(C_):
                 v__[j,i] = (comp_callers(C,T) + comp_body(C,T)) * min(C.fc,T.fc)  # x centroid V
-        C_ = [sum2O(oF_, w_=v__[:,i]) for i in range(Lc)]  # weighted re-aggr
+        C_ = [sum2O(list(_oF_), w_=v__[:,i]) for i in range(Lc)]  # weighted re-aggr
         V, dV = v__.sum(), np.abs(v__-_v__).sum()
         if V*dV*(wcO*L) <= ave * (Ln+ ccO*L): break  # convergence
         _v__ = v__
-    smF_,rF_ = [],[]  # final hard assign
     for i in range(Lc):
-        t_ = [T for j,T in enumerate(oF_) if v__[j].argmax() == i]
+        t_ = [T for j,T in enumerate(list(_oF_)) if v__[j].argmax() == i]
         if t_:
-            if (gV := v__[:,i].sum()) * ((len(t_)-1)*wL) > ave:
+            if (gV := v__[:,i].sum()) * ((len(t_)-1)*wL) > ave or i <2:  
                 nT = sum2O(t_)
                 nT.memb = gV; fC = sum(t.fc for t in t_); nT.cmpr = fC - fC/len(t_)
-                smF_ += [nT]
-            else: rF_ += t_  # unpack if weak
+                for t in t_: _oF_[t] = nT  # change mapping
+            # else no longer needed, mapping is unchanged
     ''' with average_linkage:
     for _T,T in combinations(oF_,2): V = (comp_callers(_T,T) + comp_body(_T,T)) * min(_T.fc,T.fc); _T.V_[T] = V; T.V_[_T] = V 
     for t in C.N_: if t is not T: v__[j,i] += t.V_[T]  # += pairwise Vs '''
-    return smF_, rF_
 
 def inject_oF_(oF_, g):  # inject AST in g, recompile g[name]
 
@@ -363,6 +365,7 @@ def sum2O(F_, root=None, w_=None, fcall_=0):  # for fw,fc,fr only (dTT,r,w are f
     else:
         F.body = copy(F_[0].body)  # shallow copy
         for f in F_[1:]: merge_oF(F, f, fsel=0)
+        F.fdef = set(F.fdef for F in F_)  # inherit from F
     if hasattr(F_[0],'caller_'): F.caller_ = set([caller for N in F_ for caller in N.caller_])  # for comp_caller between centroids
     return F   # fw = Fw
 
