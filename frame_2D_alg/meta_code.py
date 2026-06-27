@@ -140,9 +140,9 @@ class CoF(CF):
         f.body = kw.get('body',[])  # static AST ops + CoF refs in source order
         f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]  # fr if nested oF?
         f.caller_ = kw.get('caller_', set())
-        f.vT_ = kw.get('vt_',[])  # TT,c,r per call
-        f.gv_ = kw.get('gv_',[])  # sum gating vals
-        f.g_  = kw.get('g_', [])  # callee gates
+        f.g_ = kw.get('g_', [])  # callee gates
+        f.gV_= kw.get('gv_',[])  # sum gating vals
+        f.V_ = kw.get('vt_',[])  # sum(vt_(TT) * c/r
     @staticmethod
     def get(): return CoF._cur.get()  # Frm?
     @staticmethod
