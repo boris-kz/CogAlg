@@ -167,13 +167,13 @@ class CoF(CF):
 def gv_(v, i=None):
 
     if v > 0: return v
-    else: oF_[CoF.get().nF].gv_[i] -= v  # double -ve -> +ve
+    else: oF_[CoF.get().nF].gV_[i] -= v  # double -ve -> +ve
 
 def build(func, node):  # AST → CoF | (type,sub_) | ast_leaf | None
 
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
         if node.func.id=='gv_':
-            func.gv_+=[0]; func.g_+=[node]; l=len(func.g_)  # func.g_[i] <-> oF.gv_[i]
+            func.gV_+=[0]; func.g_+=[node]; l=len(func.g_)  # func.g_[i] <-> oF.gV_[i]
             node.args.append(ast.Constant(value=l-1))  # add gv_(i)
             sub_ = [r for t in ast.iter_child_nodes(node) if (r := build(func,t)) is not None]
             sub_,fc_ = zip(*sub_) if sub_ else ((),())
@@ -259,6 +259,7 @@ def comp_prim(_n,n):
 def get_fc(n):
     return n.fc if isinstance(n,CoF) else costs.get(n[0],0)+sum(get_fc(c) for c in n[1]) if isinstance(n,tuple) else costs.get(type(n),0)
 
+# not updated:
 def split_oF_():  # divisive clustering
     sF_, rF_ = [], []
     for oF in oF_:
@@ -276,7 +277,7 @@ def split_oF_():  # divisive clustering
         else: rF_ += [oF]
     return sF_, rF_
 
-def cluster_oF_(oF_):  # cluster Ts if called together, global only
+def clust_oF_(oF_):  # cluster Ts if called together, global only
 
     grp_ = {}   # group same-typ oFs:
     for T in oF_:  # updated in split_oF_
@@ -312,7 +313,7 @@ def inject_oF_(oF_, g):  # inject AST in g, recompile g[name]
 
     for oF in oF_:
         oF.fdef = nF_[oF.nF]; oF.g = g
-        oF.body=[]; oF.fc=0; oF.g_=[]; oF.gv_=[]
+        oF.body=[]; oF.fc=0; oF.g_=[]; oF.gV_=[]
         for node in ast.iter_child_nodes(oF.fdef):
             if (r := build(oF,node)): t,fc = r; oF.body += [t]; oF.fc += fc
         ast.fix_missing_locations(oF.fdef)
