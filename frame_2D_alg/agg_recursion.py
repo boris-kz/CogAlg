@@ -6,7 +6,7 @@ from itertools import zip_longest, combinations, product  # from multiprocessing
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
-from meta_code import iF_,nF_,CF,CL,CC,CN,CoF,wT,wTT, eps_,eps,ave,avd,decay, trace_func,parse_funcs, call_sites, split_oF_,clust_oF_,inject_oF_,gv_, vt_,sum_vt
+from meta_code import oF_,iF_,nF_,CF,CL,CC,CN,CoF,wT,wTT, eps_,eps,ave,avd,decay, trace_func,parse_funcs, call_sites, split_oF_,clust_oF_,inject_oF_,gv_, vt_,sum_vt
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -330,7 +330,7 @@ def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace
                 L.Nt,L.Bt,L.Ct = CF(),CF(),CF()
             # merge roots
     G_ = []  # add prelink pL_,pN_? include merged Cs, in feature space for Cs
-    if sum(vt_(Ft.dTT, Ft.root.wTT*ttcN)) * wcN > (ave+avd)*(_r+ccN)  > 0:  # this gate should be external to cluster_N?
+    if sumV(Ft.dTT*Ft.root.wTT*ttcN,Ft.c,Ft.r) * wcN > (ave+avd)*(_r+ccN)  > 0:  # this gate should be external to cluster_N?
         for N in _N_:
             N.fin=0; N.exe=1; sum2F(N.rim,N.Rt)  # only if N was added in trans-cluster?
         G_=[]; Gt_=[]; in_ = set()  # root attrs
@@ -362,7 +362,7 @@ def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace
                 c = nc + lc + bc
                 r = (nr*nc + lr*lc + br*bc) /c  # br includes overlap?
                 tt= (nt*nc + lt*lc + bt*bc) /c  # tentative
-                if gv_(sum(vt_(tt, Ft.root.wTT*ttcN))*wcN*(len(N_)-1) - (ave+avd)*(r+ccN*(len(N_)-1))):  # apply Fw_ and Fc_ in every eval_?
+                if gv_(sumV(tt*Ft.root.wTT*ttcN,c,r)*wcN*(len(N_)-1) - (ave+avd)*(r+ccN*(len(N_)-1))):  # apply Fw_ and Fc_ in every eval_?
                     G_ += [sum2G(ft_,ttcN, CN())]; Gt_+= [[tt,c,r]]  # evals cluster_C, cluster_P internally
                     # _C=C+c; _rc=C/_C; rc=c/_C; TT=TT*_rc+tt*rc; R=R*_rc+r*rc; C=_C
         if G_:
@@ -370,7 +370,7 @@ def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace
             C = sum([g[1] for g in Gt_]); TT=np.zeros((2,9)); R=0; _r+=1  # + wC?
             for tt,c,gr in Gt_: w=c/C; TT+=tt*w; R+=gr*w
             L = len(G_)-1
-            if gv_(sum(vt_(TT, Ft.root.wTT*ttcN))*(wcN*L) - (ave+avd)*(_r+R+ccN*L)):  # reform root,Nt, no other forks yet:
+            if gv_(sumV(TT*Ft.root.wTT*ttcN,C,R)*(wcN*L) - (ave+avd)*(_r+R+ccN*L)):  # reform root,Nt, no other forks yet:
                 rG = Ft.root; Nt=rG.Nt; Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=R
                 rG.dTT=TT; rG.c=C; rG.r=R
         # combine C_:
@@ -720,8 +720,8 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
                         if N.B_:
                             PPd_ = [B.root for B in N.B_]; sum2F(PPd_,N.Bt)
                             N.Bt.N_ = PPd_; [setattr(B,'root',N.Bt) for B in PPd_]
-                    L = len(PPm_)-1
-                    if gv_(sum(vt_(sum_vt(N_,wTT=ttVct)[0])) * (wVct*L) - (ave+avd) * (3+cVct*L)):
+                    L = len(PPm_)-1; tt,c,r = sum_vt(N_)
+                    if gv_(sumV(tt*ttVct,c,r) * (wVct*L) - (ave+avd) * (3+cVct*L)):
                         G_,TT,c,R = trace_edge([F2N(n) for n in N_], G_,TT,c,3,tile); C += c  # flatten B_-mediated Gs
     if G_:
         Nt = CF(nF='Nt', root=tile); Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=1; Nt.H=tile.H; tile.Nt=Nt; tile.dTT=TT; tile.c=C; L=len(G_)
@@ -772,7 +772,7 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
                 G_ += [sum2G([(n_,'Nt',ntt,nc,r)]+([(l_,'Lt',ltt,lc,r)] if l_ else []), ttTrc, root)]
             else:
                 for N in n_: N.fin=0; N.root=root
-    if sum(vt_(TT,root.wTT*ttTrc))*wTrc > (ave+avd)*(r+1+cTrc): _G_+=G_; _TT+=TT;_C+=C  # eval per edge, concat in tile?
+    if sumV(TT*root.wTT*ttTrc,C,R)*wTrc > (ave+avd)*(r+1+cTrc): _G_+=G_; _TT+=TT;_C+=C  # eval per edge, concat in tile?
     FV_(CoF.get(), *sum_vt(_G_))
     return _G_, _TT, _C, r+R/_C
 
@@ -828,7 +828,7 @@ def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N
     def proj_TT(L, cos_d, dist, r, pTT, wTT, dec=1, fdec=0):     # accumulate L|N' pTT with iTT|eTT internally
         dec = dist if fdec else ave** (1 + dist * dec / L.span)  # not fully revised, ave = match decay rate / unit distance
         TT = np.array([L.dTT[0] * dec, L.dTT[1] * cos_d * dec])  # IxE angle alignment * decay?
-        cert = abs(sum(vt_(TT, wTT)) * wPrj)  # approximation
+        cert = abs(sumV(TT*wTT,L.c,r) * wPrj)  # approximation
         if cert > (ave + avd) * (r + cPrj):  # certainty margin
             pTT += TT
 
@@ -854,10 +854,10 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
         cy,cx = (Ly-1)//2,(Lx-1)//2; y,x = cy,cx  # start=mean
         PV__ = np.zeros([Ly,Lx])
         T_ = []
-        while T and gv_(sum(vt_(T.dTT, T.wTT*ttFrm*T.c)) * wFrm - (ave+avd)*(T.r+(cFrm*T.c))):
+        while T and gv_(sumV(T.dTT*T.wTT*ttFrm,T.c,T.r) * wFrm - (ave+avd)*(T.r+(cFrm*T.c))):
             frame[y,x]=T; T_+=[T]; dy_dx = T.box[2:] -T.box[:2]
             pTT, pc = proj_N(T, np.hypot(*dy_dx), dy_dx, elev, T.c)
-            if gv_(ave * (cFrm*T.c) - sum(vt_(pTT, T.wTT*ttFrm)) * (wFrm*pc)):
+            if gv_(ave * (cFrm*T.c) - sumV(pTT*T.wTT*ttFrm,pc,T.r) * wFrm):
                 proj_focus(PV__,y,x, T)
                 pv__ = PV__.copy(); pv__[frame != None] = 0
                 y,x = np.unravel_index(pv__.argmax(), PV__.shape)
@@ -868,7 +868,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
             else: break
         if T_:
             TT,C,R = sum_vt(T_, wTT=ttFrm); R += elev
-            if sum(vt_(TT,ttFrm))*(C*wFrm) > (ave+avd)*(R+cFrm):
+            if sumV(TT,ttFrm,C,R)*wFrm > (ave+avd)*(R+cFrm):
                 return T_,C,R
         return [], 0, 0
 

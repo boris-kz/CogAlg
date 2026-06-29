@@ -259,24 +259,31 @@ def comp_prim(_n,n):
 def get_fc(n):
     return n.fc if isinstance(n,CoF) else costs.get(n[0],0)+sum(get_fc(c) for c in n[1]) if isinstance(n,tuple) else costs.get(type(n),0)
 
-# not updated:
-def split_oF_():  # divisive clustering
-    sF_, rF_ = [], []
-    for oF in oF_:
-        if (len(oF.body)-1) * wL > ave:  # * split w,c
-            _n= oF.body[0]; grp=[_n]; grp_=[]
-            for n in oF.body[1:]:
-                if comp_prim(_n,n): grp+=[n]
-                else: grp_+= [grp]; grp =[n]
-                _n=n
-            grp_ += [grp]
-            for grp in grp_:  # single refinement
-                fc = sum([get_fc(prim) for prim in grp])
-                sub = CoF(root=oF,fc=fc,body=grp); sub.caller_ = copy(oF.caller_)
-                sF_ += [sub]
-        else: rF_ += [oF]
-    return sF_, rF_
+# very initial draft
+def split_oF_(oF_site_):  # divisive clustering
 
+    def get_body(grp):
+        pass
+
+    for oF, sites in oF_site_.items():
+        
+        if (len(sites)-1) * wL > ave:  # at least 2 oF functions within the body
+            _caller_fd, _oF_cs = sites[0]
+            grp=[(_caller_fd, _oF_cs)]; grp_=[]
+            for caller_fd, oF_cs in sites[1:]:
+                if comp_prim(_caller_fd,caller_fd) and 0: grp+=[(caller_fd, oF_cs)]
+                else: grp_+= [grp]; grp =[caller_fd, oF_cs]
+                _caller_fd, _oF_cs = caller_fd, oF_cs    
+            grp_ += [grp]
+    
+            if len(grp_)>1:  # if grp == 1, there's no difference with original oF
+                for grp in grp_:  # single refinement
+                    fc = sum([get_fc(prim) for prim in grp])
+                    sub = CoF(root=oF,fc=fc,body=get_body(grp)); sub.caller_ = {oF_[iF_[fd.name]] for fd,_ in grp}
+                    oF_site_[sub] = grp  # add new split oFs
+                del oF_site_[oF]  # remove the split oF
+
+# not updated:
 def clust_oF_(oF_):  # cluster Ts if called together, global only
 
     grp_ = {}   # group same-typ oFs:
