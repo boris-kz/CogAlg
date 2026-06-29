@@ -6,7 +6,7 @@ from itertools import zip_longest, combinations, product  # from multiprocessing
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
-from meta_code import oF_,nF_,CF,CL,CC,CN,CoF,wT,wTT, eps_,eps,ave,avd,decay, trace_func,parse_funcs, call_sites, split_oF_,clust_oF_,inject_oF_,gv_, vt_,sum_vt
+from meta_code import iF_,nF_,CF,CL,CC,CN,CoF,wT,wTT, eps_,eps,ave,avd,decay, trace_func,parse_funcs, call_sites, split_oF_,clust_oF_,inject_oF_,gv_, vt_,sum_vt
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -52,11 +52,14 @@ capitalized vars are summed small-case vars
 wM,wD,wi, wG,wI,wa, wL,wS,wA = wT
 cFrm,cAgg,cTrc, cN_,cC_,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (      # function complexity
 wFrm,wAgg,wTrc, wN_,wC_,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init = cost
-ttFrm,tAgg,ttTrc, ttN_,ttC_,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj, ttVct = [F.wTT for F in oF_]
+ttFrm,ttA,ttTrc,ttN_,ttC_,ttN,ttF,ttE,ttcN,ttcC,ttcP, ttsG,ttBac,ttPrj,ttVct = [F.wTT for F in oF_]
 
-def FV_(F, tt,c,r):
-    tF = oF_[F.nF]; tF.c += [c]; tt = tt*tF.wTT
-    V = (sum(tt[0]) + sum(abs(tt[1]))) * c/r; tF.V_ += [V]
+def sumV(tt,c,r, fd=0):
+    return sum(tt[0]) + fd or sum(abs(tt[1])) * c/r
+
+def FV_(F, tt,c,r):  # use instead of sum(vt_())?
+    tF = oF_[F.nF]; tF.c += c
+    V = sumV(tt* tF.wTT, c,r); tF.V_ += [V]
     return V
 
 def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to the sum, recompute to convergence
@@ -92,14 +95,14 @@ def cross_comp(root, rr, fC=0):  # core function mediating recursive rng+ and de
         oF_[CoF.get().nF].V_ += [cV]  # combined comp_ results
         if L_:  # +ve only (L_ may empty when there's just negative links)
             root.L_ = L_; L= len(L_)-1  # val=m+d /clust, m/comp
-            if gv_((sum(vt_(TT,ttE))*(wE*L) - (ave+avd)*(r+cE*L)) * c):  # if +ve, store neg gate values
+            if gv_(sumV(TT*ttE,c,r)*(wE*L) - (ave+avd)* (r+cE*L)* c):  # if +ve, store neg gate values
                 E_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)
                 G_,r = cluster_N(root, E_,r,c)  # cluster_C, _P, eval?
                 if G_:
                     if not root.typ: F2N(root)  # promote at 1st sub+ or agg+
                     root.H += [sum2F(L_,root,froot=1)]  # dLev per L_
                     root.Nt = sum2F(G_,root,froot=2); L=len(G_)-1  #| C_?
-                    if gv_((vt_(TT,tAgg)[0]* (wAgg*L) - ave* (r+cAgg*L)) * c):  # *c for extensive?
+                    if gv_((sumV(TT*ttA,c,r)*(wAgg*L) - ave* (r+cAgg*L))* c):  # extensive
                         G_ = cross_comp(root.Nt,r)  # agg+
     return G_
 
@@ -568,7 +571,7 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
                 r +=1; G_,r = cluster_C(G.Nt,E_,r,c)  # higher V, low decay, eval cluster_P
             else:      G_,r = cluster_N(G.Nt,E_,r,c)  # updates G
             L= (len(G_)-1) **2  # if full cross_comp?
-            if G_ and gv_(vt_(G.Nt.dTT,G.wTT*tAgg)[0]*(wAgg*L) - ave*(r+cAgg*L)):
+            if G_ and gv_(vt_(G.Nt.dTT,G.wTT*ttA)[0]*(wAgg*L) - ave*(r+cAgg*L)):
                 cross_comp(G.Nt,r)
     if G.Bt:
         Bt = G.Bt; bd,br,L = Bt.d,Bt.r,len(Bt.N_); rroot = root.root if root.root else 0
@@ -864,7 +867,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
                 else: break
             else: break
         if T_:
-            TT,C,R = sum_vt(T_, wTT=ttFrm); R+= elev
+            TT,C,R = sum_vt(T_, wTT=ttFrm); R += elev
             if sum(vt_(TT,ttFrm))*(C*wFrm) > (ave+avd)*(R+cFrm):
                 return T_,C,R
         return [], 0, 0
@@ -899,21 +902,16 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
     # H init @ 1st term:
     if aL := pack_seg(frame,'aH',wBac, cBac, aTT):  # L: new level
         dTT = aL.dTT-aTT; aTT=aL.dTT; dc= aL.c-_ac; dr= aL.r-_ar
-        ave, avd = vt_(aTT)
-        # filters *= ave
+        ave, avd = vt_(aTT)  # filters *= ave
         if oL := pack_seg(frame,'oH', wBac, cBac**2, oTT):
             dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
-            oF_site_ = {}  # map oFs to their call sites
-            # not updated:
+            oF_site_ = {oF: [] for oF in oF_}
+            for fd in nF_:  # map oFs to their call sites, draft:
+                for n in call_sites(fd):  # Calls in fd, func.id in iF_
+                    oF_site_[oF_[iF_[n.func.id]]] += [(fd, n)]
             split_oF_(oF_site_)  # splits + remaining oF_s
             clust_oF_(oF_site_)  # splits+merges + remaining, returns dict oF_
-            _oF_ = list(dict.fromkeys(oF_site_.values()))  # collapse A->A'->A''?
-            for F in _oF_:  # update fDefs
-                sites = call_sites(F.fdef)
-                if not F.body or any(n.func.id in oF_ for n in sites):
-                    for n in sites:
-                        if n.func.id in oF_: n.func.id = oF_[n.func.id]
-                    oF_ += [F]
+            oF_ = list(dict.fromkeys(oF_site_.values()))
             if oF_: inject_oF_(oF_, globals())
     FV_(CoF.get(),dTT,dc,dr)
     return frame, aTT, oTT, aL, oL
