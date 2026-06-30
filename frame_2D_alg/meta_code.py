@@ -213,7 +213,7 @@ parse_funcs(["agg_recursion.py"])  # populate nF_
 # AST -> F.body:
 for func,fdef in zip(oF_,nF_):
     for node in ast.iter_child_nodes(fdef):
-        if (r := build(func,node)): t,fc = r; func.body += [t]; func.fc += fc
+        if r := build(func,node): t,fc = r; func.body += [t]; func.fc += fc
 def call_sites(fd):  # FunctionDef
     return [n for n in ast.walk(fd) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id in iF_]
 F_call_T_ = [[np.zeros((2,9)) for _ in call_sites(fd)] for fd in nF_]  # dTT computed per callee
@@ -263,7 +263,7 @@ def get_fc(n):
 def split_oF_():  # divisive clustering
     sF_, rF_ = [], []
     for oF in oF_:
-        if (len(oF.body)-1) * wL > ave:  # * split w,c
+        if (len(oF.body)-1) * wL > ave:  # * split w,c;  need to add callers to raw code forks too?
             _n= oF.body[0]; grp=[_n]; grp_=[]
             for n in oF.body[1:]:
                 if comp_prim(_n,n): grp+=[n]
@@ -277,6 +277,7 @@ def split_oF_():  # divisive clustering
         else: rF_ += [oF]
     return sF_, rF_
 
+# not updated:
 def clust_oF_(oF_):  # cluster Ts if called together, global only
 
     grp_ = {}   # group same-typ oFs:
@@ -315,7 +316,7 @@ def inject_oF_(oF_, g):  # inject AST in g, recompile g[name]
         oF.fdef = nF_[oF.nF]; oF.g = g
         oF.body=[]; oF.fc=0; oF.g_=[]; oF.gV_=[]
         for node in ast.iter_child_nodes(oF.fdef):
-            if (r := build(oF,node)): t,fc = r; oF.body += [t]; oF.fc += fc
+            if r := build(oF,node): t,fc = r; oF.body += [t]; oF.fc += fc
         ast.fix_missing_locations(oF.fdef)
         exec( compile( ast.Module(body=[oF.fdef], type_ignores=[]), '<oF>', 'exec'), oF.g)
         oF.g[oF.fdef.name] = CoF.traced(oF.g[oF.fdef.name])
