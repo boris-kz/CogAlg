@@ -259,9 +259,8 @@ def comp_prim(_n,n):
 def get_fc(n):
     return n.fc if isinstance(n,CoF) else costs.get(n[0],0)+sum(get_fc(c) for c in n[1]) if isinstance(n,tuple) else costs.get(type(n),0)
 
-# not updated:
-def split_oF_():  # divisive clustering
-    sF_, rF_ = [], []
+# not fully edited
+def split_oF_(oF_site_):  # divisive clustering
     for oF in oF_:
         if (len(oF.body)-1) * wL > ave:  # * split w,c;  need to add callers to raw code forks too?
             _n= oF.body[0]; grp=[_n]; grp_=[]
@@ -270,12 +269,14 @@ def split_oF_():  # divisive clustering
                 else: grp_+= [grp]; grp =[n]
                 _n=n
             grp_ += [grp]
-            for grp in grp_:  # single refinement
-                fc = sum([get_fc(prim) for prim in grp])
-                sub = CoF(root=oF,fc=fc,body=grp); sub.caller_ = copy(oF.caller_)
-                sF_ += [sub]
-        else: rF_ += [oF]
-    return sF_, rF_
+            if len(grp_)>1:
+                sites = oF_site_.pop(oF)  # remove the split oF?
+                for grp in grp_:  # single refinement
+                    caller_ = set([caller for p in grp if isinstance(p,CoF) for caller in p.caller_])
+                    fc = sum([get_fc(prim) for prim in grp])
+                    sub = CoF(root=oF,fc=fc,body=grp); sub.caller_ = caller_
+                    sub_caller_fd = {nF_[caller.nF] for caller in caller_} 
+                    oF_site_[sub] = [(caller_fd, oF_cs) for (caller_fd, oF_cs) in sites if caller_fd in sub_caller_fd]   # pack only sites with the current sub's caller
 
 # not updated:
 def clust_oF_(oF_):  # cluster Ts if called together, global only

@@ -54,7 +54,7 @@ cFrm,cAgg,cTrc, cN_,cC_,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (      # fu
 wFrm,wAgg,wTrc, wN_,wC_,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init = cost
 ttFrm,ttA,ttTrc,ttN_,ttC_,ttN,ttF,ttE,ttcN,ttcC,ttcP, ttsG,ttBac,ttPrj,ttVct = [F.wTT for F in oF_]
 
-def sumV(tt,c,r, fd=0):
+def sumV(tt,c,r, fd=1):
     return (sum(tt[0]) + (sum(abs(tt[1])) if fd else 0)) * c/r
 
 def FV_(F, tt,c,r):  # use instead of sum(vt_())?
@@ -95,7 +95,7 @@ def cross_comp(root, rr, fC=0):  # core function mediating recursive rng+ and de
         oF_[CoF.get().nF].V_ += [cV]  # combined comp_ results
         if L_:  # +ve only (L_ may empty when there's just negative links)
             root.L_ = L_; L= len(L_)-1  # val=m+d /clust, m/comp
-            if gv_(sumV(TT*ttcN,c,r)*(wcN*L) - (ave+avd)* (r+ccN*L)* c):  # if +ve, store neg gate values
+            if gv_(sumV(TT*ttcN,c,r,0)*(wcN*L) - (ave+avd)* (r+ccN*L)* c):  # if +ve, store neg gate values
                 E_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)
                 G_,r = cluster_N(root, E_,r,c)  # cluster_C, _P, eval?
                 if G_:
@@ -113,7 +113,7 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
         iTT = (_N.dTT + N.dTT) * Dec
         eTT = (_N.Rt.dTT + N.Rt.dTT) * Dec
         C = min(_N.c,N.c); R = (_N.r+N.r)/2; M = (_N.m+N.m)/2
-        if sumV((eTT+iTT)*ttPrj, C,R) * wPrj > ave * (cPrj+r+C+R):  # not oF, spec / link:
+        if sumV((eTT+iTT)*ttPrj, C,R,0) * wPrj > ave * (cPrj+r+C+R):  # not oF, spec / link:
             eTT+= proj_N(N, dist, dy_dx, r, N.c, dec)[0]  # pTT/ L_,B_,rim, if pV >0
             eTT+= proj_N(_N,dist, -dy_dx, r, _N.c, dec)[0]  # reverse direction
         return iTT+eTT
@@ -427,7 +427,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
     if out_:
         for n in [N for C in out_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals:
             n.exe = (n.d if n.typ==1 else n.m) + np.sum(n.m_) - ave
-        if gv_(vt_(DTT,Ft.root.wTT*ttcC)[0]*wcC*(len(out_)-1) - ave*(r+ccC*(len(out_)-1))):
+        if gv_(sumV(DTT*Ft.root.wTT*ttcC,0)*wcC*(len(out_)-1) - ave*(r+ccC*(len(out_)-1))):
             Ct = sum2F(out_); Ft.root.Ct = Ct; Ct.root = Ft.root
             cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
     if out_: FV_(CoF.get(), *sum_vt(out_)[:-1], r)
@@ -570,7 +570,7 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
                 r +=1; G_,r = cluster_C(G.Nt,E_,r,c)  # higher V, low decay, eval cluster_P
             else:      G_,r = cluster_N(G.Nt,E_,r,c)  # updates G
             L= (len(G_)-1) **2  # if full cross_comp?
-            if G_ and gv_(vt_(G.Nt.dTT,G.wTT*ttA)[0]*(wAgg*L) - ave*(r+cAgg*L)):
+            if G_ and gv_(sumV(G.Nt.dTT*G.wTT*ttA,G.c,G.r,0)*(wAgg*L) - ave*(r+cAgg*L)):
                 cross_comp(G.Nt,r)
     if G.Bt:
         Bt = G.Bt; bd,br,L = Bt.d,Bt.r,len(Bt.N_); rroot = root.root if root.root else 0
@@ -724,7 +724,7 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
                         G_,TT,c,R = trace_edge([F2N(n) for n in N_], G_,TT,c,3,tile); C += c  # flatten B_-mediated Gs
     if G_:
         Nt = CF(nF='Nt', root=tile); Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=1; Nt.H=tile.H; tile.Nt=Nt; tile.dTT=TT; tile.c=C; L=len(G_)
-        if vt_(TT,ttVct)[0]*(wFrm*L) > ave * (cFrm*L):  # L for trans-comp only?
+        if sumV(TT*ttVct,C,1,0)*(wFrm*L) > ave * (cFrm*L):  # L for trans-comp only?
             A_ = [G.angl[0] for G in G_ if G.angl]
             tile.angl = [np.sum(A_, axis=0) if A_ else np.zeros(2), np.sign(tile.dTT[1] @ ttVct[1])]
             FV_(CoF.get(), TT,C,1)
@@ -742,7 +742,7 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
             cT_.add(cT)
             dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)  # Rc = r+ (N.r+_N.r)/2
             Link = comp_N(_N,N, r,_C,A=dy_dx, span=dist)
-            if vt_(Link.dTT,ttTrc)[0] > ave*r:  L_+=[Link]  # r = 1|2, add Bt?
+            if sumV(Link.dTT*ttTrc,Link.c,Link.r,0) > ave*r:  L_+=[Link]  # r = 1|2, add Bt?
             if L_: lTT,lc,_ = sum_vt(L_,wTT=ttTrc)
     Gt_ = []
     for N in N_:  # flood-fill G per seed N
@@ -766,7 +766,7 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
     G_, TT,C,R = [],np.zeros((2,9)),0,0
     for n_,ntt,nc,l_,ltt,lc,merged in Gt_:
         if not merged:
-            if gv_(vt_(ntt+ltt,ttTrc)[0] - ave*r):  # wrap singletons too
+            if gv_(sumV(ntt+ltt*ttTrc,nc+lc,r,0) - ave*r):  # wrap singletons too
                 TT += ntt+ltt; C += nc+lc; R += r*(nc+lc)  # add Bt?
                 G_ += [sum2G([(n_,'Nt',ntt,nc,r)]+([(l_,'Lt',ltt,lc,r)] if l_ else []), ttTrc, root)]
             else:
@@ -867,7 +867,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
             else: break
         if T_:
             TT,C,R = sum_vt(T_, wTT=ttFrm); R += elev
-            if sumV(TT,ttFrm,C,R)*wFrm > (ave+avd)*(R+cFrm):
+            if sumV(TT*ttFrm,C,R)*wFrm > (ave+avd)*(R+cFrm):
                 return T_,C,R
         return [], 0, 0
 
