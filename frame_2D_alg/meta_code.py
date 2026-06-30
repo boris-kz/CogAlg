@@ -213,7 +213,7 @@ parse_funcs(["agg_recursion.py"])  # populate nF_
 # AST -> F.body:
 for func,fdef in zip(oF_,nF_):
     for node in ast.iter_child_nodes(fdef):
-        if (r := build(func,node)): t,fc = r; func.body += [t]; func.fc += fc
+        if r := build(func,node): t,fc = r; func.body += [t]; func.fc += fc
 def call_sites(fd):  # FunctionDef
     return [n for n in ast.walk(fd) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id in iF_]
 F_call_T_ = [[np.zeros((2,9)) for _ in call_sites(fd)] for fd in nF_]  # dTT computed per callee
@@ -259,29 +259,23 @@ def comp_prim(_n,n):
 def get_fc(n):
     return n.fc if isinstance(n,CoF) else costs.get(n[0],0)+sum(get_fc(c) for c in n[1]) if isinstance(n,tuple) else costs.get(type(n),0)
 
-# very initial draft
-def split_oF_(oF_site_):  # divisive clustering
-
-    def get_body(grp):
-        pass
-
-    for oF, sites in oF_site_.items():
-        
-        if (len(sites)-1) * wL > ave:  # at least 2 oF functions within the body
-            _caller_fd, _oF_cs = sites[0]
-            grp=[(_caller_fd, _oF_cs)]; grp_=[]
-            for caller_fd, oF_cs in sites[1:]:
-                if comp_prim(_caller_fd,caller_fd) and 0: grp+=[(caller_fd, oF_cs)]
-                else: grp_+= [grp]; grp =[caller_fd, oF_cs]
-                _caller_fd, _oF_cs = caller_fd, oF_cs    
+# not updated:
+def split_oF_():  # divisive clustering
+    sF_, rF_ = [], []
+    for oF in oF_:
+        if (len(oF.body)-1) * wL > ave:  # * split w,c;  need to add callers to raw code forks too?
+            _n= oF.body[0]; grp=[_n]; grp_=[]
+            for n in oF.body[1:]:
+                if comp_prim(_n,n): grp+=[n]
+                else: grp_+= [grp]; grp =[n]
+                _n=n
             grp_ += [grp]
-    
-            if len(grp_)>1:  # if grp == 1, there's no difference with original oF
-                for grp in grp_:  # single refinement
-                    fc = sum([get_fc(prim) for prim in grp])
-                    sub = CoF(root=oF,fc=fc,body=get_body(grp)); sub.caller_ = {oF_[iF_[fd.name]] for fd,_ in grp}
-                    oF_site_[sub] = grp  # add new split oFs
-                del oF_site_[oF]  # remove the split oF
+            for grp in grp_:  # single refinement
+                fc = sum([get_fc(prim) for prim in grp])
+                sub = CoF(root=oF,fc=fc,body=grp); sub.caller_ = copy(oF.caller_)
+                sF_ += [sub]
+        else: rF_ += [oF]
+    return sF_, rF_
 
 # not updated:
 def clust_oF_(oF_):  # cluster Ts if called together, global only
@@ -322,7 +316,7 @@ def inject_oF_(oF_, g):  # inject AST in g, recompile g[name]
         oF.fdef = nF_[oF.nF]; oF.g = g
         oF.body=[]; oF.fc=0; oF.g_=[]; oF.gV_=[]
         for node in ast.iter_child_nodes(oF.fdef):
-            if (r := build(oF,node)): t,fc = r; oF.body += [t]; oF.fc += fc
+            if r := build(oF,node): t,fc = r; oF.body += [t]; oF.fc += fc
         ast.fix_missing_locations(oF.fdef)
         exec( compile( ast.Module(body=[oF.fdef], type_ignores=[]), '<oF>', 'exec'), oF.g)
         oF.g[oF.fdef.name] = CoF.traced(oF.g[oF.fdef.name])
