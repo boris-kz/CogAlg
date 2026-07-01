@@ -102,7 +102,7 @@ def cross_comp(root, rr, fC=0):  # core function mediating recursive rng+ and de
                     if not root.typ: F2N(root)  # promote at 1st sub+ or agg+
                     root.H += [sum2F(L_,root,froot=1)]  # dLev per L_
                     root.Nt = sum2F(G_,root,froot=2); L=len(G_)-1  #| C_?
-                    if gv_((sumV(TT*ttA,c,r)*(wAgg*L) - ave* (r+cAgg*L))* c):  # extensive
+                    if gv_((sumV(TT*ttA,c,r,0)*(wAgg*L) - ave* (r+cAgg*L))* c):  # extensive
                         G_ = cross_comp(root.Nt,r)  # agg+
     return G_
 
