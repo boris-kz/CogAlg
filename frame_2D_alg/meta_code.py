@@ -263,17 +263,19 @@ def get_fc(n):
 def split_oF_():  # divisive clustering
     sF_, rF_ = [], []
     for oF in oF_:
+        # or if oF.w * len(gated_segment_AST): approximate gain from encapsulating the segment? same for merge but with component oFs?
         if (len(oF.body)-1) * wL > ave:  # * split w,c;  need to add callers to raw code forks too?
             _n= oF.body[0]; grp=[_n]; grp_=[]
             for n in oF.body[1:]:
                 if comp_prim(_n,n): grp+=[n]
                 else: grp_+= [grp]; grp =[n]
                 _n=n
-            grp_ += [grp]
-            for grp in grp_:  # single refinement
-                fc = sum([get_fc(prim) for prim in grp])
-                sub = CoF(root=oF,fc=fc,body=grp); sub.caller_ = copy(oF.caller_)
-                sF_ += [sub]
+            grp_ += [grp]  # last
+            if len(grp_) > 1:  # -1 * wL > ave?
+                for grp in grp_:  # single refinement
+                    fc = sum([get_fc(prim) for prim in grp])
+                    sub = CoF(root=oF,fc=fc,body=grp); sub.caller_ = copy(oF.caller_)
+                    sF_ += [sub]
         else: rF_ += [oF]
     return sF_, rF_
 
