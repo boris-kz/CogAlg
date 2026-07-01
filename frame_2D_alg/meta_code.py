@@ -261,14 +261,17 @@ def get_fc(n):
 
 # not updated:
 def split_oF_():  # divisive clustering
+
+    def get_segl(n): return 1 + sum(get_segl(p) for p in n[1]) if isinstance(n, tuple) else 1 
+
     sF_, rF_ = [], []
     for oF in oF_:
         # or if oF.w * len(gated_segment_AST): approximate gain from encapsulating the segment? same for merge but with component oFs?
         if (len(oF.body)-1) * wL > ave:  # * split w,c;  need to add callers to raw code forks too?
-            _n= oF.body[0]; grp=[_n]; grp_=[]
+            _n= oF.body[0]; grp=[_n]; grp_=[]; len_seg = get_segl(_n);
             for n in oF.body[1:]:
-                if comp_prim(_n,n): grp+=[n]
-                else: grp_+= [grp]; grp =[n]
+                if comp_prim(_n,n) and oF.w*(len_seg + get_segl(n))<ave: grp+=[n]; len_seg+=get_segl(n)  # eval segment length when packing new body?
+                else: grp_+= [grp]; grp=[n]; len_seg=get_segl(_n)
                 _n=n
             grp_ += [grp]  # last
             if len(grp_) > 1:  # -1 * wL > ave?
@@ -280,7 +283,7 @@ def split_oF_():  # divisive clustering
     return sF_, rF_
 
 # not updated:
-def clust_oF_(oF_):  # cluster Ts if called together, global only
+def clust_oF_():  # cluster Ts if called together, global only
 
     grp_ = {}   # group same-typ oFs:
     for T in oF_:  # updated in split_oF_
@@ -306,6 +309,9 @@ def clust_oF_(oF_):  # cluster Ts if called together, global only
                 nT = sum2O(t_)
                 nT.memb = gV; fC = sum(t.fc for t in t_); nT.cmpr = fC - fC/len(t_)
                 smF_ += [nT]
+                for fork in t_:
+                    for (caller_fd, site) in fork.sites:
+                        site.func.id = nF_[nT.nF].name  # with this method, we need to set nT's nF_ first 
             else: rF_ += t_  # unpack if weak
     ''' with average_linkage:
     for _T,T in combinations(oF_,2): V = (comp_callers(_T,T) + comp_body(_T,T)) * min(_T.fc,T.fc); _T.V_[T] = V; T.V_[_T] = V 
