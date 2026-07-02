@@ -232,7 +232,8 @@ def comp_F(_F, F, ir=0, rL=None):
             if l: Np_ = [[_n,n] for _n,n in zip(_N_,N_) if _n and n]  # same forks
             else: Np_ = list(product(_N_,N_))  # pairs
             L = len(Np_)-1
-            if gv_(np.mean([rL.m,m])* (c/r)* (wF*L) - ave* (r+cF*L)):
+            tt = (rL.dTT*rL.c + ddTT*dF.c) / (rL.c+dF.c)
+            if gv_(vt_(tt,ttF)[0]* (c/r)* (wF*L) - ave* (r+cF*L)):
                 if l: L_= [L for Np in Np_ for L in comp_F(*Np, r,rL=dF).N_]; TT,C,R = sum_vt(L_, wTT=ttF)
                 else: L_,TT,C,R,_ = comp_N_(Np_,r,nF,rL)
                 if L_:
@@ -429,7 +430,8 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
     if out_:
         for n in [N for C in out_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals:
             n.exe = (n.d if n.typ==1 else n.m) + np.sum(n.m_) - ave
-        if gv_(sumV(DTT*Ft.root.wTT*ttcC,0)*wcC*(len(out_)-1) - ave*(r+ccC*(len(out_)-1))):
+        # or sum c from out_?
+        if gv_(vt_(DTT,Ft.root.wTT*ttcC)[0]*_c/r*wcC*(len(out_)-1) - ave*(r+ccC*(len(out_)-1))):
             Ct = sum2F(out_); Ft.root.Ct = Ct; Ct.root = Ft.root
             cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
     if out_: FV_(CoF.get(), *sum_vt(out_)[:-1], r)
@@ -572,7 +574,7 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
                 r +=1; G_,r = cluster_C(G.Nt,E_,r,c)  # higher V, low decay, eval cluster_P
             else:      G_,r = cluster_N(G.Nt,E_,r,c)  # updates G
             L= (len(G_)-1) **2  # if full cross_comp?
-            if G_ and gv_(sumV(G.Nt.dTT*G.wTT*ttA,G.c,G.r,0)*(wAgg*L) - ave*(r+cAgg*L)):
+            if G_ and gv_(vt_(G.Nt.dTT,G.wTT*ttA)[0]*(G.c/G.r)*(wAgg*L) - ave*(r+cAgg*L)):
                 cross_comp(G.Nt,r)
     if G.Bt:
         Bt = G.Bt; bd,br,L = Bt.d,Bt.r,len(Bt.N_); rroot = root.root if root.root else 0
@@ -726,7 +728,7 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
                         G_,TT,c,R = trace_edge([F2N(n) for n in N_], G_,TT,c,3,tile); C += c  # flatten B_-mediated Gs
     if G_:
         Nt = CF(nF='Nt', root=tile); Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=1; Nt.H=tile.H; tile.Nt=Nt; tile.dTT=TT; tile.c=C; L=len(G_)
-        if sumV(TT*ttVct,C,1,0)*(wFrm*L) > ave * (cFrm*L):  # L for trans-comp only?
+        if sumV(TT*ttVct,C,1)*(wFrm*L) > ave * (cFrm*L):  # L for trans-comp only?
             A_ = [G.angl[0] for G in G_ if G.angl]
             tile.angl = [np.sum(A_, axis=0) if A_ else np.zeros(2), np.sign(tile.dTT[1] @ ttVct[1])]
             FV_(CoF.get(), TT,C,1)
@@ -744,7 +746,8 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
             cT_.add(cT)
             dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)  # Rc = r+ (N.r+_N.r)/2
             Link = comp_N(_N,N, r,_C,A=dy_dx, span=dist)
-            if sumV(Link.dTT*ttTrc,Link.c,Link.r,0) > ave*r:  L_+=[Link]  # r = 1|2, add Bt?
+            # r is not needed because cancel out each other? Link.r is actually same as r
+            if vt_(Link.dTT,ttTrc)[0]*(Link.c/Link.r) > ave*r:  L_+=[Link]  # r = 1|2, add Bt?
             if L_: lTT,lc,_ = sum_vt(L_,wTT=ttTrc)
     Gt_ = []
     for N in N_:  # flood-fill G per seed N
@@ -768,7 +771,7 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
     G_, TT,C,R = [],np.zeros((2,9)),0,0
     for n_,ntt,nc,l_,ltt,lc,merged in Gt_:
         if not merged:
-            if gv_(sumV(ntt+ltt*ttTrc,nc+lc,r,0) - ave*r):  # wrap singletons too
+            if gv_(vt_(ntt+ltt,ttTrc)[0] * ((nc+lc)/r)  - ave*r):  # wrap singletons too
                 TT += ntt+ltt; C += nc+lc; R += r*(nc+lc)  # add Bt?
                 G_ += [sum2G([(n_,'Nt',ntt,nc,r)]+([(l_,'Lt',ltt,lc,r)] if l_ else []), ttTrc, root)]
             else:
@@ -909,11 +912,16 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
             oF_site_ = {oF: [] for oF in oF_}
             for fdef in nF_:  # map oFs to call sites:
                 for n in call_sites(fdef):  # calls in fdef, func.id in iF_
-                    oF_site_[oF_[iF_[n.func.id]]] += [(fdef, n)]
-            split_oF_(oF_site_)  # splits + remaining oF_s
-            clust_oF_(oF_site_)  # splits+merges + remaining, returns dict oF_
-            oF_ = list(dict.fromkeys(oF_site_.values()))
-            if oF_: inject_oF_(oF_, globals())
+                    oF_site_[oF_[iF_[n.func.id]]] += [(fdef, n)]                
+            sF_, rF_ = split_oF_()  # splits + remaining oF_s
+            oF_ = sF_ + rF_ 
+            smF_, rF_ = clust_oF_(oF_site_)  # splits+merges + remaining, returns dict oF_
+            oF_ = smF_ + rF_
+            if smF_:
+                caller_fd_ = {caller_fd for nT in smF_ for fork in nT.N_ for (caller_fd,_) in oF_site_.get(fork, [])}  # get the updated caller
+                updated_oF_ = smF_ + [oF_[iF_[fd.name]] for fd in caller_fd_ if fd.name in iF_]
+                inject_oF_(updated_oF_, globals())
+
     FV_(CoF.get(),dTT,dc,dr)
     return frame, aTT, oTT, aL, oL
 
