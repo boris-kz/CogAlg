@@ -54,10 +54,10 @@ cFrm,cAgg,cTrc, cN_,cC_,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (      # fu
 wFrm,wAgg,wTrc, wN_,wC_,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init = cost
 ttFrm,ttA,ttTrc,ttN_,ttC_,ttN,ttF,ttE,ttcN,ttcC,ttcP, ttsG,ttBac,ttPrj,ttVct = [F.wTT for F in oF_]
 
-def sumV(tt,c,r, fd=1):
-    return (sum(tt[0]) + (sum(abs(tt[1])) if fd else 0)) * c/r
+def sumV(tt,c,r):
+    return (sum(tt[0]) + sum(abs(tt[1]))) * c/r  # for clustering, combine unnormalized forks
 
-def FV_(F, tt,c,r):  # use instead of sum(vt_())?
+def FV_(F, tt,c,r):  # combine m,d per oF
     tF = oF_[F.nF]; tF.c += c
     V = sumV(tt* tF.wTT, c,r); tF.V_ += [V]
     return V
@@ -95,14 +95,14 @@ def cross_comp(root, rr, fC=0):  # core function mediating recursive rng+ and de
         oF_[CoF.get().nF].V_ += [cV]  # combined comp_ results
         if L_:  # +ve only (L_ may empty when there's just negative links)
             root.L_ = L_; L= len(L_)-1  # val=m+d /clust, m/comp
-            if gv_(sumV(TT*ttcN,c,r)*(wcN*L) - (ave+avd)* (r+ccN*L)* c):  # if +ve, store neg gate values
+            if gv_(sumV(TT*ttcN,c,r)* (wcN*L) - (ave+avd)* (r+ccN*L)* c):  # if +ve, store neg gate values
                 E_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)
                 G_,r = cluster_N(root, E_,r,c)  # cluster_C, _P, eval?
                 if G_:
                     if not root.typ: F2N(root)  # promote at 1st sub+ or agg+
                     root.H += [sum2F(L_,root,froot=1)]  # dLev per L_
                     root.Nt = sum2F(G_,root,froot=2); L=len(G_)-1  #| C_?
-                    if gv_((sumV(TT*ttA,c,r,0)*(wAgg*L) - ave* (r+cAgg*L))* c):  # extensive
+                    if gv_((vt_(TT*ttA)[0]* (c/r)* (wAgg*L) - ave* (r+cAgg*L))* c):  # extensive m only
                         G_ = cross_comp(root.Nt,r)  # agg+
     return G_
 
@@ -112,10 +112,10 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
         Dec = dec or decay ** ((dist/((_N.span+N.span)/2)))
         iTT = (_N.dTT + N.dTT) * Dec
         eTT = (_N.Rt.dTT + N.Rt.dTT) * Dec
-        C = min(_N.c,N.c); R = (_N.r+N.r)/2; M = (_N.m+N.m)/2
-        if sumV((eTT+iTT)*ttPrj, C,R,0) * wPrj > ave * (cPrj+r+C+R):  # not oF, spec / link:
+        C = min(_N.c,N.c); R = (_N.r+N.r)/2
+        if vt_((eTT+iTT)*ttPrj)[0]* (C/R)* wPrj > ave* (cPrj+r+C+R):  # not oF, spec / link:
             eTT+= proj_N(N, dist, dy_dx, r, N.c, dec)[0]  # pTT/ L_,B_,rim, if pV >0
-            eTT+= proj_N(_N,dist, -dy_dx, r, _N.c, dec)[0]  # reverse direction
+            eTT+= proj_N(_N,dist,-dy_dx, r,_N.c, dec)[0]  # reverse direction
         return iTT+eTT
 
     pairs, olp_ = [],[]  # no olp_?
@@ -126,16 +126,16 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
 
     N_, L_ = [],[]
     for pL in sorted(pairs, key=lambda x: x[0]):  # proximity prior, test compared?
-        dist, dy_dx, _N,N, c = pL  # rim angl is not canonic
+        dist, dy_dx, _N,N, lc = pL  # rim angl is not canonic
         pTT = proj_V(_N,N, dist, dy_dx, root.m if root!=2 else decay** (dist/((_N.span+N.span)/2)))  # based on current rim
-        lr = r+ (N.r+_N.r)/2; m,d = vt_(pTT,ttN_)  # +|-match certainty
+        m,d = vt_(pTT,ttN_); lr = r+ (N.r+_N.r)/2  # +|-match certainty
         if m > 0:
-            if gv_(abs(m)*wN - ave*(r+cN)):  # comp if marginally predictable, update N.Rt pair eval, ave / proj surprise value?
-                Link = comp_N(_N,N, lr, c, full=not tnF, A=dy_dx, span=dist, rL=root)
+            if gv_(m*(lc/lr)*wN - ave*(r+cN)):  # comp if marginally predictable, update N.Rt pair eval, ave / proj surprise value?
+                Link = comp_N(_N,N, lr,lc, full=not tnF, A=dy_dx, span=dist, rL=root)
                 Link.rTT = np.abs(pTT - Link.dTT) / eps_(Link.dTT)  # relative prediction error to fit oF, direction-agnostic
                 L_+= [Link]; N_+= [_N,N]
             else:
-                pL = CL(typ=-1, N_=[_N,N],dTT=pTT,m=m,d=d,c=c,r=lr, angl=[dy_dx,1],span=dist)
+                pL = CL(typ=-1, N_=[_N,N],dTT=pTT,m=m,d=d,c=lc,r=lr, angl=[dy_dx,1],span=dist)
                 L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.N_  # add neg C?
                 # oF.N_ is +-Ls
         else: break  # beyond initial induction range, re-sort by proj_V?
@@ -194,12 +194,13 @@ def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None):
             tt += ltt*lc; C+=lc; R+=lr*lc
         return dH,tt,C, (r* Link.c+R)/ (Link.c+C)  # same norm for tt?
 
-    TT = base_comp(_N,N)[0] if full else comp_derT(_N.dTT[1],N.dTT[1]); m,d = vt_(TT, ttN_)
+    TT = base_comp(_N,N)[0] if full else comp_derT(_N.dTT[1],N.dTT[1])
+    m,d = vt_(TT, ttN_)
     L = CL(N_=[_N,N], dTT=TT,m=m,d=d,c=c,r=r, root=rL)
-    if N.typ and gv_(m* wN_*c - ave*(r+cN_)):  # skip PPs, may comp Nts?
+    if N.typ and gv_(m* (c/r)* wN_ - ave*(r+cN_)):  # skip PPs, may comp Nts?
         L.H = [Copy_(L)]  # lev0 to preserve resolution before adding deeper tLevs, min len H = 2
         dn_ = []  # cross_comp N_| Ft_-> top tLev
-        if N.typ <3:  # L | C | Nt?
+        if N.typ < 3:  # L | C | Nt?
             for _n,n in product(_N.N_,N.N_): dn_ += [comp_N(_n,n,r,c, rL=L)]  # CN L.nt, rL spec in comp.N
         else:  # CN
             for i,(_Ft,Ft, tnF) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct),('Nt','Lt','Bt','Ct'))):
@@ -222,15 +223,16 @@ def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None):
 
 def comp_F(_F, F, ir=0, rL=None):
 
-    ddTT = comp_derT(_F.dTT[1],F.dTT[1]); r=(_F.r+F.r)/2; m,d = vt_(ddTT,ttF); r+=ir
-    dF = CF(dTT=ddTT, m=m,d=d,r=r,c=min(_F.c,F.c),nF=F.nF)
+    ddTT = comp_derT(_F.dTT[1],F.dTT[1]); r=(_F.r+F.r)/2
+    m, d = vt_(ddTT,ttF); r += ir; c = min(_F.c,F.c)
+    dF = CF(dTT=ddTT, m=m,d=d,r=r,c=c, nF=F.nF)
     if _F.nF == F.nF:  # sub-comp
         _N_,N_=_F.N_,F.N_; nF=F.nF; l = nF=='Lt'
         if  _N_ and N_:
             if l: Np_ = [[_n,n] for _n,n in zip(_N_,N_) if _n and n]  # same forks
             else: Np_ = list(product(_N_,N_))  # pairs
             L = len(Np_)-1
-            if gv_(np.mean([rL.m,m])* (wF*L) - ave* (r+cF*L)):
+            if gv_(np.mean([rL.m,m])* (c/r)* (wF*L) - ave* (r+cF*L)):
                 if l: L_= [L for Np in Np_ for L in comp_F(*Np, r,rL=dF).N_]; TT,C,R = sum_vt(L_, wTT=ttF)
                 else: L_,TT,C,R,_ = comp_N_(Np_,r,nF,rL)
                 if L_:
