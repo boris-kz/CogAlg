@@ -914,9 +914,9 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
                 for n in call_sites(fdef):  # calls in fdef, func.id in iF_
                     oF_site_[oF_[iF_[n.func.id]]] += [(fdef, n)]
             sF_, rF_ = split_oF_()  # splits + remaining oF_s
-            oF_ = sF_ + rF_
-            smF_, rF_ = clust_oF_(oF_site_)  # splits+merges + remaining, returns dict oF_
-            oF_ = smF_ + rF_
+            oF_[:] = sF_ + rF_
+            clust_oF_(oF_site_)  # splits+merges + remaining
+            # below not updated
             if smF_:
                 caller_fd_ = {caller_fd for nT in smF_ for fork in nT.N_ for (caller_fd,_) in oF_site_.get(fork, [])}  # get the updated caller
                 updated_oF_ = smF_ + [oF_[iF_[fd.name]] for fd in caller_fd_ if fd.name in iF_]

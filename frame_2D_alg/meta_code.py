@@ -262,21 +262,16 @@ def get_fc(n):
 def split_oF_():  # divisive clustering
 
     def is_gate_l(t):  # check ast.type instead
-        if isinstance(t,tuple) and not isinstance(t[0],tuple) and isinstance(t[1],tuple) and t[1]:
-            h = t[1][0]
-            if isinstance(h,tuple) and isinstance(h[0],tuple) and h[0][0]=='gv_': return h[0][1]
+        if isinstance(t,tuple) and t[0] in (ast.If,ast.IfExp) and isinstance(h:=t[1][0],tuple) and isinstance(h[0],tuple) and h[0][0] == 'gv_': return 1
         return 0
-    def is_fork(t):  # check type = ast.IfExp instead?
-        return isinstance(t,tuple) and not isinstance(t[0],tuple) and t[0] in (ast.If, ast.IfExp) and t[1]
 
-    def extract(t, oF, sF_):  # pack sub gate from gv or ifexp
-        l = is_gate_l(t); fork = l or is_fork(t);oF.w=1
-        if fork and oF.w * sum(get_fc(p) for p in t[1]) if isinstance(t,tuple) else 1 > ave:
+    def extract(t, oF, sF_):  # pack sub gate from gates
+        if is_gate_l(t) and oF.fw * sum(get_fc(p) for p in t[1]) > ave:  # w is membership weight, it should be fw?
+            # we need to include sub's fdef here, it will be needed by clust_oF_ later    
             sub = CoF(root=oF, fc=get_fc(t), body=[t], caller_={oF})
-            if not l: oF.gV_ += [0]; oF.g_ += [t]  # this is not correct yet, we need to identify the gv_ index of new ifexp gate
             sF_ += [sub]
             return sub
-        if isinstance(t,tuple) and not isinstance(t[0],tuple) and isinstance(t[1],tuple):  # return body
+        if isinstance(t,tuple) and t[1]:  # return body and split nested node recursively
             return (t[0], tuple(extract(s,oF,sF_) for s in t[1]))
         return t
 
@@ -327,8 +322,26 @@ def clust_oF_(oF_site_):  # cluster Ts if called together, global only
             if (gV := v__[:,i].sum()) * ((len(t_)-1)*wL) > ave:
                 nT = sum2O(t_)
                 nT.memb = gV; fC = sum(t.fc for t in t_); nT.cmpr = fC - fC/len(t_)
+                fdef = emit_oF(nT)
+                if fdef is None: continue  # fdef shouldn't be None here, we must build the node here
+                nT.fdef = fdef; fdef.name = f"oF{nT.id}"  # unique under removal: len(nF_) may repeat after pops
                 nT_ += [nT]
             else: rF_ += t_  # unpack if weak
+    # draft
+    if nT_:
+        merged_oF_ = {t for nT in nT_ for t in nT.N_}  # list of merged oFs 
+        # new oFs = non-merged + new 
+        new_oF_ = [(F, nF_[F.nF]) for F in oF_ if F not in merged_oF_] + [(nT, nT.fdef) for nT in nT_]
+
+        # update oF_, iF_ and nF_
+        oF_[:] = [F for F,_ in new_oF_]
+        nF_[:] = [fd for _,fd in new_oF_] 
+        iF_.clear(); iF_.update({fd.name: j for j,(_,fd) in enumerate(new_oF_)})
+  
+        # update each oF's nF
+        for i,(F,_) in enumerate(new_oF_): F.nF = i  # re-update nF index
+
+    '''
     smF_ = []  # final smF
     for nT in nT_:  # create ast node with fdef
         fdef = emit_oF(nT)
@@ -340,10 +353,10 @@ def clust_oF_(oF_site_):  # cluster Ts if called together, global only
         for fork in nT.N_:
             for (caller_fd, site) in oF_site_.get(fork, []):   # point site to the updated merged oF
                 site.func.id = nF_[nT.nF].name
+    '''
     ''' with average_linkage:
     for _T,T in combinations(oF_,2): V = (comp_callers(_T,T) + comp_body(_T,T)) * min(_T.fc,T.fc); _T.V_[T] = V; T.V_[_T] = V 
     for t in C.N_: if t is not T: v__[j,i] += t.V_[T]  # += pairwise Vs '''
-    return smF_, rF_
 
 def inject_oF_(oF_, g):  # inject AST in g, recompile g[name]
 
