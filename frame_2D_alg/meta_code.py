@@ -259,30 +259,52 @@ def comp_prim(_n,n):
 def get_fc(n):
     return n.fc if isinstance(n,CoF) else costs.get(n[0],0)+sum(get_fc(c) for c in n[1]) if isinstance(n,tuple) else costs.get(type(n),0)
 
-# not updated:
 def split_oF_():  # divisive clustering
-    sF_, rF_ = [], []
+
+    def is_gate_l(t):  # check ast.type instead
+        if isinstance(t,tuple) and not isinstance(t[0],tuple) and isinstance(t[1],tuple) and t[1]:
+            h = t[1][0]
+            if isinstance(h,tuple) and isinstance(h[0],tuple) and h[0][0]=='gv_': return h[0][1]
+        return 0
+    def is_fork(t):  # check type = ast.IfExp instead?
+        return isinstance(t,tuple) and not isinstance(t[0],tuple) and t[0] in (ast.If, ast.IfExp) and t[1]
+
+    def extract(t, oF, sF_):  # pack sub gate from gv or ifexp
+        l = is_gate_l(t); fork = l or is_fork(t);oF.w=1
+        if fork and oF.w * sum(get_fc(p) for p in t[1]) if isinstance(t,tuple) else 1 > ave:
+            sub = CoF(root=oF, fc=get_fc(t), body=[t], caller_={oF})
+            if not l: oF.gV_ += [0]; oF.g_ += [t]  # this is not correct yet, we need to identify the gv_ index of new ifexp gate
+            sF_ += [sub]
+            return sub
+        if isinstance(t,tuple) and not isinstance(t[0],tuple) and isinstance(t[1],tuple):  # return body
+            return (t[0], tuple(extract(s,oF,sF_) for s in t[1]))
+        return t
+
+    sF_,rF_ = [],[]
     for oF in oF_:
-        # or if oF.w * len(gated_segment_AST): approximate gain from encapsulating the segment? same for merge but with component oFs?
-        if (len(oF.body)-1) * wL > ave:  # * split w,c;  need to add callers to raw code forks too?
-            _n= oF.body[0]; grp=[_n]; grp_=[]
-            for n in oF.body[1:]:
-                if comp_prim(_n,n): grp+=[n]
-                else: grp_+= [grp]; grp =[n]
-                _n=n
-            grp_ += [grp]  # last
-            if len(grp_) > 1:  # -1 * wL > ave?
-                for grp in grp_:  # single refinement
-                    fc = sum([get_fc(prim) for prim in grp])
-                    sub = CoF(root=oF,fc=fc,body=grp); sub.caller_ = copy(oF.caller_)
-                    sF_ += [sub]
-        else: rF_ += [oF]
+        oF.body = [extract(t,oF,sF_) for t in oF.body]
+        if oF.body: rF_ += [oF]  # pack to rF_ if there's leftover unsplit body
     return sF_, rF_
 
-# not updated:
-def clust_oF_(oF_):  # cluster Ts if called together, global only
+def clust_oF_(oF_site_):  # cluster Ts if called together, global only
 
-    grp_ = {}   # group same-typ oFs:
+    # not revised:
+    def emit_oF(nT):  # nT.body -> ast.FunctionDef, inverse of build; None if not emittable
+        fd_ = [nF_[f.nF] for f in nT.N_ if isinstance(f.nF,int)]
+        if len(fd_) < len(nT.N_): return  # member without fdef: split sub | unregistered composite
+        a_ = [[a.arg for a in fd.args.args] for fd in fd_]
+        if any(a != a_[0] for a in a_[1:]): return  # rewritten sites keep caller args: members must share signature
+        stmts = []
+        for t in nT.body:
+            if isinstance(t,CoF) and isinstance(t.nF,int):
+                stmts += [ast.Expr(ast.Call(func=ast.Name(nF_[t.nF].name,ctx=ast.Load()), args=[], keywords=[]))]  # arg binding in bind_oF_?
+            else: return  # (typ,sub_) skeleton | (ast.IfExp,(Sub,sub)) fork: no runnable AST form, accounting-only
+        if stmts:
+            fdef = ast.parse(f"def {nT.name}(): pass").body[0]
+            fdef.args = deepcopy(fd_[0].args); fdef.body = stmts
+            return ast.fix_missing_locations(fdef)
+
+    grp_ = {}   # group same-typ oFs?
     for T in oF_:  # updated in split_oF_
         grp_.setdefault(T.typ, []).append(T)
     grp_ = list(grp_.values())
@@ -298,15 +320,26 @@ def clust_oF_(oF_):  # cluster Ts if called together, global only
         V, dV = v__.sum(), np.abs(v__-_v__).sum()
         if V*dV*(wcO*L) <= ave * (Ln+ ccO*L): break  # convergence
         _v__ = v__
-    smF_,rF_ = [],[]  # final hard assign
+    nT_,rF_ = [],[]  # final hard assign
     for i in range(Lc):
         t_ = [T for j,T in enumerate(oF_) if v__[j].argmax() == i]
         if t_:
             if (gV := v__[:,i].sum()) * ((len(t_)-1)*wL) > ave:
                 nT = sum2O(t_)
                 nT.memb = gV; fC = sum(t.fc for t in t_); nT.cmpr = fC - fC/len(t_)
-                smF_ += [nT]
+                nT_ += [nT]
             else: rF_ += t_  # unpack if weak
+    smF_ = []  # final smF
+    for nT in nT_:  # create ast node with fdef
+        fdef = emit_oF(nT)
+        if fdef is None: continue
+        name = f"oF{len(nF_)}"; fdef.name = name  # temporary named by length of nF_, for eg: oF11,oF12,oF13...
+        nF_.append(fdef); iF_[name] = len(nF_)-1; oF_.append(nT); nT.nF = len(oF_)-1
+        smF_ += [nT]
+    for nT in smF_:
+        for fork in nT.N_:
+            for (caller_fd, site) in oF_site_.get(fork, []):   # point site to the updated merged oF
+                site.func.id = nF_[nT.nF].name
     ''' with average_linkage:
     for _T,T in combinations(oF_,2): V = (comp_callers(_T,T) + comp_body(_T,T)) * min(_T.fc,T.fc); _T.V_[T] = V; T.V_[_T] = V 
     for t in C.N_: if t is not T: v__[j,i] += t.V_[T]  # += pairwise Vs '''
