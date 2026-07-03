@@ -259,30 +259,25 @@ def comp_prim(_n,n):
 def get_fc(n):
     return n.fc if isinstance(n,CoF) else costs.get(n[0],0)+sum(get_fc(c) for c in n[1]) if isinstance(n,tuple) else costs.get(type(n),0)
 
-
 def split_oF_():  # divisive clustering
 
-    def get_segl(t):  # get nested body length
-        return 1 + sum(get_segl(p) for p in t[1]) if isinstance(t, tuple) else 1 
-
-    def is_gate_l(t):  # check gv_
+    def is_gate_l(t):  # check ast.type instead
         if isinstance(t,tuple) and not isinstance(t[0],tuple) and isinstance(t[1],tuple) and t[1]:
             h = t[1][0]
             if isinstance(h,tuple) and isinstance(h[0],tuple) and h[0][0]=='gv_': return h[0][1]
         return 0
-
-    def is_fork(t):  # check IfExp
+    def is_fork(t):  # check type = ast.IfExp instead?
         return isinstance(t,tuple) and not isinstance(t[0],tuple) and t[0] in (ast.If, ast.IfExp) and t[1]
 
     def extract(t, oF, sF_):  # pack sub gate from gv or ifexp
         l = is_gate_l(t); fork = l or is_fork(t);oF.w=1
-        if fork and oF.w * get_segl(t) > ave:
+        if fork and oF.w * sum(get_fc(p) for p in t[1]) if isinstance(t,tuple) else 1 > ave:
             sub = CoF(root=oF, fc=get_fc(t), body=[t], caller_={oF})
             if not l: oF.gV_ += [0]; oF.g_ += [t]  # this is not correct yet, we need to identify the gv_ index of new ifexp gate
             sF_ += [sub]
-            return sub  
+            return sub
         if isinstance(t,tuple) and not isinstance(t[0],tuple) and isinstance(t[1],tuple):  # return body
-            return (t[0], tuple(extract(s,oF,sF_) for s in t[1]))  
+            return (t[0], tuple(extract(s,oF,sF_) for s in t[1]))
         return t
 
     sF_,rF_ = [],[]
@@ -293,7 +288,7 @@ def split_oF_():  # divisive clustering
 
 def clust_oF_(oF_site_):  # cluster Ts if called together, global only
 
-    # from LLM, not verified, to build new ast node from new merged oF
+    # not revised:
     def emit_oF(nT):  # nT.body -> ast.FunctionDef, inverse of build; None if not emittable
         fd_ = [nF_[f.nF] for f in nT.N_ if isinstance(f.nF,int)]
         if len(fd_) < len(nT.N_): return  # member without fdef: split sub | unregistered composite
@@ -309,8 +304,7 @@ def clust_oF_(oF_site_):  # cluster Ts if called together, global only
             fdef.args = deepcopy(fd_[0].args); fdef.body = stmts
             return ast.fix_missing_locations(fdef)
 
-
-    grp_ = {}   # group same-typ oFs:
+    grp_ = {}   # group same-typ oFs?
     for T in oF_:  # updated in split_oF_
         grp_.setdefault(T.typ, []).append(T)
     grp_ = list(grp_.values())

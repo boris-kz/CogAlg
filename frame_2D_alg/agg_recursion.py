@@ -94,15 +94,15 @@ def cross_comp(root, rr, fC=0):  # core function mediating recursive rng+ and de
         L_,TT,c,r, cV = Lt
         oF_[CoF.get().nF].V_ += [cV]  # combined comp_ results
         if L_:  # +ve only (L_ may empty when there's just negative links)
-            root.L_ = L_; L= len(L_)-1  # val=m+d /clust, m/comp
-            if gv_(sumV(TT*ttcN,c,r)* (wcN*L) - (ave+avd)* (r+ccN*L)* c):  # if +ve, store neg gate values
+            root.L_ = L_  # val=m+d /clust, m/comp
+            if gv_(sumV(TT*ttcN, c, (r+ccN)) * wcN * ((len(L_)-1)* wL) - (ave+avd)):  # if +ve, store neg gate values
                 E_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)
                 G_,r = cluster_N(root, E_,r,c)  # cluster_C, _P, eval?
                 if G_:
                     if not root.typ: F2N(root)  # promote at 1st sub+ or agg+
                     root.H += [sum2F(L_,root,froot=1)]  # dLev per L_
                     root.Nt = sum2F(G_,root,froot=2); L=len(G_)-1  #| C_?
-                    if gv_((vt_(TT*ttA)[0]* (c/r)* (wAgg*L) - ave* (r+cAgg*L))* c):  # extensive m only
+                    if gv_((vt_(TT*ttA)[0]* (c/(r+cAgg*L)) * (wAgg*L)) - ave):  # extensive m only
                         G_ = cross_comp(root.Nt,r)  # agg+
     return G_
 
@@ -113,7 +113,7 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
         iTT = (_N.dTT + N.dTT) * Dec
         eTT = (_N.Rt.dTT + N.Rt.dTT) * Dec
         C = min(_N.c,N.c); R = (_N.r+N.r)/2
-        if vt_((eTT+iTT)*ttPrj)[0]* (C/R)* wPrj > ave* (cPrj+r+C+R):  # not oF, spec / link:
+        if vt_((eTT+iTT)*ttPrj)[0]* (C/(cPrj+r+R))* wPrj > ave:  # not oF, spec / link:
             eTT+= proj_N(N, dist, dy_dx, r, N.c, dec)[0]  # pTT/ L_,B_,rim, if pV >0
             eTT+= proj_N(_N,dist,-dy_dx, r,_N.c, dec)[0]  # reverse direction
         return iTT+eTT
@@ -428,10 +428,10 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
             _C_ = C_
         else: out_+=C_; break  # converged
     if out_:
+        oc = 0
         for n in [N for C in out_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals:
-            n.exe = (n.d if n.typ==1 else n.m) + np.sum(n.m_) - ave
-        # or sum c from out_?
-        if gv_(vt_(DTT,Ft.root.wTT*ttcC)[0]*_c/r*wcC*(len(out_)-1) - ave*(r+ccC*(len(out_)-1))):
+            n.exe = (n.d if n.typ==1 else n.m) + np.sum(n.m_) - ave; oc+=n.c
+        if gv_(vt_(DTT,Ft.root.wTT*ttcC)[0] * (oc/(r+ccC)) * ((len(out_)-1)*wL) * wcC - ave):
             Ct = sum2F(out_); Ft.root.Ct = Ct; Ct.root = Ft.root
             cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
     if out_: FV_(CoF.get(), *sum_vt(out_)[:-1], r)
@@ -912,9 +912,9 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
             oF_site_ = {oF: [] for oF in oF_}
             for fdef in nF_:  # map oFs to call sites:
                 for n in call_sites(fdef):  # calls in fdef, func.id in iF_
-                    oF_site_[oF_[iF_[n.func.id]]] += [(fdef, n)]                
+                    oF_site_[oF_[iF_[n.func.id]]] += [(fdef, n)]
             sF_, rF_ = split_oF_()  # splits + remaining oF_s
-            oF_ = sF_ + rF_ 
+            oF_ = sF_ + rF_
             smF_, rF_ = clust_oF_(oF_site_)  # splits+merges + remaining, returns dict oF_
             oF_ = smF_ + rF_
             if smF_:
