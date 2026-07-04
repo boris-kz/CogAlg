@@ -55,7 +55,7 @@ wFrm,wAgg,wTrc, wN_,wC_,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for
 ttFrm,ttA,ttTrc,ttN_,ttC_,ttN,ttF,ttE,ttcN,ttcC,ttcP, ttsG,ttBac,ttPrj,ttVct = [F.wTT for F in oF_]
 
 def sumV(tt,c,r):
-    return (sum(tt[0]) + sum(abs(tt[1]))) * c/r  # for clustering, combine unnormalized forks
+    return (sum(tt[0]) + sum(abs(tt[1]))) * c/r  # combine unnormalized forks per oF, or Nt,Bt in clustering
 
 def FV_(F, tt,c,r):  # combine m,d per oF
     tF = oF_[F.nF]; tF.c += c
@@ -913,11 +913,10 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
             for fdef in nF_:  # map oFs to call sites:
                 for n in call_sites(fdef):  # calls in fdef, func.id in iF_
                     oF_site_[oF_[iF_[n.func.id]]] += [(fdef, n)]
-            sF_, rF_ = split_oF_()  # splits + remaining oF_s
+            sF_,rF_ = split_oF_()  # splits + remaining oF_s
             oF_[:] = sF_ + rF_
             clust_oF_(oF_site_)  # splits+merges + remaining
-            # below not updated
-            if smF_:
+            if sF_:  # not updated
                 caller_fd_ = {caller_fd for nT in smF_ for fork in nT.N_ for (caller_fd,_) in oF_site_.get(fork, [])}  # get the updated caller
                 updated_oF_ = smF_ + [oF_[iF_[fd.name]] for fd in caller_fd_ if fd.name in iF_]
                 inject_oF_(updated_oF_, globals())
