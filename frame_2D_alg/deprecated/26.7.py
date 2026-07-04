@@ -17,7 +17,7 @@ def split_oF_():  # divisive clustering
         else: rF_ += [oF]
     return sF_, rF_
 
-def clust_oF_(oF_):  # cluster Ts if called together, global only
+def clust_oF_(oF_):  # cluster Ts with similar body and callers
 
     grp_ = {}   # group same-typ oFs:
     for T in oF_:  # updated in split_oF_
@@ -44,11 +44,15 @@ def clust_oF_(oF_):  # cluster Ts if called together, global only
                 nT.memb = gV; fC = sum(t.fc for t in t_); nT.cmpr = fC - fC/len(t_)
                 smF_ += [nT]
             else: rF_ += t_  # unpack if weak
-    ''' with average_linkage:
-    for _T,T in combinations(oF_,2): V = (comp_callers(_T,T) + comp_body(_T,T)) * min(_T.fc,T.fc); _T.V_[T] = V; T.V_[_T] = V 
-    for t in C.N_: if t is not T: v__[j,i] += t.V_[T]  # += pairwise Vs '''
     return smF_, rF_
 
+    ''' with average_linkage:
+    for _T,T in combinations(oF_,2): V = (comp_callers(_T,T) + comp_body(_T,T)) * min(_T.fc,T.fc); _T.V_[T] = V; T.V_[_T] = V 
+    for t in C.N_: if t is not T: v__[j,i] += t.V_[T]  # += pairwise Vs 
+
+    for F, f_ in smF_:
+        for f in f_: iF_[nF_[f.nF].name] = F's index  # name -> merged oF
+    '''
 def inject_oF_(oF_, g):  # inject AST in g, recompile g[name]
 
     for oF in oF_:
