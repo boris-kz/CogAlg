@@ -857,7 +857,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
         while T and gv_(vt_(T.dTT*T.wTT*ttFrm)[0] * ((T.c+wFrm)/(T.r+cFrm)) - ave):
             frame[y,x]=T; T_+=[T]; dy_dx = T.box[2:] -T.box[:2]
             pTT, pc = proj_N(T, np.hypot(*dy_dx), dy_dx, elev, T.c)  # no proj r?
-            if gv_(ave - vt_(pTT*T.wTT*ttFrm) * ((pc+wFrm)/(T.r+elev+cFrm))):  # inverted val
+            if gv_(ave - vt_(pTT*T.wTT*ttFrm)[0] * ((pc+wFrm)/(T.r+elev+cFrm))):  # inverted val
                 proj_focus(PV__,y,x,T)
                 pv__ = PV__.copy(); pv__[frame != None] = 0
                 y,x = np.unravel_index(pv__.argmax(), PV__.shape)
@@ -868,7 +868,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
             else: break
         if T_:
             TT,C,R = sum_vt(T_, wTT=ttFrm); R += elev
-            if vt_(TT*ttFrm)[0] * ((C+wFrm)/(R+cFrm) > ave):
+            if vt_(TT*ttFrm)[0] * (C+wFrm)/(R+cFrm) > ave:
                 return T_,C,R
         return [], 0, 0
 
