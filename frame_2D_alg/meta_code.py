@@ -262,47 +262,43 @@ def get_fc(n):
 def split_oF_():  # divisive clustering
 
     def is_gate_l(t):  # check ast.type instead
-        if isinstance(t,tuple) and not isinstance(t[0],tuple) and isinstance(t[1],tuple) and t[1]:
-            h = t[1][0]
-            if isinstance(h,tuple) and isinstance(h[0],tuple) and h[0][0]=='gv_': return h[0][1]
+        if isinstance(t,tuple) and t[0] in (ast.If,ast.IfExp) and isinstance(h:=t[1][0],tuple) and isinstance(h[0],tuple) and h[0][0] == 'gv_': return 1
         return 0
-    def is_fork(t):  # check type = ast.IfExp instead?
-        return isinstance(t,tuple) and not isinstance(t[0],tuple) and t[0] in (ast.If, ast.IfExp) and t[1]
 
-    def extract(t, oF, sF_):  # pack sub gate from gv or ifexp
-        l = is_gate_l(t); fork = l or is_fork(t);oF.w=1
-        if fork and oF.w * sum(get_fc(p) for p in t[1]) if isinstance(t,tuple) else 1 > ave:
+    def split(t, oF):  # pack sub gate from gates
+        if is_gate_l(t) and oF.fw * sum(get_fc(p) for p in t[1]) > ave:  # w is membership weight, it should be fw?
             sub = CoF(root=oF, fc=get_fc(t), body=[t], caller_={oF})
-            if not l: oF.gV_ += [0]; oF.g_ += [t]  # this is not correct yet, we need to identify the gv_ index of new ifexp gate
-            sF_ += [sub]
+            oF_.append(sub); nF_.append(None); sub.nF = len(oF_)-1
             return sub
-        if isinstance(t,tuple) and not isinstance(t[0],tuple) and isinstance(t[1],tuple):  # return body
-            return (t[0], tuple(extract(s,oF,sF_) for s in t[1]))
+        if isinstance(t,tuple) and t[1]:  # return body and split nested node recursively
+            return (t[0], tuple(split(s,oF) for s in t[1]))
         return t
 
-    sF_,rF_ = [],[]
-    for oF in oF_:
-        oF.body = [extract(t,oF,sF_) for t in oF.body]
-        if oF.body: rF_ += [oF]  # pack to rF_ if there's leftover unsplit body
-    return sF_, rF_
+    for oF in copy(oF_):  # copy because we append new sub during
+        oF.body = [split(t,oF) for t in oF.body]
 
-def clust_oF_(oF_site_):  # cluster Ts if called together, global only
+def clust_oF_():  # pairwise merge for body compression
 
-    # not revised:
-    def emit_oF(nT):  # nT.body -> ast.FunctionDef, inverse of build; None if not emittable
-        fd_ = [nF_[f.nF] for f in nT.N_ if isinstance(f.nF,int)]
-        if len(fd_) < len(nT.N_): return  # member without fdef: split sub | unregistered composite
-        a_ = [[a.arg for a in fd.args.args] for fd in fd_]
-        if any(a != a_[0] for a in a_[1:]): return  # rewritten sites keep caller args: members must share signature
-        stmts = []
-        for t in nT.body:
-            if isinstance(t,CoF) and isinstance(t.nF,int):
-                stmts += [ast.Expr(ast.Call(func=ast.Name(nF_[t.nF].name,ctx=ast.Load()), args=[], keywords=[]))]  # arg binding in bind_oF_?
-            else: return  # (typ,sub_) skeleton | (ast.IfExp,(Sub,sub)) fork: no runnable AST form, accounting-only
-        if stmts:
-            fdef = ast.parse(f"def {nT.name}(): pass").body[0]
-            fdef.args = deepcopy(fd_[0].args); fdef.body = stmts
-            return ast.fix_missing_locations(fdef)
+    F_ = copy(oF_); mrg_F_ = []
+    v_ = {(_T,T): comp_body(_T,T) * min(_T.fc,T.fc) for _T,T in combinations(F_,2) if _T.typ==T.typ}  # estimate, prioritize only
+    while v_:
+        (_T,T), v = max(v_.items(), key=lambda kv: kv[1])
+        if v*wL <= ave: break  # no pair worth realizing
+        nT = CoF(N_=[_T,T], typ=_T.typ, fc=_T.fc+T.fc, caller_=_T.caller_|T.caller_)
+        nT.body = copy(_T.body)  # body will be merged below
+        merge_oF(nT, T, fsel=0)
+        mC = sum(get_fc(t) for t in nT.body); nT.cmpr = nT.fc - mC  # realized compression, net of fork cost
+        if nT.cmpr*wL > ave:
+            print(nT)
+            nT.fc = mC; F_.remove(_T); F_.remove(T); F_ += [nT]; mrg_F_ += [nT]
+            v_ = {p:v for p,v in v_.items() if _T not in p and T not in p}  # drop stale pairs
+            v_.update({(nT,t): comp_body(nT,t) * min(nT.fc,t.fc) for t in F_[:-1] if t.typ==nT.typ})
+        else: del v_[(_T,T)]  # estimate passed, merge didn't: don't retry
+    mrg_F_ = [n for n in mrg_F_ if n in F_]  # live composites only: chains absorb earlier nTs
+    for F in mrg_F_:
+        oF_.append(F); nF_.append(None); F.nF = len(oF_)-1
+
+def clust_oF_old():  # cluster Ts if called together, global only
 
     grp_ = {}   # group same-typ oFs?
     for T in oF_:  # updated in split_oF_
@@ -327,24 +323,21 @@ def clust_oF_(oF_site_):  # cluster Ts if called together, global only
             if (gV := v__[:,i].sum()) * ((len(t_)-1)*wL) > ave:
                 nT = sum2O(t_)
                 nT.memb = gV; fC = sum(t.fc for t in t_); nT.cmpr = fC - fC/len(t_)
+                nT.fdef = fdef; fdef.name = f"oF{nT.id}"  # unique under removal: len(nF_) may repeat after pops
                 nT_ += [nT]
             else: rF_ += t_  # unpack if weak
-    smF_ = []  # final smF
-    for nT in nT_:  # create ast node with fdef
-        fdef = emit_oF(nT)
-        if fdef is None: continue
-        name = f"oF{len(nF_)}"; fdef.name = name  # temporary named by length of nF_, for eg: oF11,oF12,oF13...
-        nF_.append(fdef); iF_[name] = len(nF_)-1; oF_.append(nT); nT.nF = len(oF_)-1
-        smF_ += [nT]
-    for nT in smF_:
-        for fork in nT.N_:
-            for (caller_fd, site) in oF_site_.get(fork, []):   # point site to the updated merged oF
-                site.func.id = nF_[nT.nF].name
-    ''' with average_linkage:
+    if nT_:
+        merged_oF_ = {t for nT in nT_ for t in nT.N_}  # list of merged oFs
+        new_oF_ = [(F, nF_[F.nF]) for F in oF_ if F not in merged_oF_] + [(nT, nT.fdef) for nT in nT_]
+        oF_[:] = [F for F,_ in new_oF_]
+        nF_[:] = [fd for _,fd in new_oF_]
+        iF_.clear(); iF_.update({fd.name: j for j,(_,fd) in enumerate(new_oF_)})
+        for i,(F,_) in enumerate(new_oF_): F.nF = i  # re-update nF index
+    ''' 
+    with average_linkage:
     for _T,T in combinations(oF_,2): V = (comp_callers(_T,T) + comp_body(_T,T)) * min(_T.fc,T.fc); _T.V_[T] = V; T.V_[_T] = V 
-    for t in C.N_: if t is not T: v__[j,i] += t.V_[T]  # += pairwise Vs '''
-    return smF_, rF_
-
+    for t in C.N_: if t is not T: v__[j,i] += t.V_[T]  # += pairwise Vs 
+    '''
 def inject_oF_(oF_, g):  # inject AST in g, recompile g[name]
 
     for oF in oF_:
