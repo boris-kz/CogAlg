@@ -54,13 +54,9 @@ cFrm,cAgg,cTrc, cN_,cC_,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (      # fu
 wFrm,wAgg,wTrc, wN_,wC_,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init = cost
 ttFrm,ttA,ttTrc,ttN_,ttC_,ttN,ttF,ttE,ttcN,ttcC,ttcP, ttsG,ttBac,ttPrj,ttVct = [F.wTT for F in oF_]
 
-def sumV(tt,c,r):
-    return (sum(tt[0]) + sum(abs(tt[1]))) * c/r  # combine unnormalized forks per oF, or Nt,Bt in clustering
-
 def FV_(F, tt,c,r):  # combine m,d per oF
     tF = oF_[F.nF]; tF.c += c
-    V = sumV(tt* tF.wTT, c,r); tF.V_ += [V]
-    return V
+    V = vt_(tt*tF.wTT)[0] * (c/r); tF.V_ += [V]; return V
 
 def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to the sum, recompute to convergence
 
@@ -95,14 +91,14 @@ def cross_comp(root, rr, fC=0):  # core function mediating recursive rng+ and de
         oF_[CoF.get().nF].V_ += [cV]  # combined comp_ results
         if L_:  # +ve only (L_ may empty when there's just negative links)
             root.L_ = L_  # val=m+d /clust, m/comp
-            if gv_(sumV(TT*ttcN, c, (r+ccN)) * wcN * ((len(L_)-1)* wL) - (ave+avd)):  # if +ve, store neg gate values
+            if gv_(vt_(TT*ttcN)[0] * ((c+wcN)/(r+ccN)) * ((len(L_)-1)*wL) - ave):  # if +ve, store neg gate values
                 E_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)
                 G_,r = cluster_N(root, E_,r,c)  # cluster_C, _P, eval?
                 if G_:
                     if not root.typ: F2N(root)  # promote at 1st sub+ or agg+
                     root.H += [sum2F(L_,root,froot=1)]  # dLev per L_
-                    root.Nt = sum2F(G_,root,froot=2); L=len(G_)-1  #| C_?
-                    if gv_((vt_(TT*ttA)[0]* (c/(r+cAgg*L)) * (wAgg*L)) - ave):  # extensive m only
+                    root.Nt = sum2F(G_,root,froot=2) #| C_?
+                    if gv_((vt_(TT*ttA)[0]* ((c+wAgg)/(r+cAgg))  * ((len(G_))-1)*wL) - ave):  # extensive m only
                         G_ = cross_comp(root.Nt,r)  # agg+
     return G_
 
@@ -364,15 +360,14 @@ def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace
             c = nc + lc + bc
             r = (nr*nc + lr*lc + br*bc) /c  # br includes overlap?
             tt= (nt*nc + lt*lc + bt*bc) /c  # tentative
-            if gv_(sumV(tt*Ft.root.wTT*ttcN,c,r)*wcN*(len(N_)-1) - (ave+avd)*(r+ccN*(len(N_)-1))):  # apply Fw_ and Fc_ in every eval_?
+            if gv_(vt_(tt*Ft.root.wTT*ttcN)[0] * (c*wcN /(r+ccN)) * ((len(N_)-1)*wL) - ave):  # apply Fw_ and Fc_ in every eval_?
                 G_ += [sum2G(ft_,ttcN, CN())]; Gt_+= [[tt,c,r]]  # evals cluster_C, cluster_P internally
                 # _C=C+c; _rc=C/_C; rc=c/_C; TT=TT*_rc+tt*rc; R=R*_rc+r*rc; C=_C
     if G_:
         for G in G_: trans_cluster(G)  # splice trans_links, merge L.N_.roots
         C = sum([g[1] for g in Gt_]); TT=np.zeros((2,9)); R=0; _r+=1  # + wC?
         for tt,c,gr in Gt_: w=c/C; TT+=tt*w; R+=gr*w
-        L = len(G_)-1
-        if gv_(sumV(TT*Ft.root.wTT*ttcN,C,R)*(wcN*L) - (ave+avd)*(_r+R+ccN*L)):  # reform root,Nt, no other forks yet:
+        if gv_(vt_(TT*Ft.root.wTT*ttcN)[0] * (C*wcN /(_r+R+ccN)) * ((len(G_)-1)*wL) - ave):  # reform root,Nt, no other forks yet:
             rG = Ft.root; Nt=rG.Nt; Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=R
             rG.dTT=TT; rG.c=C; rG.r=R
         # combine C_:
@@ -723,12 +718,12 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
                         if N.B_:
                             PPd_ = [B.root for B in N.B_]; sum2F(PPd_,N.Bt)
                             N.Bt.N_ = PPd_; [setattr(B,'root',N.Bt) for B in PPd_]
-                    L = len(PPm_)-1; tt,c,r = sum_vt(N_)
-                    if gv_(sumV(tt*ttVct,c,r) * (wVct*L) - (ave+avd) * (3+cVct*L)):
+                    tt,c,r = sum_vt(N_)
+                    if gv_(vt_(tt*ttVct)[0] * ((c+wVct)/ (3+cVct)) * ((len(PPm_)-1)*wL) - ave):
                         G_,TT,c,R = trace_edge([F2N(n) for n in N_], G_,TT,c,3,tile); C += c  # flatten B_-mediated Gs
     if G_:
-        Nt = CF(nF='Nt', root=tile); Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=1; Nt.H=tile.H; tile.Nt=Nt; tile.dTT=TT; tile.c=C; L=len(G_)
-        if sumV(TT*ttVct,C,1)*(wFrm*L) > ave * (cFrm*L):  # L for trans-comp only?
+        Nt = CF(nF='Nt', root=tile); Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=1; Nt.H=tile.H; tile.Nt=Nt; tile.dTT=TT; tile.c=C
+        if vt_(TT*ttVct)[0] * ((C+wFrm)/ cFrm) * ((len(G_)-1)*wL) > ave:  # L for trans-comp only?
             A_ = [G.angl[0] for G in G_ if G.angl]
             tile.angl = [np.sum(A_, axis=0) if A_ else np.zeros(2), np.sign(tile.dTT[1] @ ttVct[1])]
             FV_(CoF.get(), TT,C,1)
@@ -776,7 +771,8 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
                 G_ += [sum2G([(n_,'Nt',ntt,nc,r)]+([(l_,'Lt',ltt,lc,r)] if l_ else []), ttTrc, root)]
             else:
                 for N in n_: N.fin=0; N.root=root
-    if sumV(TT*root.wTT*ttTrc,C,R)*wTrc > (ave+avd)*(r+1+cTrc): _G_+=G_; _TT+=TT;_C+=C  # eval per edge, concat in tile?
+    if vt_(TT*root.wTT*ttTrc)[0] * ((C+wTrc)/(r+1+cTrc)) * ((len(G_)-1)*wL) > ave:
+        _G_+=G_; _TT+=TT; _C+=C  # eval per edge, concat in tile?
     FV_(CoF.get(), *sum_vt(_G_))
     return _G_, _TT, _C, r+R/_C
 
@@ -832,7 +828,7 @@ def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N
     def proj_TT(L, cos_d, dist, r, pTT, wTT, dec=1, fdec=0):     # accumulate L|N' pTT with iTT|eTT internally
         dec = dist if fdec else ave** (1 + dist * dec / L.span)  # not fully revised, ave = match decay rate / unit distance
         TT = np.array([L.dTT[0] * dec, L.dTT[1] * cos_d * dec])  # IxE angle alignment * decay?
-        cert = abs(sumV(TT*wTT,L.c,r) * wPrj)  # approximation
+        cert = abs(vt_(TT*wTT*ttPrj)[0] * ((L.c+wPrj)/(r+cPrj)) - ave)  # approximation
         if cert > (ave + avd) * (r + cPrj):  # certainty margin
             pTT += TT
 
@@ -848,7 +844,7 @@ def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N
     pTT = iTT + eTT  # proj int,ext links, work the same?
     pc = c* decay ** (1+ dist/N.span)
     FV_(CoF.get(), pTT,pc,_r)
-    return pTT,pc  # only c decays? info_gain = N.m * average link uncertainty, should be separate
+    return pTT,pc  # only c decays, not _r? info_gain = N.m * average link uncertainty, should be separate
 
 def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
 
@@ -858,11 +854,11 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
         cy,cx = (Ly-1)//2,(Lx-1)//2; y,x = cy,cx  # start=mean
         PV__ = np.zeros([Ly,Lx])
         T_ = []
-        while T and gv_(sumV(T.dTT*T.wTT*ttFrm,T.c,T.r) * wFrm - (ave+avd)*(T.r+(cFrm*T.c))):
+        while T and gv_(vt_(T.dTT*T.wTT*ttFrm)[0] * ((T.c+wFrm)/(T.r+cFrm)) - ave):
             frame[y,x]=T; T_+=[T]; dy_dx = T.box[2:] -T.box[:2]
-            pTT, pc = proj_N(T, np.hypot(*dy_dx), dy_dx, elev, T.c)
-            if gv_(ave * (cFrm*T.c) - sumV(pTT*T.wTT*ttFrm,pc,T.r) * wFrm):
-                proj_focus(PV__,y,x, T)
+            pTT, pc = proj_N(T, np.hypot(*dy_dx), dy_dx, elev, T.c)  # no proj r?
+            if gv_(ave - vt_(pTT*T.wTT*ttFrm) * ((pc+wFrm)/(T.r+elev+cFrm))):  # inverted val
+                proj_focus(PV__,y,x,T)
                 pv__ = PV__.copy(); pv__[frame != None] = 0
                 y,x = np.unravel_index(pv__.argmax(), PV__.shape)
                 if gv_(PV__[y,x] - ave):
@@ -872,7 +868,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
             else: break
         if T_:
             TT,C,R = sum_vt(T_, wTT=ttFrm); R += elev
-            if sumV(TT*ttFrm,C,R)*wFrm > (ave+avd)*(R+cFrm):
+            if vt_(TT*ttFrm)[0] * ((C+wFrm)/(R+cFrm) > ave):
                 return T_,C,R
         return [], 0, 0
 
@@ -913,9 +909,9 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
             for fdef in nF_:  # map oFs to call sites:
                 for n in call_sites(fdef):  # calls in fdef, func.id in iF_
                     oF_site_[oF_[iF_[n.func.id]]] += [(fdef, n)]
-            split_oF_() 
-            clust_oF_() 
-            if sF_:  # not updated
+            sF_,rF_ = split_oF_()  # splits + remaining oF_s
+            smF_ = clust_oF_(sF_+rF_)  # splits + merges + remaining
+            if smF_:  # not updated
                 caller_fd_ = {caller_fd for nT in smF_ for fork in nT.N_ for (caller_fd,_) in oF_site_.get(fork, [])}  # get the updated caller
                 updated_oF_ = smF_ + [oF_[iF_[fd.name]] for fd in caller_fd_ if fd.name in iF_]
                 inject_oF_(updated_oF_, globals())

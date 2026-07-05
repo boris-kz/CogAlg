@@ -266,7 +266,7 @@ def split_oF_():  # divisive clustering
         return 0
 
     def split(t, oF):  # pack sub gate from gates
-        if is_gate_l(t) and oF.fw * sum(get_fc(p) for p in t[1]) > ave:  # w is membership weight, it should be fw?  
+        if is_gate_l(t) and oF.fw * sum(get_fc(p) for p in t[1]) > ave:  # w is membership weight, it should be fw?
             sub = CoF(root=oF, fc=get_fc(t), body=[t], caller_={oF})
             oF_.append(sub); nF_.append(None); sub.nF = len(oF_)-1
             return sub
@@ -274,10 +274,10 @@ def split_oF_():  # divisive clustering
             return (t[0], tuple(split(s,oF) for s in t[1]))
         return t
 
-    for oF in copy(oF_):  # copy because we append new sub during 
+    for oF in copy(oF_):  # copy because we append new sub during
         oF.body = [split(t,oF) for t in oF.body]
 
-def clust_oF_():  # greedy pairwise merge, gated by realized body-overlap compression
+def clust_oF_():  # pairwise merge for body compression
 
     F_ = copy(oF_); mrg_F_ = []
     v_ = {(_T,T): comp_body(_T,T) * min(_T.fc,T.fc) for _T,T in combinations(F_,2) if _T.typ==T.typ}  # estimate, prioritize only
@@ -286,7 +286,7 @@ def clust_oF_():  # greedy pairwise merge, gated by realized body-overlap compre
         if v*wL <= ave: break  # no pair worth realizing
         nT = CoF(N_=[_T,T], typ=_T.typ, fc=_T.fc+T.fc, caller_=_T.caller_|T.caller_)
         nT.body = copy(_T.body)  # body will be merged below
-        merge_oF(nT, T, fsel=0) 
+        merge_oF(nT, T, fsel=0)
         mC = sum(get_fc(t) for t in nT.body); nT.cmpr = nT.fc - mC  # realized compression, net of fork cost
         if nT.cmpr*wL > ave:
             print(nT)
@@ -298,8 +298,7 @@ def clust_oF_():  # greedy pairwise merge, gated by realized body-overlap compre
     for F in mrg_F_:
         oF_.append(F); nF_.append(None); F.nF = len(oF_)-1
 
-
-def clust_oF_old(oF_site_):  # cluster Ts if called together, global only
+def clust_oF_old():  # cluster Ts if called together, global only
 
     grp_ = {}   # group same-typ oFs?
     for T in oF_:  # updated in split_oF_
@@ -324,42 +323,21 @@ def clust_oF_old(oF_site_):  # cluster Ts if called together, global only
             if (gV := v__[:,i].sum()) * ((len(t_)-1)*wL) > ave:
                 nT = sum2O(t_)
                 nT.memb = gV; fC = sum(t.fc for t in t_); nT.cmpr = fC - fC/len(t_)
-                fdef = emit_oF(nT)
-                if fdef is None: continue  # fdef shouldn't be None here, we must build the node here
                 nT.fdef = fdef; fdef.name = f"oF{nT.id}"  # unique under removal: len(nF_) may repeat after pops
                 nT_ += [nT]
             else: rF_ += t_  # unpack if weak
-    # draft
     if nT_:
-        merged_oF_ = {t for nT in nT_ for t in nT.N_}  # list of merged oFs 
-        # new oFs = non-merged + new 
+        merged_oF_ = {t for nT in nT_ for t in nT.N_}  # list of merged oFs
         new_oF_ = [(F, nF_[F.nF]) for F in oF_ if F not in merged_oF_] + [(nT, nT.fdef) for nT in nT_]
-
-        # update oF_, iF_ and nF_
         oF_[:] = [F for F,_ in new_oF_]
-        nF_[:] = [fd for _,fd in new_oF_] 
+        nF_[:] = [fd for _,fd in new_oF_]
         iF_.clear(); iF_.update({fd.name: j for j,(_,fd) in enumerate(new_oF_)})
-  
-        # update each oF's nF
         for i,(F,_) in enumerate(new_oF_): F.nF = i  # re-update nF index
-
-    '''
-    smF_ = []  # final smF
-    for nT in nT_:  # create ast node with fdef
-        fdef = emit_oF(nT)
-        if fdef is None: continue
-        name = f"oF{len(nF_)}"; fdef.name = name  # temporary named by length of nF_, for eg: oF11,oF12,oF13...
-        nF_.append(fdef); iF_[name] = len(nF_)-1; oF_.append(nT); nT.nF = len(oF_)-1
-        smF_ += [nT]
-    for nT in smF_:
-        for fork in nT.N_:
-            for (caller_fd, site) in oF_site_.get(fork, []):   # point site to the updated merged oF
-                site.func.id = nF_[nT.nF].name
-    '''
-    ''' with average_linkage:
+    ''' 
+    with average_linkage:
     for _T,T in combinations(oF_,2): V = (comp_callers(_T,T) + comp_body(_T,T)) * min(_T.fc,T.fc); _T.V_[T] = V; T.V_[_T] = V 
-    for t in C.N_: if t is not T: v__[j,i] += t.V_[T]  # += pairwise Vs '''
-
+    for t in C.N_: if t is not T: v__[j,i] += t.V_[T]  # += pairwise Vs 
+    '''
 def inject_oF_(oF_, g):  # inject AST in g, recompile g[name]
 
     for oF in oF_:
