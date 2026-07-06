@@ -9,16 +9,19 @@ code modification: compare aligned ops between oF_ AST sequences, cluster/split/
 eps = 1e-7
 def eps_(a): return np.where(a==0, eps, a)
 
-ave,avd = .3,.5; decay = ave/(ave+avd)  # ave m,d / unit dist, recomputed from dTT*wTT?
+ave = decay = .3; avd = 20  # mean sum( abs(dTT[1]) * wTT[1]), the borrower
 wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
 wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
 wTT = np.array([wT,wT*avd])
 
-def vt_(TT, wTT=wTT):  # base eval: multi-variate rel match, rel diff for membership
+def val_(TT, wTT=wTT, fd=0):  # multi-variate rel match for membership, rel diff for boundary
 
-    m_,d_ = TT; ad_ = np.abs(d_); t_ = eps_(m_+ad_)  # ~ max comparand
-    m = (m_/t_) @ wTT[0]; d = (ad_/t_) @ wTT[1]  # /= total = rdn, borrow in G.Bt only?
-    return m, d
+    m_,d_ = TT; ad_ = np.abs(d_)
+    vm = (m_/ eps_(m_+ad_)) @ wTT[0]  # /= total | max = rdn
+    if fd:
+        vd = (ad_ @ wTT[1] - avd) * (vm/2)  # (vd-ave_vd) * vm/2: vd_dev borrow from mean(known_cis_vm, unknown_trans_vm)?
+        return vm,vd
+    else: return vm
 
 def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
 
@@ -26,7 +29,7 @@ def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
     for n in N_:
         w = n.c/C; TT += (n.rTT if fr else n.dTT)*w; R += n.r*w
     if fm:
-        m,d = vt_(TT, wTT)
+        m,d = val_(TT, wTT)
         if fdiv: m/= ave*R; d/= avd*R  # in 0-inf for summation
         else:    m-= ave*R; d-= avd*R  # in -1:1 without r
         return   m,d,TT,C,R
@@ -142,7 +145,7 @@ class CoF(CF):
         f.caller_ = kw.get('caller_', set())
         f.g_ = kw.get('g_', [])  # callee gates
         f.gV_= kw.get('gv_',[])  # sum gating vals
-        f.V_ = kw.get('vt_',[])  # sum(vt_(TT) * c/r
+        f.V_ = kw.get('val_',[])  # sum(val_(TT) * c/r
     @staticmethod
     def get(): return CoF._cur.get()  # Frm?
     @staticmethod
@@ -256,7 +259,7 @@ def comp_prim(_n,n):
     else:
         return _n[0]==n[0] and not (is_fork(_n) or is_fork(n)) if isinstance(_n,tuple) and isinstance(n,tuple) else 0 if isinstance(_n,tuple) or isinstance(n,tuple) else type(_n)==type(n)
 
-def is_fork(t): return isinstance(t,tuple) and t[0] is ast.IfExp and isinstance(t[-1],set) 
+def is_fork(t): return isinstance(t,tuple) and t[0] is ast.IfExp and isinstance(t[-1],set)
 
 def get_fc(n):
     return n.fc if isinstance(n,CoF) else costs.get(n[0],0)+sum(get_fc(c) for c in n[1]) if isinstance(n,tuple) else costs.get(type(n),0)
@@ -287,53 +290,17 @@ def clust_oF_():  # pairwise merge for body compression
         (_T,T), v = max(v_.items(), key=lambda kv: kv[1])
         if v*wL <= ave: break  # no pair worth realizing
         nT = CoF(N_=[_T], typ=_T.typ, fc=_T.fc, caller_=copy(_T.caller_))
-        nT.body = copy(_T.body)  # body will be merged below
-        merge_oF(nT, T, fsel=0); _T.N_ += [T]; _T.fc += T.fc; _T.caller_ |= T.caller_  # or move this to merge_oF too?
-        mC = sum(get_fc(t) for t in nT.body); nT.cmpr = nT.fc - mC  # realized compression, net of fork cost
+        nT.body = copy(_T.body)  # merged below
+        merge_oF(nT, T, fsel=0)
+        mC = sum(get_fc(t) for t in nT.body); nT.cmpr = nT.fc - mC  # compression - fork cost
         if nT.cmpr*wL > ave:
             nT.fc = mC; F_.remove(_T); F_.remove(T); F_ += [nT]; mrg_F_ += [nT]
             v_ = {p:v for p,v in v_.items() if _T not in p and T not in p}  # drop stale pairs
             v_.update({(nT,t): comp_body(nT,t) * min(nT.fc,t.fc) for t in F_[:-1] if t.typ==nT.typ})
-        else: del v_[(_T,T)]  # estimate passed, merge didn't: don't retry
+        else: del v_[(_T,T)]
     mrg_F_ = [n for n in mrg_F_ if n in F_]  # live composites only: chains absorb earlier nTs
     for F in mrg_F_:
         oF_.append(F); nF_.append(None); F.nF = len(oF_)-1
-
-def clust_oF_old():  # cluster Ts if called together, global only
-
-    grp_ = {}   # group same-typ oFs?
-    for T in oF_:  # updated in split_oF_
-        grp_.setdefault(T.typ, []).append(T)
-    grp_ = list(grp_.values())
-    C_ = [sum2O(g) for g in grp_]  # initial composites
-    Ln,Lc = len(oF_),len(C_); L = Ln*Lc  # -1?
-    _v__ = np.zeros((Ln, Lc))
-    while True:
-        v__ = np.zeros((Ln, Lc))
-        for j,T in enumerate(oF_):  # refine by comp T x G_, cluster_P analog
-            for i,C in enumerate(C_):
-                v__[j,i] = (comp_callers(C,T) + comp_body(C,T)) * min(C.fc,T.fc)  # x centroid V
-        C_ = [sum2O(oF_, w_=v__[:,i]) for i in range(Lc)]  # weighted re-aggr
-        V, dV = v__.sum(), np.abs(v__-_v__).sum()
-        if V*dV*(wcO*L) <= ave * (Ln+ ccO*L): break  # convergence
-        _v__ = v__
-    nT_,rF_ = [],[]  # final hard assign
-    for i in range(Lc):
-        t_ = [T for j,T in enumerate(oF_) if v__[j].argmax() == i]
-        if t_:
-            if (gV := v__[:,i].sum()) * ((len(t_)-1)*wL) > ave:
-                nT = sum2O(t_)
-                nT.memb = gV; fC = sum(t.fc for t in t_); nT.cmpr = fC - fC/len(t_)
-                nT.fdef = fdef; fdef.name = f"oF{nT.id}"  # unique under removal: len(nF_) may repeat after pops
-                nT_ += [nT]
-            else: rF_ += t_  # unpack if weak
-    if nT_:
-        merged_oF_ = {t for nT in nT_ for t in nT.N_}  # list of merged oFs
-        new_oF_ = [(F, nF_[F.nF]) for F in oF_ if F not in merged_oF_] + [(nT, nT.fdef) for nT in nT_]
-        oF_[:] = [F for F,_ in new_oF_]
-        nF_[:] = [fd for _,fd in new_oF_]
-        iF_.clear(); iF_.update({fd.name: j for j,(_,fd) in enumerate(new_oF_)})
-        for i,(F,_) in enumerate(new_oF_): F.nF = i  # re-update nF index
     ''' 
     with average_linkage:
     for _T,T in combinations(oF_,2): V = (comp_callers(_T,T) + comp_body(_T,T)) * min(_T.fc,T.fc); _T.V_[T] = V; T.V_[_T] = V 
@@ -352,9 +319,8 @@ def inject_oF_(oF_, g):  # inject AST in g, recompile g[name]
 
 def merge_oF(F,f, fsel=1):  # combine aligned ops, if-fork per miss, no inline recursion, f can only be added as a whole
 
-    body,add_ = [],[]  # replace F.body: op sequence in func
+    body, add_ = [],[]  # replace F.body: op sequence in func
     C = 0  # compression
-    o_ = set(F.N_) or {F}   # old oFs (or the whitelist of the if branch)
     for i, (Sub,sub) in enumerate(zip(F.body,f.body)):
         if isinstance(Sub,CoF) and Sub.nF=='E':  # gate oF, none yet
             fin=0
@@ -369,49 +335,25 @@ def merge_oF(F,f, fsel=1):  # combine aligned ops, if-fork per miss, no inline r
                 if isinstance(sub, CoF): add2O(Sub,sub)
                 C+=get_fc(sub); add_+=[sub]
             body += [Sub]
+        # not revised, need to assigned _F per fork:
         else:  # default
             if is_fork(Sub):  # Sub is prior added IfExp ast fork
                 if   comp_prim(Sub[1][0],sub): body += [(ast.IfExp, Sub[1], Sub[-1]|{f})]  # sub same as if branch, update the o_ with f
                 elif comp_prim(Sub[1][1],sub): body += [Sub]  # sub is the same as else branch, nothing to assign here
-                else: body += [(ast.IfExp,(Sub,sub),o_)]; C += get_fc(sub); add_+=[sub]  # nest in new fork
+                else: body += [(ast.IfExp,(Sub,sub))]; C += get_fc(sub); add_+=[sub]  # nest in new fork
             elif comp_prim(Sub,sub): body += [Sub]
-            else: body += [(ast.IfExp,(Sub,sub),o_)]; C += get_fc(sub); add_+=[sub]  # new fork
+            else: body += [(ast.IfExp,(Sub,sub))]; C += get_fc(sub); add_+=[sub]  # new fork
             # new fork
     if len(f.body) > len(F.body): offs = f.body[i+1:]; body+=offs; add_+=offs  # offsets should be added to a new fork?
     elif len(F.body)>len(f.body): body+= F.body[i+1:]
     F.body = body
+
     if fsel and (f.fc / (C or 1e-7) > ave):  # high individual_cost / forking_Cost, else keep old F,f
-        if add_: add2O(F, sum2O(add_))
+        if add_: add2O(F, sum2O(add_)); F.N_ += [f]
         return F,f
     else: return F
 
-# from claude: example of rebuild using the new IfExp ast node, may not directly relevant now
-'''
-def emit_oF(F, g, name='M'):  # rebuild: aligned bodies, no tails | nesting | gv_ rebinding
-    def get_mm(F):  # emission-time resolver: leaf members via N_ flattening
-        return {m for n in F.N_ for m in get_mm(n)} if F.N_ else {F}
-    
-    mm = sorted(get_mm(F), key=lambda m: m.id)  # leaf members, source donors
-    body_ = []
-    for j,t in enumerate(F.body):
-        if is_fork(t):
-            (a,b),o_ = t[1],t[-1]
-            t_ = frozenset().union(*[get_mm(o) for o in o_]); g[f'_o{j}'] = t_    # resolve o_ to leafs, plant in oF.g
-            rep_t = next(m for m in mm if m in t_)      # branch source: representative of assigned oFs
-            rep_e = next(m for m in mm if m not in t_)  # else source: representative of complement
-            body_ += [ast.If(test=ast.Compare(left=ast.Name('o',ast.Load()), ops=[ast.In()],
-                                              comparators=[ast.Name(f'_o{j}',ast.Load())]),
-                             body=[deepcopy(rep_t.fdef.body[j])], orelse=[deepcopy(rep_e.fdef.body[j])])]
-        else: body_ += [deepcopy(mm[0].fdef.body[j])]   # shared op: any member's source
-    fdef = ast.parse(f"def {name}(): pass").body[0]
-    fdef.args = deepcopy(mm[0].fdef.args); fdef.args.args.insert(0, ast.arg(arg='o'))  # caller passes its old oF
-    fdef.body = body_; ast.fix_missing_locations(fdef)
-    exec(compile(ast.Module(body=[fdef], type_ignores=[]), '<oF>', 'exec'), g)
-    return g[name], fdef
-'''
-
-
-def sum2O(F_, root=None, w_=None, fcall_=0):  # for fw,fc,fr only (dTT,r,w are from vt_)
+def sum2O(F_, root=None, w_=None, fcall_=0):  # for fw,fc,fr only (dTT,r,w are from val_)
 
     fc_ = np.array([n.fc for n in F_], dtype=float); fC = fc_.sum()
     if w_ is None:  w_ = fc_/fC; fw=0
