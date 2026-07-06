@@ -555,7 +555,7 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
         if len(ft_)>1: L_,_,ltt,lc,lr=ft_[1]; L_+=root.L_; ltt+=root.Lt.dTT; lc+=root.Lt.c; lr+=root.Lt.r; ft_[1]=L_,_,ltt,lc,lr
     Ft_ = []
     for ft, nF in zip_longest(ft_,('Nt','Lt','Bt')):
-        if ft: n_,_,tt,c,r = ft; Ft_+= [CF(N_=n_,nF=nF,dTT=tt,m=(vt:=val_(tt,wTT,1)),d=vt[1],c=c,r=r)]
+        if ft: n_,_,tt,c,r = ft; Ft_+= [CF(N_=n_,nF=nF,dTT=tt,m=(vt:=val_(tt,wTT,1))[0],d=vt[1],c=c,r=r)]
         else:  Ft_ += [CF()]
     C_ = [c for N in ft_[0][0] for c in N.C_]  # splice centroids
     Ft_ += [sum2F(list(set(C_)), root.Ct) if C_ else CF()]  # add multiple root_ in Cs?
@@ -718,7 +718,7 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
                             PPd_ = [B.root for B in N.B_]; sum2F(PPd_,N.Bt)
                             N.Bt.N_ = PPd_; [setattr(B,'root',N.Bt) for B in PPd_]
                     tt,c,r = sum_vt(N_)
-                    if gv_(val_(tt*ttVct)[0] * ((c+wVct)/ (3+cVct)) * ((len(PPm_)-1)*wL) - ave):
+                    if gv_(val_(tt*ttVct) * ((c+wVct)/ (3+cVct)) * ((len(PPm_)-1)*wL) - ave):
                         G_,TT,c,R = trace_edge([F2N(n) for n in N_], G_,TT,c,3,tile); C += c  # flatten B_-mediated Gs
     if G_:
         Nt = CF(nF='Nt', root=tile); Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=1; Nt.H=tile.H; tile.Nt=Nt; tile.dTT=TT; tile.c=C
