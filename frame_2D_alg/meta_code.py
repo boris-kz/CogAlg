@@ -19,7 +19,7 @@ def val_(TT, wTT=wTT, fd=0):  # multi-variate rel match for membership, rel diff
     m_,d_ = TT; ad_ = np.abs(d_)
     vm = (m_/ eps_(m_+ad_)) @ wTT[0]  # /= total | max = rdn
     if fd:
-        vd = (ad_ @ wTT[1] - avd) * (vm/2)  # (vd-ave_vd) * vm/2: vd_dev borrow from mean(known_cis_vm, unknown_trans_vm)?
+        vd = (ad_@ wTT[1] / avd) * (vm/2)  # rat_dev_vd- proportional borrow from (vm + neutral trans-vm)/2?
         return vm,vd
     else: return vm
 
@@ -29,7 +29,7 @@ def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
     for n in N_:
         w = n.c/C; TT += (n.rTT if fr else n.dTT)*w; R += n.r*w
     if fm:
-        m,d = val_(TT, wTT)
+        m,d = val_(TT, wTT,1)
         if fdiv: m/= ave*R; d/= avd*R  # in 0-inf for summation
         else:    m-= ave*R; d-= avd*R  # in -1:1 without r
         return   m,d,TT,C,R
@@ -141,7 +141,7 @@ class CoF(CF):
         super().__init__(**kw)
         f.call_ = kw.get('call_',[])  # called oFs only
         f.body = kw.get('body',[])  # static AST ops + CoF refs in source order
-        f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]  # fr if nested oF?
+        f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]  # fw: code compression, fc: costs, fr if nested oF?
         f.caller_ = kw.get('caller_', set())
         f.g_ = kw.get('g_', [])  # callee gates
         f.gV_= kw.get('gv_',[])  # sum gating vals
@@ -259,7 +259,7 @@ def comp_prim(_n,n):
     else:
         return _n[0]==n[0] and not (is_fork(_n) or is_fork(n)) if isinstance(_n,tuple) and isinstance(n,tuple) else 0 if isinstance(_n,tuple) or isinstance(n,tuple) else type(_n)==type(n)
 
-def is_fork(t): return isinstance(t,tuple) and t[0] is ast.IfExp and isinstance(t[-1],set)
+def is_fork(t): return isinstance(t,tuple) and t[0] is ast.IfExp
 
 def get_fc(n):
     return n.fc if isinstance(n,CoF) else costs.get(n[0],0)+sum(get_fc(c) for c in n[1]) if isinstance(n,tuple) else costs.get(type(n),0)
@@ -292,6 +292,7 @@ def clust_oF_():  # pairwise merge for body compression
         nT = CoF(N_=[_T], typ=_T.typ, fc=_T.fc, caller_=copy(_T.caller_))
         nT.body = copy(_T.body)  # merged below
         merge_oF(nT, T, fsel=0)
+        nT.N_+=[T]; nT.fc = sum(get_fc(t) for t in nT.body)
         mC = sum(get_fc(t) for t in nT.body); nT.cmpr = nT.fc - mC  # compression - fork cost
         if nT.cmpr*wL > ave:
             nT.fc = mC; F_.remove(_T); F_.remove(T); F_ += [nT]; mrg_F_ += [nT]
@@ -335,16 +336,24 @@ def merge_oF(F,f, fsel=1):  # combine aligned ops, if-fork per miss, no inline r
                 if isinstance(sub, CoF): add2O(Sub,sub)
                 C+=get_fc(sub); add_+=[sub]
             body += [Sub]
-        # not revised, need to assigned _F per fork:
-        else:  # default
-            if is_fork(Sub):  # Sub is prior added IfExp ast fork
-                if   comp_prim(Sub[1][0],sub): body += [(ast.IfExp, Sub[1], Sub[-1]|{f})]  # sub same as if branch, update the o_ with f
-                elif comp_prim(Sub[1][1],sub): body += [Sub]  # sub is the same as else branch, nothing to assign here
-                else: body += [(ast.IfExp,(Sub,sub))]; C += get_fc(sub); add_+=[sub]  # nest in new fork
+        else:
+            if is_fork(Sub):  # Sub is previously added IfExp
+                if comp_prim(Sub[1][0],sub):
+                    # add eval for partial match and significant sub-fork?
+                    body += [ast.IfExp(f,sub)]  # test by source only?
+                # not revised:
+                elif comp_prim(Sub[1][1],sub): body += [Sub]  # in else branch
+                else: body += [(ast.IfExp,(Sub,sub), (F,f))]; C += get_fc(sub); add_+=[sub]  # nest in new fork
             elif comp_prim(Sub,sub): body += [Sub]
-            else: body += [(ast.IfExp,(Sub,sub))]; C += get_fc(sub); add_+=[sub]  # new fork
+            else: body += [(ast.IfExp,(Sub,sub),(F,f))]; C += get_fc(sub); add_+=[sub]  # new fork
             # new fork
-    if len(f.body) > len(F.body): offs = f.body[i+1:]; body+=offs; add_+=offs  # offsets should be added to a new fork?
+    if len(f.body) > len(F.body):
+        offs = f.body[i+1:]
+        if f.fw * sum(get_fc(p) for p in offs) > ave:  # conditional fork when diff is expensive
+            body += [(ast.If, (*offs))]  # single If fork
+        else: body += offs  # cheap diff
+        add_ += offs
+
     elif len(F.body)>len(f.body): body+= F.body[i+1:]
     F.body = body
 
