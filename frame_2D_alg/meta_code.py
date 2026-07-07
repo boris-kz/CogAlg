@@ -19,7 +19,7 @@ def val_(TT, wTT=wTT, fd=0):  # multi-variate rel match for membership, rel diff
     m_,d_ = TT; ad_ = np.abs(d_)
     vm = (m_/ eps_(m_+ad_)) @ wTT[0]  # /= total | max = rdn
     if fd:
-        vd = (ad_ @ wTT[1] - avd) * (vm/2)  # (vd-ave_vd) * vm/2: vd_dev borrow from mean(known_cis_vm, unknown_trans_vm)?
+        vd = (ad_@ wTT[1] / avd) * (vm/2)  # rat_dev_vd- proportional borrow from (vm + neutral trans-vm)/2?
         return vm,vd
     else: return vm
 
@@ -29,7 +29,7 @@ def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
     for n in N_:
         w = n.c/C; TT += (n.rTT if fr else n.dTT)*w; R += n.r*w
     if fm:
-        m,d = val_(TT, wTT,fd=1)
+        m,d = val_(TT, wTT,1)
         if fdiv: m/= ave*R; d/= avd*R  # in 0-inf for summation
         else:    m-= ave*R; d-= avd*R  # in -1:1 without r
         return   m,d,TT,C,R
@@ -141,7 +141,7 @@ class CoF(CF):
         super().__init__(**kw)
         f.call_ = kw.get('call_',[])  # called oFs only
         f.body = kw.get('body',[])  # static AST ops + CoF refs in source order
-        f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]  # fr if nested oF?
+        f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]  # fw: code compression, fc: costs, fr if nested oF?
         f.caller_ = kw.get('caller_', set())
         f.g_ = kw.get('g_', [])  # callee gates
         f.gV_= kw.get('gv_',[])  # sum gating vals
@@ -336,22 +336,24 @@ def merge_oF(F,f, fsel=1):  # combine aligned ops, if-fork per miss, no inline r
                 if isinstance(sub, CoF): add2O(Sub,sub)
                 C+=get_fc(sub); add_+=[sub]
             body += [Sub]
-        # not revised, need to assigned _F per fork:
-        else:  # default
-            if is_fork(Sub):  # Sub is prior added IfExp ast fork
-                if   comp_prim(Sub[1][0],sub): body += [(ast.IfExp, Sub[1], (*Sub[2], f))]  # sub same as if branc, add new f into the F and f pair
-                elif comp_prim(Sub[1][1],sub): body += [Sub]  # sub is the same as else branch, nothing to assign here
+        else:
+            if is_fork(Sub):  # Sub is previously added IfExp
+                if comp_prim(Sub[1][0],sub):
+                    # add eval for partial match and significant sub-fork?
+                    body += [ast.IfExp(f,sub)]  # test by source only?
+                # not revised:
+                elif comp_prim(Sub[1][1],sub): body += [Sub]  # in else branch
                 else: body += [(ast.IfExp,(Sub,sub), (F,f))]; C += get_fc(sub); add_+=[sub]  # nest in new fork
             elif comp_prim(Sub,sub): body += [Sub]
             else: body += [(ast.IfExp,(Sub,sub),(F,f))]; C += get_fc(sub); add_+=[sub]  # new fork
             # new fork
-    if len(f.body) > len(F.body): 
+    if len(f.body) > len(F.body):
         offs = f.body[i+1:]
         if f.fw * sum(get_fc(p) for p in offs) > ave:  # conditional fork when diff is expensive
             body += [(ast.If, (*offs))]  # single If fork
         else: body += offs  # cheap diff
         add_ += offs
-    
+
     elif len(F.body)>len(f.body): body+= F.body[i+1:]
     F.body = body
 
