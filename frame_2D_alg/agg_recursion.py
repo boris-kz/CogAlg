@@ -894,7 +894,7 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
 
     global ave, avd, oF_
     for oF in oF_:
-        if oF.V_: oF.w = sum(oF.V_) + sum(oF.gV_)  # all extensive
+        if oF.V_: oF.w += sum(oF.V_) + sum(oF.gV_)  # all extensive
     dTT = dc = dr = 0
     _ac,_ar = (aL.c,aL.r) if aL else (0,0); _oc,_or = (oL.c,oL.r) if oL else (0,0)
     # H init @ 1st term:

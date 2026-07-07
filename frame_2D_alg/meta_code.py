@@ -141,7 +141,7 @@ class CoF(CF):
         super().__init__(**kw)
         f.call_ = kw.get('call_',[])  # called oFs only
         f.body = kw.get('body',[])  # static AST ops + CoF refs in source order
-        f.fw,f.fc,f.fr = [kw.get(x,0) for x in ('fw','fc','fr')]  # fw: code compression, fc: costs, fr if nested oF?
+        f.fc,f.fr = [kw.get(x,0) for x in ('fc','fr')]  # fw: code compression, fc: costs, fr if nested oF?
         f.caller_ = kw.get('caller_', set())
         f.g_ = kw.get('g_', [])  # callee gates
         f.gV_= kw.get('gv_',[])  # sum gating vals
@@ -271,7 +271,7 @@ def split_oF_():  # divisive clustering
         return 0
 
     def split(t, oF):  # pack sub gate from gates
-        if is_gate_l(t) and oF.fw * sum(get_fc(p) for p in t[1]) > ave:  # w is membership weight, it should be fw?
+        if is_gate_l(t) and oF.w * sum(get_fc(p) for p in t[1]) > ave:  # w is membership weight, it should be fw?
             sub = CoF(root=oF, fc=get_fc(t), body=[t], caller_={oF})
             oF_.append(sub); nF_.append(None); sub.nF = len(oF_)-1
             return sub
@@ -291,7 +291,7 @@ def clust_oF_():  # pairwise merge for body compression
         if v*wL <= ave: break  # no pair worth realizing
         nT = CoF(N_=[_T], typ=_T.typ, fc=_T.fc, caller_=copy(_T.caller_))
         nT.body = copy(_T.body)  # merged below
-        merge_oF(nT, T, fsel=0)
+        merge_oF(nT, T)
         nT.N_+=[T]; nT.fc = sum(get_fc(t) for t in nT.body)
         mC = sum(get_fc(t) for t in nT.body); nT.cmpr = nT.fc - mC  # compression - fork cost
         if nT.cmpr*wL > ave:
@@ -318,71 +318,56 @@ def inject_oF_(oF_, g):  # inject AST in g, recompile g[name]
         exec( compile( ast.Module(body=[oF.fdef], type_ignores=[]), '<oF>', 'exec'), oF.g)
         oF.g[oF.fdef.name] = CoF.traced(oF.g[oF.fdef.name])
 
-def merge_oF(F,f, fsel=1):  # combine aligned ops, if-fork per miss, no inline recursion, f can only be added as a whole
+# rename to merge_Fbody？
+def merge_oF(F,f):  # combine aligned ops, if-fork per miss, no inline recursion, f can only be added as a whole
 
-    body, add_ = [],[]  # replace F.body: op sequence in func
-    C = 0  # compression
+    body = []  # replace F.body: op sequence in func
     for i, (Sub,sub) in enumerate(zip(F.body,f.body)):
-        if isinstance(Sub,CoF) and Sub.nF=='E':  # gate oF, none yet
-            fin=0
-            if isinstance(sub,CoF) and sub.nF=='E':
-                subt = merge_oF(Sub, sub)  # add2F(Sub,ssub_)?
-                if isinstance(subt, tuple):
-                    sub = subt[1]; C+=sub.fc; body+=[sub]; add_+=[sub]
-                    continue  # skip if merged:
-            for _sub in Sub.body:
-                if comp_prim(_sub,sub): fin=1; break  # no new fork?
-            if not fin:
-                if isinstance(sub, CoF): add2O(Sub,sub)
-                C+=get_fc(sub); add_+=[sub]
-            body += [Sub]
-        else:
-            if is_fork(Sub):  # Sub is previously added IfExp
-                if comp_prim(Sub[1][0],sub):
-                    # add eval for partial match and significant sub-fork?
-                    body += [ast.IfExp(f,sub)]  # test by source only?
-                # not revised:
-                elif comp_prim(Sub[1][1],sub): body += [Sub]  # in else branch
-                else: body += [(ast.IfExp,(Sub,sub), (F,f))]; C += get_fc(sub); add_+=[sub]  # nest in new fork
-            elif comp_prim(Sub,sub): body += [Sub]
-            else: body += [(ast.IfExp,(Sub,sub),(F,f))]; C += get_fc(sub); add_+=[sub]  # new fork
-            # new fork
+        if is_fork(Sub):  # Sub is previously added IfExp
+            felse = 0  # flag to pack into else fork
+            for _F,_Sub in Sub[1]:
+                if comp_prim(_Sub,sub):  # check all Subs in if fork to match with sub
+                    # add eval for partial match and significant sub-fork? 
+                    Sub[1] += [(f,sub)]; felse= 1   # test by source only?
+                    break
+            if felse: Sub[2] += [(f,sub)]  # pack to else fork
+            body += [Sub]   
+        elif comp_prim(Sub, sub):
+             body += [Sub]  # match: position stays plain
+        # structure = (type, if_subs, else_subs). Each subs is [(source, nested sub),...]
+        else: body += [(ast.IfExp, [(F,Sub)], [(f,sub)])]  # miss: new fork: consensus branch + f branch
+        # new fork
     if len(f.body) > len(F.body):
         offs = f.body[i+1:]
-        if f.fw * sum(get_fc(p) for p in offs) > ave:  # conditional fork when diff is expensive
-            body += [(ast.If, (*offs))]  # single If fork
+        if f.w * sum(get_fc(p) for p in offs) > ave:  # conditional fork when diff is expensive
+            body += [(ast.If,[(f,off) for off in offs] )]  # single If fork  (same structure as in IfExp)
         else: body += offs  # cheap diff
-        add_ += offs
-
     elif len(F.body)>len(f.body): body+= F.body[i+1:]
     F.body = body
-
-    if fsel and (f.fc / (C or 1e-7) > ave):  # high individual_cost / forking_Cost, else keep old F,f
-        if add_: add2O(F, sum2O(add_)); F.N_ += [f]
-        return F,f
-    else: return F
+    return F
+    
 
 def sum2O(F_, root=None, w_=None, fcall_=0):  # for fw,fc,fr only (dTT,r,w are from val_)
 
     fc_ = np.array([n.fc for n in F_], dtype=float); fC = fc_.sum()
-    if w_ is None:  w_ = fc_/fC; fw=0
+    if w_ is None:  w_ = fc_/fC; w=0
     else:
         w_ = w_ / (w_.sum() or eps)
-        for N, v in zip(F_,w_): N.fw = v
-        fw = w_
-    F = CoF(N_=F_, root=root, fc=fC, fw=fw, fr=F_[0].fr+1)  # unfinished, use w_ for N summing?
+        for N, v in zip(F_,w_): N.w = v
+        w = w_
+    F = CoF(N_=F_, root=root, fc=fC, w=w, fr=F_[0].fr+1)  # unfinished, use w_ for N summing?
     if fcall_:
         c_ = np.array([n.c for n in F_], dtype=float); C = c_.sum(); w_ = c_/C; F.call_ = F_
     else:
         F.body = copy(F_[0].body)  # shallow copy
-        for f in F_[1:]: merge_oF(F, f, fsel=0)
+        for f in F_[1:]: merge_oF(F, f)
     if hasattr(F_[0],'caller_'): F.caller_ = set([caller for N in F_ for caller in N.caller_])  # for comp_caller between centroids
     return F   # fw = Fw
 
 def add2O(F, n, nested=0):
 
     if F.fc:  # sum subtree gain, fixed cost, extensive: no weighting?
-        C=F.fc+n.fc; _w,w = F.fc/C, n.fc/C; F.fr = F.fr*_w + n.fr*w; F.fc = C; F.fw += n.fw
+        C=F.fc+n.fc; _w,w = F.fc/C, n.fc/C; F.fr = F.fr*_w + n.fr*w; F.fc = C; F.w += n.w
     else:
         F.fc=n.fc; F.fr=n.fr; F.fw=n.fw
     if nested: F.call_ += [n]  # else add forks?
