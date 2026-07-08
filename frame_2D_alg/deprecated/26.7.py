@@ -126,10 +126,41 @@ def emit_oF(F, g, name='M'):  # rebuild: aligned bodies, no tails | nesting | gv
     exec(compile(ast.Module(body=[fdef], type_ignores=[]), '<oF>', 'exec'), g)
     return g[name], fdef
 
+def clust_oF_1():  # exemplar-seeded merge for body compression
+
+    F_ = copy(oF_); mrg_F_ = []
+    for _F,F in combinations(F_,2):
+        if _F.typ == F.typ:  # or all typs?
+            w = comp_body(_F,F) * min(_F.fc,F.fc)
+            _F.rim += [(F,w)]; F.rim += [(_F,w)]
+            if w > ave: _F.w += w; F.w += w
+    for _F in sorted(F_, key=lambda F: F.w, reverse=True):
+        if _F.w <= ave: break
+        if _F.fin: continue
+        T = CoF(N_=[_F], typ=_F.typ, body=copy(_F.body), fc=_F.fc, caller_=copy(_F.caller_))
+        for F,w in sorted(_F.rim, key=lambda t: t[1], reverse=True):
+            if w <= ave: break
+            if F.fin: continue
+            merge_oF(T,F); T.N_ += [F]; T.caller_ |= F.caller_; F.fin = 1
+        if len(T.N_) > 1:
+            T.fc = sum(get_fc(t) for t in T.body); T.cmpr = sum(f.fc for f in T.N_) - T.fc
+            if T.cmpr > ave: _F.fin = 1; mrg_F_ += [T]
+            else:
+                for F in T.N_[1:]: F.fin = 0
+    for T in mrg_F_: oF_.append(T); nF_.append(None); T.nF = len(oF_)-1
 
 def val_(TT, wTT=wTT, fd = 0):  # base eval: multi-variate rel match for membership
 
     m_,d_ = TT; ad_ = np.abs(d_); t_ = eps_(m_+ad_)  # ~ max comparand
     return (m_/t_) @ wTT[0]  # /= total = rdn, borrow in G.Bt only?
+
+def get_fc(n):
+    return n.fc if isinstance(n,CoF) else costs.get(n[0],0)+sum(get_fc(c) for c in n[1]) if isinstance(n,tuple) else costs.get(type(n),0)
+
+def comp_prim(_n,n):
+    if isinstance(_n,CoF) or isinstance(n,CoF):
+        return comp_callers(_n,n) > ave if isinstance(_n,CoF) and isinstance(n,CoF) and n.nF==_n.nF else 0
+    else:
+        return _n[0]==n[0] and not (is_fork(_n) or is_fork(n)) if isinstance(_n,tuple) and isinstance(n,tuple) else 0 if isinstance(_n,tuple) or isinstance(n,tuple) else type(_n)==type(n)
 
 
