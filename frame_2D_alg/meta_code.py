@@ -276,6 +276,40 @@ def comp_body_claude(_n, n, _m_, m):  # compare = merge: realized compression C 
     if type(_n) is type(n) and not isinstance(n,tuple): return costs.get(type(n),0), _n  # leaf
     return -2, fork([alt(copy(_m_),[_n]), alt([m],[n])])  # fork per miss
 
+
+def comp_body_claude2(_n, n, _m_=None, m=None):  # compare == merge: compression C + merged form (pure, replaces merge_oF)
+    
+    def gate(f_, sub):             return (ast.IfExp, (f_, sub))              # 1-branch: these members do op, others skip
+    def new_fork(_f_,_sub, m,sub): return (ast.IfExp, (_f_,_sub), ([m],sub))  # 2-branch fork from one divergent op pair
+    
+    def add_fork(F, n, _m_, m):  # route member op n into existing fork F: join its best branch, else append a branch
+        branch_ = list(F[1:])  # [(m_, op), ...]
+        r_ = [comp_body(op, n, bm_, m) for bm_,op in branch_]
+        i  = int(np.argmax([c for c,_ in r_])); c, op = r_[i]
+        if c > 0: branch_[i] = (branch_[i][0]+[m], op)  # n merges into branch i
+        else:     branch_ += [([m], n)]; c = -2         # n becomes a new branch
+        return c, (ast.IfExp, *branch_)
+    
+    def merge_seq(_q, q, _m_, m):  # merge aligned op sequences (bodies | node children) -> C, merged_
+        C, Q = 0, []
+        for _t, t in zip(_q, q):
+            c, mt = comp_body(_t, t, _m_, m); C += c; Q += [mt]
+        for _t in _q[len(q):]:  Q += [_t if isinstance(_t,tuple) and _t[0] is ast.IfExp else gate(_m_, _t)]; C -= 2  # tail: new member m skips these
+        for  t in  q[len(_q):]: Q += [gate([m], t)]; C -= 2  # tail: prior members skip these
+        return C, Q
+    
+    if _m_ is None: return merge_seq(_n.body, n.body, [_n], n)  # top level
+    if isinstance(_n,tuple) and _n[0] is ast.IfExp and isinstance(_n[1][0],list):  # existing fork
+        return add_fork(_n, n, _m_, m)
+    if _n is n: return get_fc(n), _n  # same ref, skip
+    
+    if isinstance(_n,tuple) and isinstance(n,tuple) and _n[0] is n[0]:  # same ast node, merge children
+        C, sub_ = merge_seq(_n[1], n[1], _m_, m); return C + costs.get(_n[0],0), (_n[0], tuple(sub_))
+    if type(_n) is type(n) and not isinstance(_n,(tuple,CoF)):  # other than tuple and CoF
+        return costs.get(type(n),0), _n
+    return -2, new_fork(_m_, _n, m, n)  # miss, create fork
+
+
 def comp_callers(_T, T):  # compute value of callers_overlap + calls_overlap
 
     olp = _T.caller_ & T.caller_
@@ -315,19 +349,28 @@ for t in C.N_: if t is not T: v__[j,i] += t.V_[T]  # += pairwise Vs
 def clust_oF_():  # exemplar-seeded merge for body compression
 
     F_ = copy(oF_); T_ = []
-    while F_:
-        _F = F_.pop()
-        if not _F.fin:
-            T = CoF(N_=[_F], typ=_F.typ, body=_F.body, fc=_F.fc, caller_=copy(_F.caller_))
-            for F in F_:
-                if _F.typ == F.typ and not F.fin:
-                    C, body = comp_body(T.body,F.body, T.N_,F)
-                    if C>ave: T.body = body; T.w += C; T.N_ += [F]; T.caller_ |= F.caller_; F.fin = 1
-            if len(T.N_) > 1:
-                T.fc = sum(get_fc(t) for t in T.body); T.cmpr = sum(f.fc for f in T.N_) - T.fc
-                if T.cmpr > ave: _F.fin = 1; T_ += [T]
-                else:
-                    for F in T.N_[1:]: F.fin = 0
+    for F in F_: F.fin = 0; F.rim = []
+    for _F,F in combinations(F_,2):
+        if _F.typ == F.typ:
+            w,_ = comp_body(_F,F)
+            # w *= min(_F.fc,F.fc)  # this is not needed?
+            if w > ave:
+                _F.w += w; F.w += w  # projected compression: above-ave w only
+                _F.rim += [(F,w)]; F.rim += [(_F,w)]
+                
+    for _F in sorted(F_, key=lambda F: F.w, reverse=True):
+        if _F.fin: continue
+        if _F.w <= ave: break  # that _F.w*wL is not relevant here?
+        T = CoF(N_=[_F], typ=_F.typ, body=_F.body, fc=_F.fc)
+        for F,w in sorted(_F.rim, key=lambda t: t[1], reverse=True):
+            if F.fin: continue
+            C, body = comp_body(T.body,F.body, T.N_,F)
+            if C>ave: T.body = body; T.w += C; T.N_ += [F]; F.fin = 1
+        if len(T.N_) > 1:
+            T.fc = sum(get_fc(t) for t in T.body); T.cmpr = sum(f.fc for f in T.N_) - T.fc
+            if T.cmpr > ave: _F.fin = 1; T_ += [T]
+            else:
+                for F in T.N_[1:]: F.fin = 0
     for T in T_: oF_.append(T); nF_.append(None); T.nF = len(oF_)-1
 
 def inject_oF_(oF_, g):  # inject AST in g, recompile g[name]
