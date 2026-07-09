@@ -222,93 +222,75 @@ def call_sites(fd):  # FunctionDef
 F_call_T_ = [[np.zeros((2,9)) for _ in call_sites(fd)] for fd in nF_]  # dTT computed per callee
 F_call_i_ = [{n.lineno: j for j,n in enumerate(call_sites(fd))} for fd in nF_]
 
-def comp_body(_n, n, C=0):  # estimated n-merge cost compression, init mean C=3, accum from recursive unpack
+def clust_oF_():  # exemplar-seeded merge for body compression
 
-    if isinstance(n, CoF):
-        if isinstance(_n, CoF):
-            if n is _n: C += n.fc
-            elif n.fc > ave_C:  # mean compression value
-                C -= 2  # fork compression cost, ast.IfExp
-                for _sub, sub in zip(_n.body, n.body): C = comp_body(_sub, sub, C)
-                if len(n.body) > len(_n.body): C -= 2  # single tail fork cost
-            else: C -= 2
-        else: C -= 2
-    elif isinstance(n, tuple):  # AST fork
-        if isinstance(_n, tuple) and n[0] is _n[0]:
-            C += costs.get(n[0], 0)
-            for _sub, sub in zip(_n[1], n[1]): C = comp_body(_sub, sub, C)
-            if len(n[1]) > len(_n[1]): C -= 2
-        else: C -= 2
-    elif type(_n) is type(n):
-        C += costs.get(type(n), 0)  # AST leaf
-    else: C -= 2
-    return C
+    F_ = copy(oF_); T_ = []
+    for F in F_: F.fin = 0; F.rim = []; F.w = 0
+    for _F,F in combinations(F_,2):
+        if _F.typ == F.typ:
+            w = comp_body(_F.body, F.body)  # absolute compression estimate
+            if w > ave:
+                _F.w += w; F.w += w
+                _F.rim += [(F,w)]; F.rim += [(_F,w)]
+    for _F in sorted(F_, key=lambda F: F.w, reverse=True):
+        if _F.fin: continue
+        if _F.w <= ave: break
+        T = CoF(N_=[_F], typ=_F.typ, body=_F.body, fc=_F.fc, caller_=copy(_F.caller_))
+        for F,w in sorted(_F.rim, key=lambda t: t[1], reverse=True):
+            if F.fin: continue
+            C, body = form_body(T.N_+[F])
+            if C - T.w > ave:  # realized incremental compression
+                T.body = body; T.w = C; T.N_ += [F]; T.caller_ |= F.caller_; F.fin = 1
+        if len(T.N_) > 1:
+            T.fc = sum(f.fc for f in T.N_) - T.w; _F.fin = 1; T_ += [T]
+    for T in T_: oF_.append(T); nF_.append(None); T.nF = len(oF_)-1
 
-def comp_body_claude(_n, n, _m_, m):  # compare = merge: realized compression C + merged form, pure
-    # _n: composite side, may hold 'E' blocks | '|' forks; n: member side, raw ops + registered refs
+def comp_body(_n, n):  # compare only: compression estimate C; construction in form_body
 
-    def alt(m_,t_): return CoF(nF='A', N_=m_, body=t_, fc=sum(get_fc(t) for t in t_))  # member-subset block
-    def fork(a_):   return CoF(nF='|', N_=a_, fc=2 + sum(a.fc for a in a_))  # alts in N_; 2: ast.IfExp
+    if isinstance(_n,CoF) or isinstance(n,CoF):
+        if _n is n:
+            return get_fc(n)  # same ref: saved call site
+        if isinstance(_n,CoF) and isinstance(n,CoF) and min(_n.fc,n.fc) > ave_C:
+            return comp_body(_n.body, n.body) - 2  # cross-ref: body overlap - fork cost; also top-level pair entry
+        return -2
+    if isinstance(_n,list):  # op sequences: bodies | tuple children
+        C = -2 * abs(len(_n)-len(n))
+        for _t,t in zip(_n,n): C += comp_body(_t,t)
+        return C
+    if isinstance(_n,tuple) and isinstance(n,tuple) and _n[0] is n[0]:
+        return costs.get(_n[0],0) + comp_body(list(_n[1]), list(n[1]))
+    if type(_n) is type(n) and not isinstance(_n,tuple):
+        return costs.get(type(n),0)  # leaf
+    return -2
 
-    def seq(_q, q):  # aligned op sequences
-        C = 0; Q = []
-        for c,t in [comp_body(_t,t,_m_,m) for _t,t in zip(_q,q)]: C += c; Q += [t]
-        for _t in _q[len(q):]: Q += [_t if isinstance(_t,CoF) and _t.nF=='|' else fork([alt(copy(_m_),[_t])])]; C -= 2  # m skips
-        for t in q[len(_q):]:  Q += [fork([alt([m],[t])])]; C -= 2  # priors skip
-        return C, Q
+def form_body(N_):  # render composite body: n-way positional columns, cluster ops per column
 
-    if isinstance(n,list): return seq(_n, n)  # top bodies
-    if isinstance(_n,CoF) and _n.nF=='|':  # fork: merge n into best alt | append alt
-        r_ = [comp_body(a.body, [n], a.N_, m) for a in _n.N_]  # nested forks tag in alt-member terms
-        i = int(np.argmax([c for c,_ in r_])); c, body = r_[i]
-        a_ = copy(_n.N_)
-        if c > 0: a_[i] = alt(_n.N_[i].N_+[m], body); return c, fork(a_)
-        else:     return -2, fork(a_ + [alt([m],[n])])
-    if isinstance(n,CoF) or isinstance(_n,CoF):
-        if n is _n: return get_fc(n), _n  # same registered ref | shared block: match = saved call site
-        if isinstance(n,CoF) and isinstance(_n,CoF) and isinstance(n.nF,str) and isinstance(_n.nF,str) and n.fc > ave_C:
-            C, body = seq(_n.body, n.body)  # inline blocks: recursive body merge
-            if C > 0: return C-2, CoF(nF='E', N_=copy(_m_)+[m], body=body, fc=sum(get_fc(t) for t in body),
-                                      caller_=_n.caller_|n.caller_)
-        return -2, fork([alt(copy(_m_),[_n]), alt([m],[n])])  # diff refs | mixed: fork here, merge at def level
-    if isinstance(_n,tuple) and isinstance(n,tuple) and n[0] is _n[0]:
-        C, sub_ = seq(_n[1], n[1]); return C + costs.get(n[0],0), (n[0], tuple(sub_))  # deep partial merge
-    if type(_n) is type(n) and not isinstance(n,tuple): return costs.get(type(n),0), _n  # leaf
-    return -2, fork([alt(copy(_m_),[_n]), alt([m],[n])])  # fork per miss
+    def fk(t): return isinstance(t,tuple) and t[0] is ast.IfExp and isinstance(t[1][0],list)  # fork
 
-
-def comp_body_claude2(_n, n, _m_=None, m=None):  # compare == merge: compression C + merged form (pure, replaces merge_oF)
-    
-    def gate(f_, sub):             return (ast.IfExp, (f_, sub))              # 1-branch: these members do op, others skip
-    def new_fork(_f_,_sub, m,sub): return (ast.IfExp, (_f_,_sub), ([m],sub))  # 2-branch fork from one divergent op pair
-    
-    def add_fork(F, n, _m_, m):  # route member op n into existing fork F: join its best branch, else append a branch
-        branch_ = list(F[1:])  # [(m_, op), ...]
-        r_ = [comp_body(op, n, bm_, m) for bm_,op in branch_]
-        i  = int(np.argmax([c for c,_ in r_])); c, op = r_[i]
-        if c > 0: branch_[i] = (branch_[i][0]+[m], op)  # n merges into branch i
-        else:     branch_ += [([m], n)]; c = -2         # n becomes a new branch
-        return c, (ast.IfExp, *branch_)
-    
-    def merge_seq(_q, q, _m_, m):  # merge aligned op sequences (bodies | node children) -> C, merged_
-        C, Q = 0, []
-        for _t, t in zip(_q, q):
-            c, mt = comp_body(_t, t, _m_, m); C += c; Q += [mt]
-        for _t in _q[len(q):]:  Q += [_t if isinstance(_t,tuple) and _t[0] is ast.IfExp else gate(_m_, _t)]; C -= 2  # tail: new member m skips these
-        for  t in  q[len(_q):]: Q += [gate([m], t)]; C -= 2  # tail: prior members skip these
-        return C, Q
-    
-    if _m_ is None: return merge_seq(_n.body, n.body, [_n], n)  # top level
-    if isinstance(_n,tuple) and _n[0] is ast.IfExp and isinstance(_n[1][0],list):  # existing fork
-        return add_fork(_n, n, _m_, m)
-    if _n is n: return get_fc(n), _n  # same ref, skip
-    
-    if isinstance(_n,tuple) and isinstance(n,tuple) and _n[0] is n[0]:  # same ast node, merge children
-        C, sub_ = merge_seq(_n[1], n[1], _m_, m); return C + costs.get(_n[0],0), (_n[0], tuple(sub_))
-    if type(_n) is type(n) and not isinstance(_n,(tuple,CoF)):  # other than tuple and CoF
-        return costs.get(type(n),0), _n
-    return -2, new_fork(_m_, _n, m, n)  # miss, create fork
-
+    def form(col, Fn):  # col: [(op,F)] -> bare op | merged op | fork
+        grp = {}
+        for t,F in col:
+            k = t if isinstance(t,CoF) else id(t[0]) if isinstance(t,tuple) else type(t)  # ref | head | leaf type
+            grp.setdefault(k,[]).append((t,F))
+        branch_ = []
+        for g in grp.values():
+            t0 = g[0][0]; f_ = [F for _,F in g]
+            if len(g)==1 or not isinstance(t0,tuple) or all(t is t0 for t,_ in g):
+                op = t0  # single | ref,leaf | shared
+            else:  # same-head: children columns
+                op = (t0[0], tuple(form([(t[1][j],F) for t,F in g if len(t[1])>j], len(g)) for j in range(max(len(t[1]) for t,_ in g))))
+            branch_ += [(f_,[op])]
+        if len(branch_)==1 and len(branch_[0][0])==Fn: return branch_[0][1][0]  # universal: bare op
+        return (ast.IfExp, *branch_)
+    Bod = []
+    bod_= [F.body for F in N_]
+    for j in range(max(len(b) for b in bod_)):
+        t = form([(b[j],F) for b,F in zip(bod_,N_) if len(b)>j], len(N_))
+        if fk(t) and Bod and fk(Bod[-1]) and [b[0] for b in Bod[-1][1:]]==[b[0] for b in t[1:]]:  # same func partition: concat
+            Bod[-1] = (ast.IfExp, *[(f_, op_+_op_) for (f_,op_),(__,_op_) in zip(Bod[-1][1:], t[1:])])
+        else:
+            Bod += [t]
+    return sum(F.fc for F in N_) - sum(get_fc(t) for t in Bod), Bod
 
 def comp_callers(_T, T):  # compute value of callers_overlap + calls_overlap
 
@@ -320,18 +302,13 @@ def comp_callers(_T, T):  # compute value of callers_overlap + calls_overlap
     # refine by comp results: -ve return may remove the callee?
 
 def get_fc(n):
-    if isinstance(n,CoF): return n.fc if isinstance(n.nF,str) else costs.get(ast.Call,0)  # inline 'E'|'|' block | registered ref: body counted at def
-    if isinstance(n,tuple): return costs.get(n[0],0) + sum(get_fc(c) for c in n[1])
-    return costs.get(type(n),0)
+    return n.fc if isinstance(n,CoF) else costs.get(n[0],0)+sum(get_fc(c) for c in n[1]) if isinstance(n,tuple) else costs.get(type(n),0)
 
 def split_oF_():  # divisive clustering
 
-    def is_gate_l(t):  # check ast.type instead
-        if isinstance(t,tuple) and t[0] in (ast.If,ast.IfExp) and isinstance(h:=t[1][0],tuple) and isinstance(h[0],tuple) and h[0][0] == 'gv_': return 1
-        return 0
-
     def split(t, oF):  # pack sub gate from gates
-        if is_gate_l(t) and oF.w * sum(get_fc(p) for p in t[1]) > ave:  # w is membership weight, it should be fw?
+        if (isinstance(t,tuple) and t[0] in (ast.If,ast.IfExp) and isinstance(h:=t[1][0],tuple) and isinstance(h[0],tuple) and h[0][0]=='gv_'
+            and oF.w * sum(get_fc(p) for p in t[1]) > ave):
             sub = CoF(root=oF, fc=get_fc(t), body=[t], caller_={oF})
             oF_.append(sub); nF_.append(None); sub.nF = len(oF_)-1
             return sub
@@ -341,37 +318,6 @@ def split_oF_():  # divisive clustering
 
     for oF in copy(oF_):  # copy because we append new sub during
         oF.body = [split(t,oF) for t in oF.body]
-''' 
-with average_linkage:
-for _T,T in combinations(oF_,2): V = (comp_callers(_T,T) + comp_body(_T,T)) * min(_T.fc,T.fc); _T.V_[T] = V; T.V_[_T] = V 
-for t in C.N_: if t is not T: v__[j,i] += t.V_[T]  # += pairwise Vs 
-'''
-def clust_oF_():  # exemplar-seeded merge for body compression
-
-    F_ = copy(oF_); T_ = []
-    for F in F_: F.fin = 0; F.rim = []
-    for _F,F in combinations(F_,2):
-        if _F.typ == F.typ:
-            w,_ = comp_body(_F,F)
-            # w *= min(_F.fc,F.fc)  # this is not needed?
-            if w > ave:
-                _F.w += w; F.w += w  # projected compression: above-ave w only
-                _F.rim += [(F,w)]; F.rim += [(_F,w)]
-                
-    for _F in sorted(F_, key=lambda F: F.w, reverse=True):
-        if _F.fin: continue
-        if _F.w <= ave: break  # that _F.w*wL is not relevant here?
-        T = CoF(N_=[_F], typ=_F.typ, body=_F.body, fc=_F.fc)
-        for F,w in sorted(_F.rim, key=lambda t: t[1], reverse=True):
-            if F.fin: continue
-            C, body = comp_body(T.body,F.body, T.N_,F)
-            if C>ave: T.body = body; T.w += C; T.N_ += [F]; F.fin = 1
-        if len(T.N_) > 1:
-            T.fc = sum(get_fc(t) for t in T.body); T.cmpr = sum(f.fc for f in T.N_) - T.fc
-            if T.cmpr > ave: _F.fin = 1; T_ += [T]
-            else:
-                for F in T.N_[1:]: F.fin = 0
-    for T in T_: oF_.append(T); nF_.append(None); T.nF = len(oF_)-1
 
 def inject_oF_(oF_, g):  # inject AST in g, recompile g[name]
 
