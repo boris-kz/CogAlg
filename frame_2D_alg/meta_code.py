@@ -238,11 +238,13 @@ def clust_oF_():  # exemplar-seeded merge for body compression
         T = CoF(N_=[_F], typ=_F.typ, body=_F.body, fc=_F.fc, caller_=copy(_F.caller_))
         for F,w in sorted(_F.rim, key=lambda t: t[1], reverse=True):
             if F.fin: continue
-            C, body = form_body(T.N_+[F])
-            if C - T.w > ave:  # realized incremental compression
-                T.body = body; T.w = C; T.N_ += [F]; T.caller_ |= F.caller_; F.fin = 1
+            orim = {nt for N in T.N_ for nt in N.rim if not nt[0].fin}.intersection(F.rim)  # overlapping rim between T.N_'s rim and F.rim
+            ow = sum(Nt[1] for Nt in orim)  # sum w from overlapping rim
+            if ow > ave:  # realized incremental compression
+                T.w += w; T.N_ += [F]; F.fin = 1  # caller should be filled in the next runtime
         if len(T.N_) > 1:
-            T.fc = sum(f.fc for f in T.N_) - T.w; _F.fin = 1; T_ += [T]
+            T.body = form_body(T.N_); T.fc = sum(get_fc(t) for t in T.body)  # this fc computation can be unpacked from comp_body?
+            _F.fin = 1; T_ += [T]
     for T in T_: oF_.append(T); nF_.append(None); T.nF = len(oF_)-1
 
 def comp_body(_n, n):  # compare only: compression estimate C; construction in form_body
@@ -280,17 +282,19 @@ def form_body(N_):  # render composite body: n-way positional columns, cluster o
             else:  # same-head: children columns
                 op = (t0[0], tuple(form([(t[1][j],F) for t,F in g if len(t[1])>j], len(g)) for j in range(max(len(t[1]) for t,_ in g))))
             branch_ += [(f_,[op])]
+        # when single node in branch, eval to add If fork too?
         if len(branch_)==1 and len(branch_[0][0])==Fn: return branch_[0][1][0]  # universal: bare op
-        return (ast.IfExp, *branch_)
+        return (ast.IfExp, *branch_)  # always form branch when there's at least 2 same length Fs
     Bod = []
     bod_= [F.body for F in N_]
     for j in range(max(len(b) for b in bod_)):
         t = form([(b[j],F) for b,F in zip(bod_,N_) if len(b)>j], len(N_))
+        # i don't get below? Why we need to merge Bod[-1]? it's in entirely different block?
         if fk(t) and Bod and fk(Bod[-1]) and [b[0] for b in Bod[-1][1:]]==[b[0] for b in t[1:]]:  # same func partition: concat
             Bod[-1] = (ast.IfExp, *[(f_, op_+_op_) for (f_,op_),(__,_op_) in zip(Bod[-1][1:], t[1:])])
         else:
             Bod += [t]
-    return sum(F.fc for F in N_) - sum(get_fc(t) for t in Bod), Bod
+    return Bod
 
 def comp_callers(_T, T):  # compute value of callers_overlap + calls_overlap
 
