@@ -154,13 +154,64 @@ def val_(TT, wTT=wTT, fd = 0):  # base eval: multi-variate rel match for members
     m_,d_ = TT; ad_ = np.abs(d_); t_ = eps_(m_+ad_)  # ~ max comparand
     return (m_/t_) @ wTT[0]  # /= total = rdn, borrow in G.Bt only?
 
-def get_fc(n):
-    return n.fc if isinstance(n,CoF) else costs.get(n[0],0)+sum(get_fc(c) for c in n[1]) if isinstance(n,tuple) else costs.get(type(n),0)
-
 def comp_prim(_n,n):
     if isinstance(_n,CoF) or isinstance(n,CoF):
         return comp_callers(_n,n) > ave if isinstance(_n,CoF) and isinstance(n,CoF) and n.nF==_n.nF else 0
     else:
         return _n[0]==n[0] and not (is_fork(_n) or is_fork(n)) if isinstance(_n,tuple) and isinstance(n,tuple) else 0 if isinstance(_n,tuple) or isinstance(n,tuple) else type(_n)==type(n)
 
+def comp_body(_n, n, C=0):  # estimated n-merge cost compression, init mean C=3, accum from recursive unpack
+
+    if isinstance(n, CoF):
+        if isinstance(_n, CoF):
+            if n is _n: C += n.fc
+            elif n.fc > ave_C:  # mean compression value
+                C -= 2  # fork compression cost, ast.IfExp
+                for _sub, sub in zip(_n.body, n.body): C = comp_body(_sub, sub, C)
+                if len(n.body) > len(_n.body): C -= 2  # single tail fork cost
+            else: C -= 2
+        else: C -= 2
+    elif isinstance(n, tuple):  # AST fork
+        if isinstance(_n, tuple) and n[0] is _n[0]:
+            C += costs.get(n[0], 0)
+            for _sub, sub in zip(_n[1], n[1]): C = comp_body(_sub, sub, C)
+            if len(n[1]) > len(_n[1]): C -= 2
+        else: C -= 2
+    elif type(_n) is type(n):
+        C += costs.get(type(n), 0)  # AST leaf
+    else: C -= 2
+    return C
+
+def comp_body1(_n, n, _f_=None, f=None):  # compare == merge: compression C + merged form (pure, replaces merge_oF)
+
+    def gate(f_, sub): return              # 1-branch: these members do op, others skip
+
+    def merge_seq(_q,q, _n_,n):  # merge aligned op sequences (bodies | node children) -> C, merged_
+        C, Q = 0, []
+        for _t, t in zip(_q, q):
+            c,  = comp_body(_t, t, _n_,n); C += c; Q += [mt]
+        for _t in _q[len(q):]:
+            Q += [_t if isinstance(_t,tuple) and _t[0] is ast.IfExp else gate(_m_, _t)]; C -= 2  # tail: new member m skips these
+        for  t in  q[len(_q):]:
+            Q += [(ast.IfExp, (f_, sub))([m], t)]; C -= 2  # tail: prior members skip these
+        return C, Q
+
+    if _f_ is None: return merge_seq(_n.body, n.body, [_n], n)  # top level
+    if isinstance(_n,tuple) and _n[0] is ast.IfExp and isinstance(_n[1][0],list):
+        # existing fork, append it or closest sub_fork
+        sub_ = list(_n[1:])  # [(m_, op), ...]
+        r_ = [comp_body(op, n, bf_, f) for bf_,op in sub_]
+        i  = int(np.argmax([c for c,_ in r_])); c, op = r_[i]
+        if c > 0: sub_[i] = (sub_[i][0]+[f], op)  # n merges into branch i
+        else:     sub_ += [([f], n)]; c = -2         # n becomes a new branch
+        return c, (ast.IfExp, *sub_)
+    if _n is n: return get_fc(n), _n  # same ref, skip
+
+    if isinstance(_n,tuple) and isinstance(n,tuple) and _n[0] is n[0]:  # same ast node, merge children
+        C, sub_ = merge_seq(_n[1], n[1], _f_, f)
+        return C + costs.get(_n[0],0), (_n[0], tuple(sub_))
+    elif type(_n) is type(n) and not isinstance(_n,(tuple,CoF)):  # other than tuple and CoF
+        return costs.get(type(n),0), _n
+    else:
+        return -2, (ast.IfExp, (_f_,_n), ([f],n))  # 2-branch fork from one divergent op pair
 
