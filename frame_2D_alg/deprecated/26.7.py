@@ -215,3 +215,31 @@ def comp_body1(_n, n, _f_=None, f=None):  # compare == merge: compression C + me
     else:
         return -2, (ast.IfExp, (_f_,_n), ([f],n))  # 2-branch fork from one divergent op pair
 
+def clust_oF_2():  # exemplar-seeded merge for body compression
+
+    F_ = copy(oF_);
+    T_ = []
+    for F in F_: F.fin = 0; F.rim = []; F.w = 0
+    for _F, F in combinations(F_, 2):
+        if _F.typ == F.typ:
+            w = comp_body(_F.body, F.body)  # absolute compression estimate
+            if w > ave: _F.w += w; F.w += w; _F.rim += [(F, w)]; F.rim += [(_F, w)]
+    for _F in sorted(F_, key=lambda F: F.w, reverse=True):
+        if _F.fin: continue
+        if _F.w <= ave: break
+        T = CoF(N_=[_F], typ=_F.typ, body=_F.body, fc=_F.fc, caller_=copy(_F.caller_))
+        _F.rooT = T  # T._rim_ expansion, as in cluster_N:
+        for F, w in sorted(_F.rim, key=lambda t: t[1], reverse=True):
+            if w < ave: break
+            T.L_ = {L for N in T.N_ for L in N.rim if not L[0].fin}  # T.N_ is extended per loop
+            _L_ = F.rooT.L_ if F.rooT else F.rim  # try merging F.rooT if any
+            L_olp = T.L_.intersection(_L_)  # rooT.L_ overlap
+            if olp_w := sum(L[1] for L in L_olp) > ave:
+                T.w += olp_w  # merge Ts:
+                for L in L_olp: __F = L[0];  T.N_ += [__F]; __F.fin = 1
+        if len(T.N_) > 1:
+            form_body(T);
+            _F.fin = 1;
+            T_ += [T]
+    for T in T_: oF_.append(T); nF_.append(None); T.nF = len(oF_) - 1
+

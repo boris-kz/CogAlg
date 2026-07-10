@@ -20,7 +20,7 @@ def val_(TT, wTT=wTT, fd=0):  # multi-variate rel match for membership, rel diff
     vm = (m_/ eps_(m_+ad_)) @ wTT[0]  # /= total | max = rdn
     if fd:
         vd = (ad_@ wTT[1] / avd) * (vm/2)  # rat_dev_vd- proportional borrow from (vm + neutral trans-vm)/2?
-        return vm,vd
+        return vm, vd
     else: return vm
 
 def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
@@ -154,7 +154,7 @@ class CoF(CF):
         @wraps(func)
         def inner(*a, **kw):
             _CoF = CoF._cur.get(None)
-            oF = CoF(nF=iF_[func.__name__], root=_CoF)
+            oF = CoF(nF=iF_[func.__name__], root = _CoF)
             i = iF_[func.__name__]; oF_[i].call_ += [oF]  # F_call_T_[i][oF.nF] += oF.dTT
             if _CoF is not None:
                 _CoF.call_ += [oF]
@@ -168,7 +168,6 @@ class CoF(CF):
     def __bool__(f): return bool(f.call_)
 
 def gv_(v, i=None):
-
     if v > 0: return v
     else: oF_[CoF.get().nF].gV_[i] -= v  # double -ve -> +ve
 
@@ -222,28 +221,42 @@ def call_sites(fd):  # FunctionDef
 F_call_T_ = [[np.zeros((2,9)) for _ in call_sites(fd)] for fd in nF_]  # dTT computed per callee
 F_call_i_ = [{n.lineno: j for j,n in enumerate(call_sites(fd))} for fd in nF_]
 
-def clust_oF_():  # exemplar-seeded merge for body compression
+# draft:
+def clust_oF_():  # flood-fill by rim links, cluster_N form: frontier expansion + cluster contact-merge
 
     F_ = copy(oF_); T_ = []
-    for F in F_: F.fin = 0; F.rim = []; F.w = 0
+    for F in F_: F.rim = []; F.rooT = None
     for _F,F in combinations(F_,2):
         if _F.typ == F.typ:
-            w = comp_body(_F.body, F.body)  # absolute compression estimate
+            w = comp_body(_F.body, F.body)  # compression estimate
             if w > ave:
-                _F.w += w; F.w += w
-                _F.rim += [(F,w)]; F.rim += [(_F,w)]
+                _F.rim += [(F,w)]; F.rim += [(_F,w)]; F.w += w; _F.w += w
     for _F in sorted(F_, key=lambda F: F.w, reverse=True):
-        if _F.fin: continue
+        if _F.rooT: continue
         if _F.w <= ave: break
-        T = CoF(N_=[_F], typ=_F.typ, body=_F.body, fc=_F.fc, caller_=copy(_F.caller_))
-        for F,w in sorted(_F.rim, key=lambda t: t[1], reverse=True):
-            if F.fin: continue
-            C, body = form_body(T.N_+[F])
-            if C - T.w > ave:  # realized incremental compression
-                T.body = body; T.w = C; T.N_ += [F]; T.caller_ |= F.caller_; F.fin = 1
-        if len(T.N_) > 1:
-            T.fc = sum(f.fc for f in T.N_) - T.w; _F.fin = 1; T_ += [T]
-    for T in T_: oF_.append(T); nF_.append(None); T.nF = len(oF_)-1
+        T = CoF(N_=[_F], typ=_F.typ, caller_=copy(_F.caller_)); _F.fin = 1; _F.rooT = T
+        L_ = _F.rim
+        while L_:  # recursive frontier expansion
+            _L_ = []
+            for F,w in L_:
+                if rT := F.rooT and rT is not T and rT not in T.N_:  # merge clusters by cross-link density
+                    if W := sum(w for N in T.N_ for f,w in N.rim if f.rooT is rT) > ave:
+                        for f in _N_ := rT.N_: f.rooT = T
+                        T.N_ += _N_; T.w += rT.w + W
+                        _L_ += [l[0] for f in _N_ for l in f.rim]
+                elif W := sum(w for f,w in F.rim if f.rooT is T) > ave:
+                    T.N_ += [F]; T.w += W; F.rooT = T
+                    _L_ += F.rim
+            L_ = list(set(_L_))
+        if len(T.N_) > 1: T_ += [T]
+    for T in T_:
+        if len(T.N_) > 1:  # skip Ts emptied by contact-merge
+            form_body(T)
+            if C := T.cmpr > ave:
+                T.fc = sum(f.fc for f in T.N_) - C; T.w = C
+                oF_.append(T); nF_.append(None); T.nF = len(oF_)-1
+            else:
+                for F in T.N_: F.fin = 0; F.rooT = None  # release; nothing downstream to undo
 
 def comp_body(_n, n):  # compare only: compression estimate C; construction in form_body
 
@@ -263,7 +276,7 @@ def comp_body(_n, n):  # compare only: compression estimate C; construction in f
         return costs.get(type(n),0)  # leaf
     return -2
 
-def form_body(N_):  # render composite body: n-way positional columns, cluster ops per column
+def form_body(F):  # render composite body: n-way positional columns, cluster ops per column
 
     def fk(t): return isinstance(t,tuple) and t[0] is ast.IfExp and isinstance(t[1][0],list)  # fork
 
@@ -281,16 +294,17 @@ def form_body(N_):  # render composite body: n-way positional columns, cluster o
                 op = (t0[0], tuple(form([(t[1][j],F) for t,F in g if len(t[1])>j], len(g)) for j in range(max(len(t[1]) for t,_ in g))))
             branch_ += [(f_,[op])]
         if len(branch_)==1 and len(branch_[0][0])==Fn: return branch_[0][1][0]  # universal: bare op
-        return (ast.IfExp, *branch_)
+        return (ast.IfExp, *branch_)  # always form branch when there's at least 2 same length Fs
     Bod = []
-    bod_= [F.body for F in N_]
+    N_ = F.N_; bod_= [F.body for F in N_]
     for j in range(max(len(b) for b in bod_)):
         t = form([(b[j],F) for b,F in zip(bod_,N_) if len(b)>j], len(N_))
         if fk(t) and Bod and fk(Bod[-1]) and [b[0] for b in Bod[-1][1:]]==[b[0] for b in t[1:]]:  # same func partition: concat
             Bod[-1] = (ast.IfExp, *[(f_, op_+_op_) for (f_,op_),(__,_op_) in zip(Bod[-1][1:], t[1:])])
         else:
             Bod += [t]
-    return sum(F.fc for F in N_) - sum(get_fc(t) for t in Bod), Bod
+    F.fc = sum(get_fc(n) for n in Bod)
+    F.body = Bod
 
 def comp_callers(_T, T):  # compute value of callers_overlap + calls_overlap
 
