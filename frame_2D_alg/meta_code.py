@@ -234,29 +234,31 @@ def clust_oF_():  # flood-fill by rim links, cluster_N form: frontier expansion 
     for _F in sorted(F_, key=lambda F: F.w, reverse=True):
         if _F.rooT: continue
         if _F.w <= ave: break
-        T = CoF(N_=[_F], typ=_F.typ, caller_=copy(_F.caller_)); _F.fin = 1; _F.rooT = T
+        T = CoF(N_=[_F], typ=_F.typ, caller_=copy(_F.caller_)); _F.rooT = T
         L_ = _F.rim
         while L_:  # recursive frontier expansion
             _L_ = []
             for F,w in L_:
-                if rT := F.rooT and rT is not T and rT not in T.N_:  # merge clusters by cross-link density
+                if (rT := F.rooT) and rT is not T and rT not in T.N_:  # merge clusters by cross-link density
                     if W := sum(w for N in T.N_ for f,w in N.rim if f.rooT is rT) > ave:
-                        for f in _N_ := rT.N_: f.rooT = T
+                        for f in (_N_:= rT.N_): f.rooT = T
                         T.N_ += _N_; T.w += rT.w + W
                         _L_ += [l[0] for f in _N_ for l in f.rim]
-                elif W := sum(w for f,w in F.rim if f.rooT is T) > ave:
+                        rT.N_ = []  # empty the merged T
+                elif F.rooT is None and (W := sum(w for f,w in F.rim if f.rooT is T)) > ave:  # we need bracket, else W is boolean from > ave
                     T.N_ += [F]; T.w += W; F.rooT = T
-                    _L_ += F.rim
+                    n_ = [nt[0] for nt in L_]
+                    _L_ += [nt for nt in F.rim if nt[0] is not _F and nt[0] not in n_]  # rim assignment is bidirectional, prevent cyclic here
             L_ = list(set(_L_))
         if len(T.N_) > 1: T_ += [T]
     for T in T_:
         if len(T.N_) > 1:  # skip Ts emptied by contact-merge
             form_body(T)
-            if C := T.cmpr > ave:
+            if (C := T.cmpr) > ave:
                 T.fc = sum(f.fc for f in T.N_) - C; T.w = C
                 oF_.append(T); nF_.append(None); T.nF = len(oF_)-1
             else:
-                for F in T.N_: F.fin = 0; F.rooT = None  # release; nothing downstream to undo
+                for F in T.N_: F.rooT = None  # release; nothing downstream to undo
 
 def comp_body(_n, n):  # compare only: compression estimate C; construction in form_body
 
@@ -304,6 +306,7 @@ def form_body(F):  # render composite body: n-way positional columns, cluster op
         else:
             Bod += [t]
     F.fc = sum(get_fc(n) for n in Bod)
+    F.cmpr = sum(f.fc for f in F.N_) - fc  # compression = original member - merged?
     F.body = Bod
 
 def comp_callers(_T, T):  # compute value of callers_overlap + calls_overlap
