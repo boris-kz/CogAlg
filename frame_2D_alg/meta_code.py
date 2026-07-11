@@ -238,14 +238,17 @@ def clust_oF_():  # flood-fill by rim links, cluster_N form: frontier expansion 
             _L_ = []  # new frontier
             for _f,f, w in L_:  # current frontier
                 F = f if _f in T.N_ else _f; inL_,exL_ = [],[]; W=0
+                if F.rooT is T: continue  # skip same root
                 for l in [l for n in (F.rooT.N_ if F.rooT is not None else [F]) for l in n.rim]:
                     _r, r, w = l
-                    if _r in T.N_ or r in T.N_: inL_ += [l]; W += w
+                    if _r in T.N_ and r in T.N_: continue  # if both Fs are included, skip?
+                    elif _r in T.N_ or r in T.N_: inL_ += [l]; W += w
                     else: exL_ += [l]
                 if W > ave * len(inL_+exL_):  # merge clusters by cross-link density
                     T.w += W; _L_ += exL_; T.L_ += inL_
                     for n in [n for l in inL_ for n in (l[0],l[1]) if n not in T.N_]:
-                        n.rooT.N_ = []; n.rooT = T; T.N_ += [n]
+                        if n.rooT: n.rooT.N_ = []
+                        n.rooT = T; T.N_ += [n]
             L_ = list(set(_L_))
         if len(T.N_) > 1: T_ += [T]
     for T in T_:
@@ -275,7 +278,7 @@ def comp_body(_n, n):  # compare only: compression estimate C; construction in f
         return costs.get(type(n),0)  # leaf
     return -2
 
-def form_body(F):  # render composite body: n-way positional columns, cluster ops per column
+def form_body_claude(F):  # render composite body: n-way positional columns, cluster ops per column
 
     def fork(t): return isinstance(t,tuple) and t[0] is ast.IfExp and isinstance(t[1][0],list)
 
@@ -296,7 +299,7 @@ def form_body(F):  # render composite body: n-way positional columns, cluster op
         return (ast.IfExp, *branch_)  # always form branch when there's at least 2 same length Fs
     Bod = []
     N_ = F.N_; bod_= [F.body for F in N_]
-    for j in range(max(len(b) for bod in bod_)):
+    for j in range(max(len(bod) for bod in bod_)):
         fk = form([(b[j],F) for b,F in zip(bod_,N_) if len(b)>j], len(N_))
         if fork(fk) and Bod and fork(Bod[-1]) and [b[0] for b in Bod[-1][1:]]==[b[0] for b in fk[1:]]:  # same func partition: concat
             Bod[-1] = (ast.IfExp, *[(f_, op_+_op_) for (f_,op_),(__,_op_) in zip(Bod[-1][1:], fk[1:])])
@@ -305,6 +308,19 @@ def form_body(F):  # render composite body: n-way positional columns, cluster op
     F.fc = sum(get_fc(n) for n in Bod)
     F.cmpr = sum(f.fc for f in F.N_) - fc  # compression = original member - merged?
     F.body = Bod
+
+def form_body(F):
+    
+    _body_ = [F.body for F in F.N_]
+    max_bodyl = max(len(body) for body in _body_)
+    Body=[]
+    for i in range (max_bodyl):
+        ibody_ = [(F.N_[j], body) for j,body in enumerate(_body_) if len (body)>i]  # i's index bodies and their F from all Fs
+        if len(ibody_)>1: Body += [(ast.IfExp,*ibody_)]  # in the format of (ast.IfExp, (f,t)...)
+        else:             Body += [ibody_[0][0]]  # single body, direct append and no additional fork
+    F.fc = sum(get_fc(t) for t in Body)
+    F.cmpr = sum(f.fc for f in F.N_) - F.fc
+    F.body = Body
 
 def comp_callers(_T, T):  # compute value of callers_overlap + calls_overlap
 
