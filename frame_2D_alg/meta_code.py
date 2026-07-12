@@ -225,39 +225,40 @@ F_call_i_ = [{n.lineno: j for j,n in enumerate(call_sites(fd))} for fd in nF_]
 def clust_oF_():  # centroid form: exemplar seeds, fuzzy membership by mean link C, reform to convergence
 
     F_ = copy(oF_); T_ = []
-    for F in F_: F.rim = []; F.w = 0; F.root_ = []
+    for F in F_: F.rim = []; F.w = 0; F._root_ = []; F.root_ = []
     for _F,F in combinations(F_,2):
         if _F.typ == F.typ:
             if (w := comp_body(_F.body, F.body)) > ave:  # compression estimate
                 L = (_F,F,w); _F.rim += [L]; F.rim += [L]; _F.w += w; F.w += w
-    E_ = []
+    T_ = []
     for F in sorted(F_, key=lambda F: F.w, reverse=True):  # exemplars: NMS in similarity space
-        if F.w <= ave: break
-        if not any((n if _n is F else _n) in E_ for _n,n,w in F.rim): E_ += [F]
-    for E in E_:
-        T = CoF(N_=[E], typ=E.typ); E.root_ = [(T,E.w)]
-        T_ += [T]  # seed C = E.w: pass-1 stand-in
+        # if F.w <= ave: break
+        if not any((n if _n is F else _n).root_ for _n,n,w in F.rim):    
+            T = CoF(N_=[F], typ=F.typ); F._root_ = [(T,F.w)]
+            T._N_ = list({(_f if f is F else f) for _f,f,w in F.rim})  # frontier
+            T_ += [T]  # seed C = T.w: pass-1 stand-in
     while True:  # reform to convergence
-        upd = 0
+        # compute each T's membership via frontier
+        for T in T_:
+            for F in T.N_+T._N_:
+                n_ = [f for f in T.N_ if f is not F]
+                C = sum(w for _n,n,w in F.rim if (n if _n is F else _n) in n_) / len(n_) if n_ else F.w
+                if C > ave: F.root_ += [(C,T)]
+        # check if there's any changes in their F.root_ vs F._root_
+        fbreak = 1
         for F in F_:
-            root_ = []
+            if set(F.root_) != set(F._root_): fbreak = 0; break
+        if fbreak: break
+        else:  # rebuild T's N_, _N_ and T_
             for T in T_:
-                if F.typ == T.typ:
-                    n_ = [G for G in T.N_ if G is not F]
-                    C = sum(w for _n,n,w in F.rim if (n if _n is F else _n) in n_) / len(n_) if n_ else F.w
-                    if C > ave: root_ += [(C,T)]
-            root_.sort(key=lambda t: t[0], reverse=True)
-            root_ = [(T,C) for i,(C,T) in enumerate(root_) if C > ave*(i+1)]  # rdn-scaled gate per extra root
-            if [t for t,_ in root_] != [t for t,_ in F.root_]: upd = 1
-            F.root_ = root_
-        if not upd:
-            break  # all memberships stable
-        for T in T_: T.N_ = [F for F in F_ if any(t is T for t,_ in F.root_)]  # rebuild once per pass
-        T_ = [T for T in T_ if T.N_]
-
+                T.N_ = [F for F in F_ if any(t is T for _,t in F.root_)]  # rebuild T.N_ from F.root_
+                T._N_ = list({(n if _n is F else _n) for F in T.N_ for _n,n,w in F.rim} - set(T.N_))  # extend frontier via member rims
+            T_ = [T for T in T_ if T.N_]  # remove if no new root
+        for F in F_: F._root_ = F.root_; F.root_ = []  # reset
+    # not updated
     for T in sorted(T_, key=lambda T: sum(C for F in T.N_ for t,C in F.root_ if t is T), reverse=True):
         if len(T.N_) > 1:
-            fc, cmpr, bod = form_body(T)
+            fc, cmpr, bod = form_body(T,0)
             C = cmpr - sum(F.fc for F in T.N_ if F.root_[0][0] is not T)  # member fc credited once, at primary root
             if C > ave:
                 T.body = bod; T.fc = fc; T.w = C; T.cmpr = cmpr
@@ -286,12 +287,33 @@ def comp_body(_n, n):  # compare only: compression estimate C; construction in f
 
 def form_body(F, fassign=1):
 
-    _body_ = [F.body for F in F.N_]
+    def form_forks(bod_):  # merge IfExp forks      
+        # each body in bod_ is ([f], t)
+        forks = [bod for bod in bod_ if isinstance(bod[1], tuple) and bod[1][0] is ast.IfExp]  # retrieve ifExp forks only
+        if len(forks)>1:  # merge IfExp forks
+            _fork = list(forks[0])  # _fork is [[f], t]
+            _ifnode = list(_fork[1])  # ifnode is [ast.ifExp, ([f],t),([f],t)...]
+            for fork in forks[1:]:
+                ifnode = list(fork[1])  
+                _fork[0] += fork[0]    # merge fs
+                _ifnode += ifnode[1:]  # merge ([f],t) of subsequent forks into main _fork
+            _fork[1] = ifnode  # update node
+            # loop each merged ([f],t,t2...) and recursively form_forks in t1,t2..
+            for j, sub in enumerate(_fork[1][1:]):  # each sub is (ast.IfExp, (f,t),...)
+                sub_bod_ = form_forks(sub[1:])
+                sub_ifnode = (ast.IfExp, *sub_bod_)
+                _fork[1][j+1] = sub_ifnode 
+            _fork[1] = tuple(_fork[1])
+            bod_[bod_.index(forks[0])] = tuple(_fork)  # reassign the merged fork    
+        return bod_
+            
+    _body_ = [f.body for f in F.N_]
     Bod = []
     for i in range(max(len(b) for b in _body_)):
-        ibod_ = [(F.N_[j], body) for j, body in enumerate(_body_) if len(body) > i]  # i's index bodies and their F from all Fs
+        ibod_ = [([F.N_[j]], body[i]) for j, body in enumerate(_body_) if len(body) > i]  # i's index bodies and their F from all Fs
         if len(ibod_) > 1:
-            Bod += [(ast.IfExp, *ibod_)]  # in the format of (ast.IfExp, (f,t)...)
+            form_forks(ibod_)  # ibod_ is [([f],t),([f],t)...]
+            Bod += [(ast.IfExp, *ibod_)]  # in the format of (ast.IfExp, ([f],t)...)
         else:
             Bod += [ibod_[0][0]]  # single body, direct append and no additional fork
     fc = sum(get_fc(n) for n in Bod)
