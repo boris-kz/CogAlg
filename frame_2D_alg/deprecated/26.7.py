@@ -215,31 +215,45 @@ def comp_body1(_n, n, _f_=None, f=None):  # compare == merge: compression C + me
     else:
         return -2, (ast.IfExp, (_f_,_n), ([f],n))  # 2-branch fork from one divergent op pair
 
-def clust_oF_2():  # exemplar-seeded merge for body compression
+def clust_oF_2():  # flood-fill by rim links, cluster_N form: frontier expansion + cluster contact-merge
 
-    F_ = copy(oF_);
-    T_ = []
-    for F in F_: F.fin = 0; F.rim = []; F.w = 0
-    for _F, F in combinations(F_, 2):
+    F_ = copy(oF_); T_ = []
+    for F in F_: F.rim = []; F.rooT = None
+    for _F,F in combinations(F_,2):
         if _F.typ == F.typ:
-            w = comp_body(_F.body, F.body)  # absolute compression estimate
-            if w > ave: _F.w += w; F.w += w; _F.rim += [(F, w)]; F.rim += [(_F, w)]
+            if (w := comp_body(_F.body, F.body)) > ave:  # compression estimate
+                _F.rim += [(_F,F,w)]; F.rim += [(_F,F,w)]; F.w += w; _F.w += w
     for _F in sorted(F_, key=lambda F: F.w, reverse=True):
-        if _F.fin: continue
+        if _F.rooT is not None: continue
         if _F.w <= ave: break
-        T = CoF(N_=[_F], typ=_F.typ, body=_F.body, fc=_F.fc, caller_=copy(_F.caller_))
-        _F.rooT = T  # T._rim_ expansion, as in cluster_N:
-        for F, w in sorted(_F.rim, key=lambda t: t[1], reverse=True):
-            if w < ave: break
-            T.L_ = {L for N in T.N_ for L in N.rim if not L[0].fin}  # T.N_ is extended per loop
-            _L_ = F.rooT.L_ if F.rooT else F.rim  # try merging F.rooT if any
-            L_olp = T.L_.intersection(_L_)  # rooT.L_ overlap
-            if olp_w := sum(L[1] for L in L_olp) > ave:
-                T.w += olp_w  # merge Ts:
-                for L in L_olp: __F = L[0];  T.N_ += [__F]; __F.fin = 1
-        if len(T.N_) > 1:
-            form_body(T);
-            _F.fin = 1;
-            T_ += [T]
-    for T in T_: oF_.append(T); nF_.append(None); T.nF = len(oF_) - 1
+        T = CoF(N_=[_F], typ=_F.typ, caller_=copy(_F.caller_)); _F.rooT = T
+        L_ = set(_F.rim)
+        while L_:  # extend frontier
+            _L_ = []  # new frontier
+            for _f,f, w in L_:  # current frontier
+                F = f if _f.rooT is T else _f
+                if F.rooT is T: continue  # link internalized since queued
+                n_, inL_,exL_ = [],[],[]; W=0  #  for n,_n in (n,_n), (_n,n),:
+                for l in (F.rooT.L_ if F.rooT is not None else F.rim):
+                    _n, n, w = l
+                    if _n.rooT is T or n.rooT is T:  # cross link
+                        inL_ += [l]; W += w; n_ += [n if _n.rooT is T else _n]
+                    else: exL_ += [l]  # new frontier
+                if W > ave * len(inL_+exL_):  # merge clusters by cross-link density
+                    T.w += W; _L_ += exL_; T.L_.update(inL_+exL_)
+                    for n in n_:
+                        if n.rooT is T: continue  # dup endpoint across cross links
+                        if (r := n.rooT) is not None: r.N_ = []  # skip
+                        n.rooT = T; T.N_ += [n]
+            L_ = set(_L_)
+        if len(T.N_) > 1: T_ += [T]
+    for T in T_:
+        if len(T.N_) > 1:  # skip Ts emptied by contact-merge
+            form_body(T)
+            if (C := T.cmpr) > ave:
+                T.fc = sum(f.fc for f in T.N_) - C; T.w = C
+                oF_.append(T); nF_.append(None); T.nF = len(oF_)-1
+            else:
+                for F in T.N_: F.rooT = None
+
 
