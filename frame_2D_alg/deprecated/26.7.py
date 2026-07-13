@@ -215,45 +215,47 @@ def comp_body1(_n, n, _f_=None, f=None):  # compare == merge: compression C + me
     else:
         return -2, (ast.IfExp, (_f_,_n), ([f],n))  # 2-branch fork from one divergent op pair
 
-def clust_oF_2():  # flood-fill by rim links, cluster_N form: frontier expansion + cluster contact-merge
+def clust_oF_2():  # centroid form: exemplar seeds, fuzzy membership by mean link C, reform to convergence
 
     F_ = copy(oF_); T_ = []
-    for F in F_: F.rim = []; F.rooT = None
+    for F in F_: F.rim = []; F.w = 0; F.root_ = []
     for _F,F in combinations(F_,2):
         if _F.typ == F.typ:
             if (w := comp_body(_F.body, F.body)) > ave:  # compression estimate
-                _F.rim += [(_F,F,w)]; F.rim += [(_F,F,w)]; F.w += w; _F.w += w
-    for _F in sorted(F_, key=lambda F: F.w, reverse=True):
-        if _F.rooT is not None: continue
-        if _F.w <= ave: break
-        T = CoF(N_=[_F], typ=_F.typ, caller_=copy(_F.caller_)); _F.rooT = T
-        L_ = set(_F.rim)
-        while L_:  # extend frontier
-            _L_ = []  # new frontier
-            for _f,f, w in L_:  # current frontier
-                F = f if _f.rooT is T else _f
-                if F.rooT is T: continue  # link internalized since queued
-                n_, inL_,exL_ = [],[],[]; W=0  #  for n,_n in (n,_n), (_n,n),:
-                for l in (F.rooT.L_ if F.rooT is not None else F.rim):
-                    _n, n, w = l
-                    if _n.rooT is T or n.rooT is T:  # cross link
-                        inL_ += [l]; W += w; n_ += [n if _n.rooT is T else _n]
-                    else: exL_ += [l]  # new frontier
-                if W > ave * len(inL_+exL_):  # merge clusters by cross-link density
-                    T.w += W; _L_ += exL_; T.L_.update(inL_+exL_)
-                    for n in n_:
-                        if n.rooT is T: continue  # dup endpoint across cross links
-                        if (r := n.rooT) is not None: r.N_ = []  # skip
-                        n.rooT = T; T.N_ += [n]
-            L_ = set(_L_)
-        if len(T.N_) > 1: T_ += [T]
-    for T in T_:
-        if len(T.N_) > 1:  # skip Ts emptied by contact-merge
-            form_body(T)
-            if (C := T.cmpr) > ave:
-                T.fc = sum(f.fc for f in T.N_) - C; T.w = C
-                oF_.append(T); nF_.append(None); T.nF = len(oF_)-1
-            else:
-                for F in T.N_: F.rooT = None
+                L = (_F,F,w); _F.rim += [L]; F.rim += [L]; _F.w += w; F.w += w
+    E_ = []
+    for F in sorted(F_, key=lambda F: F.w, reverse=True):  # exemplars: NMS in similarity space
+        if F.w <= ave: break
+        if not any((n if _n is F else _n) in E_ for _n,n,w in F.rim): E_ += [F]
+    for E in E_:
+        T = CoF(N_=[E], typ=E.typ); E.root_ = [(T,E.w)]
+        T_ += [T]  # seed C = E.w: pass-1 stand-in
+    while True:  # reform to convergence
+        upd = 0
+        for F in F_:
+            root_ = []
+            for T in T_:
+                if F.typ == T.typ:
+                    n_ = [G for G in T.N_ if G is not F]
+                    C = sum(w for _n,n,w in F.rim if (n if _n is F else _n) in n_) / len(n_) if n_ else F.w
+                    if C > ave: root_ += [(C,T)]
+            root_.sort(key=lambda t: t[0], reverse=True)
+            root_ = [(T,C) for i,(C,T) in enumerate(root_) if C > ave*(i+1)]  # rdn-scaled gate per extra root
+            if [t for t,_ in root_] != [t for t,_ in F.root_]: upd = 1
+            F.root_ = root_
+        if not upd:
+            break  # all memberships stable
+        for T in T_: T.N_ = [F for F in F_ if any(t is T for t,_ in F.root_)]  # rebuild once per pass
+        T_ = [T for T in T_ if T.N_]
 
+    for T in sorted(T_, key=lambda T: sum(C for F in T.N_ for t,C in F.root_ if t is T), reverse=True):
+        if len(T.N_) > 1:
+            fc, cmpr, bod = form_body(T)
+            C = cmpr - sum(F.fc for F in T.N_ if F.root_[0][0] is not T)  # member fc credited once, at primary root
+            if C > ave:
+                T.body = bod; T.fc = fc; T.w = C; T.cmpr = cmpr
+                T.caller_ = set().union(*[F.caller_ for F in T.N_])
+                oF_.append(T); nF_.append(None); T.nF = len(oF_)-1
+                continue
+        for F in T.N_: F.root_ = [r for r in F.root_ if r[0] is not T]  # release failed | singleton: next roots promote
 
