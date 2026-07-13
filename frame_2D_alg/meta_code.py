@@ -225,7 +225,7 @@ F_call_i_ = [{n.lineno: j for j,n in enumerate(call_sites(fd))} for fd in nF_]
 def clust_oF_():  # flood-fill by rim links, cluster_N form: frontier expansion + cluster contact-merge
 
     F_ = copy(oF_); T_ = []
-    for F in F_: F.rim = []; F.rooT = None
+    for F in F_: F.rim = []; F.root_ = []; F.rw_ = []
     for _F,F in combinations(F_,2):
         if (w := comp_body(_F.body, F.body)) > ave:  # compression
             _F.rim += [(_F,F,w)]; F.rim += [(_F,F,w)]; F.w += w; _F.w += w
@@ -233,21 +233,20 @@ def clust_oF_():  # flood-fill by rim links, cluster_N form: frontier expansion 
         if _F.w <= ave: break
         w_,N_,L_ = [_F.fc], [_F], set(_F.rim)
         for _f,f, w in sorted(_F.rim, key=lambda l: l[2], reverse=True):
-            F = f if _f.root_[-1] is T else _f
-            if w > ave * len([rw for rw in F.rw_ if rw>w]):  # rdn = n stronger memberships
+            F = f if _f in N_ else _f
+            if w > ave * (len([rw for rw in F.rw_ if rw>w])-1):  # rdn = n stronger memberships
                 w_+=[w]; N_+=[F]; L_.update(F.rim)
         if len(N_) > 1 and (W :=sum(w_)) > ave:
-            T = CoF(w=W, N_=N_, L_=L_)
+            T = CoF(w=W, N_=N_); T.L_ = L_; T.cmpr = sum(L[2] for L in L_ if (L[0] in N_ and L[1] in N_))  # cmpr computed with only L with both Ns in N_?
             for f,w in zip(N_,w_): f.root_+=[T]; f.rw_+=[w]
             T_ += [T]
     for T in T_:
         if len(T.N_) > 1:  # skip Ts emptied by contact-merge
             form_body(T)
-            if (C := T.cmpr) > ave:
-                T.fc = sum(f.fc for f in T.N_) - C; T.w = C
+            if T.cmpr > ave:
                 oF_.append(T); nF_.append(None); T.nF = len(oF_)-1
             else:
-                for F in T.N_: F.root_.pop()
+                for F in T.N_: i = F.root_.index(T); F.root_.pop(i); F.rw_.pop(i) 
 
 def comp_body(_n, n):  # compare only: compression estimate C; construction in form_body
 
@@ -267,27 +266,22 @@ def comp_body(_n, n):  # compare only: compression estimate C; construction in f
         return costs.get(type(n),0)  # leaf
     return -2
 
-def form_body(F, fassign=1):
+def form_body(F):
 
     def form_forks(bod_):
         # merge IfExp forks, bod is ([f], t)
         forks = [bod for bod in bod_ if isinstance(bod[1], tuple) and bod[1][0] is ast.IfExp]  # retrieve ifExp forks only
         if len(forks)>1:  # merge IfExp forks
             _fork = list(forks[0])  # _fork is [[f], t]
-            _ifnode = list(_fork[1])  # ifnode is [ast.ifExp, ([f],t),([f],t)...]
+            _ifnode = list(_fork[1])  # _ifnode is [ast.ifExp, ([f],t),([f],t)...]
             for fork in forks[1:]:
-                ifnode = list(fork[1])
                 _fork[0] += fork[0]    # merge fs
+                ifnode = list(fork[1])
                 _ifnode += ifnode[1:]  # merge ([f],t) of subsequent forks into main _fork
-            _fork[1] = ifnode  # update node
-            # loop each merged ([f],t,t2...) and recursively form_forks in t1,t2..
-            for j, sub in enumerate(_fork[1][1:]):  # each sub is (ast.IfExp, (f,t),...)
-                sub_bod_ = form_forks(sub[1:])
-                sub_ifnode = (ast.IfExp, *sub_bod_)
-                _fork[1][j+1] = sub_ifnode
-            _fork[1] = tuple(_fork[1])
+                bod_.remove(fork)  # remove the merged fork
+            _fork[1] = (ast.IfExp, *form_forks(_ifnode[1:]))  # recursively form_forks in t1,t2.. of ([f],t,t2...)
             bod_[bod_.index(forks[0])] = tuple(_fork)  # reassign the merged fork
-        return bod_
+        return bod_  # bod_ is [([f], t),([f], t),...]
     _body_ = [f.body for f in F.N_]
     Bod = []
     for i in range(max(len(b) for b in _body_)):
@@ -296,12 +290,9 @@ def form_body(F, fassign=1):
             form_forks(ibod_)  # ibod_ is [([f],t),([f],t)...]
             Bod += [(ast.IfExp, *ibod_)]  # in the format of (ast.IfExp, ([f],t)...)
         else:
-            Bod += [ibod_[0][0]]  # single body, direct append and no additional fork
-    fc = sum(get_fc(n) for n in Bod)
-    cmpr = sum(f.fc for f in F.N_) - fc  # compression = original member - merged?
-    if fassign:
-        F.fc=fc; F.cmpr=cmpr; F.body = Bod
-    return fc,cmpr,Bod
+            Bod += [ibod_[0][1]]  # single body, direct append and no additional fork (their f won't be preserved here?)
+    F.fc = sum(get_fc(n) for n in Bod)
+    F.body = Bod
 
 def _form_body(F, fassign=1):  # render composite body: n-way positional columns, cluster ops per column
 
