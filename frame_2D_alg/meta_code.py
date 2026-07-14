@@ -221,31 +221,36 @@ def call_sites(fd):  # FunctionDef
 F_call_T_ = [[np.zeros((2,9)) for _ in call_sites(fd)] for fd in nF_]  # dTT computed per callee
 F_call_i_ = [{n.lineno: j for j,n in enumerate(call_sites(fd))} for fd in nF_]
 
-# not revised
-def clust_oF_():  # cluster_C form: exemplar-seeded stars, centroid membership + rdn, single pass
+def clust_oF_():
 
-    F_ = copy(oF_); T_ = []
-    for F in F_: F.fin = 0; F.root_ = []; F.rw_ = []
-    for _F in F_:
-        if _F.fin: continue
-        T = CoF(N_=[_F])
+    F_ = copy(oF_); _T_ = []
+    for F in F_: F.rim = []; F.root_ = []; F.rw_ = []
+    for _F, F in combinations(F_, 2): 
+        if comp_body(_F.body, F.body) > ave: 
+            _F.rim += [F]; F.rim += [_F]
+    for _F in F_:  # init T with F and rim
+        if not _F.rim: continue
+        T = CoF(N_=[_F] + _F.rim);form_body(T); _T_ += [T]  # exemplars are Fs with non empty rim
+    T_ = []
+    while True:
+        fbreak = 1
         for F in F_:
-            if not F.fin and comp_body(_F.body, F.body) > ave:
-                T.N_ += [F]; F.fin = 1
-        if len(T.N_) > 1: _F.fin = 1; T_ += [T]; form_body(T)
-    for T in T_: T.N_ = []  # rebuilt by membership
-    for F in F_:
-        for i, (w, T) in enumerate(sorted([(comp_body(T.body, F.body), T) for T in T_], key=lambda t: t[0], reverse=True)):
-            if w > ave * (i + 1):
-                F.root_ += [T]; F.rw_ += [w]; T.N_ += [F]
-            else: break  # w falls, threshold grows
+            _N_ = F.N_; F.root_ = []; F.N_ = []; F.rw_ = []
+            for i, (w, T) in enumerate(sorted([(comp_body(T.body, F.body), T) for T in _T_], key=lambda t: t[0], reverse=True)):
+                if w > ave * (i + 1):  # rdn beased on their w?
+                    F.root_ += [T]; F.rw_ += [w]; T.N_ += [F]; T.w += w
+            if set(F.N_) != set(_N_): fbreak = 0  # continue refinement as long there's changes in the members
+        for T in _T_:
+            if len(T.N_)>1: form_body(T); T_ += [T]  # rebuild and pack T
+        if fbreak: break 
+        else:      _T_ = T_; T_ = []   
+    # no changes from existing code
     for T in T_:
-        if len(T.N_) > 1:
-            form_body(T); T.w = T.cmpr - sum(F.fc for F in T.N_ if F.root_[0] is not T)
-            if T.w > ave:
-                oF_.append(T); nF_.append(None); T.nF = len(oF_) - 1
-                continue
-            for F in T.N_: i = F.root_.index(T); F.root_.pop(i); F.rw_.pop(i)
+        T.w = T.cmpr - sum(F.fc for F in T.N_ if F.root_[0] is not T)
+        if T.w > ave:
+            oF_.append(T); nF_.append(None); T.nF = len(oF_) - 1
+            continue
+        for F in T.N_: i = F.root_.index(T); F.root_.pop(i); F.rw_.pop(i)
 
 def comp_body(_n, n):  # compare only: compression estimate C; construction in form_body
 
