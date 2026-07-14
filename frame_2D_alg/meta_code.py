@@ -221,32 +221,31 @@ def call_sites(fd):  # FunctionDef
 F_call_T_ = [[np.zeros((2,9)) for _ in call_sites(fd)] for fd in nF_]  # dTT computed per callee
 F_call_i_ = [{n.lineno: j for j,n in enumerate(call_sites(fd))} for fd in nF_]
 
-# draft:
-def clust_oF_():  # flood-fill by rim links, cluster_N form: frontier expansion + cluster contact-merge
+# not revised
+def clust_oF_():  # cluster_C form: exemplar-seeded stars, centroid membership + rdn, single pass
 
     F_ = copy(oF_); T_ = []
-    for F in F_: F.rim = []; F.root_ = []; F.rw_ = []
-    for _F,F in combinations(F_,2):
-        if (w := comp_body(_F.body, F.body)) > ave:  # compression
-            _F.rim += [(_F,F,w)]; F.rim += [(_F,F,w)]; F.w += w; _F.w += w
-    for _F in sorted(F_, key=lambda F: F.w, reverse=True):
-        if _F.w <= ave: break
-        w_,N_,L_ = [_F.fc], [_F], set(_F.rim)
-        for _f,f, w in sorted(_F.rim, key=lambda l: l[2], reverse=True):
-            F = f if _f in N_ else _f
-            if w > ave * (len([rw for rw in F.rw_ if rw>w])-1):  # rdn = n stronger memberships
-                w_+=[w]; N_+=[F]; L_.update(F.rim)
-        if len(N_) > 1 and (W :=sum(w_)) > ave:
-            T = CoF(w=W, N_=N_); T.L_ = L_; T.cmpr = sum(L[2] for L in L_ if (L[0] in N_ and L[1] in N_))  # cmpr computed with only L with both Ns in N_?
-            for f,w in zip(N_,w_): f.root_+=[T]; f.rw_+=[w]
-            T_ += [T]
+    for F in F_: F.fin = 0; F.root_ = []; F.rw_ = []
+    for _F in F_:
+        if _F.fin: continue
+        T = CoF(N_=[_F])
+        for F in F_:
+            if not F.fin and comp_body(_F.body, F.body) > ave:
+                T.N_ += [F]; F.fin = 1
+        if len(T.N_) > 1: _F.fin = 1; T_ += [T]; form_body(T)
+    for T in T_: T.N_ = []  # rebuilt by membership
+    for F in F_:
+        for i, (w, T) in enumerate(sorted([(comp_body(T.body, F.body), T) for T in T_], key=lambda t: t[0], reverse=True)):
+            if w > ave * (i + 1):
+                F.root_ += [T]; F.rw_ += [w]; T.N_ += [F]
+            else: break  # w falls, threshold grows
     for T in T_:
-        if len(T.N_) > 1:  # skip Ts emptied by contact-merge
-            form_body(T)
-            if T.cmpr > ave:
-                oF_.append(T); nF_.append(None); T.nF = len(oF_)-1
-            else:
-                for F in T.N_: i = F.root_.index(T); F.root_.pop(i); F.rw_.pop(i) 
+        if len(T.N_) > 1:
+            form_body(T); T.w = T.cmpr - sum(F.fc for F in T.N_ if F.root_[0] is not T)
+            if T.w > ave:
+                oF_.append(T); nF_.append(None); T.nF = len(oF_) - 1
+                continue
+            for F in T.N_: i = F.root_.index(T); F.root_.pop(i); F.rw_.pop(i)
 
 def comp_body(_n, n):  # compare only: compression estimate C; construction in form_body
 

@@ -259,3 +259,29 @@ def clust_oF_2():  # centroid form: exemplar seeds, fuzzy membership by mean lin
                 continue
         for F in T.N_: F.root_ = [r for r in F.root_ if r[0] is not T]  # release failed | singleton: next roots promote
 
+def clust_oF_3():  # flood-fill by rim links, cluster_N form: frontier expansion + cluster contact-merge
+
+    F_ = copy(oF_); T_ = []
+    for F in F_: F.rim = []; F.root_ = []; F.rw_ = []
+    for _F,F in combinations(F_,2):
+        if (w := comp_body(_F.body, F.body)) > ave:  # compression, *= F.w?
+            _F.rim += [(_F,F,w)]; F.rim += [(_F,F,w)]; F.w += w; _F.w += w
+    for _F in sorted(F_, key=lambda F: F.w, reverse=True):
+        w_, N_,L_ = [_F.fc], [_F], set(_F.rim)
+        for _f,f, w in sorted(_F.rim, key=lambda l: l[2], reverse=True):
+            F = f if _f in N_ else _f
+            if w > ave * (len([rw for rw in F.rw_ if rw>w])-1):  # rdn = n stronger memberships, but not final in this loop?
+                w_+=[w]; N_+=[F]; L_.update(F.rim)
+        if len(N_) > 1 and (W :=sum(w_)) > ave:
+            T = CoF(w=W, N_=N_, L_=L_)
+            for f,w in zip(N_,w_): f.root_+=[T]; f.rw_+=[w]
+            T_ += [T]
+    # only if rdn can be reassigned?
+    for T in T_:
+        if len(T.N_) > 1:  # skip Ts emptied by contact-merge
+            form_body(T)
+            if T.cmpr > ave:
+                oF_.append(T); nF_.append(None); T.nF = len(oF_)-1
+            else:
+                for F in T.N_: i = F.root_.index(T); F.root_.pop(i); F.rw_.pop(i)
+

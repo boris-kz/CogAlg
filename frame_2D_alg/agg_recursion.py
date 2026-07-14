@@ -328,10 +328,9 @@ def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace
                                 rt0.N_ += rt1.N_; add_Nt(rt0)  # recompute Nt attrs / G
                 L.Nt,L.Bt,L.Ct = CF(),CF(),CF()
             # merge roots
-    G_ = []  # add prelink pL_,pN_? include merged Cs, in feature space for Cs
     for N in _N_:
         N.fin =0; N.exe=1; sum2F(N.rim,N.Rt)  # only if N was added in trans-cluster?
-    G_=[]; Gt_=[]; in_ = set()  # root attrs
+    G_, Gt_, in_ = [],[],set()  # root attrs, add prelink pL_,pN_? include merged Cs, in feature space for Cs
     for N in _N_:  # form G per remaining N
         if N.fin or (Ft.root.root and not N.exe): continue  # no exemplars in Fg
         N_ = [N]; L_,B_ = [],[]; N.fin=1  # init G
