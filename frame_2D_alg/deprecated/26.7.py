@@ -285,3 +285,36 @@ def clust_oF_3():  # flood-fill by rim links, cluster_N form: frontier expansion
             else:
                 for F in T.N_: i = F.root_.index(T); F.root_.pop(i); F.rw_.pop(i)
 
+def clust_oF_dense():  # simplified oF rim-mediated centroid clustering
+
+    F_ = copy(oF_)
+    for F in F_: F.rim = []
+    for _F, F in combinations(F_,2):
+        if (w := comp_body(_F.body, F.body)) > ave: _F.rim += [F,w]; F.rim += [_F,w]; _F.w += w; F.w += w
+    _T_ = []
+    for _F in F_:
+        _F.w = sum([w * (_F.w/(_F.w+F.w)) for F,w in _F.rim])  # /= rdn to stronger F in rim
+        if _F.w > ave:
+            N_ = [_F]+ [L[0] for L in _F.rim]; T = CoF(N_=N_, L_= [0 for _ in N_])  # no T.L_,T.w yet
+            form_body(T); _T_ += [T]
+    while _T_:
+        T_,nT_ = [],[]; W = DW = 0
+        root__ = [[] for f in F_]  # dense, replace in parallel
+        for i,T in enumerate(_T_):
+            Tw = Dw = 0; N_,L_ = [],[]
+            for j, w in enumerate(T.L_):  # aligned with F_ in all Ts
+                w = comp_body(T.body, F.body)
+                N_+= [F]; L_+= [w]; Tw += w; Dw += F_[j].root_[i]
+            DW += Dw; W += Tw
+            if Dw > ave:
+                T.N_= N_; T.L_= L_; T.w = W  # add adjust each w for rdn to stronger roots?
+                T_+= [T]; nT_+=[T]
+            else: nT_ += [[]]
+        if any(nT_) and DW > ave:   # continue refinement as long there's changes in the members
+            for T,nT in zip(T_,nT_):
+                if nT: form_body(T)  # rebuild from new N_
+        else: break
+    for T in T_:
+        if T.w > ave: oF_.append(T); nF_.append(None); T.nF = len(oF_) - 1
+        else:
+            for F in T.N_: i = F.root_.index(T); F.root_.pop(i); F.rw_.pop(i)
