@@ -3,6 +3,15 @@ from contextlib import contextmanager
 from functools import wraps
 from copy import copy, deepcopy
 import ast; from itertools import combinations
+
+eps = 1e-7
+def eps_(a): return np.where(a==0, eps, a)
+
+ave = decay = .3; avd = 20  # mean sum( abs(dTT[1]) * wTT[1]), the borrower
+wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
+wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
+wTT = np.array([wT,wT*avd])
+
 '''
 code modification: compare aligned ops between oF_ AST sequences, cluster/split/merge matches into higher oF typs
 '''
@@ -192,18 +201,22 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
     while _T_:
         T_ = []
         for T in _T_:
-            Tw = Dw = 0; N_,L_ = [],[]
+            Tw = Dw = 0; N_,L_,rw_ = [],[],[]
             for j,F in enumerate(F_):
                 w = comp_body(T.body, F.body) / min(T.fc, F.fc)
-                L_ += [w]; Tw += w; Dw += abs(w - T.L_[j])
-                if w > ave: N_ += [F]  # hard member cutoff, L_ stays dense
-            T.L_ = L_; T.w = Tw
+                L_ += [w]; Dw += abs(w - T.L_[j])
+                if w > ave: Tw += w; N_ += [F]; rw_ += [w]  # hard member cutoff, L_ stays dense
+            T.L_ = L_
             if Tw > ave:  # else drop
-                if Dw > ave: T.N_ = N_; form_body(T); T_ += [T]  # rebuild from new members, refine
+                if Dw > ave: T.w = Tw; T.rw_=rw_; T.N_ = N_; form_body(T); T_ += [T]  # rebuild from new members, refine
                 else: out_ += [T]  # converged Ts
         _T_ = T_
-    for i,T in enumerate(out_): T.nF = i  # all renamed
-    oF_ = out_
+        
+    if out_:  # else remain oF_?
+        N__ = set()
+        out_= [F for F in out_ if (N_ := tuple(F.N_)) not in N__ and not N__.add(N_)]
+        for i,T in enumerate(out_): T.nF = i  # all renamed
+        oF_ = out_
 
 def comp_body(_n, n):  # compare only: compression estimate C; construction in form_body
 
@@ -396,10 +409,4 @@ def call_sites(fd):  # FunctionDef
 F_call_T_ = [[np.zeros((2,9)) for _ in call_sites(fd)] for fd in nF_]  # dTT computed per callee
 F_call_i_ = [{n.lineno: j for j,n in enumerate(call_sites(fd))} for fd in nF_]
 
-eps = 1e-7
-def eps_(a): return np.where(a==0, eps, a)
 
-ave = decay = .3; avd = 20  # mean sum( abs(dTT[1]) * wTT[1]), the borrower
-wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
-wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
-wTT = np.array([wT,wT*avd])
