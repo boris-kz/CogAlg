@@ -6,14 +6,6 @@ import ast; from itertools import combinations
 '''
 code modification: compare aligned ops between oF_ AST sequences, cluster/split/merge matches into higher oF typs
 '''
-eps = 1e-7
-def eps_(a): return np.where(a==0, eps, a)
-
-ave = decay = .3; avd = 20  # mean sum( abs(dTT[1]) * wTT[1]), the borrower
-wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
-wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
-wTT = np.array([wT,wT*avd])
-
 def val_(TT, wTT=wTT, fd=0):  # multi-variate rel match for membership, rel diff for boundary
 
     m_,d_ = TT; ad_ = np.abs(d_)
@@ -35,26 +27,6 @@ def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
         return   m,d,TT,C,R
     else: return TT,C,R
 
-wcO, ccO = 5,5  # temporary
-ave_C, wL = 3,3
-costs = {  # types
-    ast.Assign: 2,  # bind name: trivial
-    ast.Attribute: 5,  # single dict lookup on object
-    ast.UnaryOp: 2,  # apply one operator to one operand
-    ast.BoolOp: 1,  # short-circuit decision between already-evaluated values
-    ast.Compare: 2,  # compare already-evaluated operands
-    ast.If: 1,  # test + pick branch, body ops counted separately
-    ast.IfExp: 2,  # same as If
-    ast.BinOp: 2,  # apply operator to two already-evaluated operands
-    ast.AugAssign: 2,  # read + op + store, but op and target counted separately
-    ast.Subscript: 5,  # index resolution into container
-    ast.GeneratorExp: 3,  # lazy wrapper, inner loop body counted as child nodes
-    ast.While: 1,  # condition re-evaluation overhead per iteration, body counted separately
-    ast.For: 1,  # iterator protocol: __iter__ + __next__ overhead, body counted separately
-    ast.ListComp: 1,  # same iteration overhead as For + list.append + allocation
-    ast.SetComp: 2,  # same as ListComp + hashing per element
-    ast.Call: 3,  # frame creation + arg binding + return: overhead beyond the callee body itself
-}
 class CBase:
     refs = []
     def __init__(obj):
@@ -202,55 +174,36 @@ def parse_funcs(paths):
             if isinstance(node, ast.FunctionDef) and node.name in iF_:
                 nF_[iF_.get(node.name)] = node
 
-_names = ['frame_H','cross_comp','trace_edge',                         # root_, oF_[0] = frame_H, adds level per call
-          'comp_N_','comp_C_','comp_N','comp_F',                       # comp_: incrementally distant, nested
-          'get_exemplars','cluster_N','cluster_C','cluster_P','sum2G', # clus_: incrementally fuzzy, parallel
-          'ffeedback','proj_N',                                        # fbac_: update filters) coords) funcs
-          'vect_edge']                                                 # prep_
-typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','clus_','fbac_','fbac_','prep_']
-nF_ = [None]*len(_names)  # FunctionDefs
-iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
-oF_ = [CoF(nF=i,typ=typ) for i,typ in enumerate(typ_)]
-parse_funcs(["agg_recursion.py"])  # populate nF_
-# AST -> F.body:
-for func,fdef in zip(oF_,nF_):
-    for node in ast.iter_child_nodes(fdef):
-        if r := build(func,node): t,fc = r; func.body += [t]; func.fc += fc
-def call_sites(fd):  # FunctionDef
-    return [n for n in ast.walk(fd) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id in iF_]
-F_call_T_ = [[np.zeros((2,9)) for _ in call_sites(fd)] for fd in nF_]  # dTT computed per callee
-F_call_i_ = [{n.lineno: j for j,n in enumerate(call_sites(fd))} for fd in nF_]
+def clust_oF_():  # simplified oF rim-mediated centroid clustering
 
-def clust_oF_():
-
-    F_ = copy(oF_); _T_ = []
-    for F in F_: F.rim = []; F.root_ = []; F.rw_ = []
-    for _F, F in combinations(F_, 2): 
-        if comp_body(_F.body, F.body) > ave: 
-            _F.rim += [F]; F.rim += [_F]
-    for _F in F_:  # init T with F and rim
-        if not _F.rim: continue
-        T = CoF(N_=[_F] + _F.rim);form_body(T); _T_ += [T]  # exemplars are Fs with non empty rim
-    T_ = []
-    while True:
-        fbreak = 1
-        for F in F_:
-            _N_ = F.N_; F.root_ = []; F.N_ = []; F.rw_ = []
-            for i, (w, T) in enumerate(sorted([(comp_body(T.body, F.body), T) for T in _T_], key=lambda t: t[0], reverse=True)):
-                if w > ave * (i + 1):  # rdn beased on their w?
-                    F.root_ += [T]; F.rw_ += [w]; T.N_ += [F]; T.w += w
-            if set(F.N_) != set(_N_): fbreak = 0  # continue refinement as long there's changes in the members
+    global oF_;  F_ = copy(oF_)
+    for F in F_: F.rim = []; F.w = 0
+    for _F, F in combinations(F_,2):  # w = relative compression: shared / min cost, ave-commensurate
+        if (w := comp_body(_F.body, F.body) / min(_F.fc, F.fc)) > ave:
+            _F.rim += [(F,w)]; F.rim += [(_F,w)]; _F.w += w; F.w += w
+    w_ = [sum([w * F.w/(F.w+_F.w) for _F,w in F.rim]) for F in F_]  # /= rdn to stronger F in rim, from raw-w snapshot
+    _T_ = []
+    for F,w in zip(F_,w_):
+        F.w = w
+        if w > ave:
+            T = CoF(N_= [F]+[f for f,_ in F.rim], L_= [0 for _ in F_])  # L_: dense prior w_, aligned with F_ in all Ts
+            form_body(T); _T_ += [T]
+    out_ = []
+    while _T_:
+        T_ = []
         for T in _T_:
-            if len(T.N_)>1: form_body(T); T_ += [T]  # rebuild and pack T
-        if fbreak: break 
-        else:      _T_ = T_; T_ = []   
-    # no changes from existing code
-    for T in T_:
-        T.w = T.cmpr - sum(F.fc for F in T.N_ if F.root_[0] is not T)
-        if T.w > ave:
-            oF_.append(T); nF_.append(None); T.nF = len(oF_) - 1
-            continue
-        for F in T.N_: i = F.root_.index(T); F.root_.pop(i); F.rw_.pop(i)
+            Tw = Dw = 0; N_,L_ = [],[]
+            for j,F in enumerate(F_):
+                w = comp_body(T.body, F.body) / min(T.fc, F.fc)
+                L_ += [w]; Tw += w; Dw += abs(w - T.L_[j])
+                if w > ave: N_ += [F]  # hard member cutoff, L_ stays dense
+            T.L_ = L_; T.w = Tw
+            if Tw > ave:  # else drop
+                if Dw > ave: T.N_ = N_; form_body(T); T_ += [T]  # rebuild from new members, refine
+                else: out_ += [T]  # converged Ts
+        _T_ = T_
+    for i,T in enumerate(out_): T.nF = i  # all renamed
+    oF_ = out_
 
 def comp_body(_n, n):  # compare only: compression estimate C; construction in form_body
 
@@ -403,3 +356,50 @@ def trace_func(module_dict, module_name=None):
             if obj.__module__ != module_name: continue
             if getattr(obj, 'wrapped', False): continue
             module_dict[name] = CoF.traced(obj)
+
+wcO, ccO = 5,5  # temporary
+ave_C, wL = 3,3
+costs = {  # types
+    ast.Assign: 2,  # bind name: trivial
+    ast.Attribute: 5,  # single dict lookup on object
+    ast.UnaryOp: 2,  # apply one operator to one operand
+    ast.BoolOp: 1,  # short-circuit decision between already-evaluated values
+    ast.Compare: 2,  # compare already-evaluated operands
+    ast.If: 1,  # test + pick branch, body ops counted separately
+    ast.IfExp: 2,  # same as If
+    ast.BinOp: 2,  # apply operator to two already-evaluated operands
+    ast.AugAssign: 2,  # read + op + store, but op and target counted separately
+    ast.Subscript: 5,  # index resolution into container
+    ast.GeneratorExp: 3,  # lazy wrapper, inner loop body counted as child nodes
+    ast.While: 1,  # condition re-evaluation overhead per iteration, body counted separately
+    ast.For: 1,  # iterator protocol: __iter__ + __next__ overhead, body counted separately
+    ast.ListComp: 1,  # same iteration overhead as For + list.append + allocation
+    ast.SetComp: 2,  # same as ListComp + hashing per element
+    ast.Call: 3,  # frame creation + arg binding + return: overhead beyond the callee body itself
+}
+_names = ['frame_H','cross_comp','trace_edge',                         # root_, oF_[0] = frame_H, adds level per call
+          'comp_N_','comp_C_','comp_N','comp_F',                       # comp_: incrementally distant, nested
+          'get_exemplars','cluster_N','cluster_C','cluster_P','sum2G', # clus_: incrementally fuzzy, parallel
+          'ffeedback','proj_N',                                        # fbac_: update filters) coords) funcs
+          'vect_edge']                                                 # prep_
+typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','clus_','fbac_','fbac_','prep_']
+nF_ = [None]*len(_names)  # FunctionDefs
+iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
+oF_ = [CoF(nF=i,typ=typ) for i,typ in enumerate(typ_)]
+parse_funcs(["agg_recursion.py"])  # populate nF_
+# AST -> F.body:
+for func,fdef in zip(oF_,nF_):
+    for node in ast.iter_child_nodes(fdef):
+        if r := build(func,node): t,fc = r; func.body += [t]; func.fc += fc
+def call_sites(fd):  # FunctionDef
+    return [n for n in ast.walk(fd) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id in iF_]
+F_call_T_ = [[np.zeros((2,9)) for _ in call_sites(fd)] for fd in nF_]  # dTT computed per callee
+F_call_i_ = [{n.lineno: j for j,n in enumerate(call_sites(fd))} for fd in nF_]
+
+eps = 1e-7
+def eps_(a): return np.where(a==0, eps, a)
+
+ave = decay = .3; avd = 20  # mean sum( abs(dTT[1]) * wTT[1]), the borrower
+wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
+wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
+wTT = np.array([wT,wT*avd])
