@@ -3,6 +3,13 @@ from contextlib import contextmanager
 from functools import wraps
 from copy import copy, deepcopy
 import ast; from itertools import combinations
+eps = 1e-7
+def eps_(a): return np.where(a==0, eps, a)
+ave = decay = .3; avd = 20
+# mean sum( abs(dTT[1]) * wTT[1]), the borrower
+wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
+wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
+wTT = np.array([wT,wT*avd])
 '''
 code modification: compare aligned ops between oF_ AST sequences, cluster/split/merge matches into higher oF typs
 '''
@@ -140,6 +147,7 @@ class CoF(CF):
     def __bool__(f): return bool(f.call_)
 
 def gv_(v, i=None):
+    # +ve values trigger recursion?
     if v > 0: return v
     else: oF_[CoF.get().nF].gV_[i] -= v  # double -ve -> +ve
 
@@ -176,33 +184,35 @@ def parse_funcs(paths):
 
 def clust_oF_():  # simplified oF rim-mediated centroid clustering
 
-    global oF_;  F_ = copy(oF_)
+    global oF_;  F_ = [F for F in oF_ if F]  # called Fs only: uncalled don't cluster, deleted at swap
     for F in F_: F.rim = []; F.w = 0
     for _F, F in combinations(F_,2):  # w = relative compression: shared / min cost, ave-commensurate
         if (w := comp_body(_F.body, F.body) / min(_F.fc, F.fc)) > ave:
             _F.rim += [(F,w)]; F.rim += [(_F,w)]; _F.w += w; F.w += w
-    w_ = [sum([w * F.w/(F.w+_F.w) for _F,w in F.rim]) for F in F_]  # /= rdn to stronger F in rim, from raw-w snapshot
-    _T_ = []
-    for F,w in zip(F_,w_):
-        F.w = w
-        if w > ave:
-            T = CoF(N_= [F]+[f for f,_ in F.rim], L_= [0 for _ in F_])  # L_: dense prior w_, aligned with F_ in all Ts
-            form_body(T); _T_ += [T]
-    out_ = []
-    while _T_:
-        T_ = []
-        for T in _T_:
+    T_ = []
+    for F in F_:
+        F.w = sum([w * F.w / (F.w+_F.w) for _F, w in F.rim])
+        if F.w > ave:
+            T = CoF(N_= [F]+[f for f,_ in F.rim], L_= [0 for _ in F_]); T.fin=0  # L_: dense prior w_, aligned with F_ in all Ts
+            form_body(T); T_ += [T]
+    nT = len(T_)
+    while nT:
+        nT = 0
+        for T in [t for t in T_ if not t.fin]:
             Tw = Dw = 0; N_,L_ = [],[]
-            for j,F in enumerate(F_):
-                w = comp_body(T.body, F.body) / min(T.fc, F.fc)
-                L_ += [w]; Tw += w; Dw += abs(w - T.L_[j])
-                if w > ave: N_ += [F]  # hard member cutoff, L_ stays dense
-            T.L_ = L_; T.w = Tw
-            if Tw > ave:  # else drop
-                if Dw > ave: T.N_ = N_; form_body(T); T_ += [T]  # rebuild from new members, refine
-                else: out_ += [T]  # converged Ts
-        _T_ = T_
-    for i,T in enumerate(out_): T.nF = i  # all renamed
+            for j,F in enumerate(T.N_):  # rim-local candidates: members prune, never join
+                w = (comp_body(T.body, F.body) / min(T.fc, F.fc) if F else 0) / sum(F.root)
+                L_ += [w]; Dw += abs(w - T.L_[j])
+                if w > ave: Tw += w; N_ += [F]
+                else: N_ += [[]]  # hard member cutoff, L_,N_ stay aligned
+            T.N_ = N_; T.L_ = L_; T.w = Tw / (len(L_))  # members, weights, mean w
+            if Tw > ave and Dw > ave: form_body(T); nT += 1  # rebuild from remaining members, refine
+            else: T.fin = 1  # converged | weak, filtered below
+    out_ = []
+    for i,T in enumerate([t for t in T_ if t.w > ave]):
+        T.nF = i  # rename by index
+        T.N_,T.L_ = map(list, zip(*((f,w) for f,w in zip(T.N_,T.L_) if f)))  # strip placeholders
+        out_ += [T]
     oF_ = out_
 
 def comp_body(_n, n):  # compare only: compression estimate C; construction in form_body
@@ -239,7 +249,7 @@ def form_body(F):
             _fork[1] = (ast.IfExp, *form_forks(_ifnode[1:]))  # recursively form_forks in t1,t2.. of ([f],t,t2...)
             bod_[bod_.index(forks[0])] = tuple(_fork)  # reassign the merged fork
         return bod_  # bod_ is [([f], t),([f], t),...]
-    _body_ = [f.body for f in F.N_]
+    _body_ = [f.body for f in F.N_ if f]
     Bod = []
     for i in range(max(len(b) for b in _body_)):
         ibod_ = [([F.N_[j]], body[i]) for j, body in enumerate(_body_) if len(body) > i]  # i's index bodies and their F from all Fs
@@ -395,11 +405,3 @@ def call_sites(fd):  # FunctionDef
     return [n for n in ast.walk(fd) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id in iF_]
 F_call_T_ = [[np.zeros((2,9)) for _ in call_sites(fd)] for fd in nF_]  # dTT computed per callee
 F_call_i_ = [{n.lineno: j for j,n in enumerate(call_sites(fd))} for fd in nF_]
-
-eps = 1e-7
-def eps_(a): return np.where(a==0, eps, a)
-
-ave = decay = .3; avd = 20  # mean sum( abs(dTT[1]) * wTT[1]), the borrower
-wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
-wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
-wTT = np.array([wT,wT*avd])
