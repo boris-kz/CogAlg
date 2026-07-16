@@ -6,7 +6,7 @@ from itertools import zip_longest, combinations, product  # from multiprocessing
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
-from meta_code import oF_,iF_,nF_,CF,CL,CC,CN,CoF,wT,wTT, eps_,eps,ave,avd,decay, trace_func,parse_funcs, call_sites, split_oF_,clust_oF_,inject_oF_,gv_, val_,sum_vt
+from meta_code import oF_,iF_,nF_,CF,CL,CC,CN,CoF,wT,wTT, eps,eps_,ave,avd,decay, trace_func,parse_funcs, call_sites, split_oF_,clust_oF_,inject_oF_,gv_, val_,sum_vt
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
