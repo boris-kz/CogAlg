@@ -5,8 +5,8 @@ from copy import copy, deepcopy
 import ast; from itertools import combinations
 eps = 1e-7
 def eps_(a): return np.where(a==0, eps, a)
-ave = decay = .3; avd = 20
-# mean sum( abs(dTT[1]) * wTT[1]), the borrower
+ave = decay = .3
+avd = 20  # mean sum( abs(dTT[1]) * wTT[1]), the borrower
 wM,wD,wi, wG,wI,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
 wT = np.array([wM,wD,wi, wG,wI,wa, wL,wS,wA])
 wTT = np.array([wT,wT*avd])
@@ -195,26 +195,28 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
         if F.w > ave:
             T = CoF(N_= [F]+[f for f,_ in F.rim], L_= [0 for _ in F_]); T.fin=0  # L_: dense prior w_, aligned with F_ in all Ts
             form_body(T); T_ += [T]
-    floop = 1; _w__ = [[0 for F in F_] for T in T_]  # we just need a flag isntead of nT?
-    while floop:
-        floop = 0
+    _w__ = [[0 for F in F_] for T in T_]  # we just need a flag isntead of nT?
+    fR = 1  # refine
+    while fR:
+        fR = 0
         w__ = [[0 for F in T.N_] for T in T_]
         for i,T in enumerate(T_):
             if T.fin: continue
             Dw, N_,w_ = 0, [],[]
             for j,F in enumerate(T.N_):  # rim-local candidates: members prune, never join
-                w = (comp_body(T.body, F.body) / min(T.fc, F.fc) if F else 0) 
+                w = (comp_body(T.body, F.body) / min(T.fc, F.fc) if F else 0)
                 if F.root_: w/=sum(_T.w for _T in F.root_)
                 Dw += abs(w - _w__[i][j]); w__[i][j] = w
                 if w>ave: N_ += [F]; w_ += [w]; F.root_.add(T)
             T.N_ = N_; T.L_ = w_
-            if w_: T.w = sum(w_) / (len(w_))  # members, weights, mean w
-            if sum(w_) > ave and Dw > ave: form_body(T); floop = 1  # rebuild from remaining members, refine
+            if w_: T.w = np.mean(w_)
+            if sum(w_) > ave and Dw > ave:
+                form_body(T); fR = 1  # rebuild from remaining members, refine
             else: T.fin = 1  # converged | weak, filtered below
         _w__ = w__
     out_ = []
     for i,T in enumerate([t for t in T_ if t.w > ave]):
-        T.nF = i; out_ += [T]  # rename by index    
+        T.nF = i; out_ += [T]  # rename by index
     oF_ = out_
 
 def comp_body(_n, n):  # compare only: compression estimate C; construction in form_body
