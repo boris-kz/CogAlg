@@ -564,12 +564,18 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
         Lt = G.Lt; L_,lm,ld,lr = Lt.N_,Lt.m,Lt.d,Lt.r; L=len(L_)-1; Av = ave+avd
         if gv_(Vn := (lm+ld)*wcN - Av* (lr+1+ccN*L)):  # for cluster_N
             c = G.Lt.c; E_ = get_exemplars({N for link in L_ for N in link.N_}, r,c)
+            '''
             if gv_(Vn* (wcC-wcN)* (mdecay(L_)-decay) - Av* (lr+1+(ccC-ccN)*L)):
                 # just nested CN, then CC only between sub-Gs in frame?
                 r +=1; G_,r = cluster_C(G.Nt,E_,r,c)  # higher V, low decay, eval cluster_P
             else:      G_,r = cluster_N(G.Nt,E_,r,c)  # updates G
-            if G_ and gv_(val_(G.Nt.dTT,G.wTT*ttA) * ((G.c+wAgg) /(G.r+r+cAgg)) * ((len(G_)-1)**2 *wL) - ave):  # if full cross_comp?
-                cross_comp(G.Nt,r)
+            '''
+            # nested CN
+            if gv_(Vn* (wcN)* (mdecay(L_)-decay) - Av* (lr+1+ccN*L)):
+                G_,r = cluster_N(G.Nt,E_,r,c)  # updates G
+                # below no longer needed?
+                # if G_ and gv_(val_(G.Nt.dTT,G.wTT*ttA) * ((G.c+wAgg) /(G.r+r+cAgg)) * ((len(G_)-1)**2 *wL) - ave):  # if full cross_comp?
+                #     cross_comp(G.Nt,r)  
     if G.Bt:
         Bt = G.Bt; bd,br,L = Bt.d,Bt.r,len(Bt.N_); rroot = root.root if root.root else 0
         if N.typ!=1 and bd*(wAgg*L) > avd*(br+cAgg*L): [F2N(L) for L in Bt.N_]; cross_comp(Bt, br)  # no ddfork
@@ -879,8 +885,17 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
     if not T or not max_elev: return T, ([], np.zeros((2,9)),0,0,0)  # frame_H(0) = pixel tile
     while elev < max_elev:
         tile_,C,R = fill_frame(iY,iX, elev, T)  # project from seed tile
-        if tile_: # sparse,2D
-            Fr = sum2F(tile_)  # higher-scope tile( oH( aH
+        G__ = [G for T in tile_ for G in T.N_ for sub in G.N_ if sub.sub == G.sub]  # sub+'s N.sub should be == G
+        L_,TT,lc,lr,_ = comp_N_(combinations(G__,2),R); lm, ld = val_(TT, fd=1)
+        L=len(L_)-1; Av = ave+avd
+        E_ = get_exemplars({N for link in L_ for N in link.N_}, lr,lc)
+        Fn = sum2F(G__); CC_ = []
+        Vn = (lm+ld)*wcN - Av* (lr+1+ccN*L)
+        if gv_(Vn* wcC* (mdecay(L_)-decay) - Av* (lr+1+ccC*L)):
+            CC_,r = cluster_C(Fn.Nt,E_,lr,lc)  
+        # below not sure
+        if CC_: # sparse,2D
+            Fr = sum2F(CC_)  # higher-scope tile( oH( aH
             if cross_comp(Fr.Nt, rr=0):  # spec-> tN_,tC_,tL_, proj comb N_'L_?
                 if elev and ffb:  # ffb =1 in main, no ffeedback in added tiles
                     Fr,aTT,oTT,aH,oH = ffeedback(Fr, aTT,oTT,aH,oH)  # term,form oH(aH
