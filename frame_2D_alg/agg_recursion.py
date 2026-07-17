@@ -565,6 +565,7 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
         if gv_(Vn := (lm+ld)*wcN - Av* (lr+1+ccN*L)):  # for cluster_N
             c = G.Lt.c; E_ = get_exemplars({N for link in L_ for N in link.N_}, r,c)
             if gv_(Vn* (wcC-wcN)* (mdecay(L_)-decay) - Av* (lr+1+(ccC-ccN)*L)):
+                # just nested CN, then CC only between sub-Gs in frame?
                 r +=1; G_,r = cluster_C(G.Nt,E_,r,c)  # higher V, low decay, eval cluster_P
             else:      G_,r = cluster_N(G.Nt,E_,r,c)  # updates G
             if G_ and gv_(val_(G.Nt.dTT,G.wTT*ttA) * ((G.c+wAgg) /(G.r+r+cAgg)) * ((len(G_)-1)**2 *wL) - ave):  # if full cross_comp?
