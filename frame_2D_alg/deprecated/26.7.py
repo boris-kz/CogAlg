@@ -318,3 +318,51 @@ def clust_oF_dense():  # simplified oF rim-mediated centroid clustering
         if T.w > ave: oF_.append(T); nF_.append(None); T.nF = len(oF_) - 1
         else:
             for F in T.N_: i = F.root_.index(T); F.root_.pop(i); F.rw_.pop(i)
+
+def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
+
+    if not init:
+        N_,_,ntt,nc,nr = ft_[0]; N_+=root.N_; ntt+=root.Nt.dTT; nc+=root.Nt.c; nr+=root.Nt.r; ft_[0] = N_,_,ntt,nc,nr
+        if len(ft_)>1: L_,_,ltt,lc,lr=ft_[1]; L_+=root.L_; ltt+=root.Lt.dTT; lc+=root.Lt.c; lr+=root.Lt.r; ft_[1]=L_,_,ltt,lc,lr
+    Ft_ = []
+    for ft, nF in zip_longest(ft_,('Nt','Lt','Bt')):
+        if ft: n_,_,tt,c,r = ft; Ft_+= [CF(N_=n_,nF=nF,dTT=tt,m=(vt:=val_(tt,wTT,1))[0],d=vt[1],c=c,r=r)]
+        else:  Ft_ += [CF()]
+    C_ = [c for N in ft_[0][0] for c in N.C_]  # splice centroids
+    Ft_ += [sum2F(list(set(C_)), root.Ct) if C_ else CF()]  # add multiple root_ in Cs?
+    G = comb_Ft(*Ft_, root, wTT=fTT)
+    N_ = G.N_; N=N_[0]; G.sub = N.sub+1 if G.L_ else N.sub; r=G.r
+    if G.Lt:  # sub+
+        Lt = G.Lt; L_,lm,ld,lr = Lt.N_,Lt.m,Lt.d,Lt.r; L=len(L_)-1; Av = ave+avd
+        if gv_(Vn := (lm+ld)*wcN - Av* (lr+1+ccN*L)):  # for cluster_N
+            c = G.Lt.c; E_ = get_exemplars({N for link in L_ for N in link.N_}, r,c)
+            if gv_(Vn* (wcC-wcN)* (mdecay(L_)-decay) - Av* (lr+1+(ccC-ccN)*L)):
+                r +=1; G_,r = cluster_C(G.Nt,E_,r,c)  # higher V, low decay, eval cluster_P
+            else:      G_,r = cluster_N(G.Nt,E_,r,c)  # updates G
+            if G_ and gv_(val_(G.Nt.dTT,G.wTT*ttA) * ((G.c+wAgg) /(G.r+r+cAgg)) * ((len(G_)-1)**2 *wL) - ave):  # if full cross_comp?
+                cross_comp(G.Nt,r)
+    if G.Bt:
+        Bt = G.Bt; bd,br,L = Bt.d,Bt.r,len(Bt.N_); rroot = root.root if root.root else 0
+        if N.typ!=1 and bd*(wAgg*L) > avd*(br+cAgg*L): [F2N(L) for L in Bt.N_]; cross_comp(Bt, br)  # no ddfork
+        if rroot: Bt.brrw = Bt.m * (rroot.m * (decay * (rroot.span/G.span)))  # external lend only, need to subtract from root?
+    FV_(CoF.get(), G.dTT, G.c, G.r)
+    return G
+'''
+        G__ = [G for T in tile_ for G in T.N_ for sub in G.N_ if sub.sub == G.sub]  # sub+'s N.sub should be == G
+        L_,TT,lc,lr,_ = comp_N_(combinations(G__,2),R); lm, ld = val_(TT, fd=1)
+        L=len(L_)-1; Av = ave+avd
+        E_ = get_exemplars({N for link in L_ for N in link.N_}, lr,lc)
+        Fn = sum2F(G__); CC_ = []
+        Vn = (lm+ld)*wcN - Av* (lr+1+ccN*L)
+        if gv_(Vn* wcC* (mdecay(L_)-decay) - Av* (lr+1+ccC*L)):
+            CC_,r = cluster_C(Fn.Nt,E_,lr,lc)
+            
+    while elev < max_elev:
+        tile_,C,R = fill_frame(iY,iX, elev, T)  # project from seed tile
+        if tile_: # sparse,2D
+            Fr = sum2F(tile_)  # higher-scope tile( oH( aH
+            if cross_comp(Fr.Nt, rr=0):  # spec-> tN_,tC_,tL_, proj comb N_'L_?
+                if elev and ffb:  # ffb =1 in main, no ffeedback in added tiles
+                    Fr,aTT,oTT,aH,oH = ffeedback(Fr, aTT,oTT,aH,oH)  # term,form oH(aH
+                elev +=1; T=Fr  # next-extension seed
+'''
