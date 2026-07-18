@@ -570,6 +570,9 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
             else:      G_,r = cluster_N(G.Nt,E_,r,c)  # updates G
             if G_ and gv_(val_(G.Nt.dTT,G.wTT*ttA) * ((G.c+wAgg) /(G.r+r+cAgg)) * ((len(G_)-1)**2 *wL) - ave):  # if full cross_comp?
                 cross_comp(G.Nt,r)
+            # this is actually done in cluster_C already
+            # if G.Ct and gv_(val_(G.Nt.dTT,G.wTT*ttA) * ((G.c+wAgg) /(G.r+r+cAgg)) * ((len(G.N_)-1)**2 *wL) - ave):
+            #     cross_comp(G.Ct,r)  # cross_comp G.N_ via Ct.N_ exemplars, still sub+          
     if G.Bt:
         Bt = G.Bt; bd,br,L = Bt.d,Bt.r,len(Bt.N_); rroot = root.root if root.root else 0
         if N.typ!=1 and bd*(wAgg*L) > avd*(br+cAgg*L): [F2N(L) for L in Bt.N_]; cross_comp(Bt, br)  # no ddfork
@@ -881,11 +884,37 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
         tile_,C,R = fill_frame(iY,iX, elev, T)  # project from seed tile
         if tile_: # sparse,2D
             Fr = sum2F(tile_)  # higher-scope tile( oH( aH
-            if cross_comp(Fr.Nt, rr=0):  # spec-> tN_,tC_,tL_, proj comb N_'L_?
-                if elev and ffb:  # ffb =1 in main, no ffeedback in added tiles
-                    Fr,aTT,oTT,aH,oH = ffeedback(Fr, aTT,oTT,aH,oH)  # term,form oH(aH
+            cross_comp(Fr.Nt, rr=0)  # add base representation
+            N__ = [N for tile in tile_ for N in tile.N_]
+            # splice Ns
+            for _N in N__:
+                for i, N in enumerate(N__):
+                    if _N is N: continue
+                    if _N.box[0] <= N.box[2]+1 and N.box[0] <= _N.box[2]+1 and _N.box[1] <= N.box[3]+1 and N.box[1] <= _N.box[3]+1:  # check adjacency          
+                        # not sure, i guess we need to comp again to eval for merge?
+                        L = comp_N(_N,N, (_N.r+N.r)/2, min(_N.c,N.c), A=(dy_dx:=_N.yx-N.yx), span=np.hypot(*dy_dx))
+                        if gv_(L.m - ave*(L.r)):  # merge eval
+                            _N.rim.remove(L); N.rim.remove(L)  # remove the added L from comp_N above
+                            add2F(_N,N,1); add_Nt(_N)          # merge N into _N
+                            _N.m,_N.d = val_(_N.dTT, fd=1)     # recompute m and d
+                            for l in N.rim: l.N_[l.N_.index(N)] = _N  # update N.rim's nt from N to _N
+                            _N.rim += N.rim        # merge rim
+                            _N.Rt = sum2F(_N.rim)  # update Rt
+                            N__[i] = _N            # update N to _N                
+            N__ = list(set(N__))  # remove duplicated merged Ns
+            # add eval:  (i think this can be default? we have Ct eval below anyway)
+            E_ = get_exemplars(N__, R,C)
+            Fr.H += [Fr.Nt]; Fr.Nt = sum2F(N__)  # pack exsiting base tile into H first?
+            # below not updated
+            cluster_C(Fr.Nt,E_, R,C)  # to select cross_comp, as in sub+, no direct agg+
+            if (Ct := Fr.Ct) and (len(e_ := [n for C in Ct.N_ for n in C.N_ if n.w > ave]) - 1) ** 2 * wL > ave:  # or just eval Ct?
+                if sum(e.w for e in e_) * ((Ct.c+wAgg) / (Ct.r+ R+cAgg)):
+                    Fr.Nt = sum2F(e_, Fr)
+                    if cross_comp(Fr,R):  # agg+, spec-> tN_,tC_,tL_, proj comb N_'L_?
+                        if elev and ffb:  # ffb =1 in main, no ffeedback in added tiles
+                            Fr,aTT,oTT,aH,oH = ffeedback(Fr, aTT,oTT,aH,oH)  
+                            # term,form oH(aH?
                 elev +=1; T=Fr  # next-extension seed
-            else: break
         else: break
     if Fr: FV_(CoF.get(), Fr.dTT, Fr.c, Fr.r)
     return Fr  # intra-lev feedback
