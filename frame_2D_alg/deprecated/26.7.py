@@ -365,4 +365,52 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
                 if elev and ffb:  # ffb =1 in main, no ffeedback in added tiles
                     Fr,aTT,oTT,aH,oH = ffeedback(Fr, aTT,oTT,aH,oH)  # term,form oH(aH
                 elev +=1; T=Fr  # next-extension seed
+                
+    cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
 '''
+def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
+
+    def fill_frame(_iy,_ix, elev, T):  # expand level_frame from pixel-level seed tile
+
+        frame = np.full((Ly,Lx), None, dtype=object)  # level scope
+        cy,cx = (Ly-1)//2,(Lx-1)//2; y,x = cy,cx  # start=mean
+        PV__ = np.zeros([Ly,Lx])
+        T_ = []
+        while T and gv_(val_(T.dTT*T.wTT*ttFrm) * ((T.c+wFrm)/(T.r+cFrm)) - ave):
+            frame[y,x]=T; T_+=[T]; dy_dx = T.box[2:] -T.box[:2]
+            pTT, pc = proj_N(T, np.hypot(*dy_dx), dy_dx, elev, T.c)  # no proj r?
+            if gv_(ave - val_(pTT*T.wTT*ttFrm) * ((pc+wFrm)/(T.r+elev+cFrm))):  # inverted val
+                proj_focus(PV__,y,x,T)
+                pv__ = PV__.copy(); pv__[frame != None] = 0
+                y,x = np.unravel_index(pv__.argmax(), PV__.shape)
+                if gv_(PV__[y,x] - ave):
+                    iy = _iy+ (y-cy)*(T.box[2]-T.box[0]); ix = _ix+ (x-cx)*(T.box[3]-T.box[1])
+                    T = frame_H(image, iy,ix, Ly,Lx, Y,X, rV, max_elev=elev)[0]  # expand new tile to current level, no fb
+                else: break
+            else: break
+        if T_:
+            TT,C,R = sum_vt(T_, wTT=ttFrm); R += elev
+            if val_(TT*ttFrm) * ((C+wFrm)/(R+cFrm)) > ave:
+                return T_,C,R
+        return [], 0, 0
+
+    global ave,avd; aTT=oTT=np.zeros((2,9)); aH,oH = [],[]  # regime refs across levs / ffeedback
+    elev,Fr = 0,[]
+    if T := vect_edge(frame_blobs_root(comp_pixel(image[iY:iY+Ly, iX:iX+Lx]), rV), rV):  # initial pixel tile
+        T.yx = np.array([iY+Ly//2, iX+Lx//2]); T.box = np.array([iY,iX, min(iY+Ly,Y), min(iX+Lx,X)]); T.span = np.hypot(Ly,Lx)/2
+        if not cross_comp(T.Nt, rr=0):
+            T = []
+    if not T or not max_elev: return T, ([], np.zeros((2,9)),0,0,0)  # frame_H(0) = pixel tile
+    while elev < max_elev:
+        tile_,C,R = fill_frame(iY,iX, elev, T)  # project from seed tile
+        if tile_: # sparse,2D
+            Fr = sum2F(tile_)  # higher-scope tile( oH( aH
+            if cross_comp(Fr.Nt, rr=0):  # spec-> tN_,tC_,tL_, proj comb N_'L_?
+                if elev and ffb:  # ffb =1 in main, no ffeedback in added tiles
+                    Fr,aTT,oTT,aH,oH = ffeedback(Fr, aTT,oTT,aH,oH)  # term,form oH(aH
+                elev +=1; T=Fr  # next-extension seed
+            else: break
+        else: break
+    if Fr: FV_(CoF.get(), Fr.dTT, Fr.c, Fr.r)
+    return Fr  # intra-lev feedback
+
