@@ -568,7 +568,7 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
             else:     G_,r = cluster_N(G.Nt,E_,r,c)  # CC sub-Gs, if any
     if (Ct := G.Ct):
         e_ = {n for C in Ct.N_ for n in C.N_}
-        for e in e_: e.w = sum(e.root_)  # combine memberships, *= e.c?
+        for e in e_: e.w = sum(e.m_)  # combine memberships, *= e.c?
         e_ = [e for e in e_ if e.w]  #  sub+ cross_comps representative Ns:
         if sum(e.w for e in e_) * ((Ct.c+wAgg) / (Ct.r+r+cAgg)) * ((len(e_)-1) **2 * wL):
             cross_comp(sum2F(e_,G), r)  # Ct.N_'N_
@@ -694,7 +694,7 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
         y,x,Y,X = box; dy,dx = Y+1-y, X+1-x
         A = [np.array(A), np.sign(dTT[1] @ ttVct[1])]  # append sign
         PP = CL(typ=0, dTT=dTT,m=m,d=d,c=c,r=1, kern=kern,yx=yx,angl=A,span=np.hypot(dy/2,dx/2))  # set root in trace_edge
-        m_, d_ = np.zeros(6), np.zeros(6); PP.B_ = B_
+        m_, d_ = np.zeros(6), np.zeros(6); PP.B_ = B_; PP.box = box
         for B in B_: m_ += B.verT[0]; d_ += B.verT[1];
         ad_ = np.abs(d_); t_ = m_ + ad_  # ~ max comparand
         m = m_/eps_(t_) @ w_t[0] - ave*2; d = ad_/eps_(t_) @ w_t[1] - avd*2
@@ -721,7 +721,8 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
                             N.Bt.N_ = PPd_; [setattr(B,'root',N.Bt) for B in PPd_]
                     tt,c,r = sum_vt(N_)
                     if gv_(val_(tt*ttVct) * ((c+wVct)/ (3+cVct)) * ((len(PPm_)-1)*wL) - ave):
-                        G_,TT,c,R = trace_edge([F2N(n) for n in N_], G_,TT,c,3,tile); C += c  # flatten B_-mediated Gs
+                        for N in N_: box = N.box; F2N(N); N.box = box  # F2N reinit boxes, so we need to reassign the original boxes here
+                        G_,TT,c,R = trace_edge(N_, G_,TT,c,3,tile); C += c  # flatten B_-mediated Gs
     if G_:
         Nt = CF(nF='Nt', root=tile); Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=1; Nt.H=tile.H; tile.Nt=Nt; tile.dTT=TT; tile.c=C
         if val_(TT*ttVct) * ((C+wFrm)/ cFrm) * ((len(G_)-1)*wL) > ave:  # L for trans-comp only?
@@ -884,25 +885,24 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
         if tile_:  # sparse,2D
             Fr = sum2F(tile_)  # higher-scope tile( oH( aH
             cross_comp(Fr.Nt, rr=0)  # add base representation
-            N__ = [N for tile in tile_ for N in tile.N_]
-            for _N in N__:  # splice Ns
-                for i, N in enumerate(N__):
-                    if _N is N: continue
-                    if _N.box[0] <= N.box[2]+1 and N.box[0] <= _N.box[2]+1 and _N.box[1] <= N.box[3]+1 and N.box[1] <= _N.box[3]+1:  # adjacent
-                        TT,_ = base_comp(_N,N)
-                        if gv_(val_(TT)) > ave:
-                            add2F(_N,N,1); add_Nt(_N)
-                            _N.m,_N.d = val_(_N.dTT, fd=1)
-                            for l in N.rim: l.N_[l.N_.index(N)] = _N
-                            _N.rim += N.rim; _N.Rt = sum2F(_N.rim); N__[i] = _N
-            N__ = list(set(N__))  # remove duplicated merged Ns
+            for _tile, tile in combinations(tile_,2):
+                for _N in _tile.N_:  # splice Ns
+                    for i, N in enumerate(tile.N_):
+                        if _N is N: continue
+                        if _N.box[0] <= N.box[2]+1 and N.box[0] <= _N.box[2]+1 and _N.box[1] <= N.box[3]+1 and N.box[1] <= _N.box[3]+1:  # adjacent
+                            TT,_ = base_comp(_N,N)
+                            if gv_(val_(TT)) > ave:
+                                add2F(_N,N,1); add_Nt(_N)
+                                _N.m,_N.d = val_(_N.dTT, fd=1)
+                                tile.N_[i] = _N
+                                # rim should be empty for clustered Gs             
+            N__ = list(set(N for tile in tile_ for N in tile.N_))  # remove duplicated merged Ns
             E_ = get_exemplars(N__, R,C)
-            Fr.H += [Fr.Nt]; Fr.Nt = sum2F(N__)  # H[0] = sum2F(tile_)
-            # below not updated
+            Fr.H += [Fr.Nt]; Fr.Nt = sum2F(N__); Fr.Nt.root = Fr  # H[0] = sum2F(tile_)
             cluster_C(Fr.Nt,E_, R,C)  # to select cross_comp, as in sub+, no direct agg+
             if (Ct := Fr.Ct):  # same as in sum2G?
                 e_ = {n for C in Ct.N_ for n in C.N_}
-                for e in e_: e.w = sum(e.root_)  # combine memberships, *= e.c?
+                for e in e_: e.w = sum(e.m_)  # combine memberships, *= e.c?
                 e_ = [e for e in e_ if e.w]  #  sub+ cross_comps representative Ns:
                 if sum(e.w for e in e_) * ((Ct.c+wAgg) / (Ct.r+R+cAgg)) * ((len(e_)-1) **2 * wL):
                     cross_comp(sum2F(e_,Fr), R)  # agg+, spec-> tN_,tC_,tL_, proj comb N_'L_?
