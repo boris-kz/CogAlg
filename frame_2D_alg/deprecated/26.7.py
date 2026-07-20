@@ -367,6 +367,13 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
                 elev +=1; T=Fr  # next-extension seed
                 
     cross_comp(Ct,r)  # all distant Cs, seq C_ in eigenvector = argmax(root.wTT)?
+    
+                        oy_ = _y_.intersect(_y_,Y_-1); oY_ = _Y_.intersect(y_+1); ox_ = _x_.intersect(_x_,X_-1); oX_ = _X_.intersect(x_+1)  # adjacent
+                        if oy_ or oY_ or ox_ or oX_:
+                            if gv_(val_( base_comp(_N,N)[0])) > ave:
+                                add2F(_N,N, 1)
+                                add_Nt(_N); _N.m,_N.d = val_(_N.dTT, fd=1)
+                                tile_[i].cont_[j][0] = _N   
 '''
 def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
 
@@ -414,3 +421,50 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
     if Fr: FV_(CoF.get(), Fr.dTT, Fr.c, Fr.r)
     return Fr  # intra-lev feedback
 
+def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame graph, no recursion:
+
+    global ave,avd,Fw_,Fc_  # /= projected V change:
+    def PP2N(PP):
+        P_,L_,B_,verT,latT,A,S,box,yx, m,d,c = PP
+        kern = np.array(latT[:4])
+        [mM, mD, mI, mG, mA, mL], [dM, dD, dI, dG, dA, dL] = verT  # re-pack in dTT:
+        dTT = np.array([ np.array([mM, mD, mL, mI, mG, mA, mL, mL / 2, 0]),  # extA=0
+                         np.array([dM, dD, dL, dI, dG, dA, dL, dL / 2, 0])])
+        y,x,Y,X = box; dy,dx = Y+1-y, X+1-x
+        A = [np.array(A), np.sign(dTT[1] @ ttVct[1])]  # append sign
+        PP = CL(typ=0, dTT=dTT,m=m,d=d,c=c,r=1, kern=kern,yx=yx,angl=A,span=np.hypot(dy/2,dx/2))  # set root in trace_edge
+        m_, d_ = np.zeros(6), np.zeros(6); PP.B_ = B_
+        for B in B_: m_ += B.verT[0]; d_ += B.verT[1];
+        ad_ = np.abs(d_); t_ = m_ + ad_  # ~ max comparand
+        m = m_/eps_(t_) @ w_t[0] - ave*2; d = ad_/eps_(t_) @ w_t[1] - avd*2
+        PP.Bt = CF(N_=B_, m=m, d=d, r=2, root=PP,nF='Bt')
+        for P in P_: P.root = PP
+        if hasattr(P,'nt'):  # typ=1?
+            PP.root_ = []  # Gd.root_: cores, no centroids? multiple PPms may share same PPd?
+            for dP in P_:
+                for P in dP.nt: PP.root_ += [P.root]  # PPm
+        return PP
+    blob_ = tile.N_; G_,TT,C,R = [],np.zeros((2,9)),0,0
+    for blob in blob_:
+        if not blob.sign:
+            if gv_(blob.G * wVct - ave * cVct):  # proxy for comp_slice and slice_edge
+                edge = slice_edge(blob, rV); L = len(edge.P_)-1
+                if gv_(edge.G * (wVct*L) - sum([P.latT[4] for P in edge.P_]) * (cVct*L)):
+                    PPm_ = comp_slice(edge, rV, ttVct)  # add comp_slice's weights?
+                    N_ = [PP2N(PPm) for PPm in PPm_]
+                    c = sum([PPm.c for PPm in N_]); C += c
+                    for PPd in edge.link_: PP2N(PPd)  # we don't form Gds?
+                    for N in N_:
+                        if N.B_:
+                            PPd_ = [B.root for B in N.B_]; sum2F(PPd_,N.Bt)
+                            N.Bt.N_ = PPd_; [setattr(B,'root',N.Bt) for B in PPd_]
+                    tt,c,r = sum_vt(N_)
+                    if gv_(val_(tt*ttVct) * ((c+wVct)/ (3+cVct)) * ((len(PPm_)-1)*wL) - ave):
+                        G_,TT,c,R = trace_edge([F2N(n) for n in N_], G_,TT,c,3,tile); C += c  # flatten B_-mediated Gs
+    if G_:
+        Nt = CF(nF='Nt', root=tile); Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=1; Nt.H=tile.H; tile.Nt=Nt; tile.dTT=TT; tile.c=C
+        if val_(TT*ttVct) * ((C+wFrm)/ cFrm) * ((len(G_)-1)*wL) > ave:  # L for trans-comp only?
+            A_ = [G.angl[0] for G in G_ if G.angl]
+            tile.angl = [np.sum(A_, axis=0) if A_ else np.zeros(2), np.sign(tile.dTT[1] @ ttVct[1])]
+            FV_(CoF.get(), TT,C,1)
+            return tile
