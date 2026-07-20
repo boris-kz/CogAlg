@@ -121,6 +121,19 @@ def proj_V(_N,N, dist, dy_dx, dec, r):  # _N x N induction
 
 def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, max dist depends on prior match
 
+    # not fully review, from fable:
+    def proj_T(N, tile):  # to splice tiles: if N projection to tile box y|Y|x|X: tile.y_|Y_|x_|X_ += [N]
+        y0,x0,yn,xn = tile.box
+        for s_,dy,dx in ((tile.y_,y0-N.yx[0],0),(tile.Y_,yn-N.yx[0],0),(tile.x_,0,x0-N.yx[1]),(tile.X_,0,xn-N.yx[1])):  # top,bottom,left,right sides
+            if N in s_: continue  # packed in prior comp_N_
+            dy_dx = np.array([dy,dx]); dist = np.hypot(dy,dx)
+            Dec = root.m if root!=2 else decay** (dist/N.span)  # one-sided proj_V:
+            pTT = (N.dTT + N.Rt.dTT) * Dec; pc = N.c * Dec  # val_ is scale-normed, decayed pc carries distance
+            if val_(pTT*ttPrj) * (N.c/(cPrj+r+N.r)) * wPrj > ave:  # spec / link:
+                eTT,ec = proj_N(N, dist, dy_dx, r, N.c, Dec); pTT = pTT+eTT; pc += ec
+            if val_(pTT,ttN_) * (pc/(r+N.r)) * wN > ave* (r+cN):
+                s_ += [N]
+
     pairs, olp_ = [],[]  # no olp_?
     for _N,N in _pairs:  # get all-to-all pre-links
         if _N.sub != N.sub: continue  # or comp x composition?
@@ -128,6 +141,10 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
         else: dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx); c = min(_N.c,N.c); pairs += [[dist, dy_dx, _N,N, c]]
     # to splice tiles:
     # if _N projection to tile box y|Y|x|X: tile. y_|Y_|x_|X_ += [N]
+    if pairs:
+        tile= pairs[0][2].root
+        if tile.root is not None and tile.root.root is None:  # tiel.root is frame, frame.root should be None
+            for N in {n for pL in pairs for n in pL[2:4]}: proj_T(N, tile)
     N_, L_ = [],[]
     for pL in sorted(pairs, key=lambda x: x[0]):  # proximity prior, test compared?
         dist, dy_dx, _N,N, lc = pL  # rim angl is not canonic
@@ -573,6 +590,8 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
             if gv_(Vn * (wcC-wcN) * (mdecay(L_)-decay) - Av * (lr+1+(ccC-ccN)*L)):
                 r+=1; G_,r = cluster_C(G.Nt,E_,r,c)  # low decay: CC nodes
             else:     G_,r = cluster_N(G.Nt,E_,r,c)  # CC sub-Gs, if any
+    if root.root is None:  # when root is frame, their root is empty, and G is tile
+        G.y_,G.Y_,G.x_,G.X_ = [],[],[],[]
     if (Ct := G.Ct):
         xcomp(Ct, r, G)  # agg+ over exemplars spliced from sub+ C_
     if G.Bt:
@@ -627,7 +646,8 @@ def F2N(F):  # convert for cross_comp
 
     Nt = Copy_(F, root=F, cls=CF,typ=0); Nt.N_=F.N_; L_=F.L_  # replace in cross_comp
     F.__class__ = CN; F.Nt = Nt
-    Na_ = dict(H=[], mang=1, box=np.array([np.inf,np.inf,-np.inf,-np.inf]), sub=0, exe=0, fin=0, root_=[], compared = set())
+    box = F.box if hasattr(F, 'box') else np.array([np.inf,np.inf,-np.inf,-np.inf])  # keep existing box
+    Na_ = dict(H=[], mang=1, box=box, sub=0, exe=0, fin=0, root_=[], compared = set())
     if F.typ==0:  # CF | PP, no overlap for Cs
         Na_.update(kern=np.zeros(4), span=1, angl=None, yx=np.zeros(2))
     for k,v in Na_.items(): setattr(F, k, copy(v))
@@ -727,6 +747,11 @@ def vect_edge(T, iY,iX,Ly,Lx, rV=1):  # T=tile, PP_ cross_comp and floodfill to 
                         for N in N_: box = N.box; F2N(N); N.box = box  # F2N reinit boxes, so we need to reassign the original boxes here
                         G_,TT,c,R = trace_edge(N_, G_,TT,c,3,T); C += c  # flatten B_-mediated Gs
     if G_:
+        FV_(CoF.get(), TT, C, 1)
+        L_,lTT, lc, lr = [],np.zeros((2,9)), 0, 1
+        for G in G_: L_ += G.Lt.N_; lTT += G.Lt.dTT; lc += G.Lt.c; lr += G.Lt.r 
+        return sum2G([[G_,'Nt',TT,C,1],[L_,'Lt',lTT,lc,lr]],TT+lTT,T)  # c,R?
+        '''
         def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame graph, no recursion:
 
             global ave, avd, Fw_, Fc_  # /= projected V change:
@@ -782,6 +807,7 @@ def vect_edge(T, iY,iX,Ly,Lx, rV=1):  # T=tile, PP_ cross_comp and floodfill to 
             if G_:
                 FV_(CoF.get(), TT, C, 1)
                 return sum2G(G_,TT)  # c,R?
+        '''
 
 def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary/skeleton?
 
@@ -795,7 +821,9 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
             cT_.add(cT)
             dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)  # Rc = r+ (N.r+_N.r)/2
             Link = comp_N(_N,N, r,_C,A=dy_dx, span=dist)
-            if val_(Link.dTT,ttTrc,1)[1] * ((Link.c+wTrc)/(r+cTrc)) > ave:  L_+=[Link]  # r = 1|2, add Bt?
+            if val_(Link.dTT,ttTrc,1)[1] * ((Link.c+wTrc)/(r+cTrc)) > ave:  
+                L_+=[Link]  # r = 1|2, add Bt?
+                N.rim += [Link]; _N.rim += [Link]  # or change PP's typ to 3 in F2N? The existing comp_N doesn't pack rim in PPs, and we need the rim in flood fill below
             if L_: lTT,lc,_ = sum_vt(L_,wTT=ttTrc)
     Gt_ = []
     for N in N_:  # flood-fill G per seed N
@@ -826,7 +854,7 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
                 for N in n_: N.fin=0; N.root=root
     if val_(TT*root.wTT*ttTrc) * ((C+wTrc)/(r+1+cTrc)) * ((len(G_)-1)*wL) > ave:
         _G_+=G_; _TT+=TT; _C+=C  # eval per edge, concat in tile?
-    FV_(CoF.get(), *sum_vt(_G_))
+        FV_(CoF.get(), *sum_vt(_G_))  # _G_ may empty
     return _G_, _TT, _C, r+R/_C
 
 '''
@@ -916,7 +944,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
                 y,x = np.unravel_index(pv__.argmax(), PV__.shape)
                 if gv_(PV__[y,x] - ave):
                     iy = _iy+ (y-cy)*(T.box[2]-T.box[0]); ix = _ix+ (x-cx)*(T.box[3]-T.box[1])
-                    T = frame_H(image, iy,ix, Ly,Lx, Y,X, rV, max_elev=elev)[0]  # expand new tile to current level, no fb
+                    T = frame_H(image, iy,ix, Ly,Lx, Y,X, rV, max_elev=elev)  # expand new tile to current level, no fb
                 else: break
             else: break
         if T_:
@@ -930,7 +958,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
 
         for i, _T in enumerate(tile_):
             for T in tile_[i:]:
-                for i, _C,C,_N_,N_ in zip(_T.box, T.box, (_T.y_,_T.Y_,_T.x_,_T.X_), (T.y_,T.Y_,T.x_,T.X_)):
+                for i, (_C,C,_N_,N_) in enumerate(zip(_T.box, T.box, (_T.y_,_T.Y_,_T.x_,_T.X_), (T.y_,T.Y_,T.x_,T.X_))):
                     if abs(_C-C)==1:  # adjacent sides
                         for _N,N in product(_N_,N_):
                             if N is _N: continue
