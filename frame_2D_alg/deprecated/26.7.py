@@ -468,3 +468,35 @@ def vect_edge(tile, rV=1):  # PP_ cross_comp and floodfill to init focal frame g
             tile.angl = [np.sum(A_, axis=0) if A_ else np.zeros(2), np.sign(tile.dTT[1] @ ttVct[1])]
             FV_(CoF.get(), TT,C,1)
             return tile
+
+    def splice_T_(tile_):  # splice not-terminated Ns
+
+        for i, _T in enumerate(tile_):
+            for T in tile_[i:]:
+                for i, (_C,C,_N_,N_) in enumerate(zip(_T.box, T.box, (_T.y_,_T.Y_,_T.x_,_T.X_), (T.y_,T.Y_,T.x_,T.X_))):
+                    if abs(_C-C)==1:  # adjacent sides
+                        for _N,N in product(_N_,N_):
+                            if N is _N: continue
+                            if val_( proj_V(_N,N)):
+                                if gv_(val_( base_comp(_N,N)[0])) > ave:
+                                    add2F(_N,N, 1)
+                                    add_Nt(_N); _N.m,_N.d = val_(_N.dTT, fd=1)
+                                    N_ = _N  # need to to index this
+
+def cross_comp(root, rr, fC=0):  # core function mediating recursive rng+ and der+ cross-comp and clustering
+
+    N_,G_ = root.N_,[]  # root is Ft, converted below, rc=rdn+olp, comp N_| B_| C_:
+    if Lt := comp_C_(N_,rr,fC=1) if fC else comp_N_(combinations(N_,2),rr):
+        L_,TT,c,r, cV = Lt
+        oF_[CoF.get().nF].V_ += [cV]  # combined comp_ results
+        root.L_ = L_  # val=m+d /clust, m/comp
+        if gv_(val_(TT*ttcN) * ((c+wcN)/(r+ccN)) * ((len(L_)-1)*wL) - ave):  # if +ve, store neg gate values
+            E_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)
+            G_,r = cluster_N(root, E_,r,c)  # cluster_C, _P, eval?
+            if G_:
+                if not root.typ: F2N(root)  # promote at 1st sub+ or agg+
+                root.H += [sum2F(L_,root,froot=1)]  # dLev per L_
+                root.Nt = sum2F(G_,root,froot=2)  #| C_?
+                if Ct := root.Ct:
+                    xcomp(Ct,r,root) # sub+'agg+
+    return G_
