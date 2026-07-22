@@ -500,3 +500,16 @@ def cross_comp(root, rr, fC=0):  # core function mediating recursive rng+ and de
                 if Ct := root.Ct:
                     xcomp(Ct,r,root) # sub+'agg+
     return G_
+
+def xcomp(N_, merge=1):  # light version for contiguous tiles, also Bs?
+    out_ = []
+    for N in N_:
+        if N.fin: continue  # merged
+        for _N in N.rim:
+            if _N.fin: continue  # contiguous only, maybe in 2D and deep
+            m = val_(base_comp(_N,N)[0])
+            if m > ave:
+                add2F(_N.N, merge); N.rim += _N.rim; _N.fin = 1
+        out_ += [N]
+    return out_
+

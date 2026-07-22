@@ -107,17 +107,6 @@ def cross_comp(Ft, R,root, fC=0, fB=0):  # calls cluster_N, sub+, over exemplars
                         cross_comp(Ct,r,root) # sub+'agg+
     return G_
 
-def xcomp(N_, merge=1):  # light version for contiguous tiles, also Bs?
-    out_ = []
-    for N in N_:
-        if N.fin: continue  # merged
-        for _N in N.rim:  # contiguous only, maybe in 2D and deep
-            m = val_(base_comp(_N,N)[0])
-            if m > ave:
-                add2F(_N.N, merge); N.fin = 1
-        out_ += [N]
-    return out_
-
 def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, max dist depends on prior match
 
     def proj_V(_N, N, dist, dy_dx, dec, r):  # _N x N induction
@@ -697,99 +686,6 @@ def mdecay(L_):  # slope function
     ddist_ = np.diff([l.span for l in L_])
     return - (dm_/ eps_(ddist_)).mean()  # -dm/ddist
 
-# comp_slice hand-off:
-def vect_edge(T, iY,iX,Ly,Lx, rV=1):  # T=tile, PP_ cross_comp and floodfill to init focal frame graph, no recursion:
-
-    global ave,avd,Fw_,Fc_  # /= projected V change:
-    def PP2N(PP):
-        P_,L_,B_,verT,latT,A,S,box,yx, m,d,c = PP
-        kern = np.array(latT[:4])
-        [mM, mD, mI, mG, mA, mL], [dM, dD, dI, dG, dA, dL] = verT  # re-pack in dTT:
-        dTT = np.array([ np.array([mM, mD, mL, mI, mG, mA, mL, mL / 2, 0]),  # extA=0
-                         np.array([dM, dD, dL, dI, dG, dA, dL, dL / 2, 0])])
-        y,x,Y,X = box; dy,dx = Y+1-y, X+1-x
-        A = [np.array(A), np.sign(dTT[1] @ ttVct[1])]  # append sign
-        PP = CL(typ=0, dTT=dTT,m=m,d=d,c=c,r=1, kern=kern,yx=yx,angl=A,span=np.hypot(dy/2,dx/2))  # set root in trace_edge
-        m_, d_ = np.zeros(6), np.zeros(6); PP.B_ = B_; PP.box = box
-        for B in B_: m_ += B.verT[0]; d_ += B.verT[1];
-        ad_ = np.abs(d_); t_ = m_ + ad_  # ~ max comparand
-        m = m_/eps_(t_) @ w_t[0] - ave*2; d = ad_/eps_(t_) @ w_t[1] - avd*2
-        PP.Bt = CF(N_=B_, m=m, d=d, r=2, root=PP,nF='Bt')
-        for P in P_: P.root = PP
-        if hasattr(P,'nt'):  # typ=1?
-            PP.root_ = []  # Gd.root_: cores, no centroids? multiple PPms may share same PPd?
-            for dP in P_:
-                for P in dP.nt: PP.root_ += [P.root]  # PPm
-        return PP
-    blob_ = T.N_; G_,TT,C,R = [],np.zeros((2,9)),0,0
-    for blob in blob_:
-        if not blob.sign:
-            if gv_(blob.G * wVct - ave * cVct):  # proxy for comp_slice and slice_edge
-                edge = slice_edge(blob, rV); L = len(edge.P_)-1
-                if gv_(edge.G * (wVct*L) - sum([P.latT[4] for P in edge.P_]) * (cVct*L)):
-                    PPm_ = comp_slice(edge, rV, ttVct)  # add comp_slice's weights?
-                    N_ = [PP2N(PPm) for PPm in PPm_]
-                    c = sum([PPm.c for PPm in N_]); C += c
-                    for PPd in edge.link_: PP2N(PPd)  # we don't form Gds?
-                    for N in N_:
-                        if N.B_:
-                            PPd_ = [B.root for B in N.B_]; sum2F(PPd_,N.Bt)
-                            N.Bt.N_ = PPd_; [setattr(B,'root',N.Bt) for B in PPd_]
-                    tt,c,r = sum_vt(N_)
-                    if gv_(val_(tt*ttVct) * ((c+wVct)/ (3+cVct)) * ((len(PPm_)-1)*wL) - ave):
-                        G_,TT,c,R = trace_edge(N_, G_,TT,c,3,T); C += c  # flatten B_-mediated Gs
-    if G_:
-        FV_(CoF.get(), TT, C,1); L_,lTT, lc, lr = [],np.zeros((2,9)), 0, 1
-        for G in G_: L_ += G.Lt.N_; lTT += G.Lt.dTT; lc += G.Lt.c; lr += G.Lt.r
-        return sum2G([[G_,'Nt',TT,C,1],[L_,'Lt',lTT,lc,lr]],TT+lTT,T)  # c,R?
-
-def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary/skeleton?
-
-    L_, cT_, lTT, lc = [],set(),np.zeros((2,9)),0  # comp co-mediated Ns:
-    for N in N_: N.fin = 0
-    for N in N_:
-        _N_ = [rN for B in N.B_ for rN in B.root_ if rN is not N]   # + node-mediated
-        for _N in list(set(_N_)):  # share boundary or cores if lG with N, same val?
-            cT = tuple(sorted((N.id,_N.id)))
-            if cT in cT_: continue
-            cT_.add(cT)
-            dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)  # Rc = r+ (N.r+_N.r)/2
-            L = comp_N(_N,N, r,_C,A=dy_dx, span=dist)
-            if val_(L.dTT,ttTrc,1)[1] * ((L.c+wTrc)/(r+cTrc)) > ave:
-                L_+=[L]; N.rim+=[L]; _N.rim+=[L]  # or PP typ=3 in F2N
-            if L_: lTT,lc,_ = sum_vt(L_,wTT=ttTrc)
-    Gt_ = []
-    for N in N_:  # flood-fill G per seed N
-        if N.fin: continue
-        N.fin=1; _N_=[N]; Gt=[]; N.root=Gt; n_,ntt,nc, l_,ltt,lc = [N],N.dTT.copy(),N.c or 1,[],np.zeros((2,9)),0  # Gt
-        while _N_:
-            _N = _N_.pop(0)
-            for L in _N.rim:
-                if L in L_:
-                    n = L.N_[0] if L.N_[1] is _N else L.N_[1]
-                    if n in N_:
-                        if n.root is Gt: continue
-                        if n.fin:  # merge n root
-                            _root = n.root; n_+=_root[0];l_+=_root[3]; _root[6]=1
-                            for _n in _root[0]: _n.root = Gt
-                        else: n.fin=1; _N_+=[n]; n_+=[n]; l_+=[L]  # add single n
-                        n.root = Gt
-        ntt,nc,_ = sum_vt(n_, wTT=ttTrc)
-        if l_: ltt,lc,_= sum_vt(l_, wTT=ttTrc); ltt*=lc/nc;
-        Gt += [n_,ntt,nc, l_,ltt,lc, 0]; Gt_+=[Gt]
-    G_, TT,C,R = [],np.zeros((2,9)),0,0
-    for n_,ntt,nc,l_,ltt,lc,merged in Gt_:
-        if not merged:
-            if gv_(val_(ntt+ltt, ttTrc) * ((nc+lc+wTrc)/(r+cTrc)) - ave):  # wrap singletons too
-                TT += ntt+ltt; C += nc+lc; R += r*(nc+lc)  # add Bt?
-                G_ += [sum2G([(n_,'Nt',ntt,nc,r)]+([(l_,'Lt',ltt,lc,r)] if l_ else []), ttTrc, root)]
-            else:
-                for N in n_: N.fin=0; N.root=root
-    if val_(TT*root.wTT*ttTrc) * ((C+wTrc)/(r+1+cTrc)) * ((len(G_)-1)*wL) > ave:
-        _G_+=G_; _TT+=TT; _C+=C  # concat in tile
-        FV_(CoF.get(), *sum_vt(_G_))
-    return _G_, _TT, _C, r+R/_C
-
 '''
 frame expansion: cross_comp lower-tile N_,C_, forward results to next lev, project feedback to scan new lower windows
 
@@ -860,9 +756,102 @@ def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N
     FV_(CoF.get(), pTT,pc,_r)
     return pTT,pc  # only c decays, not _r? info_gain = N.m * average link uncertainty, should be separate
 
+# comp_slice hand-off:
+def vect_edge(T, iY,iX,Ly,Lx, rV=1):  # T=tile, PP_ cross_comp and floodfill to init focal frame graph, no recursion:
+
+    global ave,avd,Fw_,Fc_  # /= projected V change:
+    def PP2N(PP):
+        P_,L_,B_,verT,latT,A,S,box,yx, m,d,c = PP
+        kern = np.array(latT[:4])
+        [mM, mD, mI, mG, mA, mL], [dM, dD, dI, dG, dA, dL] = verT  # re-pack in dTT:
+        dTT = np.array([ np.array([mM, mD, mL, mI, mG, mA, mL, mL / 2, 0]),  # extA=0
+                         np.array([dM, dD, dL, dI, dG, dA, dL, dL / 2, 0])])
+        y,x,Y,X = box; dy,dx = Y+1-y, X+1-x
+        A = [np.array(A), np.sign(dTT[1] @ ttVct[1])]  # append sign
+        PP = CL(typ=0, dTT=dTT,m=m,d=d,c=c,r=1, kern=kern,yx=yx,angl=A,span=np.hypot(dy/2,dx/2))  # set root in trace_edge
+        m_, d_ = np.zeros(6), np.zeros(6); PP.B_ = B_; PP.box = box
+        for B in B_: m_ += B.verT[0]; d_ += B.verT[1];
+        ad_ = np.abs(d_); t_ = m_ + ad_  # ~ max comparand
+        m = m_/eps_(t_) @ w_t[0] - ave*2; d = ad_/eps_(t_) @ w_t[1] - avd*2
+        PP.Bt = CF(N_=B_, m=m, d=d, r=2, root=PP,nF='Bt')
+        for P in P_: P.root = PP
+        if hasattr(P,'nt'):  # typ=1?
+            PP.root_ = []  # Gd.root_: cores, no centroids? multiple PPms may share same PPd?
+            for dP in P_:
+                for P in dP.nt: PP.root_ += [P.root]  # PPm
+        return PP
+    blob_ = T.N_; G_,TT,C,R = [],np.zeros((2,9)),0,0
+    for blob in blob_:
+        if not blob.sign:
+            if gv_(blob.G * wVct - ave * cVct):  # proxy for comp_slice and slice_edge
+                edge = slice_edge(blob, rV); L = len(edge.P_)-1
+                if gv_(edge.G * (wVct*L) - sum([P.latT[4] for P in edge.P_]) * (cVct*L)):
+                    PPm_ = comp_slice(edge, rV, ttVct)  # add comp_slice's weights?
+                    N_ = [PP2N(PPm) for PPm in PPm_]
+                    c = sum([PPm.c for PPm in N_]); C += c
+                    for PPd in edge.link_: PP2N(PPd)  # we don't form Gds?
+                    for N in N_:
+                        if N.B_:
+                            PPd_ = [B.root for B in N.B_]; sum2F(PPd_,N.Bt)
+                            N.Bt.N_ = PPd_; [setattr(B,'root',N.Bt) for B in PPd_]
+                    tt,c,r = sum_vt(N_)
+                    if gv_(val_(tt*ttVct) * ((c+wVct)/ (3+cVct)) * ((len(PPm_)-1)*wL) - ave):
+                        G_,TT,c,R = trace_edge([F2N(N) for N in N_], G_,TT,c,3,T); C += c  # flatten B_-mediated Gs
+    if G_:
+        FV_(CoF.get(), TT, C,1); L_,lTT, lc, lr = [],np.zeros((2,9)), 0, 1
+        for G in G_: L_ += G.Lt.N_; lTT += G.Lt.dTT; lc += G.Lt.c; lr += G.Lt.r
+        return sum2G([[G_,'Nt',TT,C,1],[L_,'Lt',lTT,lc,lr]], TT+lTT, T) # c,R?
+
+def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary/skeleton?
+
+    L_, cT_, lTT, lc = [],set(),np.zeros((2,9)),0  # comp co-mediated Ns:
+    for N in N_: N.fin = 0
+    for N in N_:
+        _N_ = [rN for B in N.B_ for rN in B.root_ if rN is not N]   # + node-mediated
+        for _N in list(set(_N_)):  # share boundary or cores if lG with N, same val?
+            cT = tuple(sorted((N.id,_N.id)))
+            if cT in cT_: continue
+            cT_.add(cT)
+            dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)  # Rc = r+ (N.r+_N.r)/2
+            L = comp_N(_N,N, r,_C,A=dy_dx, span=dist)
+            if val_(L.dTT,ttTrc,1)[1] * ((L.c+wTrc)/(r+cTrc)) > ave:
+                L_+=[L]; N.rim+=[L]; _N.rim+=[L]  # or PP typ=3 in F2N
+            if L_: lTT,lc,_ = sum_vt(L_,wTT=ttTrc)
+    Gt_ = []
+    for N in N_:  # flood-fill G per seed N
+        if N.fin: continue
+        N.fin=1; _N_=[N]; Gt=[]; N.root=Gt; n_,ntt,nc, l_,ltt,lc = [N],N.dTT.copy(),N.c or 1,[],np.zeros((2,9)),0  # Gt
+        while _N_:
+            _N = _N_.pop(0)
+            for L in _N.rim:
+                if L in L_:
+                    n = L.N_[0] if L.N_[1] is _N else L.N_[1]
+                    if n in N_:
+                        if n.root is Gt: continue
+                        if n.fin:  # merge n root
+                            _root = n.root; n_+=_root[0];l_+=_root[3]; _root[6]=1
+                            for _n in _root[0]: _n.root = Gt
+                        else: n.fin=1; _N_+=[n]; n_+=[n]; l_+=[L]  # add single n
+                        n.root = Gt
+        ntt,nc,_ = sum_vt(n_, wTT=ttTrc)
+        if l_: ltt,lc,_= sum_vt(l_, wTT=ttTrc); ltt*=lc/nc;
+        Gt += [n_,ntt,nc, l_,ltt,lc, 0]; Gt_+=[Gt]
+    G_, TT,C,R = [],np.zeros((2,9)),0,0
+    for n_,ntt,nc,l_,ltt,lc,merged in Gt_:
+        if not merged:
+            if gv_(val_(ntt+ltt, ttTrc) * ((nc+lc+wTrc)/(r+cTrc)) - ave):  # wrap singletons too
+                TT += ntt+ltt; C += nc+lc; R += r*(nc+lc)  # add Bt?
+                G_ += [sum2G([(n_,'Nt',ntt,nc,r)]+([(l_,'Lt',ltt,lc,r)] if l_ else []), ttTrc, root)]
+            else:
+                for N in n_: N.fin=0; N.root=root
+    if val_(TT*root.wTT*ttTrc) * ((C+wTrc)/(r+1+cTrc)) * ((len(G_)-1)*wL) > ave:
+        _G_+=G_; _TT+=TT; _C+=C  # concat in tile
+        FV_(CoF.get(), *sum_vt(_G_))
+    return _G_, _TT, _C, r+R/_C
+
 def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
 
-    def fill_frame(_iy,_ix, elev, T):  # expand level_frame from pixel-level seed tile, similar to frame_b;obs
+    def fill_frame(_iy,_ix, elev, T, adj_T_=[]):  # expand level_frame from pixel-level seed tile, similar to frame_blobs
 
         frame = np.full((Ly,Lx), None, dtype=object)  # level scope
         cy,cx = (Ly-1)//2,(Lx-1)//2; y,x = cy,cx  # start=mean
@@ -870,35 +859,34 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
         T_ = []
         while T and gv_(val_(T.dTT*T.wTT*ttFrm) * ((T.c+wFrm)/(T.r+cFrm)) - ave):
             frame[y,x]=T; T_+=[T]; dy_dx = T.box[2:] -T.box[:2]
-            pTT, pc = proj_N(T, np.hypot(*dy_dx), dy_dx, elev, T.c)  # no proj r?
+            pTT, pc = proj_N(T, np.hypot(*dy_dx), dy_dx, elev,T.c)  # no proj r?
             if gv_(ave - val_(pTT*T.wTT*ttFrm) * ((pc+wFrm)/(T.r+elev+cFrm))):  # inverted val
                 proj_focus(PV__,y,x,T)
                 pv__ = PV__.copy(); pv__[frame != None] = 0
                 y,x = np.unravel_index(pv__.argmax(), PV__.shape)
                 if gv_(PV__[y,x] - ave):
                     iy = _iy+ (y-cy)*(T.box[2]-T.box[0]); ix = _ix+ (x-cx)*(T.box[3]-T.box[1])
-                    T = frame_H(image, iy,ix, Ly,Lx, Y,X, rV, max_elev=elev)  # expand new tile to current level, no fb
+                    _T = frame_H(image, iy,ix, Ly,Lx, Y,X, rV, max_elev=elev)  # expand new tile to current level, no fb
+                    _T.rim += [T]
+                    for t in [T] + adj_T_: t.rim += [_T]  # add to 2D-adjacents' rim
                 else: break
             else: break
         if T_:
             TT,C,R = sum_vt(T_, wTT=ttFrm); R += elev
             if val_(TT*ttFrm) * ((C+wFrm)/(R+cFrm)) > ave:
                 return T_,C,R
-        return [], 0, 0
+        return [],0,0
 
     global ave,avd; aTT=oTT=np.zeros((2,9)); aH,oH = [],[]  # regime refs across levs / ffeedback
     elev, Fr = 0,[]
     T = vect_edge( frame_blobs_root( comp_pixel( image[iY:iY+Ly, iX:iX+Lx]), rV), iY,iX,Ly,Lx, rV)
     while T and elev < max_elev:
-        tile_,C,R = fill_frame(iY,iX, elev, T)  # project from seed tile
-        if tile_: # sparse,2D
-            Fr = sum2F(tile_)  # higher-scope tile( oH( aH
-            Fr.H += [sum2F(tile_)]  # minimaly processed
-            Fr.N_ = xcomp(tile_)  # merge if match
-            for t in Fr.N_:  # tile "blobs"
-                if t.m * t.c * wcC > ave * (t.r+ccC):
-                    cluster_C(Fr, get_exemplars(t.N_,R,C), R,C)
-            if (Ct := Fr.Ct):  # no direct agg+
+        tile_,C,R = fill_frame(iY,iX, elev, T)  # also prior 2D adjacents, project from seed tile
+        if tile_:  # sparse, 2D higher-scope tile( oH( aH
+            Fr.Nt = sum2F(tile_); Fr.H += [Copy_(Fr.Nt)]  # min processed level
+            Fr.N_ = [g for t in tile_ for g in t.N_]  # concat edge Gs
+            cluster_C(Fr, get_exemplars(Fr.N_,R,C), R,C)
+            if Ct := Fr.Ct:  # agg+ exemplars
                 cross_comp(Ct,R,Fr)
                 if elev and ffb:  # ffb =1 in main, no ffeedback in added tiles
                     Fr,aTT,oTT,aH,oH = ffeedback(Fr, aTT,oTT,aH,oH)  # term,form oH(aH
