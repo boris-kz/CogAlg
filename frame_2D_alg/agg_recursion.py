@@ -98,7 +98,7 @@ def cross_comp(Ft, R,root, fC=0, fB=0):  # calls cluster_N, sub+, over exemplars
             root.L_ = L_  # val=m+d /clust, m/comp
             if gv_(val_(TT*ttcN) * ((c+wcN)/(r+ccN)) * ((len(L_)-1)*wL) - ave):  # return +ve, store -ve gate vals
                 E_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)
-                G_,r = cluster_N(root,E_,r,c)  #> sum2G
+                G_,r = cluster_N(Ft,E_,r,c)  #> sum2G
                 if G_:
                     if not root.typ: F2N(root)  # promote at 1st sub+ or agg+
                     root.H += [sum2F(L_,root,froot=1)]  # dLev per L_
@@ -107,7 +107,7 @@ def cross_comp(Ft, R,root, fC=0, fB=0):  # calls cluster_N, sub+, over exemplars
                         cross_comp(Ct,r,root) # sub+'agg+
     return G_
 
-def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, max dist depends on prior match
+def comp_N_(_pairs, r, tnF=None, root=2, fpL=0):  # incremental-distance cross_comp, max dist depends on prior match
 
     def proj_V(_N, N, dist, dy_dx, dec, r):  # _N x N induction
         Dec = dec or decay ** ((dist / ((_N.span + N.span) / 2)))
@@ -130,7 +130,7 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
         pTT = proj_V(_N,N, dist, dy_dx, root.m if root!=2 else decay** (dist/((_N.span+N.span)/2)), r)  # based on current rim
         m,d = val_(pTT,ttN_,1); lr = r+ (N.r+_N.r)/2  # +|-match certainty
         if m > 0:
-            if gv_(m*(lc/lr)*wN - ave*(r+cN)):  # comp if marginally predictable, update N.Rt pair eval, ave / proj surprise value?
+            if not fpL and gv_(m*(lc/lr)*wN - ave*(r+cN)):  # comp if marginally predictable, update N.Rt pair eval, ave / proj surprise value?
                 Link = comp_N(_N,N, lr,lc, full=not tnF, A=dy_dx, span=dist, rL=root)
                 Link.rTT = np.abs(pTT - Link.dTT) / eps_(Link.dTT)  # relative prediction error to fit oF, direction-agnostic
                 L_+= [Link]; N_+= [_N,N]
@@ -504,7 +504,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CC
                 kern=n.kern*w; span=n.span*w; yx=n.yx*w; angl = copy(n.angl[0]) if n.angl is not None else None
                 if typ==3: box=copy(n.box)
     F = (cls_[typ])(dTT=TT, c=C, r=R, nF=nF)
-    if typ==3: F.Nt.dTT = copy(TT); F.Nt.c = C; F.Nt.r = R  # redundant?
+    if typ==3: F.Nt.dTT = copy(TT); F.Nt.c = C; F.Nt.r = R  # redundant? We need this to init Nt's params, else they are empty
     if typ:
         F.N_ = n_; F.kern=kern; F.span=span; F.yx=yx
         if angl is not None: F.angl = [angl, np.sign(F.dTT[1] @ ttcP[1])]
@@ -631,7 +631,7 @@ def F2N(F):  # convert for cross_comp
     box = F.box if hasattr(F, 'box') else np.array([np.inf,np.inf,-np.inf,-np.inf])  # keep existing box
     Na_ = dict(H=[], mang=1, box=box, sub=0, exe=0, fin=0, root_=[], compared = set())
     if F.typ==0:  # CF | PP, no overlap for Cs
-        Na_.update(kern=np.zeros(4), span=1, angl=None, yx=np.zeros(2))
+        Na_.update(kern=np.zeros(4), span=1, angl=None, yx=F.yx if hasattr(F,'yx') else np.zeros(2))
     for k,v in Na_.items(): setattr(F, k, copy(v))
     [setattr(F, ft, CF(root=F)) for ft in ('Lt','Ct','Bt','Xt','Rt') if not getattr(F, ft, None)]
     if L_: F.H += [sum2F(L_, F)]
@@ -867,8 +867,12 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
                 if gv_(PV__[y,x] - ave):
                     iy = _iy+ (y-cy)*(T.box[2]-T.box[0]); ix = _ix+ (x-cx)*(T.box[3]-T.box[1])
                     _T = frame_H(image, iy,ix, Ly,Lx, Y,X, rV, max_elev=elev)  # expand new tile to current level, no fb
-                    _T.rim += [T]
-                    for t in [T] + adj_T_: t.rim += [_T]  # add to 2D-adjacents' rim
+                    if _T:   
+                        _T.rim += [T]
+                        for t in [T] + adj_T_: t.rim += [_T]  # add to 2D-adjacents' rim
+                        adj_T_ += [_T]
+                        T = _T
+                    else: break
                 else: break
             else: break
         if T_:
@@ -883,9 +887,23 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
     while T and elev < max_elev:
         tile_,C,R = fill_frame(iY,iX, elev, T)  # also prior 2D adjacents, project from seed tile
         if tile_:  # sparse, 2D higher-scope tile( oH( aH
-            Fr.Nt = sum2F(tile_); Fr.H += [Copy_(Fr.Nt)]  # min processed level
+            Fr = sum2F(tile_); Fr.H += [Copy_(Fr.Nt)]  # min processed level
             Fr.N_ = [g for t in tile_ for g in t.N_]  # concat edge Gs
-            cluster_C(Fr, get_exemplars(Fr.N_,R,C), R,C)
+            '''
+            pairs = []
+            for _N, N in combinations(Fr.N_, 2):
+                dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx); c = min(_N.c,N.c); pairs += [[dist, dy_dx, _N,N, c]]
+            for pL in sorted(pairs, key=lambda x: x[0]):  
+                dist, dy_dx, _N,N, lc = pL 
+                pTT = proj_V(_N,N, dist, dy_dx, decay** (dist/((_N.span+N.span)/2)), Fr.r)
+                m,d = val_(pTT,ttN_,1)
+                if m > 0: 
+                    pL = CL(typ=-1, N_=[_N,N],dTT=pTT,m=m,d=d,c=lc,r=(_N.r+N.r)/2, angl=[dy_dx,1],span=dist)
+                    _N.rim += [pL]; N.rim += [pL]
+            '''
+
+            comp_N_(list(combinations(Fr.N_,2)), Fr.r,fpL=1)
+            cluster_C(Fr.Nt, get_exemplars(Fr.N_,R,C), R,C)
             if Ct := Fr.Ct:  # agg+ exemplars
                 cross_comp(Ct,R,Fr)
                 if elev and ffb:  # ffb =1 in main, no ffeedback in added tiles
