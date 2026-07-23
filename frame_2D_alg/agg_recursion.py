@@ -508,7 +508,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CC
                 kern=n.kern*w; span=n.span*w; yx=n.yx*w; angl = copy(n.angl[0]) if n.angl is not None else None
                 if typ==3: box=copy(n.box)
     F = (cls_[typ])(dTT=TT, c=C, r=R, nF=nF)
-    if typ==3: F.Nt.dTT = copy(TT); F.Nt.c = C; F.Nt.r = R  # redundant?
+    if typ==3: F.Nt.dTT = copy(TT); F.Nt.c = C; F.Nt.r = R
     if typ:
         F.N_ = n_; F.kern=kern; F.span=span; F.yx=yx
         if angl is not None: F.angl = [angl, np.sign(F.dTT[1] @ ttcP[1])]
@@ -891,26 +891,27 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
     def fill_frame(_iy,_ix, elev, T):  # expand level_frame from pixel-level seed tile, similar to frame_blobs
 
         frame = np.full((Ly,Lx), None, dtype=object)  # level scope
-        cy,cx = (Ly-1)//2,(Lx-1)//2; y,x = cy,cx  # start=mean
+        cy,cx = (Ly-1)//2,(Lx-1)//2  # start=mean
         PV__ = np.zeros([Ly,Lx])
-        T_ = []
-        while gv_(val_(T.dTT*T.wTT*ttFrm) * ((T.c+wFrm)/(T.r+cFrm)) - ave):
-            # this expand frame via last tile, need to use the frontier as in cluster_C instead
-            frame[y,x]=T; T_+=[T]; dy_dx = T.box[2:] -T.box[:2]
-            pTT, pc = proj_N(T, np.hypot(*dy_dx), dy_dx, elev,T.c)  # no proj r?
-            if gv_(ave - val_(pTT*T.wTT*ttFrm) * ((pc+wFrm)/(T.r+elev+cFrm))):  # inverted val
-                proj_focus(PV__,y,x,T)
-                pv__ = PV__.copy(); pv__[frame != None] = 0
-                y,x = np.unravel_index(pv__.argmax(), PV__.shape)
-                if gv_(PV__[y,x] - ave):
-                    iy = _iy+ (y-cy)*(T.box[2]-T.box[0]); ix = _ix+ (x-cx)*(T.box[3]-T.box[1])
-                    T = frame_H(image, iy,ix, Ly,Lx, Y,X, rV, max_elev=elev)  # expand new tile to current level, no fb
-                else: break
-            else: break
-        if T_:
-            TT,C,R = sum_vt(T_, wTT=ttFrm); R += elev
+        _T_ = [[T,cy,cx]]; T_ = []; fT_ = []
+        frame[cy,cx]=T  # only T from first main call is not Fr
+        while _T_:
+            for T,y,x in _T_:
+                if gv_(val_(T.dTT*T.wTT*ttFrm) * ((T.c+wFrm)/(T.r+cFrm)) - ave):
+                    dy,dx = T.box[2:] -T.box[:2]
+                    pTT, pc = proj_N(T, np.hypot(dy,dx), np.array([dy,dx]), elev,T.c)  # no proj r?
+                    if gv_(ave - val_(pTT*T.wTT*ttFrm) * ((pc+wFrm)/(T.r+elev+cFrm))):  # inverted val                    
+                        proj_focus(PV__,y,x,T)
+                        for _y,_x,A in ((y-1,x,(-dy,0)),(y+1,x,(dy,0)),(y,x-1,(0,-dx)),(y,x+1,(0,dx))):  # project in 4 directions
+                            if not (0<=_y<(Y-Ly) and 0<=_x<(X-Lx)) or frame[_y,_x] is not None: continue  # outside frame or checked
+                            if PV__[_y,_x]>ave:  # do we need gv_ here for each direction?  
+                                T = frame_H(image, _y,_x, Ly,Lx, Y,X, rV, max_elev=elev) 
+                                if T: frame[_y,_x]=T; fT_+=[T]; T_ += [[T,_x,_y]]
+            _T_ = T_; T_ = []
+        if fT_:
+            TT,C,R = sum_vt(fT_, wTT=ttFrm); R += elev
             if val_(TT*ttFrm) * ((C+wFrm)/(R+cFrm)) > ave:
-                return T_,C,R
+                return fT_,C,R
         return [],0,0
 
     global ave,avd; aTT=oTT=np.zeros((2,9)); aH,oH = [],[]  # regime refs across levs / ffeedback
@@ -919,9 +920,9 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
     while T and elev < max_elev:
         tile_,C,R = fill_frame(iY,iX, elev, T)  # also prior 2D adjacents, project from seed tile
         if tile_:  # sparse, 2D higher-scope tile( oH( aH
-            Fr.Nt = sum2F(tile_); Fr.H += [Copy_(Fr.Nt)]  # min processed level
+            Fr = sum2F(tile_); Fr.H += [Copy_(Fr.Nt)]  # min processed level
             Fr.N_ = [g for t in tile_ for g in t.N_]  # concat edge Gs
-            cluster_C(Fr, get_exemplars(Fr.N_,R,C), R,C)
+            cluster_C(Fr.Nt, get_exemplars(Fr.N_,R,C), R,C)
             if Ct := Fr.Ct:  # agg+ exemplars
                 cross_comp(Ct,R,Fr)
                 if elev and ffb:  # ffb =1 in main, no ffeedback in added tiles
