@@ -513,3 +513,42 @@ def xcomp(N_, merge=1):  # light version for contiguous tiles, also Bs?
         out_ += [N]
     return out_
 
+def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, max dist depends on prior match
+
+    def proj_V(_N, N, dist, dy_dx, dec, r):  # _N x N induction
+        Dec = dec or decay ** ((dist / ((_N.span + N.span) / 2)))
+        iTT = (_N.dTT + N.dTT) * Dec
+        eTT = (_N.Rt.dTT + N.Rt.dTT) * Dec
+        C = min(_N.c, N.c); R = (_N.r + N.r) / 2
+        if val_((eTT + iTT) * ttPrj) * (C / (cPrj + r + R)) * wPrj > ave:  # not oF, spec / link:
+            eTT += proj_N(N, dist, dy_dx, r, N.c, dec)[0]  # pTT/ L_,B_,rim, if pV >0
+            eTT += proj_N(_N, dist, -dy_dx, r, _N.c, dec)[0]  # reverse direction
+        return iTT + eTT
+
+    pairs, olp_ = [],[]  # no olp_?
+    for _N,N in _pairs:  # get all-to-all pre-links
+        if _N.sub != N.sub: continue  # or comp x composition?
+        if N is _N: olp_ += [N]  # overlap = unit match, no miss
+        else: dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx); c = min(_N.c,N.c); pairs += [[dist, dy_dx, _N,N, c]]
+    N_, L_ = [],[]
+    for pL in sorted(pairs, key=lambda x: x[0]):  # proximity prior, test compared?
+        dist, dy_dx, _N,N, lc = pL  # rim angl is not canonic
+        pTT = proj_V(_N,N, dist, dy_dx, root.m if root!=2 else decay** (dist/((_N.span+N.span)/2)), r)  # based on current rim
+        m,d = val_(pTT,ttN_,1); lr = r+ (N.r+_N.r)/2  # +|-match certainty
+        if m > 0:
+            if gv_(m*(lc/lr)*wN - ave*(r+cN)):  # comp if marginally predictable, update N.Rt pair eval, ave / proj surprise value?
+                Link = comp_N(_N,N, lr,lc, full=not tnF, A=dy_dx, span=dist, rL=root)
+                Link.rTT = np.abs(pTT - Link.dTT) / eps_(Link.dTT)  # relative prediction error to fit oF, direction-agnostic
+                L_+= [Link]; N_+= [_N,N]
+            else:
+                pL = CL(typ=-1, N_=[_N,N],dTT=pTT,m=m,d=d,c=lc,r=lr, angl=[dy_dx,1],span=dist)
+                L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.N_  # add neg C?
+                # oF.N_ is +-Ls
+        else: break  # beyond initial induction range, re-sort by proj_V?
+    if L_:
+        for N in set(N_):
+            if N.rim: N.Rt = sum2F(N.rim)
+        cV = FV_(CoF.get(), *sum_vt(L_))  # +-ve Ls for oF, no oF.N_?
+        pL_ = [L for L in L_ if (L.m > ave or L.typ == -1)]
+        return pL_,*sum_vt(pL_), cV  # +ve only, redundant +-ve for oF
+
