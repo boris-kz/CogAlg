@@ -552,3 +552,28 @@ def comp_N_(_pairs, r, tnF=None, root=2):  # incremental-distance cross_comp, ma
         pL_ = [L for L in L_ if (L.m > ave or L.typ == -1)]
         return pL_,*sum_vt(pL_), cV  # +ve only, redundant +-ve for oF
 
+def cross_comp(Ft, R, root, fC=0, fB=0):  # calls cluster_N, sub+, over exemplars spliced from C_
+    G_ = []
+    if fB: e_=Ft.N_  # Bt
+    else:  # selective for Ct only:
+        e_ = {n for C in Ft.N_ for n in C.N_}
+        for e in e_: e.w = sum(e.m_)  # combine memberships
+        e_ = [e for e in e_ if e.w]
+    if sum(e.w for e in e_) * ((Ft.c+wAgg) / (Ft.r+R+cAgg)) * ((len(e_)-1) **2 * wL):
+        # select by dist and marginal proj m:
+        if pL_ := proj_L_(combinations(e_,2), root, R):
+            if Lt := comp_C_(pL_,R,fC=1) if fC else comp_N_(pL_, R):
+                L_,TT,c,r,cV = Lt
+                oF_[CoF.get().nF].V_ += [cV]  # combined comp_ results
+                root.L_ = L_  # val=m+d /clust, m/comp
+                if gv_(val_(TT*ttcN) * ((c+wcN)/(r+ccN)) * ((len(L_)-1)*wL) - ave):  # return +ve, store -ve gate vals
+                    E_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)
+                    G_,r = cluster_N(root, E_,r,c)  # -> sum2G
+                    if G_:
+                        if not root.typ: F2N(root)  # promote at 1st sub+ or agg+
+                        root.H += [sum2F(L_,root,froot=1)]  # dLev per L_
+                        root.Nt = sum2F(G_,root,froot=2)  #| C_?
+                        if Ct := root.Ct:
+                            cross_comp(Ct, r, root) # sub+'agg+
+    return G_
+
