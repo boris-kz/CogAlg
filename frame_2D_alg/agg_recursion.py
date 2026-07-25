@@ -6,7 +6,7 @@ from itertools import zip_longest, combinations, product  # from multiprocessing
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
-from meta_code import oF_,iF_,nF_,CF,CL,CC,CN,CoF,wT,wTT, eps,eps_,ave,avd,decay, trace_func,parse_funcs, call_sites, split_oF_,clust_oF_,inject_oF_,gv_, val_,sum_vt
+from meta_code import oF_,iF_,nF_,CF,CL,CN,CoF,wT,wTT, eps,eps_,ave,avd,decay, trace_func,parse_funcs, call_sites, split_oF_,clust_oF_,inject_oF_,gv_, val_,sum_vt
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -170,6 +170,9 @@ def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s
                 if L.m>ave: TTm+=L.dTT; cm+=L.c; rm+=L.r
                 if fC and gv_(L.m*wF- ave*(L.r+cF)):
                     add2F(_C,C,1); mrg_ += [C]  # may not already be merged
+                    for n in C.N_:
+                        for rt in n.root_:  # [C,m,d]
+                            if rt[0] is C: rt[0] = _C  # keep m,d positions
                     for n in C.N_: n.root_[n.root_.index(C)] = _C  # keep m,d positions
             if mrg_: N_ = list(set(N_) - set(mrg_))
     else:
@@ -393,11 +396,11 @@ def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace
 def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
 
     N_= copy(Ft.N_); _C_=[]  # revert if 0 clusters?
-    for n in N_: n.root_,n.m_,n.d_,n._root_,n._m_,n._d_ = [],[],[],[],[],[]
+    for n in N_: n.root_, n._root_ = [],[]
     for i,E in enumerate(E_):
-        C = Copy_(E, Ft,init=1,cls=CC)
+        C = Copy_(E, Ft,init=1,cls=CL)
         C.N_,C.L_,C.m_,C.d_ = [E],[],[1],[0]
-        E._root_+=[C]; E._m_+=[1]; E._d_+=[0]  # self m,d
+        E._root_+=[[C,1,0]]  # self (C,m,d)
         C._N_= list({n for l in E.rim for n in l.N_ if n is not E})  # init w for first loop eval
         _C_ += [C]
     out_ = []
@@ -406,12 +409,13 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
         for _C in _C_:  # C.m,d /rTT? sort / sum(_C.m_)?
             N__,n_,m_,d_,M,D,T,R,dTT,up = [],[],[],[],0,0,0,0, np.zeros((2,9)),0  # /C
             for n in _C.N_+_C._N_:  # current + frontier
-                if n not in N_: N_+=[n]; n.root_,n.m_,n.d_,n._root_,n._m_,n._d_ = [],[],[],[],[],[]
+                if n not in N_: N_+=[n]; n.root_,n._root_ = [],[]
                 dtt,_ = base_comp(_C,n)  # or comp_N, decay?
                 m,d = val_(dtt,ttcC,1); dTT+=dtt
                 n_+=[n]; m_+=[m]; d_+=[d]; c=n.c; T+=c; M+=m*c; D+=abs(d)*c; R+=n.r*c  # scale totals only?
-                if _C in n._root_:
-                    k=n._root_.index(_C); up += abs(n._m_[k]-m) + abs(n._d_[k]-d)
+                _root_ = [rt[0] for rt in n._root_]
+                if _C in _root_:
+                    k=_root_.index(_C); up += abs(n._root_[k][1]-m) + abs(n._root_[k][2]-d)
                 else: up += m+abs(d)
             r = _r+ R/T  # loop-local, not ave?
             if M * (_C.m+wC_*len(n_)) > Ave * (r+_C.r+ cC_*len(n_)):  # else: Up+= sum(_C._m_)+ sum([abs(d) for d in _C._d_])?
@@ -429,14 +433,14 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
             break
         if Up * (wcC*len(C_)) > Avd * (r+ (ccC*len(C_))):
             for C in C_: C._m_ = C.m_; C._d_ = C.d_
-            for n in N_: n._root_ = n.root_; n._m_ = n.m_; n._d_ = n.d_
-            for n in set([_n for _C in _C_ for _n in _C.N_ + _C._N_]): n.root_,n.m_,n.d_ = [],[],[]
+            for n in N_: n._root_ = n.root_
+            for n in set([_n for _C in _C_ for _n in _C.N_ + _C._N_]): n.root_ = []
             _C_ = C_
         else: out_+=C_; break  # converged
     if out_:
         oc = 0
         for n in [N for C in out_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals:
-            n.exe = (n.d if n.typ==1 else n.m) + np.sum(n.m_) - ave; oc+=n.c
+            n.exe = (n.d if n.typ==1 else n.m) + np.sum(rt[1] for rt in n.root_) - ave; oc+=n.c
         if gv_(val_(DTT,Ft.root.wTT*ttcC) * (oc/(r+ccC)) * ((len(out_)-1)*wL) * wcC - ave):
             Ct = sum2F(out_); Ft.root.Ct = Ct; Ct.root = Ft.root
     if out_: FV_(CoF.get(), *sum_vt(out_)[:-1], r)
@@ -447,10 +451,10 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
     cnt = 0; Ln = len(N_:= list(set([N for C in _C_ for N in C.N_])))  # all Ns are in all Cs
     _md__ = np.zeros((Ln, len(_C_), 2))  # NxC, cols aligned to _C_
     for j, N in enumerate(N_):
-        for c,m,d in zip(N.root_,N.m_,N.d_):
+        for c,m,d in N.root_:
             if c in _C_: _md__[j,_C_.index(c)] = m,d
     while True:
-        for N in N_: N.root_, N.m_, N.d_ = [], [], []  # reset, append in sum2F
+        for N in N_: N.root_ = []  # reset, append in sum2F
         Lc = len(_C_); L = Lc*Ln  # Lc,L,md__ per cycle since _C_ varies
         md__ = np.zeros((Ln,Lc,2)); O = 0
         for j,N in enumerate(N_):
@@ -468,7 +472,7 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
                     l = comp_N(C,_C,(C.r+_C.r)/2, min(C.c,_C.c), A=(a:=_C.yx-C.yx), span=np.hypot(*a))
                     if l.m*wF > ave*(l.r+cF):
                         add2F(_C,C,1); removed += [C]
-        new_ = [Copy_(N,root,init=1,cls=CC) for j,N in enumerate(N_)
+        new_ = [Copy_(N,root,init=1,cls=CL) for j,N in enumerate(N_)
                 if np.sort(md__[j,:,0])[-2:].min()*wcP > ave*(N.r+ccP)]  # seed overlap Ns
         _C_ = [c for c in C_ if c not in removed and c.m*wcP > ave*c.r*ccP] + new_  # survive+prune, +seeds
         if conv and not (removed or new_) and len(_C_)==Lc:
@@ -497,7 +501,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CC
     c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); w_ = c_/C; N = N_[0]
     fC = np.any(m_)
     typ = 2 if fC else N.typ
-    cls_ = [CF,CL,CC,CN]
+    cls_ = [CF,CL,CL,CN]  # keep typ=2 to differentiate CC
     for i, (n,w) in enumerate(zip(N_,w_)):
         if i:
             TT+=n.dTT*w; R+=n.r*w; n_ += (n.N_ if merge else [n])
@@ -511,6 +515,8 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CC
                 kern=n.kern*w; span=n.span*w; yx=n.yx*w; angl = copy(n.angl[0]) if n.angl is not None else None
                 if typ==3: box=copy(n.box)
     F = (cls_[typ])(dTT=TT, c=C, r=R, nF=nF)
+    if np.any(m_): F.m_,F.d_ = m_,d_; F.m, F.d = sum(m_),sum(d_)  # m_, d_ may empty here
+    else:          F.m, F.d = val_(TT, fd=1)   # consolidate all val_(TT) with a flag like FV_?
     if typ==3: F.Nt.dTT = copy(TT); F.Nt.c = C; F.Nt.r = R
     if typ:
         F.N_ = n_; F.kern=kern; F.span=span; F.yx=yx
@@ -518,8 +524,6 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CC
         if typ==3:  # frame?
             for N in N_: add_H(F.H, N.H, F)  # concat lower levs
             F.H += [sum2F([n for N in N_ for n in N.N_], F)]  # top lev
-            if np.any(m_): F.m_,F.d_ = m_,d_; F.m, F.d = sum(m_),sum(d_)  # m_, d_ may empty here
-            else:          F.m, F.d = val_(TT, fd=1)   # consolidate all val_(TT) with a flag like FV_?
             F.box = box
         else:
             F.m, F.d = val_(TT,fd=1)  # link or centroid
@@ -532,7 +536,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CC
         for n in N_: n.root = root or F
     elif froot == 2: F.root = root
     if fC:  # add root_, m_ and d_ per N in C.N_:
-        for N, m, d in zip(N_, m_, d_): N.m_ += [m]; N.d_ += [d]; N.root_ += [F]
+        for N, m, d in zip(N_, m_, d_): N.root_ += [[F,m,d]]
     return F
 
 def add2F(F, n, merge=0, fr=0, fo=0):  # unpack for batching in sum2F
@@ -574,13 +578,14 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
     if G.Lt:  # sub+
         Lt = G.Lt; L_,lm,ld,lr = Lt.N_,Lt.m,Lt.d,Lt.r; L=len(L_)-1; Av = ave+avd
         if gv_(Vn := (lm+ld)*wcN - Av* (lr+1+ccN*L)):  # for cluster_N
-            c = G.Lt.c; E_ = get_exemplars({N for link in L_ for N in link.N_}, r,c)
+            c = G.Lt.c; E_ = get_exemplars(N_, r,c)  # why not using N_?
             if gv_(Vn * (wcC-wcN) * (mdecay(L_)-decay) - Av * (lr+1+(ccC-ccN)*L)):
                 r+=1; G_,r = cluster_C(G.Nt,E_,r,c)  # low decay: CC nodes
             else:     G_,r = cluster_N(G.Nt,E_,r,c)  # CC sub-Gs, if any
     if root.root is None:  # when root is frame, their root is empty, and G is tile
         G.y_,G.Y_,G.x_,G.X_ = [],[],[],[]
     if (Ct := G.Ct):
+        for C in Ct.N_: F2N(C)
         cross_comp(Ct, r, G)  # agg+ over exemplars spliced from sub+ C_
     if G.Bt:
         Bt = G.Bt; bd,br,L = Bt.d,Bt.r,len(Bt.N_); rroot = root.root if root.root else 0
@@ -611,9 +616,10 @@ def add_Nt(G):  # in sum2G and trans_cluster
     G.kern, G.yx = np.zeros(4),np.zeros(2); yx_ = []
     for N in N_:
         N.fin = 1; N.root = G; w = N.c/C
-        if hasattr(N,'m_'):
-            if not hasattr(G,'m_'): G.root_,G.m_,G.d_ = [],[],[]
-            G.C_ += N.root_; G.m_+= N.m_; G.d_+= N.d_  # Ct || Nt
+        if hasattr(N,'root_'):
+            if not hasattr(G,'root_'): G.root_ = []
+            G.root_ += N.root_  # not sure, i think we should concatenate their [C,m,d] now? Or pack [C.m,d] in C_?
+            G.C_ += [rt[0] for rt in N.root_] # Ct || Nt
         G.kern += N.kern*w; yx = N.yx; G.yx+=yx; yx_+=[yx]  # * w?
         G.box = extend_box(G.box, N.box)
     G.span = (c_ @ np.hypot(*(np.array(yx_)-G.yx).T)) / C if len(N_)>1 else N_[0].span
@@ -646,10 +652,11 @@ def F2N(F):  # convert for cross_comp
 
 def Copy_(N, root=None, r=1, cls=None, init=0, typ=None, froot=0):
     cls = cls or type(N)
-    a = dict(dTT=N.dTT*r,m=N.m,d=N.d,c=N.c,r=N.r, root=root or N.root, nF=N.nF,wTT=copy(N.wTT),w=N.w, typ=N.typ if typ is None else typ,
+    a = dict(dTT=N.dTT*r,m=N.m,d=N.d,c=N.c,r=N.r, root=root or N.root, nF=N.nF,wTT=copy(N.wTT),typ=N.typ if typ is None else typ,
              N_=copy(N.N_), L_=copy(N.L_))
+    if hasattr(N, 'w'): a['w'] = N.w
     if isinstance(N, CL): a.update(yx=copy(N.yx), kern=copy(N.kern), span=N.span, angl=[copy(N.angl[0]), N.angl[1]] if N.angl else None)
-    if isinstance(N, CC): a.update(m_=list(N.m_), d_=list(N.d_))
+    if hasattr(N, 'root_'): a.update(root_=copy(N.root_))  # CC
     if isinstance(N,CoF): a.update(call_=copy(N.call_), typ_=copy(N.typ_), fw=N.fw, fc=N.fc, fr=N.fr)
     C = cls(**a)
     if isinstance(N, CN):
@@ -807,7 +814,7 @@ def vect_edge(T, iY,iX,Ly,Lx, rV=1):  # T=tile, PP_ cross_comp and floodfill to 
     if G_:
         FV_(CoF.get(), TT, C,1); L_,lTT, lc, lr = [],np.zeros((2,9)), 0, 1
         for G in G_: L_ += G.Lt.N_; lTT += G.Lt.dTT; lc += G.Lt.c; lr += G.Lt.r
-        return sum2G([[[N for G in G_ for N in G.N_],'Nt',TT,C,1],[L_,'Lt',lTT,lc,lr]], TT+lTT, T) # c,R?
+        return sum2G([[G_,'Nt',TT,C,1],[L_,'Lt',lTT,lc,lr]], TT+lTT, T) # c,R?
 
 def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary/skeleton?
 
@@ -858,12 +865,12 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
 
 def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
 
+    ys,xs = Y//Ly, X//Lx  # each tile's x and y size
     def fill_frame(_iy,_ix, elev, T, Ly,Lx):  # expand level_frame from pixel-level seed tile, similar to frame_blobs
 
-        nX, nY = Y//Ly,X//Lx  # total number of x and y in the tile grid
-        frame = np.full((nY,nX), None, dtype=object)  # level scope: Ly,Lx grid of Ly,Lx-pixel windows
-        cy,cx = int(_iy/Ly), int(_ix/Lx)  # seed should be based on input
-        PV__ = np.zeros([nY,nX])  # projected value map
+        frame = np.full((Ly,Lx), None, dtype=object)  # level scope: Ly,Lx grid of Ly,Lx-pixel windows
+        cy,cx = _iy//ys, _ix//xs  # tile grid location
+        PV__ = np.zeros([Ly,Lx])  # projected vlaue map
         frame[cy,cx] = T; T_=[]; __T_=[(T,cy,cx)]  # output; eval wave: __T_ consumed, _T_ built, per cluster_N
         while __T_:
             _T_ = []  # next wave
@@ -874,9 +881,9 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
                     if gv_(val_(pTT*T.wTT*ttFrm) * ((pc+wFrm)/(T.r+elev+cFrm)) - ave):  # +ve, no uncertainty projection yet
                         proj_focus(PV__,y,x,T)  # radiate projected value, make directional per L_?
                         for _y,_x in ((y-1,x), (y+1,x), (y,x-1), (y,x+1)):  # fill 4 adjacent cells
-                            if not (0<=_y<nY and 0<=_x<nX) or frame[_y,_x] is not None: continue  # outside frame or checked
+                            if not (0<=_y<Ly and 0<=_x<Lx) or frame[_y,_x] is not None: continue  # outside frame or checked
                             if gv_(PV__[_y,_x] - ave):  # accumulated from all adjacent tiles
-                                iy = _y * Ly; ix = _x * Lx
+                                iy = _y * ys; ix = _x * xs
                                 if _T := frame_H(image, iy,ix, Ly,Lx, Y,X, rV, max_elev=elev):  # expand new tile to current level, no fb
                                     T_ += [_T]; _T_ += [(_T,_y,_x)]; frame[_y,_x] = _T
                                 else: frame[_y,_x] = 0
@@ -889,7 +896,7 @@ def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
 
     global ave,avd; aTT=oTT=np.zeros((2,9)); aH,oH = [],[]  # regime refs across levs / ffeedback
     elev, Fr = 0,[]
-    T = vect_edge( frame_blobs_root( comp_pixel( image[iY:iY+Ly, iX:iX+Lx]), rV), iY,iX,Ly,Lx, rV)
+    T = vect_edge( frame_blobs_root( comp_pixel( image[iY:iY+(Y//Ly), iX:iX+(X//Lx)]), rV), iY,iX,Ly,Lx, rV)
     while T and elev < max_elev:
         tile_,C,R = fill_frame(iY,iX, elev, T, Ly**elev,Lx**elev)  # project from seed tile
         if tile_:  # sparse, 2D higher-scope tile( oH( aH
