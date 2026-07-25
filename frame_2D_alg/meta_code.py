@@ -68,7 +68,6 @@ class CF(CBase):  # clustering fork: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, 
         f.nF = kw.get('nF','Nt')
         f.dTT = kw.get('dTT',np.zeros((2,9))); f.m, f.d, f.c, f.r = [kw.get(x,0) for x in ('m','d','c','r')]  # rdpTT in oF?
         f.wTT = kw.get('wTT',wTT)  # mean wTT = 1?
-        f.w = kw.get('w',0)  # membership weight
         f.typ = kw.get('typ',0)  # blocks sub_comp
         f.root = kw.get('root',None)  # convert to list in typ oFs?
     def __bool__(f): return bool(f.c)  # N_ may be empty?
@@ -82,14 +81,6 @@ class CL(CF):  # typ=1, add kern+positionals for base comp, Rt,Nt,Bt,Ct from com
         l.angl = kw.get('angl',None)  # (dy,dx),dir, sum from L_, rarely?
         l.typ  = kw.get('typ',1)
         l.yx   = kw.get('yx', np.zeros(2))  # mean nodet? comp box is not meaningful?
-
-class CC(CL):  # typ=2, adds arrays per N_
-    name = "cent"
-    def __init__(n, **kw):
-        super().__init__(**kw)
-        n.m_ = kw.get('m_',[])  # add _m_,_d_? also in C.N_, may conflict with promoted C m_,d_?
-        n.d_ = kw.get('d_',[])
-        n.typ = kw.get('typ',2)
 
 def prop_F_(F, attr='N_'):  # factory function to get and update top-composition fork.N_|H
     def get(N): return getattr(getattr(N,F), attr)
@@ -107,9 +98,9 @@ class CN(CL):  # full node | graph fork set
         n.sub = kw.get('sub',0)  # composition depth relative to top-composition peers?
         n.exe = kw.get('exe',0)  # exemplar, temporary
         n.fin = kw.get('fin',0)  # clustered, temporary
-        n.compared = kw.get('compared',set())
-        n.root_ = kw.get('root_',[])  # reciprocal roots, Cs not Bs?
+        n.compared = kw.get('compared', set())
         n.typ = kw.get('typ',3)  # full comp
+        n.root_ = kw.get('root_', [])  # [[C,m,d]...] per root centroid, add in cluster_C only?
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.c)
 
@@ -121,6 +112,7 @@ class CoF(CF):
         f.call_ = kw.get('call_',[])  # called oFs only
         f.body = kw.get('body',[])  # static AST ops + CoF refs in source order
         f.fc,f.fr = [kw.get(x,0) for x in ('fc','fr')]  # fw: code compression, fc: costs, fr if nested oF?
+        f.w = kw.get('w',0)  # membership weight
         f.caller_ = kw.get('caller_', set())
         f.g_ = kw.get('g_', [])  # callee gates
         f.gV_= kw.get('gv_',[])  # sum gating vals
