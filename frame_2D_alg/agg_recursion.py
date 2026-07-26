@@ -89,7 +89,7 @@ def cross_comp(Ft, R, root, fC=0, fB=0):  # calls cluster_N, sub+, over exemplar
     if fB:
         e_= Ft.N_  # Bt
         for e in e_: e.w = e.d  # contrast value
-    else:  # select / Ct
+    elif fC:  # select / Ct
         e_ = {n for C in Ft.N_ for n in C.N_}
         for e in e_: e.w = sum(r[1] for r in e.root_)  # combine memberships
         e_ = [e for e in e_ if e.w]
@@ -575,7 +575,7 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
     Ft_ += [sum2F(list(set(C_)), root.Ct) if C_ else CF()]  # add multiple root_ in Cs?
     G = comb_Ft(*Ft_, root, wTT=fTT)
     N_ = G.N_; N=N_[0]; G.sub = N.sub+1 if G.L_ else N.sub; r=G.r
-    if G.Lt:  # sub+
+    if G.Lt and any([N.rim for N in N_]):  # sub+ (skip Gs from vect_edge, they do not have rim anyway)
         Lt = G.Lt; L_,lm,ld,lr = Lt.N_,Lt.m,Lt.d,Lt.r; L=len(L_)-1; Av = ave+avd
         if gv_(Vn := (lm+ld)*wcN - Av* (lr+1+ccN*L)):  #-> cluster_N
             c = G.Lt.c; E_ = get_exemplars(N_, r,c)
@@ -584,9 +584,7 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
             else:     G_,r = cluster_N(G.Nt,E_,r,c)  # CC sub-Gs, if any
     if root.root is None:  # when root is frame, their root is empty, and G is tile
         G.y_,G.Y_,G.x_,G.X_ = [],[],[],[]
-    if (Ct := G.Ct):
-        for C in Ct.N_: F2N(C)
-        cross_comp(Ct, r, G)  # agg+ over exemplars spliced from sub+ C_
+    if (Ct := G.Ct): [F2N(C) for C in Ct.N_]; cross_comp(Ct, r, G,fC=1)  # agg+ over exemplars spliced from sub+ C_
     if G.Bt:
         Bt = G.Bt; bd,br,L = Bt.d,Bt.r,len(Bt.N_); rroot = root.root if root.root else 0
         if N.typ!=1 and bd*(wAgg*L) > avd*(br+cAgg*L): [F2N(L) for L in Bt.N_]
@@ -902,11 +900,11 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
         if tile_:
             Fr = sum2F(tile_); Fr.H += [Copy_(Fr.Nt)]  # minimally processed level
             Fr.N_ = [g for t in tile_ for g in t.N_]  # concat edge Gs
-            cluster_C(Fr.Nt, get_exemplars(Fr.N_,R,C), R,C)
-            if Fr.Ct:
-                cross_comp(Fr.Ct, R, Fr)  # agg+ over CC-pruned exemplars
-                if ffb: Fr,aTT,oTT,aH,oH = ffeedback(Fr, aTT,oTT,aH,oH)  # top call only, term,form oH(aH
+            cross_comp(Fr.Nt, R, Fr)  # Fr.Ct should be added from sub+ in cluster_N
+            if Fr.Ct: [F2N(C) for C in Fr.Ct.N_]; cross_comp(Fr.Ct, R, Fr,fC=1)  # agg+ over CC, should be conditional based on sub+ Cs?
+            if ffb: Fr,aTT,oTT,aH,oH = ffeedback(Fr, aTT,oTT,aH,oH)  # top call only, term,form oH(aH
             elev += 1; T = Fr  # next-extension seed
+        else: break  # when tile_ is empty, pointless to continue with the same T
     if Fr: FV_(CoF.get(), Fr.dTT, Fr.c, Fr.r)
     return Fr  # frame | base tile if no levels
 
