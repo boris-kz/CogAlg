@@ -49,7 +49,7 @@ prefix  _ denotes prior of two same-name vars, multiple _s for relative preceden
 postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized vars are summed small-case vars
 '''
-wM,wD,wi, wG,wI,wa, wL,wS,wA = wT
+wM,wD,wi, wG,wI,wa, wL,wS,wA = wT; Ly = Lx = 64  # fractal tile dims
 cFrm,cAgg,cTrc, cN_,cC_,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (      # function complexity
 wFrm,wAgg,wTrc, wN_,wC_,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init = cost
 ttFrm,ttA,ttTrc,ttN_,ttC_,ttN,ttF,ttE,ttcN,ttcC,ttcP, ttsG,ttBac,ttPrj,ttVct = [F.wTT for F in oF_]
@@ -89,14 +89,14 @@ def cross_comp(Ft, R, root, fC=0, fB=0):  # calls cluster_N, sub+, over exemplar
     if fB:
         e_= Ft.N_  # Bt
         for e in e_: e.w = e.d  # contrast value
-    else:  # selective for Ct only:
+    else:  # select / Ct
         e_ = {n for C in Ft.N_ for n in C.N_}
         for e in e_: e.w = sum(r[1] for r in e.root_)  # combine memberships
         e_ = [e for e in e_ if e.w]
     if sum(e.w for e in e_) * ((Ft.c+wAgg) / (Ft.r+R+cAgg)) * ((len(e_)-1) **2 * wL):
         if pL_ := proj_L_(combinations(e_,2), root, R):  # prox & marginal proj m
             if Lt := comp_C_(pL_,R,fC=1) if fC else comp_N_(pL_, R):
-                L_,TT,c,r,cV = Lt
+                L_, TT, c, r, cV = Lt
                 oF_[CoF.get().nF].V_ += [cV]  # combined comp_ results
                 root.L_ = L_  # val=m+d /clust, m/comp
                 if gv_(val_(TT*ttcN) * ((c+wcN)/(r+ccN)) * ((len(L_)-1)*wL) - ave):  # return +ve, store -ve gate vals
@@ -151,7 +151,7 @@ def comp_N_(pL_, r, tnF=None, root=2):  # incremental-distance cross_comp, max d
             if N.rim: N.Rt = sum2F(N.rim)
         TT, C, R = sum_vt(L_)
         cV = FV_(CoF.get(), TT, C, R)  # +ve Ls for oF, no oF.N_?
-        return L_, TT, C, R, cV  # 5-tuple, unpacked in cross_comp | comp_F
+        return L_, TT, C, R, cV  # unpacked in cross_comp, comp_F
 
 def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # simplified for centroids, trans-N_s, levels
 
@@ -577,8 +577,8 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
     N_ = G.N_; N=N_[0]; G.sub = N.sub+1 if G.L_ else N.sub; r=G.r
     if G.Lt:  # sub+
         Lt = G.Lt; L_,lm,ld,lr = Lt.N_,Lt.m,Lt.d,Lt.r; L=len(L_)-1; Av = ave+avd
-        if gv_(Vn := (lm+ld)*wcN - Av* (lr+1+ccN*L)):  # for cluster_N
-            c = G.Lt.c; E_ = get_exemplars(N_, r,c)  # why not using N_?
+        if gv_(Vn := (lm+ld)*wcN - Av* (lr+1+ccN*L)):  #-> cluster_N
+            c = G.Lt.c; E_ = get_exemplars(N_, r,c)
             if gv_(Vn * (wcC-wcN) * (mdecay(L_)-decay) - Av * (lr+1+(ccC-ccN)*L)):
                 r+=1; G_,r = cluster_C(G.Nt,E_,r,c)  # low decay: CC nodes
             else:     G_,r = cluster_N(G.Nt,E_,r,c)  # CC sub-Gs, if any
@@ -768,7 +768,54 @@ def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N
     pTT = iTT + eTT  # proj int,ext links, work the same?
     pc = c* decay ** (1+ dist/N.span)
     FV_(CoF.get(), pTT,pc,_r)
-    return pTT,pc  # only c decays, not _r? info_gain = N.m * average link uncertainty, should be separate
+    return pTT,pc  # info_gain = N.m * average link uncertainty, should be separate
+
+def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary/skeleton?
+
+    L_, cT_, lTT, lc = [], set(), np.zeros((2,9)), 0  # comp co-mediated Ns:
+    for N in N_: N.fin = 0  # curently PPs only
+    for N in N_:
+        _N_ = [rN for B in N.B_ for rN in B.root_ if rN is not N]   # + node-mediated
+        for _N in list(set(_N_)):  # share boundary or cores if lG with N, same val?
+            cT = tuple(sorted((N.id,_N.id)))
+            if cT in cT_: continue
+            cT_.add(cT)
+            dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)  # Rc = r+ (N.r+_N.r)/2
+            L = comp_N(_N,N, r,_C,A=dy_dx, span=dist)  # current L is dPP
+            if val_(L.dTT,ttTrc,1)[1] * ((L.c+wTrc)/(r+cTrc)) > ave:
+                L_+=[L]; N.rim+=[L]; _N.rim+=[L]  # or PP typ=3 in F2N
+            if L_: lTT,lc,_ = sum_vt(L_,wTT=ttTrc)
+    Gt_ = []
+    for N in N_:  # flood-fill G per seed N
+        if N.fin: continue
+        N.fin=1; _N_=[N]; Gt=[]; N.root=Gt; n_,ntt,nc, l_,ltt,lc = [N],N.dTT.copy(),N.c or 1,[],np.zeros((2,9)),0  # Gt
+        while _N_:
+            _N = _N_.pop(0)
+            for L in _N.rim:
+                if L in L_:
+                    n = L.N_[0] if L.N_[1] is _N else L.N_[1]
+                    if n in N_:
+                        if n.root is Gt: continue
+                        if n.fin:  # merge n root
+                            _root = n.root; n_+=_root[0];l_+=_root[3]; _root[6]=1
+                            for _n in _root[0]: _n.root = Gt
+                        else: n.fin=1; _N_+=[n]; n_+=[n]; l_+=[L]  # add single n
+                        n.root = Gt
+        ntt,nc,_ = sum_vt(n_, wTT=ttTrc)
+        if l_: ltt,lc,_= sum_vt(l_, wTT=ttTrc); ltt*=lc/nc;
+        Gt += [n_,ntt,nc, l_,ltt,lc, 0]; Gt_+=[Gt]
+    G_, TT,C,R = [],np.zeros((2,9)),0,0
+    for n_,ntt,nc,l_,ltt,lc,merged in Gt_:
+        if not merged:
+            if gv_(val_(ntt+ltt, ttTrc) * ((nc+lc+wTrc)/(r+cTrc)) - ave):  # wrap singletons too
+                TT += ntt+ltt; C += nc+lc; R += r*(nc+lc)  # add Bt?
+                G_ += [sum2G([(n_,'Nt',ntt,nc,r)]+([(l_,'Lt',ltt,lc,r)] if l_ else []), ttTrc, root)]
+            else:
+                for N in n_: N.fin=0; N.root=root
+    if val_(TT*root.wTT*ttTrc) * ((C+wTrc)/(r+1+cTrc)) * ((len(G_)-1)*wL) > ave:
+        _G_+=G_; _TT+=TT; _C+=C  # concat in tile
+        FV_(CoF.get(), *sum_vt(_G_))
+    return _G_, _TT, _C, r+R/_C
 
 # comp_slice hand-off:
 def vect_edge(T, iY,iX,Ly,Lx, rV=1):  # T=tile, PP_ cross_comp and floodfill to init focal frame graph, no recursion:
@@ -816,102 +863,52 @@ def vect_edge(T, iY,iX,Ly,Lx, rV=1):  # T=tile, PP_ cross_comp and floodfill to 
         for G in G_: L_ += G.Lt.N_; lTT += G.Lt.dTT; lc += G.Lt.c; lr += G.Lt.r
         return sum2G([[G_,'Nt',TT,C,1],[L_,'Lt',lTT,lc,lr]], TT+lTT, T) # c,R?
 
-def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary/skeleton?
+def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
 
-    L_, cT_, lTT, lc = [],set(),np.zeros((2,9)),0  # comp co-mediated Ns:
-    for N in N_: N.fin = 0
-    for N in N_:
-        _N_ = [rN for B in N.B_ for rN in B.root_ if rN is not N]   # + node-mediated
-        for _N in list(set(_N_)):  # share boundary or cores if lG with N, same val?
-            cT = tuple(sorted((N.id,_N.id)))
-            if cT in cT_: continue
-            cT_.add(cT)
-            dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)  # Rc = r+ (N.r+_N.r)/2
-            L = comp_N(_N,N, r,_C,A=dy_dx, span=dist)
-            if val_(L.dTT,ttTrc,1)[1] * ((L.c+wTrc)/(r+cTrc)) > ave:
-                L_+=[L]; N.rim+=[L]; _N.rim+=[L]  # or PP typ=3 in F2N
-            if L_: lTT,lc,_ = sum_vt(L_,wTT=ttTrc)
-    Gt_ = []
-    for N in N_:  # flood-fill G per seed N
-        if N.fin: continue
-        N.fin=1; _N_=[N]; Gt=[]; N.root=Gt; n_,ntt,nc, l_,ltt,lc = [N],N.dTT.copy(),N.c or 1,[],np.zeros((2,9)),0  # Gt
-        while _N_:
-            _N = _N_.pop(0)
-            for L in _N.rim:
-                if L in L_:
-                    n = L.N_[0] if L.N_[1] is _N else L.N_[1]
-                    if n in N_:
-                        if n.root is Gt: continue
-                        if n.fin:  # merge n root
-                            _root = n.root; n_+=_root[0];l_+=_root[3]; _root[6]=1
-                            for _n in _root[0]: _n.root = Gt
-                        else: n.fin=1; _N_+=[n]; n_+=[n]; l_+=[L]  # add single n
-                        n.root = Gt
-        ntt,nc,_ = sum_vt(n_, wTT=ttTrc)
-        if l_: ltt,lc,_= sum_vt(l_, wTT=ttTrc); ltt*=lc/nc;
-        Gt += [n_,ntt,nc, l_,ltt,lc, 0]; Gt_+=[Gt]
-    G_, TT,C,R = [],np.zeros((2,9)),0,0
-    for n_,ntt,nc,l_,ltt,lc,merged in Gt_:
-        if not merged:
-            if gv_(val_(ntt+ltt, ttTrc) * ((nc+lc+wTrc)/(r+cTrc)) - ave):  # wrap singletons too
-                TT += ntt+ltt; C += nc+lc; R += r*(nc+lc)  # add Bt?
-                G_ += [sum2G([(n_,'Nt',ntt,nc,r)]+([(l_,'Lt',ltt,lc,r)] if l_ else []), ttTrc, root)]
-            else:
-                for N in n_: N.fin=0; N.root=root
-    if val_(TT*root.wTT*ttTrc) * ((C+wTrc)/(r+1+cTrc)) * ((len(G_)-1)*wL) > ave:
-        _G_+=G_; _TT+=TT; _C+=C  # concat in tile
-        FV_(CoF.get(), *sum_vt(_G_))
-    return _G_, _TT, _C, r+R/_C
+    def fill_frame(_iy,_ix, elev, T):  # expand level frame from seed tile, similar to frame_blobs
 
-def frame_H(image, iY,iX, Ly,Lx, Y,X, rV, max_elev=4, ffb=0):
-
-    ys,xs = Y//Ly, X//Lx  # each tile's x and y size
-    def fill_frame(_iy,_ix, elev, T, Ly,Lx):  # expand level_frame from pixel-level seed tile, similar to frame_blobs
-
-        frame = np.full((Ly,Lx), None, dtype=object)  # level scope: Ly,Lx grid of Ly,Lx-pixel windows
-        cy,cx = _iy//ys, _ix//xs  # tile grid location
-        PV__ = np.zeros([Ly,Lx])  # projected vlaue map
-        frame[cy,cx] = T; T_=[]; __T_=[(T,cy,cx)]  # output; eval wave: __T_ consumed, _T_ built, per cluster_N
+        frame = np.full((Ly,Lx),None, dtype=object)
+        S = Ly ** elev  # cell span in pixels, frame span = S*Ly
+        cy,cx = Ly//2,Lx//2; y0,x0 = _iy-cy*S, _ix-cx*S  # frame center, pixel anchor
+        frame[cy,cx] = T; T_=[T]; __T_=[(T,cy,cx)]  # output, eval wave
+        PV__ = np.zeros([Ly, Lx])  # projected value map
         while __T_:
             _T_ = []  # next wave
             for T, y,x in __T_:  # eval all wave tiles
-                if gv_(val_(T.dTT*T.wTT*ttFrm) * ((T.c+wFrm)/(T.r+cFrm)) - ave):
-                    dy,dx = T.box[2:] -T.box[:2]
-                    pTT, pc = proj_N(T, np.hypot(dy,dx), np.array([dy,dx]), elev,T.c)  # no proj r?
-                    if gv_(val_(pTT*T.wTT*ttFrm) * ((pc+wFrm)/(T.r+elev+cFrm)) - ave):  # +ve, no uncertainty projection yet
-                        proj_focus(PV__,y,x,T)  # radiate projected value, make directional per L_?
-                        for _y,_x in ((y-1,x), (y+1,x), (y,x-1), (y,x+1)):  # fill 4 adjacent cells
+                if gv_(val_(T.dTT, T.wTT*ttFrm) * ((T.c+wFrm)/(T.r+cFrm)) - ave):
+                    dy,dx = T.box[2:]-T.box[:2]
+                    pTT, pc = proj_N(T, np.hypot(dy,dx), np.array([dy,dx]), elev,T.c)  # aggregate proj, make directional per cell?
+                    if gv_(val_(pTT, T.wTT*ttFrm) * ((pc+wFrm)/(T.r+elev+cFrm)) - ave):  # +ve, no uncertainty projection yet
+                        proj_focus(PV__,y,x,T)  # radiate projected value
+                        for _y,_x in ((y-1,x),(y+1,x),(y,x-1),(y,x+1)):  # fill 4 adjacent cells
                             if not (0<=_y<Ly and 0<=_x<Lx) or frame[_y,_x] is not None: continue  # outside frame or checked
+                            iy,ix = y0+_y*S, x0+_x*S  # cell top-left, sub-frame centers on it: alignment deferred
+                            if iy<0 or ix<0 or iy+S>Y or ix+S>X: frame[_y,_x] = 0; continue  # outside image
                             if gv_(PV__[_y,_x] - ave):  # accumulated from all adjacent tiles
-                                iy = _y * ys; ix = _x * xs
-                                if _T := frame_H(image, iy,ix, Ly,Lx, Y,X, rV, max_elev=elev):  # expand new tile to current level, no fb
+                                if _T := frame_H(image, iy,ix,Y,X, rV,1, max_elev=elev):  # build tile from pixels->elev, no fb
                                     T_ += [_T]; _T_ += [(_T,_y,_x)]; frame[_y,_x] = _T
                                 else: frame[_y,_x] = 0
             __T_ = _T_
-        if T_:
-            TT,C,R = sum_vt(T_, wTT=ttFrm); R += elev
-            if val_(TT*ttFrm) * ((C+wFrm)/(R+cFrm)) > ave:
+        if len(T_) > 1:  # else no expansion, frame = seed
+            TT,C,R = sum_vt(T_); R += elev
+            if val_(TT, ttFrm) * ((C+wFrm)/(R+cFrm)) > ave:
                 return T_,C,R
         return [],0,0
 
-    global ave,avd; aTT=oTT=np.zeros((2,9)); aH,oH = [],[]  # regime refs across levs / ffeedback
-    elev, Fr = 0,[]
-    T = vect_edge( frame_blobs_root( comp_pixel( image[iY:iY+(Y//Ly), iX:iX+(X//Lx)]), rV), iY,iX,Ly,Lx, rV)
+    aTT,oTT = np.zeros((2,9)),np.zeros((2,9)); aH,oH = [],[]  # regime refs across levs / ffeedback
+    T = Fr = vect_edge( frame_blobs_root( comp_pixel( image[iY:iY+Ly**elev, iX:iX+Lx**elev]), rV), iY,iX,Ly,Lx, rV)  # base process
     while T and elev < max_elev:
-        tile_,C,R = fill_frame(iY,iX, elev, T, Ly**elev,Lx**elev)  # project from seed tile
-        if tile_:  # sparse, 2D higher-scope tile( oH( aH
+        tile_,C,R = fill_frame(iY,iX, elev, T)  # seed tile -> sparse higher-scope tile( oH( aH
+        if tile_:
             Fr = sum2F(tile_); Fr.H += [Copy_(Fr.Nt)]  # minimally processed level
             Fr.N_ = [g for t in tile_ for g in t.N_]  # concat edge Gs
             cluster_C(Fr.Nt, get_exemplars(Fr.N_,R,C), R,C)
-            if Ct := Fr.Ct:  # agg+ exemplars
-                cross_comp(Ct,R,Fr)
-                if elev and ffb:  # ffb =1 in main, no ffeedback in added tiles
-                    Fr,aTT,oTT,aH,oH = ffeedback(Fr, aTT,oTT,aH,oH)  # term,form oH(aH
-                    elev +=1; T=Fr  # next-extension seed
-                else: break
-            else: break
-    if Fr: FV_(CoF.get(), Fr.dTT, Fr.c, Fr.r)  # the indentation is wrong here? This should be after while loop
-    return Fr  # intra-lev feedback
+            if Fr.Ct:
+                cross_comp(Fr.Ct, R, Fr)  # agg+ over CC-pruned exemplars
+                if ffb: Fr,aTT,oTT,aH,oH = ffeedback(Fr, aTT,oTT,aH,oH)  # top call only, term,form oH(aH
+            elev += 1; T = Fr  # next-extension seed
+    if Fr: FV_(CoF.get(), Fr.dTT, Fr.c, Fr.r)
+    return Fr  # frame | base tile if no levels
 
 def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
 
@@ -933,7 +930,7 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
             sF_,rF_ = split_oF_()  # splits + remaining oF_s
             smF_ = clust_oF_(sF_+rF_)  # splits + merges + remaining
             if smF_:  # not updated
-                caller_fd_ = {caller_fd for nT in smF_ for fork in nT.N_ for (caller_fd,_) in oF_site_.get(fork, [])}  # get the updated caller
+                caller_fd_ = {caller_fd for nT in smF_ for fork in nT.N_ for (caller_fd,_) in oF_site_.get(fork, [])}
                 updated_oF_ = smF_ + [oF_[iF_[fd.name]] for fd in caller_fd_ if fd.name in iF_]
                 inject_oF_(updated_oF_, globals())
 
@@ -959,5 +956,5 @@ if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.
     for oF in oF_: oF.fdef = nF_[oF.nF]  # update fdef with ast node
     inject_oF_(oF_,g)
     Y, X = imread('./images/toucan.jpg').shape
-    frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -31, iX=X//2 -31, Ly=64,Lx=64, Y=Y, X=X, rV=1, ffb=1)
+    frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -31, iX=X//2 -31, Y=Y, X=X, rV=1, ffb=1)
     # search frames ( tiles inside image, at this size it should be 4K, or 256K panorama, won't actually work on toucan
