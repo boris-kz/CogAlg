@@ -70,6 +70,7 @@ class CF(CBase):  # clustering fork: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, 
         f.wTT = kw.get('wTT',wTT)  # mean wTT = 1?
         f.typ = kw.get('typ',0)  # blocks sub_comp
         f.root = kw.get('root',None)  # convert to list in typ oFs?
+        f.root_ = kw.get('root_',[])  # C's roots
     def __bool__(f): return bool(f.c)  # N_ may be empty?
 
 class CL(CF):  # typ=1, add kern+positionals for base comp, Rt,Nt,Bt,Ct from comp_sub F2N
