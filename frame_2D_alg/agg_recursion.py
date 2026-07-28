@@ -85,7 +85,7 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
 '''
 def cross_comp(Ft, R, root):  # calls cluster_N, sub+, per B_ or spliced from C_-> N_ exemplars
 
-    if Lt := comp_N_(proj_L_(combinations(Ft.N_,2), Ft, R), R):  # N_ may be a mix of typ 3 Ns and typ 2 Cs
+    if Lt := comp_N_( proj_L_(combinations(Ft.N_,2), Ft, R), R):  # or N_, Ct.N_?
         L_, TT, c, r, V = Lt; root.L_ = L_
         oF_[CoF.get().nF].V_ += [V]  # +- comp V
         if gv_(val_(TT*ttcN) * ((c+wcN)/(r+ccN)) * ((len(L_)-1)*wL) - ave):  # return +ve, store -ve gate vals
@@ -99,11 +99,11 @@ def cross_comp(Ft, R, root):  # calls cluster_N, sub+, per B_ or spliced from C_
                     cross_comp(root.Nt, r,root)
             return G_
 
-def comp_N_(pL_, r, tnF=None, root=2):  # incremental-distance cross_comp, max dist depends on prior match
+def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_comp, max dist depends on prior match
 
     L_,N_,mrg_ = [],[],[]
-    for dist, dy_dx, _N,N, lc,lr, pTT,m,d in pL_:
-        if m > 0:
+    for dist, dy_dx, _N,N, lc,lr, pTT,m,d in pL_:  # pL is L = dist, dy_dx, _N,N if fall: not selective
+        if fall or m > 0:
             if gv_(m*(lc/lr)*wN - ave*(r+cN)):  # comp if marginally predictable, update N.Rt pair eval, ave / proj surprise value?
                 Link = comp_N(_N,N, lr,lc, full = not tnF, A=dy_dx, span=dist, rL=root)
                 Link.rTT = np.abs(pTT - Link.dTT) / eps_(Link.dTT)  # relative prediction error to fit oF, direction-agnostic
@@ -113,7 +113,7 @@ def comp_N_(pL_, r, tnF=None, root=2):  # incremental-distance cross_comp, max d
                     for n in N.N_:
                         for rt in n.root_:  # [C,m,d]
                             if rt[0] is N: rt[0] = _N  # keep m,d positions
-    if mrg_: N_ = list(set(N_) - set(mrg_))          
+    if mrg_: N_ = list(set(N_) - set(mrg_))
     if L_:
         for N in set(N_):
             if N.rim: N.Rt = sum2F(N.rim)
@@ -876,7 +876,7 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
                             if not (0<=_y<Ly and 0<=_x<Lx) or frame[_y,_x] is not None: continue  # outside frame or checked
                             if gv_(PV__[_y,_x] - ave):  # accumulated from all adjacent tiles
                                 iy = _y**elev; ix = _x**elev
-                                if _T := frame_H(image, iy,ix, Y,X, rV, elev, max_elev=elev):  # expand new tile to current level, no fb
+                                if _T := frame_H(image, iy,ix, Y,X, rV, elev, max_elev=elev):  # agg+ new tile to curr_level
                                     T_ += [_T]; _T_ += [(_T,_y,_x)]; frame[_y,_x] = _T
                                 else: frame[_y,_x] = 0
             __T_ = _T_
