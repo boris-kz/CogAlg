@@ -141,7 +141,7 @@ def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # fold in comp_N_ (simplified for cen
                     for n in C.N_:
                         for rt in n.root_:  # [C,m,d]
                             if rt[0] is C: rt[0] = _C  # keep m,d positions
-            if mrg_: N_ = list(set(N_) - set(mrg_))
+        if mrg_: N_ = list(set(N_) - set(mrg_))
     else:
         # adjacent | distance-constrained cross_comp along eigenvector: sort by max attr, or original yx in sub+, proj C.L_?
         for C in C_: C.compared=set()
@@ -293,7 +293,7 @@ def get_exemplars(N_,_r,_c):  # multi-layer non-maximum suppression -> sparse se
         else:
             break  # the rest of N_ is weaker, trace via rims
     if E_: FV_(CoF.get(), *sum_vt(list(E_)))
-    else:  E_ = set([N_[0]])  # no gain, no inhibition, any N can be seed
+    else:  E_ = set([N_[0]]); N_[0].exe=1  # no gain, no inhibition, any N can be seed
     return E_
 
 def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace iL_ with E_?
@@ -498,9 +498,8 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CC
             for N in N_: add_H(F.H, N.H, F)  # concat lower levs
             F.H += [sum2F([n for N in N_ for n in N.N_], F)]  # top lev
             F.box = box
-        else:
-            F.m, F.d = val_(TT,fd=1)  # link or centroid
-    else: F.N_=n_; F.m,F.d = val_(TT,fd=1)
+    else: F.N_=n
+    if typ==3: F.Nt.dTT = copy(TT); F.Nt.c = C; F.Nt.r = R; F.Nt.m,F.Nt.d = F.m,F.d
     if root is not None:
         F.wTT = root.wTT
         if typ!=2: add2F(root,F,2)  # skip centroids
@@ -552,8 +551,7 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
         Lt = G.Lt; L_,lm,ld,lr = Lt.N_,Lt.m,Lt.d,Lt.r; Av=ave+avd  # no levR = 1/len(L_): represented by c
         if gv_((lm+ld)* wcC - Av* (lr+1+ccC)):  # mdecay(L_)-decay?
             c = G.Lt.c; r += 1
-            Cr = cluster_C(G.Nt, get_exemplars(N_,r,c), r,c)
-            if Cr[0]: N_,r = Cr
+            if (Cr := cluster_C(G.Nt, get_exemplars(N_,r,c), r,c))[0]: N_,r = Cr; [F2N(N) for N in N_]
         E_ = get_exemplars(N_,r,c)  # or just sum_vt + w?
         ctt,cc,cr = sum_vt(E_)
         if gv_(val_(ctt) * ((cc+wAgg)/(cr+cAgg)) * ((len(E_)-1)*wL) - ave):
@@ -611,7 +609,7 @@ def F2N(F):  # convert for cross_comp
     F.__class__ = CN; F.Nt = Nt
     box = F.box if hasattr(F, 'box') else np.array([np.inf,np.inf,-np.inf,-np.inf])  # keep existing box
     Na_ = dict(H=[], mang=1, box=box, sub=0, exe=0, fin=0, root_=[], compared = set())
-    if F.typ==0:  # CF | PP, no overlap for Cs
+    if F.typ==0 and not hasattr(F, 'kern'):  # CF | PP, no overlap for Cs (only CF)
         Na_.update(kern=np.zeros(4), span=1, angl=None, yx=np.zeros(2))
     for k,v in Na_.items(): setattr(F, k, copy(v))
     [setattr(F, ft, CF(root=F)) for ft in ('Lt','Ct','Bt','Xt','Rt') if not getattr(F, ft, None)]
@@ -687,7 +685,7 @@ def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
     link.m += dddH.m; link.d += dddH.d; link.c += dddH.c; link.dTT += dddH.dTT
     add_H(ddH, dddH)    
 '''
-def proj_L_(pairs, root, r, max=20, fall=1):
+def proj_L_(pairs, root, r, max=20, fall=1,frim=0):
 
     def proj_V(_N, N, dist, dy_dx, dec, r):  # _N x N induction
         Dec = dec or decay ** ((dist / ((_N.span + N.span) / 2)))
@@ -713,6 +711,9 @@ def proj_L_(pairs, root, r, max=20, fall=1):
                     lc = min(_N.c, N.c); lr = r + (N.r + _N.r) / 2  # +|-match certainty
                     pL = [dist, dy_dx, _N, N, lc, lr, pTT, m, d]
                     for l_ in pL_, _N.prim, N.prim: l_ += [pL]
+                    if frim:  # for frame_H's cluster_C
+                        pL = CL(typ=-1, N_=[_N,N],dTT=pTT,m=m,d=d,c=lc,r=lr, angl=[dy_dx,1],span=dist)
+                        _N.rim += [pL]; N.rim += [pL]
     return pL_
 
 def proj_focus(PV__, y,x, tile):  # radial accum of projected focus value in PV__
@@ -876,6 +877,7 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
                             if not (0<=_y<Ly and 0<=_x<Lx) or frame[_y,_x] is not None: continue  # outside frame or checked
                             if gv_(PV__[_y,_x] - ave):  # accumulated from all adjacent tiles
                                 iy = _y**elev; ix = _x**elev
+                                # if max_elev = elev, no fill_frame in deeper frame_H?
                                 if _T := frame_H(image, iy,ix, Y,X, rV, elev, max_elev=elev):  # agg+ new tile to curr_level
                                     T_ += [_T]; _T_ += [(_T,_y,_x)]; frame[_y,_x] = _T
                                 else: frame[_y,_x] = 0
@@ -894,6 +896,7 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
         if tile_:
             Fr = sum2F(tile_); Fr.H += [Copy_(Fr.Nt)]  # minimally processed level
             Fr.N_ = [g for t in tile_ for g in t.N_]  # concat edge Gs
+            proj_L_(combinations(Fr.N_,2), Fr.Nt, R, frim=1)  # add pL into rim
             cluster_C(Fr.Nt, get_exemplars(Fr.N_,R,C), R,C)
             if Ct := Fr.Ct:
                 cross_comp(Ct, R, Fr)  # agg+ over CC-pruned exemplars
