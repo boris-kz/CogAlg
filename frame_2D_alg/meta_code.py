@@ -70,6 +70,7 @@ class CF(CBase):  # clustering fork: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, 
         f.wTT = kw.get('wTT',wTT)  # mean wTT = 1?
         f.typ = kw.get('typ',0)  # blocks sub_comp
         f.root = kw.get('root',None)  # convert to list in typ oFs?
+        f.root_ = kw.get('root_', [])  # [[C,m,d]...] per root centroid, add in cluster_C only?
     def __bool__(f): return bool(f.c)  # N_ may be empty?
 
 class CL(CF):  # typ=1, add kern+positionals for base comp, Rt,Nt,Bt,Ct from comp_sub F2N
@@ -100,7 +101,6 @@ class CN(CL):  # full node | graph fork set
         n.fin = kw.get('fin',0)  # clustered, temporary
         n.compared = kw.get('compared', set())
         n.typ = kw.get('typ',3)  # full comp
-        n.root_ = kw.get('root_', [])  # [[C,m,d]...] per root centroid, add in cluster_C only?
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.c)
 
