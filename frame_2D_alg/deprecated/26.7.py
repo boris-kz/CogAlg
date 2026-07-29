@@ -652,4 +652,58 @@ def sum2G1(ft_, fTT, root=None, init=1):  # core clustering function
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G
 
+def cross_comp2(Ft, R, root):  # calls cluster_N, sub+, per B_ or spliced from C_-> N_ exemplars
+
+    if Lt := comp_N_( proj_L_(combinations(Ft.N_,2), Ft, R), R):  # or N_, Ct.N_?
+        L_, TT, c, r, V = Lt; root.L_ = L_
+        oF_[CoF.get().nF].V_ += [V]  # +- comp V
+        if gv_(val_(TT*ttcN) * ((c+wcN)/(r+ccN)) * ((len(L_)-1)*wL) - ave):  # return +ve, store -ve gate vals
+            E_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)  # /+ve L only
+            G_,r = cluster_N(root, E_,r,c)  # -> sum2G, sub+
+            if G_:
+                if not root.typ: F2N(root)  # promote at 1st sub+ or agg+
+                root.H += [sum2F(L_,root,froot=1)]  # dLev per L_
+                root.Nt = sum2F(G_,root,froot=2)  # | C_?
+                if root.Ct:  # refined for agg+
+                    cross_comp(root.Nt, r,root)
+            return G_
+
+def comp_C_(C_,_r, _C_=[], fall=1, fC=0):  # fold in comp_N_ (simplified for centroids, trans-N_s, levels)
+
+    N_,L_,tc,tr = [],[],0,0; TTm,cm,rm = np.zeros((2,9)),0,0
+    if fall:
+        mrg_ = []
+        pairs = product(C_,_C_) if _C_ else combinations(C_,r=2)  # comp between | within list
+        for _C, C in pairs:
+            c = min(C.c,_C.c); r = (C.r+_C.r)/2  # comp weight
+            tc += c; tr += r*c
+            if _C is C:
+                dtt = np.array([C.dTT[1],np.zeros(9)]); TTm+=dtt; cm+=c; rm+=1  # overlap=match
+            else:
+                dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx)
+                L = comp_N(_C,C,_r,c, A=dy_dx,span=dist); L_+=[L]; N_+=[_C,C]
+                if L.m>ave: TTm+=L.dTT; cm+=L.c; rm+=L.r
+                if fC and gv_(L.m*wF- ave*(L.r+cF)):
+                    add2F(_C,C,1); mrg_ += [C]  # may not already be merged
+                    for n in C.N_:
+                        for rt in n.root_:  # [C,m,d]
+                            if rt[0] is C: rt[0] = _C  # keep m,d positions
+        if mrg_: N_ = list(set(N_) - set(mrg_))
+    else:
+        # adjacent | distance-constrained cross_comp along eigenvector: sort by max attr, or original yx in sub+, proj C.L_?
+        for C in C_: C.compared=set()
+        C_ = sorted(C_, key=lambda C: C.dTT[0][np.argmax(ttC_[0])])  # max weight defines eigenvector
+        for j in range( len(C_)-1):
+            _C = C_[j]; C = C_[j+1]
+            if _C in C.compared: continue
+            dy_dx = _C.yx-C.yx; dist = np.hypot(*dy_dx); c = min(C.c,_C.c); r = (C.r+_C.r)/2  # tc += c; acc[1]+=c
+            tc += c; tr += r*c
+            L = comp_N(_C,C,_r, c ,A=dy_dx,span=dist); L_+=[L]; N_ +=[_C,C]  # simplified for typ=2
+            if L.m>ave: TTm+=L.dTT; cm+=L.c; rm+=L.r
+    if L_:
+        for N in list(set(N_)):
+            if N.rim: N.Rt = sum2F(N.rim)
+        pL_ = [L for L in L_ if L.m>ave]
+        cV = FV_(CoF.get(), *sum_vt(L_))
+        return pL_,TTm,cm, rm/(cm or eps), cV  # +-Ls
 
