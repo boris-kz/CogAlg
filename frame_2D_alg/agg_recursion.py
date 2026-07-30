@@ -50,9 +50,9 @@ postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized vars are summed small-case vars
 '''
 wM,wD,wi, wG,wI,wa, wL,wS,wA = wT; Ly = Lx = 64  # fractal tile dims
-cFrm,cAgg,cTrc, cN_,cC_,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (      # function complexity
-wFrm,wAgg,wTrc, wN_,wC_,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init = cost
-ttFrm,ttA,ttTrc,ttN_,ttC_,ttN,ttF,ttE,ttcN,ttcC,ttcP, ttsG,ttBac,ttPrj,ttVct = [F.wTT for F in oF_]
+cFrm,cAgg,cTrc, cN_,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (      # function complexity
+wFrm,wAgg,wTrc, wN_,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init = cost
+ttFrm,ttA,ttTrc,ttN_,ttN,ttF,ttE,ttcN,ttcC,ttcP, ttsG,ttBac,ttPrj,ttVct = [F.wTT for F in oF_]
 
 def FV_(F, tt,c,r):  # combine m,d per oF
     tF = oF_[F.nF]; tF.c += c
@@ -332,7 +332,6 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
         _C_ += [C]
     out_ = []
     while True:  # reform C_
-        # need to add eval Rt: connectivity term
         C_, cnt,mat,dif,rdn,DTT,Up = [],0,0,0,0,np.zeros((2,9)),0; Ave = ave*(_r+ccC); Avd = avd*(_r+ccC)
         for _C in _C_:  # C.m,d /rTT? sort / sum(_C.m_)?
             N__,n_,m_,d_,M,D,T,R,dTT,up = [],[],[],[],0,0,0,0, np.zeros((2,9)),0  # /C
@@ -340,13 +339,15 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
                 if n not in N_: N_+=[n]; n.root_,n._root_ = [],[]
                 dtt,_ = base_comp(_C,n)  # or comp_N, decay?
                 m,d = val_(dtt,ttcC,1); dTT+=dtt
+                # lm= lc= lr= 0  # lateral connectivity term
+                # for l in (n.rim & _C.L_): lm+=l.m; lc for l.c; lr+=l.r
                 n_+=[n]; m_+=[m]; d_+=[d]; c=n.c; T+=c; M+=m*c; D+=abs(d)*c; R+=n.r*c  # scale totals only?
                 _root_ = [rt[0] for rt in n._root_]
                 if _C in _root_:
-                    k=_root_.index(_C); up += abs(n._root_[k][1]-m) + abs(n._root_[k][2]-d)
+                    i =_root_.index(_C); up += abs(n._root_[i][1]-m) + abs(n._root_[i][2]-d)
                 else: up += m+abs(d)
-            r = _r+ R/T  # loop-local, not ave?
-            if M * (_C.m+wC_*len(n_)) > Ave * (r+_C.r+ cC_*len(n_)):  # else: Up+= sum(_C._m_)+ sum([abs(d) for d in _C._d_])?
+            r = _r + R/T  # loop-local
+            if M * (_C.m+wcC*len(n_)) > Ave * (r+_C.r+ ccC*len(n_)):  # else: Up+= sum(_C._m_)+ sum([abs(d) for d in _C._d_])?
                 N__ += [_n for n in n_ for l in n.rim for _n in l.N_ if _n is not n]  # extend frontier with +|-Ls
                 C = sum2F(n_, Ft,m_,d_)  # C.N_ = n_
                 C._N_ = list(set(N__) - set(n_))  # new frontier
@@ -369,9 +370,8 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
         for n in [N for C in out_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals:
             n.exe = (n.d if n.typ==1 else n.m) + sum(rt[1] for rt in n.root_) - ave
         _m,_d,_tt,_c,_r = sum_vt(out_, fm=1)
-        FV_(CoF.get(),_tt,_c,_r)  # r/ deeper cross_comp?
-        if gv_(_m*_c * (Ft.root.wTT*ttcC) * (_c/(_r+ccC)) * ((len(out_)-1)*wL) * wcC - ave):
-            Ct = sum2F(out_); Ft.root.Ct = Ct; Ct.root = Ft.root
+        FV_(CoF.get(),_tt,_c,_r)  # r per deeper cross_comp?
+        if gv_((_m *_c *wcC) / (_r+ccC) * ((len(out_)-1)*wL) - ave):
             return out_,_m,_c,_r
 
 def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
@@ -442,18 +442,17 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CC
             if typ:
                 kern=n.kern*w; span=n.span*w; yx=n.yx*w; angl = copy(n.angl[0]) if n.angl is not None else None
                 if typ==3: box=copy(n.box)
-    F = (cls_[typ])(dTT=TT, c=C, r=R, nF=nF)
+    F = (cls_[typ])(dTT=TT, c=C, r=R, nF=nF); F.N_ = n_
     if np.any(m_): F.m_,F.d_ = m_,d_; F.m, F.d = sum(m_),sum(d_)  # m_, d_ may empty here
     else:          F.m, F.d = val_(TT, fd=1)   # consolidate all val_(TT) with a flag like FV_?
     if typ==3: F.Nt.dTT = copy(TT); F.Nt.c = C; F.Nt.r = R
     if typ:
-        F.N_ = n_; F.kern=kern; F.span=span; F.yx=yx
+        F.kern=kern; F.span=span; F.yx=yx
         if angl is not None: F.angl = [angl, np.sign(F.dTT[1] @ ttcP[1])]
         if typ==3:  # frame?
             for N in N_: add_H(F.H, N.H, F)  # concat lower levs
             F.H += [sum2F([n for N in N_ for n in N.N_], F)]  # top lev
             F.box = box
-    else: F.N_=n
     if typ==3: F.Nt.dTT = copy(TT); F.Nt.c = C; F.Nt.r = R; F.Nt.m,F.Nt.d = F.m,F.d
     if root is not None:
         F.wTT = root.wTT
@@ -489,14 +488,17 @@ def add_H(H,h, root, fN=0):
             if Lev: add2F(Lev,lev,1)  # unpack nested Hs in add2H
             else: H.append(Copy_(lev, root, cls=(CF,CN)[fN]))
 
-def xcomp(root, G_, m, c, r):  # sub+|agg+: refine by CC and exe -> cross_comp
+def xcomp(root, G_, m, c, r, nF):  # sub+|agg+: refine by CC and exe -> cross_comp
 
-    proj_L_(combinations(G_,2), root.Nt, r, frim=1)  # add pL into rim
-    Ct, cm, cc, cr = cluster_C(root, get_exemplars(G_,r,c), r,c)  # refine: root.Nt = Ct?
-    if gv_((m+cm) * ((c+cc+wAgg) / (r+cr+cAgg)) * ((len(G_)-1)*wL) - ave):
-        root.H += [Copy_(root)]  # lower agg lev
-        e_ = get_exemplars(Ct.N_, r,c)
-        cross_comp(e_, r,root)  # agg+
+    C__ = []; M = C = R = 0
+    for G in G_:
+        if Ct := cluster_C(root, get_exemplars(G.N_, r,c), r,c):  # refines, splits each G
+            C_, _m,_c,_r = Ct; C__+=C_; M+=_m; C+=c; R+=r
+    if C__:  # spliced refined sub_G_s
+        sum2F(C__, root, nF)  # also pass M,C,R?
+        if gv_((m+M) * ((c+C+wAgg) / (r+ R/len(C__)+ cAgg)) * ((len(G_)-1)*wL) - ave):
+            root.H += [Copy_(root)]  # lower agg
+            cross_comp( get_exemplars(Ct.N_, r,c), r,root)  # agg+
 
 def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
 
@@ -514,11 +516,12 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
     if G.Lt:  # sub+
         Lt = G.Lt; L_,lm,lc,lr = Lt.N_,Lt.m,Lt.c,Lt.r; Av=ave+avd  # no levR = 1/len(L_): represented by c
         if gv_(lm * lc * wcC - Av * (lr+1+ccC)):  # mdecay(L_)-decay?
-            xcomp(root, N_,lm,lc,lr)  # sub+
+            xcomp(G, N_,lm,lc,lr)  # sub+, cross_comp
     if G.Bt:
-        Bt = G.Bt; bd,br,L = Bt.d,Bt.r,len(Bt.N_); rroot = root.root if root.root else 0
-        if N.typ!=1 and bd*(wAgg*L) > avd*(br+cAgg*L): [F2N(L) for L in Bt.N_]
-        cross_comp(Bt, br, Bt)  # no ddfork; or xcomp too?
+        Bt = G.Bt; B_,bd,bc,br = Bt.N_,Bt.d,Bt.c,Bt.r; rroot = root.root if root.root else 0
+        if N.typ!=1 and gv_(bd*bc * wcC - Av * (br+1+ccC)):
+            [F2N(L) for L in Bt.N_]
+            xcomp(G, N_,bd,bc,br, nF='Bt')  # sub+, no ddfork?
         if rroot: Bt.brrw = Bt.m * (rroot.m * (decay * (rroot.span/G.span)))  # external lend only, need to subtract from root?
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G
@@ -856,9 +859,9 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
             Fr = sum2F(N_); m,c,r = Fr.m,Fr.c,Fr.r
             Fr.H += [sum2F(tile_)]  # minimally processed level
             if gv_(m * c * wcC - ave * (r+1+ccC)):
-                xcomp(Fr, N_,m,c,r)  # sub+
-                if elev and ffb:  # ffb =1 in main, no ffeedback in added tiles
-                    Fr,aTT,oTT,aH,oH = ffeedback(Fr, aTT,oTT,aH,oH)  # term,form oH(aH
+                xcomp(Fr, N_, m,c,r)  # sub+, cross_comp
+                if elev and ffb:  # ffb=1 in main, no ffeedback in side tiles
+                    Fr,aTT,oTT,aH,oH = ffeedback(Fr, aTT,oTT,aH,oH)  # term,form oH ( aH
                     elev += 1; T=Fr  # next-extension seed
                 else: break
             else: break

@@ -67,7 +67,7 @@ class CF(CBase):  # clustering fork: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, 
         f.H = kw.get('H',[])  # hierarchy = packed N_|L_s: lower CFs/ Nt||Ct, nestable, H[0]= redundant f.N_ if not empty
         f.nF = kw.get('nF','Nt')
         f.dTT = kw.get('dTT',np.zeros((2,9))); f.m, f.d, f.c, f.r = [kw.get(x,0) for x in ('m','d','c','r')]  # rdpTT in oF?
-        f.wTT = kw.get('wTT',wTT)  # mean wTT = 1?
+        f.wTT = kw.get('wTT',copy(wTT))  # mean wTT = 1?
         f.typ = kw.get('typ',0)  # blocks sub_comp
         f.root = kw.get('root',None)  # convert to list in typ oFs?
         f.root_ = kw.get('root_', [])  # [[C,m,d]...] per root centroid, add in cluster_C only?
@@ -384,11 +384,11 @@ costs = {  # types
     ast.Call: 3,  # frame creation + arg binding + return: overhead beyond the callee body itself
 }
 _names = ['frame_H','cross_comp','trace_edge',                         # root_, oF_[0] = frame_H, adds level per call
-          'comp_N_','comp_C_','comp_N','comp_F',                       # comp_: incrementally distant, nested
+          'comp_N_','comp_N','comp_F',                       # comp_: incrementally distant, nested
           'get_exemplars','cluster_N','cluster_C','cluster_P','sum2G', # clus_: incrementally fuzzy, parallel
           'ffeedback','proj_N',                                        # fbac_: update filters) coords) funcs
           'vect_edge']                                                 # prep_
-typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','clus_','fbac_','fbac_','prep_']
+typ_= ['root_','root_','root_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','clus_','fbac_','fbac_','prep_']
 nF_ = [None]*len(_names)  # FunctionDefs
 iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
 oF_ = [CoF(nF=i,typ=typ) for i,typ in enumerate(typ_)]
