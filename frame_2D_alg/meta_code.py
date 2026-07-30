@@ -384,11 +384,11 @@ costs = {  # types
     ast.Call: 3,  # frame creation + arg binding + return: overhead beyond the callee body itself
 }
 _names = ['frame_H','cross_comp','trace_edge',                         # root_, oF_[0] = frame_H, adds level per call
-          'comp_N_','comp_N','comp_F',                       # comp_: incrementally distant, nested
+          'comp_N_','comp_N','comp_F','xcomp',                         # comp_: incrementally distant, nested
           'get_exemplars','cluster_N','cluster_C','cluster_P','sum2G', # clus_: incrementally fuzzy, parallel
           'ffeedback','proj_N',                                        # fbac_: update filters) coords) funcs
           'vect_edge']                                                 # prep_
-typ_= ['root_','root_','root_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','clus_','fbac_','fbac_','prep_']
+typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','clus_','fbac_','fbac_','prep_']
 nF_ = [None]*len(_names)  # FunctionDefs
 iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
 oF_ = [CoF(nF=i,typ=typ) for i,typ in enumerate(typ_)]
