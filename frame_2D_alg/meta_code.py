@@ -102,6 +102,7 @@ class CN(CL):  # full node | graph fork set
         n.fin = kw.get('fin',0)  # clustered, temporary
         n.compared = kw.get('compared', set())
         n.typ = kw.get('typ',3)  # full comp
+        n.C_ = kw.get('C_',[])  # C roots
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.c)
 
