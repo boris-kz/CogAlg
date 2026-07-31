@@ -49,9 +49,9 @@ prefix  _ denotes prior of two same-name vars, multiple _s for relative preceden
 postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized vars are summed small-case vars
 '''
-wM,wD,wi, wG,wI,wa, wL,wS,wA = wT; Ly = Lx = 64  # fractal tile dims
-cFrm,cAgg,cTrc, cN_,cN,cF,cX, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (      # function complexity
-wFrm,wAgg,wTrc, wN_,wN,wF,wX, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init = cost
+wM,wD, wi, wG,wI,wa, wL,wS,wA = wT; Ly = Lx = 64  # fractal tile dims
+cFrm,cTrc, cN_,cN,cF,cX, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (  # function complexity
+wFrm,wTrc, wN_,wN,wF,wX, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init=cost
 ttFrm,ttA,ttTrc,ttN_,ttN,ttF,ttX, ttE,ttcN,ttcC,ttcP, ttsG,ttBac,ttPrj,ttVct = [F.wTT for F in oF_]
 
 def FV_(F, tt,c,r):  # combine m,d per oF
@@ -83,14 +83,24 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
 - forward: selective extend cross-comp, clustering across tiles, re-order centroids by eigenvalues
 - feedback filter updates 
 '''
-def cross_comp(N_, R, root):  # calls cluster_N, sub+, per B_ or spliced from C_-> N_ exemplars
+def cross_comp(root, G_, m, c, r, nF='Nt'):  # sub+|agg+: refine by CC and exe -> cross_comp
 
-    if Lt := comp_N_( proj_L_(combinations(N_,2), root, R), R):  # or N_, Ct.N_?
-        L_, TT, c, r, V = Lt
-        root.L_ = L_; oF_[CoF.get().nF].V_ += [V]  # +-/ comp
-        if gv_(val_(TT,ttcN) * ((c+wcN)/(r+ccN)) * ((len(L_)-1)*wL) - ave):  # return +ve, store -ve gate Vs
-            E_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)  # +ve Ls only
-            return cluster_N(root, E_,r,c)  # sum2G -> agg+
+    C__ = []; M = C = R = 0
+    for G in G_:
+        if gv_(G.m * ((G.c*wcC) / (G.r*ccC)) * ((len(G_)-1)*wL) - ave):
+            if Ct := cluster_C(G, get_exemplars(G.N_, r,c), r,c):  # refines, splits each G
+                C_, _m,_c,_r = Ct.N_,Ct.m,Ct.c,Ct.r
+                C__ += C_; M+=_m; C+=_c; R+=_r  # splice refined sub_G_s
+    if C__:
+        sum2F(C__, root, nF=nF)  # also pass M,C,R?
+        if gv_((m+M) * ((c+C+wN_) / (r+ R/len(C__)+ cN_)) * ((len(G_)-1)*wL) - ave):
+            root.H += [Copy_(root)]  # lower agg lev
+            if Lt := comp_N_( proj_L_(combinations([F2N(C) for C in C__],2), root, R), R):
+                L_, TT, c, r, V = Lt
+                root.L_ = L_; oF_[CoF.get().nF].V_ += [V]  # +-/ comp
+                if gv_(val_(TT,ttcN) * ((c+wcN)/(r+ccN)) * ((len(L_)-1)*wL) - ave):  # return +ve, store -ve gate Vs
+                    e_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)  # +ve Ls only
+                    return cluster_N(root, e_,r,c)  # sum2G -> agg+
 
 def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_comp, max dist depends on prior match
 
@@ -99,7 +109,7 @@ def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_com
         if fall or (m>0 and gv_(m*(lc/lr)*wN - ave*(r+cN))):
         # comp if marginally predictable: ave / proj surprise value?
             Link = comp_N(_N,N, lr,lc, full = not tnF, A=dy_dx, span=dist, rL=root)
-            Link.rTT = np.abs(pTT - Link.dTT) / eps_(Link.dTT)  # relative prediction error to fit oF, direction-agnostic
+            Link.rTT = np.abs(pTT - Link.dTT) / eps_(Link.dTT)  # relative prediction error/oF, direction-agnostic
             L_+= [Link]; N_+= [_N,N]
             if _N.root_ and gv_(Link.m*wF- ave*(Link.r+cF)):
                 add2F(_N,N,1); mrg_ += [N]  # may not already be merged
@@ -128,7 +138,7 @@ def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None):
     TT = base_comp(_N,N)[0] if full else comp_derT(_N.dTT[1],N.dTT[1])
     m,d = val_(TT, ttN_,1)
     L = CL(N_=[_N,N], dTT=TT,m=m,d=d,c=c,r=r, root=rL)
-    if N.typ and gv_(m* (c/r)* wN_ - ave*(r+cN_)):  # skip PPs, may comp Nts?
+    if N.typ > 1 and gv_(m* (c/r)* wN_ - ave*(r+cN_)):  # skip PPs, Nts?
         L.H = [Copy_(L)]  # lev0 to preserve resolution before adding deeper tLevs, min len H = 2
         dn_ = []  # cross_comp N_| Ft_ -> top tLev
         if N.typ < 3:  # L | C | Nt, merge?
@@ -372,7 +382,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
         _m,_d,_tt,_c,_r = sum_vt(out_, fm=1)
         FV_(CoF.get(),_tt,_c,_r)  # r per deeper cross_comp?
         if gv_((_m *_c *wcC) / (_r+ccC) * ((len(out_)-1)*wL) - ave):
-            Ft.root.H += [Copy_(Ft)] 
+            Ft.root.H += [Copy_(Ft)]
             return sum2F(out_, Ft.root, nF='Nt')
 
 def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
@@ -489,20 +499,6 @@ def add_H(H,h, root, fN=0):
             if Lev: add2F(Lev,lev,1)  # unpack nested Hs in add2H
             else: H.append(Copy_(lev, root, cls=(CF,CN)[fN]))
 
-def xcomp(root, G_, m, c, r, nF='Nt'):  # sub+|agg+: refine by CC and exe -> cross_comp
-
-    C__ = []; M = C = R = 0
-    for G in G_:
-        # skip when it's called from traced-edge, where G is PP, and PP.N_ is empty
-        if G.N_ and (Ct := cluster_C(G, get_exemplars(G.N_, r,c), r,c)):  # refines, splits each G
-            C_, _m,_c,_r = Ct.N_,Ct.m,Ct.c,Ct.r; C__+=C_; M+=_m; C+=_c; R+=_r
-    if C__:  # spliced refined sub_G_s
-        sum2F(C__, root, nF=nF)  # also pass M,C,R?
-        if gv_((m+M) * ((c+C+wAgg+wX) / (r+ R/len(C__)+ cAgg+cX)) * ((len(G_)-1)*wL) - ave):
-            root.H += [Copy_(root)]  # lower agg
-            [F2N(C) for C in Ct.N_]
-            cross_comp( get_exemplars(Ct.N_, r,c), r,root)  # agg+
-
 def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
 
     if not init:
@@ -518,13 +514,12 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
     N_ = G.N_; N=N_[0]; G.sub = N.sub+1 if G.L_ else N.sub; r=G.r; Av=ave+avd
     if G.Lt:  # sub+
         Lt = G.Lt; L_,lm,lc,lr = Lt.N_,Lt.m,Lt.c,Lt.r  # no levR = 1/len(L_): represented by c
-        if gv_(lm * lc * wcC - Av * (lr+1+ccC)):  # mdecay(L_)-decay?
-            xcomp(G, N_,lm,lc,lr)  # sub+, cross_comp
+        if gv_(lm*lc*wX - Av* (lr+1+cX)):  # mdecay(L_)-decay?
+            cross_comp(G, N_,lm,lc,lr)  # sub+, cross_comp
     if G.Bt:
-        Bt = G.Bt; B_,bd,bc,br = Bt.N_,Bt.d,Bt.c,Bt.r; rroot = root.root if root.root else 0
-        if N.typ!=1 and gv_(bd*bc * wcC - Av * (br+1+ccC)):
-            [F2N(L) for L in Bt.N_]
-            xcomp(Bt, B_,bd,bc,br, nF='Bt')  # sub+, no ddfork?
+        Bt = G.Bt; bd,bc,br = Bt.d,Bt.c,Bt.r; rroot = root.root if root.root else 0
+        if N.typ!=1 and gv_(bd*bc*wX - Av*(br+1+cX)):  # no ddfork, eval len?
+            cross_comp(Bt, [F2N(L) for L in Bt.N_],bd,bc,br, nF='Bt')
         if rroot: Bt.brrw = Bt.m * (rroot.m * (decay * (rroot.span/G.span)))  # external lend only, need to subtract from root?
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G
@@ -744,7 +739,8 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
     Gt_ = []
     for N in N_:  # flood-fill G per seed N
         if N.fin: continue
-        N.fin=1; _N_=[N]; Gt=[]; N.root=Gt; n_,ntt,nc, l_,ltt,lc = [N],N.dTT.copy(),N.c or 1,[],np.zeros((2,9)),0  # Gt
+        N.fin=1; _N_=[N]; Gt=[]; N.root=Gt
+        n_,ntt,nc = [N],N.dTT.copy(),(N.c or 1); l_,ltt,lc = [],np.zeros((2,9)),0  # Gt
         while _N_:
             _N = _N_.pop(0)
             for L in _N.rim:
@@ -858,7 +854,7 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
             Fr = sum2F(N_); m,c,r = Fr.m,Fr.c,Fr.r
             Fr.H += [sum2F(tile_)]  # minimally processed level
             if gv_(m * c * wcC - ave * (r+1+ccC)):
-                xcomp(Fr, N_, m,c,r)  # sub+, cross_comp
+                cross_comp(Fr, N_, m,c,r)  # agg+
                 if elev and ffb:  # ffb=1 in main, no ffeedback in side tiles
                     Fr,aTT,oTT,aH,oH = ffeedback(Fr, aTT,oTT,aH,oH)  # term,form oH ( aH
                     elev += 1; T=Fr  # next-extension seed

@@ -81,6 +81,7 @@ class CL(CF):  # typ=1, add kern+positionals for base comp, Rt,Nt,Bt,Ct from com
         l.span = kw.get('span',1)  # distance in nodet or aRad, comp with kern or len(N_)
         l.angl = kw.get('angl',None)  # (dy,dx),dir, sum from L_, rarely?
         l.typ  = kw.get('typ',1)
+        l.rim  = kw.get('rim',[])  # comp PPs and Ls
         l.yx   = kw.get('yx', np.zeros(2))  # mean nodet? comp box is not meaningful?
 
 def prop_F_(F, attr='N_'):  # factory function to get and update top-composition fork.N_|H
@@ -90,12 +91,12 @@ def prop_F_(F, attr='N_'):  # factory function to get and update top-composition
 
 class CN(CL):  # full node | graph fork set
     name = "node"
-    N_,C_,L_,B_,X_,rim,H = prop_F_('Nt'),prop_F_('Ct'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Xt'),prop_F_('Rt'),prop_F_('Nt','H')  # ext|int -defined Ns,Ls
+    N_,L_,B_,X_,rim,H = prop_F_('Nt'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Xt'),prop_F_('Rt'),prop_F_('Nt','H')  # ext|int -defined Ns,Ls
     def __init__(n, **kw):
-        n.Nt,n.Bt,n.Ct,n.Lt,n.Xt,n.Rt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Ct','Lt','Xt','Rt')))  # CN if nest, Ct||Nt
+        n.Nt,n.Bt,n.Lt,n.Xt,n.Rt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Lt','Xt','Rt')))  # CN if nest
         super().__init__(**kw)
+        n.mang = kw.get('mang',1) # ave match of angles in L_, =1 in links
         n.box = kw.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
-        n.mang= kw.get('mang',1) # ave match of angles in L_, =1 in links
         n.sub = kw.get('sub',0)  # composition depth relative to top-composition peers?
         n.exe = kw.get('exe',0)  # exemplar, temporary
         n.fin = kw.get('fin',0)  # clustered, temporary
@@ -383,12 +384,12 @@ costs = {  # types
     ast.SetComp: 2,  # same as ListComp + hashing per element
     ast.Call: 3,  # frame creation + arg binding + return: overhead beyond the callee body itself
 }
-_names = ['frame_H','cross_comp','trace_edge',                         # root_, oF_[0] = frame_H, adds level per call
-          'comp_N_','comp_N','comp_F','xcomp',                         # comp_: incrementally distant, nested
+_names = ['frame_H','cross_comp','trace_edge',  # root_, oF_[0] = frame_H, adds level per call
+          'comp_N_','comp_N','comp_F',          # comp_: incrementally distant, nested
           'get_exemplars','cluster_N','cluster_C','cluster_P','sum2G', # clus_: incrementally fuzzy, parallel
           'ffeedback','proj_N',                                        # fbac_: update filters) coords) funcs
           'vect_edge']                                                 # prep_
-typ_= ['root_','root_','root_','comp_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','clus_','fbac_','fbac_','prep_']
+typ_= ['root_','root_','root_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','clus_','fbac_','fbac_','prep_']
 nF_ = [None]*len(_names)  # FunctionDefs
 iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
 oF_ = [CoF(nF=i,typ=typ) for i,typ in enumerate(typ_)]
