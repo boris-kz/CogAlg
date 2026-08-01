@@ -83,7 +83,7 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
 - forward: selective extend cross-comp, clustering across tiles, re-order centroids by eigenvalues
 - feedback filter updates 
 '''
-def cross_comp(root, G_, m, c, r, nF='Nt'):  # sub+|agg+: refine by CC and exe -> cross_comp
+def cross_comp(root, G_, m, c, r, nF='Nt'):  # agg+: refine by CC,exe -> cross_comp, nF: core|contour?
 
     C__ = []; M = C = R = 0
     for G in G_:
@@ -92,13 +92,13 @@ def cross_comp(root, G_, m, c, r, nF='Nt'):  # sub+|agg+: refine by CC and exe -
                 C_, _m,_c,_r = Ct.N_,Ct.m,Ct.c,Ct.r
                 C__ += C_; M+=_m; C+=_c; R+=_r  # splice refined sub_G_s
     if C__:
-        sum2F(C__, root, nF=nF)  # also pass M,C,R?
-        if gv_((m+M) * ((c+C+wN_) / (r+ R/len(C__)+ cN_)) * ((len(C__)-1)*wL) - ave):
+        setattr(root,nF, sum2F(C__,root, nF=nF, froot=2)); L=len(C__); R/=L  # also pass M,C,R?
+        if gv_((m+M) * (c*(C+wN_) / (r*(R+cN_))) * ((L-1)*wL) - ave):
             root.H += [Copy_(root)]  # lower agg lev
-            if Lt := comp_N_( proj_L_(combinations([F2N(C) for C in C__],2), root, R), R):
+            if Lt := comp_N_( proj_L_(combinations([F2N(C) for C in C__],2), root,R), R):
                 L_, TT, c, r, V = Lt
                 root.L_ = L_; oF_[CoF.get().nF].V_ += [V]  # +-/ comp
-                if gv_(val_(TT,ttcN) * ((c+wcN)/(r+ccN)) * ((len(L_)-1)*wL) - ave):  # return +ve, store -ve gate Vs
+                if gv_(val_(TT,ttcN) * (c*wcN /(r*ccN)) * ((L_-1)*wL) - ave):  # return +ve, store -ve gate Vs
                     e_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)  # +ve Ls only
                     return cluster_N(root.Nt, e_,r,c)  # sum2G -> agg+
 
@@ -106,7 +106,7 @@ def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_com
 
     L_,N_,mrg_ = [],[],[]
     for dist, dy_dx, _N,N, lc,lr, pTT,m,d in pL_:  # pL is L = dist, dy_dx, _N,N if fall: not selective
-        if fall or (m>0 and gv_(m*(lc/lr)*wN - ave*(r+cN))):
+        if fall or (m>0 and gv_(m * (lc*wN / (lr*cN)) - ave*(r+cN))):
         # comp if marginally predictable: ave / proj surprise value?
             Link = comp_N(_N,N, lr,lc, full = not tnF, A=dy_dx, span=dist, rL=root)
             Link.rTT = np.abs(pTT - Link.dTT) / eps_(Link.dTT)  # relative prediction error/oF, direction-agnostic
@@ -157,7 +157,7 @@ def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None):
         box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
         angl = [A, np.sign(TT[1] @ ttN_[1])]
         L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2
-    if isinstance(N, CN):  # all CN should add their rim here, that's including the converted PP or CL
+    if isinstance(N, CN):
         for n, _n in (_N,N),(N,_N):
             n.rim += [L]; n.compared.add(_n)  # or unique comps?
     FV_(CoF.get(), L.dTT, L.c, L.r)
@@ -311,7 +311,7 @@ def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace
             c = nc + lc + bc
             r = (nr*nc + lr*lc + br*bc) /c  # br includes overlap?
             tt= (nt*nc + lt*lc + bt*bc) /c  # tentative
-            if gv_(val_(tt*Ft.root.wTT*ttcN) * (c*wcN /(r+ccN)) * ((len(N_)-1)*wL) - ave):  # apply Fw_ and Fc_ in every eval_?
+            if gv_(val_(tt*Ft.root.wTT*ttcN) * (c*wcN /(r*ccN)) * ((len(N_)-1)*wL) - ave):  # apply Fw_ and Fc_ in every eval_?
                 G_ += [sum2G(ft_,ttcN, CN())]; Gt_+= [[tt,c,r]]  # eval sub+
 
     if G_:  # or the below is in sum2G?
@@ -506,11 +506,11 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
     if G.Lt:  # sub+
         Lt = G.Lt; L_,lm,lc,lr = Lt.N_,Lt.m,Lt.c,Lt.r  # no levR = 1/len(L_): represented by c
         if gv_(lm*lc*wX - Av* (lr+1+cX)):  # mdecay(L_)-decay?
-            cross_comp(G, N_,lm,lc,lr)  # sub+, cross_comp
+            cross_comp(G, N_,lm,lc,lr, nF='Nt')  # sub+, cross_comp
     if G.Bt:
         Bt = G.Bt; bd,bc,br = Bt.d,Bt.c,Bt.r; rroot = root.root if root.root else 0
         if N.typ!=1 and gv_(bd*bc*wX - Av*(br+1+cX)):  # no ddfork, eval len?
-            cross_comp(Bt, [F2N(L) for L in Bt.N_],bd,bc,br, nF='Bt')
+            cross_comp(G, [F2N(L) for L in Bt.N_],bd,bc,br, nF='Bt')
         if rroot: Bt.brrw = Bt.m * (rroot.m * (decay * (rroot.span/G.span)))  # external lend only, need to subtract from root?
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G
