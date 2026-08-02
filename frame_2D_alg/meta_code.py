@@ -99,8 +99,6 @@ class CN(CL):  # full node | graph fork set
         n.box = kw.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
         n.sub = kw.get('sub',0)  # composition depth relative to top-composition peers?
         n.exe = kw.get('exe',0)  # exemplar, temporary
-        n.fin = kw.get('fin',0)  # clustered, temporary
-        n.compared = kw.get('compared', set())
         n.typ = kw.get('typ',3)  # full comp
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.c)

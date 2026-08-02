@@ -88,7 +88,7 @@ def cross_comp(root, G_, m, c, r, nF='Nt'):  # agg+: refine by CC,exe -> cross_c
     C__ = []; M = C = R = 0
     for G in G_:
         if gv_(G.m * ((G.c*wcC) / (G.r*ccC)) * ((len(G.N_)-1)*wL) - ave):
-            if Ct := cluster_C(G, get_exemplars(G.N_, r,c), r,c):  # refines, splits each G
+            if Ct := cluster_C(G.Nt, get_exemplars(G.N_,r,c),r,c):  # refines, splits each G
                 C_, _m,_c,_r = Ct.N_,Ct.m,Ct.c,Ct.r
                 C__ += C_; M+=_m; C+=_c; R+=_r  # splice refined sub_G_s
     if C__:
@@ -98,9 +98,9 @@ def cross_comp(root, G_, m, c, r, nF='Nt'):  # agg+: refine by CC,exe -> cross_c
             if Lt := comp_N_( proj_L_(combinations([F2N(C) for C in C__],2), root,R), R):
                 L_, TT, c, r, V = Lt
                 root.L_ = L_; oF_[CoF.get().nF].V_ += [V]  # +-/ comp
-                if gv_(val_(TT,ttcN) * (c*wcN /(r*ccN)) * ((L_-1)*wL) - ave):  # return +ve, store -ve gate Vs
+                if gv_(val_(TT,ttcN) * (c*wcN /(r*ccN)) * ((len(L_)-1)*wL) - ave):  # return +ve, store -ve gate Vs
                     e_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)  # +ve Ls only
-                    return cluster_N(root.Nt, e_,r,c)  # sum2G -> agg+
+                    return cluster_N(root.Nt, e_,r,c)  # sum2G-> agg+
 
 def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_comp, max dist depends on prior match
 
@@ -119,7 +119,7 @@ def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_com
     if mrg_: N_ = list(set(N_) - set(mrg_))
     if L_:
         for N in set(N_):
-            if N.rim: N.Rt = sum2F(N.rim)
+            if N.rim: N.Rt = sum2F(N.rim,root=N,froot=2)
         TT, C, R = sum_vt(L_)
         cV = FV_(CoF.get(), TT, C, R)  # +ve Ls for oF, no oF.N_?
         return L_, TT, C, R, cV  # unpacked in cross_comp, comp_F
@@ -157,9 +157,7 @@ def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None):
         box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
         angl = [A, np.sign(TT[1] @ ttN_[1])]
         L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2
-    if isinstance(N, CN):
-        for n, _n in (_N,N),(N,_N):
-            n.rim += [L]; n.compared.add(_n)  # or unique comps?
+    for n, _n in (_N,N),(N,_N): n.rim += [L]
     FV_(CoF.get(), L.dTT, L.c, L.r)
     # or merge N -> _N?
     return L
@@ -312,9 +310,8 @@ def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace
             r = (nr*nc + lr*lc + br*bc) /c  # br includes overlap?
             tt= (nt*nc + lt*lc + bt*bc) /c  # tentative
             if gv_(val_(tt*Ft.root.wTT*ttcN) * (c*wcN /(r*ccN)) * ((len(N_)-1)*wL) - ave):  # apply Fw_ and Fc_ in every eval_?
-                G_ += [sum2G(ft_,ttcN, CN())]; Gt_+= [[tt,c,r]]  # eval sub+
-
-    if G_:  # or the below is in sum2G?
+                G_ += [sum2G(ft_,ttcN, Ft)]; Gt_+= [[tt,c,r]]  # eval sub+
+    if G_:
         for G in G_: trans_cluster(G)  # splice trans_links, merge L.N_.roots
         C = sum([g[1] for g in Gt_]); TT=np.zeros((2,9)); R=0; _r+=1  # + wC?
         for tt,c,gr in Gt_: w=c/C; TT+=tt*w; R+=gr*w
@@ -372,7 +369,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
         else: out_+=C_; break  # converged
     if out_:
         for n in [N for C in out_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals:
-            n.exe = (n.d if n.typ==1 else n.m) + sum(rt[1] for rt in n.root_) - ave
+            n.exe = (n.d if n.typ==1 else n.m) + sum(rt[1] for rt in n.root_) > ave
         _m,_d,_tt,_c,_r = sum_vt(out_, fm=1)
         FV_(CoF.get(),_tt,_c,_r)  # r per deeper cross_comp?
         if gv_((_m *_c *wcC) / (_r+ccC) * ((len(out_)-1)*wL) - ave):
@@ -429,10 +426,10 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
         FV_(CoF.get(), dCt.dTT, dCt.c, dCt.r)
     return out_
 
-def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CC/CN
+def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
 
     c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); w_ = c_/C; N = N_[0]
-    fC = np.any(m_)
+    fC = any(m_)
     typ = 2 if fC else N.typ
     cls_ = [CF,CL,CL,CN]  # keep typ=2 to differentiate CC
     for i, (n,w) in enumerate(zip(N_,w_)):
@@ -483,7 +480,6 @@ def add2F(F, n, merge=0, fr=0, fo=0):  # unpack for batching in sum2F
         if fo: F.typ_+= [n]
         else: F.N_ += (n.N_ if merge else [n])
     if hasattr(F,'H') and getattr(n,'H',None): add_H(F.H, n.H, F)
-    if hasattr(n,'C_'): F.C_ = getattr(F,'C_',[]) + n.C_  # same for L_?
     return F
 
 def add_H(H,h, root, fN=0):
@@ -536,7 +532,7 @@ def add_Nt(G):  # in sum2G and trans_cluster
     G.kern, G.yx = np.zeros(4),np.zeros(2); yx_ = []
     for N in N_:
         N.fin = 1; N.root = G; w = N.c/C
-        G.C_ += [rt[0] for rt in N.root_] # Ct || Nt
+        G.root_ += [rt[0] for rt in N.root_] # Ct || Nt
         G.kern += N.kern*w; yx = N.yx; G.yx+=yx; yx_+=[yx]  # * w?
         G.box = extend_box(G.box, N.box)
     G.span = (c_ @ np.hypot(*(np.array(yx_)-G.yx).T)) / C if len(N_)>1 else N_[0].span
@@ -583,7 +579,7 @@ def Copy_(N, root=None, r=1, cls=None, init=0, typ=None, froot=0):
         else:
             for f in ('Nt','Lt','Bt','Xt','Rt'): setattr(C, f, Copy_(getattr(N,f), root=C))
             C.H = [Copy_(lev, root=C) for lev in N.H]
-            C.angl=deepcopy(N.angl); C.yx=copy(N.yx); C.box=copy(N.box); C.mang=N.mang; C.exe=N.exe; C.fin=N.fin; C.root_=list(N.root_)
+            C.angl=deepcopy(N.angl); C.yx=copy(N.yx); C.box=copy(N.box); C.mang=N.mang; C.exe=N.exe; C.root_=list(N.root_)
     if froot:
         for n in C.N_+C.L_: n.root = C  # reassign for feedback, or root_+= if multiple roots?
     return C
