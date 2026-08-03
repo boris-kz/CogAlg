@@ -92,7 +92,7 @@ def cross_comp(root, G_, m, c, r, nF='Nt'):  # agg+: refine by CC,exe -> cross_c
                 C_, _m,_c,_r = Ct.N_,Ct.m,Ct.c,Ct.r
                 C__ += C_; M+=_m; C+=_c; R+=_r  # splice refined sub_G_s
     if C__:
-        setattr(root,nF, sum2F(C__,root, nF=nF, froot=2)); L=len(C__); R/=L  # also pass M,C,R? (existing root.H will be replaced by C_'s H?)
+        setattr(root,nF, sum2F(C__,root, nF=nF, froot=2)); L=len(C__); R/=L  # pass M,C,R in sum2F?
         if gv_((m+M) * (c*(C+wN_) / (r*(R+cN_))) * ((L-1)*wL) - ave):
             root.H += [Copy_(root)]  # lower agg lev
             if Lt := comp_N_( proj_L_(combinations([F2N(C) for C in C__],2), root,R), R):
@@ -106,8 +106,8 @@ def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_com
 
     L_,N_,mrg_ = [],[],[]
     for dist, dy_dx, _N,N, lc,lr, pTT,m,d in pL_:  # pL is L = dist, dy_dx, _N,N if fall: not selective
-        if fall or (m>0 and gv_(m * (lc*wN / (lr*cN)) - ave*(r+cN))):
-        # comp if marginally predictable: ave / proj surprise value?
+        if fall or (m>0 and gv_(m * (lc*wN / (lr*cN)) - ave*(r+cN))):  # marginal -gV
+        # comp if marginally predictable: proj surprise value?
             Link = comp_N(_N,N, lr,lc, full = not tnF, A=dy_dx, span=dist, rL=root)
             Link.rTT = np.abs(pTT - Link.dTT) / eps_(Link.dTT)  # relative prediction error/oF, direction-agnostic
             L_+= [Link]; N_+= [_N,N]
@@ -501,6 +501,7 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
     N_ = G.N_; N=N_[0]; G.sub = N.sub+1 if G.L_ else N.sub; r=G.r; Av=ave+avd
     if G.Lt:  # sub+
         Lt = G.Lt; L_,lm,lc,lr = Lt.N_,Lt.m,Lt.c,Lt.r  # no levR = 1/len(L_): represented by c
+        comp_pL_(G, Lt, wTT, fG=1)
         if gv_(lm*lc*wX - Av* (lr+1+cX)):  # mdecay(L_)-decay?
             cross_comp(G, N_,lm,lc,lr, nF='Nt')  # sub+, cross_comp
     if G.Bt:
@@ -522,8 +523,13 @@ def comb_Ft(Nt, Lt, Bt, root,wTT):  # from sum2G, default Nt
     add2F(G,T, merge=2)
     if any(dF_): sum2F(dF_,G.Xt)  # cross-fork covariance
     add_Nt(G)  # add kern,ext, doesn't affect comp_F
-    if Lt: add_Lt(G, Lt,wTT)
-    G.m,G.d = val_(G.dTT,wTT,1)  # recompute m and d after add_Nt and add_Lt above
+    if Lt: comp_pL_(G, Lt,wTT)
+    L_ = Lt.N_ if Lt else [l for n in G.N_ for l in n.L_]
+    angl, mang = np.zeros(2), 0  # in all Gs or Ts only?
+    for l in L_: angl += l.angl
+    G.mang = np.mean(comp_A(angl, l.angl[0])[0] for l in L_)
+    G.angl = [angl, np.sign(G.dTT[1] @ ttcN[1])]
+    G.m,G.d = val_(G.dTT,wTT,1)  # recompute m and d after add_Nt and comp_pL_ above
     return G
 
 def add_Nt(G):  # in sum2G and trans_cluster
@@ -532,22 +538,18 @@ def add_Nt(G):  # in sum2G and trans_cluster
     G.kern, G.yx = np.zeros(4),np.zeros(2); yx_ = []
     for N in N_:
         N.fin = 1; N.root = G; w = N.c/C
-        G.root_ += [rt[0] for rt in N.root_] # Ct || Nt
+        G.root_ += [rt[0] for rt in N.root_]  # Ct || Nt
         G.kern += N.kern*w; yx = N.yx; G.yx+=yx; yx_+=[yx]  # * w?
         G.box = extend_box(G.box, N.box)
     G.span = (c_ @ np.hypot(*(np.array(yx_)-G.yx).T)) / C if len(N_)>1 else N_[0].span
 
-def add_Lt(G, Lt,wTT):  # addition to Q2R
+def comp_pL_(G, Lt,wTT, fG=0):  # fG if G/tile has no L_
 
-    L_ = Lt.N_
     if Lt.m * wN > ave*(cN+Lt.r):  # comp typ -1 pre-links
         L_,pL_ = [],[]; [L_.append(L) if L.typ==1 else pL_.append(L) for L in Lt.N_]
         if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0] *wN > ave*(cN * np.mean([L.r for L in pL_])):
             for L in pL_: L_ += [comp_N(*L.N_, G.r,L.c,1, L.angl[0], L.span)]
             sum2F(L_,Lt); add2F(G, Lt, merge=2)
-    A = np.sum([l.angl[0] for l in L_], axis=0) if L_ else np.zeros(2)
-    G.angl = [A, np.sign(G.dTT[1] @ ttcN[1])]
-    G.mang = np.mean([comp_A(G.angl[0], l.angl[0])[0] for l in G.L_])  # Ls only?
 
 # utilities:
 def F2N(F):  # convert for cross_comp
@@ -796,10 +798,7 @@ def vect_edge(T, iY,iX,Ly,Lx, rV=1):  # T=tile, PP_ cross_comp and floodfill to 
                         G_,TT,c,R = trace_edge([F2N(N) for N in N_], G_,TT,c,3,T); C += c  # flatten B_-mediated Gs
     if G_:
         FV_(CoF.get(), TT, C,1)
-        T = sum2G([[G_,'Nt',TT,C,1]], TT, T) # c,R?
-        A = np.sum([l.angl[0] for G in G_ for l in G.L_], axis=0)
-        T.angl = [A, np.sign(T.dTT[1] @ ttVct[1])]  # we need angl for projection
-        return T
+        return sum2G([[G_, 'Nt', TT, C, 1]], TT, T)  # c,R?
 
 def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
 
@@ -821,7 +820,7 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
                             if not (0<=_y<Ly and 0<=_x<Lx) or frame[_y,_x] is not None: continue  # outside frame or checked
                             if gv_(PV__[_y,_x] - ave):  # accumulated from all adjacent tiles
                                 iy = _y**elev; ix = _x**elev
-                                if _T := frame_H(image, iy,ix, Y,X, rV, max_elev=elev):  # agg+ new tile to the current level 
+                                if _T := frame_H(image, iy,ix, Y,X, rV, max_elev=elev):  # agg+ new tile to the current level
                                     T_ += [_T]; _T_ += [(_T,_y,_x)]; frame[_y,_x] = _T
                                 else: frame[_y,_x] = 0
             __T_ = _T_

@@ -138,9 +138,9 @@ class CoF(CF):
     def __bool__(f): return bool(f.call_)
 
 def gv_(v, i=None):
-    # +ve values trigger recursion?
-    if v > 0: return v
-    else: oF_[CoF.get().nF].gV_[i] -= v  # double -ve -> +ve
+
+    if v > 0: return v  # if +ve Fv triggers oF recursion, invert sign at the caller?
+    else: oF_[CoF.get().nF].gV_[i] -= v  # ave Fv - neg v: +ve val of eval
 
 def build(func, node):  # AST → CoF | (type,sub_) | ast_leaf | None
 
