@@ -501,7 +501,6 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
     N_ = G.N_; N=N_[0]; G.sub = N.sub+1 if G.L_ else N.sub; r=G.r; Av=ave+avd
     if G.Lt:  # sub+
         Lt = G.Lt; L_,lm,lc,lr = Lt.N_,Lt.m,Lt.c,Lt.r  # no levR = 1/len(L_): represented by c
-        comp_pL_(G, Lt, wTT, fG=1)
         if gv_(lm*lc*wX - Av* (lr+1+cX)):  # mdecay(L_)-decay?
             cross_comp(G, N_,lm,lc,lr, nF='Nt')  # sub+, cross_comp
     if G.Bt:
@@ -525,10 +524,12 @@ def comb_Ft(Nt, Lt, Bt, root,wTT):  # from sum2G, default Nt
     add_Nt(G)  # add kern,ext, doesn't affect comp_F
     if Lt: comp_pL_(G, Lt,wTT)
     L_ = Lt.N_ if Lt else [l for n in G.N_ for l in n.L_]
-    angl, mang = np.zeros(2), 0  # in all Gs or Ts only?
-    for l in L_: angl += l.angl
-    G.mang = np.mean(comp_A(angl, l.angl[0])[0] for l in L_)
-    G.angl = [angl, np.sign(G.dTT[1] @ ttcN[1])]
+    if L_:  # skip singleton G from trace_edge because both Lt and N.L_ are empty
+        angl = np.zeros(2)  # in all Gs or Ts only?
+        for l in L_: angl += l.angl[0]
+        G.mang = np.mean([comp_A(angl, l.angl[0])[0] for l in L_])
+        G.angl = [angl, np.sign(G.dTT[1] @ ttcN[1])]
+        if not Lt: G.L_ = L_  # for T projection
     G.m,G.d = val_(G.dTT,wTT,1)  # recompute m and d after add_Nt and comp_pL_ above
     return G
 
@@ -543,7 +544,7 @@ def add_Nt(G):  # in sum2G and trans_cluster
         G.box = extend_box(G.box, N.box)
     G.span = (c_ @ np.hypot(*(np.array(yx_)-G.yx).T)) / C if len(N_)>1 else N_[0].span
 
-def comp_pL_(G, Lt,wTT, fG=0):  # fG if G/tile has no L_
+def comp_pL_(G, Lt,wTT):
 
     if Lt.m * wN > ave*(cN+Lt.r):  # comp typ -1 pre-links
         L_,pL_ = [],[]; [L_.append(L) if L.typ==1 else pL_.append(L) for L in Lt.N_]
@@ -813,7 +814,7 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
             for T, y,x in __T_:  # eval all wave tiles
                 if gv_(val_(T.dTT*T.wTT*ttFrm) * ((T.c+wFrm)/(T.r+cFrm)) - ave):
                     dy,dx = T.box[2:] -T.box[:2]
-                    pTT, pc = proj_N(T, np.hypot(dy,dx), np.array([dy,dx]), elev,T.c)  # no proj r?
+                    pTT, pc = proj_N(T, np.hypot(dy,dx), np.array([dy,dx]), elev,T.c)  # no proj r?  (We need L_ in T for the projection here)
                     if gv_(val_(pTT*T.wTT*ttFrm) * ((pc+wFrm)/(T.r+elev+cFrm)) - ave):  # +ve, no uncertainty projection yet
                         proj_focus(PV__,y,x,T)  # radiate projected value, make directional per L_?
                         for _y,_x in ((y-1,x), (y+1,x), (y,x-1), (y,x+1)):  # fill 4 adjacent cells
@@ -833,6 +834,7 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
     global ave,avd; aTT=oTT=np.zeros((2,9)); aH,oH = [],[]  # regime refs across levs / ffeedback
     Fr = []
     T = vect_edge( frame_blobs_root( comp_pixel( image[iY:iY+Ly**elev, iX:iX+Lx**elev]), rV), iY,iX,Ly,Lx, rV)  # base process
+    Fr = T  # i guess we need this as base, and replace with the expansion below?
     while T and elev < max_elev:
         tile_,C,R = fill_frame(iY, iX, elev, T)  # seed tile -> sparse higher scope tile( oH( aH
         if tile_:
