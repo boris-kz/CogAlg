@@ -183,10 +183,10 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
     T_ = []
     for F in F_:
         F.w = sum([w * F.w / (F.w+_F.w) for _F, w in F.rim])
-        if F.w > ave:
+        if F.w > ave:  # so if F.w is weak, skip the F totally? I think we still need to recycle them?
             T = CoF(N_= [F]+[f for f,_ in F.rim], L_= [0 for _ in F_]); T.fin=0  # L_: dense prior w_, aligned with F_ in all Ts
             form_body(T); T_ += [T]
-    _w__ = [[0 for F in F_] for T in T_]  # we just need a flag isntead of nT?
+    _w__ = [[0 for F in F_] for T in T_]  # we just need a flag instead of nT?
     fR = 1  # refine
     while fR:
         fR = 0
@@ -206,9 +206,13 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
             else: T.fin = 1  # converged | weak, filtered below
         _w__ = w__
     out_ = []
-    for i,T in enumerate([t for t in T_ if t.w > ave]):
-        T.nF = i; out_ += [T]  # rename by index
-    oF_ = out_
+    for T in [t for t in T_ if t.w > ave]: out_ += [T]  
+    F_ = [F for F in F_ if F not in [_F for out in out_ for _F in out.N_]]  # non-clustered oFs
+    for i, T in enumerate(F_ + out_): 
+        T.iF = i  # rename by index
+        T.nF = ast.FunctionDef(name=f'oF{T.iF}', args=ast.arguments(), body=T.body)  # reinit nF   
+    oF_ = F_ + out_
+    return oF_
 
 def comp_body(_n, n):  # compare only: compression estimate C; construction in form_body
 
