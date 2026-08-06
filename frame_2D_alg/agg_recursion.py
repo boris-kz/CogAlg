@@ -656,12 +656,11 @@ def proj_L_(pairs, root, r, max=20, fall=1):
                     pL_ += [[dist, dy_dx, _N, N, lc, lr, pTT, m, d]]
     return pL_
 
-# not fully reviewed:
-def proj_focus_opus(PV__, y,x, tile, elev):  # radial accum of projected focus value in PV__
+def proj_focus(PV__, y,x, tile, elev):  # radial accum of projected focus value in PV__
 
     m,d = val_(tile.dTT, tile.wTT*ttFrm, 1); c = tile.c  # m,d,n = tile.m, tile.d, tile.c  # add r?
-    V = (m-ave + d-avd) * c
-    H,W = PV__.shape  # = win__, tile pitch = H|W **elev
+    Vm, Vd = (m-ave)*c, (d-avd)*c
+    H,W = PV__.shape  # = win__
     Dec = decay ** (np.hypot(H**elev,W**elev) / (np.hypot(*(tile.box[2:]-tile.box[:2])) +eps))  # per-step decay, in units of tile span
     rad_A_ = np.array([
     (-1,-1), (-1,0), (-1,1),
@@ -670,42 +669,14 @@ def proj_focus_opus(PV__, y,x, tile, elev):  # radial accum of projected focus v
     ], dtype=float)  # rim dirs, same order as rim_coords, n-invariant
     rel_dist_ = np.hypot(rad_A_[:,0], rad_A_[:,1])  # 1|1.4
     A = tile.angl[0]
-    if np.hypot(*A) > eps:
+    if np.hypot(*A):
         mA_ = np.abs(rad_A_ @ A) / rel_dist_  # axial alignment, scale-free: |A| cancels in w_
-        w_ = 1 + tile.mang * (mA_ / mA_.mean() - 1)
-    else:  w_ = np.ones(8)
+        w_ = 1 + tile.mang * (mA_ / mA_.mean() - 1)  # 1 + to scale w_ into positive? But why -1 after normalize mA_?
+    else:  w_ = np.ones(8)  # if A == (0,0), no links at all, all singleton
     n = 1  # radial distance
     while y-n>=0 and x-n>=0 and y+n<H and x+n<W:  # rim is within frame
-        pV__ = V * Dec**(rel_dist_) * w_  # diag dist is 1.4 * axial
-        if np.max(pV__) < ave:
-            break  # no direction is worth extending
-        rim_coords = np.array([
-        (y-n,x-n), (y-n,x), (y-n,x+n),
-        (y, x-n),           (y, x+n),
-        (y+n,x-n), (y+n,x), (y+n,x+n)
-        ], dtype=int)
-        row,col = rim_coords[:,0], rim_coords[:,1]
-        PV__[row,col] += pV__  # in-place accum pV to rim
-        n += 1
-
-def proj_focus(PV__, y,x, tile):  # radial accum of projected focus value in PV__
-
-    m,d = val_(tile.dTT, tile.wTT*ttFrm, 1); c = tile.c  # m,d,n = tile.m, tile.d, tile.c  # add r?
-    V = (m-ave + d-avd) * c
-    dy,dx = tile.angl[0]; a = dy / (dx or eps)  # average link_ orientation, projection
-    Dec = decay ** (np.hypot(*(tile.box[2:]-tile.box[:2])) / np.hypot(Ly,Lx))
-    H,W = PV__.shape  # = win__
-    n = 1  # radial distance
-    while y-n>=0 and x-n>=0 and y+n<H and x+n<W:  # rim is within frame
-        dec = Dec ** n
-        pV__= np.array([
-        # this should be V * dec * 1|1.4 * mangl(tile.angl, cross-tile angl)
-        V * dec * 1.4, V * dec * a, V * dec * 1.4,  # a = aspect = dy/dx, affects axial directions only
-        V * dec / a,                V * dec / a,
-        V * dec * 1.4, V * dec * a, V * dec * 1.4
-        ], dtype=float)
-        if np.sum(pV__) < ave * 8:
-            break  # < min adjustment
+        pV__ = (Vm + Vd*w_) * Dec**(n*rel_dist_)  # diag dist is 1.4 * axial (w_ is applied on the directional Vd only?)
+        if np.max(pV__) < ave: break  # < min adjustment
         rim_coords = np.array([
         (y-n,x-n), (y-n,x), (y-n,x+n),
         (y, x-n),           (y, x+n),
@@ -843,7 +814,7 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
                     T_ += [_T]; dy,dx = _T.box[2:] -_T.box[:2]
                     pTT, pc = proj_N(_T, np.hypot(dy,dx), np.array([dy,dx]), elev,_T.c)  # no proj r?
                     if gv_(val_(pTT*T.wTT*ttFrm) * ((pc+wFrm)/(_T.r+elev+cFrm)) - ave):  # +ve, no uncertainty projection yet
-                        proj_focus(PV__,y,x,_T)  # -> projected value map
+                        proj_focus(PV__,y,x,_T,elev)  # -> projected value map
                         for _y,_x in ((y-1,x), (y+1,x), (y,x-1), (y,x+1)):  # fill 4 adjacent cells
                             if not (0<=_y<Ly and 0<=_x<Lx) or frame[_y,_x] is not None: continue  # outside frame or checked
                             if gv_(PV__[_y,_x] - ave):  # accumulated from all adjacent tiles
@@ -863,8 +834,8 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
     while T and elev < max_elev:
         tile_,C,R = fill_frame(iY, iX, elev, T)  # seed tile -> sparse higher scope tile( oH( aH
         if tile_:
-            N_ = [g for t in tile_ for g in t.N_]  # concat edge Gs
-            Fr = sum2F(N_); m,c,r = Fr.m,Fr.c,Fr.r
+            N_ = [g for t in tile_ for g in t.N_]; m,_,tt,c,r = sum_vt(N_,fm=1)  # concat edge Gs  
+            Fr = sum2G([(N_,'Nt',tt,c,r)],ttFrm)  # use sum2G to get angl and l_, for the next loop's T (T = Fr)
             Fr.H += [sum2F(tile_)]  # minimally processed level
             if gv_(m * c * wX - ave * (r+1+cX)):
                 cross_comp(Fr, N_, m,c,r)  # agg+
@@ -879,7 +850,7 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
 
 def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
 
-    global ave, avd, oF_
+    global ave, avd, oF_, nF_, iF_
     for oF in oF_:
         if oF.V_: oF.w += sum(oF.V_) + sum(oF.gV_)  # all extensive
     dTT = dc = dr = 0
@@ -890,16 +861,22 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
         ave, avd = val_(aTT, fd=1)  # filters *= ave
         if oL := pack_seg(frame,'oH', wBac, cBac**2, oTT):
             dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
-            oF_site_ = {oF: [] for oF in oF_}
-            for fdef in nF_:  # map oFs to call sites:
-                for n in call_sites(fdef):  # calls in fdef, func.id in iF_
-                    oF_site_[oF_[iF_[n.func.id]]] += [(fdef, n)]
-            sF_,rF_ = split_oF_()  # splits + remaining oF_s
-            smF_ = clust_oF_(sF_+rF_)  # splits + merges + remaining
-            if smF_:  # not updated
-                caller_fd_ = {caller_fd for nT in smF_ for fork in nT.N_ for (caller_fd,_) in oF_site_.get(fork, [])}
-                updated_oF_ = smF_ + [oF_[iF_[fd.name]] for fd in caller_fd_ if fd.name in iF_]
-                inject_oF_(updated_oF_, globals())
+            # not fully review
+            split_oF_(); oF_ = clust_oF_()
+            rep_ = {}
+            for T in oF_:
+                if T.N_:  # new clustered T
+                    T.caller_ = set().union(*[F.caller_ for F in T.N_]); T.c = sum(F.c for F in T.N_)
+                    for F in T.N_:
+                        if nF_[F.nF] is not None: rep_[nF_[F.nF].name] = T.fdef.name
+            for k in rep_: rep_[k] = rep_.get(rep_[k], rep_[k])  # collapse A->A'->A''
+            # update nF_ and iF_:
+            nF_ = [oF.fdef for oF in oF_]
+            iF_.clear(); iF_.update({fd.name: i for i,fd in enumerate(nF_)})
+            for oF in oF_:  # even if oF was not modified, callees may be replaced
+                for n in call_sites(nF_[oF.nF]):
+                    if n.func.id in rep_: n.func.id = rep_[n.func.id]
+            inject_oF_(oF_, globals())
 
     FV_(CoF.get(),dTT,dc,dr)
     return frame, aTT, oTT, aL, oL
