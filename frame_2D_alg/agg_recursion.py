@@ -630,7 +630,7 @@ def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
     link.m += dddH.m; link.d += dddH.d; link.c += dddH.c; link.dTT += dddH.dTT
     add_H(ddH, dddH)    
 '''
-def proj_L_(pairs, root, r, max=20, fall=1,frim=0):
+def proj_L_(pairs, root, r, max=20, fall=1):
 
     def proj_V(_N, N, dist, dy_dx, dec, r):  # _N x N induction
         Dec = dec or decay ** ((dist / ((_N.span + N.span) / 2)))
@@ -654,7 +654,6 @@ def proj_L_(pairs, root, r, max=20, fall=1,frim=0):
                 if fall or m > ave:
                     lc = min(_N.c, N.c); lr = r + (N.r + _N.r) / 2  # +|-match certainty
                     pL_ += [[dist, dy_dx, _N, N, lc, lr, pTT, m, d]]
-
     return pL_
 
 # not fully reviewed:
@@ -677,7 +676,7 @@ def proj_focus_opus(PV__, y,x, tile, elev):  # radial accum of projected focus v
     else:  w_ = np.ones(8)
     n = 1  # radial distance
     while y-n>=0 and x-n>=0 and y+n<H and x+n<W:  # rim is within frame
-        pV__ = V * Dec**(n*rel_dist_) * w_  # diag dist is 1.4 * axial
+        pV__ = V * Dec**(rel_dist_) * w_  # diag dist is 1.4 * axial
         if np.max(pV__) < ave:
             break  # no direction is worth extending
         rim_coords = np.array([
