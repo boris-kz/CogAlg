@@ -180,13 +180,14 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
     for _F, F in combinations(F_,2):  # w = relative compression: shared / min cost, ave-commensurate
         if (w := comp_body(_F.body, F.body) / min(_F.fc, F.fc)) > ave:
             _F.rim += [(F,w)]; F.rim += [(_F,w)]; _F.w += w; F.w += w
-    T_ = []
+    T_,_F_ = [],[]
     for F in F_:
         F.w = sum([w * F.w / (F.w+_F.w) for _F, w in F.rim])
-        if F.w > ave:  # so if F.w is weak, skip the F totally? I think we still need to recycle them?
+        if F.w > ave:
             T = CoF(N_= [F]+[f for f,_ in F.rim], L_= [0 for _ in F_]); T.fin=0  # L_: dense prior w_, aligned with F_ in all Ts
             form_body(T); T_ += [T]
-    _w__ = [[0 for F in F_] for T in T_]  # we just need a flag instead of nT?
+        else: _F_ += [F]
+    _w__ = [[0 for f in F_] for t in T_]
     fR = 1  # refine
     while fR:
         fR = 0
@@ -205,14 +206,13 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
                 form_body(T); fR = 1  # rebuild from remaining members, refine
             else: T.fin = 1  # converged | weak, filtered below
         _w__ = w__
-    out_ = []
-    for T in [t for t in T_ if t.w > ave]: out_ += [T]  
-    F_ = [F for F in F_ if F not in [_F for out in out_ for _F in out.N_]]  # non-clustered oFs
-    for i, T in enumerate(F_ + out_): 
-        T.iF = i  # rename by index
-        T.nF = ast.FunctionDef(name=f'oF{T.iF}', args=ast.arguments(), body=T.body)  # reinit nF   
-    oF_ = F_ + out_
-    return oF_
+    _out_,out_ = [],[]
+    for T in T_:
+        if T.w > ave: out_ += [T]
+        else: out_ += T.N_
+    for i,F in enumerate(list(set(out_+_F_))):
+        F.nF = i; out_ += [F]  # rename by index
+    oF_ = out_
 
 def comp_body(_n, n):  # compare only: compression estimate C; construction in form_body
 
