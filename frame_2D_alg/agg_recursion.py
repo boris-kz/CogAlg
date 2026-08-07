@@ -860,21 +860,20 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
         ave, avd = val_(aTT, fd=1)  # filters *= ave
         if oL := pack_seg(frame,'oH', wBac, cBac**2, oTT):
             dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
-            # not reviewed:
+            # not fully reviewed:
             split_oF_(); oF_ = clust_oF_()
-            rep_ = {}
+            map_ = {}
             for T in oF_:
                 if T.N_:  # new clustered T
                     T.caller_ = set().union(*[F.caller_ for F in T.N_]); T.c = sum(F.c for F in T.N_)
                     for F in T.N_:
-                        if nF_[F.nF] is not None: rep_[nF_[F.nF].name] = T.fdef.name
-            for k in rep_: rep_[k] = rep_.get(rep_[k], rep_[k])  # collapse A->A'->A''
+                        if nF_[F.nF] is not None: map_[nF_[F.nF].name] = T.fdef.name  # map existing oFs to clustered oF (many oFs to one new oF)
             # update nF_ and iF_:
             nF_ = [oF.fdef for oF in oF_]
             iF_.clear(); iF_.update({fd.name: i for i,fd in enumerate(nF_)})
             for oF in oF_:  # even if oF was not modified, callees may be replaced
-                for n in call_sites(nF_[oF.nF]):
-                    if n.func.id in rep_: n.func.id = rep_[n.func.id]
+                for n in call_sites(oF.fdef):
+                    if n.func.id in map_:  n.func.id = map_[n.func.id]
             inject_oF_(oF_, globals())
 
     FV_(CoF.get(),dTT,dc,dr)
