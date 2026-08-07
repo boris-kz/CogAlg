@@ -659,23 +659,22 @@ def proj_L_(pairs, root, r, max=20, fall=1):
 def proj_focus(PV__, y,x, tile, elev):  # radial accum of projected focus value in PV__
 
     m,d = val_(tile.dTT, tile.wTT*ttFrm, 1); c = tile.c  # m,d,n = tile.m, tile.d, tile.c  # add r?
-    Vm, Vd = (m-ave)*c, (d-avd)*c
+    Vm,Vd = (m-ave)*c, (d-avd)*c
     H,W = PV__.shape  # = win__
     Dec = decay ** (np.hypot(H**elev,W**elev) / (np.hypot(*(tile.box[2:]-tile.box[:2])) +eps))  # per-step decay, in units of tile span
-    rad_A_ = np.array([
+    rim_A_ = np.array([
     (-1,-1), (-1,0), (-1,1),
     ( 0,-1),         ( 0,1),
     ( 1,-1), ( 1,0), ( 1,1)
     ], dtype=float)  # rim dirs, same order as rim_coords, n-invariant
-    rel_dist_ = np.hypot(rad_A_[:,0], rad_A_[:,1])  # 1|1.4
     A = tile.angl[0]
     if np.hypot(*A):
-        mA_ = np.abs(rad_A_ @ A) / rel_dist_  # axial alignment, scale-free: |A| cancels in w_
-        w_ = 1 + tile.mang * (mA_ / mA_.mean() - 1)  # 1 + to scale w_ into positive? But why -1 after normalize mA_?
-    else:  w_ = np.ones(8)  # if A == (0,0), no links at all, all singleton
-    n = 1  # radial distance
-    while y-n>=0 and x-n>=0 and y+n<H and x+n<W:  # rim is within frame
-        pV__ = (Vm + Vd*w_) * Dec**(n*rel_dist_)  # diag dist is 1.4 * axial (w_ is applied on the directional Vd only?)
+        mA_ = np.abs(rim_A_ @ A) * tile.mang  # axial alignment, scale-free: |A| cancels in w_, signed
+    else:  mA_ = np.ones(8)  # if A==(0,0), no links at all, all singleton
+    rim_dist_ = np.hypot(rim_A_[:,0], rim_A_[:,1])
+    n = 1  # n rim layers
+    while y-n>=0 and n-1>=0 and y+n<H and x+n<W:  # rim is within frame
+        pV__ = (Vm + Vd*mA_) * Dec**(n*rim_dist_)  # diag dist is 1.4 * axial
         if np.max(pV__) < ave: break  # < min adjustment
         rim_coords = np.array([
         (y-n,x-n), (y-n,x), (y-n,x+n),
@@ -834,7 +833,7 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
     while T and elev < max_elev:
         tile_,C,R = fill_frame(iY, iX, elev, T)  # seed tile -> sparse higher scope tile( oH( aH
         if tile_:
-            N_ = [g for t in tile_ for g in t.N_]; m,_,tt,c,r = sum_vt(N_,fm=1)  # concat edge Gs  
+            N_ = [g for t in tile_ for g in t.N_]; m,_,tt,c,r = sum_vt(N_,fm=1)  # concat edge Gs
             Fr = sum2G([(N_,'Nt',tt,c,r)],ttFrm)  # use sum2G to get angl and l_, for the next loop's T (T = Fr)
             Fr.H += [sum2F(tile_)]  # minimally processed level
             if gv_(m * c * wX - ave * (r+1+cX)):
@@ -861,7 +860,7 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
         ave, avd = val_(aTT, fd=1)  # filters *= ave
         if oL := pack_seg(frame,'oH', wBac, cBac**2, oTT):
             dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
-            # not fully review
+            # not reviewed:
             split_oF_(); oF_ = clust_oF_()
             rep_ = {}
             for T in oF_:
