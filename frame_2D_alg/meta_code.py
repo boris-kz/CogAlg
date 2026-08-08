@@ -142,6 +142,7 @@ def gv_(v, i=None):
     if v > 0: return v  # if +ve Fv triggers oF recursion, invert sign at the caller?
     else: oF_[CoF.get().nF].gV_[i] -= v  # ave Fv - neg v: +ve val of eval
 
+# always pack node along with typ for rebuild?
 def build(func, node):  # AST → CoF | (type,sub_) | ast_leaf | None
 
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
@@ -209,7 +210,7 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
     for T in T_:
         if T.w > ave: out_ += [T]
     _F_ =[F for F in oF_ if F not in (_F for T in out_ for _F in T.N_)]  # recycle singletons
-    for i,F in enumerate(list(set(out_+_F_))):
+    for i,F in enumerate(_F_+out_):  # we shouldn't get duplicated oFs here
         F.nF=i; F.fdef = ast.FunctionDef(name=f'oF{F.nF}',args=ast.arguments(),body=F.body)  # reinit the fdef: ast node
         out_ += [F]  # rename by index
     oF_ = out_
