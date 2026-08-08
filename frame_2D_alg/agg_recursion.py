@@ -380,9 +380,9 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
 
     cnt = 0; Ln = len(N_:= list(set([N for C in _C_ for N in C.N_])))  # all Ns are in all Cs
     _md__ = np.zeros((Ln, len(_C_), 2))  # NxC, cols aligned to _C_
-    for j, N in enumerate(N_):
+    for i, N in enumerate(N_):
         for c,m,d in N.root_:
-            if c in _C_: _md__[j,_C_.index(c)] = m,d
+            if c in _C_: _md__[i,_C_.index(c)] = m,d
     while True:
         for N in N_: N.root_ = []  # reset, append in sum2F
         Lc = len(_C_); L = Lc*Ln  # Lc,L,md__ per cycle since _C_ varies
@@ -867,7 +867,7 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
                 if T.N_:  # new clustered T
                     T.caller_ = set().union(*[F.caller_ for F in T.N_]); T.c = sum(F.c for F in T.N_)
                     for F in T.N_:
-                        if nF_[F.nF] is not None: map_[nF_[F.nF].name] = T.fdef.name  # map existing oFs to clustered oF (many oFs to one new oF)
+                        if nF_[F.nF] is not None: map_[nF_[F.nF].name] = T.fdef.name  # map existing oFs to clustered oF
             # update nF_ and iF_:
             nF_ = [oF.fdef for oF in oF_]
             iF_.clear(); iF_.update({fd.name: i for i,fd in enumerate(nF_)})
