@@ -333,7 +333,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
         _C_ += [C]
     out_ = []
     while True:  # reform C_
-        C_, cnt,mat,dif,rdn,DTT,Up = [],0,0,0,0,np.zeros((2,9)),0; Ave = ave*(_r+ccC); Avd = avd*(_r+ccC)
+        C_, cnt,rdn,DTT,Up = [],0,0,np.zeros((2,9)),0; Ave = ave*(_r+ccC); Avd = avd*(_r+ccC)
         for _C in _C_:  # C.m,d /rTT? sort / sum(_C.m_)?
             N__,n_,m_,d_,M,D,T,R,dTT,up = [],[],[],[],0,0,0,0, np.zeros((2,9)),0  # /C
             for n in _C.N_+_C._N_:  # current + frontier
@@ -354,10 +354,10 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
                 C._N_ = list(set(N__) - set(n_))  # new frontier
                 if D < Avd: out_+=[C]  # output if stable
                 else:       C_ += [C]  # reform
-                DTT+=dTT; mat+=M; dif+=D; cnt+=T; rdn+=R; Up+=up
+                DTT+=dTT; cnt+=T; rdn+=R; Up+=up
         r = _r+ rdn/(cnt or eps)
         L = len(out_+ C_); olp = sum([len(N.root_) for N in N_])  # rdn+=olp, prioritize stronger?
-        if gv_((mat+dif)* (wcP*L) - Ave* (r+olp+ ccP*L)):
+        if gv_(sum(val_(DTT,fd=1))* (wcP*L) - Ave* (r+olp+ ccP*L)):
             out_+=C_; T=sum([f.c for f in out_])
             out_ = cluster_P(out_,T, Ft)  # refine all memberships in parallel by global backprop
             break
@@ -378,7 +378,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
 
 def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
 
-    cnt = 0; Ln = len(N_:= list(set([N for C in _C_ for N in C.N_])))  # all Ns are in all Cs
+    iC_ = _C_; cnt = 0; Ln = len(N_:= list(set([N for C in _C_ for N in C.N_])))  # all Ns are in all Cs
     _md__ = np.zeros((Ln, len(_C_), 2))  # NxC, cols aligned to _C_
     for i, N in enumerate(N_):
         for c,m,d in N.root_:
@@ -405,7 +405,7 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
         new_ = [Copy_(N,root,init=1,cls=CL) for j,N in enumerate(N_)
                 if np.sort(md__[j,:,0])[-2:].min()*wcP > ave*(N.r+ccP)]  # seed overlap Ns
         _C_ = [c for c in C_ if c not in removed and c.m*wcP > ave*c.r*ccP] + new_  # survive+prune, +seeds
-        if conv and not (removed or new_) and len(_C_)==Lc:
+        if conv and not (removed) and len(_C_)==Lc:  # we should check removed only since new_ is default
             break
         _md__ = md__; cnt += 1
     out_ = []
@@ -422,8 +422,11 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
                     L.N_ = [N,C]; C.L_ += [L]
                 out_ += [C]
     if out_:
-        dCt = sum2F(list(set(_C_)-set(out_)))  # compress, out_ for CoF?
-        FV_(CoF.get(), dCt.dTT, dCt.c, dCt.r)
+        # dCt = sum2F(list(set(_C_)-set(out_)))  # compress, out_ for CoF?
+        # FV_(CoF.get(), dCt.dTT, dCt.c, dCt.r)
+        # pending review: the difference should be input's params - output's params? We will never get same Cs from _C_ and out_ anyway
+        iTT,iC,iR = sum_vt(iC_); oTT,oC,oR = sum_vt(out_)
+        FV_(CoF.get(), iTT-oTT, iC-oC, iR-oR)
     return out_
 
 def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
@@ -431,6 +434,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
     c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); w_ = c_/C; N = N_[0]
     fC = any(m_)
     typ = 2 if fC else N.typ
+    if fC: w_ *= m_/sum(m_)  # pending review: to update weights with soft membership via m_
     cls_ = [CF,CL,CL,CN]  # keep typ=2 to differentiate CC
     for i, (n,w) in enumerate(zip(N_,w_)):
         if i:
