@@ -388,7 +388,7 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
         Lc = len(_C_); L = Lc*Ln  # Lc,L,md__ per cycle since _C_ varies
         md__ = np.zeros((Ln,Lc,2)); O = 0
         for j,N in enumerate(N_):
-            for i,C in enumerate(_C_): md__[j,i] = val_(base_comp(C,N)[0], ttcP)
+            for i,C in enumerate(_C_): md__[j,i] = val_(base_comp(C,N)[0], ttcP,fd=1)  # we need fd = 1 here to assign both m and d, else the same m is assign to both
             m_ = md__[j,:,0]; O += m_.sum() - m_.max()  # cross-C ambiguity, gates split/merge
         C_ = [sum2F(N_, root, md__[:,i,0], md__[:,i,1]) for i in range(Lc)]  # mean shift, aligned to md__
         Mt = md__[:,:,0].sum()  # total V
@@ -397,13 +397,23 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
         if gv_(O*wcP - ave*(root.r+ccP*L)):  # merge redundant Cs
             for i,_C in enumerate(C_):
                 if _C in removed: continue
-                for C in C_[i+1:]:
+                for j, C in enumerate(C_[i+1:],start=i+1):
                     if C in removed: continue
                     l = comp_N(C,_C,(C.r+_C.r)/2, min(C.c,_C.c), A=(a:=_C.yx-C.yx), span=np.hypot(*a))
                     if l.m*wF > ave*(l.r+cF):
-                        add2F(_C,C,1); removed += [C]
-        new_ = [Copy_(N,root,init=1,cls=CL) for j,N in enumerate(N_)
-                if np.sort(md__[j,:,0])[-2:].min()*wcP > ave*(N.r+ccP)]  # seed overlap Ns
+                        add2F(_C,C,2); removed += [C]  # merge should be 2 here, all Cs have the same N_
+                        _C.m_ += C.m_; _C.d_ += C.d_  # not sure, sum their m_ and d_ when we merge _C?
+                        for N in N_: 
+                            N.root_[i][1] += N.root_[j][1]; N.root_[i][2] += N.root_[j][2]  # sum m and d reference of merged _C            
+                            N.root_.pop(j)
+        new_ = []
+        for j,N in enumerate(N_):
+            if md__[j,:,0].min()*wcP > ave*(N.r+ccP):  # should be weakest > ave to init new C?
+                C = Copy_(N,root,init=1,cls=CL); C.N_ = N_  # or sum2F using md__?
+                for n in N_: n.root_ += [[C,md__[j,:,0].mean(),md__[j,:,1].mean()]]  # use existing Cs' n mean values? 
+                new_ += [C]   
+        # new_ = [Copy_(N,root,init=1,cls=CL) for j,N in enumerate(N_)
+        #         if md__[j,:,0].max()*wcP > ave*(N.r+ccP)]  # seed overlap Ns
         _C_ = [c for c in C_ if c not in removed and c.m*wcP > ave*c.r*ccP] + new_  # survive+prune, +seeds
         if conv and not (removed) and len(_C_)==Lc:
             break

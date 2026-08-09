@@ -147,14 +147,15 @@ def build(func, node):  # AST → CoF | (type,sub_) | ast_leaf | None
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
         if node.func.id=='gv_':
             func.gV_+=[0]; func.g_+=[node]; l=len(func.g_)  # func.g_[i] <-> oF.gV_[i]
-            node.args.append(ast.Constant(value=l-1))  # add gv_(i)
+            if len(node.args)==1: node.args.append(ast.Constant(value=l-1))  # add gv_(i)
+            else: node.args[-1] = ast.Constant(value=l-1)  # re-build: replace index, don't accumulate
             sub_ = [r for t in ast.iter_child_nodes(node) if (r := build(func,t)) is not None]
             sub_,fc_ = zip(*sub_) if sub_ else ((),())
-            return (('gv_',l), sub_), sum(fc_)+costs.get(ast.Call,0)
+            return (('gv_',l), sub_, node), sum(fc_)+costs.get(ast.Call,0)
         if (i := iF_.get(node.func.id)) is not None: return oF_[i],3
     sub_ = [rett for t in ast.iter_child_nodes(node) if (rett := build(func,t)) is not None]
     if sub_:
-        sub_,fc_= zip(*sub_); return (type(node), sub_), sum(fc_)+costs.get(type(node), 0)
+        sub_,fc_= zip(*sub_); return (type(node), sub_, node), sum(fc_)+costs.get(type(node), 0)
     if type(node) in costs: return node, costs.get(type(node),0)
 
 def F_body_():  # form function body by AST tracing
@@ -205,12 +206,53 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
                 form_body(T); fR = 1  # rebuild from remaining members, refine
             else: T.fin = 1  # converged | weak, filtered below
         _w__ = w__
-    oT_ = [T for  T in T_ if T.w > ave]
-    oF_ = [F for F in oF_ if F not in (_F for T in oT_ for _F in T.N_)]  # recycle singletons
-    for i,F in enumerate(oF_ + oT_):
-        F.nF=i; F.fdef = ast.FunctionDef(name=f'oF{F.nF}',args=ast.arguments(),body=F.body)  # reinit the fdef: ast node
-        oT_ += [F]  # rename by index
-    return oT_
+    _T_ = [T for  T in T_ if T.w > ave]
+    _F_ = [F for F in oF_ if F not in (_F for T in _T_ for _F in T.N_)]; out_ = []  # recycle singletons
+    for i,F in enumerate(_F_ + _T_):
+        F.nF=i; F.fdef = get_fdef(F, name=f'oF{i}')   # reinit the fdef: ast node
+        out_ += [F]  # rename by index
+    return out_    
+
+# from fable, not review yet
+def get_fdef(F, name=None):  # real FunctionDef from F.body; members define branch dispatch + arg spec
+   
+    def mk_args(names=()):  # full ast.arguments, compile-safe
+        return ast.arguments(posonlyargs=[], args=[ast.arg(arg=n) for n in names], vararg=None,
+                         kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[])
+
+    def body2ast(body, fi_map=None):  # meta body -> list of real ast stmts; fi_map: member CoF -> branch index
+        def fork(t): return (isinstance(t,tuple) and t[0] is ast.IfExp and len(t)>1
+                             and isinstance(t[1],tuple) and len(t[1])==2 and isinstance(t[1][0],list))  # form_body marker
+        def stmt(n):
+            n = deepcopy(n)
+            return n if isinstance(n, ast.stmt) else ast.Expr(value=n)
+        out = []
+        for t in body:
+            if isinstance(t, ast.AST): out += [stmt(t)]  # leaf: original stmt
+            elif isinstance(t, CoF):   out += [stmt(ast.Expr(ast.Call(func=ast.Name(f'oF{t.nF}',ast.Load()),args=[],keywords=[])))]  # split-out sub, free vars unresolved
+            elif fork(t):  # (ast.IfExp, ([f_],op)...) -> dispatch on fi selector, branch per member set
+                node = None
+                for k,(f_,op) in enumerate(t[1:]):
+                    op_ = op if isinstance(op,list) else [op]
+                    test = ast.Compare(left=ast.Name('fi',ast.Load()), ops=[ast.In()],
+                                       comparators=[ast.Tuple(elts=[ast.Constant((fi_map or {}).get(f,k)) for f in f_], ctx=ast.Load())])
+                    br = ast.If(test=test, body=body2ast(op_, fi_map) or [ast.Pass()], orelse=[])
+                    if node is None: node = br; out += [node]
+                    else: node.orelse = [br]; node = br
+            elif isinstance(t,tuple) and len(t)>2 and isinstance(t[2],(ast.stmt,ast.expr)): out += [stmt(t[2])]  # packed node
+            elif isinstance(t,tuple) and len(t)>2 and isinstance(t[2],ast.AST): pass  # arguments etc: cost-counted, not body ops
+            else: out += [ast.Pass()]  # unrecoverable: pre-pack tree | synthetic without node
+        return out
+
+    mem_ = [f for f in F.N_ if isinstance(f,CoF)]
+    fi_map = {f:k for k,f in enumerate(mem_)}
+    args = deepcopy(nF_[mem_[0].nF].args) if mem_ and mem_[0].nF < len(nF_) and nF_[mem_[0].nF] is not None else mk_args()
+    if mem_: args.kwonlyargs += [ast.arg(arg='fi')]; args.kw_defaults += [ast.Constant(0)]  # member selector
+    fd = ast.FunctionDef(name=name or f'oF{F.nF}', args=args, body=body2ast(F.body, fi_map) or [ast.Pass()],
+                         decorator_list=[], returns=None, type_comment=None)
+    if 'type_params' in ast.FunctionDef._fields: fd.type_params = []  # py3.12+
+    return ast.fix_missing_locations(fd)
+
 
 def comp_body(_n, n):  # compare only: compression estimate C; construction in form_body
 
