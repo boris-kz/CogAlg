@@ -405,7 +405,7 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
         new_ = [Copy_(N,root,init=1,cls=CL) for j,N in enumerate(N_)
                 if np.sort(md__[j,:,0])[-2:].min()*wcP > ave*(N.r+ccP)]  # seed overlap Ns
         _C_ = [c for c in C_ if c not in removed and c.m*wcP > ave*c.r*ccP] + new_  # survive+prune, +seeds
-        if conv and not (removed) and len(_C_)==Lc:  # we should check removed only since new_ is default
+        if conv and not (removed) and len(_C_)==Lc:
             break
         _md__ = md__; cnt += 1
     out_ = []
@@ -422,10 +422,7 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
                     L.N_ = [N,C]; C.L_ += [L]
                 out_ += [C]
     if out_:
-        # dCt = sum2F(list(set(_C_)-set(out_)))  # compress, out_ for CoF?
-        # FV_(CoF.get(), dCt.dTT, dCt.c, dCt.r)
-        # pending review: the difference should be input's params - output's params? We will never get same Cs from _C_ and out_ anyway
-        iTT,iC,iR = sum_vt(iC_); oTT,oC,oR = sum_vt(out_)
+        iTT, iC, iR = sum_vt(iC_); oTT,oC,oR = sum_vt(out_)
         FV_(CoF.get(), iTT-oTT, iC-oC, iR-oR)
     return out_
 
@@ -434,8 +431,8 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
     c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); w_ = c_/C; N = N_[0]
     fC = any(m_)
     typ = 2 if fC else N.typ
-    if fC: w_ *= m_/sum(m_)  # pending review: to update weights with soft membership via m_
-    cls_ = [CF,CL,CL,CN]  # keep typ=2 to differentiate CC
+    if fC: w_ *= m_/sum(m_)  # differential initialization to break symmetry
+    cls_ = [CF,CL,CL,CN]  # typ=2 CCs
     for i, (n,w) in enumerate(zip(N_,w_)):
         if i:
             TT += n.dTT*w; R+=n.r*w; n_ += (n.N_ if merge else [n])
@@ -864,7 +861,6 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
         ave, avd = val_(aTT, fd=1)  # filters *= ave
         if oL := pack_seg(frame,'oH', wBac, cBac**2, oTT):
             dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
-            # not fully reviewed:
             split_oF_(); oF_ = clust_oF_()
             map_ = {}
             for T in oF_:
