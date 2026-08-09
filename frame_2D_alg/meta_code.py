@@ -205,15 +205,12 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
                 form_body(T); fR = 1  # rebuild from remaining members, refine
             else: T.fin = 1  # converged | weak, filtered below
         _w__ = w__
-    out_ = []
-    for T in T_:
-        if T.w > ave: out_ += [T]
-    _F_ =[F for F in oF_ if F not in (_F for T in out_ for _F in T.N_)]  # recycle singletons
-    for i,F in enumerate(list(set(out_+_F_))):
+    oT_ = [T for  T in T_ if T.w > ave]
+    oF_ = [F for F in oF_ if F not in (_F for T in oT_ for _F in T.N_)]  # recycle singletons
+    for i,F in enumerate(oF_ + oT_):
         F.nF=i; F.fdef = ast.FunctionDef(name=f'oF{F.nF}',args=ast.arguments(),body=F.body)  # reinit the fdef: ast node
-        out_ += [F]  # rename by index
-    oF_ = out_
-    return oF_
+        oT_ += [F]  # rename by index
+    return oT_
 
 def comp_body(_n, n):  # compare only: compression estimate C; construction in form_body
 
