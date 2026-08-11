@@ -351,7 +351,7 @@ def split_oF_():  # divisive clustering
             oF_.append(sub); nF_.append(None); sub.nF = len(oF_)-1
             return sub
         if isinstance(t,tuple) and t[1]:  # return body and split nested node recursively
-            return (t[0], tuple(split(s,oF) for s in t[1]))
+            return (t[0], tuple(split(s,oF) for s in t[1]),*t[2:])  # t[2] could be the original ast node
         return t
 
     for oF in copy(oF_):  # copy because we append new sub during

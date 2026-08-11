@@ -242,7 +242,8 @@ def comp_A(_A,A):
 def get_exemplars(N_,_r,_c):  # multi-layer non-maximum suppression -> sparse seeds for diffusive clustering, cluster_N too?
 
     for n in N_:
-        n.w = (n.Rt.m + sum([r[1] for r in n.root_])) * n.c
+        rc = sum(r[0].c for r in n.root_); C = n.c + rc
+        n.w = ((n.Rt.m * n.c) + sum([r[1]*r[0].c for r in n.root_]))/C
         # combined lateral and vertical match
     N_= sorted(N_, key=lambda n: n.w, reverse=True); E_,Inh_ = set(),set()
     for rdn, N in enumerate(N_, start=1):  # strong-first
@@ -406,10 +407,10 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
             if np.sort(md__[j,:,0])[-2:].min()*wcP > ave*(N.r+ccP):  # seed overlap Ns
                 C = Copy_(N,root,init=1,cls=CL); C.N_ = N_
                 md_ = np.array([val_(base_comp(C,n)[0], ttcP,fd=1) for n in N_])
-                C.m_,C.d_ = md_[:,0],md_[:,1]; _C_ += [C]
+                C.m_,C.d_ = md_[:,0],md_[:,1]; C_ += [C]
                 _md__ = np.concatenate([md__,md_[:,None,:]], axis=1)  # for next loop
         _C_ = [c for c in C_ if c not in removed and c.m*wcP > ave*c.r*ccP]  # survive+prune, +seeds
-        if conv and not (removed) and len(_C_)==Lc:
+        if not _C_ or (conv and not (removed) and len(_C_)==Lc):  # skip if all _C_ failed the  c.m*wcP > ave*c.r*ccP eval above
             break
         _md__ = md__; cnt += 1
     out_ = []
@@ -455,7 +456,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
         F.m, F.d = sum(m*c for m,c in zip(m_,c_))/C, sum(d*c for d,c in zip(d_,c_))/C
     else:
         F.m, F.d = val_(TT, fd=1)   # consolidate all val_(TT) with a flag like FV_?
-    F.w = sum(rt[1] * c for rt, c in zip(m_, c_)) / C
+    F.w = sum(m * c for m, c in zip(m_, c_)) / C
 
     if typ==3: F.Nt.dTT = copy(TT); F.Nt.c = C; F.Nt.r = R
     if typ:
