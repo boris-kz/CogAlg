@@ -388,7 +388,7 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
         Lc = len(_C_); L = Lc*Ln  # Lc,L,md__ per cycle since _C_ varies
         md__ = np.zeros((Ln,Lc,2)); O = 0
         for j,N in enumerate(N_):
-            for i,C in enumerate(_C_): md__[j,i] = val_(base_comp(C,N)[0], ttcP)
+            for i,C in enumerate(_C_): md__[j,i] = val_(base_comp(C,N)[0], ttcP,fd=1)
             m_ = md__[j,:,0]; O += m_.sum() - m_.max()  # cross-C ambiguity, gates split/merge
         C_ = [sum2F(N_, root, md__[:,i,0], md__[:,i,1]) for i in range(Lc)]  # mean shift, aligned to md__
         Mt = md__[:,:,0].sum()  # total V
@@ -401,10 +401,14 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
                     if C in removed: continue
                     l = comp_N(C,_C,(C.r+_C.r)/2, min(C.c,_C.c), A=(a:=_C.yx-C.yx), span=np.hypot(*a))
                     if l.m*wF > ave*(l.r+cF):
-                        add2F(_C,C,1); removed += [C]
-        new_ = [Copy_(N,root,init=1,cls=CL) for j,N in enumerate(N_)
-                if np.sort(md__[j,:,0])[-2:].min()*wcP > ave*(N.r+ccP)]  # seed overlap Ns
-        _C_ = [c for c in C_ if c not in removed and c.m*wcP > ave*c.r*ccP] + new_  # survive+prune, +seeds
+                        add2F(_C,C,2); removed += [C]; _C.m,_C.d = val_(_C.dTT,ttcP,fd=1)  # for next-loop base comp
+        for j,N in enumerate(N_):
+            if np.sort(md__[j,:,0])[-2:].min()*wcP > ave*(N.r+ccP):  # seed overlap Ns
+                C = Copy_(N,root,init=1,cls=CL); C.N_ = N_
+                md_ = np.array([val_(base_comp(C,n)[0], ttcP,fd=1) for n in N_])
+                C.m_,C.d_ = md_[:,0],md_[:,1]; _C_ += [C]
+                _md__ = np.concatenate([md__,md_[:,None,:]], axis=1)  # for next loop
+        _C_ = [c for c in C_ if c not in removed and c.m*wcP > ave*c.r*ccP]  # survive+prune, +seeds
         if conv and not (removed) and len(_C_)==Lc:
             break
         _md__ = md__; cnt += 1
@@ -446,8 +450,13 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
                 kern=n.kern*w; span=n.span*w; yx=n.yx*w; angl = copy(n.angl[0]) if n.angl is not None else None
                 if typ==3: box=copy(n.box)
     F = (cls_[typ])(dTT=TT, c=C, r=R, nF=nF); F.N_ = n_
-    if np.any(m_): F.m_,F.d_ = m_,d_; F.m, F.d = sum(m_),sum(d_)  # m_, d_ may empty here
-    else:          F.m, F.d = val_(TT, fd=1)   # consolidate all val_(TT) with a flag like FV_?
+    if np.any(m_):
+        F.m_,F.d_ = m_,d_; C = sum(c_); F.c=C  # for CCs only
+        F.m, F.d = sum(m*c for m,c in zip(m_,c_))/C, sum(d*c for d,c in zip(d_,c_))/C
+    else:
+        F.m, F.d = val_(TT, fd=1)   # consolidate all val_(TT) with a flag like FV_?
+    F.w = sum(rt[1] * c for rt, c in zip(m_, c_)) / C
+
     if typ==3: F.Nt.dTT = copy(TT); F.Nt.c = C; F.Nt.r = R
     if typ:
         F.kern=kern; F.span=span; F.yx=yx
