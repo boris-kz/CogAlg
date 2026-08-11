@@ -211,14 +211,13 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
     for i,F in enumerate(_F_ + _T_):
         F.nF=i; F.fdef = get_fdef(F, name=f'oF{i}')   # reinit the fdef: ast node
         out_ += [F]  # rename by index
-    return out_    
+    return out_
 
-# from fable, not review yet
+# from fable, not reviewed yet
 def get_fdef(F, name=None):  # real FunctionDef from F.body; members define branch dispatch + arg spec
-   
+
     def mk_args(names=()):  # full ast.arguments, compile-safe
-        return ast.arguments(posonlyargs=[], args=[ast.arg(arg=n) for n in names], vararg=None,
-                         kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[])
+        return ast.arguments(posonlyargs=[], args=[ast.arg(arg=n) for n in names], vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[])
 
     def body2ast(body, fi_map=None):  # meta body -> list of real ast stmts; fi_map: member CoF -> branch index
         def fork(t): return (isinstance(t,tuple) and t[0] is ast.IfExp and len(t)>1
@@ -252,7 +251,6 @@ def get_fdef(F, name=None):  # real FunctionDef from F.body; members define bran
                          decorator_list=[], returns=None, type_comment=None)
     if 'type_params' in ast.FunctionDef._fields: fd.type_params = []  # py3.12+
     return ast.fix_missing_locations(fd)
-
 
 def comp_body(_n, n):  # compare only: compression estimate C; construction in form_body
 
