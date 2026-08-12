@@ -342,20 +342,16 @@ def comp_callers(_T, T):  # compute value of callers_overlap + calls_overlap
 def get_fc(n):
     return n.fc if isinstance(n,CoF) else costs.get(n[0],0)+sum(get_fc(c) for c in n[1]) if isinstance(n,tuple) else costs.get(type(n),0)
 
-def split_oF_():  # divisive clustering
-
-    def split(t, oF):  # pack sub gate from gates
-        if (isinstance(t,tuple) and t[0] in (ast.If,ast.IfExp) and isinstance(h:=t[1][0],tuple) and isinstance(h[0],tuple) and h[0][0]=='gv_'
-            and oF.w * sum(get_fc(p) for p in t[1]) > ave):
-            sub = CoF(root=oF, fc=get_fc(t), body=[t], caller_={oF})
-            oF_.append(sub); nF_.append(None); sub.nF = len(oF_)-1
-            return sub
-        if isinstance(t,tuple) and t[1]:  # return body and split nested node recursively
-            return (t[0], tuple(split(s,oF) for s in t[1]),*t[2:])  # t[2] could be the original ast node
-        return t
-
-    for oF in copy(oF_):  # copy because we append new sub during
-        oF.body = [split(t,oF) for t in oF.body]
+# divisive clustering:
+def split_oF(t, oF):  # pack sub gate from gates
+    if (isinstance(t,tuple) and t[0] in (ast.If,ast.IfExp) and isinstance(h:=t[1][0],tuple) and isinstance(h[0],tuple) and h[0][0]=='gv_'
+        and oF.w * sum(get_fc(p) for p in t[1]) > ave):
+        sub = CoF(root=oF, fc=get_fc(t), body=[t], caller_={oF})
+        oF_.append(sub); nF_.append(None); sub.nF = len(oF_)-1
+        return sub
+    if isinstance(t,tuple) and t[1]:  # return body and split nested node recursively
+        return (t[0], tuple(split_oF(s,oF) for s in t[1]),*t[2:])  # t[2] could be prior ast node
+    return t
 
 def inject_oF_(oF_, g):  # inject AST in g, recompile g[name]
 

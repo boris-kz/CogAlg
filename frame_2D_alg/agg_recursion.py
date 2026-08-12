@@ -6,7 +6,7 @@ from itertools import zip_longest, combinations, product  # from multiprocessing
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
-from meta_code import oF_,iF_,nF_,CF,CL,CN,CoF,wT,wTT, eps,eps_,ave,avd,decay, trace_func,parse_funcs, call_sites, split_oF_,clust_oF_,inject_oF_,gv_, val_,sum_vt
+from meta_code import oF_,iF_,nF_,CF,CL,CN,CoF,wT,wTT, eps,eps_,ave,avd,decay, trace_func,parse_funcs, call_sites, split_oF,clust_oF_,inject_oF_,gv_, val_,sum_vt
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), the input here is resulting PPs: segments of matching Ps.
@@ -386,7 +386,7 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
             if c in _C_: _md__[i,_C_.index(c)] = m,d
     while True:
         for N in N_: N.root_ = []  # reset, append in sum2F
-        Lc = len(_C_); L = Lc*Ln  # Lc,L,md__ per cycle since _C_ varies
+        Lc = len(_C_); L = Lc*Ln  # loop Lc,L,md__
         md__ = np.zeros((Ln,Lc,2)); O = 0
         for j,N in enumerate(N_):
             for i,C in enumerate(_C_): md__[j,i] = val_(base_comp(C,N)[0], ttcP,fd=1)
@@ -403,6 +403,11 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
                     l = comp_N(C,_C,(C.r+_C.r)/2, min(C.c,_C.c), A=(a:=_C.yx-C.yx), span=np.hypot(*a))
                     if l.m*wF > ave*(l.r+cF):
                         add2F(_C,C,2); removed += [C]; _C.m,_C.d = val_(_C.dTT,ttcP,fd=1)  # for next-loop base comp
+        for i, _C in enumerate(C_):
+            _C.olp = sum(rt[1] for n in C.N_ for rt in getattr(n, 'root_', []) if rt[0] is not C and rt[1] > _C.m)
+            if _C.m * wcP > ave * (_C.r + _C.olp + ccP):  # prune, add olp as stronger ms?
+                _C_ += [C]  # also after merge and converge
+        '''
         for j,N in enumerate(N_):
             if np.sort(md__[j,:,0])[-2:].min()*wcP > ave*(N.r+ccP):  # seed overlap Ns
                 C = Copy_(N,root,init=1,cls=CL); C.N_ = N_
@@ -410,6 +415,7 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
                 C.m_,C.d_ = md_[:,0],md_[:,1]; C_ += [C]
                 _md__ = np.concatenate([md__,md_[:,None,:]], axis=1)  # for next loop
         _C_ = [c for c in C_ if c not in removed and c.m*wcP > ave*c.r*ccP]  # survive+prune, +seeds
+        '''
         if not _C_ or (conv and not (removed) and len(_C_)==Lc):  # skip if all _C_ failed the  c.m*wcP > ave*c.r*ccP eval above
             break
         _md__ = md__; cnt += 1
@@ -871,7 +877,8 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
         ave, avd = val_(aTT, fd=1)  # filters *= ave
         if oL := pack_seg(frame,'oH', wBac, cBac**2, oTT):
             dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
-            split_oF_(); oF_ = clust_oF_()
+            oF_ = [split_oF(t, oF) for _oF in copy(oF_) for t in _oF.body]
+            oF_ = clust_oF_()
             map_ = {}
             for T in oF_:
                 if T.N_:  # new clustered T
