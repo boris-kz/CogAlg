@@ -182,8 +182,9 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
         if (w := comp_body(_F.body, F.body) / min(_F.fc, F.fc)) > ave:
             _F.rim += [(F,w)]; F.rim += [(_F,w)]; _F.w += w; F.w += w
     T_,_F_ = [],[]
-    for F in F_:
-        F.w = sum([w * F.w / (F.w+_F.w) for _F, w in F.rim])
+    w_ = [sum([w * F.w / (F.w+_F.w) for _F, w in F.rim]) for F in F_]  # need to review
+    for F,w in zip(F_,w_):
+        F.w = w
         if F.w > ave:
             T = CoF(N_= [F]+[f for f,_ in F.rim], L_= [0 for _ in F_]); T.fin=0  # L_: dense prior w_, aligned with F_ in all Ts
             form_body(T); T_ += [T]
@@ -197,7 +198,7 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
             Dw, N_,w_ = 0, [],[]
             for j,F in enumerate(T.N_):  # rim-local candidates: members prune, never join
                 w = (comp_body(T.body, F.body) / min(T.fc, F.fc) if F else 0)
-                if F.root_: w/=sum(_T.w for _T in F.root_)
+                if F.root_: w/=sum(_T.w for _T in F.root_ if _T in T_ or T.fin)  # only current iteration T or converged T?
                 Dw += abs(w - _w__[i][j]); w__[i][j] = w
                 if w>ave: N_ += [F]; w_ += [w]; F.root_.add(T)
             T.N_ = N_; T.L_ = w_
@@ -209,7 +210,9 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
     _T_ = [T for  T in T_ if T.w > ave]
     _F_ = [F for F in oF_ if F not in (_F for T in _T_ for _F in T.N_)]; out_ = []  # recycle singletons
     for i,F in enumerate(_F_ + _T_):
-        F.nF=i; F.fdef = get_fdef(F, name=f'oF{i}')   # reinit the fdef: ast node
+        F.nF=i
+        # recycled oFs should have existing fdef
+        if F not in _F_: F.fdef = get_fdef(F, name=f'oF{i}')   # reinit the fdef: ast node
         out_ += [F]  # rename by index
     return out_
 

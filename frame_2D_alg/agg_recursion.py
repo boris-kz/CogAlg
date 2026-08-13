@@ -403,20 +403,12 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
                     l = comp_N(C,_C,(C.r+_C.r)/2, min(C.c,_C.c), A=(a:=_C.yx-C.yx), span=np.hypot(*a))
                     if l.m*wF > ave*(l.r+cF):
                         add2F(_C,C,2); removed += [C]; _C.m,_C.d = val_(_C.dTT,ttcP,fd=1)  # for next-loop base comp
-        for i, _C in enumerate(C_):
+        _C_ = []  # for next loop
+        for  _C in [C for C in C_ if C not in removed]:  # skip merged
             _C.olp = sum(rt[1] for n in C.N_ for rt in getattr(n, 'root_', []) if rt[0] is not C and rt[1] > _C.m)
-            if _C.m * wcP > ave * (_C.r + _C.olp + ccP):  # prune, add olp as stronger ms?
+            if _C.m * wcP > ave * (_C.r + _C.olp + ccP):  # prune
                 _C_ += [C]  # also after merge and converge
-        '''
-        for j,N in enumerate(N_):
-            if np.sort(md__[j,:,0])[-2:].min()*wcP > ave*(N.r+ccP):  # seed overlap Ns
-                C = Copy_(N,root,init=1,cls=CL); C.N_ = N_
-                md_ = np.array([val_(base_comp(C,n)[0], ttcP,fd=1) for n in N_])
-                C.m_,C.d_ = md_[:,0],md_[:,1]; C_ += [C]
-                _md__ = np.concatenate([md__,md_[:,None,:]], axis=1)  # for next loop
-        _C_ = [c for c in C_ if c not in removed and c.m*wcP > ave*c.r*ccP]  # survive+prune, +seeds
-        '''
-        if not _C_ or (conv and not (removed) and len(_C_)==Lc):  # skip if all _C_ failed the  c.m*wcP > ave*c.r*ccP eval above
+        if not _C_ or (conv and (not removed) and len(_C_)==Lc):  # skip if all _C_ failed the  c.m*wcP > ave*c.r*ccP eval above
             break
         _md__ = md__; cnt += 1
     out_ = []
@@ -690,7 +682,7 @@ def proj_focus(PV__, y,x, tile, elev):  # radial accum of projected focus value 
     else:  mA_ = np.ones(8)  # if A==(0,0), no links at all, all singleton
     rim_dist_ = np.hypot(rim_A_[:,0], rim_A_[:,1])
     n = 1  # n rim layers
-    while y-n>=0 and n-1>=0 and y+n<H and x+n<W:  # rim is within frame
+    while y-n>=0 and x-n>=0 and y+n<H and x+n<W:  # rim is within frame
         pV__ = (Vm + Vd*mA_) * Dec**(n*rim_dist_)  # diag dist is 1.4 * axial
         if np.max(pV__) < ave: break  # < min adjustment
         rim_coords = np.array([
