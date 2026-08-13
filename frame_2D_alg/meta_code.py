@@ -182,7 +182,7 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
         if (w := comp_body(_F.body, F.body) / min(_F.fc, F.fc)) > ave:
             _F.rim += [(F,w)]; F.rim += [(_F,w)]; _F.w += w; F.w += w
     T_,_F_ = [],[]
-    w_ = [sum([w * F.w / (F.w+_F.w) for _F, w in F.rim]) for F in F_]
+    w_ = [sum([w * F.w / (F.w+_F.w) for _F, w in F.rim]) for F in F_]  # need to review
     for F,w in zip(F_,w_):
         F.w = w
         if F.w > ave:
