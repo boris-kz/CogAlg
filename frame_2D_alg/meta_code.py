@@ -177,7 +177,7 @@ def parse_funcs(paths):
 def clust_oF_():  # simplified oF rim-mediated centroid clustering
 
     global oF_;  F_ = [F for F in oF_ if F]  # uncalled Fs, don't cluster, pack in _F_ if the loop is not representative?
-    for F in F_: F.rim = []; F.w = 0; F.root_ = set()
+    for F in F_: F.rim = []; F.w = 0; F.root_ = []
     for _F, F in combinations(F_,2):  # w = relative compression: shared / min cost, ave-commensurate
         if (w := comp_body(_F.body, F.body) / min(_F.fc, F.fc)) > ave:
             _F.rim += [(F,w)]; F.rim += [(_F,w)]; _F.w += w; F.w += w
@@ -191,27 +191,38 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
     _w__ = [[0 for f in F_] for t in FC_]
     while True:  # refine Ts
         Dv = 0; w__ = [[0 for F in C.N_] for C in FC_]
-        for i,C in enumerate(FC_):
+        for i,C in enumerate(FC_):  # first pass to compute w and assign F's root_
+            if C.fin: continue
+            for j,F in enumerate(C.N_):  # rim-local candidates: members prune, never join
+                w = (comp_body(C.body, F.body) / min(C.fc, F.fc) if F else 0)
+                F.root_ += [C]; w__[i][j] = w
+        for i,C in enumerate(FC_):  # second pass
             if C.fin: continue
             N_,w_ = [],[]
             for j,F in enumerate(C.N_):  # rim-local candidates: members prune, never join
-                w = (comp_body(C.body, F.body) / min(C.fc, F.fc) if F else 0)
-                if F.root_: w/=sum(_C.w for _C in F.root_ if _C in FC_ or C.fin)  # only current iteration T or converged T?
-                Dv += abs(w -_w__[i][j]) - ave*F.r; w__[i][j] = w
-                if w>ave: N_ += [F]; w_ += [w]; F.root_.add(C)
+                w = w__[i][j]
+                if F.root_:
+                    rw_ = [w__[FC_.index(r)][r.N_.index(F)] for r in F.root_ if r is not C]; sr_,wr_ = [.5],[]  # self
+                    for rw in rw_:
+                        if rw > w: sr_ = [rw]  # stronger or weaker alt root
+                        else: wr_ += [rw]
+                    r = np.mean(wr_)/np.mean(sr_)
+                    F.r = r; C.r += r
+                    Dv += abs(w -_w__[i][j]) - ave*F.r
+                    w *= r; w__[i][j] = w
+                if w>ave: N_ += [F]; w_ += [w]
+                else:     F.root_.remove(C)
             C.N_ = N_; C.L_ = w_
             if w_: C.w = np.mean(w_)
-            if sum(w_) > ave*C.r:
-                form_body(C); fR = 1  # rebuild from remaining members, refine
+            if sum(w_) > ave*C.r: form_body(C)  # rebuild from remaining members, refine
             else: C.fin = 1  # converged | weak, filtered below
         if Dv > 0:  _w__ = w__
         else: break
-    _C_ = [C for  C in FC_ if C.w > ave]
+    _C_ = [C for  C in FC_ if C.w > ave]  # not only converged?
     _F_ = [F for F in oF_ if F not in (_F for C in _C_ for _F in C.N_)]; out_ = []  # recycle singletons
     for i,F in enumerate(_F_ + _C_):
         F.nF=i
-        # recycled oFs should have existing fdef
-        if F not in _F_: F.fdef = get_fdef(F, name=f'oF{i}')   # reinit the fdef: ast node
+        if F not in oF_: F.fdef = get_fdef(F, name=f'oF{i}')   # reinit the fdef: ast node
         out_ += [F]  # rename by index
     return out_
 
