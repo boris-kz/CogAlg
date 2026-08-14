@@ -177,51 +177,41 @@ def parse_funcs(paths):
 def clust_oF_():  # simplified oF rim-mediated centroid clustering
 
     global oF_;  F_ = [F for F in oF_ if F]  # uncalled Fs, don't cluster, pack in _F_ if the loop is not representative?
-    for F in F_: F.rim = []; F.w = 0; F.root_ = []
+    for F in F_: F.rim = []; F.w = 0; F.root_ = set()
     for _F, F in combinations(F_,2):  # w = relative compression: shared / min cost, ave-commensurate
         if (w := comp_body(_F.body, F.body) / min(_F.fc, F.fc)) > ave:
             _F.rim += [(F,w)]; F.rim += [(_F,w)]; _F.w += w; F.w += w
-    T_ = []
+    FC_,_F_ = [],[]
     w_ = [sum([w * F.w / (F.w+_F.w) for _F, w in F.rim]) for F in F_]  # need to review
     for F,w in zip(F_,w_):
         F.w = w
         if F.w > ave:
-            T = CoF(N_= [F]+[f for f,_ in F.rim], L_= [0 for _ in F_]); T.fin=0  # L_: dense prior w_, aligned with F_ in all Ts
-            form_body(T); T_ += [T]
-    _w__ = [[0 for f in t.N_] for t in T_]
-    while True:
-        w__ = [[0 for F in T.N_] for T in T_]
-        for i,T in enumerate(T_):  # first pass to compute w__
-            for j,F in enumerate(T.N_):  # rim-local candidates: members prune, never join
-                w = (comp_body(T.body, F.body) / min(T.fc, F.fc) if F else 0)  
-                F.root_ += [T]; w__[i][j] = w
-        Dw = 0; Rdn = 0; FC_ = []
-        for i,T in enumerate(T_):  # second pass
-            N_,w_, rdn = [],[],0
-            for j,F in enumerate(T.N_):
-                # get current F's root_'s ws, exclude T
-                cw_ = [w__[T_.index(r)][r.N_.index(F)] for r in F.root_ if r is not T]  
-                w = w__[i][j]  # current T and F comparison w
-                # stronger ws and weaker ws
-                sw_ = [sw for sw in cw_ if sw > w]
-                ww_ = [ww for ww in cw_ if ww <= w] + [w]  # add current comparison w to prevent empty divisor?
-                r = np.mean(sw_)/np.mean(ww_) if sw_ else 1; rdn += r
-                Dw += abs(w - _w__[T_.index(T)][T.N_.index(F)])
-                if w > ave * r:  N_ += [F]; w_ += [w]
-                else:              F.root_.remove(T)
-            if N_:
-                T.N_ = N_; T.L_ = w_; T.w = np.mean(w_)
-                if T.w > ave * Rdn: FC_ += [T] 
-            Rdn += rdn  
-        for FC in FC_: form_body(FC)
-        if Dw > ave * Rdn: T_ = FC_
-        else:              break  # convergence over the whole FC_'s Dw and Rdn?
-        _w__ = w__
-    F_ = [F for F in oF_ if F not in (_F for T in FC_ for _F in T.N_)]; out_ = []  # recycle singletons
-    for i,F in enumerate(F_+FC_):
+            C = CoF(N_= [F]+[f for f,_ in F.rim], L_= [0 for _ in F_]); C.fin=0  # L_: dense prior w_, aligned with F_ in all Ts
+            form_body(C); FC_ += [C]  # function clusters
+    _w__ = [[0 for f in F_] for t in FC_]
+    while True:  # refine Ts
+        Dv = 0; w__ = [[0 for F in C.N_] for C in FC_]
+        for i,C in enumerate(FC_):
+            if C.fin: continue
+            N_,w_ = [],[]
+            for j,F in enumerate(C.N_):  # rim-local candidates: members prune, never join
+                w = (comp_body(C.body, F.body) / min(C.fc, F.fc) if F else 0)
+                if F.root_: w/=sum(_C.w for _C in F.root_ if _C in FC_ or C.fin)  # only current iteration T or converged T?
+                Dv += abs(w -_w__[i][j]) - ave*F.r; w__[i][j] = w
+                if w>ave: N_ += [F]; w_ += [w]; F.root_.add(C)
+            C.N_ = N_; C.L_ = w_
+            if w_: C.w = np.mean(w_)
+            if sum(w_) > ave*C.r:
+                form_body(C); fR = 1  # rebuild from remaining members, refine
+            else: C.fin = 1  # converged | weak, filtered below
+        if Dv > 0:  _w__ = w__
+        else: break
+    _C_ = [C for  C in FC_ if C.w > ave]
+    _F_ = [F for F in oF_ if F not in (_F for C in _C_ for _F in C.N_)]; out_ = []  # recycle singletons
+    for i,F in enumerate(_F_ + _C_):
         F.nF=i
         # recycled oFs should have existing fdef
-        if F not in oF_: F.fdef = get_fdef(F, name=f'oF{i}')   # reinit the fdef: ast node
+        if F not in _F_: F.fdef = get_fdef(F, name=f'oF{i}')   # reinit the fdef: ast node
         out_ += [F]  # rename by index
     return out_
 
