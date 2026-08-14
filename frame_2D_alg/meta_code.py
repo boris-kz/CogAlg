@@ -181,35 +181,34 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
     for _F, F in combinations(F_,2):  # w = relative compression: shared / min cost, ave-commensurate
         if (w := comp_body(_F.body, F.body) / min(_F.fc, F.fc)) > ave:
             _F.rim += [(F,w)]; F.rim += [(_F,w)]; _F.w += w; F.w += w
-    T_,_F_ = [],[]
+    FC_,_F_ = [],[]
     w_ = [sum([w * F.w / (F.w+_F.w) for _F, w in F.rim]) for F in F_]  # need to review
     for F,w in zip(F_,w_):
         F.w = w
         if F.w > ave:
-            T = CoF(N_= [F]+[f for f,_ in F.rim], L_= [0 for _ in F_]); T.fin=0  # L_: dense prior w_, aligned with F_ in all Ts
-            form_body(T); T_ += [T]
-    _w__ = [[0 for f in F_] for t in T_]
-    fR = 1  # refine
-    while fR:
-        fR = 0
-        w__ = [[0 for F in T.N_] for T in T_]
-        for i,T in enumerate(T_):
-            if T.fin: continue
-            Dw, N_,w_ = 0, [],[]
-            for j,F in enumerate(T.N_):  # rim-local candidates: members prune, never join
-                w = (comp_body(T.body, F.body) / min(T.fc, F.fc) if F else 0)
-                if F.root_: w/=sum(_T.w for _T in F.root_ if _T in T_ or T.fin)  # only current iteration T or converged T?
-                Dw += abs(w - _w__[i][j]); w__[i][j] = w
-                if w>ave: N_ += [F]; w_ += [w]; F.root_.add(T)
-            T.N_ = N_; T.L_ = w_
-            if w_: T.w = np.mean(w_)
-            if sum(w_) > ave and Dw > ave:
-                form_body(T); fR = 1  # rebuild from remaining members, refine
-            else: T.fin = 1  # converged | weak, filtered below
-        _w__ = w__
-    _T_ = [T for  T in T_ if T.w > ave]
-    _F_ = [F for F in oF_ if F not in (_F for T in _T_ for _F in T.N_)]; out_ = []  # recycle singletons
-    for i,F in enumerate(_F_ + _T_):
+            C = CoF(N_= [F]+[f for f,_ in F.rim], L_= [0 for _ in F_]); C.fin=0  # L_: dense prior w_, aligned with F_ in all Ts
+            form_body(C); FC_ += [C]  # function clusters
+    _w__ = [[0 for f in F_] for t in FC_]
+    while True:  # refine Ts
+        Dv = 0; w__ = [[0 for F in C.N_] for C in FC_]
+        for i,C in enumerate(FC_):
+            if C.fin: continue
+            N_,w_ = [],[]
+            for j,F in enumerate(C.N_):  # rim-local candidates: members prune, never join
+                w = (comp_body(C.body, F.body) / min(C.fc, F.fc) if F else 0)
+                if F.root_: w/=sum(_C.w for _C in F.root_ if _C in FC_ or C.fin)  # only current iteration T or converged T?
+                Dv += abs(w -_w__[i][j]) - ave*F.r; w__[i][j] = w
+                if w>ave: N_ += [F]; w_ += [w]; F.root_.add(C)
+            C.N_ = N_; C.L_ = w_
+            if w_: C.w = np.mean(w_)
+            if sum(w_) > ave*C.r:
+                form_body(C); fR = 1  # rebuild from remaining members, refine
+            else: C.fin = 1  # converged | weak, filtered below
+        if Dv > 0:  _w__ = w__
+        else: break
+    _C_ = [C for  C in FC_ if C.w > ave]
+    _F_ = [F for F in oF_ if F not in (_F for C in _C_ for _F in C.N_)]; out_ = []  # recycle singletons
+    for i,F in enumerate(_F_ + _C_):
         F.nF=i
         # recycled oFs should have existing fdef
         if F not in _F_: F.fdef = get_fdef(F, name=f'oF{i}')   # reinit the fdef: ast node
