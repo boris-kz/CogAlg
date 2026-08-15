@@ -182,11 +182,12 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
         if (w := comp_body(_F.body, F.body) / min(_F.fc, F.fc)) > ave:
             _F.rim += [(F,w)]; F.rim += [(_F,w)]; _F.w += w; F.w += w
     FC_,_F_ = [],[]
-    w_ = [sum([w * F.w / (F.w+_F.w) for _F, w in F.rim]) for F in F_]  # need to review
+    w_ = [sum([w * F.w / (F.w+_F.w) for _F, w in F.rim]) for F in F_]  # need to review 
     for F,w in zip(F_,w_):
         F.w = w
         if F.w > ave:
-            C = CoF(N_= [F]+[f for f,_ in F.rim], L_= [0 for _ in F_]); C.fin=0  # L_: dense prior w_, aligned with F_ in all Ts
+            N_ = [F]+[f for f,_ in F.rim]; fc=sum(N.fc for N in N_)  # fc is sum of N_'s fc? But then min(C.fc, F.fc) is always F.fc
+            C = CoF(N_= N_, L_= [0 for _ in F_],fc=fc); C.fin=0  # L_: dense prior w_, aligned with F_ in all Ts
             form_body(C); FC_ += [C]  # function clusters
     _w__ = [[0 for f in F_] for t in FC_]
     while True:  # refine Ts
@@ -198,23 +199,18 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
                 F.root_ += [C]; w__[i][j] = w
         for i,C in enumerate(FC_):  # second pass
             if C.fin: continue
-            N_,w_ = [],[]
+            N_,w_ = [],w__[i]
             for j,F in enumerate(C.N_):  # rim-local candidates: members prune, never join
-                w = w__[i][j]
+                w = w_[j]
                 if F.root_:
-                    rw_ = [w__[FC_.index(r)][r.N_.index(F)] for r in F.root_ if r is not C]; sr_,wr_ = [.5],[]  # self
-                    for rw in rw_:
-                        if rw > w: sr_ = [rw]  # stronger or weaker alt root
-                        else: wr_ += [rw]
-                    r = np.mean(wr_)/np.mean(sr_)
-                    F.r = r; C.r += r
-                    Dv += abs(w -_w__[i][j]) - ave*F.r
-                    w *= r; w__[i][j] = w
-                if w>ave: N_ += [F]; w_ += [w]
+                    r = sum([w__[FC_.index(r)][r.N_.index(F)] for r in F.root_ if r is not C and r.w >w])/w  # sum of stronger roots' w/w
+                    F.r += r; C.r += r
+                    Dv += abs(w -_w__[i][j]) - (ave+r) * min(C.fc, F.fc)
+                if w>ave: N_ += [F]
                 else:     F.root_.remove(C)
             C.N_ = N_; C.L_ = w_
             if w_: C.w = np.mean(w_)
-            if sum(w_) > ave*C.r: form_body(C)  # rebuild from remaining members, refine
+            if sum(w_) > (ave+C.r)*C.fc: form_body(C)  # rebuild from remaining members, refine
             else: C.fin = 1  # converged | weak, filtered below
         if Dv > 0:  _w__ = w__
         else: break
