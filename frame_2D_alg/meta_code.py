@@ -194,19 +194,19 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
         for i,C in enumerate(FC_):  # first pass to compute w and assign F's root_
             if C.fin: continue
             for j,F in enumerate(C.N_):  # rim-local candidates: members prune, never join
-                w = (comp_body(C.body, F.body) / min(C.fc, F.fc) if F else 0)  
+                w = (comp_body(C.body, F.body) / min(C.fc, F.fc) if F else 0)
                 F.root_ += [C]; w__[i][j] = w
         for i,C in enumerate(FC_):  # second pass
             if C.fin: continue
             N_,w_ = [],[]
             for j,F in enumerate(C.N_):  # rim-local candidates: members prune, never join
-                w = w__[i][j]  
+                w = w__[i][j]
                 if F.root_:
-                    rw_ = [w__[FC_.index(r)][r.N_.index(F)] for r in F.root_ if r is not C]  
-                    # stronger ws and weaker ws
-                    sw_ = [sw for sw in rw_ if sw > w]
-                    ww_ = [ww for ww in rw_ if ww <= w] + [w]  # add current comparison w to prevent empty divisor?
-                    r = np.mean(sw_)/np.mean(ww_) if sw_ else 1
+                    rw_ = [w__[FC_.index(r)][r.N_.index(F)] for r in F.root_ if r is not C]; sr_,wr_ = [.5],[]  # self
+                    for rw in rw_:
+                        if rw > w: sr_ = [rw]  # stronger or weaker alt root
+                        else: wr_ += [rw]
+                    r = np.mean(wr_)/np.mean(sr_)
                     F.r = r; C.r += r
                     Dv += abs(w -_w__[i][j]) - ave*F.r
                     w *= r; w__[i][j] = w
@@ -218,11 +218,10 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
             else: C.fin = 1  # converged | weak, filtered below
         if Dv > 0:  _w__ = w__
         else: break
-    _C_ = [C for  C in FC_ if C.w > ave and C.fin]  # only converged clusters?
+    _C_ = [C for  C in FC_ if C.w > ave]  # not only converged?
     _F_ = [F for F in oF_ if F not in (_F for C in _C_ for _F in C.N_)]; out_ = []  # recycle singletons
     for i,F in enumerate(_F_ + _C_):
         F.nF=i
-        # recycled oFs should have existing fdef
         if F not in oF_: F.fdef = get_fdef(F, name=f'oF{i}')   # reinit the fdef: ast node
         out_ += [F]  # rename by index
     return out_
