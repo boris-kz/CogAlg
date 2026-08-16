@@ -179,12 +179,10 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
     global oF_;  F_ = [F for F in oF_ if F]  # uncalled Fs, don't cluster, pack in _F_ if the loop is not representative?
     for F in F_: F.rim = []; F.w = 0; F.root_ = []
     for _F, F in combinations(F_,2):  # w = relative compression: shared / min cost, ave-commensurate
-        if (w := comp_body(_F.body, F.body) / min(_F.fc, F.fc)) > ave:
+        if (w := comp_body(_F.body, F.body)) > ave * min(_F.fc, F.fc):
             _F.rim += [(F,w)]; F.rim += [(_F,w)]; _F.w += w; F.w += w
     FC_,_F_ = [],[]
-    w_ = [sum([w * F.w / (F.w+_F.w) for _F, w in F.rim]) for F in F_]  # need to review 
-    for F,w in zip(F_,w_):
-        F.w = w
+    for F in F_:
         if F.w > ave:
             N_ = [F]+[f for f,_ in F.rim]; fc=sum(N.fc for N in N_)  # fc is sum of N_'s fc? But then min(C.fc, F.fc) is always F.fc
             C = CoF(N_= N_, L_= [0 for _ in F_],fc=fc); C.fin=0  # L_: dense prior w_, aligned with F_ in all Ts
@@ -195,7 +193,7 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
         for i,C in enumerate(FC_):  # first pass to compute w and assign F's root_
             if C.fin: continue
             for j,F in enumerate(C.N_):  # rim-local candidates: members prune, never join
-                w = (comp_body(C.body, F.body) / min(C.fc, F.fc) if F else 0)
+                w = (comp_body(C.body, F.body) if F else 0)
                 F.root_ += [C]; w__[i][j] = w
         for i,C in enumerate(FC_):  # second pass
             if C.fin: continue
@@ -206,12 +204,12 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
                     r = sum([w__[FC_.index(r)][r.N_.index(F)] for r in F.root_ if r is not C and r.w >w])/w  # sum of stronger roots' w/w
                     F.r += r; C.r += r
                     Dv += abs(w -_w__[i][j]) - (ave+r) * min(C.fc, F.fc)
-                if w>ave: N_ += [F]
-                else:     F.root_.remove(C)
+                if w>(ave+r)*F.fc: N_ += [F]
+                else:              F.root_.remove(C)
             C.N_ = N_; C.L_ = w_
             if w_: C.w = np.mean(w_)
-            if sum(w_) > (ave+C.r)*C.fc: form_body(C)  # rebuild from remaining members, refine
-            else: C.fin = 1  # converged | weak, filtered below
+            if sum(w_) > (ave+C.r)*C.fc: form_body(C)  # rebuild from remaining members, refine 
+            else:                        C.fin = 1  # converged | weak, filtered below
         if Dv > 0:  _w__ = w__
         else: break
     _C_ = [C for  C in FC_ if C.w > ave]  # not only converged?
@@ -355,8 +353,9 @@ def get_fc(n):
 def split_oF(t, oF):  # pack sub gate from gates
     if (isinstance(t,tuple) and t[0] in (ast.If,ast.IfExp) and isinstance(h:=t[1][0],tuple) and isinstance(h[0],tuple) and h[0][0]=='gv_'
         and oF.w * sum(get_fc(p) for p in t[1]) > ave):
-        sub = CoF(root=oF, fc=get_fc(t), body=[t], caller_={oF})
-        oF_.append(sub); nF_.append(None); sub.nF = len(oF_)-1
+        sub = CoF(root=oF, fc=get_fc(t), body=[t], caller_={oF}); oF_.append(sub);
+        sub.fdef = get_fdef(sub, name=f'oF{len(oF_)-1}')   # reform fdef
+        nF_.append(sub.fdef); sub.nF = len(oF_)-1
         return sub
     if isinstance(t,tuple) and t[1]:  # return body and split nested node recursively
         return (t[0], tuple(split_oF(s,oF) for s in t[1]),*t[2:])  # t[2] could be prior ast node

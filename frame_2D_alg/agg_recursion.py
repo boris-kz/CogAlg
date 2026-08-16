@@ -869,7 +869,7 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
         ave, avd = val_(aTT, fd=1)  # filters *= ave
         if oL := pack_seg(frame,'oH', wBac, cBac**2, oTT):
             dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
-            oF_ = [split_oF(t, oF) for _oF in copy(oF_) for t in _oF.body]
+            for _oF in copy(oF_): _oF.body = [split_oF(t,_oF) for t in _oF.body] # split_oF is per oF.body node
             oF_ = clust_oF_()
             map_ = {}
             for T in oF_:
