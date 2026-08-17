@@ -157,6 +157,7 @@ def build(func, node):  # AST → CoF | (type,sub_) | ast_leaf | None
     if sub_:
         sub_,fc_= zip(*sub_); return (type(node), sub_, node), sum(fc_)+costs.get(type(node), 0)
     if type(node) in costs: return node, costs.get(type(node),0)
+    if isinstance(node, ast.stmt): return node, 0  # keep childless statement (not in costs) for rebuild purpose 
 
 def F_body_():  # form function body by AST tracing
 
@@ -175,8 +176,8 @@ def parse_funcs(paths):
                 nF_[iF_.get(node.name)] = node
 
 def clust_oF_():  # simplified oF rim-mediated centroid clustering
-
-    global oF_;  F_ = [F for F in oF_ if F]  # uncalled Fs, don't cluster, pack in _F_ if the loop is not representative?
+    # include the prior split new oFs although their call_ is empty?
+    global oF_;  F_ = [F for F in oF_ if F or F.typ==0]  # uncalled Fs, don't cluster, pack in _F_ if the loop is not representative?
     for F in F_: F.rim = []; F.w = 0; F.root_ = []
     for _F, F in combinations(F_,2):  # w = relative compression: shared / min cost, ave-commensurate
         if (w := comp_body(_F.body, F.body)) > ave * min(_F.fc, F.fc):
@@ -203,7 +204,7 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
                 if F.root_:
                     r = sum([w__[FC_.index(r)][r.N_.index(F)] for r in F.root_ if r is not C and r.w >w])/w  # sum of stronger roots' w/w
                     F.r += r; C.r += r
-                    Dv += abs(w -_w__[i][j]) - (ave+r) * min(C.fc, F.fc)
+                    Dv += abs(w -_w__[i][j]) - (ave+r) * F.fc
                 if w>(ave+r)*F.fc: N_ += [F]
                 else:              F.root_.remove(C)
             C.N_ = N_; C.L_ = w_
@@ -216,7 +217,9 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
     _F_ = [F for F in oF_ if F not in (_F for C in _C_ for _F in C.N_)]; out_ = []  # recycle singletons
     for i,F in enumerate(_F_ + _C_):
         F.nF=i
-        if F not in oF_: F.fdef = get_fdef(F, name=f'oF{i}')   # reinit the fdef: ast node
+        if F not in oF_:
+            # cluster's typ is concatenated from N_'s typ? Or determine it from their body?
+            F.fdef = get_fdef(F, name=f'oF{i}')   # reinit the fdef: ast node
         out_ += [F]  # rename by index
     return out_
 
@@ -271,7 +274,7 @@ def comp_body(_n, n):  # compare only: compression estimate C; construction in f
         C = -2 * abs(len(_n)-len(n))
         for _t,t in zip(_n,n): C += comp_body(_t,t)
         return C
-    if isinstance(_n,tuple) and isinstance(n,tuple) and _n[0] is n[0]:
+    if isinstance(_n,tuple) and isinstance(n,tuple) and _n[0] == n[0]:  # _n[0] and n[0] will never be the same objec,need to use == to check for same type
         return costs.get(_n[0],0) + comp_body(list(_n[1]), list(n[1]))
     if type(_n) is type(n) and not isinstance(_n,tuple):
         return costs.get(type(n),0)  # leaf
@@ -298,7 +301,7 @@ def form_body(F):
     for i in range(max(len(b) for b in _body_)):
         ibod_ = [([F.N_[j]], body[i]) for j, body in enumerate(_body_) if len(body) > i]  # i's index bodies and their F from all Fs
         if len(ibod_) > 1:
-            form_forks(ibod_)  # ibod_ is [([f],t),([f],t)...]
+            form_forks(ibod_)  # ibod_ is [([f],t),([f],t)...]  (form forks even if the ops are exactly the same?)
             Bod += [(ast.IfExp, *ibod_)]  # in the format of (ast.IfExp, ([f],t)...)
         else:
             Bod += [ibod_[0][1]]  # single body, direct append and no additional fork (their f won't be preserved here?)
@@ -352,6 +355,7 @@ def get_fc(n):
 # divisive clustering:
 def split_oF(t, oF):  # pack sub gate from gates
     if (isinstance(t,tuple) and t[0] in (ast.If,ast.IfExp) and isinstance(h:=t[1][0],tuple) and isinstance(h[0],tuple) and h[0][0]=='gv_'
+        and not any(isinstance(n, (ast.Break, ast.Continue)) for n in ast.walk(t[2]))  # skip if contain break or continue, not relevant in new split oF
         and oF.w * sum(get_fc(p) for p in t[1]) > ave):
         sub = CoF(root=oF, fc=get_fc(t), body=[t], caller_={oF}); oF_.append(sub);
         sub.fdef = get_fdef(sub, name=f'oF{len(oF_)-1}')   # reform fdef
