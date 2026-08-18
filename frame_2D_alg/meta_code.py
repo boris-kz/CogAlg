@@ -176,14 +176,14 @@ def parse_funcs(paths):
                 nF_[iF_.get(node.name)] = node
 
 def clust_oF_():  # simplified oF rim-mediated centroid clustering
-    # include the prior split new oFs although their call_ is empty?
+    # pending review: include the prior split new oFs although their call_ is empty?
     global oF_;  F_ = [F for F in oF_ if F or F.typ==0]  # uncalled Fs, don't cluster, pack in _F_ if the loop is not representative?
     for F in F_: F.rim = []; F.w = 0; F.root_ = []
     for _F, F in combinations(F_,2):  # w = relative compression: shared / min cost, ave-commensurate
         if (w := comp_body(_F.body, F.body)) > ave * min(_F.fc, F.fc):
             _F.rim += [(F,w)]; F.rim += [(_F,w)]; _F.w += w; F.w += w
     FC_,_F_ = [],[]
-    for F in F_:
+    for F in F_:  # pending review: F.w is summed from all rim
         if F.w > ave:
             N_ = [F]+[f for f,_ in F.rim]; fc=sum(N.fc for N in N_)  # fc is sum of N_'s fc? But then min(C.fc, F.fc) is always F.fc
             C = CoF(N_= N_, L_= [0 for _ in F_],fc=fc); C.fin=0  # L_: dense prior w_, aligned with F_ in all Ts
@@ -194,7 +194,7 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
         for i,C in enumerate(FC_):  # first pass to compute w and assign F's root_
             if C.fin: continue
             for j,F in enumerate(C.N_):  # rim-local candidates: members prune, never join
-                w = (comp_body(C.body, F.body) if F else 0)
+                w = (comp_body(C.body, F.body) if F.body else 0)
                 F.root_ += [C]; w__[i][j] = w
         for i,C in enumerate(FC_):  # second pass
             if C.fin: continue
@@ -202,14 +202,14 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
             for j,F in enumerate(C.N_):  # rim-local candidates: members prune, never join
                 w = w_[j]
                 if F.root_:
-                    r = sum([w__[FC_.index(r)][r.N_.index(F)] for r in F.root_ if r is not C and r.w >w])/w  # sum of stronger roots' w/w
+                    r = sum([w__[FC_.index(r)][r.N_.index(F)] for r in F.root_ if r in FC_ and r is not C and r.w >w])/(w or eps)  # sum of stronger roots' w/w
                     F.r += r; C.r += r
                     Dv += abs(w -_w__[i][j]) - (ave+r) * F.fc
-                if w>(ave+r)*F.fc: N_ += [F]
+                if w>(ave+r)*F.fc: N_ += [F]  # pending review: w > (ave +redundancy) * func cost?
                 else:              F.root_.remove(C)
             C.N_ = N_; C.L_ = w_
             if w_: C.w = np.mean(w_)
-            if sum(w_) > (ave+C.r)*C.fc: form_body(C)  # rebuild from remaining members, refine 
+            if sum(w_) > (ave+C.r)*C.fc: form_body(C)  # rebuild from remaining members, refine
             else:                        C.fin = 1  # converged | weak, filtered below
         if Dv > 0:  _w__ = w__
         else: break
@@ -218,7 +218,7 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
     for i,F in enumerate(_F_ + _C_):
         F.nF=i
         if F not in oF_:
-            # cluster's typ is concatenated from N_'s typ? Or determine it from their body?
+            # pending review: cluster's typ is concatenated from N_'s typ? Or determine it from their body?
             F.fdef = get_fdef(F, name=f'oF{i}')   # reinit the fdef: ast node
         out_ += [F]  # rename by index
     return out_
@@ -296,7 +296,7 @@ def form_body(F):
             _fork[1] = (ast.IfExp, *form_forks(_ifnode[1:]))  # recursively form_forks in t1,t2.. of ([f],t,t2...)
             bod_[bod_.index(forks[0])] = tuple(_fork)  # reassign the merged fork
         return bod_  # bod_ is [([f], t),([f], t),...]
-    _body_ = [f.body for f in F.N_ if f]
+    _body_ = [f.body for f in F.N_]  # pending review: should include the empty oF because those split oF has empty call_
     Bod = []
     for i in range(max(len(b) for b in _body_)):
         ibod_ = [([F.N_[j]], body[i]) for j, body in enumerate(_body_) if len(body) > i]  # i's index bodies and their F from all Fs
@@ -355,11 +355,11 @@ def get_fc(n):
 # divisive clustering:
 def split_oF(t, oF):  # pack sub gate from gates
     if (isinstance(t,tuple) and t[0] in (ast.If,ast.IfExp) and isinstance(h:=t[1][0],tuple) and isinstance(h[0],tuple) and h[0][0]=='gv_'
-        and not any(isinstance(n, (ast.Break, ast.Continue)) for n in ast.walk(t[2]))  # skip if contain break or continue, not relevant in new split oF
+        and not any(isinstance(n, (ast.Break, ast.Continue)) for n in ast.walk(t[2]))  # pending review: skip if block of code contains break or continue, not relevant in new split oF
         and oF.w * sum(get_fc(p) for p in t[1]) > ave):
         sub = CoF(root=oF, fc=get_fc(t), body=[t], caller_={oF}); oF_.append(sub);
         sub.fdef = get_fdef(sub, name=f'oF{len(oF_)-1}')   # reform fdef
-        nF_.append(sub.fdef); sub.nF = len(oF_)-1
+        nF_.append(sub.fdef); sub.nF = len(oF_)-1  # pending review: the split oFs have issues on the input and output argument
         return sub
     if isinstance(t,tuple) and t[1]:  # return body and split nested node recursively
         return (t[0], tuple(split_oF(s,oF) for s in t[1]),*t[2:])  # t[2] could be prior ast node
