@@ -321,7 +321,7 @@ def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace
             rG.dTT=TT; rG.c=C; rG.r=R
     if G_: FV_(CoF.get(), *sum_vt(G_)[:-1],_r)
     return G_,_r
-
+# pending review: input _C is not used here?
 def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
 
     N_= copy(Ft.N_); _C_=[]  # revert if 0 clusters?
@@ -376,7 +376,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
         if gv_((_m *_c *wcC) / (_r+ccC) * ((len(out_)-1)*wL) - ave):
             Ft.root.H += [Copy_(Ft)]
             return sum2F(out_, Ft.root, nF='Nt')
-
+# pending review: we not really need this input _c or the total _C_'s c?
 def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
 
     iC_ = _C_; cnt = 0; Ln = len(N_:= list(set([N for C in _C_ for N in C.N_])))  # all Ns are in all Cs
@@ -403,17 +403,19 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
                     l = comp_N(C,_C,(C.r+_C.r)/2, min(C.c,_C.c), A=(a:=_C.yx-C.yx), span=np.hypot(*a))
                     if l.m*wF > ave*(l.r+cF):
                         add2F(_C,C,2); removed += [C]; _C.m,_C.d = val_(_C.dTT,ttcP,fd=1)  # for next-loop base comp
+                        for N in C.N_:
+                            for rt in N.root_: rt[0] = _C  # update root from C to _C, for olp computation below
         _C_ = []  # for next loop
-        for  _C in [C for C in C_ if C not in removed]:  # skip merged
-            _C.olp = sum(rt[1] for n in C.N_ for rt in getattr(n, 'root_', []) if rt[0] is not C and rt[1] > _C.m)
+        for _C in [C for C in C_ if C not in removed]:  # skip merged
+            _C.olp = sum(rt[1] for n in _C.N_ for rt in getattr(n, 'root_', []) if rt[0] is not _C and rt[1] > _C.m)
             if _C.m * wcP > ave * (_C.r + _C.olp + ccP):  # prune
-                _C_ += [C]  # also after merge and converge
+                _C_ += [_C]  # also after merge and converge
         if not _C_ or (conv and (not removed) and len(_C_)==Lc):  # skip if all _C_ failed the  c.m*wcP > ave*c.r*ccP eval above
             break
         _md__ = md__; cnt += 1
     out_ = []
     for N in N_: N.root_ = []  # replace with out_ Cs:
-    for i, _C in enumerate(C_):
+    for i, _C in enumerate(_C_):  # should be _C_ here to get the converged and merged Cs
         if _C.m > ave * _C.r:  # prune, add olp as stronger ms?
             N_,m_,d_ = [],[],[]
             for N, m,d in zip(_C.N_, md__[:,i,0], md__[:,i,1]):
