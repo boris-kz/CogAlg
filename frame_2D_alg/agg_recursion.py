@@ -119,7 +119,7 @@ def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_com
     if mrg_: N_ = list(set(N_) - set(mrg_))
     if L_:
         for N in set(N_):
-            if N.rim: N.Rt = sum2F(N.rim,root=N,froot=2)
+            if N.rim: N.Rt = sum2F(N.rim); N.Rt.root = N  # pending review: we shouldn't sum N.rim's params into N? Those rim params should be summed to G only (N.s root)
         TT, C, R = sum_vt(L_)
         cV = FV_(CoF.get(), TT, C, R)  # +ve Ls for oF, no oF.N_?
         return L_, TT, C, R, cV  # unpacked in cross_comp, comp_F
@@ -363,7 +363,7 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
             out_ = cluster_P(out_,T, Ft)  # refine all memberships in parallel by global backprop
             break
         if Up * (wcC*len(C_)) > Avd * (r+ (ccC*len(C_))):
-            for C in C_: C._m_ = C.m_; C._d_ = C.d_
+            # for C in C_: C._m_ = C.m_; C._d_ = C.d_  # pending review: we don't need _m_ and _d_ now?
             for n in N_: n._root_ = n.root_
             for n in set([_n for _C in _C_ for _n in _C.N_ + _C._N_]): n.root_ = []
             _C_ = C_
@@ -393,6 +393,7 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
             m_ = md__[j,:,0]; O += m_.sum() - m_.max()  # cross-C ambiguity, gates split/merge
         C_ = [sum2F(N_, root, md__[:,i,0], md__[:,i,1]) for i in range(Lc)]  # mean shift, aligned to md__
         Mt = md__[:,:,0].sum()  # total V
+        # pending review: for the case of diverging, we need to break if diverge?
         conv = md__.shape==_md__.shape and Mt* np.abs(md__-_md__).sum()* (wcP*L) <= ave*(root.r+ccP*L)  # convergence
         removed = []
         if gv_(O*wcP - ave*(root.r+ccP*L)):  # merge redundant Cs
@@ -405,11 +406,13 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
                         add2F(_C,C,2); removed += [C]; _C.m,_C.d = val_(_C.dTT,ttcP,fd=1)  # for next-loop base comp
                         for N in C.N_:
                             for rt in N.root_: rt[0] = _C  # update root from C to _C, for olp computation below
-        _C_ = []  # for next loop
-        for _C in [C for C in C_ if C not in removed]:  # skip merged
+        _C_ = []; i_ = []  # for next loop
+        for i, _C in enumerate(C_):
+            if _C in removed: continue
             _C.olp = sum(rt[1] for n in _C.N_ for rt in getattr(n, 'root_', []) if rt[0] is not _C and rt[1] > _C.m)
             if _C.m * wcP > ave * (_C.r + _C.olp + ccP):  # prune
-                _C_ += [_C]  # also after merge and converge
+                _C_ += [_C]; i_ += [i]  # also after merge and converge
+        md__ = md__[:,i_]  # pending review: remove md__ of removed Cs, to be used in the next convergence test in the next iteration    
         if not _C_ or (conv and (not removed) and len(_C_)==Lc):  # skip if all _C_ failed the  c.m*wcP > ave*c.r*ccP eval above
             break
         _md__ = md__; cnt += 1
