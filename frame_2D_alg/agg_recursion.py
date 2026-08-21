@@ -384,6 +384,7 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
     for i, N in enumerate(N_):
         for c,m,d in N.root_:
             if c in _C_: _md__[i,_C_.index(c)] = m,d
+    _rM = 0; _dM = 0
     while True:
         for N in N_: N.root_ = []  # reset, append in sum2F
         Lc = len(_C_); L = Lc*Ln  # loop Lc,L,md__
@@ -394,7 +395,15 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
         C_ = [sum2F(N_, root, md__[:,i,0], md__[:,i,1]) for i in range(Lc)]  # mean shift, aligned to md__
         Mt = md__[:,:,0].sum()  # total V
         # pending review: for the case of diverging, we need to break if diverge?
-        conv = md__.shape==_md__.shape and Mt* np.abs(md__-_md__).sum()* (wcP*L) <= ave*(root.r+ccP*L)  # convergence
+        conv = 0
+        dM = np.abs(md__[:,:,0]-_md__[:,:,0]).sum() if md__.shape==_md__.shape else 0
+        if dM:
+            if _dM:  # converge always false when _dM is 0 in the first iteration
+                rM = dM / _dM
+                if rM >= 1 and abs(_rM - rM)>ave: conv = -1  # Diverging  (ratio of dM to _dM is growing larger)
+                else:                             conv = Mt*dM*(wcP*L) <= ave*(root.r+ccP*L)
+        else: conv = 1
+        # conv = md__.shape==_md__.shape and Mt* np.abs(md__-_md__).sum()* (wcP*L) <= ave*(root.r+ccP*L)  # convergence
         removed = []
         if gv_(O*wcP - ave*(root.r+ccP*L)):  # merge redundant Cs
             for i,_C in enumerate(C_):
