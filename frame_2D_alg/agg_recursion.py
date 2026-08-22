@@ -105,7 +105,7 @@ def cross_comp(root, G_, m, c, r, nF='Nt'):  # agg+: refine by CC,exe -> cross_c
 def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_comp, max dist depends on prior match
 
     L_,N_,mrg_ = [],[],[]
-    for dist, dy_dx, _N,N, lc,lr, pTT,m,d in pL_:  # pL is L = dist, dy_dx, _N,N if fall: not selective
+    for dist, dy_dx, _N,N, lc,lr, pTT,m,_ in pL_:  # pL is L = dist, dy_dx, _N,N if fall: not selective
         if fall or (m>0 and gv_(m * (lc*wN / (lr*cN)) - ave*(r+cN))):  # marginal -gV
         # comp if marginally predictable: proj surprise value?
             Link = comp_N(_N,N, lr,lc, full = not tnF, A=dy_dx, span=dist, rL=root)
@@ -120,7 +120,7 @@ def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_com
     if L_:
         for N in set(N_):
             if N.rim: N.Rt = sum2F(N.rim); N.Rt.root = N  # pending review: we shouldn't sum N.rim's params into N? Those rim params should be summed to G only (N.s root)
-        TT, C, R = sum_vt(L_)
+        TT, C, R = sum_vt(L_, wTT=ttN)  # pending review: use ttN rather than wTT?
         cV = FV_(CoF.get(), TT, C, R)  # +ve Ls for oF, no oF.N_?
         return L_, TT, C, R, cV  # unpacked in cross_comp, comp_F
 
@@ -280,7 +280,7 @@ def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace
                 L.Nt,L.Bt = CF(),CF()
             # merge roots
     for N in _N_:
-        N.fin =0; N.exe=1; sum2F(N.rim,N.Rt)  # only if N was added in trans-cluster?
+        N.fin =0; N.exe=1; N.Rt = sum2F(N.rim);N.Rt.root = N  # only if N was added in trans-cluster?
     G_, Gt_, in_ = [],[],set()  # root attrs, add prelink pL_,pN_? include merged Cs, in feature space for Cs
     for N in _N_:  # form G per remaining N
         if N.fin or (Ft.root.root and not N.exe): continue  # no exemplars in Fg
@@ -359,11 +359,9 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
         r = _r+ rdn/(cnt or eps)
         L = len(out_+ C_); olp = sum([len(N.root_) for N in N_])  # rdn+=olp, prioritize stronger?
         if gv_(sum(val_(DTT,fd=1))* (wcP*L) - Ave* (r+olp+ ccP*L)):
-            out_+=C_; T=sum([f.c for f in out_])
-            out_ = cluster_P(out_,T, Ft)  # refine all memberships in parallel by global backprop
+            out_+=C_; out_ = cluster_P(out_, Ft)  # refine all memberships in parallel by global backprop
             break
         if Up * (wcC*len(C_)) > Avd * (r+ (ccC*len(C_))):
-            # for C in C_: C._m_ = C.m_; C._d_ = C.d_  # pending review: we don't need _m_ and _d_ now?
             for n in N_: n._root_ = n.root_
             for n in set([_n for _C in _C_ for _n in _C.N_ + _C._N_]): n.root_ = []
             _C_ = C_
@@ -376,15 +374,15 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
         if gv_((_m *_c *wcC) / (_r+ccC) * ((len(out_)-1)*wL) - ave):
             Ft.root.H += [Copy_(Ft)]
             return sum2F(out_, Ft.root, nF='Nt')
-# pending review: we not really need this input _c or the total _C_'s c?
-def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
+
+def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
 
     iC_ = _C_; cnt = 0; Ln = len(N_:= list(set([N for C in _C_ for N in C.N_])))  # all Ns are in all Cs
     _md__ = np.zeros((Ln, len(_C_), 2))  # NxC, cols aligned to _C_
     for i, N in enumerate(N_):
         for c,m,d in N.root_:
             if c in _C_: _md__[i,_C_.index(c)] = m,d
-    _rM = 0; _dM = 0
+    _dM = 0; ddM_ = []
     while True:
         for N in N_: N.root_ = []  # reset, append in sum2F
         Lc = len(_C_); L = Lc*Ln  # loop Lc,L,md__
@@ -398,12 +396,11 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
         conv = 0
         dM = np.abs(md__[:,:,0]-_md__[:,:,0]).sum() if md__.shape==_md__.shape else 0
         if dM:
-            if _dM:  # converge always false when _dM is 0 in the first iteration
-                rM = dM / _dM
-                if rM >= 1 and abs(_rM - rM)>ave: conv = -1  # Diverging  (ratio of dM to _dM is growing larger)
-                else:                             conv = Mt*dM*(wcP*L) <= ave*(root.r+ccP*L)
+            if _dM:  # first loop doesn't have prior _dM
+                ddM_ += [_dM - dM]; ddM_ = ddM_[-5:]  # summed over last 5 loops
+                conv = Mt*(wcP*L)/sum(ddM_) <= ave*(cnt+root.r+ccP*L)  # add cnt as redundancy?
+            _dM = dM         
         else: conv = 1
-        # conv = md__.shape==_md__.shape and Mt* np.abs(md__-_md__).sum()* (wcP*L) <= ave*(root.r+ccP*L)  # convergence
         removed = []
         if gv_(O*wcP - ave*(root.r+ccP*L)):  # merge redundant Cs
             for i,_C in enumerate(C_):
@@ -427,7 +424,7 @@ def cluster_P(_C_, _c, root):  # multi-seed mean shift: parallel centroid refine
         _md__ = md__; cnt += 1
     out_ = []
     for N in N_: N.root_ = []  # replace with out_ Cs:
-    for i, _C in enumerate(_C_):  # should be _C_ here to get the converged and merged Cs
+    for i, _C in enumerate(_C_):
         if _C.m > ave * _C.r:  # prune, add olp as stronger ms?
             N_,m_,d_ = [],[],[]
             for N, m,d in zip(_C.N_, md__[:,i,0], md__[:,i,1]):

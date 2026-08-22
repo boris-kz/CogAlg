@@ -176,8 +176,8 @@ def parse_funcs(paths):
                 nF_[iF_.get(node.name)] = node
 
 def clust_oF_():  # simplified oF rim-mediated centroid clustering
-    # pending review: include the prior split new oFs although their call_ is empty?
-    global oF_;  F_ = [F for F in oF_ if F or F.typ==0]  # uncalled Fs, don't cluster, pack in _F_ if the loop is not representative?
+
+    global oF_;  F_ = [F for F in oF_ if F or F.typ==0]  # uncalled Fs, don't cluster, pack in _F_ if the loop is not representative? (F.typ==0 to include the prior split new oFs)
     for F in F_: F.rim = []; F.w = 0; F.root_ = []
     for _F, F in combinations(F_,2):  # w = relative compression: shared / min cost, ave-commensurate
         if (w := comp_body(_F.body, F.body)) > ave * min(_F.fc, F.fc):
@@ -354,11 +354,36 @@ def get_fc(n):
 
 # divisive clustering:
 def split_oF(t, oF):  # pack sub gate from gates
+    
+    # from claude, not review yet, to fill the input and output of split oF
+    def split_fdef(sub, t, oF, name):  # sub fdef with a real signature, and its call spliced over t[2] in oF.fdef
+        b_ = {id(x) for x in ast.walk(t[2])}  # the block
+        d_ = {id(x) for f in ast.walk(oF.fdef) if isinstance(f,(ast.FunctionDef,ast.Lambda)) and f is not oF.fdef for x in ast.walk(f)}  # nested defs: separate scopes
+        e_ = [x for x in ast.walk(oF.fdef) if id(x) not in b_|d_]  # oF.fdef outside the block, its own scope only
+        cm = {m.id for x in ast.walk(t[2]) if isinstance(x,(ast.ListComp,ast.SetComp,ast.DictComp,ast.GeneratorExp)) for g in x.generators for m in ast.walk(g.target) if isinstance(m,ast.Name)}  # comprehension scope
+        st = {a.arg for a in e_ if isinstance(a,ast.arg)} | {f.name for f in ast.walk(oF.fdef) if isinstance(f,ast.FunctionDef) and f is not oF.fdef} | {
+              m.id for m in e_ if isinstance(m,ast.Name) and isinstance(m.ctx,ast.Store) and m.lineno < t[2].lineno}  # bound before the block, else unbound at the call site
+        ld = {m.id for m in e_ if isinstance(m,ast.Name) and isinstance(m.ctx,ast.Load)}
+        nm = lambda c: {m.id for m in ast.walk(t[2]) if isinstance(m,ast.Name) and isinstance(m.ctx,c)} - cm
+        o_ = sorted(nm(ast.Store) & ld)             # rebound in the block, still read by oF
+        p_ = sorted((nm(ast.Load) | set(o_)) & st)  # oF locals it reads; the rest are globals, resolved via oF.g
+        fd = get_fdef(sub, name=name)               # deepcopies t[2], so splice after
+        fd.args = ast.arguments(posonlyargs=[], args=[ast.arg(arg=x) for x in p_], vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[])
+        fd.body = [ast.Assign(targets=[ast.Name(x,ast.Store())],value=ast.Constant(None)) for x in o_ if x not in p_] + fd.body \
+                + ([ast.Return(ast.Tuple([ast.Name(x,ast.Load()) for x in o_],ast.Load()))] if o_ else [])  # bind block-born outs, write back the rest
+        c = ast.Call(func=ast.Name(name,ast.Load()), args=[ast.Name(x,ast.Load()) for x in p_], keywords=[])
+        site = ast.Assign(targets=[ast.Tuple([ast.Name(x,ast.Store()) for x in o_],ast.Store())], value=c) if o_ else ast.Expr(c)
+        ast.fix_missing_locations(ast.copy_location(site, t[2]))
+        for x in ast.walk(oF.fdef):  # splice the call over the block: oF.fdef is what inject_oF_ recompiles
+            for f in 'body','orelse','finalbody':
+                if isinstance(b:=getattr(x,f,None),list) and any(y is t[2] for y in b): b[[id(y) for y in b].index(id(t[2]))] = site
+        return ast.fix_missing_locations(fd)
+
     if (isinstance(t,tuple) and t[0] in (ast.If,ast.IfExp) and isinstance(h:=t[1][0],tuple) and isinstance(h[0],tuple) and h[0][0]=='gv_'
         and not any(isinstance(n, (ast.Break, ast.Continue)) for n in ast.walk(t[2]))  # pending review: skip if block of code contains break or continue, not relevant in new split oF
         and oF.w * sum(get_fc(p) for p in t[1]) > ave):
         sub = CoF(root=oF, fc=get_fc(t), body=[t], caller_={oF}); oF_.append(sub);
-        sub.fdef = get_fdef(sub, name=f'oF{len(oF_)-1}')   # reform fdef
+        sub.fdef = split_fdef(sub, t, oF, f'oF{len(oF_)-1}')  # reform fdef
         nF_.append(sub.fdef); sub.nF = len(oF_)-1  # pending review: the split oFs have issues on the input and output argument
         return sub
     if isinstance(t,tuple) and t[1]:  # return body and split nested node recursively
