@@ -119,7 +119,7 @@ def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_com
     if mrg_: N_ = list(set(N_) - set(mrg_))
     if L_:
         for N in set(N_):
-            if N.rim: N.Rt = sum2F(N.rim); N.Rt.root = N  # pending review: we shouldn't sum N.rim's params into N? Those rim params should be summed to G only (N.s root)
+            if N.rim: N.Rt = sum2F(N.rim); N.Rt.root = N
         TT, C, R = sum_vt(L_, wTT=ttN)  # pending review: use ttN rather than wTT?
         cV = FV_(CoF.get(), TT, C, R)  # +ve Ls for oF, no oF.N_?
         return L_, TT, C, R, cV  # unpacked in cross_comp, comp_F
@@ -238,7 +238,7 @@ def comp_A(_A,A):
     mA = (_A @ A / den +1) / 2  # cos_da in 0:1, no rot = 1 if dy * _dx - dx * _dy >= 0 else -1  # +1 CW, −1 CCW, ((1-cos_da)/2) * rot?
     '''
     return (cos(dA)+1) /2, dA/pi  # mA in 0:1, dA in -1:1, or invert dA, may be negative?
-
+# pending review: we don't need _c now?
 def get_exemplars(N_,_r,_c):  # multi-layer non-maximum suppression -> sparse seeds for diffusive clustering, cluster_N too?
 
     for n in N_:
@@ -318,7 +318,7 @@ def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace
         for tt,c,gr in Gt_: w=c/C; TT+=tt*w; R+=gr*w
         if gv_(val_(TT*Ft.root.wTT*ttcN) * (C*wcN /(_r+R+ccN)) * ((len(G_)-1)*wL) - ave):  # reform root,Nt, no other forks yet:
             rG = Ft.root; Nt=rG.Nt; Nt.N_=G_; Nt.dTT=TT; Nt.c=C; Nt.r=R
-            rG.dTT=TT; rG.c=C; rG.r=R
+            rG.dTT=TT; rG.c=C; rG.r=R; rG.m, rG.d = val_(TT, ttcN)
     if G_: FV_(CoF.get(), *sum_vt(G_)[:-1],_r)
     return G_,_r
 # pending review: input _C is not used here?
@@ -543,7 +543,7 @@ def comb_Ft(Nt, Lt, Bt, root,wTT):  # from sum2G, default Nt
     if any(dF_): sum2F(dF_,G.Xt)  # cross-fork covariance
     add_Nt(G)  # add kern,ext, doesn't affect comp_F
     if Lt:
-        L_ =Lt.N_; L_,pL_ = [],[]; [L_.append(L) if L.typ==1 else pL_.append(L) for L in L_]
+        Link_ =Lt.N_; L_,pL_ = [],[]; [L_.append(L) if L.typ==1 else pL_.append(L) for L in Link_]
         if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0] *wN > ave*(cN * np.mean([L.r for L in pL_])):
             for L in pL_: L_ += [comp_N(*L.N_, G.r,L.c,1, L.angl[0], L.span)]
             sum2F(L_,Lt); add2F(G, Lt, merge=2)
@@ -728,7 +728,7 @@ def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N
 
 def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary/skeleton?
 
-    L_, cT_, lTT, lc = [], set(), np.zeros((2,9)), 0  # comp co-mediated Ns:
+    L_, cT_ [], set()  # comp co-mediated Ns:
     for N in N_: N.fin = 0  # curently PPs only
     for N in N_:
         _N_ = [rN for B in N.B_ for rN in B.root_ if rN is not N]   # + node-mediated
@@ -739,9 +739,10 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
             dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)  # Rc = r+ (N.r+_N.r)/2
             L = comp_N(_N,N, r,_C,A=dy_dx, span=dist)  # current L is dPP
             if val_(L.dTT,ttTrc,1)[1] * ((L.c+wTrc)/(r+cTrc)) > ave: L_+=[L]
-            if L_: lTT,lc,_ = sum_vt(L_,wTT=ttTrc)
+            # if L_: lTT,lc,_ = sum_vt(L_,wTT=ttTrc)  # pending review: we don't need lTT and lc now?
     Gt_ = []
     for N in N_:  # flood-fill G per seed N
+        if N.rim: N.Rt = sum2F(N.rim);N.Rt.root = N  # pending review: add m  to Rt, to be used in get_exemplars of cross_comp
         if N.fin: continue
         N.fin=1; _N_=[N]; Gt=[]; N.root=Gt
         n_,ntt,nc = [N],N.dTT.copy(),(N.c or 1); l_,ltt,lc = [],np.zeros((2,9)),0  # Gt
@@ -805,18 +806,17 @@ def vect_edge(T, iY,iX,Ly,Lx, rV=1):  # T=tile, PP_ cross_comp and floodfill to 
                 if gv_(edge.G * (wVct*L) - sum([P.latT[4] for P in edge.P_]) * (cVct*L)):
                     PPm_ = comp_slice(edge, rV, ttVct)  # add comp_slice's weights?
                     N_ = [PP2N(PPm) for PPm in PPm_]
-                    c = sum([PPm.c for PPm in N_]); C += c
                     for PPd in edge.link_: PP2N(PPd)  # we don't form Gds?
                     for N in N_:
                         if N.B_:
                             PPd_ = [B.root for B in N.B_]; sum2F(PPd_,N.Bt)
                             N.Bt.N_ = PPd_; [setattr(B,'root',N.Bt) for B in PPd_]
-                    tt,c,r = sum_vt(N_)
+                    tt,c,r = sum_vt(N_); C += c
                     if gv_(val_(tt*ttVct) * ((c+wVct)/ (3+cVct)) * ((len(PPm_)-1)*wL) - ave):
                         G_,TT,c,R = trace_edge([F2N(N) for N in N_], G_,TT,c,3,T); C += c  # flatten B_-mediated Gs
     if G_:
         FV_(CoF.get(), TT, C,1)
-        return sum2G([[G_, 'Nt', TT, C, 1]], TT, T)  # c,R?
+        return sum2G([[G_, 'Nt', TT, C, 1]], ttVct, T)  # c,R?
 
 def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
 
@@ -880,7 +880,7 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
         ave, avd = val_(aTT, fd=1)  # filters *= ave
         if oL := pack_seg(frame,'oH', wBac, cBac**2, oTT):
             dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
-            for _oF in copy(oF_): _oF.body = [split_oF(t,_oF) for t in _oF.body] # split_oF is per oF.body node
+            for _oF in copy(oF_): _oF.body = [split_oF(t,_oF) for t in _oF.body]
             oF_ = clust_oF_()
             map_ = {}
             for T in oF_:
