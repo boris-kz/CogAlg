@@ -91,7 +91,7 @@ def cross_comp(root, G_, m, c, r, nF='Nt'):  # agg+: refine by CC,exe -> cross_c
             if Ct := cluster_C(G.Nt, get_exemplars(G.N_,r,c),r,c):  # refines, splits each G
                 C_, _m,_c,_r = Ct.N_,Ct.m,Ct.c,Ct.r
                 C__ += C_; M+=_m; C+=_c; R+=_r  # splice refined sub_G_s
-    if C__:
+    if C__:  # pending review: C__ is actually converted PPs, since G_ are graphs from trace_edge, so trans comp in comp_N will never be true
         setattr(root,nF, sum2F(C__,root, nF=nF, froot=2)); L=len(C__); R/=L  # pass M,C,R in sum2F?
         if gv_((m+M) * (c*(C+wN_) / (r*(R+cN_))) * ((L-1)*wL) - ave):
             root.H += [Copy_(root)]  # lower agg lev
@@ -116,6 +116,7 @@ def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_com
                 for n in N.N_:
                     for rt in n.root_:  # [C,m,d]
                         if rt[0] is N: rt[0] = _N  # keep m,d positions
+                N.rim.remove(Link); Link.N_ = [_N,_N]  # replaces the merged N 
     if mrg_: N_ = list(set(N_) - set(mrg_))
     if L_:
         for N in set(N_):
@@ -141,6 +142,9 @@ def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None):
     if N.typ > 1 and gv_(m* (c/r)* wN_ - ave*(r+cN_)):  # skip PPs, Nts?
         L.H = [Copy_(L)]  # lev0 to preserve resolution before adding deeper tLevs, min len H = 2
         dn_ = []  # cross_comp N_| Ft_ -> top tLev
+        if _N.H and N.H:  # pending review: So this comp_H should be default first when both Ns have H?
+            dH,tt,C,L.r = comp_H(_N.Nt,N.Nt, L)
+            L.H += dH; L.dTT = (L.dTT*L.c+tt)/(L.c+C); L.c+=C; L.m,L.d=val_(L.dTT,ttN_,1) 
         if N.typ < 3:  # L | C | Nt, merge?
             for _n,n in product(_N.N_,N.N_): dn_ += [comp_N(_n,n,r,c, rL=L)]  # CN L.nt, rL spec in comp.N
         else:  # CN
@@ -391,14 +395,12 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
             for i,C in enumerate(_C_): md__[j,i] = val_(base_comp(C,N)[0], ttcP,fd=1)
             m_ = md__[j,:,0]; O += m_.sum() - m_.max()  # cross-C ambiguity, gates split/merge
         C_ = [sum2F(N_, root, md__[:,i,0], md__[:,i,1]) for i in range(Lc)]  # mean shift, aligned to md__
-        Mt = md__[:,:,0].sum()  # total V
-        # pending review: for the case of diverging, we need to break if diverge?
         conv = 0
         dM = np.abs(md__[:,:,0]-_md__[:,:,0]).sum() if md__.shape==_md__.shape else 0
         if dM:
             if _dM:  # first loop doesn't have prior _dM
                 ddM_ += [_dM - dM]; ddM_ = ddM_[-5:]  # summed over last 5 loops
-                conv = Mt*(wcP*L)/sum(ddM_) <= ave*(cnt+root.r+ccP*L)  # add cnt as redundancy?
+                conv = wcP*sum(ddM_) <= ave*(cnt+root.r+ccP)
             _dM = dM         
         else: conv = 1
         removed = []
@@ -728,7 +730,7 @@ def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N
 
 def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary/skeleton?
 
-    L_, cT_ [], set()  # comp co-mediated Ns:
+    L_, cT_ = [], set()  # comp co-mediated Ns:
     for N in N_: N.fin = 0  # curently PPs only
     for N in N_:
         _N_ = [rN for B in N.B_ for rN in B.root_ if rN is not N]   # + node-mediated
@@ -753,10 +755,11 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
                     n = L.N_[0] if L.N_[1] is _N else L.N_[1]
                     if n in N_:
                         if n.root is Gt: continue
+                        l_+=[L]  # default link 
                         if n.fin:  # merge n root
                             _root = n.root; n_+=_root[0];l_+=_root[3]; _root[6]=1
                             for _n in _root[0]: _n.root = Gt
-                        else: n.fin=1; _N_+=[n]; n_+=[n]; l_+=[L]  # add single n
+                        else: n.fin=1; _N_+=[n]; n_+=[n];  # add single n
                         n.root = Gt
         ntt,nc,_ = sum_vt(n_, wTT=ttTrc)
         if l_: ltt,lc,_= sum_vt(l_, wTT=ttTrc); ltt*=lc/nc;
@@ -907,7 +910,7 @@ def pack_seg(frame, nF, w, c, _dTT):  # drift-gated regime termination for aH an
     if tail := H[i:] if nF=='aH' else [l for l in H[i:] if l.nF=='aH']:  # lev_| aH_
         D = sum(np.sum(np.abs(t.dTT-_dTT) * wTT) for t in tail)  # drift
         if (vD := D*w - ave*c) > 0:  # update value
-            seg = CN(nF=nF, H=tail, root=frame); seg.dTT = tail[-1].dTT; seg.c = sum(l.c for l in tail)  # default regime summary
+            seg = CN(nF=nF, root=frame); seg.H=tail; seg.dTT = tail[-1].dTT; seg.c = sum(l.c for l in tail)  # default regime summary
             if vD > ave: seg.dTT,seg.c,seg.r = sum_vt(tail); seg.m,seg.d = val_(seg.dTT,fd=1)  # deep summary
             frame.H = H[:i]+[seg]  # append
             return seg
