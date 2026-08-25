@@ -109,6 +109,7 @@ def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_com
         if fall or (m>0 and gv_(m * (lc*wN / (lr*cN)) - ave*(r+cN))):  # marginal -gV
         # comp if marginally predictable: proj surprise value?
             Link = comp_N(_N,N, lr,lc, full = not tnF, A=dy_dx, span=dist, rL=root)
+            # pending review: we no longer using rTT now? 
             Link.rTT = np.abs(pTT - Link.dTT) / eps_(Link.dTT)  # relative prediction error/oF, direction-agnostic
             L_+= [Link]; N_+= [_N,N]
             if _N.root_ and gv_(Link.m*wF- ave*(Link.r+cF)):
@@ -139,28 +140,29 @@ def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None):
     TT = base_comp(_N,N)[0] if full else comp_derT(_N.dTT[1],N.dTT[1])
     m,d = val_(TT, ttN_,1)
     L = CL(N_=[_N,N], dTT=TT,m=m,d=d,c=c,r=r, root=rL)
+    if full:  # pending review: add geometry before Copy_(L) below
+        if span is None: span = np.hypot(*_N.yx - N.yx)
+        yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
+        box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
+        angl = [A, np.sign(TT[1] @ ttN_[1])]
+        L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2
     if N.typ > 1 and gv_(m* (c/r)* wN_ - ave*(r+cN_)):  # skip PPs, Nts?
         L.H = [Copy_(L)]  # lev0 to preserve resolution before adding deeper tLevs, min len H = 2
         dn_ = []  # cross_comp N_| Ft_ -> top tLev
-        if _N.H and N.H:  # pending review: So this comp_H should be default first when both Ns have H?
-            dH,tt,C,L.r = comp_H(_N.Nt,N.Nt, L)
-            L.H += dH; L.dTT = (L.dTT*L.c+tt)/(L.c+C); L.c+=C; L.m,L.d=val_(L.dTT,ttN_,1) 
+        htt,hc,hr = np.zeros((2,9)), 0, 0
+        for _n,n in product(_N.N_,N.N_):  # breadth first per N_ batch
+            dH,dtt,dc,dr = comp_H(_n.Nt,n.Nt, L)
+            add_H(L.H,dH,L); htt+=dtt; hc+=dc; hr+=dr
+        if hc: L.dTT = (L.dTT*L.c+htt*hc)/ (L.c+hc); L.m,L.d = val_(L.dTT,ttN_,1); L.r += hr
         if N.typ < 3:  # L | C | Nt, merge?
             for _n,n in product(_N.N_,N.N_): dn_ += [comp_N(_n,n,r,c, rL=L)]  # CN L.nt, rL spec in comp.N
         else:  # CN
             for i,(_Ft,Ft, tnF) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt),(N.Nt,N.Lt,N.Bt),('Nt','Lt','Bt'))):
                 if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1  # unique Nt,Lt, rL spec in comp_F
         if dn_:
-            # else eval comp_H, tentative?
             [add_H(L.H, d.H, L) for d in dn_ if d.H]  # lower levs
             L.H += [sum2F(dn_,L)]  # top lev
         # merge if no or weak Bt?
-    if full:
-        if span is None: span = np.hypot(*_N.yx - N.yx)
-        yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
-        box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
-        angl = [A, np.sign(TT[1] @ ttN_[1])]
-        L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2
     for n, _n in (_N,N),(N,_N): n.rim += [L]
     FV_(CoF.get(), L.dTT, L.c, L.r)
     # or merge N -> _N?
@@ -447,7 +449,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
     c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); w_ = c_/C; N = N_[0]
     fC = any(m_)
     typ = 2 if fC else N.typ
-    if fC: w_ *= m_/sum(m_)  # differential initialization to break symmetry
+    if fC: w_ *= np.array(m_)/sum(m_)  # differential initialization to break symmetry
     cls_ = [CF,CL,CL,CN]  # typ=2 CCs
     for i, (n,w) in enumerate(zip(N_,w_)):
         if i:
@@ -488,19 +490,17 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
         for N, m, d in zip(N_, m_, d_): N.root_ += [[F,m,d]]
     return F
 
-def add2F(F, n, merge=0, fr=0, fo=0):  # unpack for batching in sum2F
+def add2F(F, n, merge=0):  # unpack for batching in sum2F
 
-    a = 'rTT' if fr else 'dTT'  # or wTT?
     if F.c:
         C=F.c+n.c; _w,w = F.c/C, n.c/C; F.r = F.r*_w + n.r*w; F.c = C
         if isinstance(F,CoF) and isinstance(n,CoF): F.fw += n.m  # sum subtree gain, fixed cost, extensive: no weighting?
-        setattr(F, a, getattr(F,a)*_w + getattr(n,a)*w)
+        setattr(F, 'dTT', getattr(F,'dTT')*_w + getattr(n,'dTT')*w)
     else:
-        setattr(F,a,getattr(n,a)); F.c=n.c; F.r=n.r
+        setattr(F,'dTT',getattr(n,'dTT')); F.c=n.c; F.r=n.r
         if isinstance(F,CoF) and isinstance(n,CoF): F.fw=n.m
     if merge <2:
-        if fo: F.typ_+= [n]
-        else: F.N_ += (n.N_ if merge else [n])
+        F.N_ += (n.N_ if merge else [n])
     if hasattr(F,'H') and getattr(n,'H',None): add_H(F.H, n.H, F)
     return F
 
@@ -565,9 +565,9 @@ def add_Nt(G):  # in sum2G and trans_cluster
     for N in N_:
         N.fin = 1; N.root = G; w = N.c/C
         G.root_ += [rt[0] for rt in N.root_]  # Ct || Nt
-        G.kern += N.kern*w; yx = N.yx; G.yx+=yx; yx_+=[yx]  # * w?
+        G.kern += N.kern*w; yx = N.yx; yx_+=[yx]  # * w?
         G.box = extend_box(G.box, N.box)
-    G.span = (c_ @ np.hypot(*(np.array(yx_)-G.yx).T)) / C if len(N_)>1 else N_[0].span
+    G.yx = np.mean(yx_,axis=0); G.span = (c_ @ np.hypot(*(np.array(yx_)-G.yx).T)) / C if len(N_)>1 else N_[0].span
 
 # utilities:
 def F2N(F):  # convert for cross_comp
@@ -590,7 +590,7 @@ def Copy_(N, root=None, r=1, cls=None, init=0, typ=None, froot=0):
     if hasattr(N, 'w'): a['w'] = N.w
     if isinstance(N, CL): a.update(yx=copy(N.yx), kern=copy(N.kern), span=N.span, angl=[copy(N.angl[0]), N.angl[1]] if N.angl else None)
     if hasattr(N, 'root_'): a.update(root_=copy(N.root_))  # CC
-    if isinstance(N,CoF): a.update(call_=copy(N.call_), typ_=copy(N.typ_), fw=N.fw, fc=N.fc, fr=N.fr)
+    if isinstance(N,CoF): a.update(call_=copy(N.call_), typ_=copy(N.typ_) if hasattr(N, 'typ_') else [], fw=N.fw if hasattr(N, 'fw') else 0, fc=N.fc, fr=N.fr)
     C = cls(**a)
     if isinstance(N, CN):
         if init:
