@@ -91,7 +91,7 @@ def cross_comp(root, G_, m, c, r, nF='Nt'):  # agg+: refine by CC,exe -> cross_c
             if Ct := cluster_C(G.Nt, get_exemplars(G.N_,r,c),r,c):  # refines, splits each G
                 C_, _m,_c,_r = Ct.N_,Ct.m,Ct.c,Ct.r
                 C__ += C_; M+=_m; C+=_c; R+=_r  # splice refined sub_G_s
-    if C__:  # pending review: C__ is actually converted PPs, since G_ are graphs from trace_edge, so trans comp in comp_N will never be true
+    if C__:
         setattr(root,nF, sum2F(C__,root, nF=nF, froot=2)); L=len(C__); R/=L  # pass M,C,R in sum2F?
         if gv_((m+M) * (c*(C+wN_) / (r*(R+cN_))) * ((L-1)*wL) - ave):
             root.H += [Copy_(root)]  # lower agg lev
@@ -122,7 +122,7 @@ def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_com
     if L_:
         for N in set(N_):
             if N.rim: N.Rt = sum2F(N.rim); N.Rt.root = N
-        TT, C, R = sum_vt(L_, wTT=ttN)  # pending review: use ttN rather than wTT?
+        TT, C, R = sum_vt(L_, wTT=ttN)
         cV = FV_(CoF.get(), TT, C, R)  # +ve Ls for oF, no oF.N_?
         return L_, TT, C, R, cV  # unpacked in cross_comp, comp_F
 
@@ -327,7 +327,7 @@ def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace
             rG.dTT=TT; rG.c=C; rG.r=R; rG.m, rG.d = val_(TT, ttcN)
     if G_: FV_(CoF.get(), *sum_vt(G_)[:-1],_r)
     return G_,_r
-# pending review: input _C is not used here?
+
 def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
 
     N_= copy(Ft.N_); _C_=[]  # revert if 0 clusters?
@@ -402,6 +402,7 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
         if dM:
             if _dM:  # first loop doesn't have prior _dM
                 ddM_ += [_dM - dM]; ddM_ = ddM_[-5:]  # summed over last 5 loops
+                if sum(ddM_)<0: break  # break and preserve the last Cs before the divergence
                 conv = wcP*sum(ddM_) <= ave*(cnt+root.r+ccP)
             _dM = dM         
         else: conv = 1
@@ -422,7 +423,7 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
             _C.olp = sum(rt[1] for n in _C.N_ for rt in getattr(n, 'root_', []) if rt[0] is not _C and rt[1] > _C.m)
             if _C.m * wcP > ave * (_C.r + _C.olp + ccP):  # prune
                 _C_ += [_C]; i_ += [i]  # also after merge and converge
-        md__ = md__[:,i_]  # pending review: remove md__ of removed Cs, to be used in the next convergence test in the next iteration    
+        md__ = md__[:,i_]
         if not _C_ or (conv and (not removed) and len(_C_)==Lc):  # skip if all _C_ failed the  c.m*wcP > ave*c.r*ccP eval above
             break
         _md__ = md__; cnt += 1
@@ -431,7 +432,7 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
     for i, _C in enumerate(_C_):
         if _C.m > ave * _C.r:  # prune, add olp as stronger ms?
             N_,m_,d_ = [],[],[]
-            for N, m,d in zip(_C.N_, md__[:,i,0], md__[:,i,1]):
+            for N, m,d in zip(_C.N_, _md__[:,i,0], _md__[:,i,1]):
                 if m*N.c > ave*N.r: N_+=[N]; m_+=[m]; d_+=[d]
             if N_:
                 C = sum2F(N_,root, m_,d_)
@@ -741,10 +742,9 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
             dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)  # Rc = r+ (N.r+_N.r)/2
             L = comp_N(_N,N, r,_C,A=dy_dx, span=dist)  # current L is dPP
             if val_(L.dTT,ttTrc,1)[1] * ((L.c+wTrc)/(r+cTrc)) > ave: L_+=[L]
-            # if L_: lTT,lc,_ = sum_vt(L_,wTT=ttTrc)  # pending review: we don't need lTT and lc now?
     Gt_ = []
     for N in N_:  # flood-fill G per seed N
-        if N.rim: N.Rt = sum2F(N.rim);N.Rt.root = N  # pending review: add m  to Rt, to be used in get_exemplars of cross_comp
+        if N.rim: N.Rt = sum2F(N.rim);N.Rt.root = N
         if N.fin: continue
         N.fin=1; _N_=[N]; Gt=[]; N.root=Gt
         n_,ntt,nc = [N],N.dTT.copy(),(N.c or 1); l_,ltt,lc = [],np.zeros((2,9)),0  # Gt
