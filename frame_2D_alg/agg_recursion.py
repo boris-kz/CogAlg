@@ -105,8 +105,8 @@ def cross_comp(root, G_, m, c, r, nF='Nt'):  # agg+: refine by CC,exe -> cross_c
 def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_comp, max dist depends on prior match
 
     L_,N_,mrg_ = [],[],[]
-    for dist, dy_dx, _N,N, lc,lr, pTT,m,_ in pL_:  # pL is L = dist, dy_dx, _N,N if fall: not selective
-        if fall or (m>0 and gv_(m * (lc*wN / (lr*cN)) - ave*(r+cN))):  # marginal -gV
+    for i, (dist, dy_dx, _N,N, lc,lr, pTT,m,_) in enumerate(pL_):  # pL is L = dist, dy_dx, _N,N if fall: not selective
+        if _N != N and fall or (m>0 and gv_(m * (lc*wN / (lr*cN)) - ave*(r+cN))):  # marginal -gV
         # comp if marginally predictable: proj surprise value?
             Link = comp_N(_N,N, lr,lc, full = not tnF, A=dy_dx, span=dist, rL=root)
             # pending review: we no longer using rTT now? 
@@ -118,6 +118,9 @@ def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_com
                     for rt in n.root_:  # [C,m,d]
                         if rt[0] is N: rt[0] = _N  # keep m,d positions
                 N.rim.remove(Link); Link.N_ = [_N,_N]  # replaces the merged N 
+                for pt in pL_[i+1:]:  # dist, dy_dx, _N,N, lc,lr, pTT,m,d  (replaces in pL_)
+                    if pt[2] is N: pt[2] = _N
+                    elif pt[3] is N: pt[3] = _N
     if mrg_: N_ = list(set(N_) - set(mrg_))
     if L_:
         for N in set(N_):
@@ -126,7 +129,7 @@ def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_com
         cV = FV_(CoF.get(), TT, C, R)  # +ve Ls for oF, no oF.N_?
         return L_, TT, C, R, cV  # unpacked in cross_comp, comp_F
 
-def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None):
+def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
 
     def comp_H(_Nt,Nt, Link):  # tentative pre-comp, before comp N_?
         dH, tt, C,R = [],np.zeros((2,9)),0,0
@@ -144,7 +147,7 @@ def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None):
         if span is None: span = np.hypot(*_N.yx - N.yx)
         yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
         box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
-        angl = [A, np.sign(TT[1] @ ttN_[1])]
+        angl = [np.zeros(2) if A is None else A, np.sign(TT[1] @ ttN_[1])]
         L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2
     if N.typ > 1 and gv_(m* (c/r)* wN_ - ave*(r+cN_)):  # skip PPs, Nts?
         L.H = [Copy_(L)]  # lev0 to preserve resolution before adding deeper tLevs, min len H = 2
@@ -153,7 +156,7 @@ def comp_N(_N,N, r,c, full=1, A=np.zeros(2),span=None, rL=None):
         for _n,n in product(_N.N_,N.N_):  # breadth first per N_ batch
             dH,dtt,dc,dr = comp_H(_n.Nt,n.Nt, L)
             add_H(L.H,dH,L); htt+=dtt; hc+=dc; hr+=dr
-        if hc: L.dTT = (L.dTT*L.c+htt*hc)/ (L.c+hc); L.m,L.d = val_(L.dTT,ttN_,1); L.r += hr
+        if hc: L.dTT = (L.dTT*L.c+htt*hc)/ (L.c+hc); L.m,L.d = val_(L.dTT,ttN_,1); L.r += hr  # not sure if we need to normalize the r here?
         if N.typ < 3:  # L | C | Nt, merge?
             for _n,n in product(_N.N_,N.N_): dn_ += [comp_N(_n,n,r,c, rL=L)]  # CN L.nt, rL spec in comp.N
         else:  # CN
@@ -500,6 +503,7 @@ def add2F(F, n, merge=0):  # unpack for batching in sum2F
     else:
         setattr(F,'dTT',getattr(n,'dTT')); F.c=n.c; F.r=n.r
         if isinstance(F,CoF) and isinstance(n,CoF): F.fw=n.m
+    F.m, F.d = val_(F.dTT,fd=1)
     if merge <2:
         F.N_ += (n.N_ if merge else [n])
     if hasattr(F,'H') and getattr(n,'H',None): add_H(F.H, n.H, F)
@@ -711,8 +715,10 @@ def proj_focus(PV__, y,x, tile, elev):  # radial accum of projected focus value 
 def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N projection val, add pN if comp_pN?
 
     def proj_TT(L, cos_d, dist, r, pTT, wTT, dec=1, fdec=0):     # accumulate L|N' pTT with iTT|eTT internally
+        # pending review: we reassign ave in ffeedback: ave, avd = val_(aTT, fd=1), so ave can't be negative else we won't get a valid decay here
         dec = dist if fdec else ave** (1 + dist * dec / L.span)  # not fully revised, ave = match decay rate / unit distance
         TT = np.array([L.dTT[0] * dec, L.dTT[1] * cos_d * dec])  # IxE angle alignment * decay?
+        # pending review: decay cancel out each other in val_:  (m_/ eps_(m_+ad_))
         cert = abs(val_(TT* wTT*ttPrj) * ((L.c+wPrj)/(r+cPrj)) - ave)  # approximation
         if cert > (ave + avd) * (r + cPrj):  # certainty margin
             pTT += TT
