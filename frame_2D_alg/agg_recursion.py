@@ -152,15 +152,16 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
             tt += ltt*lc; C+=lc; R+=lr*lc
         return dH,tt,C, (r* Link.c+R)/ (Link.c+C)  # same norm for tt?
 
-    TT = base_comp(_N,N)[0] if full else comp_derT(_N.dTT[1],N.dTT[1])
-    m,d = val_(TT, ttN_,1)
-    L = CL(N_=[_N,N], dTT=TT,m=m,d=d,c=c,r=r, root=rL)
-    if full:  # pending review: add geometry before Copy_(L) below
+    L = CL(N_=[_N,N],c=c,r=r, root=rL)
+    if full:
+        TT = base_comp(_N,N)[0]
         if span is None: span = np.hypot(*_N.yx - N.yx)
         yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
         box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
         angl = [np.zeros(2) if A is None else A, np.sign(TT[1] @ ttN_[1])]
-        L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2
+        L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2  
+    else: TT = comp_derT(_N.dTT[1],N.dTT[1])
+    m,d = val_(TT, ttN_,1); L.dTT,L.m,L.d = TT,m,d
     if N.typ > 1 and gv_(m* (c/r)* wN_ - ave*(r+cN_)):  # skip PPs, Nts?
         L.H = [Copy_(L)]  # lev0 to preserve resolution before adding deeper tLevs, min len H = 2
         dn_ = []  # cross_comp N_| Ft_ -> top tLev
