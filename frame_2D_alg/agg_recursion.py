@@ -109,7 +109,7 @@ def cross_comp(root, N_, rr,nF='Nt'):  # agg+: refine by CC,exe -> cross_comp, n
         root.L_ = L_; oF_[CoF.get().nF].V_ += [V]  # +-/ comp
         if gv_(val_(TT,ttcN) * (c*wcN /(r*ccN)) * ((len(L_)-1)*wL) - ave):  # return +ve, store -ve gate Vs、
             Ft = cluster_(getattr(root,nF,),list(set([n for L in L_ for n in L.N_])),r,c)  # sum2G-> agg+
-            L = len(root.Nt.N_)
+            L = len(getattr(root, nF).N_)
             if Ft and gv_(val_(TT,ttX) * (c*wX /(r*cX)) * ((L-1)*wL) - ave):
                 cross_comp(root, root.Nt.N_, root.r)
                 
@@ -304,11 +304,12 @@ def cluster_(Ft, _N_, r, c):
             # merge roots
 
     def cluster_n(Ft, _N_, _r,_c):
-        for N in _N_:
-            N.LB_ = [[],[]]; N.fin =0; N.exe=1; N.Rt = sum2F(N.rim);N.Rt.root = N  # only if N was added in trans-cluster?
+        for N in Ft.N_:
+            N.LB_ = [[],[]]; N.fin =0
+            if N.rim: N.Rt = sum2F(N.rim);N.Rt.root = N  # only if N was added in trans-cluster?
         N__, in_ = [],set()  # root attrs, add prelink pL_,pN_? include merged Cs, in feature space for Cs
         for N in _N_:  # form G per remaining N
-            if N.fin or (Ft.root.root and not N.exe): continue  # no exemplars in Fg
+            if N.fin: continue
             N_ = [N]; N.fin=1  # init G
             __L_= N.rim  # spliced rim
             while __L_:
@@ -337,9 +338,9 @@ def cluster_(Ft, _N_, r, c):
             for N in N_: N._root_+=[[C,1,0]]  # self (C,m,d)
             C._N_= list({n for N in N_ for l in N.rim for n in l.N_ if n not in N_})  # init w for first loop eval
             _C_ += [C]
-        out_ = []
+        out_ = []; r = _r  # loop-local, for Avd
         while True:  # reform C_
-            C_, cnt,rdn,DTT,Up = [],0,0,np.zeros((2,9)),0; Ave = ave*(_r+ccC); Avd = avd*(_r+ccC)
+            C_, cnt,rdn,DTT,Up = [],0,0,np.zeros((2,9)),0; Ave = ave*(_r+ccC); Avd = avd*(r+ccC)
             for _C in _C_:  # C.m,d /rTT? sort / sum(_C.m_)?
                 N__,n_,m_,d_,M,D,T,R,dTT,up = [],[],[],[],0,0,0,0, np.zeros((2,9)),0  # /C
                 for n in _C.N_+_C._N_:  # current + frontier
@@ -385,8 +386,8 @@ def cluster_(Ft, _N_, r, c):
             for N in G.N_: L_ += N.LB_[0]; B_ += N.LB_[1]
             for (F_,nF) in zip((L_, B_),('Lt','Bt')):
                 F_ = list(set(F_)) or []; tt,fc,fr = sum_vt(F_,wTT=ttcN) if F_ else (np.zeros((2,9)),0,0)
-                Ft = CF(N_=F_,nF=nF,dTT=tt,m=(vt:=val_(tt,wTT,1))[0],d=vt[1],c=fc,r=fr)
-                setattr(G,nF,Ft)  # set Lt and Bt
+                ft = CF(N_=F_,nF=nF,dTT=tt,m=(vt:=val_(tt,wTT,1))[0],d=vt[1],c=fc,r=fr)
+                setattr(G,nF,ft)  # set Lt and Bt
             trans_cluster(G) 
         _m,_d,_tt,_c,_r = sum_vt(G_, fm=1)
         FV_(CoF.get(),_tt,_c,_r)  # r per deeper cross_comp?
@@ -394,7 +395,7 @@ def cluster_(Ft, _N_, r, c):
             rG = Ft.root; 
             if Ft.nF == "Nt": 
                 rG.H += [Copy_(Ft)]  # add H only for Nt?
-                rG.dTT=_tt; rG.c=_c; rG.r=_r; rG.m, rG.d = val_(_tt, (ttcN+ttcC))
+                rG.dTT=_tt; rG.c=_c; rG.r=_r; rG.m, rG.d = val_(_tt, (ttcN+ttcC),fd=1)
             Ft.N_ = G_; Ft.dTT=_tt; Ft.c=_c; Ft.r=_r
             return Ft
 
@@ -699,7 +700,7 @@ def add_Nt(G):  # in sum2G and trans_cluster
     G.kern, G.yx = np.zeros(4),np.zeros(2); yx_ = []
     for N in N_:
         N.fin = 1; N.root = G; w = N.c/C
-        G.root_ += [rt[0] for rt in N.root_]  # Ct || Nt
+        G.root_ += [rt for rt in N.root_]  # Ct || Nt  (use rt for consistency, to be used in get_exemplars:  rc = sum(r[0].c for r in n.root_))
         G.kern += N.kern*w; yx = N.yx; yx_+=[yx]  # * w?
         G.box = extend_box(G.box, N.box)
     G.yx = np.mean(yx_,axis=0); G.span = (c_ @ np.hypot(*(np.array(yx_)-G.yx).T)) / C if len(N_)>1 else N_[0].span
