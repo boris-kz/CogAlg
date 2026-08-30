@@ -285,11 +285,13 @@ def get_exemplars(N_,_r,_c):  # multi-layer non-maximum suppression -> sparse se
 def cluster_(Ft, _N_, r, c):
     
     def nt_vt(n,_n):
-        M, D = 0,0  # exclusive match, contrast
+        M, D, R, C = 0,0, 0, 0  # exclusive match, contrast
         for l in set(n.rim+_n.rim):
-            if l.m > 0:   M += l.m
-            elif l.d > 0: D += l.d
-        return M, D
+            if l.m > 0 or l.m > 0:
+                if l.m > 0:   M += l.m
+                elif l.d > 0: D += l.d
+                C += l.c; R += l.r
+        return M, D, R, C
     def trans_cluster(G):
         for L in G.L_:
             for lev in L.H[1:]:  # L.H[0] is direct ders
@@ -303,64 +305,46 @@ def cluster_(Ft, _N_, r, c):
                 L.Nt,L.Bt = CF(),CF()
             # merge roots
 
-    def cluster_n(Ft, _N_, _r,_c):
-        for N in Ft.N_:
-            N.LB_ = [[],[]]; N.fin =0
-            if N.rim: N.Rt = sum2F(N.rim);N.Rt.root = N  # only if N was added in trans-cluster?
-        N__, in_ = [],set()  # root attrs, add prelink pL_,pN_? include merged Cs, in feature space for Cs
-        for N in _N_:  # form G per remaining N
-            if N.fin: continue
-            N_ = [N]; N.fin=1  # init G
-            __L_= N.rim  # spliced rim
-            while __L_:
-                _L_ = []
-                for L in set(__L_) - in_:  # flood-fill via frontier links
-                    _N = L.N_[0] if L.N_[1].fin else L.N_[1]; in_.add(L)
-                    if not _N.fin and _N in Ft.N_:
-                        m,d = nt_vt(*L.N_)
-                        if m > ave * (_r-1):  # cluster nt, L,C_ by combined rim density, add gv_?
-                            span = np.sqrt(len(N_))  # approx span
-                            if span > 3:  # refine by rim connectivity / norm span
-                                iM = sum([L.m for L in _N.rim if (L.N_[0] if L.N_[1] is _N else L.N_[1]) in N_])
-                                if iM / (span*decay) < ave * (_r-1): continue  # normalized N-to-N_ match, sum for sum2G?
-                            N_ += [_N]; _N.LB_[0] += [L]; _N.fin = 1
-                            _L_+= [l for l in _N.rim if l not in in_ and (l.N_[0].fin ^ l.N_[1].fin)]   # new frontier links, +|-?
-                        elif d > avd * (_r-1): _N.LB_[1] += [L]  # contrast value, exclusive?
-                __L_ = list(set(_L_))
-            N__ += [N_]   # no termination yet          
-        return N__
-
-    def cluster_c(Ft, N__,_r,_c):
-        _C_=[]  # revert if 0 clusters?
-        for n in Ft.N_: n.root_, n._root_ = [],[]
-        for N_ in N__:
-            C = sum2F(N_, Ft,m_=np.ones(len(N_)),d_=np.zeros(len(N_)))
-            for N in N_: N._root_+=[[C,1,0]]  # self (C,m,d)
-            C._N_= list({n for N in N_ for l in N.rim for n in l.N_ if n not in N_})  # init w for first loop eval
+    def cluster(Ft, E_,_r,_c):
+        _C_= []; N_= copy(Ft.N_)  # revert if 0 clusters?
+        for n in N_:
+            n.root_, n._root_ = [],[]; n.fin = 0
+            if n.rim: n.Rt = sum2F(n.rim); n.Rt.root = n
+        for N in E_: 
+            C = sum2F([N], Ft, m_=[1],d_=[0]); N.fin = 1
+            N._root_+= [[C,1,0]]  # self (C,m,d)
+            C._N_= list({n for l in N.rim for n in l.N_ if n is not N})  # init frontier
             _C_ += [C]
         out_ = []; r = _r  # loop-local, for Avd
         while True:  # reform C_
-            C_, cnt,rdn,DTT,Up = [],0,0,np.zeros((2,9)),0; Ave = ave*(_r+ccC); Avd = avd*(r+ccC)
+            C_, cnt,rdn,DTT,Up = [],0,0,np.zeros((2,9)),0; Ave = ave*(r+ccC); Avd = avd*(r+ccC)  # both Ave and Avd should be computed with loop-local r?
             for _C in _C_:  # C.m,d /rTT? sort / sum(_C.m_)?
                 N__,n_,m_,d_,M,D,T,R,dTT,up = [],[],[],[],0,0,0,0, np.zeros((2,9)),0  # /C
                 for n in _C.N_+_C._N_:  # current + frontier
                     if n not in N_: N_+=[n]; n.root_,n._root_ = [],[]
                     dtt,_ = base_comp(_C,n)  # or comp_N, decay?
                     m,d = val_(dtt,ttcC,1); dTT+=dtt
-                    # lm= lc= lr= 0  # lateral connectivity term
-                    # for l in (n.rim & _C.L_): lm+=l.m; lc for l.c; lr+=l.r
-                    n_+=[n]; m_+=[m]; d_+=[d]; c=n.c; T+=c; M+=m*c; D+=abs(d)*c; R+=n.r*c  # scale totals only?
-                    _root_ = [rt[0] for rt in n._root_]
-                    if _C in _root_:
-                        i =_root_.index(_C); up += abs(n._root_[i][1]-m) + abs(n._root_[i][2]-d)
-                    else: up += m+abs(d)
+                    lm= lc= lr= 0  # lateral connectivity term                
+                    for l in n.rim:  
+                        vt = nt_vt(*l.N_)
+                        lm+=vt[0]; lr+=vt[2]; lc+=vt[3]  # connected to existing N
+                    if (m+lm) > ave * (r + (lr*lc)):
+                        span = np.sqrt(len(n_))  # approx span
+                        if span > 3:  # refine by rim connectivity / norm span
+                            iM = sum([l.m for l in n.rim if (l.N_[0] if l.N_[1] is n else l.N_[1]) in n_])
+                            if iM / (span*decay) < ave * (_r-1): continue  # normalized N-to-N_ match, sum for sum2G?
+                        n_+=[n]; m_+=[m]; d_+=[d]; c=n.c; T+=c; M+=m*c; D+=abs(d)*c; R+=n.r*c  # scale totals only?
+                        _root_ = [rt[0] for rt in n._root_]
+                        if _C in _root_:
+                            i =_root_.index(_C); up += abs(n._root_[i][1]-m)
+                        else: up += m 
                 r = _r + R/T  # loop-local
-                if M * (_C.m+wcC*len(n_)) > Ave * (r+_C.r+ ccC*len(n_)):  # else: Up+= sum(_C._m_)+ sum([abs(d) for d in _C._d_])?
-                    N__ += [_n for n in n_ for l in n.rim for _n in l.N_ if _n is not n]  # extend frontier with +|-Ls
+                if (_C.m+M) * (wcC*len(n_)) > Ave * (r+_C.r+ccC*len(n_)):  # else: Up+= sum(_C._m_)+ sum([abs(d) for d in _C._d_])?
+                    N__ += [_n for n in n_ for l in n.rim for _n in l.N_ if (_n is not n and _n not in n_)]  # extend frontier with +|-Ls
                     C = sum2F(n_, Ft,m_,d_)  # C.N_ = n_
                     C._N_ = list(set(N__) - set(n_))  # new frontier
-                    if D < Avd: out_+=[C]  # output if stable
-                    else:       C_ += [C]  # reform
+                    if D/T < Avd: out_+=[C]  # output if stable
+                    else:         C_ += [C]  # reform
                     DTT+=dTT; cnt+=T; rdn+=R; Up+=up
             r = _r+ rdn/(cnt or eps)
             L = len(out_+ C_); olp = sum([len(N.root_) for N in N_])  # rdn+=olp, prioritize stronger?
@@ -378,12 +362,15 @@ def cluster_(Ft, _N_, r, c):
         return out_
 
     E_ = get_exemplars(_N_,r,c)
-    N__ = cluster_n(Ft, E_, r+1, c)
-    G_ = cluster_c(Ft, N__, r+2, c)
+    G_ = cluster_(Ft, E_, r+1, c)
     if G_:
         for G in G_:  # form Lt and Bt from C.N_'s L_ and B_
-            L_, B_ = [], []
-            for N in G.N_: L_ += N.LB_[0]; B_ += N.LB_[1]
+            L_, B_ = [],[]
+            for N in G.N_:
+                for L in N.rim:
+                    m,d,_,_ = nt_vt(*L.N_)
+                    if m > ave * (r-1):  L_ += [L]   
+                    elif d > avd * (r-1): B_ += [L]
             for (F_,nF) in zip((L_, B_),('Lt','Bt')):
                 F_ = list(set(F_)) or []; tt,fc,fr = sum_vt(F_,wTT=ttcN) if F_ else (np.zeros((2,9)),0,0)
                 ft = CF(N_=F_,nF=nF,dTT=tt,m=(vt:=val_(tt,wTT,1))[0],d=vt[1],c=fc,r=fr)
