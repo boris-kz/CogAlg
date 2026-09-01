@@ -84,25 +84,6 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
 - feedback filter updates 
 '''
 def cross_comp(root, N_, rr,nF='Nt'):  # agg+: refine by CC,exe -> cross_comp, nF: core|contour?
-
-    '''
-    C__ = []; M = C = R = 0
-    for G in G_:
-        if gv_(G.m * ((G.c*wcC) / (G.r*ccC)) * ((len(G.N_)-1)*wL) - ave):
-            if Ct := cluster_C(G.Nt, get_exemplars(G.N_,r,c),r,c):  # refines, splits each G
-                C_, _m,_c,_r = Ct.N_,Ct.m,Ct.c,Ct.r
-                C__ += C_; M+=_m; C+=_c; R+=_r  # splice refined sub_G_s
-    if C__:
-        setattr(root,nF, sum2F(C__,root, nF=nF, froot=2)); L=len(C__); R/=L  # pass M,C,R in sum2F?
-        if gv_((m+M) * (c*(C+wN_) / (r*(R+cN_))) * ((L-1)*wL) - ave):
-            root.H += [Copy_(root)]  # lower agg lev
-            if Lt := comp_N_( proj_L_(combinations([F2N(C) for C in C__],2), root,R), R):
-                L_, TT, c, r, V = Lt
-                root.L_ = L_; oF_[CoF.get().nF].V_ += [V]  # +-/ comp
-                if gv_(val_(TT,ttcN) * (c*wcN /(r*ccN)) * ((len(L_)-1)*wL) - ave):  # return +ve, store -ve gate Vs
-                    e_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)  # +ve Ls only
-                    return cluster_N(root.Nt, e_,r,c)  # sum2G-> agg+
-    '''
                 
     if Lt := comp_N_( proj_L_(combinations(N_,2), root,rr), rr):
         L_, TT, c, r, V = Lt
@@ -285,13 +266,11 @@ def get_exemplars(N_,_r,_c):  # multi-layer non-maximum suppression -> sparse se
 def cluster_(Ft, _N_, r, c):
     
     def nt_vt(n,_n):
-        M, D, R, C = 0,0, 0, 0  # exclusive match, contrast
+        M, D = 0,0  # exclusive match, contrast
         for l in set(n.rim+_n.rim):
-            if l.m > 0 or l.d > 0:
-                if l.m > 0:   M += l.m
-                elif l.d > 0: D += l.d
-                C += l.c; R += l.r
-        return M, D, R, C
+            if l.m > 0:   M += l.m
+            elif l.d > 0: D += l.d
+        return M, D
     def trans_cluster(G):
         for L in G.L_:
             for lev in L.H[1:]:  # L.H[0] is direct ders
@@ -308,10 +287,10 @@ def cluster_(Ft, _N_, r, c):
     E_ = get_exemplars(_N_,r,c)
     _C_= []; N_= copy(Ft.N_); _r = r+1  # revert if 0 clusters?
     for n in N_:
-        n.root_, n._root_ = [],[]; n.fin = 0
+        n.root_, n._root_ = [],[]
         if n.rim: n.Rt = sum2F(n.rim); n.Rt.root = n
     for N in E_: 
-        C = sum2F([N], Ft, m_=[1],d_=[0]); N.fin = 1
+        C = sum2F([N], Ft, m_=[1],d_=[0])
         N._root_+= [[C,1,0]]  # self (C,m,d)
         C._N_= list({n for l in N.rim for n in l.N_ if n is not N})  # init frontier
         _C_ += [C]
@@ -321,15 +300,18 @@ def cluster_(Ft, _N_, r, c):
         for _C in _C_:  # C.m,d /rTT? sort / sum(_C.m_)?
             N__,n_,m_,d_,M,D,T,R,dTT,up = [],[],[],[],0,0,0,0, np.zeros((2,9)),0  # /C
             for n in _C.N_+_C._N_:  # current + frontier
-                if n not in N_: N_+=[n]; n.root_,n._root_ = [],[]
-                dtt,_ = base_comp(_C,n)  # or comp_N, decay?
+                if n not in N_: N_+=[n]; n.root_,n._root_ = [],[]; n.Rt = sum2F(n.rim); n.Rt.root = n
+                dtt,_ = base_comp(_C,n.Rt)  # or comp_N, decay?
                 m,d = val_(dtt,ttcC,1); dTT+=dtt
+                '''
                 lm= lc= lr= 0  # lateral connectivity term                
                 for l in n.rim:
                     if l.N_[0] in n_ or l.N_[1] in n_:  # connected to existing N?
                         vt = nt_vt(*l.N_)
                         lm+=vt[0]; lr+=vt[2]; lc+=vt[3]  
                 if (m+lm)*(lc or 1) > ave * (cr + lr):
+                '''
+                if m > ave * cr:
                     span = np.sqrt(len(n_))  # approx span
                     if span > 3:  # refine by rim connectivity / norm span
                         iM = sum([l.m for l in n.rim if (l.N_[0] if l.N_[1] is n else l.N_[1]) in n_])
@@ -356,19 +338,14 @@ def cluster_(Ft, _N_, r, c):
             for n in N_: n._root_ = n.root_
             for n in set([_n for _C in _C_ for _n in _C.N_ + _C._N_]): n.root_ = []
             _C_ = C_
-        else: out_+=C_; break  # converged
+        else: out_ = merged if (merged:= out_ +C_) else _C_; break  # converged
     if out_:
-        # pending review: don't think we need this now
-        '''
-        for n in [N for C in out_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals: 
-            n.exe = (n.d if n.typ==1 else n.m) + sum(rt[1] for rt in n.root_) > ave
-        '''
         G_ = []
-        for C in out_:  # C is actually Nt (sum from sum2F), form G from Nt, Lt and Bt
+        for C in out_:  # sum C.N_'s rim into Lt and Bt in the final step
             L_, B_ = [],[]
             for N in C.N_:
                 for L in N.rim:
-                    m,d,_,_ = nt_vt(*L.N_)
+                    m,d = nt_vt(*L.N_)
                     if m > ave * (r-1):  L_ += [L]   
                     elif d > avd * (r-1): B_ += [L]    
             ft_ = [[C.N_,'Nt',C.dTT, C.c, C.r]]
