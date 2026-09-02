@@ -87,12 +87,13 @@ def cross_comp(root, N_, rr,nF='Nt'):  # agg+: refine by CC,exe -> cross_comp, n
                 
     if Lt := comp_N_( proj_L_(combinations(N_,2), root,rr), rr):
         L_, TT, c, r, V = Lt
-        root.L_ = L_; oF_[CoF.get().nF].V_ += [V]  # +-/ comp
+        root.Lt.N_=L_; root.Lt.dTT=TT; root.Lt.c=c; root.Lt.r=r; root.Lt.m,root.Lt.d=val_(TT,ttX,fd=1)
+        oF_[CoF.get().nF].V_ += [V]  # +-/ comp
         if gv_(val_(TT,ttcN) * (c*wcN /(r*ccN)) * ((len(L_)-1)*wL) - ave):  # return +ve, store -ve gate Vs、
             Ft = cluster_(getattr(root,nF,),list(set([n for L in L_ for n in L.N_])),r,c)  # sum2G-> agg+
             L = len(getattr(root, nF).N_)
             if Ft and gv_(val_(TT,ttX) * (c*wX /(r*cX)) * ((L-1)*wL) - ave):
-                cross_comp(root, root.Nt.N_, root.r)
+                cross_comp(root, root.Nt.N_, root.r,nF=nF)
                 
 
 def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_comp, max dist depends on prior match
@@ -150,7 +151,8 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
         for _n,n in product(_N.N_,N.N_):  # breadth first per N_ batch
             dH,dtt,dc,dr = comp_H(_n.Nt,n.Nt, L)
             add_H(L.H,dH,L); htt+=dtt; hc+=dc; hr+=dr
-        if hc: L.dTT = (L.dTT*L.c+htt*hc)/ (L.c+hc); L.m,L.d = val_(L.dTT,ttN_,1); L.r += hr  # not sure if we need to normalize the r here?
+        # htt is already applied with lc in comp_H
+        if hc: L.dTT = (L.dTT*L.c+htt)/ (L.c+hc); L.m,L.d = val_(L.dTT,ttN_,1); L.r += hr  # not sure if we need to normalize the r here?
         if N.typ < 3:  # L | C | Nt, merge?
             for _n,n in product(_N.N_,N.N_): dn_ += [comp_N(_n,n,r,c, rL=L)]  # CN L.nt, rL spec in comp.N
         else:  # CN
@@ -284,11 +286,11 @@ def cluster_(Ft, _N_, r, c):
                 L.Nt,L.Bt = CF(),CF()
             # merge roots
 
+    for n in _N_:  # update Rt for get_exemplars
+        if n.rim: n.Rt = sum2F(n.rim); n.Rt.root = n
     E_ = get_exemplars(_N_,r,c)
     _C_= []; N_= copy(Ft.N_); _r = r+1  # revert if 0 clusters?
-    for n in N_:
-        n.root_, n._root_ = [],[]
-        if n.rim: n.Rt = sum2F(n.rim); n.Rt.root = n
+    for n in _N_: n.root_, n._root_ = [],[]
     for N in E_: 
         C = sum2F([N], Ft, m_=[1],d_=[0])
         N._root_+= [[C,1,0]]  # self (C,m,d)
@@ -300,18 +302,11 @@ def cluster_(Ft, _N_, r, c):
         for _C in _C_:  # C.m,d /rTT? sort / sum(_C.m_)?
             N__,n_,m_,d_,M,D,T,R,dTT,up = [],[],[],[],0,0,0,0, np.zeros((2,9)),0  # /C
             for n in _C.N_+_C._N_:  # current + frontier
-                if n not in N_: N_+=[n]; n.root_,n._root_ = [],[]; n.Rt = sum2F(n.rim); n.Rt.root = n
-                dtt,_ = base_comp(_C,n.Rt)  # or comp_N, decay?
+                if n not in N_: N_+=[n]; n.root_,n._root_ = [],[]
+                dtt,_ = base_comp(_C,n)  # or comp_N, decay?
                 m,d = val_(dtt,ttcC,1); dTT+=dtt
-                '''
-                lm= lc= lr= 0  # lateral connectivity term                
-                for l in n.rim:
-                    if l.N_[0] in n_ or l.N_[1] in n_:  # connected to existing N?
-                        vt = nt_vt(*l.N_)
-                        lm+=vt[0]; lr+=vt[2]; lc+=vt[3]  
-                if (m+lm)*(lc or 1) > ave * (cr + lr):
-                '''
                 if m > ave * cr:
+                    # pending review: refine by rim is redundant?
                     span = np.sqrt(len(n_))  # approx span
                     if span > 3:  # refine by rim connectivity / norm span
                         iM = sum([l.m for l in n.rim if (l.N_[0] if l.N_[1] is n else l.N_[1]) in n_])
@@ -523,10 +518,10 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
             _C.olp = sum(rt[1] for n in _C.N_ for rt in getattr(n, 'root_', []) if rt[0] is not _C and rt[1] > _C.m)
             if _C.m * wcP > ave * (_C.r + _C.olp + ccP):  # prune
                 _C_ += [_C]; i_ += [i]  # also after merge and converge
-        md__ = md__[:,i_]
+        md__ = md__[:,i_]; _md__ = md__
         if not _C_ or (conv and (not removed) and len(_C_)==Lc):  # skip if all _C_ failed the  c.m*wcP > ave*c.r*ccP eval above
             break
-        _md__ = md__; cnt += 1
+        cnt += 1
     out_ = []
     for N in N_: N.root_ = []  # replace with out_ Cs:
     for i, _C in enumerate(_C_):
@@ -651,7 +646,8 @@ def comb_Ft(Nt, Lt, Bt, root,wTT):  # from sum2G, default Nt
         if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0] *wN > ave*(cN * np.mean([L.r for L in pL_])):
             for L in pL_: L_ += [comp_N(*L.N_, G.r,L.c,1, L.angl[0], L.span)]
             sum2F(L_,Lt); add2F(G, Lt, merge=2)
-    else: L_ = [l for n in G.N_ for l in n.L_]; G.L_=L_  # no sum2F?
+        G.Lt = Lt
+    else: L_ = [l for n in G.N_ for l in n.L_]; G.Lt = sum2F(L_, root=G, nF='Lt')
     if L_:
         angl = np.zeros(2)  # in all Gs or Ts only?
         for l in L_: angl += l.angl[0]
