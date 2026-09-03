@@ -90,10 +90,10 @@ def cross_comp(root, N_, rr,nF='Nt'):  # agg+: refine by CC,exe -> cross_comp, n
         root.Lt.N_=L_; root.Lt.dTT=TT; root.Lt.c=c; root.Lt.r=r; root.Lt.m,root.Lt.d=val_(TT,ttX,fd=1)
         oF_[CoF.get().nF].V_ += [V]  # +-/ comp
         if gv_(val_(TT,ttcN) * (c*wcN /(r*ccN)) * ((len(L_)-1)*wL) - ave):  # return +ve, store -ve gate Vs、
-            Ft = cluster_(getattr(root,nF,),list(set([n for L in L_ for n in L.N_])),r,c)  # sum2G-> agg+
+            Ft = cluster_(getattr(root,nF),list(set([n for L in L_ for n in L.N_])),r,c)  # sum2G-> agg+
             L = len(getattr(root, nF).N_)
             if Ft and gv_(val_(TT,ttX) * (c*wX /(r*cX)) * ((L-1)*wL) - ave):
-                cross_comp(root, root.Nt.N_, root.r,nF=nF)
+                cross_comp(root, getattr(root,nF).N_, root.r,nF=nF)
                 
 
 def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_comp, max dist depends on prior match
@@ -333,7 +333,7 @@ def cluster_(Ft, _N_, r, c):
             for n in N_: n._root_ = n.root_
             for n in set([_n for _C in _C_ for _n in _C.N_ + _C._N_]): n.root_ = []
             _C_ = C_
-        else: out_ = merged if (merged:= out_ +C_) else _C_; break  # converged
+        else: out_ = merged if (merged:= out_ +C_) else _C_; break  # converged or diverged (when out_ + C_ is empty)
     if out_:
         G_ = []
         for C in out_:  # sum C.N_'s rim into Lt and Bt in the final step
@@ -645,9 +645,8 @@ def comb_Ft(Nt, Lt, Bt, root,wTT):  # from sum2G, default Nt
         Link_ =Lt.N_; L_,pL_ = [],[]; [L_.append(L) if L.typ==1 else pL_.append(L) for L in Link_]
         if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0] *wN > ave*(cN * np.mean([L.r for L in pL_])):
             for L in pL_: L_ += [comp_N(*L.N_, G.r,L.c,1, L.angl[0], L.span)]
-            sum2F(L_,Lt); add2F(G, Lt, merge=2)
-        G.Lt = Lt
-    else: L_ = [l for n in G.N_ for l in n.L_]; G.Lt = sum2F(L_, root=G, nF='Lt')
+            sum2F(L_,Lt); add2F(G, Lt, merge=2); Lt.N_ = L_
+    elif (L_ := [l for n in G.N_ for l in n.L_]): G.Lt = sum2F(L_, root=G, nF='Lt')  # reassign if Lt is empty
     if L_:
         angl = np.zeros(2)  # in all Gs or Ts only?
         for l in L_: angl += l.angl[0]
