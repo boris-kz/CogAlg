@@ -157,7 +157,6 @@ def build(func, node):  # AST → CoF | (type,sub_) | ast_leaf | None
     if sub_:
         sub_,fc_= zip(*sub_); return (type(node), sub_, node), sum(fc_)+costs.get(type(node), 0)
     if type(node) in costs: return node, costs.get(type(node),0)
-    if isinstance(node, ast.stmt): return node, 0  # keep childless statement (not in costs) for rebuild purpose
 
 def F_body_():  # form function body by AST tracing
 
@@ -177,16 +176,17 @@ def parse_funcs(paths):
 
 def clust_oF_():  # simplified oF rim-mediated centroid clustering
 
-    global oF_;  F_ = [F for F in oF_ if F or F.typ==0]  # uncalled Fs, don't cluster, pack in _F_ if the loop is not representative? (F.typ==0 to include the prior split new oFs)
+    global oF_;  F_ = [F for F in oF_ if F]  # uncalled Fs, don't cluster, pack in _F_ if the loop is not representative?
     for F in F_: F.rim = []; F.w = 0; F.root_ = []
     for _F, F in combinations(F_,2):  # w = relative compression: shared / min cost, ave-commensurate
-        if (w := comp_body(_F.body, F.body)) > ave * min(_F.fc, F.fc):
+        if (w := comp_body(_F.body, F.body) / min(_F.fc, F.fc)) > ave:
             _F.rim += [(F,w)]; F.rim += [(_F,w)]; _F.w += w; F.w += w
     FC_,_F_ = [],[]
-    for F in F_:  # pending review: F.w is summed from all rim
+    w_ = [sum([w * F.w / (F.w+_F.w) for _F, w in F.rim]) for F in F_]  # need to review
+    for F,w in zip(F_,w_):
+        F.w = w
         if F.w > ave:
-            N_ = [F]+[f for f,_ in F.rim]; fc=sum(N.fc for N in N_)  # fc is sum of N_'s fc? But then min(C.fc, F.fc) is always F.fc
-            C = CoF(N_= N_, L_= [0 for _ in F_],fc=fc); C.fin=0  # L_: dense prior w_, aligned with F_ in all Ts
+            C = CoF(N_= [F]+[f for f,_ in F.rim], L_= [0 for _ in F_]); C.fin=0  # L_: dense prior w_, aligned with F_ in all Ts
             form_body(C); FC_ += [C]  # function clusters
     _w__ = [[0 for f in F_] for t in FC_]
     while True:  # refine Ts
@@ -194,32 +194,35 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
         for i,C in enumerate(FC_):  # first pass to compute w and assign F's root_
             if C.fin: continue
             for j,F in enumerate(C.N_):  # rim-local candidates: members prune, never join
-                w = (comp_body(C.body, F.body) if F.body else 0)
+                w = (comp_body(C.body, F.body) / min(C.fc, F.fc) if F else 0)
                 F.root_ += [C]; w__[i][j] = w
         for i,C in enumerate(FC_):  # second pass
             if C.fin: continue
-            N_,w_ = [],w__[i]
+            N_,w_ = [],[]
             for j,F in enumerate(C.N_):  # rim-local candidates: members prune, never join
-                w = w_[j]
+                w = w__[i][j]
                 if F.root_:
-                    r = sum([w__[FC_.index(r)][r.N_.index(F)] for r in F.root_ if r in FC_ and r is not C and r.w >w])/(w or eps)  # sum of stronger roots' w/w
-                    F.r += r; C.r += r
-                    Dv += abs(w -_w__[i][j]) - (ave+r) * F.fc
-                if w>(ave+r)*F.fc: N_ += [F]  # pending review: w > (ave +redundancy) * func cost?
-                else:              F.root_.remove(C)
+                    rw_ = [w__[FC_.index(r)][r.N_.index(F)] for r in F.root_ if r is not C]; sr_,wr_ = [.5],[]  # self
+                    for rw in rw_:
+                        if rw > w: sr_ = [rw]  # stronger or weaker alt root
+                        else: wr_ += [rw]
+                    r = np.mean(wr_)/np.mean(sr_)
+                    F.r = r; C.r += r
+                    Dv += abs(w -_w__[i][j]) - ave*F.r
+                    w *= r; w__[i][j] = w
+                if w>ave: N_ += [F]; w_ += [w]
+                else:     F.root_.remove(C)
             C.N_ = N_; C.L_ = w_
             if w_: C.w = np.mean(w_)
-            if sum(w_) > (ave+C.r)*C.fc: form_body(C)  # rebuild from remaining members, refine
-            else:                        C.fin = 1  # converged | weak, filtered below
+            if sum(w_) > ave*C.r: form_body(C)  # rebuild from remaining members, refine
+            else: C.fin = 1  # converged | weak, filtered below
         if Dv > 0:  _w__ = w__
         else: break
     _C_ = [C for  C in FC_ if C.w > ave]  # not only converged?
     _F_ = [F for F in oF_ if F not in (_F for C in _C_ for _F in C.N_)]; out_ = []  # recycle singletons
     for i,F in enumerate(_F_ + _C_):
         F.nF=i
-        if F not in oF_:
-            # pending review: cluster's typ is concatenated from N_'s typ? Or determine it from their body?
-            F.fdef = get_fdef(F, name=f'oF{i}')   # reinit the fdef: ast node
+        if F not in oF_: F.fdef = get_fdef(F, name=f'oF{i}')   # reinit the fdef: ast node
         out_ += [F]  # rename by index
     return out_
 
@@ -274,7 +277,7 @@ def comp_body(_n, n):  # compare only: compression estimate C; construction in f
         C = -2 * abs(len(_n)-len(n))
         for _t,t in zip(_n,n): C += comp_body(_t,t)
         return C
-    if isinstance(_n,tuple) and isinstance(n,tuple) and _n[0] == n[0]:  # _n[0] and n[0] will never be the same objec,need to use == to check for same type
+    if isinstance(_n,tuple) and isinstance(n,tuple) and _n[0] is n[0]:
         return costs.get(_n[0],0) + comp_body(list(_n[1]), list(n[1]))
     if type(_n) is type(n) and not isinstance(_n,tuple):
         return costs.get(type(n),0)  # leaf
@@ -296,12 +299,12 @@ def form_body(F):
             _fork[1] = (ast.IfExp, *form_forks(_ifnode[1:]))  # recursively form_forks in t1,t2.. of ([f],t,t2...)
             bod_[bod_.index(forks[0])] = tuple(_fork)  # reassign the merged fork
         return bod_  # bod_ is [([f], t),([f], t),...]
-    _body_ = [f.body for f in F.N_]  # pending review: should include the empty oF because those split oF has empty call_
+    _body_ = [f.body for f in F.N_ if f]
     Bod = []
     for i in range(max(len(b) for b in _body_)):
         ibod_ = [([F.N_[j]], body[i]) for j, body in enumerate(_body_) if len(body) > i]  # i's index bodies and their F from all Fs
         if len(ibod_) > 1:
-            form_forks(ibod_)  # ibod_ is [([f],t),([f],t)...]  (form forks even if the ops are exactly the same?)
+            form_forks(ibod_)  # ibod_ is [([f],t),([f],t)...]
             Bod += [(ast.IfExp, *ibod_)]  # in the format of (ast.IfExp, ([f],t)...)
         else:
             Bod += [ibod_[0][1]]  # single body, direct append and no additional fork (their f won't be preserved here?)
@@ -354,37 +357,10 @@ def get_fc(n):
 
 # divisive clustering:
 def split_oF(t, oF):  # pack sub gate from gates
-
-    # from claude, not review yet, to fill the input and output of split oF
-    def split_fdef(sub, t, oF, name):  # sub fdef with a real signature, and its call spliced over t[2] in oF.fdef
-        b_ = {id(x) for x in ast.walk(t[2])}  # the block
-        d_ = {id(x) for f in ast.walk(oF.fdef) if isinstance(f,(ast.FunctionDef,ast.Lambda)) and f is not oF.fdef for x in ast.walk(f)}  # nested defs: separate scopes
-        e_ = [x for x in ast.walk(oF.fdef) if id(x) not in b_|d_]  # oF.fdef outside the block, its own scope only
-        cm = {m.id for x in ast.walk(t[2]) if isinstance(x,(ast.ListComp,ast.SetComp,ast.DictComp,ast.GeneratorExp)) for g in x.generators for m in ast.walk(g.target) if isinstance(m,ast.Name)}  # comprehension scope
-        st = {a.arg for a in e_ if isinstance(a,ast.arg)} | {f.name for f in ast.walk(oF.fdef) if isinstance(f,ast.FunctionDef) and f is not oF.fdef} | {
-              m.id for m in e_ if isinstance(m,ast.Name) and isinstance(m.ctx,ast.Store) and m.lineno < t[2].lineno}  # bound before the block, else unbound at the call site
-        ld = {m.id for m in e_ if isinstance(m,ast.Name) and isinstance(m.ctx,ast.Load)}
-        nm = lambda c: {m.id for m in ast.walk(t[2]) if isinstance(m,ast.Name) and isinstance(m.ctx,c)} - cm
-        o_ = sorted(nm(ast.Store) & ld)             # rebound in the block, still read by oF
-        p_ = sorted((nm(ast.Load) | set(o_)) & st)  # oF locals it reads; the rest are globals, resolved via oF.g
-        fd = get_fdef(sub, name=name)               # deepcopies t[2], so splice after
-        fd.args = ast.arguments(posonlyargs=[], args=[ast.arg(arg=x) for x in p_], vararg=None, kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[])
-        fd.body = [ast.Assign(targets=[ast.Name(x,ast.Store())],value=ast.Constant(None)) for x in o_ if x not in p_] + fd.body \
-                + ([ast.Return(ast.Tuple([ast.Name(x,ast.Load()) for x in o_],ast.Load()))] if o_ else [])  # bind block-born outs, write back the rest
-        c = ast.Call(func=ast.Name(name,ast.Load()), args=[ast.Name(x,ast.Load()) for x in p_], keywords=[])
-        site = ast.Assign(targets=[ast.Tuple([ast.Name(x,ast.Store()) for x in o_],ast.Store())], value=c) if o_ else ast.Expr(c)
-        ast.fix_missing_locations(ast.copy_location(site, t[2]))
-        for x in ast.walk(oF.fdef):  # splice the call over the block: oF.fdef is what inject_oF_ recompiles
-            for f in 'body','orelse','finalbody':
-                if isinstance(b:=getattr(x,f,None),list) and any(y is t[2] for y in b): b[[id(y) for y in b].index(id(t[2]))] = site
-        return ast.fix_missing_locations(fd)
-
     if (isinstance(t,tuple) and t[0] in (ast.If,ast.IfExp) and isinstance(h:=t[1][0],tuple) and isinstance(h[0],tuple) and h[0][0]=='gv_'
-        and not any(isinstance(n, (ast.Break, ast.Continue)) for n in ast.walk(t[2]))  # pending review: skip if block of code contains break or continue, not relevant in new split oF
         and oF.w * sum(get_fc(p) for p in t[1]) > ave):
-        sub = CoF(root=oF, fc=get_fc(t), body=[t], caller_={oF}); oF_.append(sub);
-        sub.fdef = split_fdef(sub, t, oF, f'oF{len(oF_)-1}')  # reform fdef
-        nF_.append(sub.fdef); sub.nF = len(oF_)-1  # pending review: the split oFs have issues on the input and output argument
+        sub = CoF(root=oF, fc=get_fc(t), body=[t], caller_={oF})
+        oF_.append(sub); nF_.append(None); sub.nF = len(oF_)-1
         return sub
     if isinstance(t,tuple) and t[1]:  # return body and split nested node recursively
         return (t[0], tuple(split_oF(s,oF) for s in t[1]),*t[2:])  # t[2] could be prior ast node

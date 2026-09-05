@@ -125,14 +125,14 @@ def frame_blobs_root(image, rV=1, fintra=0):
 def comp_pixel(i__):  # compare all in parallel -> i__, g__, dy__, dx__, s__
     # compute directional derivatives:
     dy__ = (
-            (i__[2:, :-2] - i__[:-2, 2:]) * 0.25 +
-            (i__[2:, 1:-1] - i__[:-2, 1:-1]) * 0.50 +
-            (i__[2:, 2:] - i__[:-2, 2:]) * 0.25
+        (i__[2:, :-2] - i__[:-2, :-2]) * 0.25 +   # BL - TL (Left vertical)
+        (i__[2:, 1:-1] - i__[:-2, 1:-1]) * 0.50 + # B  - T  (Center vertical)
+        (i__[2:, 2:]   - i__[:-2, 2:])   * 0.25   # BR - TR (Right vertical)
     )
     dx__ = (
-            (i__[:-2, 2:] - i__[2:, :-2]) * 0.25 +
-            (i__[1:-1, 2:] - i__[1:-1, :-2]) * 0.50 +
-            (i__[2:, 2:] - i__[:-2, 2:]) * 0.25
+        (i__[:-2, 2:] - i__[:-2, :-2]) * 0.25 +   # TR - TL (Top horizontal)
+        (i__[1:-1, 2:] - i__[1:-1, :-2]) * 0.50 + # R  - L  (Center horizontal)
+        (i__[2:, 2:]   - i__[2:, :-2])   * 0.25   # BR - BL (Bottom horizontal)
     )
     g__ = np.hypot(dy__, dx__)  # compute gradient magnitude, -> separate G because it's not signed, dy,dx cancel out in Dy,Dx
     s__ = ave - g__ > 0  # sign, positive = below-average g
