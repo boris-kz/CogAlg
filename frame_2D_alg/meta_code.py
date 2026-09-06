@@ -91,9 +91,9 @@ def prop_F_(F, attr='N_'):  # factory function to get and update top-composition
 
 class CN(CL):  # full node | graph fork set
     name = "node"
-    N_,L_,B_,X_,rim,H = prop_F_('Nt'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Xt'),prop_F_('Rt'),prop_F_('Nt','H')  # ext|int -defined Ns,Ls
+    N_,L_,B_,C_,X_,rim,H = prop_F_('Nt'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Ct'),prop_F_('Xt'),prop_F_('Rt'),prop_F_('Nt','H')  # ext|int -defined Ns,Ls
     def __init__(n, **kw):
-        n.Nt,n.Bt,n.Lt,n.Xt,n.Rt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Lt','Xt','Rt')))  # CN if nest
+        n.Nt,n.Bt,n.Lt,n.Ct,n.Xt,n.Rt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Lt','Ct','Xt','Rt')))  # CN if nest
         super().__init__(**kw)
         n.mang = kw.get('mang',1) # ave match of angles in L_, =1 in links
         n.box = kw.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn

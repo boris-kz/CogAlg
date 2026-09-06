@@ -87,7 +87,7 @@ def cross_comp(root, G_, m, c, r, nF='Nt'):  # agg+: refine by CC,exe -> cross_c
     C__ = []; M = C = R = 0
     for G in G_:
         if gv_(G.m * ((G.c*wcC) / (G.r*ccC)) * ((len(G.N_)-1)*wL) - ave):
-            if Ct := cluster_C(G.Nt, get_exemplars(G.N_,r,c),r,c):  # refines, splits each G
+            if Ct := cluster_C(G.Nt, get_exemplars(G.N_,r,c),r,c):  # refines, splits connectivity cluster
                 C_, _m,_c,_r = Ct.N_,Ct.m,Ct.c,Ct.r
                 C__ += C_; M+=_m; C+=_c; R+=_r  # splice refined sub_G_s
     if C__:
@@ -101,7 +101,7 @@ def cross_comp(root, G_, m, c, r, nF='Nt'):  # agg+: refine by CC,exe -> cross_c
                 oF_[CoF.get().nF].V_ += [V]  # +-/ comp
                 if gv_(val_(TT,ttcN) * (c*wcN /(r*ccN)) * ((len(L_)-1)*wL) - ave):  # return +ve, store -ve gate Vs
                     e_ = get_exemplars({N for L in L_ for N in L.N_}, r,c)  # +ve Ls only
-                    return cluster_N(getattr(root,nF), e_,r,c)  # sum2G-> agg+
+                    cluster_N(getattr(root,nF), e_,r,c)  # sum2G-> agg+
 
 
 def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_comp, max dist depends on prior match
@@ -159,8 +159,7 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
         for _n,n in product(_N.N_,N.N_):  # breadth first per N_ batch
             dH,dtt,dc,dr = comp_H(_n.Nt,n.Nt, L)
             add_H(L.H,dH,L); htt+=dtt; hc+=dc; hr+=dr
-        # htt is already applied with lc in comp_H
-        if hc: L.dTT = (L.dTT*L.c+htt)/ (L.c+hc); L.m,L.d = val_(L.dTT,ttN_,1); L.r += hr  # not sure if we need to normalize the r here?
+        if hc: L.dTT = (L.dTT*L.c+htt)/ (L.c+hc); L.m,L.d = val_(L.dTT,ttN_,1); L.r += hr
         if N.typ < 3:  # L | C | Nt, merge?
             for _n,n in product(_N.N_,N.N_): dn_ += [comp_N(_n,n,r,c, rL=L)]  # CN L.nt, rL spec in comp.N
         else:  # CN
@@ -439,7 +438,8 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
                     if l.m*wF > ave*(l.r+cF):
                         add2F(_C,C,2); removed += [C]; _C.m,_C.d = val_(_C.dTT,ttcP,fd=1)  # for next-loop base comp
                         for N in C.N_:
-                            for rt in N.root_: rt[0] = _C  # update root from C to _C, for olp computation below
+                            for rt in N.root_:
+                                if rt[0] is C: rt[0] = _C  # update root from C to _C, for olp computation below
         _C_ = []; i_ = []  # for next loop
         for i, _C in enumerate(C_):
             if _C in removed: continue
