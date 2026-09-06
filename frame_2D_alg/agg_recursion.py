@@ -88,6 +88,7 @@ def cross_comp(root, G_, m, c, r, nF='Nt'):  # agg+: refine by CC,exe -> cross_c
     for G in G_:
         if gv_(G.m * ((G.c*wcC) / (G.r*ccC)) * ((len(G.N_)-1)*wL) - ave):
             if Ct := cluster_C(G.Nt, get_exemplars(G.N_,r,c),r,c):  # refines, splits connectivity cluster
+                G.Ct = Ct; Ct.root = G    
                 C_, _m,_c,_r = Ct.N_,Ct.m,Ct.c,Ct.r
                 C__ += C_; M+=_m; C+=_c; R+=_r  # splice refined sub_G_s
     if C__:
@@ -96,6 +97,9 @@ def cross_comp(root, G_, m, c, r, nF='Nt'):  # agg+: refine by CC,exe -> cross_c
             root.H += [Copy_(root)]  # lower agg lev
             if Lt := comp_N_( proj_L_(combinations([F2N(C) for C in C__],2), root,R), R):
                 L_, TT, c, r, V = Lt
+                # include Ct here? The prior section in proj_N use Ct.Lt for projection?
+                # if hasattr(N.Ct,'Lt') and N.Ct.Lt:
+                #     for L in N.Ct.Lt.N_: proj_TT(L,cos_d,dist,L.r+_r,iTT,wTT,dec); c+=L.c
                 if nF == "Nt":  # optional for Nt only?
                     root.Lt.N_=L_; root.Lt.dTT=TT; root.Lt.c=c; root.Lt.r=r; root.Lt.m,root.Lt.d=val_(TT,ttX,fd=1)
                 oF_[CoF.get().nF].V_ += [V]  # +-/ comp
@@ -119,7 +123,8 @@ def comp_N_(pL_, r, tnF=None, root=2, fall=0):  # incremental-distance cross_com
                 for n in N.N_:
                     for rt in n.root_:  # [C,m,d]
                         if rt[0] is N: rt[0] = _N  # keep m,d positions
-                N.rim.remove(Link); Link.N_ = [_N,_N]  # replaces the merged N
+                if Link in N.rim: N.rim.remove(Link)  # when full = 0, rim doesn't pack Link now
+                Link.N_ = [_N,_N]  # replaces the merged N
                 for pt in pL_[i+1:]:  # dist, dy_dx, _N,N, lc,lr, pTT,m,d  (replaces in pL_)
                     if pt[2] is N: pt[2] = _N
                     elif pt[3] is N: pt[3] = _N
@@ -163,13 +168,14 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
         if N.typ < 3:  # L | C | Nt, merge?
             for _n,n in product(_N.N_,N.N_): dn_ += [comp_N(_n,n,r,c, rL=L)]  # CN L.nt, rL spec in comp.N
         else:  # CN
-            for i,(_Ft,Ft, tnF) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt),(N.Nt,N.Lt,N.Bt),('Nt','Lt','Bt'))):
+            for i,(_Ft,Ft, tnF) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct),('Nt','Lt','Bt','Ct'))):
                 if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1  # unique Nt,Lt, rL spec in comp_F
         if dn_:
             [add_H(L.H, d.H, L) for d in dn_ if d.H]  # lower levs
             L.H += [sum2F(dn_,L)]  # top lev
         # merge if no or weak Bt?
-    for n, _n in (_N,N),(N,_N): n.rim += [L]
+    if full: 
+        for n, _n in (_N,N),(N,_N): n.rim += [L]
     FV_(CoF.get(), L.dTT, L.c, L.r)
     # or merge N -> _N?
     return L
@@ -290,7 +296,7 @@ def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace
                             if rt0 and rt1 and rt0 != rt1:
                                 if rt1.H: add_H(rt0.H, rt1.H, rt0, fN=1)
                                 rt0.N_ += rt1.N_; add_Nt(rt0)  # recompute Nt attrs / G
-                L.Nt,L.Bt = CF(),CF()
+                L.Nt,L.Bt, L.Ct = CF(),CF(),CF()
             # merge roots
     for N in _N_:
         N.fin =0; N.exe=1; N.Rt = sum2F(N.rim);N.Rt.root = N  # only if N was added in trans-cluster?
@@ -335,6 +341,12 @@ def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace
                 rG.H += [Copy_(Ft)]  # add H only for Nt?
                 rG.dTT=TT; rG.c=C; rG.r=R; rG.m, rG.d = val_(TT, ttcC,fd=1)
             Ft.N_ = G_; Ft.dTT=TT; Ft.c=C; Ft.r=R; Ft.m, Ft.d = val_(TT,ttcC,fd=1)
+            # combine C_:  This is redundant now since root.Ct will be assigned in cross_comp?
+            # C_ = [C for N in (G_ if G_ else _N_) for C in N.Ct.N_]
+            # if C_:
+            #     sum2F(C_, root=Ft.root.Ct)  # Ct.r includes overlap?
+            #     L_ = [L for C in C_ for L in C.L_]  # C-to-N links
+            #     if L_: Ft.root.Ct.Lt = sum2F(L_,root=Ft.root.Ct)      
     if G_: FV_(CoF.get(), *sum_vt(G_)[:-1],_r)
     return G_,_r
 
@@ -394,14 +406,15 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
                         m,d = nt_vt(*L.N_)
                         if m > ave * _r:  L_ += [L]
                         elif d > avd * _r: B_ += [L]
-                ft_ = [[C.N_,'Nt',C.dTT, C.c, C.r]]
-                for i,(F_,nF) in enumerate(zip((L_,B_),('Lt','Bt'))):
-                    F_ = list(set(F_)) or []; tt,fc,fr = sum_vt(F_,wTT=ttcC) if F_ else (np.zeros((2,9)),0,0)
-                    ft_+= [[F_,nF,tt,fc,fr]]
-                G = sum2G(ft_, ttcC, root=Ft); G_ += [G]
-            if Ft.nF == 'Nt': Ft.root.H += [Copy_(Ft)]
-            else:             Ft.H += [Copy_(Ft)]  # for Bt?
-            return sum2F(G_, Ft.root, nF=Ft.nF)
+                Ft_ = []
+                for i,(F_,nF) in enumerate(zip((out.N_, L_,B_),('Nt','Lt','Bt'))):  # or convert C into Nt?
+                    if F_: 
+                        tt,c,r = sum_vt(F_,wTT=ttcC)
+                        Ft_ += [CF(N_=F_,nF=nF,dTT=tt,m=(vt:=val_(tt,wTT,1))[0],d=vt[1],c=c,r=r)]
+                    else: Ft_ += [CF()]
+                G = comb_Ft(*Ft_, Ft, wTT=ttcC); G_ += [G]
+            Ct = sum2F(G_, Ft.root, nF='Ct')
+            return Ct
 
 def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
 
@@ -527,6 +540,7 @@ def add2F(F, n, merge=0):  # unpack for batching in sum2F
     if merge <2:
         F.N_ += (n.N_ if merge else [n])
     if hasattr(F,'H') and getattr(n,'H',None): add_H(F.H, n.H, F)
+    if hasattr(n,'C_'): F.C_ = getattr(F,'C_',[]) + n.C_  # same for L_?
     return F
 
 def add_H(H,h, root, fN=0):
@@ -544,12 +558,15 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
     for ft, nF in zip_longest(ft_,('Nt','Lt','Bt')):
         if ft: n_,_,tt,c,r = ft; Ft_+= [CF(N_=n_,nF=nF,dTT=tt,m=(vt:=val_(tt,wTT,1))[0],d=vt[1],c=c,r=r)]
         else:  Ft_ += [CF()]
+    # no C splicing now since C fork is run in the sub+ below?
+    # C_= [c for N in ft_[0][0] for c in N.C_]  # splice centroids
+    # Ft_ += [sum2F(list(set(C_)), root.Ct) if C_ else CF()]  # add multiple root_ in Cs?
     G = comb_Ft(*Ft_, root, wTT=fTT)
     N_ = G.N_; N=N_[0]; G.sub = N.sub+1 if G.L_ else N.sub; r=G.r; Av=ave+avd
     if G.Lt:  # sub+
         Lt = G.Lt; L_,lm,lc,lr = Lt.N_,Lt.m,Lt.c,Lt.r  # no levR = 1/len(L_): represented by c
         if gv_(lm*lc*wX - Av* (lr+1+cX)):  # mdecay(L_)-decay?
-            cross_comp(G, N_,lm,lc,lr, 'Nt')  # sub+, cross_comp  (must be Nt here even root is Bt?)
+            cross_comp(G, N_,lm,lc,lr, 'Nt')  # sub+, cross_comp
     if G.Bt:
         Bt = G.Bt; bd,bc,br = Bt.d,Bt.c,Bt.r; rroot = root.root if root.root else 0
         if N.typ!=1 and gv_(bd*bc*wX - Av*(br+1+cX)):  # no ddfork, eval len?
@@ -604,7 +621,7 @@ def F2N(F):  # convert for cross_comp
     if F.typ==0 and not hasattr(F, 'kern'):  # CF | PP, no overlap for Cs (only CF)
         Na_.update(kern=np.zeros(4), span=1, angl=None, yx=np.zeros(2))
     for k,v in Na_.items(): setattr(F, k, copy(v))
-    [setattr(F, ft, CF(root=F)) for ft in ('Lt','Bt','Xt','Rt') if not getattr(F, ft, None)]
+    [setattr(F, ft, CF(root=F)) for ft in ('Lt','Ct','Bt','Xt','Rt') if not getattr(F, ft, None)]
     if L_: F.H += [sum2F(L_, F)]
     return F
 
@@ -622,7 +639,7 @@ def Copy_(N, root=None, r=1, cls=None, init=0, typ=None, froot=0):
             C.yx=[N.yx]; C.angl=[copy(N.angl[0]), N.angl[1]] if N.angl is not None else None
             C.L_=[l for l in N.rim if l.m>ave]; N.root=C; C.fin=0; C.N_=[N]
         else:
-            for f in ('Nt','Lt','Bt','Xt','Rt'): setattr(C, f, Copy_(getattr(N,f), root=C))
+            for f in ('Nt','Lt','Bt','Ct','Xt','Rt'): setattr(C, f, Copy_(getattr(N,f), root=C))
             C.H = [Copy_(lev, root=C) for lev in N.H]
             C.angl=deepcopy(N.angl); C.yx=copy(N.yx); C.box=copy(N.box); C.mang=N.mang; C.exe=N.exe; C.root_=list(N.root_)
     if froot:
