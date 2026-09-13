@@ -484,3 +484,35 @@ if (L := len(g_)) > 1:
                 for G in g_: G.fin = 0
                 cluster_N(Ft, e_, lr, lc)
 '''
+def cross_comp(root, G_, m, c, r, nF='Nt'):  # agg+: refine by CC,exe -> cross_comp, nF: core|contour?
+
+    def xcomp(Ft, N_,pairs, M,C,R):  # core
+        if gv_((m+M) * (c*(C+wN_) / (r*(R+cN_))) * ((len(N_)-1)*wL) - ave):
+            if Lt := comp_N_(proj_L_(pairs,root,R),R):
+                L_,TT,lc,lr,V = Lt; oF_[CoF.get().nF].V_ += [V]
+                if gv_(val_(TT,ttcN) * (lc*wcN /(lr*ccN)) * ((len(L_)-1)*wL) - ave):
+                    N_ = {N for L in L_ for N in L.N_}
+                    for N in N_: N.fin = 0; N.Rt = sum2F(N.rim,root=N,nF='Rt')
+                    return cluster_N(Ft, get_exemplars(N_,lr,lc), lr,lc), L_
+    M = C = R = 0
+    C__,g_= [],[]
+    for G in G_:  # or already pruned?
+        if gv_(G.m * ((G.c*wcC)/(G.r*ccC)) * ((len(G.N_)-1)*wL) - ave) and (Ct:= cluster_C(G.Nt, get_exemplars(G.N_,r,c),r,c)):
+            C__+= Ct.N_; M+=Ct.m; C+=Ct.c; R+=Ct.r  # centroids / root
+        else: g_ += [G]  # no Cs, or eval rdn?
+    G_,L_ = [],[]
+    ft = getattr(root,nF); Ft = CF(nF=nF, root=root,wTT=root.wTT, H=copy(ft.H)+[Copy_(ft)])
+    if med_ := list(dict.fromkeys(C.N_[np.argmax(C.m_)] for C in C__)):
+        if pairs := [(_N,N) for _N,N in combinations(med_,2) if not any(_N in L.N_ and N in L.N_ for L in _N.rim)]:
+            if GL_:= xcomp(Ft, list(dict.fromkeys(N for P in pairs for N in P)), pairs, M,C, R/len(med_)):
+                G_,L_ = GL_
+                for G in G_: G.H+=[[]]  # medoids: top lev is unpacked
+    if len(g_) > 1:
+        TT,C,R = sum_vt(g_)
+        if GL_:= xcomp(Ft,g_, [(_N,N) for _N,N in combinations(g_,2)], val_(TT,ttX),C,R): G_ += GL_[0]; L_ += GL_[1]
+    if G_:  # combine mG_ and gG_
+        if nF=="Nt": TT,lc,lr = sum_vt(L_); root.Lt = Lt = CF(N_=L_,dTT=TT,c=lc,r=lr,nF="Lt",root=root,wTT=root.wTT); Lt.m,Lt.d = val_(TT,ttX,fd=1)
+        Ft.N_ = G_; Ft.dTT,Ft.c,Ft.r = sum_vt(G_); Ft.m,Ft.d = val_(Ft.dTT,ttX,fd=1)
+        setattr(root,nF,Ft)
+        root.dTT,root.c,root.r = sum_vt([root.Nt,root.Lt,root.Bt]); root.m,root.d = val_(root.dTT,root.wTT,fd=1)
+
