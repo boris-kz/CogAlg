@@ -516,3 +516,228 @@ def cross_comp(root, G_, m, c, r, nF='Nt'):  # agg+: refine by CC,exe -> cross_c
         setattr(root,nF,Ft)
         root.dTT,root.c,root.r = sum_vt([root.Nt,root.Lt,root.Bt]); root.m,root.d = val_(root.dTT,root.wTT,fd=1)
 
+def cluster_(Ft, E_,_r,_c):  # draft: form parallel overlapping CCs and CNs
+
+    def reform(T):  # temporary cluster summary
+        N_ = T.N_; c_ = np.array([n.c for n in N_]); c = c_.sum(); w_ = c_/c
+        T._r = _r + sum(n.r*w for n,w in zip(N_,w_))
+        if T.fC:
+            T.c=c; T.w = c_ @ np.array(T.m_) / c  # membership value, separate from centroid data
+            w_ = c_*T.m_; w_ /= w_.sum()
+        for a in ('dTT','kern','yx','span','m','d'):
+            setattr(T,a, sum(getattr(n,a)*w for n,w in zip(N_,w_)))
+        if not T.fC: T.dTT,T.c,r = sum_vt(N_+T.L_+T.B_); T._r = _r+r; T.m,T.d = val_(T.dTT,ttcN,1); T.w=T.m
+        A_ = [n.angl[0] for n in N_ if n.angl is not None]
+        T.angl = [sum(A_), np.sign(T.dTT[1] @ ttcC[1])] if A_ else None
+        T.r= T._r+T.olp
+    def overlap(T_):  # not reviewed
+        for T in T_:
+            m_ = dict(zip(T.N_,T.m_)); M = sum(max(m,0)*n.c for n,m in m_.items()); O = 0
+            if not T.fC: M += sum(max(L.m,0)*L.c for L in T.L_)  # distinct relational value
+            for _T in T_:
+                if _T is T: continue
+                for _n,_m,n,m in zip(_T.N_,_T.m_,_T.N_,T.m_):
+                    if n in n_: O += max(min(_m,m),0) * n.c  # no negative olp
+            T.olp = O/(M or eps); T.r = T._r+T.olp
+    T_ = []
+    for E in sorted(E_, key=lambda E: (-E.w,E.id)):
+        T = CL(N_=[E],root=Ft, **{a:copy(getattr(E,a)) for a in ('dTT','m','d','c','r','kern','yx','span','angl')})
+        if fC:=T.d>ave: T.typ = 2; T.nF ='Ct'
+        else:           T.typ = 3; T.nF ='Nt'
+        T.fC=fC; T._r=T.r+_r; T.r=T._r; T.wTT=Ft.wTT; T.m_,T.d_,T.B_,T.olp = [E.m],[E.d],[],0; T_ += [T]
+
+    while T_:  # expanding CNs and CCs
+        Up,change = 0,False; r_ = {T:T.r for T in T_}
+        for T in copy(T_):  # explore T frontier
+            in_ = set(T.N_); rim_ = set(L for n in T.N_ for L in n.rim); L_,B_ = [],[]
+            if T.fC:
+                n_,m_,d_ = [],[],[]
+                for n in set(T.N_+[n for L in rim_ for n in L.N_]):  # internal + frontier
+                    m,d = val_(base_comp(T,n)[0],ttcC,1)
+                    if m*n.c*wcC > ave*(T.r+n.r+ccC): n_+=[n]; m_+=[m]; d_+=[d]  # conditional inclusion of potential members into C now?
+                old = dict(zip(T.N_,zip(T.m_,T.d_))); new = dict(zip(n_,zip(m_,d_)))
+                Up += sum(abs(new.get(n,(0,0))[0]-old.get(n,(0,0))[0]) +
+                          abs(new.get(n,(0,0))[1]-old.get(n,(0,0))[1]) for n in old.keys() | new.keys())  # up = new - old, if old not exists, up = new - 0
+            else:
+                n_,L_,B_ = list(T.N_),list(T.L_),list(T.B_)
+                for L in rim_:
+                    m,d = nt_vt(*L.N_)
+                    if m > ave*(T.r-1):
+                        n = L.N_[0] if L.N_[1] in in_ else L.N_[1]
+                        if n not in in_:
+                            if (span:= np.sqrt(len(in_))) > 3:
+                                iM = sum(l.m for l in n.rim if any(_n in in_ for _n in l.N_))
+                                if iM/(span*decay) < ave*(T.r-1): continue
+                            n_ += [n]
+                        L_ += [L]
+                    elif d > avd*(T.r-1): B_ += [L]
+                n_,L_,B_ = [list(dict.fromkeys(F_)) for F_ in (n_,L_,B_)]
+                m_,d_ = [n.m for n in n_],[n.d for n in n_]
+            change |= set(n_) != in_
+            if n_: T.N_,T.m_,T.d_,T.L_,T.B_ = n_,m_,d_,L_,B_
+            else:  T_.remove(T)
+
+        for T in copy(T_):  # merge intersecting CNs; CC overlap remains alternative membership (or use the previous fin?)
+            if not T.fC:
+                for _T in copy(T_):
+                    if _T is not T and not _T.fC and set(T.N_) & set(_T.N_):
+                        for a in ('N_','L_','B_'): setattr(T,a,list(dict.fromkeys(getattr(T,a)+getattr(_T,a))))
+                        T_.remove(_T); change=True
+                T.m_,T.d_ = [n.m for n in T.N_],[n.d for n in T.N_]
+                T.B_ = [L for L in T.B_ if len(set(L.N_) & set(T.N_)) == 1]
+            reform(T)
+        overlap(T_)
+        for T in copy(T_):
+            w,c = (wcC,ccC) if T.fC else (wcN,ccN)
+            if T.w*T.c*w*((len(T.N_)-1)*wL) < ave*T.r*c: T_.remove(T); change = True
+        dr = sum(abs(T.r-r_[T]) for T in T_)
+        if not change and dr <= ave and Up*wcC <= avd*(_r+ccC*len(T_)):
+            break
+    C_ = [T for T in T_ if T.fC]; Ct = CF(N_=C_,nF='Ct',root=Ft.root,wTT=Ft.wTT); med_=[]  # caller installs Ct and schedules sub+/agg+.
+    for C in C_:
+        C.root = Ct
+        C.m_,C.d_ = map(list,zip(*(val_(base_comp(C,n)[0],ttcC,1) for n in C.N_)))
+        for n,m,d in zip(C.N_,C.m_,C.d_): n.root_ += [[C,m,d]]
+        med_ += [C.N_[np.argmax(C.m_)]]
+    if C_: Ct.dTT,Ct.c,Ct.r = sum_vt(C_); Ct.m,Ct.d = val_(Ct.dTT,ttcC,1)
+    G_ = []
+    for T in T_:
+        if T.fC: continue
+        Ft_ = []; c_ = list(set(C for n in T.N_ for C in n.C_));
+        for N_, nF in zip((T.N_,T.L_,T.B_, c_),('Nt','Lt','Bt','Ct')):
+            ft = CF(N_=N_,nF=nF)
+            if N_:
+                ft.dTT,ft.c,ft.r = sum_vt(N_);ft.m,ft.d = val_(ft.dTT,ttcN,1)
+                ft.r += _r+T.olp  # preserve cost through later fork recomputation (why we need sum olp to ft?)
+            Ft_ += [ft]
+        G = comb_Ft(*Ft_,Ft,wTT=ttcN)  # composition / CN
+        G.olp=T.olp; G_ += [G]
+    # alt composition for cross-comp:
+    return G_, Ct, list(dict.fromkeys(med_))
+
+def cluster_N(Ft, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace iL_ with E_?
+
+    def trans_cluster(G):
+        for L in G.L_:
+            for lev in L.H[1:]:  # L.H[0] is direct ders
+                for tFt in lev.N_:  # Lt doesn't form trans-links
+                    for tL in tFt.N_:
+                        if tL.m*wcN > ave*ccN:  # merge trans_link.N_.roots
+                            rt0 = getattr(tL.N_[0].root,'root',None); rt1 = getattr(tL.N_[1].root,'root',None)  # CNs
+                            if rt0 and rt1 and rt0 != rt1:
+                                if rt1.H: add_H(rt0.H, rt1.H, rt0, fN=1)
+                                rt0.N_ += rt1.N_; add_Nt(rt0)  # recompute Nt attrs / G
+                L.Nt,L.Bt, L.Ct = CF(),CF(),CF()
+            # merge roots
+    G_, Gt_, in_ = [],[],set()  # root attrs, add prelink pL_,pN_? include merged Cs, in feature space for Cs
+    for N in _N_:  # form G per remaining N
+        if N.fin or (Ft.root.root and not N.exe): continue  # no exemplars in Fg
+        N_ = [N]; L_,B_ = [],[]; N.fin=1  # init G
+        __L_= N.rim  # spliced rim
+        while __L_:
+            _L_ = []
+            for L in set(__L_) - in_:  # flood-fill via frontier links
+                _N = L.N_[0] if L.N_[1].fin else L.N_[1]; in_.add(L)
+                if not _N.fin:
+                    m,d = nt_vt(*L.N_)
+                    if m > ave * (_r-1):  # cluster nt, L,C_ by combined rim density, add gv_?
+                        span = np.sqrt(len(N_))  # approx span
+                        if span > 3:  # refine by rim connectivity / norm span
+                            iM = sum([L.m for L in _N.rim if (L.N_[0] if L.N_[1] is _N else L.N_[1]) in N_])
+                            if iM / (span*decay) < ave * (_r-1): continue  # normalized N-to-N_ match, sum for sum2G?
+                        N_ += [_N]; L_ += [L]; _N.fin = 1
+                        _L_+= [l for l in _N.rim if l not in in_ and (l.N_[0].fin ^ l.N_[1].fin)]   # new frontier links, +|-?
+                    elif d > avd * (_r-1): B_ += [L]  # contrast value, exclusive?
+            __L_ = list(set(_L_))
+        if N_:
+            ft_ = []
+            for i,(F_,nF) in enumerate(zip((N_,L_,B_),('Nt','Lt','Bt'))):
+                F_ = list(set(F_)) or []; tt,fc,fr = sum_vt(F_,wTT=ttcN) if F_ else (np.zeros((2,9)),0,0)
+                ft_+= [[F_,nF,tt,fc,fr]]
+            (_,_,nt,nc,nr),(_,_,lt,lc,lr),(_,_,bt,bc,br) = ft_
+            c = nc + lc + bc
+            r = (nr*nc + lr*lc + br*bc) /c  # br includes overlap?
+            tt= (nt*nc + lt*lc + bt*bc) /c  # tentative
+            if gv_(val_(tt*Ft.root.wTT*ttcN) * (c*wcN /(r*ccN)) * ((len(N_)-1)*wL) - ave):  # apply Fw_ and Fc_ in every eval_?
+                G_ += [sum2G(ft_,ttcN, Ft)]; Gt_+= [[tt,c,r]]  # eval sub+
+    if G_:
+        for G in G_: trans_cluster(G)  # splice trans_links, merge L.N_.roots
+        C = sum([g[1] for g in Gt_]); TT=np.zeros((2,9)); R=0; _r+=1  # + wC?
+        for tt,c,gr in Gt_: w=c/C; TT+=tt*w; R+=gr*w
+        if gv_(val_(TT*Ft.root.wTT*ttcN) * (C*wcN /(_r+R+ccN)) * ((len(G_)-1)*wL) - ave):  # reform root,Nt, no other forks yet:
+            rG = Ft.root
+            if Ft.nF == 'Nt' or Ft.nF == 'Ct':  # concat C_ if Ct is hierarchical, same as Nt it maps to?
+                rG.H += [Copy_(Ft)]  # add H for Nt, also Ct?
+                rG.dTT=TT; rG.c=C; rG.r=R; rG.m, rG.d = val_(TT, ttcC,fd=1)
+            Ft.N_ = G_; Ft.dTT=TT; Ft.c=C; Ft.r=R; Ft.m, Ft.d = val_(TT,ttcC,fd=1)
+    if G_: FV_(CoF.get(), *sum_vt(G_)[:-1],_r)
+    return G_
+
+def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
+
+    N_= copy(Ft.N_); _C_=[]  # revert if 0 clusters?
+    for n in N_: n.root_, n._root_ = [],[]
+    for i,E in enumerate(E_):
+        C = Copy_(E, Ft,init=1,cls=CL)
+        C.N_,C.L_,C.m_,C.d_ = [E],[],[1],[0]
+        E._root_+=[[C,1,0]]  # self (C,m,d)
+        C._N_= list({n for l in E.rim for n in l.N_ if n is not E})  # init w for first loop eval
+        _C_ += [C]
+    out_ = []; r = _r
+    while True:  # reform C_
+        C_, cnt,rdn,DTT,Up = [],0,0,np.zeros((2,9)),0; Ave = ave*(r+ccC); Avd = avd*(r+ccC)   # should be r instead of _r for loop local?
+        for _C in _C_:  # C.m,d /rTT? sort / sum(_C.m_)?
+            N__,n_,m_,d_,M,D,T,R,dTT,up = [],[],[],[],0,0,0,0, np.zeros((2,9)),0  # /C
+            for n in _C.N_+_C._N_:  # current + frontier
+                if n not in N_: N_+=[n]; n.root_,n._root_ = [],[]
+                dtt,_ = base_comp(_C,n)  # or comp_N, decay?
+                m,d = val_(dtt,ttcC,1); dTT+=dtt
+                n_+=[n]; m_+=[m]; d_+=[d]; c=n.c; T+=c; M+=m*c; D+=abs(d)*c; R+=n.r*c  # scale totals only?
+                _root_ = [rt[0] for rt in n._root_]
+                if _C in _root_:
+                    i =_root_.index(_C); up += abs(n._root_[i][1]-m) + abs(n._root_[i][2]-d)
+                else: up += m+abs(d)
+            r = _r + R/T  # loop-local
+            if M * (_C.m+wcC*len(n_)) > Ave * (r+_C.r+ ccC*len(n_)):  # else: Up+= sum(_C._m_)+ sum([abs(d) for d in _C._d_])?
+                N__ += [_n for n in n_ for l in n.rim for _n in l.N_ if _n is not n]  # extend frontier with +|-Ls
+                C = sum2F(n_, Ft,m_,d_,nF='Ct')  # C.N_ = n_
+                C._N_ = list(set(N__) - set(n_))  # new frontier
+                if D < Avd: out_+=[C]  # output if stable
+                else:       C_ += [C]  # reform
+                DTT+=dTT; cnt+=T; rdn+=R; Up+=up
+        r = _r+ rdn/(cnt or eps)
+        L = len(out_+ C_); olp = sum([len(N.root_) for N in N_])  # rdn+=olp, prioritize stronger?
+        if gv_(sum(val_(DTT,fd=1))* (wcP*L) - Ave* (r+olp+ ccP*L)):
+            out_+=C_; out_ = cluster_P(out_, Ft)  # refine all memberships in parallel by global backprop
+            break
+        if Up * (wcC*len(C_)) > Avd * (r+ (ccC*len(C_))):
+            for n in N_: n._root_ = n.root_
+            for n in set([_n for _C in _C_ for _n in _C.N_ + _C._N_]): n.root_ = []
+            _C_ = C_
+        else: out_+=C_; break  # converged
+    if out_:
+        for n in [N for C in out_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals:
+            n.exe = (n.d if n.typ==1 else n.m) + sum(rt[1] for rt in n.root_) > ave
+        _m,_d,_tt,_c,_r = sum_vt(out_, fm=1)
+        FV_(CoF.get(),_tt,_c,_r)  # r per deeper cross_comp?
+        if gv_((_m *_c *wcC) / (_r+ccC) * ((len(out_)-1)*wL) - ave):
+            G_ = []
+            for out in out_:
+                L_, B_, C_ = [],[],[]
+                for N in out.N_:
+                    C_ += N.C_
+                    for L in N.rim:
+                        m,d = nt_vt(*L.N_)
+                        if m > ave * _r:  L_ += [L]
+                        elif d > avd * _r: B_ += [L]
+                Ft_ = []
+                for i,(F_,nF) in enumerate(zip((out.N_, L_,B_,C_),('Nt','Lt','Bt','Ct'))):  # or convert C into Nt?
+                    if F_:
+                        tt,c,r = sum_vt(F_,wTT=ttcC)
+                        Ft_ += [CF(N_=F_,nF=nF,dTT=tt,m=(vt:=val_(tt,wTT,1))[0],d=vt[1],c=c,r=r)]
+                    else: Ft_ += [CF(nF=nF)]
+                G = comb_Ft(*Ft_, Ft, wTT=ttcC); G_ += [G]; G.m_ = out.m_; G.d_ = out.d_
+            rG = Ft.root; Ct = sum2F(G_, rG, nF='Ct')
+            if rG.Ct: Ct.H += [rG.Ct]
+            rG.Ct = Ct; Ct.root = rG
+            return Ct
