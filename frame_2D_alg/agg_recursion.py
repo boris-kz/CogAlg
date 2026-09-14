@@ -96,13 +96,10 @@ def cross_comp(root,pL_,r,nF='Nt',tnF=None, fall=1):
             return L_,m,d,tt,c,r,cV
         for N in (N_:= list(set(N_))):
             N.Rt = sum2F(N.rim,root=N,nF='Rt') if N.rim else CF(root=N,nF='Rt')
-        Ft = getattr(root,nF); Lt = Ft.Lt; Lt.N_,Lt.m,Lt.d,Lt.dTT,Lt.c,Lt.r = L_,m,d,tt,c,r  # Nt | Bt
+        Lt = root.Lt; Lt.N_,Lt.m,Lt.d,Lt.dTT,Lt.c,Lt.r = L_,m,d,tt,c,r  # Nt | Bt
         if gv_(val_(tt,ttcN) * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
-            G_,med_ = cluster_(Ft, get_exemplars(N_,r,c),r,c)
-        for n_,R in (G_,root), (med_,root.H[0]):  # xcomp per composition level, med_=H[0]: sum to root?
-            if n_ and gv_(R.m*R.c*wX - ave*(R.r+1+cX)):  # mdecay(L_)-decay? eval len n_?
-                cross_comp(R, proj_L_(combinations(n_,2),R,r), r,R.nF)
-                # Ft.N_ += med_Gs, no direct agg+
+            G_ = cluster_(Ft, get_exemplars(N_,r,c),r,c)
+            return G_
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
 
@@ -166,7 +163,7 @@ def comp_F(_F, F, ir=0, rL=None):
             else:
                 if nF != 'Nt': [(F2N(_N),F2N(N)) for _N,N in Np_]  # convert for comp_N_ below
                 if Lt := cross_comp(rL,proj_L_(Np_,2, r),r,nF,tnF=1):  # root = 2 to use N pair span to compute decay?
-                    pass  # all this is in cross_comp:
+                    pass  # all this is in cross_comp: (we return early when tnF=1, do we really need the agg+ for trans comp too?)
                     # L_,M,D,TT,C,R,_ = Lt; add2F(dF, CF(N_=L_,m=m,d=D,dTT=TT,c=C,r=R), merge=1); add2F(rL,dF,merge=2)
     FV_(CoF.get(), dF.dTT, dF.c, dF.r)
     return dF  # no cross-fork N_, no L ext updates?
@@ -254,7 +251,7 @@ def nt_vt(n,_n):
         elif l.d > 0: D += l.d
     return M, D
 
-def cluster_(Ft, E_,_r,_c, fC):  # fC(E): CC, else CN; returns G_,Ct,med_
+def cluster_(Ft, E_,_r,_c):  # fC(E): CC, else CN; returns G_,Ct,med_
 
     def pack(N_, nF, root=None):  # summary only, no member or root-value updates
         m,d,dTT,c,r = sum_vt(N_, fm=1)
@@ -341,8 +338,24 @@ def cluster_(Ft, E_,_r,_c, fC):  # fC(E): CC, else CN; returns G_,Ct,med_
             if F: F.r += _r+T.olp  # persistent fork costs, not member n.r
         c_ = list(set(C for n in T.N_ for C in n.C_))  # lower-level Ct only
         G = comb_Ft(*Ft_,pack(c_,'Ct'),Ft,wTT=ttcN)
-        G.r_=T.r_; G.olp=T.olp; oG_ += [G]
-    return oG_,med_
+        G.r_=T.r_; G.olp=T.olp; oG_ += [G]  
+    cG_ = []
+    if med_:
+        R = F2N(Ft)  # Ft is new Ft.H[0] when new Ft is formed with combined G_ 
+        if gv_(R.m*R.c*wX - ave*(R.r+1+cX)):
+            cG_ = cross_comp(R, proj_L_(combinations(med_,2),R,_r), _r,R.nF)
+    # update root with the combined oG_ and mG_, so this needs to be after xcomp of med_
+    root = Ft.root
+    if G_:=oG_+ (cG_ or []):
+        new_Ft = sum2F(G_, root=root,nF=Ft.nF)
+        if Ft.nF == 'Nt': new_Ft.H += [Ft]  # med_ is already in Ft.N_
+        root.dTT,root.c,root.r = sum_vt([root.Nt,root.Lt,root.Bt]); root.m,root.d = val_(root.dTT,root.wTT,fd=1)
+        setattr(root,Ft.nF,new_Ft)
+    setattr(root,'Ct',Ct)
+    # xcomp per composition level, med_=H[0]: sum to root?
+    if oG_ and gv_(root.m*root.c*wX - ave*(root.r+1+cX)):  # mdecay(L_)-decay? eval len n_?
+        cross_comp(root, proj_L_(combinations(oG_,2),root,_r), _r,root.nF)
+    return G_
 
 def cluster_N(G_,_r,root__):  # one CN expansion round, previous-round memberships
 
