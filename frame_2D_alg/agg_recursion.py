@@ -83,26 +83,28 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
 - forward: selective extend cross-comp, clustering across tiles, re-order centroids by eigenvalues
 - feedback filter updates 
 '''
-def cross_comp(root,pL_,r,nF='Nt',tnF=None, fall=1):
+def cross_comp(root,pL_,r,nF='Nt',dF=None,rL=None, fall=1):
 
     L_,N_ = [],[]
     for dist, dy_dx, _N,N, lc,lr, pTT,m,_ in pL_:
         if _N != N and (fall or (m>0 and gv_(m*(lc*wN/(lr*cN)) - ave*(r+cN)))):
-            Link = comp_N(_N,N, lr,lc, full=not tnF, A=dy_dx, span=dist, rL=root)
+            Link = comp_N(_N,N, lr,lc, full=not dF, A=dy_dx, span=dist, rL=root)
             Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT); L_+=[Link]; N_+=[_N,N]  # relative prediction error/oF
     if L_:
         m,d,tt,c,r = sum_vt(L_,wTT=ttN, fm=1); cV = FV_(CoF.get(),tt,c,r)
-        if tnF:  # comp_F: no cluster_, recursion
-            return L_,m,d,tt,c,r,cV
+        if dF:  # comp_F: no cluster_, recursion
+            add2F(dF, CF(N_=L_,m=m,d=d,dTT=tt,c=c,r=r), merge=1); add2F(rL, dF, merge=2)
+            return
         for N in (N_:= list(set(N_))):
             N.Rt = sum2F(N.rim,root=N,nF='Rt') if N.rim else CF(root=N,nF='Rt')
         Ft = getattr(root,nF); Lt = Ft.Lt; Lt.N_,Lt.m,Lt.d,Lt.dTT,Lt.c,Lt.r = L_,m,d,tt,c,r  # Nt | Bt
         if gv_(val_(tt,ttcN) * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
             G_,med_ = cluster_(Ft, get_exemplars(N_,r,c),r,c)
-        for n_,R in (G_,root), (med_,root.H[0]):  # xcomp per composition level, med_=H[0]: sum to root?
-            if n_ and gv_(R.m*R.c*wX - ave*(R.r+1+cX)):  # mdecay(L_)-decay? eval len n_?
-                cross_comp(R, proj_L_(combinations(n_,2),R,r), r,R.nF)
-                # Ft.N_ += med_Gs, no direct agg+
+            for fsub, n_,R in (1,0), (med_,G_),(root.H[0],root):  # xcomp per lev, med_=H[-1], no lower levs?
+                if n_ and gv_(R.m*R.c*wX - ave*(R.r+1+cX)):  # mdecay(L_)-decay? eval with len n_?
+                    g_ = cross_comp(R, proj_L_(combinations(n_,2),R,r), r,R.nF)
+                    if fsub and g_: G_+=g_  # same level
+            return G_  # for the above
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
 
@@ -165,9 +167,7 @@ def comp_F(_F, F, ir=0, rL=None):
                 if l: L_= [L for Np in Np_ for L in comp_F(*Np, r,rL=dF).N_]; TT,C,R = sum_vt(L_, wTT=ttF)
             else:
                 if nF != 'Nt': [(F2N(_N),F2N(N)) for _N,N in Np_]  # convert for comp_N_ below
-                if Lt := cross_comp(rL,proj_L_(Np_,2, r),r,nF,tnF=1):  # root = 2 to use N pair span to compute decay?
-                    pass  # all this is in cross_comp:
-                    # L_,M,D,TT,C,R,_ = Lt; add2F(dF, CF(N_=L_,m=m,d=D,dTT=TT,c=C,r=R), merge=1); add2F(rL,dF,merge=2)
+                cross_comp(rL,proj_L_(Np_,2, r), r,nF,dF,rL)  # root=2: N pair span computes decay?
     FV_(CoF.get(), dF.dTT, dF.c, dF.r)
     return dF  # no cross-fork N_, no L ext updates?
 
@@ -254,7 +254,7 @@ def nt_vt(n,_n):
         elif l.d > 0: D += l.d
     return M, D
 
-def cluster_(Ft, E_,_r,_c, fC):  # fC(E): CC, else CN; returns G_,Ct,med_
+def cluster_(Ft, E_,_r,_c):  # fC(E): CC, else CN; returns G_,Ct,med_
 
     def pack(N_, nF, root=None):  # summary only, no member or root-value updates
         m,d,dTT,c,r = sum_vt(N_, fm=1)
@@ -327,7 +327,8 @@ def cluster_(Ft, E_,_r,_c, fC):  # fC(E): CC, else CN; returns G_,Ct,med_
         G_ = [T for T in keep_ if not T.fC]; C_ = [T for T in keep_ if T.fC]
         if not any(not T.fin for T in keep_):
             break
-    Ct = pack(C_,'Ct',Ft.root)  # no composition / H increment
+    Ct = pack(C_,'Ct', Ft.root)  # no composition / H increment
+    if Ft.nF=='Nt': Ft.root.Ct = Ct  # not for Bt?
     for n in {n for C in list(_C_)+C_ for n in C.N_}:
         n.root_ = [rt for rt in n.root_ if rt[0] not in _C_]  # replace this scope only
     for C in C_:

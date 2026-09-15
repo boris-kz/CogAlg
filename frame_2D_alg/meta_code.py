@@ -97,7 +97,6 @@ class CN(CL):  # full node | graph fork set
         super().__init__(**kw)
         n.mang = kw.get('mang',1) # ave match of angles in L_, =1 in links
         n.box = kw.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
-        n.sub = kw.get('sub',0)  # composition depth relative to top-composition peers?
         n.exe = kw.get('exe',0)  # exemplar, temporary
         n.typ = kw.get('typ',3)  # full comp
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
@@ -458,11 +457,11 @@ costs = {  # types
     ast.Call: 3,  # frame creation + arg binding + return: overhead beyond the callee body itself
 }
 _names = ['frame_H','cross_comp','trace_edge',  # root_, oF_[0] = frame_H, adds level per call
-          'comp_N_','comp_N','comp_F',          # comp_: incrementally distant, nested
+          'comp_N','comp_F',          # comp_: incrementally distant, nested
           'get_exemplars','cluster_N','cluster_C','cluster_P','sum2G', # clus_: incrementally fuzzy, parallel
           'ffeedback','proj_N',                                        # fbac_: update filters) coords) funcs
           'vect_edge']                                                 # prep_
-typ_= ['root_','root_','root_','comp_','comp_','comp_','clus_','clus_','clus_','clus_','clus_','fbac_','fbac_','prep_']
+typ_= ['root_','root_','root_','comp_','comp_','clus_','clus_','clus_','clus_','clus_','fbac_','fbac_','prep_']
 nF_ = [None]*len(_names)  # FunctionDefs
 iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
 oF_ = [CoF(nF=i,typ=typ) for i,typ in enumerate(typ_)]
