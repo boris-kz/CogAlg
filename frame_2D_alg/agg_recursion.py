@@ -91,7 +91,7 @@ def cross_comp(root,pL_,r,nF='Nt',dF=None,rL=None, fall=1):
             Link = comp_N(_N,N, lr,lc, full=not dF, A=dy_dx, span=dist, rL=root)
             Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT); L_+=[Link]; N_+=[_N,N]  # relative prediction error/oF
     if L_:
-        m,d,tt,c,r = sum_vt(L_,wTT=ttN, fm=1); cV = FV_(CoF.get(),tt,c,r)
+        m,d,tt,c,r = sum_vt(L_,wTT=ttN, fm=1); cV = FV_(CoF.get(),tt,c,r); oF_[CoF.get().nF].V_ += [cV]
         if dF:  # comp_F: no cluster_, recursion
             add2F(dF, CF(N_=L_,m=m,d=d,dTT=tt,c=c,r=r), merge=1); add2F(rL, dF, merge=2)
             return
@@ -100,7 +100,8 @@ def cross_comp(root,pL_,r,nF='Nt',dF=None,rL=None, fall=1):
         Ft = getattr(root,nF); Lt = Ft.Lt; Lt.N_,Lt.m,Lt.d,Lt.dTT,Lt.c,Lt.r = L_,m,d,tt,c,r  # Nt | Bt
         if gv_(val_(tt,ttcN) * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
             G_,med_ = cluster_(Ft, get_exemplars(N_,r,c),r,c)
-            for fsub, n_,R in (1,0), (med_,G_),(root.H[0],root):  # xcomp per lev, med_=H[-1], no lower levs?
+            if med_ and not root.H: root.H += [CF(root=root,nF=nF)]
+            for fsub,n_,R in ((1,med_,root.H[0]), (0,G_,root)):  # xcomp per lev, med_=H[-1], no lower levs?
                 if n_ and gv_(R.m*R.c*wX - ave*(R.r+1+cX)):  # mdecay(L_)-decay? eval with len n_?
                     g_ = cross_comp(R, proj_L_(combinations(n_,2),R,r), r,R.nF)
                     if fsub and g_: G_+=g_  # same level
@@ -139,7 +140,7 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
         if N.typ < 3:  # L | C | Nt, merge?
             for _n,n in product(_N.N_,N.N_): dn_ += [comp_N(_n,n,r,c, rL=L)]  # CN L.nt, rL spec in comp.N
         else:  # CN
-            for i,(_Ft,Ft, tnF) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct),('Nt','Lt','Bt','Ct'))):
+            for i,(_Ft,Ft, tnF) in enumerate(zip((_N.Nt,_N.Nt.Lt,_N.Bt,_N.Ct),(N.Nt,N.Nt.Lt,N.Bt,N.Ct),('Nt','Lt','Bt','Ct'))):
                 if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1  # unique Nt,Lt, rL spec in comp_F
         if dn_:
             [add_H(L.H, d.H, L) for d in dn_ if d.H]  # lower levs
@@ -300,7 +301,7 @@ def cluster_(Ft, E_,_r,_c):  # fC(E): CC, else CN; returns G_,Ct,med_
     G_,C_,root__ = [],[],{}
     for i,E in enumerate(sorted(E_,key=lambda E:E.id)):
         T = CL(root=Ft,wTT=Ft.wTT, **{a:copy(getattr(E,a)) for a in ('dTT','m','d','c','r','kern','yx','span','angl')})
-        T.i=i; T.fC=bool(fC(E)); T.typ=2 if T.fC else 1; T.nF='Ct' if T.fC else Ft.nF
+        T.i=i; T.fC=bool(fC(E)); T.typ=2 if T.fC else 1; T.nF='Ct' if T.fC else Ft.nF  # replace fC with eval?
         T.N_,T.L_,T.B_ = [E],[],[]; T.m_,T.d_ = [E.m],[E.d]
         T._N_ = list(set(n for L in E.rim for n in L.N_ if n is not E))
         T._r=_r+E.r; T.r=T._r; T.r_={}; T.olp=0; T.fin=0
@@ -545,24 +546,31 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
         if ft: n_,_,tt,c,r = ft; Ft_+= [CF(N_=n_,nF=nF,dTT=tt,m=(vt:=val_(tt,wTT,1))[0],d=vt[1],c=c,r=r)]
         else:  Ft_ += [CF()]
     C_= [c for N in Ft_[0].N_ for c in N.C_]  # splice centroids
-    Ft_ += [sum2F(list(set(C_)), root.Ct,nF='Ct') if C_ else CF(nF='Ct')]  # add multiple root_ in Cs?
+    Ft_ += [sum2F(list(set(C_)), root.Ct if root else None ,nF='Ct') if C_ else CF(nF='Ct')]  # add multiple root_ in Cs?
     G = comb_Ft(*Ft_, root, wTT=fTT)
     N_ = G.N_; N=N_[0]; r=G.r; Av=ave+avd
-    if G.Lt:  # sub+
+    if G.Nt.Lt:  # sub+
         Lt = G.Lt; L_,lm,lc,lr = Lt.N_,Lt.m,Lt.c,Lt.r  # no levR = 1/len(L_): represented by c
         if gv_(lm*lc*wX - Av* (lr+1+cX)):  # mdecay(L_)-decay?
-            cross_comp(G,proj_L_(combinations(N_,2),G, lr), lr+1, 'Nt')  # sub+, cross_comp  (may get endless recursion sum2G -> cross_comp -> cluster_N)
+            F2N(G.Nt)  # add Lt to Nt
+            if (sub := cross_comp(G,proj_L_(combinations(N_,2),G, lr), lr+1, 'Nt')):  # sub+, cross_comp
+                Nt = sum2F(sub, root=G, nF='Nt')
+                Nt.H += [G.Nt]; setattr(G,'Nt',Nt)
     if G.Bt:
         Bt = G.Bt; bd,bc,br = Bt.d,Bt.c,Bt.r; rroot = root.root if root.root else 0
         if N.typ!=1 and gv_(bd*bc*wX - Av*(br+1+cX)):  # no ddfork, eval len?
-            cross_comp(G, proj_L_(combinations([F2N(L) for L in Bt.N_],2),G,br),br, nF='Bt')
+            F2N(G.Bt)
+            if (sub := cross_comp(G, proj_L_(combinations([F2N(L) for L in Bt.N_],2),G,br),br, nF='Bt')):
+                Bt = sum2F(sub, root=G, nF='Bt')
+                Bt.H += [G.Bt]; setattr(G,'Bt',Bt)
         if rroot: Bt.brrw = Bt.m * (rroot.m * (decay * (rroot.span/G.span)))  # external lend only, need to subtract from root?
+    if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)  # recompute after deeper sub
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G
 
 def comb_Ft(Nt, Lt, Bt, Ct, root,wTT):  # from sum2G, default Nt
 
-    G = CN(Nt=Nt,Lt=Lt,Bt=Bt,Ct=Ct,root=root); Nt.root=G; Lt.root=G; Bt.root=G; Ct.root=G
+    G = CN(Nt=Nt,Bt=Bt,Ct=Ct,root=root); Nt.Lt =Lt; Nt.root=G; Lt.root=Nt; Bt.root=G; Ct.root=G
     T = Copy_(Nt)  # temporary accumulator
     dF_ = []
     for Ft in Lt, Bt:  # connectivity forks
@@ -575,8 +583,8 @@ def comb_Ft(Nt, Lt, Bt, Ct, root,wTT):  # from sum2G, default Nt
         Link_ =Lt.N_; L_,pL_ = [],[]; [L_.append(L) if L.typ==1 else pL_.append(L) for L in Link_]
         if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0] *wN > ave*(cN * np.mean([L.r for L in pL_])):
             for L in pL_: L_ += [comp_N(*L.N_, G.r,L.c,1, L.angl[0], L.span)]
-            G.Lt = sum2F(L_, G,  nF='Lt')
-    elif L_ := [l for n in G.N_ for l in n.L_]: G.Lt = sum2F(L_, G, nF='Lt')  # reassign if Lt is empty
+            G.Nt.Lt = sum2F(L_, G.Nt,  nF='Lt')
+    elif L_ := [l for n in G.N_ for l in n.L_]: G.Nt.Lt = sum2F(L_, G.Nt, nF='Lt')  # reassign if Lt is empty
     if L_:
         angl = np.zeros(2)  # in all Gs or Ts only?
         for l in L_: angl += l.angl[0]
@@ -626,7 +634,8 @@ def Copy_(N, root=None, r=1, cls=None, init=0, typ=None, froot=0):
             C.yx=[N.yx]; C.angl=[copy(N.angl[0]), N.angl[1]] if N.angl is not None else None
             C.L_=[l for l in N.rim if l.m>ave]; N.root=C; C.fin=0; C.N_=[N]
         else:
-            for f in ('Nt','Lt','Bt','Ct','Xt','Rt'): setattr(C, f, Copy_(getattr(N,f), root=C))
+            for f in ('Nt','Bt','Ct','Xt','Rt'): setattr(C, f, Copy_(getattr(N,f), root=C))
+            setattr(C, 'Lt', Copy_(getattr(N.Nt,f), root=C.Nt))  # Nt.Lt
             C.H = [Copy_(lev, root=C) for lev in N.H]
             C.angl=deepcopy(N.angl); C.yx=copy(N.yx); C.box=copy(N.box); C.mang=N.mang; C.exe=N.exe; C.root_=list(N.root_)
     if froot:
@@ -750,7 +759,7 @@ def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N
     cos_d = (N.angl[0].dot(A) / ((np.hypot(*N.angl[0]) * dist) or eps)) * N.angl[1] if N.angl else 0  # int x ext angle alignment, mean=0
     iTT, eTT = np.zeros((2,9)),np.zeros((2,9)); c = 0
     wTT = CoF.get().wTT*ttPrj
-    for L in N.L_+ N.B_:  # proj C-to-N links:
+    for L in N.Nt.L_+ N.B_:  # proj C-to-N links:
         proj_TT(L, cos_d, dist, L.r+_r, iTT, wTT, dec); c+=L.c  # accum iTT internally
     for L in N.rim:
         proj_TT(L, cos_d,dist,L.r+_r,eTT,wTT,dec); c+=L.c
