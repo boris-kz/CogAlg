@@ -91,7 +91,7 @@ def cross_comp(root,pL_,r,nF='Nt',dF=None,rL=None, fall=1):
             Link = comp_N(_N,N, lr,lc, full=not dF, A=dy_dx, span=dist, rL=root)
             Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT); L_+=[Link]; N_+=[_N,N]  # relative prediction error/oF
     if L_:
-        m,d,tt,c,r = sum_vt(L_,wTT=ttN, fm=1); cV = FV_(CoF.get(),tt,c,r); oF_[CoF.get().nF].V_ += [cV]
+        m,d,tt,c,r = sum_vt(L_,wTT=ttN, fm=1); FV_(CoF.get(),tt,c,r)  # Sorry, V is packed in the FV_ func
         if dF:  # comp_F: no cluster_,recursion
             add2F(dF,CF(N_=L_,m=m,d=d,dTT=tt,c=c,r=r),merge=1); add2F(rL,dF,merge=2); return
         for N in (N_:= list(set(N_))):
@@ -260,7 +260,7 @@ def cluster_(Ft, E_,_r,_c):  # fC(E): CC, else CN; returns G_,Ct,med_
     def prioritize(T_):  # stronger membership charges weaker; ties split the charge
         root__ = {}
         for T in T_:
-            T.r_ = {}; w,c = (wcC,ccC) if T.fC else (wcN,ccN)
+            T.r_ = {}; w,c = (wcC,ccC) if T.typ==1 else (wcN,ccN)
             for n,m in zip(T.N_,T.m_):
                 v = max(m,0)*w / (c*(_r+n.r))
                 root__.setdefault(n,[]).append((T,v))
@@ -271,35 +271,44 @@ def cluster_(Ft, E_,_r,_c):  # fC(E): CC, else CN; returns G_,Ct,med_
             T.r = T._r+T.olp
         return {n:[(T.i,v) for T,v in rt_] for n,rt_ in root__.items()}
 
+    def init(E,i):
+        T = CL(root=Ft,wTT=Ft.wTT, **{a:copy(getattr(E,a)) for a in ('dTT','m','d','c','r','kern','yx','span','angl')})
+        T.N_,T.L_,T.B_ = [E],[],[]; T.m_,T.d_ = [E.m],[E.d]
+        T._N_ = list(set(n for L in E.rim for n in L.N_ if n is not E))
+        T._r=_r+E.r; T.r=T._r; T.r_={}; T.olp=0; T.fin=0; T.i=i
+        T.typ=2  # type = 2 for non C?
+        return T
+
     _C_ = {C for n in Ft.N_ for C,m,d in n.root_ if getattr(C,'source',None) is Ft}
     G_,C_,root__ = [],[],{}
     for i,E in enumerate(sorted(E_,key=lambda E:E.id)):
-        T = CL(root=Ft,wTT=Ft.wTT, **{a:copy(getattr(E,a)) for a in ('dTT','m','d','c','r','kern','yx','span','angl')})
-        T.i=i; T.typ=2 if T.fC else 1; T.nF='Ct' if T.fC else Ft.nF
-        T.N_,T.L_,T.B_ = [E],[],[]; T.m_,T.d_ = [E.m],[E.d]
-        T._N_ = list(set(n for L in E.rim for n in L.N_ if n is not E))
-        T._r=_r+E.r; T.r=T._r; T.r_={}; T.olp=0; T.fin=0
-        (C_ if T.fC else G_).append(T)
+        G_ += [init(E,i)]
     while G_ or C_:
         _T_ = {T.i:(set(T.N_),dict(zip(T.N_,zip(T.m_,T.d_))),dict(T.r_)) for T in G_+C_}
         G_ = cluster_N(G_,_r,root__)
-        C_ = cluster_C(C_,_r)
+        for G in G_:
+            if G.d*(G.c*wcC/(G.r*ccC))*((len(G.N_)-1)*wL) > ave:  # high-variance G eval from claude, and test G.N_ for C_?
+                for e in [e for e in G.N_ if e.exe]:  # only exemplars?
+                    C_ += [init(e,G.i)]
+        C_ = cluster_C(list(set(C_)),_r)
         T_ = G_+C_; root__ = prioritize(T_); next_ = []
         for T in T_:
-            w,c = (wcC,ccC) if T.fC else (wcN,ccN)
+            w,c = (wcC,ccC) if T.typ==1 else (wcN,ccN)
             if T.w*T.c*w*((len(T.N_)-1)*wL) > ave*T.r*c: next_ += [T]
         if len(next_) != len(T_): root__ = prioritize(next_)  # removed proposals no longer charge survivors
         for T in next_:
             N_,md_,r_ = _T_[T.i]; md = dict(zip(T.N_,zip(T.m_,T.d_)))
             dr = max((abs(T.r_.get(n,0)-r_.get(n,0)) for n in set(T.r_) | set(r_)),default=0)
             up = sum(abs(md[n][0]-md_.get(n,(0,0))[0]) + abs(md[n][1]-md_.get(n,(0,0))[1]) for n in T.N_)
-            if T.fC: T.fin = up*wcC <= avd*(T.r+ccC*len(T.N_)) and dr<=ave
+            if T.typ==1: T.fin = up*wcC <= avd*(T.r+ccC*len(T.N_)) and dr<=ave
             else:    T.fin = set(T.N_)==N_ and dr<=ave
-        G_ = [T for T in next_ if not T.fC]; C_ = [T for T in next_ if T.fC]
+        G_ = [T for T in next_ if T.typ==2]; C_ = [T for T in next_ if T.typ==1]
         if not any(not T.fin for T in next_):
             break
-    Ct = pack(C_,'Ct', Ft.root)  # no composition / H increment
-    if Ft.nF=='Nt': Ft.root.Ct = Ct  # not for Bt?
+    if C_:
+        C_ = cluster_P(C_,Ft)
+        Ct = pack(C_,'Ct', Ft.root)  # no composition / H increment
+        Ft.root.Ct = Ct  # not for Bt? Bt should be the same?
     for n in {n for C in list(_C_)+C_ for n in C.N_}:
         n.root_ = [rt for rt in n.root_ if rt[0] not in _C_]  # replace this scope only
     for C in C_:
@@ -315,6 +324,10 @@ def cluster_(Ft, E_,_r,_c):  # fC(E): CC, else CN; returns G_,Ct,med_
         # sum2G for Gs only?
         G = comb_Ft(*Ft_,pack(c_,'Ct'),Ft,wTT=ttcN)
         G.r_=T.r_; G.olp=T.olp; oG_ += [G]
+    if oG_:
+        TT,C,R = sum_vt(oG_)
+        lev = Copy_(Ft); lt = Copy_(Ft.Lt,root=lev); lev.Lt = lt # packed N_|L_, Lt for med_ xcomp
+        Ft.H += [lev]; Ft.N_ = oG_; Ft.dTT,Ft.c,Ft.r = TT,C,R; Ft.m,Ft.d = val_(TT,ttcN,1)
     return oG_,med_
 
 def cluster_N(_G_,_r,root__):  # one CN expansion round, previous-round memberships
@@ -369,7 +382,7 @@ def cluster_C(_C_,_r):  # one CC refinement round; reuse matches to the previous
 
     C_ = []
     for _C in _C_:
-        C = copy(_C)
+        C = Copy_(_C)
         if not C.fin:  # keep stopped Cs for overlap evaluation, without extending them
             md_ = dict(zip(_C.N_,zip(_C.m_,_C.d_))) if hasattr(_C,'w') else {}  # unrefined seed has no cached scores
             C.N_ = list(set(_C.N_+_C._N_))
@@ -538,6 +551,7 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
     C_= [c for N in Ft_[0].N_ for c in N.C_]  # splice centroids
     Ft_ += [sum2F(list(set(C_)), root.Ct if root else None ,nF='Ct') if C_ else CF(nF='Ct')]  # add multiple root_ in Cs?
     G = comb_Ft(*Ft_, root, wTT=fTT)
+    # sub+ is done via cluster_ c fork now?
     if G.Bt:
         Bt = G.Bt; rroot = root.root if root.root else 0
         if rroot: Bt.brrw = Bt.m * (rroot.m * (decay * (rroot.span/G.span)))
@@ -561,13 +575,17 @@ def comb_Ft(Nt, Lt, Bt, Ct, root,wTT):  # assemble core and boundary with separa
         elif Ft is Nt and (L_ := [l for n in Nt.N_ for l in n.L_]):
             Ft.Lt = sum2F(L_,nF='Lt')
         Ft.Lt.root=Ft; Ft.Lt.nF='Lt'; Ft.Lt.wTT=Ft.wTT
-    G.Lt = Nt.Lt  # compatibility alias after replacement; Copy_ must preserve this relation
+    # G.Lt = Nt.Lt  # compatibility alias after replacement; Copy_ must preserve this relation  (no more G.Lt?)
+    # skip comparison between fork types
+    '''
     T = Copy_(Nt); dF_ = []
     for Ft in Nt.Lt,Bt,Bt.Lt:  # add each distinct fork once; Ct is an alternative representation
         if Ft: dF_ += [comp_F(T,Ft,root.r if root is not None else 0,G)]; T.dTT,T.c,T.r = sum_vt([T,Ft],wTT=wTT)
         else:  dF_ += [CF()]
-    add2F(G,T,merge=2)
     if any(dF_): sum2F(dF_,G.Xt)  # cross-fork covariance
+    add2F(G,T,merge=2)
+    '''
+    add2F(G,G.Nt,merge=2)
     add_Nt(G)  # member geometry and hierarchy
     L_ = [L for L in Nt.Lt.N_ if L.typ==1]
     if L_:  # core-link orientation; boundary-link derivatives stay in Bt.Lt
@@ -614,6 +632,7 @@ def Copy_(N, root=None, r=1, cls=None, init=0, typ=None, froot=0):
     if hasattr(N, 'root_'): a.update(root_=copy(N.root_))  # CC
     if isinstance(N,CoF): a.update(call_=copy(N.call_), typ_=copy(N.typ_) if hasattr(N, 'typ_') else [], fw=N.fw if hasattr(N, 'fw') else 0, fc=N.fc, fr=N.fr)
     C = cls(**a)
+    if hasattr(N, 'i'): C.fin=N.fin; C.olp=N.olp; C.i=N.i  # for T in cluster_
     if isinstance(N, CN):
         if init:
             C.yx=[N.yx]; C.angl=[copy(N.angl[0]), N.angl[1]] if N.angl is not None else None
