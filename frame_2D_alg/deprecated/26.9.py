@@ -741,3 +741,57 @@ def cluster_C(Ft, E_,_r,_c):  # form centroids by clustering exemplar surround v
             if rG.Ct: Ct.H += [rG.Ct]
             rG.Ct = Ct; Ct.root = rG
             return Ct
+
+    def reform(T):  # temporary Cs
+        c_ = np.array([n.c for n in T.N_]); c = c_.sum(); w_ = c_/c
+        T._r = _r + sum(n.r*w for n,w in zip(T.N_,w_))
+        if T.fC:
+            w_ = c_*T.m_; w_ = w_/w_.sum() if w_.sum() else c_/c
+            for a in ('dTT','kern','yx','span','m','d'):
+                setattr(T,a,sum(getattr(n,a)*w for n,w in zip(T.N_,w_)))
+            A_ = [n.angl[0] for n in T.N_ if n.angl is not None]
+            T.angl = [sum(A_),np.sign(T.dTT[1] @ ttcC[1])] if A_ else None
+            T.c = c
+            T.m_,T.d_ = map(list,zip(*(val_( base_comp(T,n)[0],ttcC,1) for n in T.N_)))
+            T.w = c_ @ T.m_ / c  # membership value, separate from centroid data
+        else:  # no reform CN?
+            T.dTT,T.c,r = sum_vt(T.N_+T.L_+T.B_); T._r = _r+r
+            T.m,T.d = val_(T.dTT,ttcN,1); T.w = T.m
+            T.m_,T.d_ = [],[]
+            for n in T.N_:  # support within this CN, not the node's intrinsic m
+                L_ = [L for L in T.L_ if n in L.N_]
+                m,d = val_(sum_vt(L_)[0],ttcN,1) if L_ else (0,0)
+                T.m_ += [m]; T.d_ += [d]
+        T.r = T._r+T.olp
+
+def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
+
+    if not init:
+        N_,_,ntt,nc,nr = ft_[0]; N_+=root.N_; ntt+=root.Nt.dTT; nc+=root.Nt.c; nr+=root.Nt.r; ft_[0] = N_,_,ntt,nc,nr
+        if len(ft_)>1: L_,_,ltt,lc,lr=ft_[1]; L_+=root.L_; ltt+=root.Lt.dTT; lc+=root.Lt.c; lr+=root.Lt.r; ft_[1]=L_,_,ltt,lc,lr
+    Ft_ = []
+    for ft, nF in zip_longest(ft_,('Nt','Lt','Bt')):
+        if ft: n_,_,tt,c,r = ft; Ft_+= [CF(N_=n_,nF=nF,dTT=tt,m=(vt:=val_(tt,wTT,1))[0],d=vt[1],c=c,r=r)]
+        else:  Ft_ += [CF()]
+    C_= [c for N in Ft_[0].N_ for c in N.C_]  # splice centroids
+    Ft_ += [sum2F(list(set(C_)), root.Ct if root else None ,nF='Ct') if C_ else CF(nF='Ct')]  # add multiple root_ in Cs?
+    G = comb_Ft(*Ft_, root, wTT=fTT)
+    N_ = G.N_; N=N_[0]; r=G.r; Av=ave+avd
+    if G.Nt.Lt:  # sub+
+        Lt = G.Lt; L_,lm,lc,lr = Lt.N_,Lt.m,Lt.c,Lt.r  # no levR = 1/len(L_): represented by c
+        if gv_(lm*lc*wX - Av* (lr+1+cX)):  # mdecay(L_)-decay?
+            F2N(G.Nt)  # add Lt to Nt
+            if (sub := cross_comp(G,proj_L_(combinations(N_,2),G, lr), lr+1, 'Nt')):  # sub+, cross_comp
+                Nt = sum2F(sub, root=G, nF='Nt')
+                Nt.H += [G.Nt]; setattr(G,'Nt',Nt)
+    if G.Bt:
+        Bt = G.Bt; bd,bc,br = Bt.d,Bt.c,Bt.r; rroot = root.root if root.root else 0
+        if N.typ!=1 and gv_(bd*bc*wX - Av*(br+1+cX)):  # no ddfork, eval len?
+            F2N(G.Bt)
+            if (sub := cross_comp(G, proj_L_(combinations([F2N(L) for L in Bt.N_],2),G,br),br, nF='Bt')):
+                Bt = sum2F(sub, root=G, nF='Bt')
+                Bt.H += [G.Bt]; setattr(G,'Bt',Bt)
+        if rroot: Bt.brrw = Bt.m * (rroot.m * (decay * (rroot.span/G.span)))  # external lend only, need to subtract from root?
+    if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)  # recompute after deeper sub
+    FV_(CoF.get(), G.dTT, G.c, G.r)
+    return G
