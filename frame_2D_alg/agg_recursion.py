@@ -91,7 +91,7 @@ def cross_comp(root,pL_,r,nF='Nt',dF=None,rL=None, fall=1):
             Link = comp_N(_N,N, lr,lc, full=not dF, A=dy_dx, span=dist, rL=root)
             Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT); L_+=[Link]; N_+=[_N,N]  # relative prediction error/oF
     if L_:
-        m,d,tt,c,r = sum_vt(L_,wTT=ttN, fm=1); FV_(CoF.get(),tt,c,r)  # Sorry, V is packed in the FV_ func
+        m,d,tt,c,r = sum_vt(L_,wTT=ttN, fm=1); FV_(CoF.get(),tt,c,r)
         if dF:  # comp_F: no cluster_,recursion
             add2F(dF,CF(N_=L_,m=m,d=d,dTT=tt,c=c,r=r),merge=1); add2F(rL,dF,merge=2); return
         for N in (N_:= list(set(N_))):
@@ -262,8 +262,7 @@ def cluster_(Ft, E_,_r,_c):  # fC(E): CC, else CN; returns G_,Ct,med_
         for T in T_:
             T.r_ = {}; w,c = (wcC,ccC) if T.typ==1 else (wcN,ccN)
             for n,m in zip(T.N_,T.m_):
-                v = max(m,0)*w / (c*(_r+n.r))
-                root__.setdefault(n,[]).append((T,v))
+                v = max(m,0)*w / (c*(_r+n.r)); root__.setdefault(n,[]).append((T,v))
         for n,rt_ in root__.items():
             for T,v in rt_: T.r_[n] = sum(_v/v if _v>v else .5 if _v==v else 0 for _T,_v in rt_ if _T is not T) if v>0 else 0
         for T in T_:
@@ -271,12 +270,11 @@ def cluster_(Ft, E_,_r,_c):  # fC(E): CC, else CN; returns G_,Ct,med_
             T.r = T._r+T.olp
         return {n:[(T.i,v) for T,v in rt_] for n,rt_ in root__.items()}
 
-    def init(E,i):
+    def init(E, i, fC):  # C init should be different? redundant to pack?
         T = CL(root=Ft,wTT=Ft.wTT, **{a:copy(getattr(E,a)) for a in ('dTT','m','d','c','r','kern','yx','span','angl')})
         T.N_,T.L_,T.B_ = [E],[],[]; T.m_,T.d_ = [E.m],[E.d]
         T._N_ = list(set(n for L in E.rim for n in L.N_ if n is not E))
-        T._r=_r+E.r; T.r=T._r; T.r_={}; T.olp=0; T.fin=0; T.i=i
-        T.typ=2  # type = 2 for non C?
+        T._r=_r+E.r; T.r=T._r; T.r_={}; T.olp=0; T.fin=0; T.i=i; T.typ=2  # CN
         return T
 
     _C_ = {C for n in Ft.N_ for C,m,d in n.root_ if getattr(C,'source',None) is Ft}
@@ -285,43 +283,39 @@ def cluster_(Ft, E_,_r,_c):  # fC(E): CC, else CN; returns G_,Ct,med_
         G_ += [init(E,i)]
     while G_ or C_:
         _T_ = {T.i:(set(T.N_),dict(zip(T.N_,zip(T.m_,T.d_))),dict(T.r_)) for T in G_+C_}
-        G_ = cluster_N(G_,_r,root__)
-        for G in G_:
-            if G.d*(G.c*wcC/(G.r*ccC))*((len(G.N_)-1)*wL) > ave:  # high-variance G eval from claude, and test G.N_ for C_?
-                for e in [e for e in G.N_ if e.exe]:  # only exemplars?
-                    C_ += [init(e,G.i)]
+        for G in G_ := cluster_N(G_,_r,root__):  # preselected for G.m
+            if G.d * (G.c*wcC/(G.r*ccC)) * ((len(G.N_)-1)*wL) > avd:  # high-variance G
+                C_ += [init(N, G.i,fC=1) for N in G.N_ if N.m * (G.c*wcC/(G.r*ccC)) > ave]  # any high-m N?
         C_ = cluster_C(list(set(C_)),_r)
-        T_ = G_+C_; root__ = prioritize(T_); next_ = []
+        T_ = G_+C_; root__ = prioritize(T_); front_ = []  # or keep separate?
         for T in T_:
             w,c = (wcC,ccC) if T.typ==1 else (wcN,ccN)
-            if T.w*T.c*w*((len(T.N_)-1)*wL) > ave*T.r*c: next_ += [T]
-        if len(next_) != len(T_): root__ = prioritize(next_)  # removed proposals no longer charge survivors
-        for T in next_:
+            if T.w*T.c*w*((len(T.N_)-1)*wL) > ave*T.r*c: front_ += [T]
+        if len(front_) != len(T_): root__ = prioritize(front_)  # removed proposals no longer charge survivors
+        for T in front_:
             N_,md_,r_ = _T_[T.i]; md = dict(zip(T.N_,zip(T.m_,T.d_)))
             dr = max((abs(T.r_.get(n,0)-r_.get(n,0)) for n in set(T.r_) | set(r_)),default=0)
             up = sum(abs(md[n][0]-md_.get(n,(0,0))[0]) + abs(md[n][1]-md_.get(n,(0,0))[1]) for n in T.N_)
             if T.typ==1: T.fin = up*wcC <= avd*(T.r+ccC*len(T.N_)) and dr<=ave
             else:    T.fin = set(T.N_)==N_ and dr<=ave
-        G_ = [T for T in next_ if T.typ==2]; C_ = [T for T in next_ if T.typ==1]
-        if not any(not T.fin for T in next_):
+        G_ = [T for T in front_ if T.typ==2]; C_ = [T for T in front_ if T.typ==1]
+        if not any(not T.fin for T in front_):  # or remove from front?
             break
     if C_:
-        C_ = cluster_P(C_,Ft)
-        Ct = pack(C_,'Ct', Ft.root)  # no composition / H increment
-        Ft.root.Ct = Ct  # not for Bt? Bt should be the same?
+        C_ = cluster_P(C_,Ft)  # add eval here
+        Ct = pack(C_,'Ct', Ft.root); Ft.root.Ct = Ct  # Bs may form Cs in der+, as Ns
     for n in {n for C in list(_C_)+C_ for n in C.N_}:
         n.root_ = [rt for rt in n.root_ if rt[0] not in _C_]  # replace this scope only
-    for C in C_:
-        C.root=Ct; C.source=Ft
+    for C in C_:  # not reviewed
+        C.root=Ct
         for n,m,d in zip(C.N_,C.m_,C.d_): n.root_ += [[C,m,d]]
     med_= list(set(C.N_[np.argmax(C.m_)] for C in C_))
     oG_ = []
     for T in G_:
-        Ft_ = [pack(N_,nF) for N_,nF in zip((T.N_,T.L_,T.B_),('Nt','Lt','Bt'))]  # no Lt, separate C_?
+        Ft_ = [pack(N_,nF) for N_,nF in zip((T.N_,T.B_,T.C_),('Nt','Bt','Ct'))]
         for F in Ft_:
-            if F: F.r += _r+T.olp  # persistent fork costs, not member n.r
+            if Ft: F.r += _r+T.olp  # persistent fork costs, not member n.r
         c_ = list(set(C for n in T.N_ for C in n.C_))  # lower-level Ct only
-        # sum2G for Gs only?
         G = comb_Ft(*Ft_,pack(c_,'Ct'),Ft,wTT=ttcN)
         G.r_=T.r_; G.olp=T.olp; oG_ += [G]
     if oG_:
@@ -551,7 +545,6 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
     C_= [c for N in Ft_[0].N_ for c in N.C_]  # splice centroids
     Ft_ += [sum2F(list(set(C_)), root.Ct if root else None ,nF='Ct') if C_ else CF(nF='Ct')]  # add multiple root_ in Cs?
     G = comb_Ft(*Ft_, root, wTT=fTT)
-    # sub+ is done via cluster_ c fork now?
     if G.Bt:
         Bt = G.Bt; rroot = root.root if root.root else 0
         if rroot: Bt.brrw = Bt.m * (rroot.m * (decay * (rroot.span/G.span)))
@@ -575,16 +568,6 @@ def comb_Ft(Nt, Lt, Bt, Ct, root,wTT):  # assemble core and boundary with separa
         elif Ft is Nt and (L_ := [l for n in Nt.N_ for l in n.L_]):
             Ft.Lt = sum2F(L_,nF='Lt')
         Ft.Lt.root=Ft; Ft.Lt.nF='Lt'; Ft.Lt.wTT=Ft.wTT
-    # G.Lt = Nt.Lt  # compatibility alias after replacement; Copy_ must preserve this relation  (no more G.Lt?)
-    # skip comparison between fork types
-    '''
-    T = Copy_(Nt); dF_ = []
-    for Ft in Nt.Lt,Bt,Bt.Lt:  # add each distinct fork once; Ct is an alternative representation
-        if Ft: dF_ += [comp_F(T,Ft,root.r if root is not None else 0,G)]; T.dTT,T.c,T.r = sum_vt([T,Ft],wTT=wTT)
-        else:  dF_ += [CF()]
-    if any(dF_): sum2F(dF_,G.Xt)  # cross-fork covariance
-    add2F(G,T,merge=2)
-    '''
     add2F(G,G.Nt,merge=2)
     add_Nt(G)  # member geometry and hierarchy
     L_ = [L for L in Nt.Lt.N_ if L.typ==1]
@@ -750,10 +733,12 @@ def proj_focus(PV__, y,x, tile, elev):  # radial accum of projected focus value 
 
 def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N projection val, add pN if comp_pN?
 
-    def proj_TT(L, cos_d, dist, r, pTT, wTT, dec=1, fdec=0):     # accumulate L|N' pTT with iTT|eTT internally
-        dec = dist if fdec else ave** (1 + dist * dec / L.span)  # not fully revised, ave = match decay rate / unit distance
-        TT = np.array([L.dTT[0] * dec, L.dTT[1] * cos_d * dec])  # IxE angle alignment * decay?
-        # pending review: decay cancel out each other in val_:  (m_/ eps_(m_+ad_))
+    def proj_TT(L, cos_d, dist, r, pTT, wTT, dec=1, fdec=0):  # accumulate L|N' pTT with iTT|eTT internally
+        m_,d_ = L.dTT; ad_ = np.abs(d_); rdist = dist / L.span
+        Dec = dist if fdec else decay ** (1+ rdist*dec)
+        ddec_ = (ad_/ eps_(m_+ad_) - (1-decay)) * cos_d * rdist  # projected local loss deviation
+        dm_ = m_ * (1-Dec+ddec_)  # average loss + local deviation, in match units
+        TT = np.array([m_ - dm_, d_ + np.where(d_ < 0, -dm_, dm_)])  # transfer lost match to signed difference
         cert = abs(val_(TT* wTT*ttPrj) * ((L.c+wPrj)/(r+cPrj)) - ave)  # approximation
         if cert > (ave + avd) * (r + cPrj):  # certainty margin
             pTT += TT
