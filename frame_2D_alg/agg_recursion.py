@@ -253,14 +253,20 @@ def nt_vt(n,_n):
 
 def cluster_(Ft, E_,_r,_c):  # fC(E): CC, else CN; returns G_,Ct,med_
 
-    def pack(N_, nF, root=None):  # summary only, no member or root-value updates
+    def pack(N_, nF='Nt', root=None, fseed=0, fC=0):  # summary only, no member or root-value updates
         m,d,dTT,c,r = sum_vt(N_, fm=1)
-        return CF(N_= N_,nF=nF,root=root,wTT=Ft.wTT,dTT=dTT,m=m,d=d,c=c,r=r)
+        T = (CF,(CN,CL)[fC])[fseed](N_=N_,nF=nF,root=root,wTT=Ft.wTT,dTT=dTT,m=m,d=d,c=c,r=r)
+        if fseed:  # summary only if not fT, no member or root-value updates
+            E = N_[0]; T.m,T.d = E.m,E.d  # raw vals for base_comp in cluster_C
+            T.kern,T.yx,T.span,T.angl = copy(E.kern),copy(E.yx),E.span,copy(E.angl)
+            T.L_,T.B_,T.m_,T.d_ = [],[],[E.m],[E.d]; T._N_ = list(set(n for L in E.rim for n in L.N_ if n is not E))
+            T._r=_r+E.r; T.r=T._r; T.r_={}; T.olp=0; T.fin=0; T.i=T.id; T.typ=2 if fC else 3
+        return T
 
     def prioritize(T_):  # stronger membership charges weaker; ties split the charge
         root__ = {}
         for T in T_:
-            T.r_ = {}; w,c = (wcC,ccC) if T.typ==1 else (wcN,ccN)
+            T.r_ = {}; w,c = (wcC,ccC) if T.typ==2 else (wcN,ccN)
             for n,m in zip(T.N_,T.m_):
                 v = max(m,0)*w / (c*(_r+n.r)); root__.setdefault(n,[]).append((T,v))
         for n,rt_ in root__.items():
@@ -269,38 +275,40 @@ def cluster_(Ft, E_,_r,_c):  # fC(E): CC, else CN; returns G_,Ct,med_
             T.olp = sum(n.c*T.r_[n] for n in T.N_) / sum(n.c for n in T.N_)
             T.r = T._r+T.olp
         return {n:[(T.i,v) for T,v in rt_] for n,rt_ in root__.items()}
-
-    def init(E, i, fC):  # C init should be different? redundant to pack?
-        T = CL(root=Ft,wTT=Ft.wTT, **{a:copy(getattr(E,a)) for a in ('dTT','m','d','c','r','kern','yx','span','angl')})
-        T.N_,T.L_,T.B_ = [E],[],[]; T.m_,T.d_ = [E.m],[E.d]
-        T._N_ = list(set(n for L in E.rim for n in L.N_ if n is not E))
-        T._r=_r+E.r; T.r=T._r; T.r_={}; T.olp=0; T.fin=0; T.i=i; T.typ=2  # CN
-        return T
-
     _C_ = {C for n in Ft.N_ for C,m,d in n.root_ if getattr(C,'source',None) is Ft}
-    G_,C_,root__ = [],[],{}
+    G_,C_,root__ = [],[],{}; _Up,dUp_ = 0,[]
     for i,E in enumerate(sorted(E_,key=lambda E:E.id)):
-        G_ += [init(E,i)]
+        G_ += [pack([E],root=Ft,fseed=1)]
     while G_ or C_:
-        _T_ = {T.i:(set(T.N_),dict(zip(T.N_,zip(T.m_,T.d_))),dict(T.r_)) for T in G_+C_}
-        for G in G_ := cluster_N(G_,_r,root__):  # preselected for G.m
+        _front_ = G_+C_; _T_ = {T.i:(set(T.N_),dict(zip(T.N_,zip(T.m_,T.d_))),dict(T.r_)) for T in G_+C_}
+        for G in (G_ := cluster_N(G_,_r,root__)):  # preselected for G.m
             if G.d * (G.c*wcC/(G.r*ccC)) * ((len(G.N_)-1)*wL) > avd:  # high-variance G
-                C_ += [init(N, G.i,fC=1) for N in G.N_ if N.m * (G.c*wcC/(G.r*ccC)) > ave]  # any high-m N?
+                C_ += [pack([N],root=Ft,fseed=1,fC=1) for N in G.N_ if N.m * (G.c*wcC/(G.r*ccC)) > ave]  # any high-m N?
         C_ = cluster_C(list(set(C_)),_r)
         T_ = G_+C_; root__ = prioritize(T_); front_ = []  # or keep separate?
         for T in T_:
-            w,c = (wcC,ccC) if T.typ==1 else (wcN,ccN)
+            w,c = (wcC,ccC) if T.typ==2 else (wcN,ccN)  # C.typ is 2
             if T.w*T.c*w*((len(T.N_)-1)*wL) > ave*T.r*c: front_ += [T]
         if len(front_) != len(T_): root__ = prioritize(front_)  # removed proposals no longer charge survivors
+        Up,Dr = 0,0  # eval convergence per front_, rather than each T?
         for T in front_:
-            N_,md_,r_ = _T_[T.i]; md = dict(zip(T.N_,zip(T.m_,T.d_)))
+            N_,md_,r_ = _T_.get(T.i,(set(),{},{})); md = dict(zip(T.N_,zip(T.m_,T.d_)))  # new Ts won't be in _T_
             dr = max((abs(T.r_.get(n,0)-r_.get(n,0)) for n in set(T.r_) | set(r_)),default=0)
             up = sum(abs(md[n][0]-md_.get(n,(0,0))[0]) + abs(md[n][1]-md_.get(n,(0,0))[1]) for n in T.N_)
-            if T.typ==1: T.fin = up*wcC <= avd*(T.r+ccC*len(T.N_)) and dr<=ave
-            else:    T.fin = set(T.N_)==N_ and dr<=ave
-        G_ = [T for T in front_ if T.typ==2]; C_ = [T for T in front_ if T.typ==1]
-        if not any(not T.fin for T in front_):  # or remove from front?
-            break
+            Dr = max(Dr,dr); Up += up  # not using Dr now
+            if T.typ==2: T.fin = up*wcC <= avd*(T.r+ccC*len(T.N_)) and dr<=ave
+            else:        T.fin = set(T.N_)==N_ and dr<=ave
+        G_ = [T for T in front_ if T.typ==3]; C_ = [T for T in front_ if T.typ==2]
+        conv = 0  # eval per front_  
+        if Up:
+            if _Up:  # first loop doesn't have prior
+                dUp_ += [_Up-Up]; dUp_ = dUp_[-5:]  # same with cluster_P, only last 5 loops
+                if sum(dUp_) < 0:  # break and preserve the last front_ before the divergence
+                    G_ = [T for T in _front_ if T.typ==3]; C_ = [T for T in _front_ if T.typ==2]; conv = 1
+                else: conv = Up <= avd
+        else: conv = 1
+        _Up = Up     
+        if conv: break
     if C_:
         C_ = cluster_P(C_,Ft)  # add eval here
         Ct = pack(C_,'Ct', Ft.root); Ft.root.Ct = Ct  # Bs may form Cs in der+, as Ns
@@ -314,7 +322,7 @@ def cluster_(Ft, E_,_r,_c):  # fC(E): CC, else CN; returns G_,Ct,med_
     for T in G_:
         Ft_ = [pack(N_,nF) for N_,nF in zip((T.N_,T.B_,T.C_),('Nt','Bt','Ct'))]
         for F in Ft_:
-            if Ft: F.r += _r+T.olp  # persistent fork costs, not member n.r
+            if Ft: F.r += _r+T.olp  # persistent fork costs, not member n.r (why if Ft?)
         c_ = list(set(C for n in T.N_ for C in n.C_))  # lower-level Ct only
         G = comb_Ft(*Ft_,pack(c_,'Ct'),Ft,wTT=ttcN)
         G.r_=T.r_; G.olp=T.olp; oG_ += [G]
