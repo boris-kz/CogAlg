@@ -777,7 +777,7 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
     Ft_ += [sum2F(list(set(C_)), root.Ct if root else None ,nF='Ct') if C_ else CF(nF='Ct')]  # add multiple root_ in Cs?
     G = comb_Ft(*Ft_, root, wTT=fTT)
     N_ = G.N_; N=N_[0]; r=G.r; Av=ave+avd
-    if G.Nt.Lt:  # sub+
+    if G.Lt:  # sub+
         Lt = G.Lt; L_,lm,lc,lr = Lt.N_,Lt.m,Lt.c,Lt.r  # no levR = 1/len(L_): represented by c
         if gv_(lm*lc*wX - Av* (lr+1+cX)):  # mdecay(L_)-decay?
             F2N(G.Nt)  # add Lt to Nt
