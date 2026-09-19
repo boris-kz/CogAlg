@@ -83,7 +83,7 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
 - forward: selective extend cross-comp, clustering across tiles, re-order centroids by eigenvalues
 - feedback filter updates 
 '''
-def cross_comp(root,pL_,r,nF='Nt',dF=None,rL=None, fall=1, nsub=1):
+def cross_comp(root,pL_,r,nF='Nt',dF=None,rL=None, fall=1, nexp=1):
 
     L_,N_ = [],[]
     for dist, dy_dx, _N,N, lc,lr, pTT,m,_ in pL_:
@@ -100,7 +100,7 @@ def cross_comp(root,pL_,r,nF='Nt',dF=None,rL=None, fall=1, nsub=1):
             G_,med_ = cluster_(root, get_exemplars(N_,r,c),r,c)
             for fsub,n_,R in ((1,med_,root.H[0]), (0,G_,root)):  # sub+ xcomp new G_, G_'N_| root H[-1] only?
                 if n_ and gv_(R.m*R.c*wX - ave*(R.r+1+cX)):  # mdecay(L_)-decay? eval len n_?
-                    g_ = cross_comp(R, proj_L_(combinations(n_,2),R,r, nsub), r,R.nF)
+                    g_ = cross_comp(R, proj_L_(combinations(n_,2),R,r, nexp), r,R.nF)
                     if fsub and g_: G_+=g_  # same level
             return G_  # for the above
 
@@ -250,44 +250,6 @@ def nt_vt(n,_n):
         elif l.d > 0: D += l.d
     return M, D
 
-# astra draft:
-def cluster_loop(G_,C_,root__,_r, seed_,pack,prioritize):  # one round; helpers retain cluster_ scope
-
-    F = CoF.get()
-    old_ = {T.i:(T.typ,{n:(m,d,T.r_.get(n,0)) for n,m,d in zip(T.N_,T.m_,T.d_)}) for T in G_+C_}
-    for T in G_+C_: T.fin=0  # continuation is global
-    G_ = cluster_N(G_,_r,root__)
-    for G in G_:
-        if G.d * (G.c*wcC/(G.r*ccC)) * ((len(G.N_)-1)*wL) > avd:
-            for N in G.N_:
-                if N not in seed_ and N.m * (G.c*wcC/(G.r*ccC)) > ave:
-                    C_ += [pack([N],root=G.root,fseed=1,fC=1)]; seed_.add(N)
-    C_ = cluster_C(C_,_r)
-    T_ = G_+C_; root__ = prioritize(T_); front_ = []
-    for T in T_:
-        w,c = (wcC,ccC) if T.typ==2 else (wcN,ccN)
-        if T.w*T.c*w*((len(T.N_)-1)*wL) > ave*T.r*c: front_ += [T]
-    if len(front_) != len(T_): root__ = prioritize(front_)
-
-    Up,Dr = 0,0; new_ = {T.i:T for T in front_}
-    for i in old_.keys() | new_.keys():
-        T = new_.get(i); typ = T.typ if T is not None else old_[i][0]
-        md_ = old_.get(i,(typ,{}))[1]
-        md = {n:(m,d,T.r_[n]) for n,m,d in zip(T.N_,T.m_,T.d_)} if T is not None else {}
-        w,c = (wcC,ccC) if typ==2 else (wcN,ccN)
-        for n in md_.keys() | md.keys():  # includes removed memberships and proposals
-            _m,_d,_rn = md_.get(n,(0,0,0)); m,d,rn = md.get(n,(0,0,0))
-            Up += n.c*w*(abs(m-_m)+abs(d-_d))  # d is redundant?
-            Dr += ave*n.c*c*(rn-_rn)  # signed redundancy cost, in update-value units
-
-    # this call_ params update shouldn't be here?
-    F.fc = oF_[F.nF].fc; call_ = list(F.call_)
-    while call_:  # static AST estimates, once per executed traced call
-        f = call_.pop(); F.fc += oF_[f.nF].fc; call_ += f.call_
-    F.w = Up-Dr; oF_[F.nF].V_ += [F.w]
-    G_ = [T for T in front_ if T.typ==3]; C_ = [T for T in front_ if T.typ==2]
-    return G_,C_,root__,gv_(Up - ave*F.fc - Dr)  # Up - ave*F.fc + Dr? Both Up and Dr should be small for convergece?
-
 def cluster_(Ft, E_,_r,_c):  # fC(E): CC, else CN; returns G_,Ct,med_
 
     def pack(N_, nF='Nt', root=None, fseed=0, fC=0):  # summary only, no member or root-value updates
@@ -313,35 +275,21 @@ def cluster_(Ft, E_,_r,_c):  # fC(E): CC, else CN; returns G_,Ct,med_
             T.r = T._r+T.olp
         return {n:[(T.i,v) for T,v in rt_] for n,rt_ in root__.items()}
 
+    _root__, Ec_, upV = {}, set(), 1
+    _C_ = list({C for n in Ft.N_ for C, m, d in n.root_ if getattr(C, 'source', None) is Ft})
+    _G_ = [pack([E], root=Ft, fseed=1) for E in sorted(E_, key=lambda E: E.id)]
+    G_,C_,root__ = _G_,_C_,_root__  # also defined if the loop is skipped
+    ''' was:
+    _root__,Ec_,upV = [],[],{},1
     _C_ = {C for n in Ft.N_ for C,m,d in n.root_ if getattr(C,'source',None) is Ft}
-    G_,C_,root__ = [],[],{}
-    for i,E in enumerate(sorted(E_,key=lambda E:E.id)):
-        G_ += [pack([E],root=Ft,fseed=1)]
-    while G_ or C_:
-        _front_ = G_+C_; _T_ = {T.i:(set(T.N_),dict(zip(T.N_,zip(T.m_,T.d_))),dict(T.r_)) for T in G_+C_}
-        for G in (G_ := cluster_N(G_,_r,root__)):  # preselected for G.m
-            if G.d * (G.c*wcC/(G.r*ccC)) * ((len(G.N_)-1)*wL) > avd:  # high-variance G
-                C_ += [pack([N],root=Ft,fseed=1,fC=1) for N in G.N_ if N.m * (G.c*wcC/(G.r*ccC)) > ave]  # any high-m N?
-        C_ = cluster_C(list(set(C_)),_r)
-        T_ = G_+C_; root__ = prioritize(T_); front_ = []  # or keep separate?
-        for T in T_:
-            w,c = (wcC,ccC) if T.typ==2 else (wcN,ccN)  # C.typ is 2
-            if T.w*T.c*w*((len(T.N_)-1)*wL) > ave*T.r*c: front_ += [T]
-        if len(front_) != len(T_): root__ = prioritize(front_)  # removed proposals no longer charge survivors
-        Up,Dr = 0,0  # eval convergence per front_, rather than each T?
-        for T in front_:
-            N_,md_,r_ = _T_.get(T.i,(set(),{},{})); md = dict(zip(T.N_,zip(T.m_,T.d_)))  # new Ts won't be in _T_
-            dr = max((abs(T.r_.get(n,0)-r_.get(n,0)) for n in set(T.r_) | set(r_)),default=0)
-            up = sum(abs(md[n][0]-md_.get(n,(0,0))[0]) + abs(md[n][1]-md_.get(n,(0,0))[1]) for n in T.N_)
-            Dr = max(Dr,dr); Up += up
-            if T.typ==2: T.fin = up*wcC <= avd*(T.r+ccC*len(T.N_)) and dr<=ave
-            else:        T.fin = set(T.N_)==N_ and dr<=ave
-        G_ = [T for T in front_ if T.typ==3]; C_ = [T for T in front_ if T.typ==2]
-        if Up:
-            G_ = [T for T in _front_ if T.typ==3]; C_ = [T for T in _front_ if T.typ==2]
-        else: break
-    if C_:
-        C_ = cluster_P(C_,Ft)  # add eval here
+    _G_ = [pack([E],root=Ft,fseed=1) for i,E in enumerate(sorted(E_,key=lambda E:E.id))]
+    '''
+    while (_G_ or _C_) and upV>0:
+        G_,C_,root__,upV = extend(_G_,_C_,_root__,Ec_,_r,pack,prioritize)  # front_ expansion loop
+        if upV<0: G_,C_,root__ = _G_,_C_,_root__  # divergence: revert to prior T_
+        else:     _G_,_C_,_root__ = G_,C_,root__
+    if C_:  # add eval here
+        C_ = cluster_P(C_,Ft)
         Ct = pack(C_,'Ct', Ft.root); Ft.root.Ct = Ct  # Bs may form Cs in der+, as Ns
     for n in {n for C in list(_C_)+C_ for n in C.N_}:
         n.root_ = [rt for rt in n.root_ if rt[0] not in _C_]  # replace this scope only
@@ -362,6 +310,36 @@ def cluster_(Ft, E_,_r,_c):  # fC(E): CC, else CN; returns G_,Ct,med_
         lev = Copy_(Ft); lt = Copy_(Ft.Lt,root=lev); lev.Lt = lt # packed N_|L_, Lt for med_ xcomp
         Ft.H += [lev]; Ft.N_ = oG_; Ft.dTT,Ft.c,Ft.r = TT,C,R; Ft.m,Ft.d = val_(TT,ttcN,1)
     return oG_,med_
+
+def extend(G_,C_,root__,Ec_,r, pack,prioritize):  # one round; helpers retain cluster_ scope
+    F = CoF.get()
+    _T_ = {T.i:(T.typ,{n:(m,d,T.r_.get(n,0)) for n,m,d in zip(T.N_,T.m_,T.d_)}) for T in G_+C_}
+    for T in G_+C_: T.fin=0  # continuation is global
+    for G in G_:= cluster_N(G_,r,root__):
+        if G.d * (G.c*wcC/(G.r*ccC)) * ((len(G.N_)-1)*wL) > avd:
+            for N in G.N_:
+                if N not in Ec_ and N.m * (G.c*wcC/(G.r*ccC)) > ave:
+                    C_ += [pack([N],root=G.root,fseed=1,fC=1)]; Ec_.add(N)
+    C_ = cluster_C(C_,r)
+    T_ = G_+C_; root__ = prioritize(T_); front_ = []
+    for T in T_:
+        w,c = (wcC,ccC) if T.typ==2 else (wcN,ccN)
+        if T.w*T.c*w*((len(T.N_)-1)*wL) > ave*T.r*c: front_ += [T]
+    if len(front_) != len(T_): root__ = prioritize(front_)
+    Dv,Dr = 0,0; new_ = {T.i:T for T in front_}
+    for i in _T_.keys() | new_.keys():
+        T = new_.get(i); typ = T.typ if T is not None else _T_[i][0]
+        md_ = _T_.get(i,(typ,{}))[1]
+        md = {n:(m,d,T.r_[n]) for n,m,d in zip(T.N_,T.m_,T.d_)} if T is not None else {}
+        w,c = (wcC,ccC) if typ==2 else (wcN,ccN)
+        for n in md_.keys() | md.keys():  # includes removed memberships and proposals
+            _m,_d,_rn = md_.get(n,(0,0,0)); m,d,rn = md.get(n,(0,0,0))
+            Dv += n.c*w*(abs(m-_m)+abs(d-_d))
+            Dr += ave*n.c* c* (rn-_rn)  # signed redundancy cost in update-value units
+    F.w = Dv-(ave+Dr); oF_[F.nF].V_ += [F.w]
+    G_ = [T for T in front_ if T.typ==3]; C_ = [T for T in front_ if T.typ==2]
+    upV = Dv - (ave*F.fc+Dr); gv_(upV)
+    return G_,C_,root__,upV
 
 def cluster_N(_G_,_r,root__):  # one CN expansion round, previous-round memberships
 
@@ -426,8 +404,7 @@ def cluster_C(_C_,_r):  # one CC refinement round; reuse matches to the previous
             c_ = np.array([n.c for n in C.N_]); C.c = c = c_.sum(); w_ = c_/c
             C._r = _r + sum(n.r*w for n,w in zip(C.N_,w_))
             w_ = c_*C.m_; w_ = w_/w_.sum() if w_.sum() else c_/c  # reform using matches to _C
-            for a in ('dTT','kern','yx','span','m','d'):
-                setattr(C,a,sum(getattr(n,a)*w for n,w in zip(C.N_,w_)))
+            for a in ('dTT','kern','yx','span','m','d'): setattr(C,a,sum(getattr(n,a)*w for n,w in zip(C.N_,w_)))
             A_ = [n.angl[0] for n in C.N_ if n.angl is not None]
             C.angl = [sum(A_),np.sign(C.dTT[1] @ ttcC[1])] if A_ else None
             C.m_,C.d_ = map(list,zip(*(val_(base_comp(C,n)[0],ttcC,1) for n in C.N_)))  # score reformed C; cache for next round
@@ -571,7 +548,7 @@ def add_H(H,h, root, fN=0):
                 if Lev is None: H.append(new_lev)  # pack empty list to preserve level
                 else:           H[i] = new_lev  # replaces empty list with lev
 
-def sum2G(ft_, fTT, root=None, init=1, nsub=1):  # finalize cluster
+def sum2G(ft_, fTT, root=None, init=1, nexp=1):  # finalize cluster
 
     if not init:
         N_,_,ntt,nc,nr = ft_[0]; N_+=root.N_; ntt+=root.Nt.dTT; nc+=root.Nt.c; nr+=root.Nt.r; ft_[0] = N_,_,ntt,nc,nr
@@ -587,12 +564,12 @@ def sum2G(ft_, fTT, root=None, init=1, nsub=1):  # finalize cluster
     if Lt:= G.Lt:  # rng+'sub+
         lm,lc,lr = Lt.m,Lt.c,Lt.r  # no levR = 1/len(L_): represented by c
         if gv_(lm*lc*wX - Av* (lr+1+cX)):  # mdecay(L_)-decay?
-            # or pack nsub into L or pL since L is always per level?
-            cross_comp(G, proj_L_(combinations(N_,2),G,lr,nsub+1), lr+1,'Nt',nsub=nsub+1)  # replace G Nt,Lt?
+            # or pack nexp into L or pL since L is always per level?
+            cross_comp(G, proj_L_(combinations(N_,2),G,lr,nexp+1), lr+1,'Nt',nexp=nexp+1)  # replace G Nt,Lt?
     if Bt:= G.Bt:  # der+'sub+
         bd,bc,br = Bt.d,Bt.c,Bt.r; rroot = root.root if root.root else 0
         if N.typ!=1 and gv_(bd*bc*wX - Av*(br+1+cX)):  # no ddfork, eval len?
-            cross_comp(F2N(G.Bt), proj_L_(combinations([F2N(L) for L in Bt.N_],2),G,br,nsub),br, nF='Bt',nsub=1)
+            cross_comp(F2N(G.Bt), proj_L_(combinations([F2N(L) for L in Bt.N_],2),G,br,nexp),br, nF='Bt',nexp=1)
         if rroot: Bt.brrw = Bt.m * (rroot.m * (decay * (rroot.span/G.span)))  # external lend, subtract from root?
     if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)  # recompute after deeper sub
     FV_(CoF.get(), G.dTT, G.c, G.r)
@@ -601,18 +578,17 @@ def sum2G(ft_, fTT, root=None, init=1, nsub=1):  # finalize cluster
 def comb_Ft(Nt, Lt, Bt, Ct, root,wTT):  # assemble core and boundary with separate link forks, no xcomp F_?
 
     G = CN(Nt=Nt,Lt=Lt,Bt=Bt,Ct=Ct,root=root,wTT=wTT)
-    for F in Nt,Lt,Bt,Ct: F.root=G
-    add2F(G,G.Nt,merge=2)  # sum base params?
-    r = sum_vt([Nt,Lt,Bt])[2]  # Bt.Lt is summed later, so not relevant here?
+    for F in Nt,Lt,Bt,Ct:
+        F.root=G; add2F(G,F,merge=2)
     if Lt:
         L_,pL_ = [],[]; [L_.append(L) if L.typ==1 else pL_.append(L) for L in Lt.N_]; angl = np.zeros(2)
         if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0]*wN > ave*(cN*np.mean([L.r for L in pL_])):
-            L_ += [comp_N(*L.N_,r,L.c,1,L.angl[0],L.span) for L in pL_]
+            L_ += [comp_N(*L.N_,L.r,L.c,1,L.angl[0],L.span) for L in pL_]
             G.Lt = sum2F(L_,nF='Lt')
         for L in L_: angl += L.angl[0]
         G.mang = np.mean([comp_A(angl,L.angl[0])[0] for L in L_])
         G.angl = [angl,np.sign(G.dTT[1] @ ttcN[1])]
-    add_Nt(G)  # add2F(G, G.Nt, merge=2)? member geometry and hierarchy
+    add_Nt(G)  # member geometry and hierarchy
     G.m,G.d = val_(G.dTT,wTT,1)
     return G
 
@@ -713,7 +689,7 @@ def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
     link.m += dddH.m; link.d += dddH.d; link.c += dddH.c; link.dTT += dddH.dTT
     add_H(ddH, dddH)    
 '''
-def proj_L_(pairs, root, r, max=20, fall=1, nsub=1):
+def proj_L_(pairs, root, r, max=20, fall=1, nexp=1):
 
     def proj_V(_N, N, dist, dy_dx, dec, r):  # _N x N induction
         Dec = dec or decay ** ((dist / ((_N.span + N.span) / 2)))
@@ -731,7 +707,7 @@ def proj_L_(pairs, root, r, max=20, fall=1, nsub=1):
         if N is _N: olp_ += [N]  # overlap = unit match, no miss
         else:
             dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx)  # rim angl is not canonic
-            if dist < max * nsub:
+            if dist < max * nexp:
                 pTT = proj_V(_N, N, dist, dy_dx, root.m if root != 2 else decay ** (dist / ((_N.span + N.span) / 2)), r)  # based on current rim
                 m, d = val_(pTT, ttN, 1)
                 if fall or m > ave:
