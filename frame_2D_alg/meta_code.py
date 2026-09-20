@@ -83,6 +83,7 @@ class CL(CF):  # typ=1, add kern+positionals for base comp, Rt,Nt,Bt,Ct from com
         l.typ  = kw.get('typ',1)
         l.rim  = kw.get('rim',[])  # comp PPs and Ls
         l.yx   = kw.get('yx', np.zeros(2))  # mean nodet? comp box is not meaningful?
+        l.nexp = kw.get('nexp',1)
 
 def prop_F_(F, attr='N_'):  # factory function to get and update top-composition fork.N_|H
     def get(N): return getattr(getattr(N,F), attr)
@@ -459,10 +460,10 @@ costs = {  # types
 }
 _names = ['frame_H','cross_comp','trace_edge',  # root_, oF_[0] = frame_H, adds level per call
           'comp_N','comp_F',          # comp_: incrementally distant, nested
-          'get_exemplars','cluster_N','cluster_C','cluster_P','sum2G', # clus_: incrementally fuzzy, parallel
+          'get_exemplars','cluster_N','cluster_C','cluster_P','sum2G','extend', # clus_: incrementally fuzzy, parallel
           'ffeedback','proj_N',                                        # fbac_: update filters) coords) funcs
           'vect_edge']                                                 # prep_
-typ_= ['root_','root_','root_','comp_','comp_','clus_','clus_','clus_','clus_','clus_','fbac_','fbac_','prep_']
+typ_= ['root_','root_','root_','comp_','comp_','clus_','clus_','clus_','clus_','clus_','clus_','fbac_','fbac_','prep_']
 nF_ = [None]*len(_names)  # FunctionDefs
 iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static
 oF_ = [CoF(nF=i,typ=typ) for i,typ in enumerate(typ_)]
