@@ -98,7 +98,6 @@ def cross_comp(root, pL_,r, dF=None,rL=None, fall=1):
         for N in (N_:= list(set(N_))):
             N.Rt = sum2F(N.rim,root=N,nF='Rt') if N.rim else CF(root=N,nF='Rt')
         if gv_(val_(tt,ttcN) * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
-            for N in N_: N.fin = 0  # reset from sub+
             return cluster_N(root, get_exemplars(N_,r,c), r,c)  #-> CC, CN(med_), agg+ CN(G_)
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
@@ -161,7 +160,7 @@ def comp_F(_F, F, ir=0, rL=None):
                 if l: L_= [L for Np in Np_ for L in comp_F(*Np, r,rL=dF).N_]; TT,C,R = sum_vt(L_, wTT=ttF)
             else:
                 if nF != 'Nt': [(F2N(_N),F2N(N)) for _N,N in Np_]  # convert for comp_N_ below
-                cross_comp(rL, proj_L_(Np_,2,r), r,dF,rL)  # root=2: N pair span computes decay?
+                cross_comp(rL, proj_L_(Np_,2,r),r,dF,rL)  # root=2: N pair span computes decay?
     FV_(CoF.get(), dF.dTT, dF.c, dF.r)
     return dF  # no cross-fork N_, no L ext updates?
 
@@ -262,6 +261,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
                 L.Nt,L.Bt, L.Ct = CF(),CF(),CF()
             # merge roots
     G_, Gt_, in_ = [],[],set()  # root attrs, add prelink pL_,pN_? include merged Cs, in feature space for Cs
+    for N in root.N_: N.fin = 0
     for N in _N_:  # form G per remaining N
         if N.fin or (root.root and not N.exe): continue  # no exemplars in Fg
         N_ = [N]; L_,B_ = [],[]; N.fin=1  # init G
@@ -302,12 +302,12 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
         if gv_(M * (C*wcN /(_r+R+ccN)) * ((len(G_)-1)*wL) - ave):  # reform root,Nt, no other forks yet:
             if root.nF == 'Nt' or root.nF == 'Ct':  # concat C_ if Ct is hierarchical, same as Nt it maps to?  not revised
                 root.H += [Copy_(root)]  # add H for Nt, also Ct?
-            root.N_ = G_; root.dTT=TT; root.c=C; root.r=R; root.m=M, root.d=D
+            root.N_ = G_; root.dTT=TT; root.c=C; root.r=R; root.m=M; root.d=D
+            if D * (C*wcC / R*ccC) * ((len(G_)-1)*wL) > avd:  # high variance (this must be after reform, so that root.N_ packs all G_?)
+                cluster_C(root, G_, R,C)  # -> med_,agg+
         FV_(CoF.get(), *sum_vt(G_)[:-1],R)
-        if D * (C*wcC / R*ccC) * ((len(G_)-1)*wL) > avd:  # high variance
-            cluster_C(root, G_, R,C)  # -> med_,agg+
         if gv_(M*C* wX - ave * (R+1+cX)):  # M,C,R not affected by clustering? mdecay(L_)-decay? eval len G_?
-            G_ = cross_comp(root, proj_L_(combinations(G_,2),root,R), R,root.nF)  # agg+
+            G_ = cross_comp(root, proj_L_(combinations(G_,2),root,R), R)  # agg+
     return G_
 
 def cluster_C(root, E_,_r,_c):  # form centroids by clustering exemplar surround via rims of new member nodes, within root
@@ -357,14 +357,16 @@ def cluster_C(root, E_,_r,_c):  # form centroids by clustering exemplar surround
         _m,_d,_tt,_c,_r = sum_vt(oC_, fm=1)
         FV_(CoF.get(),_tt,_c,_r)  # r per deeper cross_comp?
         if gv_((_m *_c *wcC) / (_r+ccC) * ((len(oC_)-1)*wL) - ave):
-            sum2F(oC_,root, nF='Ct')  # may need some additions
+            Ct = sum2F(oC_,root, nF='Ct')  # may need some additions
+            if root.Ct: Ct.H += [root.Ct]
+            root.Ct = Ct; Ct.root = root
             for N in N_: N.fin, N.exe = 0, 0
             for n in [N for C in oC_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals
                 n.exe = (n.d if n.typ==1 else n.m) + sum(rt[1] for rt in n.root_) > ave
                 # or exemplars in med_?:
             med_ = [o.N_[int(np.argmax(o.m_))] for o in oC_]
             if gv_((_m *_c *wX) / (_r+cX) * ((len(med_)-1)*wL) - ave):
-                cross_comp(root, proj_L_(combinations(med_,2),root,_r), _r)
+                cross_comp(F2N(Ct), proj_L_(combinations(med_,2),root,_r), _r)  # parse Ct as root, same as B fork?
                 # selective agg+, no return?
 
 def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
@@ -518,12 +520,12 @@ def sum2G(ft_, fTT, root=None, init=1):  # finalize cluster
     if Lt:= G.Lt:  # rng+'sub+
         lm,lc,lr = Lt.m,Lt.c,Lt.r  # no levR = 1/len(L_): represented by c
         if gv_(lm*lc*wX - Av* (lr+1+cX)):  # mdecay(L_)-decay?
-            cross_comp(G, proj_L_(combinations(N_,2),G,lr,nexp+1), lr+1)  # exclude old Ls from comp_N, include in cluster_N?
+            cross_comp(G, proj_L_(combinations(N_,2),G,lr,nexp=nexp+1), lr+1)  # exclude old Ls from comp_N, include in cluster_N?
             # unpack Gs if V < r+1: redundancy to stronger sub G_|C_? or partial unpack: exclude stronger sub G_|C_?
     if Bt:= G.Bt:  # der+'sub+
         bd,bc,br = Bt.d,Bt.c,Bt.r; rroot = root.root if root.root else 0
         if N.typ!=1 and gv_(bd*bc*wX - Av*(br+1+cX)):  # no ddfork, eval len?
-            cross_comp(F2N(G.Bt), proj_L_(combinations([F2N(L) for L in Bt.N_],2),G,br,nexp),br)
+            cross_comp(F2N(G.Bt), proj_L_(combinations([F2N(L) for L in Bt.N_],2),G,br,nexp=nexp),br)
         if rroot: Bt.brrw = Bt.m * (rroot.m * (decay * (rroot.span/G.span)))  # external lend, subtract from root?
     if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)  # recompute after deeper sub
     FV_(CoF.get(), G.dTT, G.c, G.r)
@@ -562,7 +564,7 @@ def add_Nt(G):  # in sum2G and trans_cluster
 # utilities:
 def F2N(F):  # convert for cross_comp
 
-    Nt = Copy_(F, root=F, cls=CF,typ=0); Nt.N_=F.N_; L_=F.L_  # replace in cross_comp
+    Nt = Copy_(F, root=F, cls=CF,typ=0); Nt.N_=F.N_; L_=F.L_; Nt.H = F.H  # replace in cross_comp
     F.__class__ = CN; F.Nt = Nt
     box = F.box if hasattr(F, 'box') else np.array([np.inf,np.inf,-np.inf,-np.inf])  # keep existing box
     Na_ = dict(H=copy(F.H), mang=1, box=box, exe=0, fin=0, root_=copy(F.root_), compared = set())
@@ -658,7 +660,7 @@ def proj_L_(pairs, root, r, max=20, fall=1, nexp=1):
     for _N, N in pairs:  # -> all-to-all pre-links
         if len(_N.H) != len(N.H): continue  # or comp x agg Lev?
         if N is _N: olp_ += [N]  # overlap = unit match, no miss
-        else:
+        elif not (set(N.rim) & set(_N.rim)):  # skip existing pairs
             dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx)  # rim angl is not canonic
             if dist < max * nexp:
                 pTT = proj_V(_N, N, dist, dy_dx, root.m if root != 2 else decay ** (dist / ((_N.span + N.span) / 2)), r)  # based on current rim
