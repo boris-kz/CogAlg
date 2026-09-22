@@ -157,7 +157,7 @@ def comp_F(_F, F, ir=0, rL=None):
             L = len(Np_)-1
             tt = (rL.dTT*rL.c + ddTT*dF.c) / (rL.c+dF.c)
             if gv_(val_(tt,ttF) * (c/r) * (wF*L) - ave* (r+cF*L)):
-                if l: L_= [L for Np in Np_ for L in comp_F(*Np, r,rL=dF).N_]; TT,C,R = sum_vt(L_, wTT=ttF)
+                if l: L_= [L for Np in Np_ for L in comp_F(*Np, r,rL=dF).N_]  # TT,C,R = sum_vt(L_, wTT=ttF)  (we don't need this TT, C and R? Same as the L_)
             else:
                 if nF != 'Nt': [(F2N(_N),F2N(N)) for _N,N in Np_]  # convert for comp_N_ below
                 cross_comp(rL, proj_L_(Np_,2,r), r,dF,rL)  # root=2: N pair span computes decay?
@@ -303,7 +303,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
         FV_(CoF.get(), *sum_vt(G_)[:-1],R)
     return G_
 
-def cluster_C(root, E_,_r,_c):  # form centroids by clustering exemplar surround via rims of new member nodes, in sub+ only?
+def cluster_C(root, E_,_r,_c, nexp):  # form centroids by clustering exemplar surround via rims of new member nodes, in sub+ only?
 
     N_= copy(root.N_); _C_=[]  # revert if 0 clusters? (current cluster_C's scope is limited to selected G's N_ only?)
     for n in N_: n.root_, n._root_ = [],[]
@@ -356,7 +356,7 @@ def cluster_C(root, E_,_r,_c):  # form centroids by clustering exemplar surround
                 n.exe = (n.d if n.typ==1 else n.m) + sum(rt[1] for rt in n.root_) > ave
             med_ = [o.N_[int(np.argmax(o.m_))] for o in oC_]
             if gv_((_m *_c *wX) / (_r+cX) * ((len(med_)-1)*wL) - ave):
-                cross_comp(root, proj_L_(combinations(med_,2),root,_r),_r)  # agg+ for medoids only?
+                cross_comp(root, proj_L_(combinations(med_,2),root,_r,nexp=nexp),_r)  # agg+ for medoids only?
 
 def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
 
@@ -453,8 +453,8 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
             F.box = box; F.Nt.dTT = copy(TT); F.Nt.c = C; F.Nt.r = R; F.Nt.m,F.Nt.d = F.m,F.d
     if root is not None:
         F.wTT = root.wTT
-        if nF=='Nt':
-            F.H = copy(root.H) + [Copy_(root.Nt, root=root)]  # previous top level
+        if typ == 3:
+            F.H = copy(root.H) + [root.Nt]  # previous top level
             root.Nt = F; F.root = root; root.dTT=copy(F.dTT); root.m,root.d,root.c,root.r = F.m,F.d,F.c,F.r
         elif nF not in ('Ct','Rt'): add2F(root,F,2)
     if froot == 1:
@@ -464,7 +464,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
         for N, m, d in zip(N_, m_, d_): N.root_ += [[F,m,d]]
     return F
 
-def add2F(F, n, merge=0):  # unpack for batching in sum2F
+def add2F(F, n, merge=0, fH=1):  # unpack for batching in sum2F
 
     if F.c:
         C=F.c+n.c; _w,w = F.c/C, n.c/C; F.r = F.r*_w + n.r*w; F.c = C
@@ -476,7 +476,7 @@ def add2F(F, n, merge=0):  # unpack for batching in sum2F
     F.m, F.d = val_(F.dTT,fd=1)
     if merge <2:
         F.N_ += (n.N_ if merge else [n])
-    if hasattr(F,'H') and getattr(n,'H',None): add_H(F.H, n.H, F)  # redundant to add_Nt?
+    if fH and hasattr(F,'H') and getattr(n,'H',None): add_H(F.H, n.H, F)  # redundant to add_Nt?
     if hasattr(n,'C_'): F.C_ = getattr(F,'C_',[]) + n.C_  # same for L_?
     return F
 
@@ -506,7 +506,14 @@ def sum2G(ft_, fTT, root=None, init=1):  # finalize cluster
     if Lt:= G.Lt:  # rng+'sub+
         lm,lc,lr = Lt.m,Lt.c,Lt.r  # no levR = 1/len(L_): represented by c
         if gv_(lm*lc*wX - Av* (lr+1+cX)):  # mdecay(L_)-decay? sub+:
-            cross_comp(G, proj_L_(combinations(N_,2), G,lr, nexp=nexp+1), lr+1)
+            cluster_C(G, N_,lr,lc,nexp+1)  # cross_comp within the cluster_C
+            # cross_comp(G, proj_L_(combinations(N_,2), G,lr, nexp=nexp+1), lr+1)
+        elif gv_(lm*lc*wcN - Av*(lr+1+ccN)):        # CN: default, cluster old+new links regardless of xcomp
+            if (sG_ := cluster_N(G, get_exemplars(N_,lr,lc), lr,lc)):  # recluster N_ to form sub Gs?
+                sG_ = [n for g in sG_ for n in (g.N_ if g.m < g.r+1 else [g])]  #  unpack Gs if V < r+1: redundancy to stronger sub G_|C_
+                sum2F(N_, G)  # pack new level before assign top level from sub Gs?
+                G.N_ = sG_; G.dTT,G.c,G.r = sum_vt(sG_); G.m,G.d = val_(G.dTT,G.wTT,fd=1)
+            
     # eval cluster with old+new links, regardless of xcomp:
     # CN/M, CC/D, parallel because it's all sub+, or CC -> med_ for CN?
     # unpack Gs if V < r+1: redundancy to stronger sub G_|C_? or partial unpack: exclude stronger sub G_|C_?
@@ -529,9 +536,10 @@ def comb_Ft(Nt, Lt, Bt, Ct, root,wTT):  # assemble core and boundary with separa
             G.Lt = sum2F(L_,nF='Lt')
         for L in L_: angl += L.angl[0]
         G.mang = np.mean([comp_A(angl,L.angl[0])[0] for L in L_])
-        G.angl = [angl,np.sign(G.dTT[1] @ ttcN[1])]
+        G.angl = [angl,0]
     for F in Nt,G.Lt,Bt,Ct:  # G.Lt is updated above
-        F.root=G; add2F(G,F,merge=2)
+        F.root=G; add2F(G,F,merge=2, fH=0)
+    if Lt: G.angl[1] = np.sign(G.dTT[1] @ ttcN[1])  # using new G.dTT after add2F above 
     add_Nt(G)  # member geometry and hierarchy
     G.m,G.d = val_(G.dTT,wTT,1)
     return G
@@ -541,19 +549,19 @@ def add_Nt(G):  # in sum2G and trans_cluster
     N_ = G.N_; c_ = np.array([N.c for N in N_]); C = c_.sum()
     G.kern, G.yx = np.zeros(4),np.zeros(2); yx_ = []
     for N in N_:
-        N.fin = 1; N.root = G; w = N.c/C
+        N.fin = 0; N.root = G; w = N.c/C  # fin actually should be 0 here, reset right after the termination
         G.root_ += [rt for rt in N.root_]  # Ct || Nt  (use rt for consistency, to be used in get_exemplars:  rc = sum(r[0].c for r in n.root_))
         G.kern += N.kern*w; yx = N.yx; yx_+=[yx]  # * w?
         G.box = extend_box(G.box, N.box)
         add_H(G.H, N.H, G); add_H(G.Ct.H, N.Ct.H, G.Ct)
-    if (n_:=[n for N in N_ for n in N.N_]): G.H += [sum2F(n_, G)]  # new top lev  (n_ shouldn't be summed back to G here?)
+    if (n_:=[n for N in N_ for n in N.N_]): sum2F(n_, G)  # new top lev
     G.yx = np.mean(yx_,axis=0); G.span = (c_ @ np.hypot(*(np.array(yx_)-G.yx).T)) / C if len(N_)>1 else N_[0].span
 
 # utilities:
 def F2N(F):  # convert for cross_comp
 
     Nt = Copy_(F, root=F, cls=CF,typ=0); Nt.N_=F.N_; L_=F.L_; Nt.H = F.H  # replace in cross_comp
-    F.__class__ = CN; F.Nt = Nt
+    F.__class__ = CN; F.Nt = Nt; F.typ = 3
     box = F.box if hasattr(F, 'box') else np.array([np.inf,np.inf,-np.inf,-np.inf])  # keep existing box
     Na_ = dict(H=copy(F.H), mang=1, box=box, exe=0, fin=0, root_=copy(F.root_), compared = set())
     if F.typ==0 and not hasattr(F, 'kern'):  # CF | PP, no overlap for Cs (only CF)
