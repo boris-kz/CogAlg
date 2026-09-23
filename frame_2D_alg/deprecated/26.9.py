@@ -795,3 +795,16 @@ def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
     if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)  # recompute after deeper sub
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G
+
+def add_Nt(G):  # in sum2G and trans_cluster
+
+    N_ = G.N_; c_ = np.array([N.c for N in N_]); C = c_.sum()
+    G.kern, G.yx = np.zeros(4),np.zeros(2); yx_ = []
+    for N in N_:
+        N.fin = 0; N.root = G; w = N.c/C  # fin actually should be 0 here, reset right after the termination
+        G.root_ += [rt for rt in N.root_]  # Ct || Nt  (use rt for consistency, to be used in get_exemplars:  rc = sum(r[0].c for r in n.root_))
+        G.kern += N.kern*w; yx = N.yx; yx_+=[yx]  # * w?
+        G.box = extend_box(G.box, N.box)
+        add_H(G.H, N.H, G); add_H(G.Ct.H, N.Ct.H, G.Ct)
+    if (n_:=[n for N in N_ for n in N.N_]): sum2F(n_, G)  # new top lev
+    G.yx = np.mean(yx_,axis=0); G.span = (c_ @ np.hypot(*(np.array(yx_)-G.yx).T)) / C if len(N_)>1 else N_[0].span

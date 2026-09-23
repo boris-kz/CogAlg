@@ -83,7 +83,7 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
 - forward: selective extend cross-comp, clustering across tiles, re-order centroids by eigenvalues
 - feedback filter updates 
 '''
-def cross_comp(root, pL_,r, dF=None,rL=None, fall=1):
+def cross_comp(root, pL_,r, dF=None,rL=None, fall=1, fsub=0):  # recursion root
 
     L_,N_ = [],[]
     for dist, dy_dx, _N,N, lc,lr, pTT,m,_,nexp in pL_:
@@ -92,13 +92,13 @@ def cross_comp(root, pL_,r, dF=None,rL=None, fall=1):
             Link.nexp=nexp; Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT)  # relative prediction error/oF
             L_+=[Link]; N_+=[_N,N]
     if L_:
-        Lt = root.Lt = sum2F(L_,root, nF='Lt'); m,d,tt,c,r = Lt.m,Lt.d,Lt.dTT,Lt.c,Lt.r; FV_(CoF.get(),tt,c,r)
-        if dF:  # comp_F: no cluster_,recursion
-            add2F(dF,CF(N_=L_,m=m,d=d,dTT=tt,c=c,r=r), merge=1); add2F(rL,dF,merge=2); return
-        for N in (N_:= list(set(N_))):
-            N.Rt = sum2F(N.rim,root=N,nF='Rt') if N.rim else CF(root=N,nF='Rt')
-        if gv_(val_(tt,ttcN) * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
-            return cluster_N(root, get_exemplars(N_,r,c), r,c)  #-> CC, CN(med_), agg+ CN(G_)
+        Lt = sum2F(L_,None if dF else root,nF='Lt')  # -> root.Lt
+        m,d,tt,c,r = Lt.m,Lt.d,Lt.dTT,Lt.c,Lt.r; v=FV_(CoF.get(),tt,c,r)
+        if dF:
+            add2F(dF,Lt,merge=1); return  # comp_F: caller accumulates returned dF
+        for N in (N_:= list(set(N_))): sum2F(N.rim,N,nF='Rt')  # -> N.Rt
+        if not fsub and v > ave and gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
+            return cluster_N(root,get_exemplars(N_,r,c),r,c)  #-> CC,agg+
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
 
@@ -123,7 +123,7 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
     else: dTT = comp_derT(_N.dTT[1],N.dTT[1])
     m,d = val_(dTT, ttN,1); L.dTT,L.m,L.d = dTT,m,d
     if N.typ > 1 and gv_(m *(c/r) *wN - ave*(r+cN)):  # skip PPs, Nts?
-        L.H = [Copy_(L)]  # lev0 to preserve resolution before adding deeper tLevs, min len H = 2
+        L.H = [Copy_(L)]  # lev0 to preserve resolution before adding deeper tLevs, min len_H=2
         htt,hc,hr = np.zeros((2,9)),0,0; dn_ = []  # cross_comp N_| Ft_-> top tLev
         for _n,n in product(_N.N_,N.N_):  # breadth first per N_ batch
             dH,dtt,dc,dr = comp_H(_n.Nt, n.Nt, L)
@@ -151,17 +151,46 @@ def comp_F(_F, F, ir=0, rL=None):
     dF = CF(dTT=ddTT, m=m,d=d,r=r,c=c, nF=F.nF)
     if _F.nF == F.nF:  # sub-comp, no comp F.Lt: included in F.dTT?
         _N_,N_=_F.N_,F.N_; nF=F.nF; l=nF=='Lt'
-        if  _N_ and N_:
+        if _N_ and N_:
             if l: Np_ = [[_n,n] for _n,n in zip(_N_,N_) if _n and n]  # same forks
             else: Np_ = list(product(_N_,N_))  # pairs
             L = len(Np_)-1
             tt = (rL.dTT*rL.c + ddTT*dF.c) / (rL.c+dF.c)
-            if gv_(val_(tt,ttF) * (c/r) * (wF*L) - ave* (r+cF*L)):
-                if l: L_= [L for Np in Np_ for L in comp_F(*Np, r,rL=dF).N_]; TT,C,R = sum_vt(L_, wTT=ttF)
-            else:
-                if nF != 'Nt': [(F2N(_N),F2N(N)) for _N,N in Np_]  # convert for comp_N_ below
-                cross_comp(rL, proj_L_(Np_,2,r), r,dF,rL)  # root=2: N pair span computes decay?
+            if gv_(val_(tt,ttF) * (c/r) * (wF*L) - ave* (r+cF*L)):  # any sub-comp?
+                if l:
+                    dF.N_ = [L for Np in Np_ for L in comp_F(*Np, r, rL=dF).N_]
+                else:
+                    if nF != 'Nt': [(F2N(_N),F2N(N)) for _N,N in Np_]  # convert for comp_N_ below
+                    cross_comp(rL, proj_L_(Np_,2,r), r,dF,rL)  # root=2: N pair span computes decay?
+    # or:
+    if _F.nF == F.nF:  # sub-comp
+        _N_,N_=_F.N_,F.N_; nF=F.nF
+        if  _N_ and N_:
+            Np_ = list(product(_N_,N_))  # pairs; Lt,Bt: links, Ct: centroids
+            L = len(Np_)-1
+            tt = (rL.dTT*rL.c + ddTT*dF.c) / (rL.c+dF.c)
+            if gv_(val_(tt,ttF) * (c/r) * (wF*L) - ave* (r+cF*L)):  # any sub-comp?
+                if nF != 'Nt': [(F2N(_N),F2N(N)) for _N,N in Np_]  # convert for comp_N below
+                cross_comp(rL, proj_L_(Np_,2,r), r,dF,rL)  # -> dF.N_
+        FV_(CoF.get(), dF.dTT, dF.c, dF.r)
+    ''' astra:
+    Yes for the comparison itself: Lt.N_ contains links, so there is no established positional correspondence requiring zip. 
+    The unified product → cross_comp → dF.N_ path fits.
+    Convert each member once, skipping existing CNs:
+            if nF != 'Nt':
+                for N in set(_N_+N_):
+                    if N.typ != 3: F2N(N)
+    Keep FV_ outside the matching-fork condition: the initial ddTT comparison exists even when sub-comparison is skipped.
     FV_(CoF.get(), dF.dTT, dF.c, dF.r)
+    return dF
+    One downstream change is required: the old Lt branch returned endpoint comparisons; this version returns link-to-link comparisons, 
+    with endpoint comparisons potentially nested in their H.
+    comp_N packs those results into L.H, but trans_cluster only reads tL.N_ and follows each endpoint’s .root.root. 
+    Source links retain their comparison root, whereas member nodes are reparented during graph formation. 
+    Therefore that traversal no longer identifies the same clusters for Lt results, and it does not descend into tL.H.
+    So remove the special comparison branch, but revise trans_cluster to consume the resulting link hierarchy. 
+    With the revised cross_comp, direct comparisons still use full=0, so they do not append to endpoint rims.
+    '''
     return dF  # no cross-fork N_, no L ext updates?
 
 def base_comp(_N,N):  # comp Et, kern, extT, dTT
@@ -257,7 +286,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
                             rt0 = getattr(tL.N_[0].root,'root',None); rt1 = getattr(tL.N_[1].root,'root',None)  # CNs
                             if rt0 and rt1 and rt0 != rt1:
                                 if rt1.H: add_H(rt0.H, rt1.H, rt0, fN=1)
-                                rt0.N_ += rt1.N_; add_Nt(rt0)  # recompute Nt attrs / G
+                                add2F(rt0, rt1)  # recompute Nt attrs / G
                 L.Nt,L.Bt, L.Ct = CF(),CF(),CF()
             # merge roots
     G_, Gt_, in_ = [],[],set()  # root attrs, add prelink pL_,pN_? include merged Cs, in feature space for Cs
@@ -303,7 +332,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
         FV_(CoF.get(), *sum_vt(G_)[:-1],R)
     return G_
 
-def cluster_C(root, E_,_r,_c):  # form centroids by clustering exemplar surround via rims of new member nodes, in sub+ only?
+def cluster_C(root, E_,_r,_c, nexp):  # form centroids by clustering exemplar surround via rims of new member nodes, in sub+ only?
 
     N_= copy(root.N_); _C_=[]  # revert if 0 clusters? (current cluster_C's scope is limited to selected G's N_ only?)
     for n in N_: n.root_, n._root_ = [],[]
@@ -356,7 +385,7 @@ def cluster_C(root, E_,_r,_c):  # form centroids by clustering exemplar surround
                 n.exe = (n.d if n.typ==1 else n.m) + sum(rt[1] for rt in n.root_) > ave
             med_ = [o.N_[int(np.argmax(o.m_))] for o in oC_]
             if gv_((_m *_c *wX) / (_r+cX) * ((len(med_)-1)*wL) - ave):
-                cross_comp(root, proj_L_(combinations(med_,2),root,_r),_r)  # agg+ for medoids only?
+                cross_comp(root, proj_L_(combinations(med_,2),root,_r,nexp=nexp),_r)  # agg+ for medoids only?
 
 def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
 
@@ -448,7 +477,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
     if typ:
         F.kern=kern; F.span=span; F.yx=yx
         if angl is not None: F.angl = [angl, np.sign(F.dTT[1] @ ttcP[1])]
-        if typ==3:
+        if typ==3:  # was add_Nt
             for N in N_: add_H(F.H, N.H, F)  # concat lower levs
             F.box = box; F.Nt.dTT = copy(TT); F.Nt.c = C; F.Nt.r = R; F.Nt.m,F.Nt.d = F.m,F.d
     if root is not None:
@@ -456,7 +485,9 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
         if nF=='Nt':
             F.H = copy(root.H) + [Copy_(root.Nt, root=root)]  # previous top level
             root.Nt = F; F.root = root; root.dTT=copy(F.dTT); root.m,root.d,root.c,root.r = F.m,F.d,F.c,F.r
-        elif nF not in ('Ct','Rt'): add2F(root,F,2)
+        else:
+            if nF and not fC and isinstance(root,CN): setattr(root,nF,F); F.root = root  # root.Lt|Rt|Ct
+            if nF not in ('Ct','Rt'): add2F(root,F,2)
     if froot == 1:
         for n in N_: n.root = root or F
     elif froot == 2: F.root = root
@@ -464,7 +495,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
         for N, m, d in zip(N_, m_, d_): N.root_ += [[F,m,d]]
     return F
 
-def add2F(F, n, merge=0):  # unpack for batching in sum2F
+def add2F(F, n, merge=0, fH=1):  # unpack for batching in sum2F
 
     if F.c:
         C=F.c+n.c; _w,w = F.c/C, n.c/C; F.r = F.r*_w + n.r*w; F.c = C
@@ -476,7 +507,7 @@ def add2F(F, n, merge=0):  # unpack for batching in sum2F
     F.m, F.d = val_(F.dTT,fd=1)
     if merge <2:
         F.N_ += (n.N_ if merge else [n])
-    if hasattr(F,'H') and getattr(n,'H',None): add_H(F.H, n.H, F)  # redundant to add_Nt?
+    if fH and hasattr(F,'H') and getattr(n,'H',None): add_H(F.H, n.H, F)  # redundant to add_Nt?
     if hasattr(n,'C_'): F.C_ = getattr(F,'C_',[]) + n.C_  # same for L_?
     return F
 
@@ -501,25 +532,26 @@ def sum2G(ft_, fTT, root=None, init=1):  # finalize cluster
         else:  Ft_ += [CF()]
     C_= [c for N in Ft_[0].N_ for c in N.C_]  # splice centroids
     Ft_ += [sum2F(list(set(C_)), root.Ct if root else None ,nF='Ct') if C_ else CF(nF='Ct')]  # add multiple root_ in Cs?
-    G = comb_Ft(*Ft_, root, wTT=fTT)
-    N_ = G.N_; N=N_[0]; Av=ave+avd; nexp = L_[0].nexp if (L_:= (G.Lt.N_ + G.Bt.N_)) else 1
+    G = comb_F(*Ft_, root, wTT=fTT)
+    N_ = G.N_; N=N_[0]; nexp = L_[0].nexp if (L_:= (G.Lt.N_ + G.Bt.N_)) else 1
     if Lt:= G.Lt:  # rng+'sub+
-        lm,lc,lr = Lt.m,Lt.c,Lt.r  # no levR = 1/len(L_): represented by c
-        if gv_(lm*lc*wX - Av* (lr+1+cX)):  # mdecay(L_)-decay? sub+:
-            cross_comp(G, proj_L_(combinations(N_,2), G,lr, nexp=nexp+1), lr+1)
-    # eval cluster with old+new links, regardless of xcomp:
-    # CN/M, CC/D, parallel because it's all sub+, or CC -> med_ for CN?
-    # unpack Gs if V < r+1: redundancy to stronger sub G_|C_? or partial unpack: exclude stronger sub G_|C_?
+        tt,m,d,c,r = Lt.dTT,Lt.m,Lt.d,Lt.c,Lt.r
+        if gv_(m*c*wX - ave* (r+1+cX)):
+            cross_comp(G, proj_L_(combinations(N_,2), G,r,nexp=nexp+1), r+1,fsub=1)
+            if G.Lt is not Lt:
+                G.Lt = add2F(Lt,G.Lt,merge=1); tt,m,d,c,r = G.Lt.dTT,G.Lt.m,G.Lt.d,G.Lt.c,G.Lt.r
+        if gv_(d*c*wcC - avd*(r+ccC)): cluster_C(G, get_exemplars(N_,r,c), r,c, nexp+1)  # should call CN?
+        elif gv_(m*c*wcN - ave*(r+ccN)): cluster_N(G, get_exemplars(N_,r,c), r,c)
     if Bt:= G.Bt:  # der+'sub+
         bd,bc,br = Bt.d,Bt.c,Bt.r; rroot = root.root if root.root else 0
-        if N.typ!=1 and gv_(bd*bc*wX - Av*(br+1+cX)):  # no ddfork, eval len B_?
+        if N.typ!=1 and gv_(bd*bc*wX - ave*(br+1+cX)):  # no ddfork, eval len B_?
             cross_comp(F2N(G.Bt), proj_L_(combinations([F2N(L) for L in Bt.N_],2),G,br),br)
         if rroot: Bt.brrw = Bt.m * (rroot.m * (decay * (rroot.span/G.span)))  # external lend, subtract from root?
     if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)  # recompute after deeper sub
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G
 
-def comb_Ft(Nt, Lt, Bt, Ct, root,wTT):  # assemble core and boundary with separate link forks, no xcomp F_?
+def comb_F(Nt, Lt, Bt, Ct, root,wTT):  # assemble core and boundary with separate link forks, no xcomp F_?
 
     G = CN(Nt=Nt,Lt=Lt,Bt=Bt,Ct=Ct,root=root,wTT=wTT)
     if Lt:
@@ -529,31 +561,18 @@ def comb_Ft(Nt, Lt, Bt, Ct, root,wTT):  # assemble core and boundary with separa
             G.Lt = sum2F(L_,nF='Lt')
         for L in L_: angl += L.angl[0]
         G.mang = np.mean([comp_A(angl,L.angl[0])[0] for L in L_])
-        G.angl = [angl,np.sign(G.dTT[1] @ ttcN[1])]
-    for F in Nt,G.Lt,Bt,Ct:  # G.Lt is updated above
-        F.root=G; add2F(G,F,merge=2)
-    add_Nt(G)  # member geometry and hierarchy
+        G.angl = [angl,0]
+    for F in Nt,Bt,Ct:  # G.Lt is updated above
+        F.root=G; add2F(G,F,merge=2, fH=0)  # includes *add_Nt
+    if Lt: G.angl[1] = np.sign(G.dTT[1] @ ttcN[1])  # using new G.dTT after add2F above
     G.m,G.d = val_(G.dTT,wTT,1)
     return G
-
-def add_Nt(G):  # in sum2G and trans_cluster
-
-    N_ = G.N_; c_ = np.array([N.c for N in N_]); C = c_.sum()
-    G.kern, G.yx = np.zeros(4),np.zeros(2); yx_ = []
-    for N in N_:
-        N.fin = 1; N.root = G; w = N.c/C
-        G.root_ += [rt for rt in N.root_]  # Ct || Nt  (use rt for consistency, to be used in get_exemplars:  rc = sum(r[0].c for r in n.root_))
-        G.kern += N.kern*w; yx = N.yx; yx_+=[yx]  # * w?
-        G.box = extend_box(G.box, N.box)
-        add_H(G.H, N.H, G); add_H(G.Ct.H, N.Ct.H, G.Ct)
-    if (n_:=[n for N in N_ for n in N.N_]): G.H += [sum2F(n_, G)]  # new top lev  (n_ shouldn't be summed back to G here?)
-    G.yx = np.mean(yx_,axis=0); G.span = (c_ @ np.hypot(*(np.array(yx_)-G.yx).T)) / C if len(N_)>1 else N_[0].span
 
 # utilities:
 def F2N(F):  # convert for cross_comp
 
     Nt = Copy_(F, root=F, cls=CF,typ=0); Nt.N_=F.N_; L_=F.L_; Nt.H = F.H  # replace in cross_comp
-    F.__class__ = CN; F.Nt = Nt
+    F.__class__ = CN; F.Nt = Nt; F.typ = 3
     box = F.box if hasattr(F, 'box') else np.array([np.inf,np.inf,-np.inf,-np.inf])  # keep existing box
     Na_ = dict(H=copy(F.H), mang=1, box=box, exe=0, fin=0, root_=copy(F.root_), compared = set())
     if F.typ==0 and not hasattr(F, 'kern'):  # CF | PP, no overlap for Cs (only CF)
