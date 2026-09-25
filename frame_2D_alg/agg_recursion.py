@@ -254,7 +254,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
                                 add2F(rt0,rt1)  # draft, recompute Nt attrs / G
                 L.Nt,L.Bt, L.Ct = CF(),CF(),CF()
             # merge roots
-    G_, Gt_, in_, fin_ = [],[],set(),[]  # root attrs, add prelink pL_,pN_? include merged Cs, in feature space for Cs
+    g__,G_,Gt_,in_,fin_ = [],[],[],set(),[]  # root attrs, add prelink pL_,pN_? include merged Cs, in feature space for Cs
     for N in _N_:  # form G per remaining N
         if N in fin_ or (root.root and not N.exe): continue  # no exemplars in Fg
         N_ = [N]; L_,B_ = [],[]; fin_ += [N]  # init G
@@ -276,79 +276,57 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
             __L_ = list(set(_L_))
         if N_:
             ft_ = []
-            C_= [c for N in N.N_ for c in N.C_]  # splice centroids
-            for i,(F_,nF) in enumerate(zip((N_,L_,B_,C_),('Nt','Lt','Bt','Ct'))):  # not sure if C's params here are redundant?
+            for i,(F_,nF) in enumerate(zip((N_,L_,B_),('Nt','Lt','Bt'))):
                 F_ = list(set(F_)) or []; tt,fc,fr = sum_vt(F_,wTT=ttcN) if F_ else (np.zeros((2,9)),0,0)
                 ft_+= [[tt,fc,fr]]
-            (nt,nc,nr),(lt,lc,lr),(bt,bc,br),(ct,cc,cr) = ft_
-            c = nc + lc + bc + cc
-            r = (nr*nc + lr*lc + br*bc + cr*cc) /c  # br includes overlap?
-            tt= (nt*nc + lt*lc + bt*bc + ct*cc) /c  # tentative
+            (nt,nc,nr),(lt,lc,lr),(bt,bc,br) = ft_
+            c = nc + lc + bc
+            r = (nr*nc + lr*lc + br*bc) /c  # br includes overlap?
+            tt= (nt*nc + lt*lc + bt*bc) /c  # tentative
             if gv_(val_(tt*root.wTT*ttcN) * (c*wcN /(r*ccN)) * ((len(N_)-1)*wL) - ave):  # apply Fw_ and Fc_ in every eval_?
-                G_ += [sum2G((N_,L_,B_,C_),ttcN, root)]; Gt_+= [[tt,c,r]]  # eval sub+,CC..
+                G_, g_ = sum2G((N_,L_,B_), ttcN, root)
+                g__+=g_; Gt_ += [[tt,c,r]]  # spliced seed to eval sub+,CC..
     if G_:
         for G in G_: trans_cluster(G)  # splice trans_links, merge L.N_.roots
         C = sum([g[1] for g in Gt_]); TT=np.zeros((2,9)); R=0; _r+=1  # + wC?
         for tt,c,r in Gt_: w=c/C; TT+=tt*w; R+=r*w
         M,D = val_(TT* root.wTT*ttcN, fd=1)
-        if gv_(M * (C*wcN /((_r+R)*ccN)) * ((len(G_)-1)*wL) - ave):
-            # spliced seed_-> CC, agg+ xcomp here, not in sum2G(ft_)?
-            # draft, probably wrong:
-            seed_,nexp = set(),1
-            for G in G_:
-                if Lt:= G.Lt:
-                    if gv_(Lt.d * (Lt.c*wcC / (Lt.r+ccC)) - avd):
-                        seed_.update(get_exemplars(G.N_,Lt.r,Lt.c))
-                        nexp = max(nexp, max(L.nexp for L in Lt.N_)+1)
-            if seed_: G_ += cluster_C(root,seed_,_r+R,C,nexp)
-            sum2F(G_,root,nF='Nt')  # pack CNs and medoid CNs once, reform root.Nt, no other forks yet, redundant to lower levs
-            tt,c,r = root.dTT, root.c, root.r+_r
-            if gv_(val_(tt*root.wTT*ttX) * (c*wX/(r*cX)) * ((len(G_)-1)*wL) - ave):
-                cross_comp(root,proj_L_(combinations(G_,2),root,r),r)  # agg+
+        if gv_(M * (C*wcC /((_r+R)*ccC)) * ((len(g__)-1)*wL) - ave):
+            # pack prior G_ in root.H in CC?
+            G_ = cluster_C(root, g__,_r+R,C)  # -> med_,agg+, not directly from G_, not yet implemented
         FV_(CoF.get(), *sum_vt(G_)[:-1],R)
     return G_
 
-def sum2G(F_, fTT, root=None):  # finalize cluster
+def sum2G(F_, wTT, root=None):  # finalize cluster
 
     G = CN(root=root,wTT=wTT)
-    N_,L_,B_,C_ = F_
-    for F,nF in zip((N_,B_,C_),('Nt','Bt','Ct')): 
-        if F: sum2F(F,G,nF=nF)
+    N_,_L_,B_ = F_
+    g_, L_,pL_ = [],[],[]  # sub_Gs for CC, L_ can't be empty?
+    for L in _L_:
+        if L.typ==1: L_+=[L]
+        else: pL_ += [L]  # projected
+    if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0]*wN > ave*(cN*np.mean([L.r for L in pL_])):
+        L_ += [comp_N(*L.N_,L.r,L.c,1,L.angl[0],L.span) for L in pL_]
+    [sum2F(F_,G,nF=nF) for F_,nF in zip((N_,L_,B_),('Nt','Lt','Bt'))]   # include geo params, if any
     G.m,G.d = val_(G.dTT,wTT,1)
-    if L_:
-        pL_ = []; angl = np.zeros(2)
-        for L in copy(L_): 
-            if L.typ!=1: pL_.append(L); L_.remove(L)
-        if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0]*wN > ave*(cN*np.mean([L.r for L in pL_])):
-            L_ += [comp_N(*L.N_,L.r,L.c,1,L.angl[0],L.span) for L in pL_]
-        G.Lt = sum2F(L_,nF='Lt')
-        for L in L_: angl += L.angl[0]
-        G.mang = np.mean([comp_A(angl,L.angl[0])[0] for L in L_])
-        G.angl = [angl,np.sign(G.dTT[1] @ ttcN[1])]
-
-    N=N_[0]; nexp = L_[0].nexp if (L_:= (G.Lt.N_ + G.Bt.N_)) else 1
-    if Lt:= G.Lt:  # rng+'sub+
-        m,d,c,r = Lt.m,Lt.d,Lt.c,Lt.r
-        if gv_(m*c*wX - ave* (r+1+cX)):  
-            cross_comp(G, proj_L_(combinations(N_,2), G,r,nexp=nexp+1), r+1,fagg=0)  # add rng+ Ls
-            if G.Lt is not Lt:
-                G.Lt = add2F(Lt,G.Lt,merge=1); m,d,c,r = G.Lt.m,G.Lt.d,G.Lt.c,G.Lt.r
-        if gv_(d*c*wcC - avd*(r+ccC)): cluster_C(G, get_exemplars(N_,r,c), r,c, nexp+1)
-        elif gv_(m*c*wcN - ave*(r+ccN)): cluster_N(G, get_exemplars(N_,r,c), r,c)
-        '''
-        if gv_(d* (c*wcC / (r+ccC)) - avd):  # seed exemplars or C/G? extend / merge across G_: splice seed_ across G_
-            cluster_C(G, get_exemplars(N_,r,c), r,c, nexp+1)  # calls xcomp,CN agg+ in root xcomp, return seed_ here?
-        '''
-    if Bt:= G.Bt:  # der+'sub+
+    if Bt := G.Bt:  # der+'sub+
         bd,bc,br = Bt.d,Bt.c,Bt.r; rroot = root.root if root.root else 0
-        if N.typ!=1 and gv_(bd*bc*wX - ave*(br+1+cX)):  # no ddfork, eval len B_?
+        if N_[0].typ!=1 and gv_(bd*bc*wX - ave*(br+1+cX)):  # no ddfork, eval len B_?
             cross_comp(F2N(G.Bt), proj_L_(combinations([F2N(L) for L in Bt.N_],2),G,br),br)
         if rroot: Bt.brrw = Bt.m * (rroot.m * (decay * (rroot.span/G.span)))  # external lend, subtract from root?
+    if Lt := G.Lt:  # rng+'sub+
+        m,d,c,r = Lt.m,Lt.d,Lt.c, Lt.r+1
+        if gv_(m* (c*wX / (r*cX)) - ave):  # rng+
+            cross_comp(G, proj_L_(combinations(N_,2), G,r,nexp=L_[0].nexp+1), r,fagg=0)  # add rng+ Ls
+            if G.Lt is not Lt: G.Lt = add2F(Lt, G.Lt, merge=1)
+        if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):
+            g_ = cluster_N(G, get_exemplars(N_,r,c), r,c)  # higher filter: r+1,-> sub_Gs for CC
     if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)  # recompute after deeper sub
     FV_(CoF.get(), G.dTT, G.c, G.r)
-    return G
+    return G, g_
 
-def cluster_C(root, E_,_r,_c, nexp):  # form centroids by clustering exemplar surround via rims of new member nodes, in sub+ only?
+def cluster_C(root, E_,_r,_c, nexp):  # not edited:
+    # form centroids by refine/extend selective sub-Gs spliced from sub+?
 
     N_= copy(root.N_); _C_=[]  # revert if 0 clusters? (current cluster_C's scope is limited to selected G's N_ only?)
     for n in N_: n.root_, n._root_ = [],[]
@@ -740,8 +718,8 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
     for n_,ntt,nc,l_,ltt,lc,merged in Gt_:
         if not merged:
             if gv_(val_(ntt+ltt, ttTrc) * ((nc+lc+wTrc)/(r+cTrc)) - ave):  # wrap singletons too
-                TT += ntt+ltt; C += nc+lc; R += r*(nc+lc)  # add Bt? (B_ is added from N.B_? Or negative link in l_ here?)
-                G_ += [sum2G((n_,l_,[],[]), ttTrc, root)]
+                TT += ntt+ltt; C += nc+lc; R += r*(nc+lc)  # add Bt from neg Ls?
+                G_ += [sum2G((n_,l_,[]), ttTrc, root)]
             else:
                 for N in n_: N.root=root
     if val_(TT*root.wTT*ttTrc) * ((C+wTrc)/(r+1+cTrc)) * ((len(G_)-1)*wL) > ave:
@@ -791,7 +769,7 @@ def vect_edge(T, iY,iX,Ly,Lx, rV=1):  # T=tile, PP_ cross_comp and floodfill to 
                         G_,TT,c,R = trace_edge([F2N(N) for N in N_], G_,TT,c,3,T); C += c  # flatten B_-mediated Gs
     if G_:
         FV_(CoF.get(), TT, C,1)
-        return sum2G((G_,[],[],[]), ttVct, T)  # c,R?
+        return sum2G((G_,[],[]), ttVct, T)  # pass TT,C,1 with G?
 
 def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
 
