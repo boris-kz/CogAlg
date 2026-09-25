@@ -808,3 +808,46 @@ def add_Nt(G):  # in sum2G and trans_cluster
         add_H(G.H, N.H, G); add_H(G.Ct.H, N.Ct.H, G.Ct)
     if (n_:=[n for N in N_ for n in N.N_]): sum2F(n_, G)  # new top lev
     G.yx = np.mean(yx_,axis=0); G.span = (c_ @ np.hypot(*(np.array(yx_)-G.yx).T)) / C if len(N_)>1 else N_[0].span
+
+def sum2G1(ft_, fTT, root=None, init=1):  # finalize cluster
+
+    def comb_F(Nt, Lt, Bt, Ct, root,wTT):  # assemble core and boundary with separate link forks, no xcomp Fs
+        G = CN(Nt=Nt,Lt=Lt,Bt=Bt,Ct=Ct,root=root,wTT=wTT)
+        if Lt:
+            L_,pL_ = [],[]; [L_.append(L) if L.typ==1 else pL_.append(L) for L in Lt.N_]; angl = np.zeros(2)
+            if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0]*wN > ave*(cN*np.mean([L.r for L in pL_])):
+                L_ += [comp_N(*L.N_,L.r,L.c,1,L.angl[0],L.span) for L in pL_]
+                G.Lt = sum2F(L_,nF='Lt')
+            for L in L_: angl += L.angl[0]
+            G.mang = np.mean([comp_A(angl,L.angl[0])[0] for L in L_])
+            G.angl = [angl,0]
+        for F in Nt,Bt,Ct:  # G.Lt is updated above
+            F.root=G; add2F(G,F,merge=2,fH=F==Nt)  # includes *add_Nt (skip Bt andCCt.H)
+        if Lt: G.angl[1] = np.sign(G.dTT[1] @ ttcN[1])  # using new G.dTT after add2F above
+        G.m,G.d = val_(G.dTT,wTT,1)
+        return G
+
+    if not init:
+        N_,_,ntt,nc,nr = ft_[0]; N_+=root.N_; ntt+=root.Nt.dTT; nc+=root.Nt.c; nr+=root.Nt.r; ft_[0] = N_,_,ntt,nc,nr
+        if len(ft_)>1: L_,_,ltt,lc,lr=ft_[1]; L_+=root.L_; ltt+=root.Lt.dTT; lc+=root.Lt.c; lr+=root.Lt.r; ft_[1]=L_,_,ltt,lc,lr
+    Ft_ = []
+    for ft, nF in zip_longest(ft_,('Nt','Lt','Bt')):
+        if ft: n_,_,tt,c,r = ft; Ft_+= [CF(N_=n_,nF=nF,dTT=tt,m=(vt:=val_(tt,wTT,1))[0],d=vt[1],c=c,r=r)]
+        else:  Ft_ += [CF()]
+    C_= [c for N in Ft_[0].N_ for c in N.C_]  # splice centroids
+    Ft_ += [sum2F(list(set(C_)), root.Ct if root else None ,nF='Ct') if C_ else CF(nF='Ct')]  # add multiple root_ in Cs?
+    G = comb_F(*Ft_, root, wTT=fTT)
+    N_ = G.N_; N=N_[0]; nexp = L_[0].nexp if (L_:= (G.Lt.N_ + G.Bt.N_)) else 1
+    if Lt:= G.Lt:  # rng+'sub+
+        tt,m,d,c,r = Lt.dTT,Lt.m,Lt.d,Lt.c,Lt.r
+        if gv_(d* (c*wcC / (r+ccC)) - avd):  # seed exemplars or C/G? extend / merge across G_: splice seed_ across G_
+            cluster_C(G, get_exemplars(N_,r,c), r,c, nexp+1)  # calls xcomp,CN agg+ in root xcomp, return seed_ here?
+    if Bt:= G.Bt:  # der+'sub+
+        bd,bc,br = Bt.d,Bt.c,Bt.r; rroot = root.root if root.root else 0
+        if N.typ!=1 and gv_(bd*bc*wX - ave*(br+1+cX)):  # no ddfork, eval len B_?
+            cross_comp(F2N(G.Bt), proj_L_(combinations([F2N(L) for L in Bt.N_],2),G,br),br)
+        if rroot: Bt.brrw = Bt.m * (rroot.m * (decay * (rroot.span/G.span)))  # external lend, subtract from root?
+    if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)  # recompute after deeper sub
+    FV_(CoF.get(), G.dTT, G.c, G.r)
+    return G
+
