@@ -263,7 +263,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
             _L_ = []
             for L in set(__L_) - in_:  # flood-fill via frontier links
                 _N = L.N_[0] if L.N_[1] in fin_ else L.N_[1]; in_.add(L)
-                if _N not in fin_:
+                if _N not in fin_:  # extend beyond root? But then there will be overlaps
                     m,d = nt_vt(*L.N_)
                     if m > ave * (_r-1):  # cluster nt, L,C_ by combined rim density, add gv_?
                         span = np.sqrt(len(N_))  # approx span
@@ -293,7 +293,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
         M,D = val_(TT* root.wTT*ttcN, fd=1)
         if gv_(M * (C*wcC /((_r+R)*ccC)) * ((len(g__)-1)*wL) - ave):
             # pack prior G_ in root.H in CC?
-            G_ = cluster_C(root, g__,_r+R,C)  # -> med_,agg+, not directly from G_, not yet implemented
+            G_ = cluster_C(root, g__,_r+R,C) or G_  # -> med_,agg+, not directly from G_, not yet implemented (preserve original G_ if there's no deeper G_?)
         FV_(CoF.get(), *sum_vt(G_)[:-1],R)
     return G_
 
@@ -331,14 +331,15 @@ def cluster_C(root, C_,_r,_c):  # C_: sub-G seeds, expand through their members'
     for C in _C_: N_.update(C.N_)
     for n in N_: n.root_,n._root_ = [],[]
     while True:  # reform C_, update,test C rims
-        C_,cnt,rdn,Up,lc = [],0,0,0,0; Avd = avd*(r+ccC)
+        C_,cnt,rdn,Up,lc = [],0,0,0,0; Avd = avd*(r+ccC)  # avd below should be loop based Avd?
         for _C in _C_:
             in_ = set(_C.N_); _N_ = _C.N_
             n_,m_,d_,M,T,R,up,c = [],[],[],0,0,0,0,0
             for exp in (0,1):  # prune members, then expand across their rims
                 for n in _N_:
                     if n not in N_: N_.add(n); n.root_,n._root_ = [],[]
-                    c+=1  # tested pairs, including rejected nodes, need to add L.c instead?
+                    # c+=1  # tested pairs, including rejected nodes, need to add L.c instead?
+                    c += sum(l.c for l in n.rim if (l.N_[0] in _N_ or l.N_[1] in _N_)) or 1  # Something like this? Add connected lc only
                     dtt,_ = base_comp(_C,n)
                     m,d = val_(dtt,ttcC,1)
                     _m,_d = next(((rt[1],rt[2]) for rt in n._root_ if rt[0] is _C), (0,0))  # prior membership, 0 if new
@@ -350,22 +351,23 @@ def cluster_C(root, C_,_r,_c):  # C_: sub-G seeds, expand through their members'
                     _N_ = list({_n for n in n_ for L in n.rim for _n in L.N_} - in_)  # frontier: rims of kept members, excl. old members
             if not n_: continue
             r = _r + R/T
-            if M * _C.m * (wcC*c / (r*_C.r*ccC)) * ((len(N_)-1)*wL) > ave:
+            if M * _C.m * (wcC*c / (r*_C.r*ccC)) * ((len(n_)-1)*wL) > ave:
                 C = sum2F(n_,root,m_,d_,nF='Ct'); C.typ=2  # -> n.root_
-                if up * (c*wcC / (r*ccC)) > avd:  # len?
+                if up * (c*wcC / (r*ccC)) > Avd:  # len? M is incremented when there's n_, so len(n_) can be excluded here?
                     C_+=[C]; Up+=up; lc+=c  # active Cs' change and estimated next-loop work
                 else: oC_+=[C]  # membership change below continuation cost
                 cnt+=T; rdn+=R
         r = _r + rdn/(cnt or eps)
-        if C_ and Up * wcC / (r*ccC*lc) > avd:
+        if (C_+oC_) and Up * wcC / (r*ccC*lc) > Avd:  # include oC_ in the eval? We will combine them anyway
             L = len(oC_+C_); c = L * len({n for C in oC_+C_ for n in C.N_})  # all centroid-node pairs in cluster_P
-            O = sum(sum(rm_) - max(rm_) for n in N_ if (rm_ := [rt[1] for rt in n.root_]))
+            O = sum(sum(rm_) - max(rm_) for n in N_ if (rm_ := [rt[1] for rt in n.root_]))  # not sure what is this ? Difference of n's m sum to their max?
             if gv_(O * (c*wcP / (r*ccP)) * ((L-1)*wL) - ave):
                 oC_ = cluster_P(oC_+C_, root)
                 break
             for n in N_: n._root_ = n.root_; n.root_ = [rt for rt in n.root_ if rt[0] in oC_]
             _C_ = C_
         else: oC_ += C_; break
+    if oC_: FV_(CoF.get(), *sum_vt(oC_))
     return oC_
 
 def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
@@ -670,21 +672,23 @@ def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N
 
 def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary/skeleton?
 
-    L_,B_, cT_ = [], set()  # comp co-mediated Ns:
+    L_, cT_ = [], set()  # comp co-mediated Ns:
     for N in N_:  # PPs
-        _N_ = [rN for B in N.B_ for rN in B.root_ if rN is not N]   # + node-mediated
+        B_=[]; _N_ = [rN for B in N.B_ for rN in B.root_ if rN is not N]   # + node-mediated
         for _N in list(set(_N_)):  # share boundary or cores if lG with N, same val?
             cT = tuple(sorted((N.id,_N.id)))
             if cT in cT_: continue
             cT_.add(cT)
             dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)  # Rc = r+ (N.r+_N.r)/2
             L = comp_N(_N,N, r,_C,A=dy_dx, span=dist)  # dPP, in N.rim
-            m,d = val_(L.dTT,ttTrc,1) * ((L.c+wTrc)/(r+cTrc))
+            m,d = np.array(val_(L.dTT,ttTrc,1)) * ((L.c+wTrc)/(r+cTrc))
             if m > ave: L_ += [L]  # probably wrong
             elif d > avd: B_ += [L]
+        N.B_ = B_
     Gt_ = []; fin_ = []
     for N in N_:  # flood-fill G per seed N
         if N.rim: N.Rt = sum2F(N.rim,root=N,nF='Rt')
+        for B in N.B_: B.root_ = []  # remove PPm as root, else it will be used in get_exemplars and causing error
         if N in fin_: continue
         fin_ += [N]; _N_=[N]; Gt=[]; N.root=Gt
         n_,ntt,nc = [N],N.dTT.copy(),(N.c or 1); l_,ltt,lc = [],np.zeros((2,9)),0; b_,btt,bc = copy(N.B_),np.zeros((2,9)),0  # Gt
@@ -697,7 +701,7 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
                         if n.root is Gt: continue
                         l_+=[L]  # default link
                         if n in fin_:  # merge n root
-                            _root = n.root; n_+=_root[0];l_+=_root[3]; b_+=root[6]; _root[-1]=1
+                            _root = n.root; n_+=_root[0];l_+=_root[3]; b_+=_root[6]; _root[-1]=1
                             for _n in _root[0]: _n.root = Gt
                         else: _N_+=[n]; n_+=[n]; b_+=n.B_; fin_ += [n]  # add single n
                         n.root = Gt
