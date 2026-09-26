@@ -718,7 +718,7 @@ def cluster_N(_G_,_r,root__):  # one CN expansion round, previous-round membersh
             G.r = G._r+G.olp  # priority refreshes overlap after both forks return
     return merged_
 
-def cluster_C(_C_,_r):  # one CC refinement round; reuse matches to the previous centroid
+def cluster_C_loop(_C_,_r):  # one CC refinement round; reuse matches to the previous centroid
 
     C_ = []
     for _C in _C_:
@@ -763,6 +763,62 @@ def cluster_C(_C_,_r):  # one CC refinement round; reuse matches to the previous
                 m,d = val_(sum_vt(L_)[0],ttcN,1) if L_ else (0,0)
                 T.m_ += [m]; T.d_ += [d]
         T.r = T._r+T.olp
+
+def cluster_C(root, E_,_r,_c, nexp):  # not edited:
+    # form centroids by refine/extend selective sub-Gs spliced from sub+?
+
+    N_= copy(root.N_); _C_=[]  # revert if 0 clusters? (current cluster_C's scope is limited to selected G's N_ only?)
+    for n in N_: n.root_, n._root_ = [],[]
+    for i,E in enumerate(E_):
+        C = Copy_(E, root,init=1,cls=CL)
+        C.N_,C.L_,C.m_,C.d_ = [E],[],[1],[0]
+        E._root_+=[[C,1,0]]  # self (C,m,d)
+        C._N_= list({n for l in E.rim for n in l.N_ if n is not E})  # init w for first loop eval
+        _C_ += [C]
+    oC_ = []; r = _r
+    while True:  # reform C_
+        C_, cnt,rdn,DTT,Up = [],0,0,np.zeros((2,9)),0; Ave = ave*(r+ccC); Avd = avd*(r+ccC)   # should be r instead of _r for loop local?
+        for _C in _C_:  # C.m,d /rTT? sort / sum(_C.m_)?
+            N__,n_,m_,d_,M,D,T,R,dTT,up = [],[],[],[],0,0,0,0, np.zeros((2,9)),0  # /C
+            for n in _C.N_+_C._N_:  # current + frontier
+                if n not in N_: N_+=[n]; n.root_,n._root_ = [],[]
+                dtt,_ = base_comp(_C,n)  # or comp_N, decay?
+                m,d = val_(dtt,ttcC,1); dTT+=dtt
+                n_+=[n]; m_+=[m]; d_+=[d]; c=n.c; T+=c; M+=m*c; D+=abs(d)*c; R+=n.r*c  # scale totals only?
+                _root_ = [rt[0] for rt in n._root_]
+                if _C in _root_:
+                    i =_root_.index(_C); up += abs(n._root_[i][1]-m) + abs(n._root_[i][2]-d)
+                else: up += m+abs(d)
+            r = _r + R/T  # loop-local
+            if M * (_C.m+wcC*len(n_)) > Ave * (r+_C.r+ ccC*len(n_)):  # else: Up+= sum(_C._m_)+ sum([abs(d) for d in _C._d_])?
+                N__ += [_n for n in n_ for l in n.rim for _n in l.N_ if _n is not n]  # extend frontier with +|-Ls
+                C = sum2F(n_, root,m_,d_,nF='Ct')  # C.N_ = n_
+                C._N_ = list(set(N__) - set(n_))  # new frontier
+                if D < Avd: oC_+=[C]  # output if stable
+                else:       C_ += [C]  # reform
+                DTT+=dTT; cnt+=T; rdn+=R; Up+=up
+        r = _r+ rdn/(cnt or eps)
+        L = len(oC_+ C_); olp = sum([len(N.root_) for N in N_])  # rdn+=olp, prioritize stronger?
+        if gv_(sum(val_(DTT,fd=1))* (wcP*L) - Ave* (r+olp+ ccP*L)):
+            oC_+= C_
+            oC_ = cluster_P(oC_, root)  # refine all memberships in parallel by global backprop
+            break
+        if Up * (wcC*len(C_)) > Avd * (r+ (ccC*len(C_))):
+            for n in N_: n._root_ = n.root_
+            for n in set([_n for _C in _C_ for _n in _C.N_ + _C._N_]): n.root_ = []
+            _C_ = C_
+        else: oC_+= C_; break  # converged Cs
+    if oC_:
+        _m,_d,_tt,_c,_r = sum_vt(oC_, fm=1)
+        FV_(CoF.get(),_tt,_c,_r)  # r per deeper cross_comp?
+        if gv_(_m * (_c*wcC / (_r+ccC)) * ((len(oC_)-1)*wL) - ave):
+            sum2F(oC_,root, nF='Ct')  # may need some additions
+            for N in N_: N.exe = 0
+            for n in [N for C in oC_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals
+                n.exe = (n.d if n.typ==1 else n.m) + sum(rt[1] for rt in n.root_) > ave
+            med_ = [o.N_[int(np.argmax(o.m_))] for o in oC_]
+            if gv_(_m * (_c*wX / (_r+cX)) - ave):  # or CC on splice seed_-> agg+ xcomp in cluster_N?
+                cross_comp(root, proj_L_(combinations(med_,2),root,_r,nexp=nexp),_r)  # agg+ for medoids only?
 
 def sum2G(ft_, fTT, root=None, init=1):  # core clustering function
 

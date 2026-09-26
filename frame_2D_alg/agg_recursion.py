@@ -325,61 +325,48 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G, g_
 
-def cluster_C(root, E_,_r,_c, nexp):  # not edited:
-    # form centroids by refine/extend selective sub-Gs spliced from sub+?
+def cluster_C(root, C_,_r,_c):  # C_: sub-G seeds, expand through their members' rims
 
-    N_= copy(root.N_); _C_=[]  # revert if 0 clusters? (current cluster_C's scope is limited to selected G's N_ only?)
-    for n in N_: n.root_, n._root_ = [],[]
-    for i,E in enumerate(E_):
-        C = Copy_(E, root,init=1,cls=CL)
-        C.N_,C.L_,C.m_,C.d_ = [E],[],[1],[0]
-        E._root_+=[[C,1,0]]  # self (C,m,d)
-        C._N_= list({n for l in E.rim for n in l.N_ if n is not E})  # init w for first loop eval
-        _C_ += [C]
-    oC_ = []; r = _r
-    while True:  # reform C_
-        C_, cnt,rdn,DTT,Up = [],0,0,np.zeros((2,9)),0; Ave = ave*(r+ccC); Avd = avd*(r+ccC)   # should be r instead of _r for loop local?
-        for _C in _C_:  # C.m,d /rTT? sort / sum(_C.m_)?
-            N__,n_,m_,d_,M,D,T,R,dTT,up = [],[],[],[],0,0,0,0, np.zeros((2,9)),0  # /C
-            for n in _C.N_+_C._N_:  # current + frontier
-                if n not in N_: N_+=[n]; n.root_,n._root_ = [],[]
-                dtt,_ = base_comp(_C,n)  # or comp_N, decay?
-                m,d = val_(dtt,ttcC,1); dTT+=dtt
-                n_+=[n]; m_+=[m]; d_+=[d]; c=n.c; T+=c; M+=m*c; D+=abs(d)*c; R+=n.r*c  # scale totals only?
-                _root_ = [rt[0] for rt in n._root_]
-                if _C in _root_:
-                    i =_root_.index(_C); up += abs(n._root_[i][1]-m) + abs(n._root_[i][2]-d)
-                else: up += m+abs(d)
-            r = _r + R/T  # loop-local
-            if M * (_C.m+wcC*len(n_)) > Ave * (r+_C.r+ ccC*len(n_)):  # else: Up+= sum(_C._m_)+ sum([abs(d) for d in _C._d_])?
-                N__ += [_n for n in n_ for l in n.rim for _n in l.N_ if _n is not n]  # extend frontier with +|-Ls
-                C = sum2F(n_, root,m_,d_,nF='Ct')  # C.N_ = n_
-                C._N_ = list(set(N__) - set(n_))  # new frontier
-                if D < Avd: oC_+=[C]  # output if stable
-                else:       C_ += [C]  # reform
-                DTT+=dTT; cnt+=T; rdn+=R; Up+=up
-        r = _r+ rdn/(cnt or eps)
-        L = len(oC_+ C_); olp = sum([len(N.root_) for N in N_])  # rdn+=olp, prioritize stronger?
-        if gv_(sum(val_(DTT,fd=1))* (wcP*L) - Ave* (r+olp+ ccP*L)):
-            oC_+= C_
-            oC_ = cluster_P(oC_, root)  # refine all memberships in parallel by global backprop
-            break
-        if Up * (wcC*len(C_)) > Avd * (r+ (ccC*len(C_))):
-            for n in N_: n._root_ = n.root_
-            for n in set([_n for _C in _C_ for _n in _C.N_ + _C._N_]): n.root_ = []
+    N_,_C_,oC_,r = set(),C_,[],_r
+    for C in _C_: N_.update(C.N_)
+    for n in N_: n.root_,n._root_ = [],[]
+    while True:  # reform C_, update,test C rims
+        C_,cnt,rdn,Up,lc = [],0,0,0,0; Avd = avd*(r+ccC)
+        for _C in _C_:
+            in_ = set(_C.N_); _N_ = _C.N_
+            n_,m_,d_,M,T,R,up,c = [],[],[],0,0,0,0,0
+            for exp in (0,1):  # prune members, then expand across their rims
+                for n in _N_:
+                    if n not in N_: N_.add(n); n.root_,n._root_ = [],[]
+                    c+=1  # tested pairs, including rejected nodes, need to add L.c instead?
+                    dtt,_ = base_comp(_C,n)
+                    m,d = val_(dtt,ttcC,1)
+                    _m,_d = next(((rt[1],rt[2]) for rt in n._root_ if rt[0] is _C), (0,0))  # prior membership, 0 if new
+                    if m*n.c <= ave*n.r: up += _m+abs(_d); continue  # dropped
+                    up += abs(_m-m)+abs(_d-d)
+                    n_+=[n]; m_+=[m]; d_+=[d]
+                    T+=n.c; M+=m*n.c; R+=n.r*n.c
+                if not exp:
+                    _N_ = list({_n for n in n_ for L in n.rim for _n in L.N_} - in_)  # frontier: rims of kept members, excl. old members
+            if not n_: continue
+            r = _r + R/T
+            if M * _C.m * (wcC*c / (r*_C.r*ccC)) * ((len(N_)-1)*wL) > ave:
+                C = sum2F(n_,root,m_,d_,nF='Ct'); C.typ=2  # -> n.root_
+                if up * (c*wcC / (r*ccC)) > avd:  # len?
+                    C_+=[C]; Up+=up; lc+=c  # active Cs' change and estimated next-loop work
+                else: oC_+=[C]  # membership change below continuation cost
+                cnt+=T; rdn+=R
+        r = _r + rdn/(cnt or eps)
+        if C_ and Up * wcC / (r*ccC*lc) > avd:
+            L = len(oC_+C_); c = L * len({n for C in oC_+C_ for n in C.N_})  # all centroid-node pairs in cluster_P
+            O = sum(sum(rm_) - max(rm_) for n in N_ if (rm_ := [rt[1] for rt in n.root_]))
+            if gv_(O * (c*wcP / (r*ccP)) * ((L-1)*wL) - ave):
+                oC_ = cluster_P(oC_+C_, root)
+                break
+            for n in N_: n._root_ = n.root_; n.root_ = [rt for rt in n.root_ if rt[0] in oC_]
             _C_ = C_
-        else: oC_+= C_; break  # converged Cs
-    if oC_:
-        _m,_d,_tt,_c,_r = sum_vt(oC_, fm=1)
-        FV_(CoF.get(),_tt,_c,_r)  # r per deeper cross_comp?
-        if gv_(_m * (_c*wcC / (_r+ccC)) * ((len(oC_)-1)*wL) - ave):
-            sum2F(oC_,root, nF='Ct')  # may need some additions
-            for N in N_: N.exe = 0
-            for n in [N for C in oC_ for N in C.N_]:  # exemplar V + sum n match_dev to Cs, m* ||C rvals
-                n.exe = (n.d if n.typ==1 else n.m) + sum(rt[1] for rt in n.root_) > ave
-            med_ = [o.N_[int(np.argmax(o.m_))] for o in oC_]
-            if gv_(_m * (_c*wX / (_r+cX)) - ave):  # or CC on splice seed_-> agg+ xcomp in cluster_N?
-                cross_comp(root, proj_L_(combinations(med_,2),root,_r,nexp=nexp),_r)  # agg+ for medoids only?
+        else: oC_ += C_; break
+    return oC_
 
 def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
 
@@ -470,14 +457,14 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
         angl = np.sum([L.angl[0] for L in N_],axis=0)
         root.mang = np.mean([comp_A(angl,L.angl[0])[0] for L in N_])
         root.angl = [angl,np.sign(root.dTT[1] @ ttcN[1])]
-    if nF=='Nt': 
+    if nF=='Nt':
         for N in N_: add_H(F.H, N.H, F)  # concat lower levs
     if 'yx' in locals():  F.kern=kern; F.span=span; F.yx=yx
     if 'box' in locals(): F.box = box
     if root is not None:
-        if nF == 'Nt': 
+        if nF == 'Nt':
             if 'yx' in locals():  root.kern,root.span,root.yx = copy(F.kern),span,copy(yx)
-            if 'box' in locals(): root.box = copy(box) 
+            if 'box' in locals(): root.box = copy(box)
         F.wTT = root.wTT
         if nF=='Nt':
             F.H = copy(root.H) + [Copy_(root.Nt, root=root)]  # previous top level
@@ -683,18 +670,18 @@ def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N
 
 def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in edge blobs or lGs in boundary/skeleton?
 
-    L_, cT_ = [], set()  # comp co-mediated Ns:
-    for N in N_:
-        B_ = []; _N_ = [rN for B in N.B_ for rN in B.root_ if rN is not N]   # + node-mediated
+    L_,B_, cT_ = [], set()  # comp co-mediated Ns:
+    for N in N_:  # PPs
+        _N_ = [rN for B in N.B_ for rN in B.root_ if rN is not N]   # + node-mediated
         for _N in list(set(_N_)):  # share boundary or cores if lG with N, same val?
             cT = tuple(sorted((N.id,_N.id)))
             if cT in cT_: continue
             cT_.add(cT)
             dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)  # Rc = r+ (N.r+_N.r)/2
-            L = comp_N(_N,N, r,_C,A=dy_dx, span=dist)  # current L is dPP
-            if val_(L.dTT,ttTrc,1)[1] * ((L.c+wTrc)/(r+cTrc)) > ave: L_+=[L]
-            else: B_ += [L]  # L_ is using d to eval above, B_ is just else?
-        N.B_ = B_  # actual same level B_
+            L = comp_N(_N,N, r,_C,A=dy_dx, span=dist)  # dPP, in N.rim
+            m,d = val_(L.dTT,ttTrc,1) * ((L.c+wTrc)/(r+cTrc))
+            if m > ave: L_ += [L]  # probably wrong
+            elif d > avd: B_ += [L]
     Gt_ = []; fin_ = []
     for N in N_:  # flood-fill G per seed N
         if N.rim: N.Rt = sum2F(N.rim,root=N,nF='Rt')
@@ -722,8 +709,8 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
     for n_,ntt,nc,l_,ltt,lc,b_,btt,bc,merged in Gt_:
         if not merged:
             if gv_(val_(ntt+ltt+btt, ttTrc) * ((nc+lc+bc+wTrc)/(r+cTrc)) - ave):  # wrap singletons too
-                TT += ntt+ltt+btt; C += nc+lc+bc; R += r*(nc+lc+bc)  # add Bt from neg Ls?
-                G_ += [sum2G((n_,l_,b_), ttTrc, root, r)[0]]
+                TT += ntt+ltt+btt; C += nc+lc+bc; R += r*(nc+lc+bc)  # add Bt from neg Ls per PP?
+                G_ += [sum2G((n_,l_,b_), ttTrc, root, r)[0]]  # add sub-PPs from sub+?
             else:
                 for N in n_: N.root=root
     if val_(TT*root.wTT*ttTrc) * ((C+wTrc)/(r+1+cTrc)) * ((len(G_)-1)*wL) > ave:
@@ -773,7 +760,7 @@ def vect_edge(T, iY,iX,Ly,Lx, rV=1):  # T=tile, PP_ cross_comp and floodfill to 
                         G_,TT,c,R = trace_edge([F2N(N) for N in N_], G_,TT,c,3,T); C += c  # flatten B_-mediated Gs
     if G_:
         FV_(CoF.get(), TT, C,1)
-        return sum2G((G_,[],[]), ttVct, T, R)[0]  # pass TT,C,1 with G?
+        return sum2G((G_,[],[]), ttVct, T,R)[0]  # return sub-PPs?
 
 def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
 
