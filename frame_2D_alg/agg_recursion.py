@@ -219,18 +219,18 @@ def get_exemplars(N_,_r,_c):  # no need for _c? multi-layer non-maximum suppress
         rc = sum(r[0].c for r in n.root_); C = n.c + rc
         n.w = ((n.Rt.m * n.c) + sum([r[1]*r[0].c for r in n.root_]))/C
         # combined lateral and vertical match
-    N_= sorted(N_, key=lambda n: n.w, reverse=True); E_,Inh_ = set(),set()
+    N_= sorted(N_, key=lambda n: n.w, reverse=True); E_,Inh_ = [],set()  # we don't need set here now since N_ is unique anyway
     for rdn, N in enumerate(N_, start=1):  # strong-first
         inh_ = list(Inh_ & set(N.rim))  # stronger Es in N.rim
         oM = sum_vt(inh_,fm=1, wTT=ttE)[0] if inh_ else 0
         oV = oM / (N.Rt.m or eps)  # relative olp V
         if N.Rt.m * N.c * wE > ave* (_r+rdn+cE+oV):
-            E_.add(N); N.exe = 1  # point cloud of focal nodes
+            E_+=[N]; N.exe = 1  # point cloud of focal nodes
             Inh_.update(set(N.rim))  # extend inhibition zone
         else:
             break  # the rest of N_ is weaker, trace via rims
-    if E_: FV_(CoF.get(), *sum_vt(list(E_)))
-    else:  E_ = set([N_[0]]); N_[0].exe=1  # no gain, no inhibition, any N can be seed
+    if E_: FV_(CoF.get(), *sum_vt(E_))
+    else:  E_ = [N_[0]]; N_[0].exe=1  # no gain, no inhibition, any N can be seed
     return E_
 
 def nt_vt(n,_n):
@@ -310,7 +310,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
     G.m,G.d = val_(G.dTT,wTT,1)
     if Bt := G.Bt:  # der+'sub+
         bd,bc,br = Bt.d,Bt.c,Bt.r+_r+1
-        if N_[0].typ!=1 and gv_(bd*bc*wX - ave*(br+1+cX)):  # no ddfork, eval len B_?
+        if N_[0].typ!=1 and gv_(bd*bc*wX - ave*(br+cX)):  # no ddfork, eval len B_? (br already +1?)
             cross_comp(F2N(G.Bt), proj_L_(combinations([F2N(L) for L in Bt.N_],2),G,br),br)
         if RR:= root.root: Bt.brrw = Bt.m* (RR.m* (decay* (RR.span/G.span)))  # root - external lend?
     if Lt := G.Lt:  # rng+,sub+
@@ -318,7 +318,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
         if gv_(m* (c*wX / (r*cX)) - ave):  # rng+
             gN_ = cross_comp(G, proj_L_(combinations(N_,2), G,r,nexp=L_[0].nexp+1), r,fagg=0)  # add rng+ Ls
             if G.Lt is not Lt: G.Lt = add2F(Lt, G.Lt, merge=1)
-
+            if gN_: G.H+= sum2F(gN_); N_= G.N_= gN_
         if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):
             g_ = cluster_N(G, get_exemplars(N_,r,c), r,c)  # higher filter: r+1,-> sub_Gs for CC
             if g_: sum2F(g_,G,nF='Nt' if g_[0].typ==3 else 'Ct')  # unpack tentative G.N_?
@@ -349,22 +349,30 @@ def cluster_C(root, C_,_r,_c):  # C_: sub-G seeds, expand through their members'
                     _N_ = list({_n for n in n_ for L in n.rim for _n in L.N_} - in_)  # frontier: rims of kept members, excl. old members
             if not n_: continue
             r = _r + R/T
-            if M * _C.m * (wcC*c / (r*_C.r*ccC)) * ((len(n_)-1)*wL) > ave:
+            if M * _C.m * (wcC*c / (r*_C.r*ccC)) * ((L:=len(n_)-1)*wL) > ave:
                 C = sum2F(n_,root,m_,d_,nF='Ct'); C.typ=2  # -> n.root_
-                if up * (c*wcC / (r*ccC)) > avd:  # len?
+                if up * (c*wcC / (r*ccC)) * ((L-1)*wL)  > avd:  # len?
                     C_+=[C]; Up+=up; lc+=c  # active Cs' change and estimated next-loop work
                 else: oC_+=[C]  # low membership change
                 cnt+=T; rdn+=R
         r = _r + rdn/(cnt or eps)
-        if C_ and Up * (lc*wcC / (r*ccC)) > avd:
-            O = sum(sum(rm_)-max(rm_) for n in N_ if (rm_ := [rt[1] for rt in n.root_]))  # draft
+        if C_ and Up * (lc*wcC / (r*ccC)) > avd: 
+            '''
+            O = 0
+            for n in N_:
+                rm_ = sorted([rt[1] for rt in n.root_])  # sort to get lowest m first, and skip the last m since highest m is not redundant
+                for i, rm in enumerate(rm_[:-1]):
+                    O += rm / sum(rm_[i+1:])  # subsequent rms has higher values
+            '''
+            # same as above, sum of m /= sum of higher ms, but if all n has single root, O is zero, which we need to break?
+            O = sum(rm / sum(rm_[i+1:]) for n in N_ for rm_ in [sorted([rt[1] for rt in n.root_])] for i, rm in enumerate(rm_[:-1]))
             if gv_(O * (lc*wcP / (r*ccP)) * ((len(oC_+C_)-1)*wL) - ave):
                 oC_ = cluster_P(oC_+C_, root)
                 break
             for n in N_: n._root_ = n.root_; n.root_ = [rt for rt in n.root_ if rt[0] in oC_]
             _C_ = C_
         else: oC_ += C_; break
-        FV_(CoF.get(), *sum_vt(oC_)[:-1],r)
+    if oC_: FV_(CoF.get(), *sum_vt(oC_)[:-1],r)
     return oC_
 
 def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
@@ -381,7 +389,8 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
         md__ = np.zeros((Ln,Lc,2)); O = 0
         for j,N in enumerate(N_):
             for i,C in enumerate(_C_): md__[j,i] = val_(base_comp(C,N)[0], ttcP,fd=1)
-            m_ = md__[j,:,0]; O += m_.sum() - m_.max()  # cross-C ambiguity, gates split/merge
+            # O follow the same method as in cluster_C?
+            m_ = sorted(md__[j,:,0]); O += sum(m / sum(m_[i+1:]) for i, m in enumerate(m_[:-1])) # cross-C ambiguity, gates split/merge
         C_ = [sum2F(N_, root, md__[:,i,0], md__[:,i,1],nF='Ct') for i in range(Lc)]  # mean shift, aligned to md__
         conv = 0
         dM = np.abs(md__[:,:,0]-_md__[:,:,0]).sum() if md__.shape==_md__.shape else 0
@@ -449,7 +458,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
             TT = n.dTT*w; R=n.r*w; n_ = copy(n.N_ if merge else [n])
             if hasattr(n,'yx'):  kern=n.kern*w; span=n.span*w; yx=n.yx*w
             if hasattr(n,'box'): box=copy(n.box)
-    F = (cls_[typ])(dTT=TT, c=C, r=R, nF=nF); F.N_ = n_
+    F = (cls_[typ])(dTT=TT, c=C, r=R, nF=nF,typ=typ); F.N_ = n_
     if fC: F.m_,F.d_ = m_,d_; F.m,F.d = sum(m*c for m,c in zip(m_,c_))/C, sum(d*c for d,c in zip(d_,c_))/C; F.w=F.m
     else:  F.m, F.d = val_(TT,fd=1)
     if nF == 'Lt' and root:  # angle should be from L_?
@@ -681,6 +690,7 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
             m,d = np.array(val_(L.dTT,ttTrc,1)) * ((L.c+wTrc)/(r+cTrc))
             if m > ave: L_ += [L]  # probably wrong
             elif d > avd: B_ += [L]
+        N.B_ = B_
     Gt_ = []; fin_ = []
     for N in N_:  # flood-fill G per seed N
         if N.rim: N.Rt = sum2F(N.rim,root=N,nF='Rt')
