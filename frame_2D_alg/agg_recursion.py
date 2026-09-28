@@ -293,7 +293,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
         for tt,c,r in Gt_: w=c/C; TT+=tt*w; R+=r*w
         M,D = val_(TT* root.wTT*ttcN, fd=1)
         if gv_(M * (C*wcC /((_r+R)*ccC)) * ((len(g__)-1)*wL) - ave):
-            G_ = cluster_C(root, g__,_r+R,C) or G_  # sub_G__ -> med_,agg+
+            G_ = cluster_C(root, g__,_r+R) or G_  # sub_G__ -> med_,agg+
         FV_(CoF.get(), *sum_vt(G_)[:-1],R)  # | G_ r?
     return G_
 
@@ -319,7 +319,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
         if gv_(m* (c*wX / (r*cX)) - ave):  # rng+
             gN_ = cross_comp(G, proj_L_(combinations(N_,2), G,r,nexp=L_[0].nexp+1), r,fagg=0)  # add rng+ Ls
             if G.Lt is not Lt: G.Lt = add2F(Lt, G.Lt, merge=1)
-            if gN_: G.H+= sum2F(gN_); N_= G.N_= gN_
+            if gN_: G.H+= [sum2F(gN_)]; N_= G.N_= gN_
         if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):
             g_ = cluster_N(G, get_exemplars(N_,r), r+1,c)  # higher filter: r+1,-> sub_Gs for CC
             if g_: sum2F(g_,G, nF='Nt' if g_[0].typ==3 else 'Ct')  # unpack tentative G.N_?
@@ -327,7 +327,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G, g_
 
-def cluster_C(root, C_,_r,_c):  # C_: sub-G seeds, expand through their members' rims
+def cluster_C(root, C_,_r):  # C_: sub-G seeds, expand through their members' rims
 
     N_,_C_,tC_,r = set(),C_,[],_r
     for C in _C_: N_.update(C.N_)
@@ -341,16 +341,16 @@ def cluster_C(root, C_,_r,_c):  # C_: sub-G seeds, expand through their members'
                 for n in _N_:
                     if n not in N_: N_.add(n); n.root_,n._root_ = [],[]
                     dtt,_ = base_comp(_C,n)
-                    m,d = val_(dtt,ttcC,1); c += n.c * m
+                    m,d = val_(dtt,ttcC,1); c += max(0, n.c * m)  # m could be negative, and c can't be negative, lowest value of c should be 0?
                     _m,_d = next(((rt[1],rt[2]) for rt in n._root_ if rt[0] is _C), (0,0))  # prior membership, 0 if new
                     if m * n.c > ave* n.r:  # inclusion
-                        up += abs(_m-m)+abs(_d-d); n_+=[n]; m_+=[m]; d_+=[d]; T+=n.c; M+=m*n.c; R+=n.r*n.c; c+=n.c  # separate c?
+                        up += abs(_m-m)+abs(_d-d); n_+=[n]; m_+=[m]; d_+=[d]; T+=n.c; M+=m*n.c; R+=n.r*n.c # separate c? (c already accumulated separately above with n.c * m?)
                     else: up += _m + abs(_d)  # exclusion
                 if not exp:
                     _N_ = list({_n for n in n_ for L in n.rim for _n in L.N_} - in_)  # frontier: rims of kept members, excl. old members
             if not n_: continue
             r = _r + R/T
-            if M * _C.m * (wcC*c / (r*_C.r*ccC)) * ((L:=len(n_)-1)*wL) > ave:
+            if M * _C.m * (wcC*c / (r*_C.r*ccC)) * (((L:=len(n_))-1)*wL) > ave:
                 C = sum2F(n_,root,m_,d_,nF='Ct'); C.typ=2  # -> n.root_
                 if up * (c*wcC / (r*ccC)) * ((L-1)*wL)  > avd:  # len?
                     C_+=[C]; Up+=up; lc+=c  # active Cs' change and estimated next-loop work
@@ -359,8 +359,9 @@ def cluster_C(root, C_,_r,_c):  # C_: sub-G seeds, expand through their members'
         r = _r + rdn/(cnt or eps)
         oC_ = tC_ + C_  # output includes terminated C_
         if C_ and Up * (lc*wcC / (r*ccC)) > avd:
-            posL = len([rt[1]>ave for C in oC_ for n in C.N_ for rt in n.root_])
-            totL = len(root.N_) * len(oC_)  # cluster_P: all Ns in all Cs
+            n_= {n for C in oC_ for n in C.N_}  # unique Cs' Ns only?
+            posL = sum(rt[1]>ave for n in n_ for rt in n.root_) 
+            totL = len(n_) * len(oC_)  # cluster_P: all Ns in all Cs
             if gv_(posL/totL * (lc*wcP / (r*ccP)) * ((len(oC_)-1)*wL) - ave):
                 oC_ = cluster_P(oC_,root); break
             else:
@@ -379,14 +380,14 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
             if c in _C_: _md__[i,_C_.index(c)] = m,d
     while True:
         for N in N_: N.root_ = []  # reset, append in sum2F
-        Lc = len(_C_); L = Lc*Ln  # loop Lc,L,md__
-        md__ = np.zeros((Ln,Lc,2)); O = 0
+        Lc = len(_C_); L = Lc*Ln  # loop Lc,L,md__ (this L is area of Lc * Ln, using something like span is better?)
+        md__ = np.zeros((Ln,Lc,2))
         for j,N in enumerate(N_):
             for i,C in enumerate(_C_): md__[j,i] = val_(base_comp(C,N)[0], ttcP,fd=1)
-            m_ = sorted(md__[j,:,0]); O += sum(m / sum(m_[i+1:]) for i, m in enumerate(m_[:-1])) # cross-C ambiguity, gates split/merge
         C_ = [sum2F(N_, root, md__[:,i,0], md__[:,i,1],nF='Ct') for i in range(Lc)]  # mean shift, aligned to md__
         removed = []
-        if gv_(O*wcP - ave*(root.r+ccP*L)):  # merge redundant Cs
+        posL = (md__[:,:,0] > ave).sum()  # totL = Lc*Ln = L
+        if gv_(posL*wcP - ave*(root.r+ccP*L)):  # merge redundant Cs (totL already in the cost?)
             for i,_C in enumerate(C_):
                 if _C in removed: continue
                 for C in C_[i+1:]:
@@ -398,15 +399,15 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
                             for rt in N.root_:
                                 if rt[0] is C: rt[0] = _C  # update root from C to _C, for olp computation below
         cnt += 1
-        dM = np.abs(md__[:,:,0]-_md__[:,:,0]).sum() if md__.shape==_md__.shape else 0
+        dM = (md__[:,:,0]-_md__[:,:,0]).mean() if md__.shape==_md__.shape else 0  # to get sign, we need to remove abs and use mean to prevent cancellation of different signs?
         if C_ and dM * (wcP / (cnt+root.r+ccP)) > ave:  # next loop, tentative
             _C_ = []; i_ = []
             for i, _C in enumerate(C_):
                 if _C in removed: continue
-                _C.olp = sum(rt[1] for n in _C.N_ for rt in getattr(n, 'root_', []) if rt[0] is not _C and rt[1] > _C.m)
+                _C.olp = sum(rt[1] for n in _C.N_ for rt in n.root_ if rt[0] is not _C and rt[1] > _C.m)  # need normalize here? Because all n.root_ are the same
                 if _C.m * wcP > ave * (_C.r + _C.olp + ccP):  # prune
                     _C_ += [_C]; i_ += [i]  # also after merge and converge
-            md__ = md__[:,i_]; _md__ = md__
+            _md__ = md__[:,i_]  # md__ will be reset anyway
         else:
             if dM < 0: C_ = _C_  # revert to better prior
             break
