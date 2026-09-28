@@ -92,11 +92,12 @@ def cross_comp(root, pL_,r, dF=None, fall=1, fagg=1):  # recursion root
             Link.nexp=nexp; Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT)  # relative prediction error/oF
             L_+=[Link]; N_+=[_N,N]
     if L_:
-        Lt = sum2F(L_,None if dF else root,nF='Lt'); m,tt,c,r = Lt.m,Lt.dTT,Lt.c,Lt.r  # -> root.Lt
-        if dF: add2F(dF,Lt,merge=1); return  # comp_F: no agg+, caller += dF
-        for N in (N_:= list(set(N_))): sum2F(N.rim,N,nF='Rt')  # -> N.Rt
+        Lt = sum2F(L_,None if dF else root,nF='Lt')  # -> root.Lt
+        if dF: add2F(dF,Lt,merge=1); return  # comp_F: no agg+, caller dF
+        for N in (N_:= list(set(N_))): sum2F(N.rim, N,nF='Rt')  # -> N.Rt
+        tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r
         if fagg and gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
-            G_ = cluster_N(root,get_exemplars(N_,r,c),r,c)  # seed C_, agg+
+            G_ = cluster_N(root,get_exemplars(N_,r), r+1,c)  # seed C_, agg+
         FV_(CoF.get(),tt,c,r)
     return G_
 
@@ -129,8 +130,8 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
             dH,dtt,dc,dr = comp_H(_n.Nt, n.Nt, L)
             add_H(L.H,dH,L); htt+=dtt; hc+=dc; hr+=dr
         if hc: L.dTT = (L.dTT*L.c+htt)/ (L.c+hc); L.m,L.d = val_(L.dTT,ttN,1); L.r += hr
-        if N.typ < 3:  # L | C | Nt, merge?
-            for _n,n in product(_N.N_,N.N_): dn_ += [comp_N(_n,n,r,c, rL=L,full=0)]  # CN L.nt, rL spec in comp.N (full = 0 for non CN?)
+        if N.typ < 3:  # Lt|Ct|Nt, merge?
+            for _n,n in product(_N.N_,N.N_): dn_ += [comp_N(_n,n,r,c, rL=L,full=0)]  # CN L.nt, rL spec, full=CN?
         else:  # CN
             for i,(_Ft,Ft, tnF) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct),('Nt','Lt','Bt','Ct'))):
                 if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1  # unique Nt,Lt, rL spec in comp_F
@@ -213,13 +214,13 @@ def comp_A(_A,A):
     '''
     return (cos(dA)+1) /2, dA/pi  # mA in 0:1, dA in -1:1, or invert dA, may be negative?
 
-def get_exemplars(N_,_r,_c):  # no need for _c? multi-layer non-maximum suppression -> sparse clustering seeds, medoids if N.Ct?
+def get_exemplars(N_,_r):  # multi-layer non-maximum suppression -> sparse clustering seeds, medoids if N.Ct
 
     for n in N_:
         rc = sum(r[0].c for r in n.root_); C = n.c + rc
         n.w = ((n.Rt.m * n.c) + sum([r[1]*r[0].c for r in n.root_]))/C
         # combined lateral and vertical match
-    N_= sorted(N_, key=lambda n: n.w, reverse=True); E_,Inh_ = [],set()  # we don't need set here now since N_ is unique anyway
+    N_= sorted(N_, key=lambda n: n.w, reverse=True); E_,Inh_ = [],set()
     for rdn, N in enumerate(N_, start=1):  # strong-first
         inh_ = list(Inh_ & set(N.rim))  # stronger Es in N.rim
         oM = sum_vt(inh_,fm=1, wTT=ttE)[0] if inh_ else 0
@@ -293,7 +294,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
         M,D = val_(TT* root.wTT*ttcN, fd=1)
         if gv_(M * (C*wcC /((_r+R)*ccC)) * ((len(g__)-1)*wL) - ave):
             G_ = cluster_C(root, g__,_r+R,C) or G_  # sub_G__ -> med_,agg+
-        FV_(CoF.get(), *sum_vt(G_)[:-1],R)
+        FV_(CoF.get(), *sum_vt(G_)[:-1],R)  # | G_ r?
     return G_
 
 def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
@@ -314,21 +315,21 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
             cross_comp(F2N(G.Bt), proj_L_(combinations([F2N(L) for L in Bt.N_],2),G,br),br)
         if RR:= root.root: Bt.brrw = Bt.m* (RR.m* (decay* (RR.span/G.span)))  # root - external lend?
     if Lt := G.Lt:  # rng+,sub+
-        m,c,r = Lt.m,Lt.c, Lt.r+_r+1
+        m,c,r = Lt.m,Lt.c, Lt.r+_r
         if gv_(m* (c*wX / (r*cX)) - ave):  # rng+
             gN_ = cross_comp(G, proj_L_(combinations(N_,2), G,r,nexp=L_[0].nexp+1), r,fagg=0)  # add rng+ Ls
             if G.Lt is not Lt: G.Lt = add2F(Lt, G.Lt, merge=1)
             if gN_: G.H+= sum2F(gN_); N_= G.N_= gN_
         if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):
-            g_ = cluster_N(G, get_exemplars(N_,r,c), r,c)  # higher filter: r+1,-> sub_Gs for CC
-            if g_: sum2F(g_,G,nF='Nt' if g_[0].typ==3 else 'Ct')  # unpack tentative G.N_?
+            g_ = cluster_N(G, get_exemplars(N_,r), r+1,c)  # higher filter: r+1,-> sub_Gs for CC
+            if g_: sum2F(g_,G, nF='Nt' if g_[0].typ==3 else 'Ct')  # unpack tentative G.N_?
     if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)  # recompute after deeper sub
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G, g_
 
 def cluster_C(root, C_,_r,_c):  # C_: sub-G seeds, expand through their members' rims
 
-    N_,_C_,oC_,r = set(),C_,[],_r
+    N_,_C_,tC_,r = set(),C_,[],_r
     for C in _C_: N_.update(C.N_)
     for n in N_: n.root_,n._root_ = [],[]
     while True:  # reform C_, update,test C rims
@@ -344,7 +345,7 @@ def cluster_C(root, C_,_r,_c):  # C_: sub-G seeds, expand through their members'
                     _m,_d = next(((rt[1],rt[2]) for rt in n._root_ if rt[0] is _C), (0,0))  # prior membership, 0 if new
                     if m * n.c > ave* n.r:  # inclusion
                         up += abs(_m-m)+abs(_d-d); n_+=[n]; m_+=[m]; d_+=[d]; T+=n.c; M+=m*n.c; R+=n.r*n.c; c+=n.c  # separate c?
-                    else: up += _m+abs(_d)  # exclusion
+                    else: up += _m + abs(_d)  # exclusion
                 if not exp:
                     _N_ = list({_n for n in n_ for L in n.rim for _n in L.N_} - in_)  # frontier: rims of kept members, excl. old members
             if not n_: continue
@@ -353,26 +354,20 @@ def cluster_C(root, C_,_r,_c):  # C_: sub-G seeds, expand through their members'
                 C = sum2F(n_,root,m_,d_,nF='Ct'); C.typ=2  # -> n.root_
                 if up * (c*wcC / (r*ccC)) * ((L-1)*wL)  > avd:  # len?
                     C_+=[C]; Up+=up; lc+=c  # active Cs' change and estimated next-loop work
-                else: oC_+=[C]  # low membership change
-                cnt+=T; rdn+=R
+                else: tC_+=[C]  # terminated if low membership change
+                cnt+=T; rdn+=R  # process costs
         r = _r + rdn/(cnt or eps)
-        if C_ and Up * (lc*wcC / (r*ccC)) > avd: 
-            '''
-            O = 0
-            for n in N_:
-                rm_ = sorted([rt[1] for rt in n.root_])  # sort to get lowest m first, and skip the last m since highest m is not redundant
-                for i, rm in enumerate(rm_[:-1]):
-                    O += rm / sum(rm_[i+1:])  # subsequent rms has higher values
-            '''
-            # same as above, sum of m /= sum of higher ms, but if all n has single root, O is zero, which we need to break?
-            O = sum(rm / sum(rm_[i+1:]) for n in N_ for rm_ in [sorted([rt[1] for rt in n.root_])] for i, rm in enumerate(rm_[:-1]))
-            if gv_(O * (lc*wcP / (r*ccP)) * ((len(oC_+C_)-1)*wL) - ave):
-                oC_ = cluster_P(oC_+C_, root)
-                break
-            for n in N_: n._root_ = n.root_; n.root_ = [rt for rt in n.root_ if rt[0] in oC_]
-            _C_ = C_
-        else: oC_ += C_; break
-    if oC_: FV_(CoF.get(), *sum_vt(oC_)[:-1],r)
+        oC_ = tC_ + C_  # output includes terminated C_
+        if C_ and Up * (lc*wcC / (r*ccC)) > avd:
+            posL = len([rt[1]>ave for C in oC_ for n in C.N_ for rt in n.root_])
+            totL = len(root.N_) * len(oC_)  # cluster_P: all Ns in all Cs
+            if gv_(posL/totL * (lc*wcP / (r*ccP)) * ((len(oC_)-1)*wL) - ave):
+                oC_ = cluster_P(oC_,root); break
+            else:
+                for n in N_: n._root_ = n.root_; n.root_ = [rt for rt in n.root_ if rt[0] in tC_]
+                _C_ = C_  # for next loop
+        else: break
+    if oC_: FV_(CoF.get(), *sum_vt(oC_))
     return oC_
 
 def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
@@ -382,25 +377,14 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
     for i, N in enumerate(N_):
         for c,m,d in N.root_:
             if c in _C_: _md__[i,_C_.index(c)] = m,d
-    _dM = 0; ddM_ = []
     while True:
         for N in N_: N.root_ = []  # reset, append in sum2F
         Lc = len(_C_); L = Lc*Ln  # loop Lc,L,md__
         md__ = np.zeros((Ln,Lc,2)); O = 0
         for j,N in enumerate(N_):
             for i,C in enumerate(_C_): md__[j,i] = val_(base_comp(C,N)[0], ttcP,fd=1)
-            # O follow the same method as in cluster_C?
             m_ = sorted(md__[j,:,0]); O += sum(m / sum(m_[i+1:]) for i, m in enumerate(m_[:-1])) # cross-C ambiguity, gates split/merge
         C_ = [sum2F(N_, root, md__[:,i,0], md__[:,i,1],nF='Ct') for i in range(Lc)]  # mean shift, aligned to md__
-        conv = 0
-        dM = np.abs(md__[:,:,0]-_md__[:,:,0]).sum() if md__.shape==_md__.shape else 0
-        if dM:
-            if _dM:  # first loop doesn't have prior _dM
-                ddM_ += [_dM - dM]; ddM_ = ddM_[-5:]  # summed over last 5 loops
-                if sum(ddM_)<0: break  # break and preserve the last Cs before the divergence
-                conv = wcP*sum(ddM_) <= ave*(cnt+root.r+ccP)
-            _dM = dM
-        else: conv = 1
         removed = []
         if gv_(O*wcP - ave*(root.r+ccP*L)):  # merge redundant Cs
             for i,_C in enumerate(C_):
@@ -413,34 +397,36 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
                         for N in C.N_:
                             for rt in N.root_:
                                 if rt[0] is C: rt[0] = _C  # update root from C to _C, for olp computation below
-        _C_ = []; i_ = []  # for next loop
-        for i, _C in enumerate(C_):
-            if _C in removed: continue
-            _C.olp = sum(rt[1] for n in _C.N_ for rt in getattr(n, 'root_', []) if rt[0] is not _C and rt[1] > _C.m)
-            if _C.m * wcP > ave * (_C.r + _C.olp + ccP):  # prune
-                _C_ += [_C]; i_ += [i]  # also after merge and converge
-        md__ = md__[:,i_]; _md__ = md__
-        if not _C_ or (conv and (not removed) and len(_C_)==Lc):  # skip if all _C_ failed the  c.m*wcP > ave*c.r*ccP eval above
-            break
         cnt += 1
+        dM = np.abs(md__[:,:,0]-_md__[:,:,0]).sum() if md__.shape==_md__.shape else 0
+        if C_ and dM * (wcP / (cnt+root.r+ccP)) > ave:  # next loop, tentative
+            _C_ = []; i_ = []
+            for i, _C in enumerate(C_):
+                if _C in removed: continue
+                _C.olp = sum(rt[1] for n in _C.N_ for rt in getattr(n, 'root_', []) if rt[0] is not _C and rt[1] > _C.m)
+                if _C.m * wcP > ave * (_C.r + _C.olp + ccP):  # prune
+                    _C_ += [_C]; i_ += [i]  # also after merge and converge
+            md__ = md__[:,i_]; _md__ = md__
+        else:
+            if dM < 0: C_ = _C_  # revert to better prior
+            break
     out_ = []
     for N in N_: N.root_ = []  # replace with out_ Cs:
-    for i, _C in enumerate(_C_):
-        if _C.m > ave * _C.r:  # prune, add olp as stronger ms?
+    for i, C in enumerate(C_):
+        if C.m > ave * C.r:  # prune, add olp as stronger ms?
             N_,m_,d_ = [],[],[]
-            for N, m,d in zip(_C.N_, _md__[:,i,0], _md__[:,i,1]):
+            for N, m,d in zip(C.N_, _md__[:,i,0], _md__[:,i,1]):
                 if m*N.c > ave*N.r: N_+=[N]; m_+=[m]; d_+=[d]
             if N_:
-                C = sum2F(N_,root, m_,d_,nF='Ct')
+                oC = sum2F(N_,root, m_,d_,nF='Ct')
                 for N in N_:
                     L = CN(typ=1, dTT=N.dTT,c=N.c,r=N.r,m=N.m,d=N.d, span=np.hypot(*(dy_dx:=C.yx-N.yx)), angl=[dy_dx,np.sign(N.dTT[1]@ttcN[1])])
                     L.N_ = [N,C]; C.L_ += [L]
-                out_ += [C]
+                out_ += [oC]
     if out_:
         iTT, iC, iR = sum_vt(iC_); oTT,oC,oR = sum_vt(out_)
         FV_(CoF.get(), iTT-oTT, iC-oC, iR-oR)
     return out_
-
 
 def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
 
