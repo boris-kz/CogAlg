@@ -341,10 +341,10 @@ def cluster_C(root, C_,_r):  # C_: sub-G seeds, expand through their members' ri
                 for n in _N_:
                     if n not in N_: N_.add(n); n.root_,n._root_ = [],[]
                     dtt,_ = base_comp(_C,n)
-                    m,d = val_(dtt,ttcC,1); c += max(0, n.c * m)  # m could be negative, and c can't be negative, lowest value of c should be 0?
+                    m,d = val_(dtt,ttcC,1); c+=n.c; _C.m += n.c * m  # mass-weighted?
                     _m,_d = next(((rt[1],rt[2]) for rt in n._root_ if rt[0] is _C), (0,0))  # prior membership, 0 if new
                     if m * n.c > ave* n.r:  # inclusion
-                        up += abs(_m-m)+abs(_d-d); n_+=[n]; m_+=[m]; d_+=[d]; T+=n.c; M+=m*n.c; R+=n.r*n.c # separate c? (c already accumulated separately above with n.c * m?)
+                        up += abs(_m-m)+abs(_d-d); n_+=[n]; m_+=[m]; d_+=[d]; T+=n.c; M+=m*n.c; R+=n.r*n.c # separate c?
                     else: up += _m + abs(_d)  # exclusion
                 if not exp:
                     _N_ = list({_n for n in n_ for L in n.rim for _n in L.N_} - in_)  # frontier: rims of kept members, excl. old members
@@ -359,9 +359,8 @@ def cluster_C(root, C_,_r):  # C_: sub-G seeds, expand through their members' ri
         r = _r + rdn/(cnt or eps)
         oC_ = tC_ + C_  # output includes terminated C_
         if C_ and Up * (lc*wcC / (r*ccC)) > avd:
-            n_= {n for C in oC_ for n in C.N_}  # unique Cs' Ns only?
-            posL = sum(rt[1]>ave for n in n_ for rt in n.root_) 
-            totL = len(n_) * len(oC_)  # cluster_P: all Ns in all Cs
+            posL = sum([rt[1]>ave for C in oC_ for n in C.N_ for rt in n.root_])
+            totL = len(root.N_) * len(oC_)  # cluster_P: all Ns in all Cs
             if gv_(posL/totL * (lc*wcP / (r*ccP)) * ((len(oC_)-1)*wL) - ave):
                 oC_ = cluster_P(oC_,root); break
             else:
@@ -399,15 +398,15 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
                             for rt in N.root_:
                                 if rt[0] is C: rt[0] = _C  # update root from C to _C, for olp computation below
         cnt += 1
-        dM = (md__[:,:,0]-_md__[:,:,0]).mean() if md__.shape==_md__.shape else 0  # to get sign, we need to remove abs and use mean to prevent cancellation of different signs?
+        dM = (md__[:,:,0]-_md__[:,:,0]).mean() if md__.shape==_md__.shape else 0  # convergence, may be negative
         if C_ and dM * (wcP / (cnt+root.r+ccP)) > ave:  # next loop, tentative
             _C_ = []; i_ = []
             for i, _C in enumerate(C_):
                 if _C in removed: continue
-                _C.olp = sum(rt[1] for n in _C.N_ for rt in n.root_ if rt[0] is not _C and rt[1] > _C.m)  # need normalize here? Because all n.root_ are the same
+                _C.olp = sum(rt[1] for n in _C.N_ for rt in n.root_ if rt[0] is not _C and rt[1] > _C.m)
                 if _C.m * wcP > ave * (_C.r + _C.olp + ccP):  # prune
                     _C_ += [_C]; i_ += [i]  # also after merge and converge
-            _md__ = md__[:,i_]  # md__ will be reset anyway
+            _md__ = md__[:,i_]
         else:
             if dM < 0: C_ = _C_  # revert to better prior
             break
