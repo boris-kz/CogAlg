@@ -95,9 +95,9 @@ def cross_comp(root, pL_,r, dF=None, fall=1, fagg=1):  # recursion root
         Lt = sum2F(L_,None if dF else root,nF='Lt')  # -> root.Lt
         if dF: add2F(dF,Lt,merge=1); return  # comp_F: no agg+, caller dF
         for N in (N_:= list(set(N_))): sum2F(N.rim, N,nF='Rt')  # -> N.Rt
-        tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r
-        if fagg and gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
-            G_ = cluster_N(root,get_exemplars(N_,r), r+1,c)  # seed C_, agg+
+        tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r  # include input r to the r here?
+        if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
+            G_ = cluster_N(root,get_exemplars(N_,r), r+1,c, fagg)  # seed C_, agg+
         FV_(CoF.get(),tt,c,r)
     return G_
 
@@ -241,7 +241,7 @@ def nt_vt(n,_n):
         elif l.d > 0: D += l.d
     return M, D
 
-def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace iL_ with E_?
+def cluster_N(root, _N_, _r,_c, fagg=1):  # flood-fill node | link clusters, flat, replace iL_ with E_?
 
     def trans_cluster(G):
         for L in G.L_:
@@ -292,7 +292,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
         C = sum([g[1] for g in Gt_]); TT=np.zeros((2,9)); R=0; _r+=1  # + wC?
         for tt,c,r in Gt_: w=c/C; TT+=tt*w; R+=r*w
         M,D = val_(TT* root.wTT*ttcN, fd=1)
-        if gv_(M * (C*wcC /((_r+R)*ccC)) * ((len(g__)-1)*wL) - ave):
+        if fagg and gv_(M * (C*wcC /((_r+R)*ccC)) * ((len(g__)-1)*wL) - ave):  # fagg should be here?
             G_ = cluster_C(root, g__,_r+R) or G_  # sub_G__ -> med_,agg+
         FV_(CoF.get(), *sum_vt(G_)[:-1],R)  # | G_ r?
     return G_
@@ -317,6 +317,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
     if Lt := G.Lt:  # rng+,sub+
         m,c,r = Lt.m,Lt.c, Lt.r+_r
         if gv_(m* (c*wX / (r*cX)) - ave):  # rng+
+            # fagg skip deeper cluster_N, we will never get gN_
             gN_ = cross_comp(G, proj_L_(combinations(N_,2), G,r,nexp=L_[0].nexp+1), r,fagg=0)  # add rng+ Ls
             if G.Lt is not Lt: G.Lt = add2F(Lt, G.Lt, merge=1)
             if gN_: G.H+= [sum2F(gN_)]; N_= G.N_= gN_
@@ -331,7 +332,7 @@ def cluster_C(root, C_,_r):  # C_: sub-G seeds, expand through their members' ri
 
     N_,_C_,tC_,r = set(),C_,[],_r
     for C in _C_: N_.update(C.N_)
-    for n in N_: n.root_,n._root_ = [],[]
+    for n in N_: n.root_,n._root_ = [],[]  # may wipe out existing n.root_
     while True:  # reform C_, update,test C rims
         C_,cnt,rdn,Up,lc = [],0,0,0,0
         for _C in _C_:
@@ -359,8 +360,8 @@ def cluster_C(root, C_,_r):  # C_: sub-G seeds, expand through their members' ri
         r = _r + rdn/(cnt or eps)
         oC_ = tC_ + C_  # output includes terminated C_
         if C_ and Up * (lc*wcC / (r*ccC)) > avd:
-            posL = sum([rt[1]>ave for C in oC_ for n in C.N_ for rt in n.root_])
-            totL = len(root.N_) * len(oC_)  # cluster_P: all Ns in all Cs
+            n_ = [n for C in oC_ for n in C.N_]; posL = sum([rt[1]>ave for n in n_ for rt in n.root_])
+            totL = len(n_) * len(oC_)  # cluster_P: all Ns in all Cs (root.N_ is not necessary n_ here, since input nodes are clustered g__)
             if gv_(posL/totL * (lc*wcP / (r*ccP)) * ((len(oC_)-1)*wL) - ave):
                 oC_ = cluster_P(oC_,root); break
             else:
@@ -379,14 +380,14 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
             if c in _C_: _md__[i,_C_.index(c)] = m,d
     while True:
         for N in N_: N.root_ = []  # reset, append in sum2F
-        Lc = len(_C_); L = Lc*Ln  # loop Lc,L,md__ (this L is area of Lc * Ln, using something like span is better?)
+        Lc = len(_C_); totL = Lc*Ln  # loop Lc,L,md__ (this L is area of Lc * Ln, using something like span is better?)
         md__ = np.zeros((Ln,Lc,2))
         for j,N in enumerate(N_):
             for i,C in enumerate(_C_): md__[j,i] = val_(base_comp(C,N)[0], ttcP,fd=1)
         C_ = [sum2F(N_, root, md__[:,i,0], md__[:,i,1],nF='Ct') for i in range(Lc)]  # mean shift, aligned to md__
         removed = []
-        posL = (md__[:,:,0] > ave).sum()  # totL = Lc*Ln = L
-        if gv_(posL*wcP - ave*(root.r+ccP*L)):  # merge redundant Cs (totL already in the cost?)
+        posL = (md__[:,:,0] > ave).sum()
+        if gv_(posL*wcP - ave*(root.r+ccP*totL)):  # merge redundant Cs
             for i,_C in enumerate(C_):
                 if _C in removed: continue
                 for C in C_[i+1:]:
@@ -430,10 +431,14 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
 
 def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
 
-    c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); w_ = c_/C; N = N_[0]
+    c_ = np.array([n.c for n in N_], dtype=float); N = N_[0]
     fC = any(m_); TT,R = np.zeros((2,9)),0
+    if fC: 
+        r = np.array(m_)/sum(m_)   # differential initialization to break symmetry
+        C = (c_ * r).sum()  # scale C instead? else all Cs has the same c
+    else: C = c_.sum();   
+    w_ = c_/C
     typ = 0 if nF=='Nt' else 2 if fC else N.typ  # Nt: summary only
-    if fC: w_ *= np.array(m_)/sum(m_)  # differential initialization to break symmetry
     cls_ = [CF,CL,CL,CN]  # typ=2 CCs
     for i, (n,w) in enumerate(zip(N_,w_)):
         if i:
