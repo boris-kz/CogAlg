@@ -85,19 +85,19 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
 '''
 def cross_comp(root, pL_,r, dF=None, fall=1, fagg=1):  # recursion root
 
-    L_,N_,G_ = [],[],[]
+    L_,N_,G_,V = [],[],[],0
     for dist, dy_dx, _N,N, lc,lr, pTT,m,_,nexp in pL_:
         if _N != N and (fall or (m>0 and gv_(m*(lc*wN/(lr*cN)) - ave* (r+cN)))):
             Link = comp_N(_N,N, lr,lc, full=not dF, A=dy_dx, span=dist, rL=root)
             Link.nexp=nexp; Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT)  # relative prediction error/oF
             L_+=[Link]; N_+=[_N,N]
-    if L_:
+    if L_:= L_ + (root.L_ if not fagg else []):  # += rng+
         Lt = sum2F(L_,None if dF else root,nF='Lt')  # -> root.Lt
-        if dF: add2F(dF,Lt,merge=1); return  # comp_F: no agg+, caller dF
-        for N in (N_:= list(set(N_))): sum2F(N.rim, N,nF='Rt')  # -> N.Rt
+        if dF: add2F(dF,Lt,merge=1); return  # comp_F: no agg+, dF out
+        for N in (N_:= list(set(N_))): sum2F(N.rim, N, nF='Rt')  # -> N.Rt
         tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r
-        if fagg and gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
-            G_ = cluster_N(root,get_exemplars(N_,r), r+1,c)  # seed C_, agg+
+        if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
+            G_ = cluster_N(root,get_exemplars(N_,r), r+1,c)  # seed C_->CC, agg+
         FV_(CoF.get(),tt,c,r)
     return G_
 
@@ -329,7 +329,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
 
 def cluster_C(root, C_,_r):  # C_: sub-G seeds, expand through their members' rims
 
-    N_,_C_,tC_,r = set(),C_,[],_r
+    N_,_C_,tC_ = set(),C_,[]
     for C in _C_: N_.update(C.N_)
     for n in N_: n.root_,n._root_ = [],[]
     while True:  # reform C_, update,test C rims
@@ -359,8 +359,9 @@ def cluster_C(root, C_,_r):  # C_: sub-G seeds, expand through their members' ri
         r = _r + rdn/(cnt or eps)
         oC_ = tC_ + C_  # output includes terminated C_
         if C_ and Up * (lc*wcC / (r*ccC)) > avd:
-            posL = sum([rt[1]>ave for C in oC_ for n in C.N_ for rt in n.root_])
-            totL = len(root.N_) * len(oC_)  # cluster_P: all Ns in all Cs
+            N__ = {n for C in oC_ for n in C.N_}
+            posL = sum(rt[1]>ave for n in N__ for rt in n.root_)
+            totL = len(N__) * len(oC_)
             if gv_(posL/totL * (lc*wcP / (r*ccP)) * ((len(oC_)-1)*wL) - ave):
                 oC_ = cluster_P(oC_,root); break
             else:
@@ -379,14 +380,14 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
             if c in _C_: _md__[i,_C_.index(c)] = m,d
     while True:
         for N in N_: N.root_ = []  # reset, append in sum2F
-        Lc = len(_C_); L = Lc*Ln  # loop Lc,L,md__ (this L is area of Lc * Ln, using something like span is better?)
+        Lc = len(_C_); totL = Lc*Ln  # loop Lc,L,md__ (this L is area of Lc * Ln, using something like span is better?)
         md__ = np.zeros((Ln,Lc,2))
         for j,N in enumerate(N_):
             for i,C in enumerate(_C_): md__[j,i] = val_(base_comp(C,N)[0], ttcP,fd=1)
         C_ = [sum2F(N_, root, md__[:,i,0], md__[:,i,1],nF='Ct') for i in range(Lc)]  # mean shift, aligned to md__
         removed = []
-        posL = (md__[:,:,0] > ave).sum()  # totL = Lc*Ln = L
-        if gv_(posL*wcP - ave*(root.r+ccP*L)):  # merge redundant Cs (totL already in the cost?)
+        posL = (md__[:,:,0] > ave).sum()
+        if gv_(posL*wcP - ave*(root.r+ccP*totL)):  # merge redundant Cs
             for i,_C in enumerate(C_):
                 if _C in removed: continue
                 for C in C_[i+1:]:
@@ -430,10 +431,17 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
 
 def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
 
-    c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); w_ = c_/C; N = N_[0]
+    c_ = np.array([n.c for n in N_], dtype=float); N = N_[0]
     fC = any(m_); TT,R = np.zeros((2,9)),0
+    C = c_.sum()
+    w_ = c_ * np.array(m_) if fC else c_.copy()
+    w_ /= w_.sum()
+    # if fC:
+    #    r = np.array(m_)/sum(m_)   # differential initialization to break symmetry
+    #    C = (c_ * r).sum()  # scale C instead? else all Cs has the same c
+    # else: C = c_.sum();
+    # w_ = c_/C
     typ = 0 if nF=='Nt' else 2 if fC else N.typ  # Nt: summary only
-    if fC: w_ *= np.array(m_)/sum(m_)  # differential initialization to break symmetry
     cls_ = [CF,CL,CL,CN]  # typ=2 CCs
     for i, (n,w) in enumerate(zip(N_,w_)):
         if i:
