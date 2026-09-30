@@ -85,19 +85,19 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
 '''
 def cross_comp(root, pL_,r, dF=None, fall=1, fagg=1):  # recursion root
 
-    L_,N_,G_ = [],[],[]
+    L_,N_,G_,V = [],[],[],0
     for dist, dy_dx, _N,N, lc,lr, pTT,m,_,nexp in pL_:
         if _N != N and (fall or (m>0 and gv_(m*(lc*wN/(lr*cN)) - ave* (r+cN)))):
             Link = comp_N(_N,N, lr,lc, full=not dF, A=dy_dx, span=dist, rL=root)
             Link.nexp=nexp; Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT)  # relative prediction error/oF
             L_+=[Link]; N_+=[_N,N]
-    if L_:
+    if L_:= L_ + (root.L_ if not fagg else []):  # += rng+
         Lt = sum2F(L_,None if dF else root,nF='Lt')  # -> root.Lt
-        if dF: add2F(dF,Lt,merge=1); return  # comp_F: no agg+, caller dF
-        for N in (N_:= list(set(N_))): sum2F(N.rim, N,nF='Rt')  # -> N.Rt
-        tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r  # include input r to the r here?
+        if dF: add2F(dF,Lt,merge=1); return  # comp_F: no agg+, dF out
+        for N in (N_:= list(set(N_))): sum2F(N.rim, N, nF='Rt')  # -> N.Rt
+        tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r
         if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
-            G_ = cluster_N(root,get_exemplars(N_,r), r+1,c, fagg)  # seed C_, agg+
+            G_ = cluster_N(root,get_exemplars(N_,r), r+1,c)  # seed C_->CC, agg+
         FV_(CoF.get(),tt,c,r)
     return G_
 
@@ -241,7 +241,7 @@ def nt_vt(n,_n):
         elif l.d > 0: D += l.d
     return M, D
 
-def cluster_N(root, _N_, _r,_c, fagg=1):  # flood-fill node | link clusters, flat, replace iL_ with E_?
+def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace iL_ with E_?
 
     def trans_cluster(G):
         for L in G.L_:
@@ -292,7 +292,7 @@ def cluster_N(root, _N_, _r,_c, fagg=1):  # flood-fill node | link clusters, fla
         C = sum([g[1] for g in Gt_]); TT=np.zeros((2,9)); R=0; _r+=1  # + wC?
         for tt,c,r in Gt_: w=c/C; TT+=tt*w; R+=r*w
         M,D = val_(TT* root.wTT*ttcN, fd=1)
-        if fagg and gv_(M * (C*wcC /((_r+R)*ccC)) * ((len(g__)-1)*wL) - ave):  # fagg should be here?
+        if gv_(M * (C*wcC /((_r+R)*ccC)) * ((len(g__)-1)*wL) - ave):
             G_ = cluster_C(root, g__,_r+R) or G_  # sub_G__ -> med_,agg+
         FV_(CoF.get(), *sum_vt(G_)[:-1],R)  # | G_ r?
     return G_
@@ -317,7 +317,6 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
     if Lt := G.Lt:  # rng+,sub+
         m,c,r = Lt.m,Lt.c, Lt.r+_r
         if gv_(m* (c*wX / (r*cX)) - ave):  # rng+
-            # fagg skip deeper cluster_N, we will never get gN_
             gN_ = cross_comp(G, proj_L_(combinations(N_,2), G,r,nexp=L_[0].nexp+1), r,fagg=0)  # add rng+ Ls
             if G.Lt is not Lt: G.Lt = add2F(Lt, G.Lt, merge=1)
             if gN_: G.H+= [sum2F(gN_)]; N_= G.N_= gN_
@@ -330,9 +329,9 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
 
 def cluster_C(root, C_,_r):  # C_: sub-G seeds, expand through their members' rims
 
-    N_,_C_,tC_,r = set(),C_,[],_r
+    N_,_C_,tC_ = set(),C_,[]
     for C in _C_: N_.update(C.N_)
-    for n in N_: n.root_,n._root_ = [],[]  # may wipe out existing n.root_
+    for n in N_: n.root_,n._root_ = [],[]
     while True:  # reform C_, update,test C rims
         C_,cnt,rdn,Up,lc = [],0,0,0,0
         for _C in _C_:
@@ -360,8 +359,9 @@ def cluster_C(root, C_,_r):  # C_: sub-G seeds, expand through their members' ri
         r = _r + rdn/(cnt or eps)
         oC_ = tC_ + C_  # output includes terminated C_
         if C_ and Up * (lc*wcC / (r*ccC)) > avd:
-            n_ = [n for C in oC_ for n in C.N_]; posL = sum([rt[1]>ave for n in n_ for rt in n.root_])
-            totL = len(n_) * len(oC_)  # cluster_P: all Ns in all Cs (root.N_ is not necessary n_ here, since input nodes are clustered g__)
+            N__ = {n for C in oC_ for n in C.N_}
+            posL = sum(rt[1]>ave for n in N__ for rt in n.root_)
+            totL = len(N__) * len(oC_)
             if gv_(posL/totL * (lc*wcP / (r*ccP)) * ((len(oC_)-1)*wL) - ave):
                 oC_ = cluster_P(oC_,root); break
             else:
@@ -433,11 +433,14 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
 
     c_ = np.array([n.c for n in N_], dtype=float); N = N_[0]
     fC = any(m_); TT,R = np.zeros((2,9)),0
-    if fC: 
-        r = np.array(m_)/sum(m_)   # differential initialization to break symmetry
-        C = (c_ * r).sum()  # scale C instead? else all Cs has the same c
-    else: C = c_.sum();   
-    w_ = c_/C
+    C = c_.sum()
+    w_ = c_ * np.array(m_) if fC else c_.copy()
+    w_ /= w_.sum()
+    # if fC:
+    #    r = np.array(m_)/sum(m_)   # differential initialization to break symmetry
+    #    C = (c_ * r).sum()  # scale C instead? else all Cs has the same c
+    # else: C = c_.sum();
+    # w_ = c_/C
     typ = 0 if nF=='Nt' else 2 if fC else N.typ  # Nt: summary only
     cls_ = [CF,CL,CL,CN]  # typ=2 CCs
     for i, (n,w) in enumerate(zip(N_,w_)):
