@@ -161,16 +161,13 @@ def comp_N_astra(_N,N, r,c, full=1, A=None,span=None, rL=None):
 
     def sum_dF_(dFt,L):
         for dF in dFt:
-            if dF.nF=='Nt': add_H(L.H,dF.H,L)
-        lev = sum2F(dFt); lev.root=L; L.H += [lev]
+            if dF.nF=='Nt': add_H(L.H,dF.H,L); break
+        lev = sum2F(dFt,nF='tF'); lev.root=L; L.H += [lev]
         TT,C,R = lev.dTT,lev.c,lev.r
         w = C/L.c * (L.r/R)
-        L.dTT = (L.dTT + TT*w) / (1+w)
+        L.dTT = (L.dTT + TT*w) / (1+w)  # why 1+w? Same as comp_H below.
         L.r = (L.r + R*w) / (1+w); L.c += C
         L.m,L.d = val_(L.dTT,ttN,1)
-
-    def sum_dN_(dN_,L):
-        sum_dF_([sum2F(dN_,nF='Nt')],L)  # pack Nt and merge dN.H
 
     def comp_H(_N,N,L):
         dH,TT,C,R = [],np.zeros((2,9)),0,0
@@ -181,6 +178,7 @@ def comp_N_astra(_N,N, r,c, full=1, A=None,span=None, rL=None):
             TT += tt*lc; C += lc; R += lr*lc; m,d = val_(tt,ttN,1)
             dH += [CF(dTT=tt,m=m,d=d,c=lc,r=lr,root=L)]
         if not C: return
+        L.H = [Copy_(L,root=L)]  # pack existing top level before add dH below?
         TT/=C; R/=C
         w = C/L.c * (L.r/R)
         L.dTT = (L.dTT + TT*w) / (1+w)
@@ -197,17 +195,18 @@ def comp_N_astra(_N,N, r,c, full=1, A=None,span=None, rL=None):
         L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2
     else: dTT = comp_derT(_N.dTT[1],N.dTT[1])
     m,d = val_(dTT,ttN,1); L.dTT,L.m,L.d = dTT,m,d
-    if N.typ >1:
+    if N.typ:  # include converted B or Ls, skip PPs
         L.H = [Copy_(L,root=L)]  # direct level, skipped by trans_cluster
-        dn_ = []; fF = N.typ==3 and gv_(m* (c*wN /(r*cN)) - ave)
-        if fF:
+        dn_ = []; fN = N.typ==3 and gv_(m* (c*wN /(r*cN)) - ave)
+        if fN:  # CN only
             for i,(_Ft,Ft) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct))):
                 if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1
-        elif gv_(m* (c*wF /(r*cF)) - ave):
+        elif gv_(m* (c*wF /(r*cF)) - ave):  # L or B
             for _n,n in product(_N.N_,N.N_):
                 dn_ += [comp_N(_n,n,r,min(_n.c,n.c),rL=L,full=0)]
         if dn_:
-            sum_dF_(dn_,L) if fF else sum_dN_(dn_,L)
+            L.H = [Copy_(L,root=L)]  # pack current top level
+            sum_dF_(dn_ if fN else [sum2F(dn_,nF='Nt')],L)  # multiple trans fork if fN else single trans tNt
         elif _N.H and N.H:
             comp_H(_N,N,L)
     if full:
@@ -393,7 +392,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
             if gN_ := cross_comp(G, proj_L_(combinations(N_,2), G,r,nexp=L_[0].nexp+1), r,fagg=0):
                 G.H+= [sum2F(gN_)]; N_= G.N_= gN_
         if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):
-            if N_[0].typ != 3: N_ = [F2N(N) for N in N_]  # convert Cs from cross_comp above
+            if not isinstance(N_[0],CN): N_ = [F2N(N) for N in N_]  # convert Cs from cross_comp above
             g_ = cluster_N(G, get_exemplars(N_,r), r+1,c)  # higher filter: r+1,-> sub_Gs for CC
             if g_: sum2F(g_,G, nF='Nt' if g_[0].typ==3 else 'Ct')  # unpack tentative G.N_?
     if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)  # recompute after deeper sub
@@ -508,13 +507,8 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
     c_ = np.array([n.c for n in N_], dtype=float); N = N_[0]
     fC = any(m_); TT,R = np.zeros((2,9)),0
     C = c_.sum()
-    w_ = c_ * np.array(m_) if fC else c_.copy()
+    w_ = c_ * np.array(m_)/max(m_) if fC else c_.copy()  # m_ should be normalized with their max? So that it scales c_ from 0 to 1
     w_ /= w_.sum()
-    # if fC:
-    #    r = np.array(m_)/sum(m_)   # differential initialization to break symmetry
-    #    C = (c_ * r).sum()  # scale C instead? else all Cs has the same c
-    # else: C = c_.sum();
-    # w_ = c_/C
     typ = 0 if nF=='Nt' else 2 if fC else N.typ  # Nt: summary only
     cls_ = [CF,CL,CL,CN]  # typ=2 CCs
     for i, (n,w) in enumerate(zip(N_,w_)):
@@ -547,7 +541,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
             root.Nt = F; F.root = root; root.dTT=copy(F.dTT); root.m,root.d,root.c,root.r = F.m,F.d,F.c,F.r
         else:
             if nF and not fC and isinstance(root,CN): setattr(root,nF,F); F.root = root  # root.Lt|Rt|Ct
-            if nF not in ('Ct','Rt'): add2F(root,F,2)
+            if nF not in ('Ct','Rt','tF'): add2F(root,F,2)  # tF's params will be summed separately
     if froot == 1:
         for n in N_: n.root = root or F
     elif froot == 2: F.root = root
@@ -590,7 +584,6 @@ def F2N(F):  # convert for cross_comp
     Na_ = dict(H=copy(F.H), mang=1, box=box, exe=0, root_=copy(F.root_), compared = set())
     if F.typ==0 and not hasattr(F, 'kern'):  # CF | PP, no overlap for Cs (only CF)
         Na_.update(kern=np.zeros(4), span=1, angl=None, yx=np.zeros(2))
-    F.typ = 3  # after the typ check above
     for k,v in Na_.items(): setattr(F, k, copy(v))
     [setattr(F, ft, CF(root=F)) for ft in ('Lt','Ct','Bt','Xt','Rt') if not getattr(F, ft, None)]
     if L_: F.H += [sum2F(L_, F)]
