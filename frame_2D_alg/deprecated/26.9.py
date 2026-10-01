@@ -907,3 +907,46 @@ def sum2G1(ft_, fTT, root=None, init=1):  # finalize cluster
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G
 
+def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
+
+    def comp_H(_Nt,Nt, Link):  # tentative pre-comp, before comp N_?
+        dH, TT,C,R = [],np.zeros((2,9)),0,0
+        for _lev, lev in zip(_Nt.H+[_Nt], Nt.H+[Nt]):  # should be top-down
+            if not (_lev and lev): continue  # skip empty level
+            tt = comp_derT(_lev.dTT[1],lev.dTT[1])
+            lc = min(_lev.c,lev.c); lr = (_lev.r+lev.r)/2; m,d = val_(tt,ttN,1)
+            dH += [CF(dTT=tt,m=m,d=d,c=lc,r=lr,root=Link)]
+            TT += tt*lc; C+=lc; R+=lr*lc
+        return dH,TT,C, (r* Link.c+R)/ (Link.c+C)  # same norm for tt?
+
+    L = CL(N_=[_N,N], c=c,r=r,root=rL)
+    if full:
+        dTT = base_comp(_N,N)[0]
+        if span is None: span = np.hypot(*_N.yx - N.yx)
+        yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
+        box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
+        angl = [np.zeros(2) if A is None else A, np.sign(dTT[1] @ ttN[1])]
+        L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2
+    else: dTT = comp_derT(_N.dTT[1],N.dTT[1])
+    m,d = val_(dTT, ttN,1); L.dTT,L.m,L.d = dTT,m,d
+    if N.typ > 1 and gv_(m *(c/r) *wN - ave*(r+cN)):  # skip PPs, Nts?
+        L.H = [Copy_(L)]  # lev0 to preserve resolution before adding deeper tLevs, min len_H=2
+        htt,hc,hr = np.zeros((2,9)),0,0; dn_ = []  # cross_comp N_| Ft_-> top tLev
+        for _n,n in product(_N.N_,N.N_):  # breadth first per N_ batch
+            dH,dtt,dc,dr = comp_H(_n.Nt, n.Nt, L)
+            add_H(L.H,dH,L); htt+=dtt; hc+=dc; hr+=dr
+        if hc: L.dTT = (L.dTT*L.c+htt)/ (L.c+hc); L.m,L.d = val_(L.dTT,ttN,1); L.r += hr
+        if N.typ < 3:  # Lt|Ct|Nt, merge?
+            for _n,n in product(_N.N_,N.N_): dn_ += [comp_N(_n,n,r,c, rL=L,full=0)]  # CN L.nt, rL spec, full=CN?
+        else:  # CN
+            for i,(_Ft,Ft, tnF) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct),('Nt','Lt','Bt','Ct'))):
+                if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1  # unique Nt,Lt, rL spec in comp_F
+        if dn_:
+            [add_H(L.H, d.H, L) for d in dn_ if d.H]  # lower levs
+            L.H += [sum2F(dn_,L)]  # top lev
+        # merge if no or weak Bt? comp x fork, H levs?
+    if full:
+        for n, _n in (_N,N),(N,_N): n.rim += [L]
+    FV_(CoF.get(), L.dTT, L.c, L.r)
+    # or merge N -> _N?
+    return L
