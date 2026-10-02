@@ -104,29 +104,28 @@ def cross_comp(root, pL_,r, dF=None, fall=1, fagg=1):  # recursion root
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
 
-    def sum_dF_(dFt,L):
+    def sum_dF_(dFt, L):
         for dF in dFt:
-            add2F(getattr(L.H[0], dF.nF), dF)  # each level in L.H is dFt
-            if dF.nF=='Nt': add_H(L.H,dF.H, L)  # or in add2F?
-    def sum_dN_(dN_,L):
-        for dN in dN_: add_H(L.H, dN.H, L)
-        TT,C,R = sum_vt(dn_)
+            if dF.nF=='Nt': add_H(L.H,dF.H,L); break
+        L.H += [lev:= sum2F(dFt, nF='tF',root=L)]
+        TT, C, R = lev.dTT,lev.c,lev.r
         w = C/L.c * (L.r/R)
-        L.dTT = (L.dTT + TT*w) / (1+w); L.m,L.d = val_(L.dTT,ttN,1)
-        L.r = (L.r+ R*w) / (1+w)
+        L.dTT = (L.dTT+ TT*w) / (1+w); L.m,L.d = val_(L.dTT,ttN,1); L.r = (L.r+ R*w) / (1+w)
         L.c += C
     def comp_H(_N, N, L):
         dH,TT,C,R = [],np.zeros((2,9)),0,0
-        for _lev, lev in zip(_N.H+[_N], N.H+[N]):  # should be top-down
-            if not (_lev and lev): continue  # skip empty level
+        for _lev,lev in zip(_N.H,N.H):  # current dTT already compared
+            if not (_lev and lev): continue
             tt = comp_derT(_lev.dTT[1],lev.dTT[1])
             lc = min(_lev.c,lev.c); lr = (_lev.r+lev.r)/2
-            TT += tt*lc; C += lc; R += lr*lc; m,d = val_(tt,ttN,1)
+            C += lc; R += lr*lc; TT += tt*lc; m,d = val_(tt,ttN,1)
             dH += [CF(dTT=tt,m=m,d=d,c=lc,r=lr,root=L)]
+        if not C: return
+        L.H = [Copy_(L,root=L)]  # pack existing top level before add dH below?
         TT/=C; R/=C
-        w = C/L.c * (L.r/R)  # dH weight
-        L.dTT = (L.dTT + TT*w) / (1+w)
-        L.r = (L.r+ R*w) / (1+w); L.c += C; L.m, L.d = val_(L.dTT,ttN,1)
+        w = C/L.c * (L.r/R)
+        L.dTT = (L.dTT + TT*w) / (1+w); L.m,L.d = val_(L.dTT,ttN,1)
+        L.r = (L.r+R*w) / (1+w); L.c += C
         L.H += dH
     L = CL(N_=[_N,N], c=c,r=r,root=rL)
     if full:
@@ -137,78 +136,20 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
         angl = [np.zeros(2) if A is None else A, np.sign(dTT[1] @ ttN[1])]
         L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2
     else: dTT = comp_derT(_N.dTT[1],N.dTT[1])
-    m,d = val_(dTT, ttN,1); L.dTT,L.m,L.d = dTT,m,d
-    if N.typ >1:  # skip PPs, Nts?
-        dn_ = []  # spec, cross_comp N_|Ft_-> top tLev
-        if N.typ==3 and gv_(m* (c*wN /(r*cN)) - ave):  # CN, add L2N?
-            for i,(_Ft,Ft, tnF) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct),('Nt','Lt','Bt','Ct'))):  # no comp Ct?
-                if _Ft and Ft: dn_ += [comp_F(_Ft, Ft, r,L)]; r+=(i or 1)-1  # unique Nt,Lt
-        elif gv_(m* (c*wF /(r*cF)) - ave):   # Lt| Ct| Nt, merge?
-            for _n,n in product(_N.N_,N.N_):
-                dn_ += [comp_N(_n, n, r,min(_n.c,n.c), rL=L,full=0)]  # CN L.nt, rL spec, full=CN?
-        if dn_:
-            sum_dF_(dn_,L) if N.typ==3 else sum_dN_(dn_,L)  # merge if no or weak Bt? comp x fork, H levs?
-        else:
-            L.H = [[]]  # empty top dFt
-            if _N.H and N.H: comp_H(_N, N, L)  # light spec
-    if full:
-        for n, _n in (_N,N),(N,_N): n.rim += [L]
-    FV_(CoF.get(), L.dTT, L.c, L.r)
-    # or merge N -> _N?
-    return L
-
-def comp_N_astra(_N,N, r,c, full=1, A=None,span=None, rL=None):
-
-    def sum_dF_(dFt,L):
-        for dF in dFt:
-            if dF.nF=='Nt': add_H(L.H,dF.H,L); break
-        lev = sum2F(dFt,nF='tF'); lev.root=L; L.H += [lev]
-        TT,C,R = lev.dTT,lev.c,lev.r
-        w = C/L.c * (L.r/R)
-        L.dTT = (L.dTT + TT*w) / (1+w)  # why 1+w? Same as comp_H below.
-        L.r = (L.r + R*w) / (1+w); L.c += C
-        L.m,L.d = val_(L.dTT,ttN,1)
-
-    def comp_H(_N,N,L):
-        dH,TT,C,R = [],np.zeros((2,9)),0,0
-        for _lev,lev in zip(_N.H,N.H):  # current dTT already compared
-            if not (_lev and lev): continue
-            tt = comp_derT(_lev.dTT[1],lev.dTT[1])
-            lc = min(_lev.c,lev.c); lr = (_lev.r+lev.r)/2
-            TT += tt*lc; C += lc; R += lr*lc; m,d = val_(tt,ttN,1)
-            dH += [CF(dTT=tt,m=m,d=d,c=lc,r=lr,root=L)]
-        if not C: return
-        L.H = [Copy_(L,root=L)]  # pack existing top level before add dH below?
-        TT/=C; R/=C
-        w = C/L.c * (L.r/R)
-        L.dTT = (L.dTT + TT*w) / (1+w)
-        L.r = (L.r + R*w) / (1+w); L.c += C
-        L.m,L.d = val_(L.dTT,ttN,1); L.H += dH
-
-    L = CL(N_=[_N,N], c=c,r=r,root=rL)
-    if full:
-        dTT = base_comp(_N,N)[0]
-        if span is None: span = np.hypot(*_N.yx - N.yx)
-        yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
-        box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
-        angl = [np.zeros(2) if A is None else A, np.sign(dTT[1] @ ttN[1])]
-        L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2
-    else: dTT = comp_derT(_N.dTT[1],N.dTT[1])
     m,d = val_(dTT,ttN,1); L.dTT,L.m,L.d = dTT,m,d
-    if N.typ:  # include converted B or Ls, skip PPs
-        L.H = [Copy_(L,root=L)]  # direct level, skipped by trans_cluster
-        dn_ = []; fN = N.typ==3 and gv_(m* (c*wN /(r*cN)) - ave)
-        if fN:  # CN only
+    if N.typ:  # converted Bs,Ls, skip PPs
+        dn_=[]
+        if fN:= N.typ==3 and gv_(m* (c*wN /(r*cN)) - ave):  # CN
             for i,(_Ft,Ft) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct))):
                 if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1
         elif gv_(m* (c*wF /(r*cF)) - ave):  # L or B
             for _n,n in product(_N.N_,N.N_):
                 dn_ += [comp_N(_n,n,r,min(_n.c,n.c),rL=L,full=0)]
         if dn_:
-            L.H = [Copy_(L,root=L)]  # pack current top level
-            sum_dF_(dn_ if fN else [sum2F(dn_,nF='Nt')],L)  # multiple trans fork if fN else single trans tNt
-        elif _N.H and N.H:
-            comp_H(_N,N,L)
+            sum_dF_(dn_ if fN else [sum2F(dn_,nF='CN')], L)  # tFt  if fN else tF_
+        else:
+            L.H += [[]]  # placeholder for absent d N.N_
+            if _N.H and N.H: comp_H(_N,N,L)
     if full:
         for n,_n in (_N,N),(N,_N): n.rim += [L]
     FV_(CoF.get(),L.dTT,L.c,L.r)
@@ -392,7 +333,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
             if gN_ := cross_comp(G, proj_L_(combinations(N_,2), G,r,nexp=L_[0].nexp+1), r,fagg=0):
                 G.H+= [sum2F(gN_)]; N_= G.N_= gN_
         if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):
-            if not isinstance(N_[0],CN): N_ = [F2N(N) for N in N_]  # convert Cs from cross_comp above
+            if N_[0].typ < 3: N_ = [F2N(N) for N in N_]  # convert Cs from cross_comp above
             g_ = cluster_N(G, get_exemplars(N_,r), r+1,c)  # higher filter: r+1,-> sub_Gs for CC
             if g_: sum2F(g_,G, nF='Nt' if g_[0].typ==3 else 'Ct')  # unpack tentative G.N_?
     if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)  # recompute after deeper sub
@@ -505,9 +446,8 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
 def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
 
     c_ = np.array([n.c for n in N_], dtype=float); N = N_[0]
-    fC = any(m_); TT,R = np.zeros((2,9)),0
-    C = c_.sum()
-    w_ = c_ * np.array(m_)/max(m_) if fC else c_.copy()  # m_ should be normalized with their max? So that it scales c_ from 0 to 1
+    C = c_.sum(); TT,R = np.zeros((2,9)),0; fC = any(m_)
+    w_ = c_ * np.array(m_) if fC else c_.copy()
     w_ /= w_.sum()
     typ = 0 if nF=='Nt' else 2 if fC else N.typ  # Nt: summary only
     cls_ = [CF,CL,CL,CN]  # typ=2 CCs
