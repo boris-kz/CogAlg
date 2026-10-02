@@ -105,9 +105,7 @@ def cross_comp(root, pL_,r, dF=None, fall=1, fagg=1):  # recursion root
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
 
     def sum_dF_(dFt, L):
-        for dF in dFt:
-            if dF.nF=='Nt': add_H(L.H,dF.H,L); break
-        L.H += [lev:= sum2F(dFt, nF='tF',root=L)]
+        L.H += [lev:= sum2F(dFt, nF='CN',root=L)]
         TT, C, R = lev.dTT,lev.c,lev.r
         w = C/L.c * (L.r/R)
         L.dTT = (L.dTT+ TT*w) / (1+w); L.m,L.d = val_(L.dTT,ttN,1); L.r = (L.r+ R*w) / (1+w)
@@ -121,7 +119,6 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
             C += lc; R += lr*lc; TT += tt*lc; m,d = val_(tt,ttN,1)
             dH += [CF(dTT=tt,m=m,d=d,c=lc,r=lr,root=L)]
         if not C: return
-        L.H = [Copy_(L,root=L)]  # pack existing top level before add dH below?
         TT/=C; R/=C
         w = C/L.c * (L.r/R)
         L.dTT = (L.dTT + TT*w) / (1+w); L.m,L.d = val_(L.dTT,ttN,1)
@@ -144,9 +141,8 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
                 if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1
         elif gv_(m* (c*wF /(r*cF)) - ave):  # L or B
             for _n,n in product(_N.N_,N.N_):
-                dn_ += [comp_N(_n,n,r,min(_n.c,n.c),rL=L,full=0)]
-        if dn_:
-            sum_dF_(dn_ if fN else [sum2F(dn_,nF='CN')], L)  # tFt  if fN else tF_
+                if _n is not n: dn_ += [comp_N(_n,n,r,min(_n.c,n.c),rL=L,full=0)]  # N and _N may have overlapping Ns from centroid clustering
+        if dn_: sum_dF_(dn_ if fN else [sum2F(dn_,nF="Nt")], L)  # tFt  if fN else tF_
         else:
             L.H += [[]]  # placeholder for absent d N.N_
             if _N.H and N.H: comp_H(_N,N,L)
@@ -255,7 +251,8 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
 
     def trans_cluster(G):
         for L in G.L_:
-            for lev in L.H[1:]:  # L.H[0] is direct ders
+            for lev in L.H:  # L.H[0] is direct ders
+                # tFt in lev.Nt, Lt and Bt now
                 for tFt in lev.N_:  # Lt doesn't form trans-links
                     for tL in tFt.N_:
                         if tL.m*wcN > ave*ccN:  # merge trans_link.N_.roots
@@ -333,7 +330,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
             if gN_ := cross_comp(G, proj_L_(combinations(N_,2), G,r,nexp=L_[0].nexp+1), r,fagg=0):
                 G.H+= [sum2F(gN_)]; N_= G.N_= gN_
         if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):
-            if N_[0].typ < 3: N_ = [F2N(N) for N in N_]  # convert Cs from cross_comp above
+            if not isinstance(N_[0], CN): N_ = [F2N(N) for N in N_]  # convert Cs from cross_comp above, or and prevent reconvert for B fork sub+
             g_ = cluster_N(G, get_exemplars(N_,r), r+1,c)  # higher filter: r+1,-> sub_Gs for CC
             if g_: sum2F(g_,G, nF='Nt' if g_[0].typ==3 else 'Ct')  # unpack tentative G.N_?
     if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)  # recompute after deeper sub
@@ -449,8 +446,8 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
     C = c_.sum(); TT,R = np.zeros((2,9)),0; fC = any(m_)
     w_ = c_ * np.array(m_) if fC else c_.copy()
     w_ /= w_.sum()
-    typ = 0 if nF=='Nt' else 2 if fC else N.typ  # Nt: summary only
-    cls_ = [CF,CL,CL,CN]  # typ=2 CCs
+    typ = 0 if nF=='Nt' or nF=='CN' else 2 if fC else N.typ  # Nt: summary only
+    cls_ = [CN if nF=="CN" else CF,CL,CL,CN]  # typ=2 CCs  (for dFt, CN with typ = 0)
     for i, (n,w) in enumerate(zip(N_,w_)):
         if i:
             TT += n.dTT*w; R+=n.r*w; n_ += (n.N_ if merge else [n])
@@ -467,7 +464,8 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
         angl = np.sum([L.angl[0] for L in N_],axis=0)
         root.mang = np.mean([comp_A(angl,L.angl[0])[0] for L in N_])
         root.angl = [angl,np.sign(root.dTT[1] @ ttcN[1])]
-    if nF=='Nt':
+    if nF == "CN": [setattr(F,dFt.nF,dFt ) for dFt in N_]
+    elif nF=='Nt':
         for N in N_: add_H(F.H, N.H, F)  # concat lower levs
     if 'yx' in locals():  F.kern=kern; F.span=span; F.yx=yx
     if 'box' in locals(): F.box = box
