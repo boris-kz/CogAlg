@@ -98,16 +98,14 @@ def cross_comp(root, pL_,r, dF=None, fall=1, fagg=1):  # recursion root
         for N in (N_:= list(set(N_))): sum2F(N.rim, N, nF='Rt')  # -> N.Rt
         tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r
         if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
-            G_ = cluster_N(root,get_exemplars(N_,r), r+1,c)  # seed C_->CC, agg+
+            G_ = cluster_N(root,get_exemplars(N_,r), r+1, c)  # seed C_->CC, agg+
         FV_(CoF.get(),tt,c,r)
     return G_
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
 
-    def sum_dF_(dFt, L):
-        for dF in dFt:
-            if dF.nF=='Nt': add_H(L.H,dF.H,L); break
-        L.H += [lev:= sum2F(dFt, nF='tF',root=L)]
+    def sum_dn_(dn_, L):
+        L.H += [lev:= sum2F(dn_, root=L)]  # dN_ maybe dFt, works the same?
         TT, C, R = lev.dTT,lev.c,lev.r
         w = C/L.c * (L.r/R)
         L.dTT = (L.dTT+ TT*w) / (1+w); L.m,L.d = val_(L.dTT,ttN,1); L.r = (L.r+ R*w) / (1+w)
@@ -121,7 +119,6 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
             C += lc; R += lr*lc; TT += tt*lc; m,d = val_(tt,ttN,1)
             dH += [CF(dTT=tt,m=m,d=d,c=lc,r=lr,root=L)]
         if not C: return
-        L.H = [Copy_(L,root=L)]  # pack existing top level before add dH below?
         TT/=C; R/=C
         w = C/L.c * (L.r/R)
         L.dTT = (L.dTT + TT*w) / (1+w); L.m,L.d = val_(L.dTT,ttN,1)
@@ -144,11 +141,10 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
                 if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1
         elif gv_(m* (c*wF /(r*cF)) - ave):  # L or B
             for _n,n in product(_N.N_,N.N_):
-                dn_ += [comp_N(_n,n,r,min(_n.c,n.c),rL=L,full=0)]
-        if dn_:
-            sum_dF_(dn_ if fN else [sum2F(dn_,nF='CN')], L)  # tFt  if fN else tF_
+                if _n is not n: dn_ += [comp_N(_n,n,r,min(_n.c,n.c),rL=L,full=0)]  # CC: medoid Ns may overlap?
+        if dn_: sum_dn_(dn_, L)  # dn_ = tFt if fN else dN_
         else:
-            L.H += [[]]  # placeholder for absent d N.N_
+            L.H += [[]]  # placeholder for absent d(N.N_)
             if _N.H and N.H: comp_H(_N,N,L)
     if full:
         for n,_n in (_N,N),(N,_N): n.rim += [L]
@@ -255,8 +251,8 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
 
     def trans_cluster(G):
         for L in G.L_:
-            for lev in L.H[1:]:  # L.H[0] is direct ders
-                for tFt in lev.N_:  # Lt doesn't form trans-links
+            for lev in L.H:  # tFt
+                for tFt in lev.N_:  # 2 compared N_s, between Nt|Bt, not Lt|Ct
                     for tL in tFt.N_:
                         if tL.m*wcN > ave*ccN:  # merge trans_link.N_.roots
                             rt0 = getattr(tL.N_[0].root,'root',None); rt1 = getattr(tL.N_[1].root,'root',None)  # CNs
@@ -333,9 +329,8 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
             if gN_ := cross_comp(G, proj_L_(combinations(N_,2), G,r,nexp=L_[0].nexp+1), r,fagg=0):
                 G.H+= [sum2F(gN_)]; N_= G.N_= gN_
         if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):
-            if N_[0].typ < 3: N_ = [F2N(N) for N in N_]  # convert Cs from cross_comp above
-            g_ = cluster_N(G, get_exemplars(N_,r), r+1,c)  # higher filter: r+1,-> sub_Gs for CC
-            if g_: sum2F(g_,G, nF='Nt' if g_[0].typ==3 else 'Ct')  # unpack tentative G.N_?
+            if g_ := cluster_N(G, get_exemplars(N_,r), r+1,c):  # higher filter: r+1,-> sub_Gs for CC
+                sum2F(g_,G, nF='Nt' if g_[0].typ==3 else 'Ct')  # unpack tentative G.N_?
     if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)  # recompute after deeper sub
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G, g_
