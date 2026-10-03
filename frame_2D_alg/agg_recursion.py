@@ -105,7 +105,7 @@ def cross_comp(root, pL_,r, dF=None, fall=1, fagg=1):  # recursion root
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
 
     def sum_dn_(dn_, L):
-        L.H += [lev:= sum2F(dn_, root=L)]  # dN_ maybe dFt, works the same?
+        L.H += [lev:= sum2F(dn_, nF='tF',root=L,froot=2)]  # dN_ maybe dFt, works the same?
         TT, C, R = lev.dTT,lev.c,lev.r
         w = C/L.c * (L.r/R)
         L.dTT = (L.dTT+ TT*w) / (1+w); L.m,L.d = val_(L.dTT,ttN,1); L.r = (L.r+ R*w) / (1+w)
@@ -136,14 +136,14 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
     m,d = val_(dTT,ttN,1); L.dTT,L.m,L.d = dTT,m,d
     if N.typ:  # converted Bs,Ls, skip PPs
         dn_=[]
-        if fN:= N.typ==3 and gv_(m* (c*wN /(r*cN)) - ave):  # CN
+        if N.typ==3 and gv_(m* (c*wN /(r*cN)) - ave):  # CN
             for i,(_Ft,Ft) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct))):
                 if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1
         elif gv_(m* (c*wF /(r*cF)) - ave):  # L or B
             for _n,n in product(_N.N_,N.N_):
                 if _n is not n: dn_ += [comp_N(_n,n,r,min(_n.c,n.c),rL=L,full=0)]  # CC: medoid Ns may overlap?
-        if dn_: sum_dn_(dn_, L)  # dn_ = tFt if fN else dN_
-        else:
+        if dn_: sum_dn_(dn_, L); L.H[-1].N_ = [_N.N_, N.N_]  # dn_ = tFt if CN else dN_
+        else:   # mostly negative L here?
             L.H += [[]]  # placeholder for absent d(N.N_)
             if _N.H and N.H: comp_H(_N,N,L)
     if full:
@@ -252,14 +252,15 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
     def trans_cluster(G):
         for L in G.L_:
             for lev in L.H:  # tFt
-                for tFt in lev.N_:  # 2 compared N_s, between Nt|Bt, not Lt|Ct
+                if not lev: continue  # empty list   
+                tFt_ = lev.N_ if lev.N_ and not isinstance(lev.N_[0], CL) else [lev]   # from B or L: flat, and lev.N_ is empty from comp_H
+                for tFt in tFt_:  # 2 compared N_s, between Nt|Bt, not Lt|Ct       
                     for tL in tFt.N_:
                         if tL.m*wcN > ave*ccN:  # merge trans_link.N_.roots
                             rt0 = getattr(tL.N_[0].root,'root',None); rt1 = getattr(tL.N_[1].root,'root',None)  # CNs
                             if rt0 and rt1 and rt0 != rt1:
                                 if rt1.H: add_H(rt0.H, rt1.H, rt0, fN=1)
                                 add2F(rt0,rt1)  # draft, recompute Nt attrs / G
-                L.Nt,L.Bt, L.Ct = CF(),CF(),CF()
             # merge roots
     g__,G_,Gt_,in_,fin_ = [],[],[],set(),[]  # root attrs, add prelink pL_,pN_? fin_ should be tile-wide?
     for N in _N_:  # form G per remaining N
@@ -327,7 +328,10 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
         m,c,r = Lt.m,Lt.c, Lt.r+_r
         if gv_(m* (c*wX / (r*cX)) - ave):  # rng+
             if gN_ := cross_comp(G, proj_L_(combinations(N_,2), G,r,nexp=L_[0].nexp+1), r,fagg=0):
-                G.H+= [sum2F(gN_)]; N_= G.N_= gN_
+                G.H+= [sum2F(gN_)] 
+                if not isinstance(gN_[0], CN):  # CC
+                    G.N_ = list({C.N_[int(np.argmax(C.m_))] for C in gN_}) # medoids (multiple Cs may have the same medoids?)
+                else: G.N_= gN_
         if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):
             if g_ := cluster_N(G, get_exemplars(N_,r), r+1,c):  # higher filter: r+1,-> sub_Gs for CC
                 sum2F(g_,G, nF='Nt' if g_[0].typ==3 else 'Ct')  # unpack tentative G.N_?
