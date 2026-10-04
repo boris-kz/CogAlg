@@ -262,7 +262,7 @@ def cluster_N(root, _N_, _r,_c, fsub=0):  # flood-fill node | link clusters, fla
         for L in G.L_:
             for lev in L.H:  # tFt/Nt | tN_/Bt, not Lt|Ct
                 if lev:
-                    for tF in lev.N_ if isinstance(lev.N_[0],CN) else [lev]:  # tFt if CN
+                    for tF in lev.N_ if not isinstance(lev.N_[0],CL) else [lev]:  # CF or CL (N fork and B|L fork)
                         for tL in tF.N_:
                             if tL.m*wcN > ave*ccN:  # merge trans_link.N_.roots
                                 rt0 = getattr(tL.N_[0].root,'root',None); rt1 = getattr(tL.N_[1].root,'root',None)  # CNs
@@ -281,6 +281,7 @@ def cluster_N(root, _N_, _r,_c, fsub=0):  # flood-fill node | link clusters, fla
             for L in set(__L_) - in_:  # flood-fill via frontier links
                 _N = L.N_[0] if L.N_[1] in fin_ else L.N_[1]; in_.add(L)
                 if _N not in fin_:
+                    if fsub and _N not in root.N_: continue  # for sub+, within root only?
                     m,d = nt_vt(*L.N_)
                     if m > ave * (_r-1):  # cluster nt, L,C_ by combined rim density, add gv_?
                         span = np.sqrt(len(N_))  # approx span
@@ -322,13 +323,15 @@ def cluster_N(root, _N_, _r,_c, fsub=0):  # flood-fill node | link clusters, fla
 def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
 
     G = CN(root=root,wTT=wTT)
-    g_, L_,pL_= [],[],[]  # sub_Gs for CC, L_ can't be empty?
-    N_,_L_,B_ = F_
+    g_= []  # sub_Gs for CC, L_ can't be empty?
+    N_,L_,B_ = F_
+    '''
     for L in _L_:
         if L.typ==1: L_+=[L]
-        else: pL_ += [L]  # projected
+        else: pL_ += [L]
     if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0]*wN > ave*(cN*np.mean([L.r for L in pL_])):
         L_ += [comp_N(*L.N_,L.r,L.c,1,L.angl[0],L.span) for L in pL_]
+    '''
     [sum2F(F_,G,nF=nF) for F_,nF in zip((N_,B_,L_),('Nt','Bt','Lt')) if F_]
     G.m,G.d = val_(G.dTT,wTT,1)
     if Bt:= G.Bt:  # der+'sub+
@@ -341,8 +344,8 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
         if gv_(m* (c*wX / (r*cX)) - ave):  # rng+
             cross_comp(G, proj_L_(combinations(N_,2), G,r,nexp=L_[0].nexp+1), r,fagg=0)  # skip clustering
         if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):  # higher filter: r+1,-> sub_Gs,CC, with/out rng+
-            if g_:= cluster_N(G, get_exemplars(N_,r), r+1,c, fsub=1):
-                sum2F(g_,G, nF='Nt' if g_[0].typ==3 else 'Bt')
+            g_ = cluster_N(G, get_exemplars(N_,r), r+1,c, fsub=1)
+                # sum2F(g_,G, nF='Nt' if g_[0].typ==3 else 'Bt')  # sum2F is done within cluster_N? ->  sum2F(medoids or G_, root, nF='Nt')
     if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)  # recompute after deeper sub
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G, g_
