@@ -86,11 +86,15 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
 def cross_comp(root, pL_,r, dF=None, fall=1, fagg=1):  # recursion root
 
     L_,N_,G_ = [],[],[]
-    for dist, dy_dx, _N,N, lc,lr, pTT,m,_,nexp in pL_:
-        if _N != N and (fall or (m>0 and gv_(m*(lc*wN/(lr*cN)) - ave* (r+cN)))):
-            Link = comp_N(_N,N, lr,lc, full=not dF, A=dy_dx, span=dist, rL=root)
-            Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT)  # prediction error
-            L_+=[Link]; N_+=[_N,N]; Link.nexp=nexp
+    for dist, dy_dx, _N,N, lc,lr, pTT,m,d,nexp in pL_:
+        if _N != N and (fall or m>0):
+            if gv_(m*(lc*wN/(lr*cN)) - ave* (r+cN)):
+                Link = comp_N(_N,N, lr,lc, full=not dF, A=dy_dx, span=dist, rL=root)
+                Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT)  # prediction error
+                L_+=[Link]; N_+=[_N,N]; Link.nexp=nexp
+            else:  # pack as prelink
+                pL = CL(typ=-1, N_=[_N,N],dTT=pTT,m=m,d=d,c=lc,r=lr, angl=[dy_dx,1],span=dist)
+                L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.N_
     if L_:
         if not fagg: L_ += root.L_  # rng+, += lower-rng L_
         Lt = sum2F(L_,None if dF else root,nF='Lt')  # -> root.Lt
@@ -206,16 +210,9 @@ def comp(_pars, pars, meA,deA):  # compute m_,d_ from inputs or derivatives
             _a,a = abs(_p), abs(p)
             m_ += [min(_a,a) if (_p<0)==(p<0) else -min(_a,a)]  # + complement max(_a,a) for +ves?
             d_ += [_p - p]
-        ''' for general mass in 0:1, m = dir_m * mass + inv_m * (1-mass):
-        else:  # scalar: p, (p,avd), or (p,avd,mass)
-            if isinstance(p,tuple): p,avd,mass = p if len(p)==3 else (*p,0)
-            else:                   avd, mass = 0,1
-            d = _p - p
-            _a,a = abs(_p),abs(p)
-            dir_m = min(_a,a) if (_p<0)==(p<0) else -min(_a,a)
-            inv_m = avd - abs(d)
-            m_ += [dir_m*mass + inv_m*(1-mass)]; d_ += [d]
-        '''
+    ''' for mass in 0:1:
+        m = dir_m * mass + inv_m * (1-mass), | mass* max(abs(_p),abs(p)) + (1-mass)* avd - ad
+    '''
     return np.array(m_+[meA]), np.array(d_+[deA])
 
 def comp_A(_A,A):
@@ -262,7 +259,7 @@ def cluster_N(root, _N_, _r,_c, fsub=0):  # flood-fill node | link clusters, fla
         for L in G.L_:
             for lev in L.H:  # tFt/Nt | tN_/Bt, not Lt|Ct
                 if lev:
-                    for tF in lev.N_ if not isinstance(lev.N_[0],CL) else [lev]:  # CF or CL (N fork and B|L fork)
+                    for tF in lev.N_ if not isinstance(lev.N_[0],CL) else [lev]:  # CF or CL: Nt|Bt
                         for tL in tF.N_:
                             if tL.m*wcN > ave*ccN:  # merge trans_link.N_.roots
                                 rt0 = getattr(tL.N_[0].root,'root',None); rt1 = getattr(tL.N_[1].root,'root',None)  # CNs
@@ -271,7 +268,7 @@ def cluster_N(root, _N_, _r,_c, fsub=0):  # flood-fill node | link clusters, fla
                                     add2F(rt0,rt1)  # draft, recompute Nt attrs / G
                 else:
                     break  # no top lev: deeper lev'N_s not compared
-    g__,G_,Gt_,in_,fin_,medoids = [],[],[],set(),[],[]  # root attrs, add prelink pL_,pN_? fin_ should be tile-wide?
+    g__,G_,Gt_,in_,fin_,med_ = [],[],[],set(),[],[]  # root attrs, add prelink pL_,pN_? fin_ should be tile-wide?
     for N in _N_:  # form G per remaining N
         if N in fin_ or (root.root and not N.exe): continue  # no exemplars in Fg
         N_ = [N]; L_,B_ = [],[]; fin_ += [N]  # init G
@@ -281,7 +278,6 @@ def cluster_N(root, _N_, _r,_c, fsub=0):  # flood-fill node | link clusters, fla
             for L in set(__L_) - in_:  # flood-fill via frontier links
                 _N = L.N_[0] if L.N_[1] in fin_ else L.N_[1]; in_.add(L)
                 if _N not in fin_:
-                    if fsub and _N not in root.N_: continue  # for sub+, within root only?
                     m,d = nt_vt(*L.N_)
                     if m > ave * (_r-1):  # cluster nt, L,C_ by combined rim density, add gv_?
                         span = np.sqrt(len(N_))  # approx span
@@ -314,24 +310,36 @@ def cluster_N(root, _N_, _r,_c, fsub=0):  # flood-fill node | link clusters, fla
         M,D = val_(TT* root.wTT*ttcN, fd=1)
         if gv_(M * (C*wcC /((_r+R)*ccC)) * ((len(g__)-1)*wL) - ave):
             if C_:= cluster_C(root, g__,_r+R):  # sub_G__ -> med_,agg+
-                medoids = list({C.N_[int(np.argmax(C.m_))] for C in C_})  # shared x Cs?
-        if medoids or fsub:
-            sum2F(medoids or G_, root, nF='Nt')  # selected medoids, else terminal sub-Gs
+                med_= [G_[np.mean([r[1] for r in g.root_]) > ave] for g in G_]
+                # sort med_ and add root rdn to weaker Gs?
+                # med_= list({C.N_[int(np.argmax(C.m_))] for C in C_})  # medoids, shouldn't be C-specific
+        if med_ or fsub:
+            sum2F(med_ or G_, root, nF='Nt')  # selected medoids, else terminal sub-Gs
         FV_(CoF.get(), *sum_vt(G_)[:-1],R)  # | G_ r?
-    return G_ if fsub else medoids
+
+    def get_medoids(N_, _r):  # fable
+        # strong-first NMS in C-space, net of Cs already represented
+        N_ = sorted(N_, key=lambda N: max(r[1] for r in N.root_), reverse=True);
+        med_, bM = [], {}  # bM: best medoid m per C
+        for N in N_:
+            M = sum(max(0, m - bM.get(C, 0)) for C, m, _ in N.root_)  # membership not yet represented
+            if M > ave * _r:
+                med_ += [N]
+                for C, m, _ in N.root_: bM[C] = max(bM.get(C, 0), m)
+        return med_
+
+    return G_ if fsub else med_
 
 def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
 
     G = CN(root=root,wTT=wTT)
-    g_= []  # sub_Gs for CC, L_ can't be empty?
-    N_,L_,B_ = F_
-    '''
+    g_,L_,pL_ = [], [], []  # sub_Gs for CC, L_ can't be empty?
+    N_,_L_,B_ = F_
     for L in _L_:
         if L.typ==1: L_+=[L]
         else: pL_ += [L]
     if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0]*wN > ave*(cN*np.mean([L.r for L in pL_])):
         L_ += [comp_N(*L.N_,L.r,L.c,1,L.angl[0],L.span) for L in pL_]
-    '''
     [sum2F(F_,G,nF=nF) for F_,nF in zip((N_,B_,L_),('Nt','Bt','Lt')) if F_]
     G.m,G.d = val_(G.dTT,wTT,1)
     if Bt:= G.Bt:  # der+'sub+
@@ -345,7 +353,6 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
             cross_comp(G, proj_L_(combinations(N_,2), G,r,nexp=L_[0].nexp+1), r,fagg=0)  # skip clustering
         if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):  # higher filter: r+1,-> sub_Gs,CC, with/out rng+
             g_ = cluster_N(G, get_exemplars(N_,r), r+1,c, fsub=1)
-                # sum2F(g_,G, nF='Nt' if g_[0].typ==3 else 'Bt')  # sum2F is done within cluster_N? ->  sum2F(medoids or G_, root, nF='Nt')
     if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)  # recompute after deeper sub
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G, g_
