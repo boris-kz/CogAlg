@@ -92,7 +92,7 @@ def cross_comp(root, pL_,r, dF=None, fall=1, fagg=1):  # recursion root
                 Link = comp_N(_N,N, lr,lc, full=not dF, A=dy_dx, span=dist, rL=root)
                 Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT)  # prediction error
                 L_+=[Link]; N_+=[_N,N]; Link.nexp=nexp
-            else:  # pack as prelink
+            elif not dF:  # pack as prelink (skip pL for dF? They will not be converted anyway)
                 pL = CL(typ=-1, N_=[_N,N],dTT=pTT,m=m,d=d,c=lc,r=lr, angl=[dy_dx,1],span=dist)
                 L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.N_
     if L_:
@@ -310,6 +310,7 @@ def cluster_N(root, _N_, _r,_c, fsub=0):  # flood-fill node | link clusters, fla
         M,D = val_(TT* root.wTT*ttcN, fd=1)
         if gv_(M * (C*wcC /((_r+R)*ccC)) * ((len(g__)-1)*wL) - ave):
             if C_:= cluster_C(root, g__,_r+R):  # sub_G__ -> med_,agg+
+                sum2F(C_, root=root, nF='Ct')  # pack as Ct here?
                 med_= [G_[np.mean([r[1] for r in g.root_]) > ave] for g in G_]
                 # sort med_ and add root rdn to weaker Gs?
                 # med_= list({C.N_[int(np.argmax(C.m_))] for C in C_})  # medoids, shouldn't be C-specific
@@ -317,7 +318,7 @@ def cluster_N(root, _N_, _r,_c, fsub=0):  # flood-fill node | link clusters, fla
             sum2F(med_ or G_, root, nF='Nt')  # selected medoids, else terminal sub-Gs
         FV_(CoF.get(), *sum_vt(G_)[:-1],R)  # | G_ r?
 
-    def get_medoids(N_, _r):  # fable
+    def get_medoids(N_, _r):  # fable 
         # strong-first NMS in C-space, net of Cs already represented
         N_ = sorted(N_, key=lambda N: max(r[1] for r in N.root_), reverse=True);
         med_, bM = [], {}  # bM: best medoid m per C
@@ -339,7 +340,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
         if L.typ==1: L_+=[L]
         else: pL_ += [L]
     if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0]*wN > ave*(cN*np.mean([L.r for L in pL_])):
-        L_ += [comp_N(*L.N_,L.r,L.c,1,L.angl[0],L.span) for L in pL_]
+        for pL in pL_: L = comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span); L_ += [L]; L.nexp = pL.nexp
     [sum2F(F_,G,nF=nF) for F_,nF in zip((N_,B_,L_),('Nt','Bt','Lt')) if F_]
     G.m,G.d = val_(G.dTT,wTT,1)
     if Bt:= G.Bt:  # der+'sub+
@@ -440,7 +441,7 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
             _md__ = md__[:,i_]
         else:
             if dM<0: C_ = _C_  # revert to better prior
-            else: _md__ = md__
+            else: _md__ = md__; C_ = [C for C in C_ if C not in removed]
             break
     out_ = []
     for N in N_: N.root_ = []  # replace with out_ Cs:
@@ -466,17 +467,15 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
     C = c_.sum(); TT,R = np.zeros((2,9)),0; fC = any(m_)
     w_ = c_ * np.array(m_) if fC else c_.copy()
     w_ /= w_.sum()
-    typ = 0 if nF=='Nt' else 2 if fC else N.typ  # Nt: summary only
+    typ = 0 if nF=='Nt' else 2 if fC else abs(N.typ)  # Nt: summary only (Lt should be using CF?)
     cls_ = [CF,CL,CL,CN]  # typ=2 CCs
-    for i, (n,w) in enumerate(zip(N_,w_)):
-        if i:
-            TT += n.dTT*w; R+=n.r*w; n_ += (n.N_ if merge else [n])
-            if hasattr(n,'yx'):  kern+=n.kern*w; span+=n.span*w; yx+=n.yx*w  # links and higher
-            if hasattr(n,'box'): box=extend_box(box,n.box)
-        else:  # init
-            TT = n.dTT*w; R=n.r*w; n_ = copy(n.N_ if merge else [n])
-            if hasattr(n,'yx'):  kern=n.kern*w; span=n.span*w; yx=n.yx*w
-            if hasattr(n,'box'): box=copy(n.box)
+    for i, (n,w) in enumerate(zip(N_,w_)):  # restructure, because pL doesn't have geo params
+        if i: TT += n.dTT*w; R+=n.r*w; n_ += (n.N_ if merge else [n])
+        else: TT = n.dTT*w; R=n.r*w; n_ = copy(n.N_ if merge else [n])  # init
+        if hasattr(n, 'yx'):
+            if 'yx' in locals(): kern+=n.kern*w; span+=n.span*w; yx+=n.yx*w
+            else:                kern=n.kern*w; span=n.span*w; yx=n.yx*w
+        if hasattr(n, 'box'): box = extend_box(box, n.box) if 'box' in locals() else copy(n.box)
     F = (cls_[typ])(dTT=TT, c=C, r=R, nF=nF,typ=typ); F.N_ = n_
     if fC: F.m_,F.d_ = m_,d_; F.m,F.d = sum(m*c for m,c in zip(m_,c_))/C, sum(d*c for d,c in zip(d_,c_))/C; F.w=F.m
     else:  F.m, F.d = val_(TT,fd=1)
@@ -494,10 +493,10 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
             if 'box' in locals(): root.box = copy(box)
         F.wTT = root.wTT
         if nF=='Nt':
-            F.H = copy(root.H) + [Copy_(root.Nt, root=root)]  # previous top level
+            if root.Nt: F.H = copy(root.H) + [Copy_(root.Nt, root=root)]  # previous top level (only valid if root has Nt, G from sum2G is empty when calling sum2F)
             root.Nt = F; F.root = root; root.dTT=copy(F.dTT); root.m,root.d,root.c,root.r = F.m,F.d,F.c,F.r
         else:
-            if nF and not fC and isinstance(root,CN): setattr(root,nF,F); F.root = root  # root.Lt|Rt|Ct
+            if nF and not fC: setattr(root,nF,F); F.root = root  # root.Lt|Rt|Ct
             if nF not in ('Ct','Rt','tF'): add2F(root,F,2)  # tF's params will be summed separately
     if froot == 1:
         for n in N_: n.root = root or F
@@ -781,7 +780,7 @@ def vect_edge(T, iY,iX,Ly,Lx, rV=1):  # T=tile, PP_ cross_comp and floodfill to 
                     for PPd in edge.link_: PP2N(PPd)  # we don't form Gds?
                     for N in N_:
                         if N.B_:
-                            PPd_ = [B.root for B in N.B_]; N.Bt = sum2F(PPd_, nF='Bt')
+                            PPd_ = list({B.root for B in N.B_}); N.Bt = sum2F(PPd_, nF='Bt')
                             N.Bt.N_ = PPd_; [setattr(B,'root',N.Bt) for B in PPd_]
                     tt,c,r = sum_vt(N_); C += c
                     if gv_(val_(tt*ttVct) * ((c+wVct)/ (3+cVct)) * ((len(PPm_)-1)*wL) - ave):
