@@ -81,3 +81,5 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
     if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)  # recompute after deeper sub
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G, G_
+
+# med_= list({C.N_[int(np.argmax(C.m_))] for C in C_})  # medoids, shouldn't be C-specific

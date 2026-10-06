@@ -80,6 +80,8 @@ class CL(CF):  # typ=1, add kern+positionals for base comp, Rt,Nt,Bt,Ct from com
         l.kern = kw.get('kern',np.zeros(4))  # I,G,A diffs in links
         l.span = kw.get('span',1)  # distance in nodet or aRad, comp with kern or len(N_)
         l.angl = kw.get('angl',None)  # (dy,dx),dir, sum from L_, rarely?
+        l.mang = kw.get('mang',1) # ave match of angles in L_, =1 in links
+        l.box  = kw.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
         l.typ  = kw.get('typ',1)
         l.rim  = kw.get('rim',[])  # comp PPs and Ls
         l.yx   = kw.get('yx', np.zeros(2))  # mean nodet? comp box is not meaningful?
@@ -90,17 +92,15 @@ def prop_F_(F, attr='N_'):  # factory function to get and update top-composition
     def set(N, new_val): setattr(getattr(N,F), attr, new_val)
     return property(get,set)
 
-class CN(CL):  # full node | graph fork set
+class CN(CL):  # full node|graph for xcomp, adding fork set
     name = "node"
     N_,L_,B_,C_,X_,rim,H = prop_F_('Nt'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Ct'),prop_F_('Xt'),prop_F_('Rt'),prop_F_('Nt','H')
     # ext|int - defined Ns|Ls, no comparable Ls for Ct: transient structure?
     def __init__(n, **kw):
         n.Nt,n.Bt,n.Lt,n.Ct,n.Xt,n.Rt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Lt','Ct','Xt','Rt')))  # CN if nest
         super().__init__(**kw)
-        n.mang = kw.get('mang',1) # ave match of angles in L_, =1 in links
-        n.box = kw.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
         n.exe = kw.get('exe',0)  # exemplar, temporary
-        n.typ = kw.get('typ',3)  # full comp
+        n.typ = kw.get('typ',3)  # full comp, =2 for Cs?
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.c)
 
