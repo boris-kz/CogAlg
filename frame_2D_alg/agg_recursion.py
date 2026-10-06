@@ -94,7 +94,7 @@ def cross_comp(root, pL_,r, dF=None, fall=1, fagg=1):  # recursion root
                 L_+=[Link]; N_+=[_N,N]; Link.nexp=nexp
             elif not dF:  # pack as prelink
                 _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
-                pL = CL(typ=-1, N_=[_N,N],dTT=pTT,m=m,d=d,c=lc,r=lr, angl=[dy_dx,1],span=dist,box=box)
+                pL = CL(typ=-1, N_=[_N,N],dTT=pTT,m=m,d=d,c=lc,r=lr, angl=[dy_dx,1],span=dist,box=box); pL.nexp=nexp
                 L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.N_
     if L_:
         if not fagg: L_ += root.L_  # rng+, += lower-rng L_
@@ -312,7 +312,9 @@ def cluster_N(root, _N_, _r,_c, fsub=0):  # flood-fill node | link clusters, fla
         if gv_(M * (C*wcC /((_r+R)*ccC)) * ((len(g__)-1)*wL) - ave):
             if cluster_C(root, g__,_r+R):  # sub_G__->med_ for agg+:
                 med_ = [g.m + G_[np.mean([r[1] for r in g.root_]) > ave] for g in G_]  # select by CN+CC value per N?
-                # only ms are added in CC, sort med_ -> root rdn / weaker?
+                # something like this? n.m + CC roots' mean m
+                med_ = [n for n in root.N_ if (n.m + np.mean([r[1] for r in n.root_])) > ave]
+               # only ms are added in CC, sort med_ -> root rdn / weaker?
         if med_ or fsub:
             sum2F(med_ or G_, root, nF='Nt')  # selected medoids, else terminal sub-Gs
         FV_(CoF.get(), *sum_vt(G_)[:-1],R)  # | G_ r?
@@ -339,7 +341,9 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN, eval der+, rng+, sub+
         if L.typ==1: L_+=[L]
         else: pL_ += [L]
     if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0]*wN > ave*(cN*np.mean([L.r for L in pL_])):
-        for pL in pL_: L_+= L:= comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span); L.nexp = pL.nexp
+        for pL in pL_: 
+            L_+= [L:= comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span)]; L.nexp = pL.nexp
+            N,_N = pL.N_; N.rim[N.rim.index(pL)] = L; _N.rim[_N.rim.index(pL)] = L  # map N's rim from pL to L
     [sum2F(F_,G,nF=nF) for F_,nF in zip((N_,B_,L_),('Nt','Bt','Lt')) if F_]
     G.m,G.d = val_(G.dTT,wTT,1)
     if Bt:= G.Bt:  # der+'sub+
@@ -442,7 +446,7 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
             _md__ = md__[:,i_]
         else:
             if dM<0: C_ = _C_  # revert to better prior
-            else: _md__ = md__; C_ = [C for C in C_ if C not in removed]
+            else: _md__ = md__;  i_ = [i for i,C in enumerate(C_) if C not in removed]; _md__ = md__[:,i_]; C_ = [C_[i] for i in i_]
             break
     out_ = []
     for N in N_: N.root_ = []  # replace with out_ Cs:
@@ -492,13 +496,13 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
     if 'box' in locals(): F.box = box
     if root is not None:
         if nF=='Nt':
+            if root.Nt: F.H = copy(root.H) + [Copy_(root.Nt, root=root)]  # previous top level (pack root.N_ as latest level in H only if root.N_ is available)
             root.Nt = F; F.root = root; root.dTT=copy(F.dTT); root.m,root.d,root.c,root.r = F.m,F.d,F.c,F.r
-            F.H = copy(root.H) + [Copy_(root.Nt, root=root)]  # previous top level
             if nF and not fC: setattr(root,nF,F); F.root = root  # root.Lt|Rt|Ct
             if nF not in ('Ct','Rt','tF'): add2F(root,F,2)  # tF's params will be summed separately
-            # wrong:
-            if 'yx' in locals():  root.kern,root.span,root.yx = copy(F.kern),span,copy(yx)
-            if 'box' in locals(): root.box = copy(box)
+        w = F.c/root.c
+        if 'yx' in locals(): root.kern+=kern*w; root.span+=span*w; root.yx+=yx*w
+        if 'box' in locals(): root.box = copy(box)
         F.wTT = root.wTT
     if froot == 1:
         for n in N_: n.root = root or F
@@ -686,7 +690,7 @@ def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N
     cos_d = (N.angl[0].dot(A) / ((np.hypot(*N.angl[0]) * dist) or eps)) * N.angl[1] if N.angl else 0  # int x ext angle alignment, mean=0
     iTT, eTT = np.zeros((2,9)),np.zeros((2,9)); c = 0
     wTT = CoF.get().wTT*ttPrj
-    for L in N.Nt.L_+ N.Bt.L_:  # or Bt.L_ proj cancels Nt.L_ proj?
+    for L in N.Nt.L_+ N.Bt.L_:  # or Bt.L_ proj cancels Nt.L_ proj? (this is not relevant now? We don't have L_ and B_ per Nt now)
         proj_TT(L, cos_d, dist, L.r+_r, iTT, wTT, dec); c+=L.c  # accum iTT internally
     for L in N.rim:
         proj_TT(L, cos_d,dist,L.r+_r,eTT,wTT,dec); c+=L.c
