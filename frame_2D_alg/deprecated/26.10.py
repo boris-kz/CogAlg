@@ -83,3 +83,33 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
     return G, G_
 
 # med_= list({C.N_[int(np.argmax(C.m_))] for C in C_})  # medoids, shouldn't be C-specific
+
+def get_medoids(N_, _r):  # fable
+        # strong-first NMS in C-space, net of Cs already represented
+        N_ = sorted(N_, key=lambda N: max(r[1] for r in N.root_), reverse=True)
+        med_, bM = [], {}  # bM: best medoid m per C
+        for N in N_:
+            M = sum(max(0, m - bM.get(C, 0)) for C, m, _ in N.root_)  # membership not yet represented
+            if M > ave * _r:
+                med_ += [N]
+                for C, m, _ in N.root_: bM[C] = max(bM.get(C, 0), m)
+
+def get_exemplars(N_,_r):  # multi-layer non-maximum suppression -> sparse clustering seeds, for medoids if N.Ct?
+
+    for n in N_:
+        rc = sum(r[0].c for r in n.root_); C = n.c + rc
+        n.w = ((n.Rt.m * n.c) + sum([r[1]*r[0].c for r in n.root_]))/C
+        # combined lateral and vertical match
+    N_= sorted(N_, key=lambda n: n.w, reverse=True); E_,Inh_ = [],set()
+    for rdn, N in enumerate(N_, start=1):  # strong-first
+        inh_ = list(Inh_ & set(N.rim))  # stronger Es in N.rim
+        oM = sum_vt(inh_,fm=1, wTT=ttE)[0] if inh_ else 0
+        oV = oM / (N.Rt.m or eps)  # relative olp V
+        if N.Rt.m * N.c * wE > ave* (_r+rdn+cE+oV):
+            E_+=[N]; N.exe = 1  # point cloud of focal nodes
+            Inh_.update(set(N.rim))  # extend inhibition zone
+        else:
+            break  # the rest of N_ is weaker, trace via rims
+    if E_: FV_(CoF.get(), *sum_vt(E_))
+    else:  E_ = [N_[0]]; N_[0].exe=1  # no gain, no inhibition, any N can be seed
+    return E_

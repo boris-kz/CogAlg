@@ -94,7 +94,7 @@ def cross_comp(root, pL_,r, dF=None, fall=1, fagg=1):  # recursion root
                 L_+=[Link]; N_+=[_N,N]; Link.nexp=nexp
             elif not dF:  # pack as prelink
                 _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
-                pL = CL(typ=-1, N_=[_N,N],dTT=pTT,m=m,d=d,c=lc,r=lr, angl=[dy_dx,1],span=dist,box=box)
+                pL = CL(typ=-1, N_=[_N,N],dTT=pTT,m=m,d=d,c=lc,r=lr, angl=[dy_dx,1],span=dist,box=box,nexp=nexp)
                 L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.N_
     if L_:
         if not fagg: L_ += root.L_  # rng+, += lower-rng L_
@@ -227,22 +227,19 @@ def comp_A(_A,A):
     '''
     return (cos(dA)+1) /2, dA/pi  # mA in 0:1, dA in -1:1, or invert dA, may be negative?
 
-def get_exemplars(N_,_r):  # multi-layer non-maximum suppression -> sparse clustering seeds, for medoids if N.Ct?
+def get_exemplars(N_,_r):  # multi-layer non-maximum suppression -> sparse clustering seeds = rim-medoids
 
-    for n in N_:
-        rc = sum(r[0].c for r in n.root_); C = n.c + rc
-        n.w = ((n.Rt.m * n.c) + sum([r[1]*r[0].c for r in n.root_]))/C
-        # combined lateral and vertical match
+    for n in N_: n.w = (n.Rt.m + n.Ct.m) * n.c  # lateral + internal representativeness, Ct.m=0 if no Ct
     N_= sorted(N_, key=lambda n: n.w, reverse=True); E_,Inh_ = [],set()
     for rdn, N in enumerate(N_, start=1):  # strong-first
         inh_ = list(Inh_ & set(N.rim))  # stronger Es in N.rim
         oM = sum_vt(inh_,fm=1, wTT=ttE)[0] if inh_ else 0
-        oV = oM / (N.Rt.m or eps)  # relative olp V
-        if N.Rt.m * N.c * wE > ave* (_r+rdn+cE+oV):
+        oV = oM / (N.Rt.m or eps)  # relative olp V, lateral only
+        if N.w * wE > ave* (_r+rdn+cE+oV):
             E_+=[N]; N.exe = 1  # point cloud of focal nodes
-            Inh_.update(set(N.rim))  # extend inhibition zone
-        else:
-            break  # the rest of N_ is weaker, trace via rims
+            Inh_.update(set(N.rim))  # rim-based: Ct olp would be other instances of the same class
+        elif N.w * wE <= ave* (_r+rdn+cE):
+            break  # the rest is weaker even without olp, trace via rims
     if E_: FV_(CoF.get(), *sum_vt(E_))
     else:  E_ = [N_[0]]; N_[0].exe=1  # no gain, no inhibition, any N can be seed
     return E_
@@ -310,37 +307,26 @@ def cluster_N(root, _N_, _r,_c, fsub=0):  # flood-fill node | link clusters, fla
         for tt,c,r in Gt_: w=c/C; TT+=tt*w; R+=r*w
         M,D = val_(TT* root.wTT*ttcN, fd=1)
         if gv_(M * (C*wcC /((_r+R)*ccC)) * ((len(g__)-1)*wL) - ave):
-            if cluster_C(root, g__,_r+R):  # sub_G__->med_ for agg+:
-                med_ = [g.m + G_[np.mean([r[1] for r in g.root_]) > ave] for g in G_]  # select by CN+CC value per N?
-                # only ms are added in CC, sort med_ -> root rdn / weaker?
-        if med_ or fsub:
-            sum2F(med_ or G_, root, nF='Nt')  # selected medoids, else terminal sub-Gs
+            C_= cluster_C(root, g__,_r+R)  # agg+: xcomp CC-extended CNs
         FV_(CoF.get(), *sum_vt(G_)[:-1],R)  # | G_ r?
 
-    def get_medoids(N_, _r):  # fable
-        # strong-first NMS in C-space, net of Cs already represented
-        N_ = sorted(N_, key=lambda N: max(r[1] for r in N.root_), reverse=True)
-        med_, bM = [], {}  # bM: best medoid m per C
-        for N in N_:
-            M = sum(max(0, m - bM.get(C, 0)) for C, m, _ in N.root_)  # membership not yet represented
-            if M > ave * _r:
-                med_ += [N]
-                for C, m, _ in N.root_: bM[C] = max(bM.get(C, 0), m)
-        return med_
+        return C_  # base Gs are not valuable
 
     return G_ if fsub else med_
 
 def sum2G(F_, wTT, root=None, _r=0):  # finalize CN, eval der+, rng+, sub+
 
     G = CN(root=root,wTT=wTT)
-    g_,L_,pL_ = [], [], []  # sub_Gs for CC, L_ can't be empty?
-    N_,_L_,B_ = F_
+    g_,L_,pL_ = [],[],[]  # sub_Gs for CC, L_ can't be empty?
+    N_,_L_,B_,C_ = F_  # C_ is C.L_: single N in L.N_, no redundant vals and separate H?
     for L in _L_:
         if L.typ==1: L_+=[L]
         else: pL_ += [L]
     if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0]*wN > ave*(cN*np.mean([L.r for L in pL_])):
-        for pL in pL_: L_+= L:= comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span); L.nexp = pL.nexp
-    [sum2F(F_,G,nF=nF) for F_,nF in zip((N_,B_,L_),('Nt','Bt','Lt')) if F_]
+        for pL in pL_:
+            L_+= [L:= comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span)]; L.nexp = pL.nexp
+            N,_N = pL.N_; N.rim[N.rim.index(pL)] = L; _N.rim[_N.rim.index(pL)] = L  # map N's rim from pL to L
+    [sum2F(F_,G,nF=nF) for F_,nF in zip((N_,B_,L_,C_),('Nt','Bt','Lt','Ct')) if F_]
     G.m,G.d = val_(G.dTT,wTT,1)
     if Bt:= G.Bt:  # der+'sub+
         bd,bc,br = Bt.d,Bt.c,Bt.r+_r+1
@@ -352,9 +338,9 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN, eval der+, rng+, sub+
         if gv_(m* (c*wX / (r*cX)) - ave):  # rng+
             cross_comp(G, proj_L_(combinations(N_,2), G,r,nexp=L_[0].nexp+1), r,fagg=0)  # skip clustering
         if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):  # higher filter: r+1 -> sub_Gs, CC
-            g_ = cluster_N(G, get_exemplars(N_,r), r+1,c,fsub=1)  # seed E_, w|o rng+
+            g_ = cluster_N(G, get_exemplars(N_,r), r+1,c,fsub=1)  # G+C, w|o rng+
     # if sub+:
-    if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)
+    if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt,G.Ct]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G, g_
 
@@ -442,7 +428,7 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
             _md__ = md__[:,i_]
         else:
             if dM<0: C_ = _C_  # revert to better prior
-            else: _md__ = md__; C_ = [C for C in C_ if C not in removed]
+            else: i_ = [i for i,C in enumerate(C_) if C not in removed]; _md__ = md__[:,i_]; C_ = [C_[i] for i in i_]
             break
     out_ = []
     for N in N_: N.root_ = []  # replace with out_ Cs:
@@ -492,13 +478,13 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
     if 'box' in locals(): F.box = box
     if root is not None:
         if nF=='Nt':
+            if root.Nt: F.H = copy(root.H) + [Copy_(root.Nt, root=root)]  # previous top level
             root.Nt = F; F.root = root; root.dTT=copy(F.dTT); root.m,root.d,root.c,root.r = F.m,F.d,F.c,F.r
-            F.H = copy(root.H) + [Copy_(root.Nt, root=root)]  # previous top level
             if nF and not fC: setattr(root,nF,F); F.root = root  # root.Lt|Rt|Ct
             if nF not in ('Ct','Rt','tF'): add2F(root,F,2)  # tF's params will be summed separately
-            # wrong:
-            if 'yx' in locals():  root.kern,root.span,root.yx = copy(F.kern),span,copy(yx)
-            if 'box' in locals(): root.box = copy(box)
+        w = F.c/root.c
+        if 'yx' in locals(): root.kern+=kern*w; root.span+=span*w; root.yx+=yx*w
+        if 'box' in locals(): root.box = copy(box)
         F.wTT = root.wTT
     if froot == 1:
         for n in N_: n.root = root or F
@@ -686,7 +672,7 @@ def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N
     cos_d = (N.angl[0].dot(A) / ((np.hypot(*N.angl[0]) * dist) or eps)) * N.angl[1] if N.angl else 0  # int x ext angle alignment, mean=0
     iTT, eTT = np.zeros((2,9)),np.zeros((2,9)); c = 0
     wTT = CoF.get().wTT*ttPrj
-    for L in N.Nt.L_+ N.Bt.L_:  # or Bt.L_ proj cancels Nt.L_ proj?
+    for L in N.L_+ N.B_:  # neg B_ proj cancels Nt.L_ proj?
         proj_TT(L, cos_d, dist, L.r+_r, iTT, wTT, dec); c+=L.c  # accum iTT internally
     for L in N.rim:
         proj_TT(L, cos_d,dist,L.r+_r,eTT,wTT,dec); c+=L.c
