@@ -113,3 +113,46 @@ def get_exemplars(N_,_r):  # multi-layer non-maximum suppression -> sparse clust
     if E_: FV_(CoF.get(), *sum_vt(E_))
     else:  E_ = [N_[0]]; N_[0].exe=1  # no gain, no inhibition, any N can be seed
     return E_
+
+def cross_comp(root, pL_,r, dF=None, fall=1):  # recursion root
+
+    def medoid_(N_, C_, _r, nexp):  # not reviewed
+        # eval rng+ by combined membership value in n.root_, suppressed by stronger Ns
+        C_ = set(C_)  # current batch only: root_ also holds nested batches' memberships
+        for n in N_: n.w = sum(m * C.m for C, m, _ in n.root_ if C in C_) * n.c  # typicality * class coherence, summed over classes
+        N_ = sorted(N_, key=lambda n: n.w, reverse=True); M_, Inh_ = [], set()
+        for rdn, N in enumerate(N_, start=1):  # strong-first
+            oM = sum(m for C,m,_ in N.root_ if C in Inh_) * N.c  # value in classes already probed
+            oV = oM / (N.w or eps)  # relative overlap, 0:1
+            if N.w * wX > ave * (_r + nexp + rdn + cX + oV):
+                M_ += [N]; Inh_.update(C for C,_,_ in N.root_ if C in C_)  # its classes are covered
+            elif N.w * wX <= ave * (_r+nexp+rdn+cX):
+                break  # the rest is weaker w/o olp
+        return M_
+    L_, N_,G_ = [],[],[]
+    if isinstance(pL_,tuple): pL_,iN_ = pL_
+    for dist, dy_dx, _N,N, lc,lr, pTT,m,d,nexp in pL_:
+        if _N != N and (fall or m>0):
+            if gv_(m*(lc*wN/(lr*cN)) - ave* (r+cN)):
+                Link = comp_N(_N,N, lr,lc, full=not dF, A=dy_dx, span=dist, rL=root)
+                Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT)  # prediction error
+                L_+=[Link]; N_+=[_N,N]; Link.nexp=nexp
+            elif not dF:  # pack as prelink
+                _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
+                pL = CL(typ=-1, N_=[_N,N],dTT=pTT,m=m,d=d,c=lc,r=lr,span=dist,box=box,nexp=nexp,angl=[dy_dx,1], yx=np.add(_N.yx,N.yx)/2)
+                L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.N_
+    if L_:
+        Lt = sum2F(L_:= L_+root.L_,None if dF else root,nF='Lt')  # rng_L_+= lower-rng_L_
+        if dF: add2F(dF,Lt,merge=1); return  # comp_F: no agg+, dF out
+        for N in (N_:= list(set(N_))): sum2F(N.rim, N, nF='Rt')  # -> N.Rt
+        tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r
+        if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
+            root.Ct = CF(root=root); nexp=1
+            G_ = cluster_N(root, exemplar_(N_,r:=r+1), r,c)  # provisional G_-> CC-> root.Ct
+            while G_ and root.Ct and (med_:= medoid_(N_, root.Ct.N_, r:=r+1, nexp:=nexp+1)):  # rng+/CC, []: rng exhaustion
+                cross_comp(root, pL_=(proj_L_(combinations(med_,2),root,r,nexp=nexp), iN_), r=r)  # recluster iN_ @ rng+
+            if G_:
+                sum2F(G_, root, nF='Nt')  # final G_->root.N_,_Nt->H
+                cross_comp(root, proj_L_(combinations(G_,2), root, r:=r+1), r)  # agg+, same block one level up
+        FV_(CoF.get(),tt,c,r)
+    return G_

@@ -20,7 +20,7 @@ Clustering compressively groups the elements into compositional hierarchy, initi
 High-contrast links are correlation clustered to form a boundary per connectivity cluster of the nodes.
 Each level may extend clustering through 4 increasingly fuzzy stages, each seeded by prior-stage output:
 
-- select sparse exemplars to seed the clusters, top k for parallelization (get_exemplars), no clustering?
+- select sparse exemplars to seed the clusters, top k for parallelization (exemplar_), no clustering?
 - connectivity-based agglomerative ( divisive clustering in cluster_N, with boundary link clustering in Bt
 - centroid-based marginally fuzzy and extensible clustering, in divisive phase (cluster_C), or ave_linkage?
 - centroid-parallel fully fuzzy FCM-like refine, if significant global overlap (cluster_P), no higher stage?
@@ -83,7 +83,8 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
 - forward: selective extend cross-comp, clustering across tiles, re-order centroids by eigenvalues
 - feedback filter updates 
 '''
-def cross_comp(root, pL_,r, dF=None, fall=1, fagg=1):  # recursion root
+# fable draft:
+def cross_comp(root, pL_,r, dF=None, fall=1, iN_=None):  # recursion root; iN_: level reclustered by rng+, None in base call
 
     L_,N_,G_ = [],[],[]
     for dist, dy_dx, _N,N, lc,lr, pTT,m,d,nexp in pL_:
@@ -97,17 +98,17 @@ def cross_comp(root, pL_,r, dF=None, fall=1, fagg=1):  # recursion root
                 pL = CL(typ=-1, N_=[_N,N],dTT=pTT,m=m,d=d,c=lc,r=lr,span=dist,box=box,nexp=nexp,angl=[dy_dx,1], yx=np.add(_N.yx,N.yx)/2)
                 L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.N_
     if L_:
-        if not fagg: L_ += root.L_  # rng+, += lower-rng L_
-        Lt = sum2F(L_,None if dF else root,nF='Lt')  # -> root.Lt
-        if dF: add2F(dF,Lt,merge=1); return  # comp_F: no agg+, dF out
+        if dF: add2F(dF, sum2F(L_,nF='Lt'), merge=1); return  # comp_F: no agg+, dF out
+        tt,c,r = sum_vt(L_); m = val_(tt)  # this band's links, for the gate
+        sum2F(L_+root.L_ if iN_ else L_, root, nF='Lt')  # -> root.Lt, rng+ bands add to lower-rng links
         for N in (N_:= list(set(N_))): sum2F(N.rim, N, nF='Rt')  # -> N.Rt
-        tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r
-        if fagg and gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
-            G_ = cluster_N(root,get_exemplars(N_,r), r+1, c)  # provisional G_ to seed C_->CC
-            if root.Ct:
-                # agg+ after higher CC selects medoids from root.N_, replace provisional G_,root.N_?
-                G_ = cross_comp(root, proj_L_(get_exemplars(G_,r),2,r), r)
-                sum2F(G_,root)  # -> root.N_,H
+        if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
+            if fb := iN_ is None: iN_ = N_  # base call: this level's nodes
+            root.Ct = CF(root=root)  # classes of this band's clustering only
+            if G_:= cluster_N(root, exemplar_(iN_,r:=r+1), r,c):  # whole level over current rims, provisional G_-> CC-> root.Ct
+                if med_:= medoid_(iN_, root.Ct.N_, r+1, nexp+1):  # rng+ probes for the next band, []: rng exhaustion
+                    G_ = cross_comp(root, proj_L_(combinations(med_,2), root, r+1, nexp=nexp+1), r+1, iN_=iN_) or G_  # links, recluster, deeper bands
+                if fb: sum2F(G_, root, nF='Nt')  # install the last band's G_ -> root.N_, prior Nt -> H
         FV_(CoF.get(),tt,c,r)
     return G_
 
@@ -231,7 +232,7 @@ def comp_A(_A,A):
     '''
     return (cos(dA)+1) /2, dA/pi  # mA in 0:1, dA in -1:1, or invert dA, may be negative?
 
-def get_exemplars(N_,_r):  # multi-layer non-maximum suppression -> sparse clustering seeds = rim-medoids
+def exemplar_(N_,_r):  # multi-layer non-maximum suppression -> sparse clustering seeds = rim-medoids
 
     for n in N_: n.w = (n.Rt.m + n.Ct.m) * n.c  # lateral + internal representativeness, Ct.m=0 if no Ct
     N_= sorted(N_, key=lambda n: n.w, reverse=True); E_,Inh_ = [],set()
@@ -247,6 +248,20 @@ def get_exemplars(N_,_r):  # multi-layer non-maximum suppression -> sparse clust
     if E_: FV_(CoF.get(), *sum_vt(E_))
     else:  E_ = [N_[0]]; N_[0].exe=1  # no gain, no inhibition, any N can be seed
     return E_
+
+def medoid_(N_, C_, _r, nexp):  # not reviewed
+    # eval rng+ by combined membership value in n.root_, suppressed by stronger Ns
+    C_ = set(C_)  # current batch only: root_ also holds nested batches' memberships
+    for n in N_: n.w = sum(m * C.m for C, m, _ in n.root_ if C in C_) * n.c  # typicality * class coherence, summed over classes
+    N_ = sorted(N_, key=lambda n: n.w, reverse=True); M_, Inh_ = [], set()
+    for rdn, N in enumerate(N_, start=1):  # strong-first
+        oM = sum(m for C,m,_ in N.root_ if C in Inh_) * N.c  # value in classes already probed
+        oV = oM / (N.w or eps)  # relative overlap, 0:1
+        if N.w * wX > ave * (_r + nexp + rdn + cX + oV):
+            M_ += [N]; Inh_.update(C for C,_,_ in N.root_ if C in C_)  # its classes are covered
+        elif N.w * wX <= ave * (_r+nexp+rdn+cX):
+            break  # the rest is weaker w/o olp
+    return M_
 
 def nt_vt(n,_n):
     M, D = 0,0  # exclusive match, contrast
@@ -288,7 +303,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
                             if iM / (span*decay) < ave * (_r-1): continue  # normalized N-to-N_ match, sum for sum2G?
                         N_ += [_N]; L_ += [L]; fin_ += [_N]
                         _L_+= [l for l in _N.rim if l not in in_ and ((l.N_[0] in fin_) ^ (l.N_[1] in fin_))]   # new frontier links, +|-?
-                    elif d > avd * (_r-1): B_ += [L]  # contrast value, exclusive?
+                    elif L.nexp==1 and d > avd * (_r-1): B_ += [L]  # contrast value, exclusive? C has no boundary
             __L_ = list(set(_L_))
         if N_:
             ft_ = []
@@ -298,7 +313,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
             (nt,nc,nr),(lt,lc,lr),(bt,bc,br) = ft_
             c = nc+lc+bc; r = (nr*nc +lr*lc +br*bc) /c;  tt = (nt*nc +lt*lc +bt*bc) /c  # br includes overlap?
             if gv_(val_(tt*root.wTT*ttcN) * (c*wcN/(r*ccN)) * ((len(N_)-1)*wL) - ave):  # apply Fw_ and Fc_ in every eval_?
-                Gt_ += [sum2G((N_,L_,B_), ttcN, root, _r), tt,c,r]  # to eval sub+
+                Gt_ += [(sum2G((N_,L_,B_), ttcN, root, _r), tt,c,r)]  # to eval sub+
             else:
                 for n in N_: fin_.remove(n)  # remove N and L if they didn't form G
                 for l in L_: in_.remove(l)
@@ -318,7 +333,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
 def sum2G(F_, wTT, root=None, _r=0):  # finalize CN, eval der+, rng+, sub+
 
     G = CN(root=root,wTT=wTT)
-    g_,L_,pL_ = [],[],[]  # sub_Gs for CC, L_ can't be empty?
+    L_,pL_ = [],[]  # sub_Gs for CC, L_ can't be empty?
     N_,_L_,B_ = F_  # C_ is C.L_: single N in L.N_, no redundant vals and separate H?
     for L in _L_:
         if L.typ==1: L_+=[L]
@@ -326,7 +341,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN, eval der+, rng+, sub+
     if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0]*wN > ave*(cN*np.mean([L.r for L in pL_])):
         for pL in pL_:
             L_ += [L:= comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span)]; L.nexp=pL.nexp
-            for N in pL.N_: N.rim.remove(pL)
+            for N in pL.N_: N.rim.remove(pL)  # resum N.Rt? We might need them in sub+'s get_exemplar?
     [sum2F(F_,G,nF=nF) for F_,nF in zip((N_,B_,L_),('Nt','Bt','Lt')) if F_]
     G.m,G.d = val_(G.dTT,wTT,1)
     if Bt:= G.Bt:  # der+'sub+
@@ -339,7 +354,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN, eval der+, rng+, sub+
         if gv_(m* (c*wX / (r*cX)) - ave):  # rng+
             cross_comp(G, proj_L_(combinations(N_,2), G,r,nexp=L_[0].nexp+1), r,fagg=0)  # skip clustering
         if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):  # higher filter: r+1-> sub_Gs, CC
-            cluster_N(G, get_exemplars(N_,r), r+1,c)  # recursive sub+ w|o rng+
+            cluster_N(G, exemplar_(N_,r), r+1,c)  # recursive sub+ w|o rng+
     # or pack in CN sum2F, with G.N_,G.H?:
     if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)
     FV_(CoF.get(), G.dTT, G.c, G.r)
@@ -412,8 +427,8 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
                 if _C in removed: continue
                 for C in C_[i+1:]:
                     if C in removed: continue
-                    l = comp_N(C,_C,(C.r+_C.r)/2, min(C.c,_C.c), A=(a:=C.yx-_C.yx), span=np.hypot(*a))
-                    if l.m*wF > ave*(l.r+cF):
+                    m = val_(base_comp(C,_C)[0],ttcP); r = (C.r+_C.r)
+                    if m*wF > ave*(r+cF):
                         add2F(_C,C,2); removed += [C]; _C.m,_C.d = val_(_C.dTT,ttcP,fd=1)  # for next-loop base comp
                         for N in C.N_:
                             for rt in N.root_:
@@ -691,7 +706,7 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
             if cT in cT_: continue
             cT_.add(cT)
             dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)  # Rc = r+ (N.r+_N.r)/2
-            L = comp_N(_N,N, r,_C,A=dy_dx, span=dist)  # dPP, in N.rim
+            L = comp_N(_N,N, r,_C,A=dy_dx, span=dist)  # dPP, in N.rim (_C should be from N.c and _N.c)
             m,d = np.array(val_(L.dTT,ttTrc,1)) * ((L.c+wTrc)/(r+cTrc))
             if m > ave: L_ += [L]  # probably wrong
             elif d > avd: B_ += [L]
@@ -725,7 +740,7 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
         if not merged:
             if gv_(val_(ntt+ltt+btt, ttTrc) * ((nc+lc+bc+wTrc)/(r+cTrc)) - ave):  # wrap singletons
                 TT += ntt+ltt+btt; C += nc+lc+bc; R += r*(nc+lc+bc)  # add Bt from neg Ls per PP?
-                G_ += [sum2G((n_,l_,b_,[]), ttTrc, root, r)[0]]  # add sub-PPs from sub+?
+                G_ += [sum2G((n_,l_,b_), ttTrc, root, r)]  # add sub-PPs from sub+?
             else:
                 for N in n_: N.root=root
     if val_(TT*root.wTT*ttTrc) * ((C+wTrc)/(r+1+cTrc)) * ((len(G_)-1)*wL) > ave:
@@ -775,7 +790,7 @@ def vect_edge(T, iY,iX,Ly,Lx, rV=1):  # T=tile, PP_ cross_comp and floodfill to 
                         G_,TT,c,R = trace_edge([F2N(N) for N in N_], G_,TT,c,3,T); C += c  # flatten B_-mediated Gs
     if G_:
         FV_(CoF.get(), TT, C,1)
-        return sum2G((G_,[],[],[]), ttVct, T,R)[0]  # return sub-PPs?
+        return sum2G((G_,[],[]), ttVct, T,R)  # return sub-PPs?
 
 def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
 
@@ -813,7 +828,7 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
         tile_,C,R = fill_frame(iY, iX, elev, T)  # seed tile -> sparse higher scope tile( oH( aH
         if tile_:
             N_ = [g for t in tile_ for g in t.N_]; m,_,_,c,r = sum_vt(N_,fm=1)  # concat edge Gs
-            Fr = sum2G((N_,[],[],[]),ttFrm)[0]  # use sum2G to get angl and l_, for the next loop's T (T = Fr)
+            Fr = sum2G((N_,[],[]),ttFrm)  # use sum2G to get angl and l_, for the next loop's T (T = Fr)
             Fr.H += [sum2F(tile_)]  # minimally processed level
             if gv_(m * c * wX - ave * (r+1+cX)):
                 cross_comp(Fr, proj_L_(combinations(N_,2),Fr, r),r)  # agg+
