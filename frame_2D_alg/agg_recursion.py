@@ -103,13 +103,16 @@ def cross_comp(root, pL_,r, dF=None, fall=1, iN_=None):  # recursion root; iN_: 
         sum2F(L_+root.L_ if iN_ else L_, root, nF='Lt')  # -> root.Lt, rng+ bands add to lower-rng links
         for N in (N_:= list(set(N_))): sum2F(N.rim, N, nF='Rt')  # -> N.Rt
         if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
-            if fb := iN_ is None: iN_ = N_  # base call: this level's nodes
-            root.Ct = CF(root=root)  # classes of this band's clustering only
+            if iN_ is None: iN_ = N_  # base call: this level's nodes
+            Ct = root.Ct; root.Ct = CF(root=root)  # classes of this band's clustering only
             if G_:= cluster_N(root, exemplar_(iN_,r:=r+1), r,c):  # whole level over current rims, provisional G_-> CC-> root.Ct
-                if med_:= medoid_(iN_, root.Ct.N_, r+1, nexp+1):  # rng+ probes for the next band, []: rng exhaustion
-                    G_ = cross_comp(root, proj_L_(combinations(med_,2), root, r+1, nexp=nexp+1), r+1, iN_=iN_) or G_  # links, recluster, deeper bands
-                if fb: sum2F(G_, root, nF='Nt')  # install the last band's G_ -> root.N_, prior Nt -> H
-        FV_(CoF.get(),tt,c,r)
+                if (med_:= medoid_(iN_, root.Ct.N_, r+1, nexp+1)): nexp += 1  # rng+ probes for the next band, []: rng exhaustion  
+                else: 
+                    sum2F(G_, root, nF='Nt'); iN_ = None  # termination fork, run agg+ next
+                pL_ = proj_L_(combinations(med_ or G_,2), root, r+1, nexp=nexp)
+                G_ = cross_comp(root, pL_, r+1, iN_=iN_) or G_      
+            else: root.Ct = Ct  # fallback?    
+        FV_(CoF.get(),tt,c,r)  # update tt,c,r from G_ of cross_comp above?
     return G_
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
@@ -341,7 +344,8 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN, eval der+, rng+, sub+
     if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0]*wN > ave*(cN*np.mean([L.r for L in pL_])):
         for pL in pL_:
             L_ += [L:= comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span)]; L.nexp=pL.nexp
-            for N in pL.N_: N.rim.remove(pL)  # resum N.Rt? We might need them in sub+'s get_exemplar?
+            for N in pL.N_: N.rim.remove(pL)
+    for N in N_: N.Rt = sum2F(N.rim,root=N,nF='Rt')
     [sum2F(F_,G,nF=nF) for F_,nF in zip((N_,B_,L_),('Nt','Bt','Lt')) if F_]
     G.m,G.d = val_(G.dTT,wTT,1)
     if Bt:= G.Bt:  # der+'sub+
@@ -351,8 +355,6 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN, eval der+, rng+, sub+
         if RR:= root.root: Bt.brrw = Bt.m* (RR.m* (decay* (RR.span/G.span)))  # root - external lend?
     if Lt:= G.Lt:  # rng+'sub+
         m,c,r = Lt.m,Lt.c, Lt.r+_r
-        if gv_(m* (c*wX / (r*cX)) - ave):  # rng+
-            cross_comp(G, proj_L_(combinations(N_,2), G,r,nexp=L_[0].nexp+1), r,fagg=0)  # skip clustering
         if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):  # higher filter: r+1-> sub_Gs, CC
             cluster_N(G, exemplar_(N_,r), r+1,c)  # recursive sub+ w|o rng+
     # or pack in CN sum2F, with G.N_,G.H?:
@@ -497,7 +499,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
         else:
             if nF and not fC: setattr(root,nF,F); F.root = root  # root.Lt|Rt|Ct
             if nF not in ('Ct','Rt','tF'): add2F(root,F,2)  # tF's params will be summed separately
-        w = F.c/root.c
+        w = F.c/root.c  # yx and box shouldn't be exclusive to Nt only
         if 'yx' in locals(): root.kern+=kern*w; root.span+=span*w; root.yx+=yx*w
         if 'box' in locals(): root.box = copy(box)
         F.wTT = root.wTT
@@ -706,7 +708,7 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
             if cT in cT_: continue
             cT_.add(cT)
             dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)  # Rc = r+ (N.r+_N.r)/2
-            L = comp_N(_N,N, r,_C,A=dy_dx, span=dist)  # dPP, in N.rim (_C should be from N.c and _N.c)
+            L = comp_N(_N,N, r,(N.c+_N.c)/2,A=dy_dx, span=dist)  # dPP, in N.rim (_C should be from N.c and _N.c)
             m,d = np.array(val_(L.dTT,ttTrc,1)) * ((L.c+wTrc)/(r+cTrc))
             if m > ave: L_ += [L]  # probably wrong
             elif d > avd: B_ += [L]
