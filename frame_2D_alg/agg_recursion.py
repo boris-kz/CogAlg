@@ -83,7 +83,7 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
 - forward: selective extend cross-comp, clustering across tiles, re-order centroids by eigenvalues
 - feedback filter updates 
 '''
-def cross_comp(root, pL_,r, dF=None, fall=1, iN_=None, _G_=[]):  # recursion root, iN_: recluster/rng+, _G_: prior rng G_
+def cross_comp(root, pL_,r, dF=None, fall=1, iN_=None):  # recursion root, iN_: recluster/rng+, _G_: prior rng G_
 
     L_,N_,G_ = [],[],[]
     for dist, dy_dx, _N,N, lc,lr, pTT,m,d,nexp in pL_:
@@ -99,20 +99,22 @@ def cross_comp(root, pL_,r, dF=None, fall=1, iN_=None, _G_=[]):  # recursion roo
     if L_:
         if dF: add2F(dF, sum2F(L_,nF='Lt'), merge=1); return  # comp_F: no agg+, dF out
         tt,c,R = sum_vt(L_); m = val_(tt)
-        sum2F(L_+root.L_ if iN_ else L_, root, nF='Lt')  # -> root.Lt + rng links
+        sum2F(L_+root.L_ if iN_ else L_, root, nF='Lt')  # -> root.Lt + rng links 
+        # root.L_'s params already in root, recompute root's params ? Else there's redundant params 
+        root.dTT,root.c,root.r = sum_vt([root.Nt,root.Lt,root.Bt]); root.m,root.d = val_(root.dTT,root.wTT,fd=1)
         for N in (N_:= list(set(N_))): sum2F(N.rim, N, nF='Rt')  # -> N.Rt
         if gv_(m * (c*wcN/(R*ccN)) * ((len(L_)-1)*wL) - ave):
             if iN_ is None: iN_ = N_  # base call
             Ct = root.Ct; root.Ct = CF(root=root)  # current band
             if not (G_:= cluster_N(root, exemplar_(iN_,r+1), r+1,c)): root.Ct = Ct  # same Ns, updated rims -> provisional G_,CC
         FV_(CoF.get(),tt,c,R)  # this band only
-    if G_ or _G_:
-        if G_ and (rng_:= expand_(iN_, root,r)) and (pL_:= proj_L_(combinations(rng_,2),root,r,nexp=nexp+1)):
-            _G_ = G_  # rng+/ Lt.m + root_.M
-        else:  # agg+ / rng term
-            sum2F(G_:= G_ or _G_, root, nF='Nt')  # last G_ -> root.N_, prior Nt -> H
-            pL_ = proj_L_(combinations(G_,2), root, r:=r+1); iN_ = None; _G_ = []  # new level at base range
-        G_ = cross_comp(root, pL_, r, iN_=iN_, _G_=_G_) or G_
+    if G_:
+        if (rng_:= expand_(iN_, root, r)) and \
+            (pL_:= proj_L_(combinations(rng_,2), root, r, nexp=nexp+1)) and \
+            (rG_:= cross_comp(root, pL_, r, iN_=iN_)):
+                return rG_
+        sum2F(G_, root, nF='Nt')  # last G_ -> root.N_, prior Nt,Ct -> H
+        G_ = cross_comp(root, proj_L_(combinations(G_,2), root, r+1), r+1) or G_  # new level at base range    
     return G_
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
@@ -255,7 +257,7 @@ def exemplar_(N_,_r):  # multi-layer non-maximum suppression -> sparse clusterin
 def expand_(N_, root, _r):  # rng+ eval
 
     for n in N_:  # if N.root.Lt.m, add decay/L? + sum N.root_, suppressed by better medoids
-        n.w = (sum(m for C, m,_ in n.root_ if C in root.C_) + root.Lt.m) * n.c
+        n.w = (sum(m for C, m,_ in n.root_ if C in root.C_) + root.Lt.m) * n.c  # why root.Lt.m? They all have the same root.Lt.m anyway
     N_ = sorted(N_, key=lambda n: n.w, reverse=True); rng_,Inh_ = [], set()
     for rdn, N in enumerate(N_, start=1):  # strong-first
         oM = sum(m for C,m,_ in N.root_ if C in Inh_) * N.c  # prior medoids
@@ -493,16 +495,17 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
     if 'yx' in locals():  F.kern=kern; F.span=span; F.yx=yx
     if 'box' in locals(): F.box = box
     if root is not None:
+        F.wTT = root.wTT; skip = nF in ('Ct','Rt','tF')
         if nF=='Nt':
             if root.Nt: F.H = copy(root.H) + [Copy_(root.Nt, root=root)]  # previous top level
             root.Nt = F; F.root = root; root.dTT=copy(F.dTT); root.m,root.d,root.c,root.r = F.m,F.d,F.c,F.r
         else:
             if nF and not fC: setattr(root,nF,F); F.root = root  # root.Lt|Rt|Ct
-            if nF not in ('Ct','Rt','tF'): add2F(root,F,2)  # tF's params will be summed separately
-        w = F.c/root.c
-        if 'yx' in locals(): root.kern+=kern*w; root.span+=span*w; root.yx+=yx*w
-        if 'box' in locals(): root.box = copy(box)
-        F.wTT = root.wTT
+            if not skip: add2F(root,F,2)  # tF's params will be summed separately
+        if not skip:  # those forks shouldn't affect kern and root geo params
+            w = F.c/root.c
+            if 'yx' in locals(): root.kern+=kern*w; root.span+=span*w; root.yx+=yx*w
+            if 'box' in locals(): root.box = copy(box)
     if froot == 1:
         for n in N_: n.root = root or F
     elif froot == 2: F.root = root
