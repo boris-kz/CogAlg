@@ -156,3 +156,17 @@ def cross_comp(root, pL_,r, dF=None, fall=1):  # recursion root
                 cross_comp(root, proj_L_(combinations(G_,2), root, r:=r+1), r)  # agg+, same block one level up
         FV_(CoF.get(),tt,c,r)
     return G_
+
+def expand_(N_, C_, _r, nexp):  # not reviewed
+    # eval rng+ by combined membership value in n.root_, suppressed by stronger Ns
+    C_ = set(C_)  # current batch only: root_ also holds nested batches' memberships
+    for n in N_: n.w = sum(m * C.m for C, m, _ in n.root_ if C in C_) * n.c  # typicality * class coherence, summed over classes
+    N_ = sorted(N_, key=lambda n: n.w, reverse=True); M_, Inh_ = [], set()
+    for rdn, N in enumerate(N_, start=1):  # strong-first
+        oM = sum(m for C,m,_ in N.root_ if C in Inh_) * N.c  # value in classes already probed
+        oV = oM / (N.w or eps)  # relative overlap, 0:1
+        if N.w * wX > ave * (_r + nexp + rdn + cX + oV):
+            M_ += [N]; Inh_.update(C for C,_,_ in N.root_ if C in C_)  # its classes are covered
+        elif N.w * wX <= ave * (_r+nexp+rdn+cX):
+            break  # the rest is weaker w/o olp
+    return M_

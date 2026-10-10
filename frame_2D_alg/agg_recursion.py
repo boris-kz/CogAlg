@@ -83,8 +83,7 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
 - forward: selective extend cross-comp, clustering across tiles, re-order centroids by eigenvalues
 - feedback filter updates 
 '''
-# fable draft:
-def cross_comp(root, pL_,r, dF=None, fall=1, iN_=None):  # recursion root; iN_: level reclustered by rng+, None in base call
+def cross_comp(root, pL_,r, dF=None, fall=1, iN_=None, _G_=[]):  # recursion root, iN_: recluster/rng+, _G_: prior rng G_
 
     L_,N_,G_ = [],[],[]
     for dist, dy_dx, _N,N, lc,lr, pTT,m,d,nexp in pL_:
@@ -95,21 +94,25 @@ def cross_comp(root, pL_,r, dF=None, fall=1, iN_=None):  # recursion root; iN_: 
                 L_+=[Link]; N_+=[_N,N]; Link.nexp=nexp
             elif not dF:  # pack as prelink
                 _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
-                pL = CL(typ=-1, N_=[_N,N],dTT=pTT,m=m,d=d,c=lc,r=lr,span=dist,box=box,nexp=nexp,angl=[dy_dx,1], yx=np.add(_N.yx,N.yx)/2)
+                pL = CL(typ=-1, N_=[_N,N], dTT=pTT,m=m,d=d,c=lc,r=lr,span=dist,box=box,nexp=nexp,angl=[dy_dx,1], yx=np.add(_N.yx,N.yx)/2)
                 L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.N_
     if L_:
         if dF: add2F(dF, sum2F(L_,nF='Lt'), merge=1); return  # comp_F: no agg+, dF out
-        tt,c,r = sum_vt(L_); m = val_(tt)  # this band's links, for the gate
-        sum2F(L_+root.L_ if iN_ else L_, root, nF='Lt')  # -> root.Lt, rng+ bands add to lower-rng links
+        tt,c,R = sum_vt(L_); m = val_(tt)
+        sum2F(L_+root.L_ if iN_ else L_, root, nF='Lt')  # -> root.Lt + rng links
         for N in (N_:= list(set(N_))): sum2F(N.rim, N, nF='Rt')  # -> N.Rt
-        if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
-            if fb := iN_ is None: iN_ = N_  # base call: this level's nodes
-            root.Ct = CF(root=root)  # classes of this band's clustering only
-            if G_:= cluster_N(root, exemplar_(iN_,r:=r+1), r,c):  # whole level over current rims, provisional G_-> CC-> root.Ct
-                if med_:= medoid_(iN_, root.Ct.N_, r+1, nexp+1):  # rng+ probes for the next band, []: rng exhaustion
-                    G_ = cross_comp(root, proj_L_(combinations(med_,2), root, r+1, nexp=nexp+1), r+1, iN_=iN_) or G_  # links, recluster, deeper bands
-                if fb: sum2F(G_, root, nF='Nt')  # install the last band's G_ -> root.N_, prior Nt -> H
-        FV_(CoF.get(),tt,c,r)
+        if gv_(m * (c*wcN/(R*ccN)) * ((len(L_)-1)*wL) - ave):
+            if iN_ is None: iN_ = N_  # base call
+            Ct = root.Ct; root.Ct = CF(root=root)  # current band
+            if not (G_:= cluster_N(root, exemplar_(iN_,r+1), r+1,c)): root.Ct = Ct  # same Ns, updated rims -> provisional G_,CC
+        FV_(CoF.get(),tt,c,R)  # this band only
+    if G_ or _G_:
+        if G_ and (rng_:= expand_(iN_, root,r)) and (pL_:= proj_L_(combinations(rng_,2),root,r,nexp=nexp+1)):
+            _G_ = G_  # rng+/ Lt.m + root_.M
+        else:  # agg+ / rng term
+            sum2F(G_:= G_ or _G_, root, nF='Nt')  # last G_ -> root.N_, prior Nt -> H
+            pL_ = proj_L_(combinations(G_,2), root, r:=r+1); iN_ = None; _G_ = []  # new level at base range
+        G_ = cross_comp(root, pL_, r, iN_=iN_, _G_=_G_) or G_
     return G_
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
@@ -249,19 +252,19 @@ def exemplar_(N_,_r):  # multi-layer non-maximum suppression -> sparse clusterin
     else:  E_ = [N_[0]]; N_[0].exe=1  # no gain, no inhibition, any N can be seed
     return E_
 
-def medoid_(N_, C_, _r, nexp):  # not reviewed
-    # eval rng+ by combined membership value in n.root_, suppressed by stronger Ns
-    C_ = set(C_)  # current batch only: root_ also holds nested batches' memberships
-    for n in N_: n.w = sum(m * C.m for C, m, _ in n.root_ if C in C_) * n.c  # typicality * class coherence, summed over classes
-    N_ = sorted(N_, key=lambda n: n.w, reverse=True); M_, Inh_ = [], set()
+def expand_(N_, root, _r):  # rng+ eval
+
+    for n in N_:  # if N.root.Lt.m, add decay/L? + sum N.root_, suppressed by better medoids
+        n.w = (sum(m for C, m,_ in n.root_ if C in root.C_) + root.Lt.m) * n.c
+    N_ = sorted(N_, key=lambda n: n.w, reverse=True); rng_,Inh_ = [], set()
     for rdn, N in enumerate(N_, start=1):  # strong-first
-        oM = sum(m for C,m,_ in N.root_ if C in Inh_) * N.c  # value in classes already probed
+        oM = sum(m for C,m,_ in N.root_ if C in Inh_) * N.c  # prior medoids
         oV = oM / (N.w or eps)  # relative overlap, 0:1
-        if N.w * wX > ave * (_r + nexp + rdn + cX + oV):
-            M_ += [N]; Inh_.update(C for C,_,_ in N.root_ if C in C_)  # its classes are covered
-        elif N.w * wX <= ave * (_r+nexp+rdn+cX):
-            break  # the rest is weaker w/o olp
-    return M_
+        if N.w * wX > ave * (_r+rdn+cX+oV):
+            rng_ += [N]; Inh_.update(C for C,_,_ in N.root_ if C in root.C_)
+        elif N.w * wX <= ave * (_r+rdn+cX):
+            break  # weak w/o overlap
+    return rng_  # Ns for rng+ comp
 
 def nt_vt(n,_n):
     M, D = 0,0  # exclusive match, contrast
@@ -329,36 +332,6 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
         if gv_(M * (C*wcC /((_r+R)*ccC)) * ((len(G_)-1)*wL) - ave):
             cluster_C(root, G_,_r+R)
         return G_  # also return vt?
-
-def sum2G(F_, wTT, root=None, _r=0):  # finalize CN, eval der+, rng+, sub+
-
-    G = CN(root=root,wTT=wTT)
-    L_,pL_ = [],[]  # sub_Gs for CC, L_ can't be empty?
-    N_,_L_,B_ = F_  # C_ is C.L_: single N in L.N_, no redundant vals and separate H?
-    for L in _L_:
-        if L.typ==1: L_+=[L]
-        else: pL_ += [L]
-    if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0]*wN > ave*(cN*np.mean([L.r for L in pL_])):
-        for pL in pL_:
-            L_ += [L:= comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span)]; L.nexp=pL.nexp
-            for N in pL.N_: N.rim.remove(pL)  # resum N.Rt? We might need them in sub+'s get_exemplar?
-    [sum2F(F_,G,nF=nF) for F_,nF in zip((N_,B_,L_),('Nt','Bt','Lt')) if F_]
-    G.m,G.d = val_(G.dTT,wTT,1)
-    if Bt:= G.Bt:  # der+'sub+
-        bd,bc,br = Bt.d,Bt.c,Bt.r+_r+1
-        if N_[0].typ!=1 and gv_(bd*bc*wX - ave*(br+cX)):  # no ddfork, eval len B_?
-            cross_comp(F2N(G.Bt), proj_L_(combinations([F2N(L) for L in Bt.N_],2),G,br),br)
-        if RR:= root.root: Bt.brrw = Bt.m* (RR.m* (decay* (RR.span/G.span)))  # root - external lend?
-    if Lt:= G.Lt:  # rng+'sub+
-        m,c,r = Lt.m,Lt.c, Lt.r+_r
-        if gv_(m* (c*wX / (r*cX)) - ave):  # rng+
-            cross_comp(G, proj_L_(combinations(N_,2), G,r,nexp=L_[0].nexp+1), r,fagg=0)  # skip clustering
-        if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):  # higher filter: r+1-> sub_Gs, CC
-            cluster_N(G, exemplar_(N_,r), r+1,c)  # recursive sub+ w|o rng+
-    # or pack in CN sum2F, with G.N_,G.H?:
-    if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)
-    FV_(CoF.get(), G.dTT, G.c, G.r)
-    return G
 
 def cluster_C(root, G_,_r):  # sub-G seeds expand through their members' rims
 
@@ -461,6 +434,35 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
         iTT, iC, iR = sum_vt(iC_); oTT,oC,oR = sum_vt(out_)
         FV_(CoF.get(), iTT-oTT, iC-oC, iR-oR)
     return out_
+
+def sum2G(F_, wTT, root=None, _r=0):  # finalize CN, eval der+, rng+, sub+
+
+    G = CN(root=root,wTT=wTT)
+    L_,pL_ = [],[]  # sub_Gs for CC, L_ can't be empty?
+    N_,_L_,B_ = F_  # C_ is C.L_: single N in L.N_, no redundant vals and separate H?
+    for L in _L_:
+        if L.typ==1: L_+=[L]
+        else: pL_ += [L]
+    if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0]*wN > ave*(cN*np.mean([L.r for L in pL_])):
+        for pL in pL_:
+            L_ += [L:= comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span)]; L.nexp=pL.nexp
+            for N in pL.N_: N.rim.remove(pL)
+    for N in N_: N.Rt = sum2F(N.rim,root=N,nF='Rt')
+    [sum2F(F_,G,nF=nF) for F_,nF in zip((N_,B_,L_),('Nt','Bt','Lt')) if F_]
+    G.m,G.d = val_(G.dTT,wTT,1)
+    if Bt:= G.Bt:  # der+
+        bd,bc,br = Bt.d,Bt.c,Bt.r+_r+1
+        if N_[0].typ!=1 and gv_(bd*bc*wX - ave*(br+cX)):  # no ddfork, eval len B_?
+            cross_comp(F2N(G.Bt), proj_L_(combinations([F2N(L) for L in Bt.N_],2),G,br),br)
+        if RR:= root.root: Bt.brrw = Bt.m* (RR.m* (decay* (RR.span/G.span)))  # root - external lend?
+    if Lt:= G.Lt:  # sub+
+        m,c,r = Lt.m,Lt.c, Lt.r+_r
+        if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):  # higher filter: r+1-> sub_Gs, CC
+            cluster_N(G, exemplar_(N_,r), r+1,c)  # recursive sub+ w|o rng+
+    # or pack in CN sum2F, with G.N_,G.H?:
+    if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)
+    FV_(CoF.get(), G.dTT, G.c, G.r)
+    return G
 
 def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
 
@@ -706,7 +708,7 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
             if cT in cT_: continue
             cT_.add(cT)
             dy_dx = _N.yx-N.yx; dist = np.hypot(*dy_dx)  # Rc = r+ (N.r+_N.r)/2
-            L = comp_N(_N,N, r,_C,A=dy_dx, span=dist)  # dPP, in N.rim (_C should be from N.c and _N.c)
+            L = comp_N(_N,N, r,min(N.c,_N.c),A=dy_dx, span=dist)  # dPP, in N.rim
             m,d = np.array(val_(L.dTT,ttTrc,1)) * ((L.c+wTrc)/(r+cTrc))
             if m > ave: L_ += [L]  # probably wrong
             elif d > avd: B_ += [L]
