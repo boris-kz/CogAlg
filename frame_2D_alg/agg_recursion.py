@@ -83,8 +83,7 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
 - forward: selective extend cross-comp, clustering across tiles, re-order centroids by eigenvalues
 - feedback filter updates 
 '''
-# fable draft:
-def cross_comp(root, pL_,r, dF=None, fall=1, iN_=None):  # recursion root; iN_: level reclustered by rng+, None in base call
+def cross_comp(root, pL_,r, dF=None, fall=1, iN_=None, _G_=[]):  # recursion root, iN_: recluster/rng+, _G_: prior rng G_
 
     L_,N_,G_ = [],[],[]
     for dist, dy_dx, _N,N, lc,lr, pTT,m,d,nexp in pL_:
@@ -95,24 +94,26 @@ def cross_comp(root, pL_,r, dF=None, fall=1, iN_=None):  # recursion root; iN_: 
                 L_+=[Link]; N_+=[_N,N]; Link.nexp=nexp
             elif not dF:  # pack as prelink
                 _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
-                pL = CL(typ=-1, N_=[_N,N],dTT=pTT,m=m,d=d,c=lc,r=lr,span=dist,box=box,nexp=nexp,angl=[dy_dx,1], yx=np.add(_N.yx,N.yx)/2)
+                pL = CL(typ=-1, N_=[_N,N], dTT=pTT,m=m,d=d,c=lc,r=lr,span=dist,box=box,nexp=nexp,angl=[dy_dx,1], yx=np.add(_N.yx,N.yx)/2)
                 L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.N_
     if L_:
         if dF: add2F(dF, sum2F(L_,nF='Lt'), merge=1); return  # comp_F: no agg+, dF out
-        tt,c,r = sum_vt(L_); m = val_(tt)  # this band's links, for the gate
-        sum2F(L_+root.L_ if iN_ else L_, root, nF='Lt')  # -> root.Lt, rng+ bands add to lower-rng links
+        tt,c,R = sum_vt(L_); m = val_(tt)
+        if iN_: add2F(root.Lt, Lt:= sum2F(L_,nF='Lt'), merge=1); add2F(root, Lt, 2)  # rng links -> root.Lt, only new links -> root
+        else:   sum2F(L_, root, nF='Lt')  # -> root.Lt
         for N in (N_:= list(set(N_))): sum2F(N.rim, N, nF='Rt')  # -> N.Rt
-        if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
-            if iN_ is None: iN_ = N_  # base call: this level's nodes
-            Ct = root.Ct; root.Ct = CF(root=root)  # classes of this band's clustering only
-            if G_:= cluster_N(root, exemplar_(iN_,r:=r+1), r,c):  # whole level over current rims, provisional G_-> CC-> root.Ct
-                if (med_:= medoid_(iN_, root.Ct.N_, r+1, nexp+1)): nexp += 1  # rng+ probes for the next band, []: rng exhaustion  
-                else: 
-                    sum2F(G_, root, nF='Nt'); iN_ = None  # termination fork, run agg+ next
-                pL_ = proj_L_(combinations(med_ or G_,2), root, r+1, nexp=nexp)
-                G_ = cross_comp(root, pL_, r+1, iN_=iN_) or G_      
-            else: root.Ct = Ct  # fallback?    
-        FV_(CoF.get(),tt,c,r)  # update tt,c,r from G_ of cross_comp above?
+        if gv_(m * (c*wcN/(R*ccN)) * ((len(L_)-1)*wL) - ave):
+            if iN_ is None: iN_ = N_  # base call
+            Ct = root.Ct; root.Ct = CF(root=root)  # current band
+            if not (G_:= cluster_N(root, exemplar_(iN_,r+1), r+1,c)): root.Ct = Ct  # same Ns, updated rims -> provisional G_,CC
+        FV_(CoF.get(),tt,c,R)  # this band only
+    if G_ or _G_:
+        if G_ and (rng_:= expand_(iN_, root,r)) and (pL_:= proj_L_(combinations(rng_,2),root,r,nexp=nexp+1)):
+            _G_ = G_  # rng+/ Lt.m + root_.M
+        else:  # agg+ / rng term
+            sum2F(G_:= G_ or _G_, root, nF='Nt')  # last G_ -> root.N_, prior Nt,Ct -> H
+            pL_ = proj_L_(combinations(G_,2), root, r:=r+1); iN_ = None; _G_ = []  # new level at base range
+        G_ = cross_comp(root, pL_, r, iN_=iN_, _G_=_G_) or G_
     return G_
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
@@ -252,19 +253,19 @@ def exemplar_(N_,_r):  # multi-layer non-maximum suppression -> sparse clusterin
     else:  E_ = [N_[0]]; N_[0].exe=1  # no gain, no inhibition, any N can be seed
     return E_
 
-def medoid_(N_, C_, _r, nexp):  # not reviewed
-    # eval rng+ by combined membership value in n.root_, suppressed by stronger Ns
-    C_ = set(C_)  # current batch only: root_ also holds nested batches' memberships
-    for n in N_: n.w = sum(m * C.m for C, m, _ in n.root_ if C in C_) * n.c  # typicality * class coherence, summed over classes
-    N_ = sorted(N_, key=lambda n: n.w, reverse=True); M_, Inh_ = [], set()
+def expand_(N_, root, _r):  # rng+ eval: sum N.root_ M + root.Lt.m, suppressed by better medoids
+
+    C_ = set(root.C_); rM = root.Lt.m
+    for n in N_: n.w = (sum(m for C,m,_ in n.root_ if C in C_) + rM) * n.c
+    N_ = sorted(N_, key=lambda n: n.w, reverse=True); rng_,Inh_ = [], set()
     for rdn, N in enumerate(N_, start=1):  # strong-first
-        oM = sum(m for C,m,_ in N.root_ if C in Inh_) * N.c  # value in classes already probed
+        oM = sum(m for C,m,_ in N.root_ if C in Inh_) * N.c  # prior medoids
         oV = oM / (N.w or eps)  # relative overlap, 0:1
-        if N.w * wX > ave * (_r + nexp + rdn + cX + oV):
-            M_ += [N]; Inh_.update(C for C,_,_ in N.root_ if C in C_)  # its classes are covered
-        elif N.w * wX <= ave * (_r+nexp+rdn+cX):
-            break  # the rest is weaker w/o olp
-    return M_
+        if N.w * wX > ave * (_r+rdn+cX+oV):
+            rng_ += [N]; Inh_.update(C for C,_,_ in N.root_ if C in C_)
+        elif N.w * wX <= ave * (_r+rdn+cX):
+            break  # weak w/o overlap
+    return rng_  # Ns for rng+ comp
 
 def nt_vt(n,_n):
     M, D = 0,0  # exclusive match, contrast
@@ -298,10 +299,10 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
             for L in set(__L_) - in_:  # flood-fill via frontier links
                 _N = L.N_[0] if L.N_[1] in fin_ else L.N_[1]; in_.add(L)
                 if _N not in fin_:
-                    m,d = nt_vt(*L.N_)
+                    m,d = nt_vt(*L.N_) if L.nexp==1 or (L.typ==1 and L.m*(L.c*wcN/(L.r*ccN)) > ave) else (0,0)  # rng link: compared, strong
                     if m > ave * (_r-1):  # cluster nt, L,C_ by combined rim density, add gv_?
                         span = np.sqrt(len(N_))  # approx span
-                        if span > 3:  # refine by rim connectivity / norm span
+                        if span > 3 and L.nexp==1:  # refine by rim connectivity / norm span, local
                             iM = sum([L.m for L in _N.rim if (L.N_[0] if L.N_[1] is _N else L.N_[1]) in N_])
                             if iM / (span*decay) < ave * (_r-1): continue  # normalized N-to-N_ match, sum for sum2G?
                         N_ += [_N]; L_ += [L]; fin_ += [_N]
@@ -494,7 +495,7 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
     if 'box' in locals(): F.box = box
     if root is not None:
         if nF=='Nt':
-            if root.Nt: F.H = copy(root.H) + [Copy_(root.Nt, root=root)]  # previous top level
+            if root.Nt: F.H = copy(root.H) + [lev:= Copy_(root.Nt, root=root)]; lev.Ct = root.Ct; root.Ct = CF(root=root)  # previous top level, its Ct
             root.Nt = F; F.root = root; root.dTT=copy(F.dTT); root.m,root.d,root.c,root.r = F.m,F.d,F.c,F.r
         else:
             if nF and not fC: setattr(root,nF,F); F.root = root  # root.Lt|Rt|Ct
@@ -621,14 +622,14 @@ def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
 '''
 def proj_L_(pairs, root, r, max=20, fall=1, nexp=1):
 
-    def proj_V(_N, N, dist, dy_dx, dec, r):  # _N x N induction
-        Dec = dec or decay ** ((dist / ((_N.span + N.span) / 2)))
+    def proj_V(_N, N, dist, dy_dx, r):  # _N x N induction
+        Dec = decay ** (dist / ((_N.span + N.span) / 2))  # per distance
         iTT = (_N.dTT + N.dTT) * Dec
         eTT = (_N.Rt.dTT + N.Rt.dTT) * Dec
         C = min(_N.c, N.c); R = (_N.r + N.r) / 2
         if val_((eTT + iTT) * ttPrj) * (C / (cPrj + r + R)) * wPrj > ave:  # not oF, spec / link:
-            eTT += proj_N(N, dist, dy_dx, r, N.c, dec)[0]  # pTT/ L_,B_,rim, if pV >0
-            eTT += proj_N(_N, dist, -dy_dx, r, _N.c, dec)[0]  # reverse direction
+            eTT += proj_N(N, dist, dy_dx, r, N.c)[0]  # pTT/ L_,B_,rim, if pV >0
+            eTT += proj_N(_N, dist, -dy_dx, r, _N.c)[0]  # reverse direction
         return iTT + eTT
 
     pL_, olp_ = [], []  # no olp_?
@@ -638,7 +639,7 @@ def proj_L_(pairs, root, r, max=20, fall=1, nexp=1):
         elif not (set(N.rim) & set(_N.rim)):  # not nexp-1 link
             dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx)  # rim angl is not canonic
             if dist < max * nexp:
-                pTT = proj_V(_N, N, dist, dy_dx, root.m if root != 2 else decay ** (dist / ((_N.span + N.span) / 2)), r)  # based on current rim
+                pTT = proj_V(_N, N, dist, dy_dx, r)  # based on current rim
                 m, d = val_(pTT, ttN, 1)
                 if fall or m > ave:
                     lc = min(_N.c, N.c); lr = r + (N.r + _N.r) / 2  # +|-match certainty
