@@ -99,7 +99,9 @@ def cross_comp(root, pL_,_r, dF=None, fall=1, iN_=None):  # recursion root, iN_:
     if L_:
         Lt = sum2F(L_,root=None if (dF or iN_) else root, nF='Lt'); tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r
         if dF: add2F(dF,Lt, merge=1); return  # comp_F: no agg+, dF out
-        if iN_: add2F(root.Lt, Lt, merge=1)  # rng+
+        if iN_: 
+            add2F(root.Lt, Lt, merge=1)  # rng+
+            A = np.sum(A_:=[L.angl[0]*L.angl[1] for L in root.L_],axis=0); root.angl = [A,1]; root.mang = np.mean([comp_A(A,a)[0] for a in A_])
         for N in (N_:= list(set(N_))): sum2F(N.rim, N, nF='Rt')  # -> N.Rt
         if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
             Ct=root.Ct; root.Ct=CF(root=root); iN_= iN_ or N_  # current rng
@@ -107,19 +109,20 @@ def cross_comp(root, pL_,_r, dF=None, fall=1, iN_=None):  # recursion root, iN_:
                 root.Ct = Ct  # same Ns with updated rims form tentative G_,CC
         FV_(CoF.get(),tt,c,r)  # current rng
         if G_:
-            if (rng_:= expand_(iN_,root,r)) and (pL_:= proj_L_(combinations(rng_,2),root,_r,nexp=nexp+1) and gv_(sum(n.w for n in rng_) * (wX/cX) - ave)
-                and (_G_ := cross_comp(root, pL_, _r, iN_=iN_))):
-                    G_ = _G_  # installed below
-            else:  # install, agg+
-                Nt = sum2F(G_, root,nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r  # final G_-> root.N_, prior Nt,Ct -> H
-                if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+
-                    G_ = cross_comp(root, proj_L_(combinations(G_,2),root,_r+1),_r+1) or G_
+            if (rng_:= expand_(iN_,root,r)) and (pL_:= proj_L_(combinations(rng_,2),root,_r+1,nexp=nexp+1)):  # _r+1 for rng+
+                if gv_(sum(n.w for n in rng_) * (wX/cX) - ave) and (_G_ := cross_comp(root, pL_, _r+1, iN_=iN_)):  # := should be run first, sine it has lower priority compare to “and"
+                    return _G_  # installed below
+            # install, agg+
+            Nt = sum2F(G_, root,nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r  # final G_-> root.N_, prior Nt,Ct -> H
+            Nt.Ct = root.Ct; nm,nc,nr = Nt.m,Nt.c,Nt.r  # per level's Ct
+            if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+
+                G_ = cross_comp(root, proj_L_(combinations(G_,2),root,_r+1),_r+1) or G_
     return G_
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
 
     def sum_dn_(dn_, L):
-        L.H += [lev:= sum2F(dn_,nF='tF',root=L,froot=2)]  # dN_ maybe dFt, works the same
+        L.H += [lev:= sum2F(dn_,nF='tF',root=L)]  # dN_ maybe dFt, works the same
         TT, C, R = lev.dTT,lev.c,lev.r
         w = C/L.c * (L.r/R)
         L.dTT = (L.dTT+ TT*w) / (1+w); L.m,L.d = val_(L.dTT,ttN,1); L.r = (L.r+ R*w) / (1+w); L.c += C
@@ -255,8 +258,10 @@ def exemplar_(N_,_r):  # multi-layer non-maximum suppression -> sparse clusterin
 
 def expand_(N_, root, _r):  # rng+ eval
 
-    for n in N_:  # if N.root.Lt.m, add decay/L? + sum N.root_, suppressed by better medoids
-        n.w = (sum(m for C, m,_ in n.root_ if C in root.C_) + root.Lt.m) * n.c  # why root.Lt.m? They all have the same root.Lt.m anyway
+    Lt = root.Lt; dist = max(L.span for L in Lt.N_)
+    rM = Lt.m * decay**(dist/Lt.span -1)  # induction from all root links, decays as range extends
+    for n in N_:  # sum N.root_, suppressed by better medoids
+        n.w = (sum(m for C, m,_ in n.root_ if C in root.C_) + rM) * n.c    
     N_ = sorted(N_, key=lambda n: n.w, reverse=True); rng_,Inh_ = [], set()
     for rdn, N in enumerate(N_, start=1):  # strong-first
         oM = sum(m for C,m,_ in N.root_ if C in Inh_) * N.c  # prior medoids
@@ -448,7 +453,8 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN, eval der+, rng+, sub+
         for pL in pL_:
             L_ += [L:= comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span)]; L.nexp=pL.nexp
             for N in pL.N_: N.rim.remove(pL)
-    for N in N_: N.Rt = sum2F(N.rim,root=N,nF='Rt')
+    for N in N_:
+        if N.rim: N.Rt = sum2F(N.rim,root=N,nF='Rt')  # skip if singleton
     [sum2F(F_,G,nF=nF) for F_,nF in zip((N_,B_,L_),('Nt','Bt','Lt')) if F_]
     G.m,G.d = val_(G.dTT,wTT,1)
     if Bt:= G.Bt:  # der+
@@ -484,10 +490,10 @@ def sum2F(N_, root=None, m_=None, d_=None, nF=None):  # c|c*m -weighted sum -> C
         if root.Nt: F.H = copy(root.H) + [Copy_(root.Nt, root=root)]
         else: [add_H(F.H, n.H, F) for n in N_]
         root.dTT,root.c,root.r,root.m,root.d = copy(TT),C,R,F.m,F.d
-        root.yx,root.kern,root.box = F.yx,F.kern,F.box; root.span = np.hypot(*(F.box[2:]-F.box[:2]))/2  # extent, as in PP2N
+        root.yx,root.kern,root.box = F.yx,F.kern,F.box; root.span = np.hypot(*(F.box[2:]-F.box[:2]))/2  # extent, as in PP2N (valid for Lt too?)
     elif nF=='Lt':  # oriented, as in base_comp
         A_ = [L.angl[0]*L.angl[1] for L in N_]; A = np.sum(A_,axis=0)
-        root.angl = [A,1]; root.mang = np.mean([comp_A(A,a)[0] for a in A_])
+        root.angl = [A,1]; root.mang = np.mean([comp_A(A,a)[0] for a in A_]); F.angl = [A,1]  # Lt.angl for proj_V
     if not fC and nF and hasattr(root,nF): setattr(root,nF,F)  # Nt|Lt|Bt|Rt|Ct, not L.tF
     return F
 
@@ -548,6 +554,7 @@ def Copy_(N, root=None, r=1, cls=None, init=0, typ=None, froot=0):
             for f in ('Nt','Lt','Bt','Ct','Xt','Rt'): setattr(C, f, Copy_(getattr(N,f), root=C))
             C.H = [Copy_(lev, root=C) for lev in N.H]
             C.angl=deepcopy(N.angl); C.yx=copy(N.yx); C.box=copy(N.box); C.mang=N.mang; C.exe=N.exe; C.root_=list(N.root_)
+    if N.Ct and isinstance(N, CF): C.Ct = Copy_(N.Ct)  # per level Ct
     if froot:
         for n in C.N_+C.L_: n.root = C  # reassign for feedback, or root_+= if multiple roots?
     return C
@@ -602,10 +609,14 @@ def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
 '''
 def proj_L_(pairs, root, r, max=20, fall=1, nexp=1):
 
-    def proj_V(_N, N, dist, dy_dx, dec, r):  # _N x N induction
-        Dec = dec or decay ** ((dist / ((_N.span + N.span) / 2)))
-        iTT = (_N.dTT + N.dTT) * Dec
-        eTT = (_N.Rt.dTT + N.Rt.dTT) * Dec
+    def proj_V(_N, N, dist, dy_dx, r):  # _N x N induction
+        dec = decay ** ((dist / ((_N.span + N.span) / 2)))
+        iTT = (_N.dTT + N.dTT) * dec
+        eTT = (_N.Rt.dTT + N.Rt.dTT) * dec
+        if root!=2 and (Lt:= root.Lt) and Lt.angl:
+            V = Lt.angl[0]; a = 2*atan2(*dy_dx)  # mean L axis, pair axis: doubled angles
+            mA = comp_A(V, np.array([np.sin(a), np.cos(a)]))[0]
+            eTT += Lt.dTT * decay**(dist/Lt.span -1) * (1 - np.hypot(*V)*(1-mA))
         C = min(_N.c, N.c); R = (_N.r + N.r) / 2
         if val_((eTT + iTT) * ttPrj) * (C / (cPrj + r + R)) * wPrj > ave:  # not oF, spec / link:
             eTT += proj_N(N, dist, dy_dx, r, N.c, dec)[0]  # pTT/ L_,B_,rim, if pV >0
@@ -619,7 +630,7 @@ def proj_L_(pairs, root, r, max=20, fall=1, nexp=1):
         elif not (set(N.rim) & set(_N.rim)):  # not nexp-1 link
             dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx)  # rim angl is not canonic
             if dist < max * nexp:
-                pTT = proj_V(_N, N, dist, dy_dx, root.m if root != 2 else decay ** (dist / ((_N.span + N.span) / 2)), r)  # based on current rim
+                pTT = proj_V(_N, N, dist, dy_dx, r)  # based on current rim
                 m, d = val_(pTT, ttN, 1)
                 if fall or m > ave:
                     lc = min(_N.c, N.c); lr = r + (N.r + _N.r) / 2  # +|-match certainty
