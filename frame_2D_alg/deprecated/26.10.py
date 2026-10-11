@@ -170,3 +170,51 @@ def expand_(N_, C_, _r, nexp):  # not reviewed
         elif N.w * wX <= ave * (_r+nexp+rdn+cX):
             break  # the rest is weaker w/o olp
     return M_
+
+def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
+
+    c_ = np.array([n.c for n in N_], dtype=float); N = N_[0]
+    C = c_.sum(); TT,R = np.zeros((2,9)),0; fC = any(m_)
+    w_ = c_ * np.array(m_) if fC else c_.copy()
+    w_ /= w_.sum()
+    typ = 0 if nF=='Nt' else 2 if fC else N.typ  # Nt: summary only
+    cls_ = [CF,CL,CL,CN]  # typ=2 CCs
+    for i, (n,w) in enumerate(zip(N_,w_)):
+        if i:
+            TT += n.dTT*w; R+=n.r*w; n_ += (n.N_ if merge else [n])
+            if hasattr(n,'yx'):  kern+=n.kern*w; span+=n.span*w; yx+=n.yx*w  # links and higher
+            if hasattr(n,'box'): box=extend_box(box,n.box)
+        else:  # init
+            TT = n.dTT*w; R=n.r*w; n_ = copy(n.N_ if merge else [n])
+            if hasattr(n,'yx'):  kern=n.kern*w; span=n.span*w; yx=n.yx*w
+            if hasattr(n,'box'): box=copy(n.box)
+    F = (cls_[typ])(dTT=TT, c=C, r=R, nF=nF,typ=typ); F.N_ = n_
+    if fC: F.m_,F.d_ = m_,d_; F.m,F.d = sum(m*c for m,c in zip(m_,c_))/C, sum(d*c for d,c in zip(d_,c_))/C; F.w=F.m
+    else:  F.m, F.d = val_(TT,fd=1)
+    if nF=='Lt' and root:
+        angl = np.sum([L.angl[0] for L in N_],axis=0)
+        root.mang = np.mean([comp_A(angl,L.angl[0])[0] for L in N_])
+        root.angl = [angl,np.sign(root.dTT[1] @ ttcN[1])]
+    if nF=='Nt':
+        for N in N_: add_H(F.H, N.H, F)  # concat lower levs
+    if 'yx' in locals():  F.kern=kern; F.span=span; F.yx=yx
+    if 'box' in locals(): F.box = box
+    if root is not None:
+        F.wTT = root.wTT
+        if nF in ('Nt','Lt'):
+            w = F.c/root.c
+            if 'yx' in locals(): root.kern+=kern*w; root.span+=span*w; root.yx+=yx*w
+            if 'box' in locals(): root.box = copy(box)
+            if nF=='Nt':
+                if root.Nt: F.H = copy(root.H) + [Copy_(root.Nt, root=root)]  # previous top level
+                root.Nt = F; F.root = root; root.dTT=copy(F.dTT); root.m,root.d,root.c,root.r = F.m,F.d,F.c,F.r
+            else:
+                if nF and not fC: setattr(root,nF,F); F.root = root  # root.Lt|Rt|Ct
+                add2F(root,F,2)  # tF's params will be summed separately
+    if froot == 1:
+        for n in N_: n.root = root or F
+    elif froot == 2: F.root = root
+    if fC:
+        for N, m, d in zip(N_, m_, d_): N.root_ += [[F,m,d]]
+    return F
+

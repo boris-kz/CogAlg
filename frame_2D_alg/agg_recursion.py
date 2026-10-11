@@ -1,7 +1,7 @@
 import numpy as np, inspect, contextvars
-import ast
 from copy import copy, deepcopy
-from math import atan2, cos, pi  # from functools import reduce
+from math import atan2, cos, pi
+from functools import reduce
 from itertools import zip_longest, combinations, product  # from multiprocessing import Pool, Manager
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
@@ -83,12 +83,12 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
 - forward: selective extend cross-comp, clustering across tiles, re-order centroids by eigenvalues
 - feedback filter updates 
 '''
-def cross_comp(root, pL_,r, dF=None, fall=1, iN_=None, _G_=[]):  # recursion root, iN_: recluster/rng+, _G_: prior rng G_
+def cross_comp(root, pL_,_r, dF=None, fall=1, iN_=None):  # recursion root, iN_: recluster/rng+
 
     L_,N_,G_ = [],[],[]
     for dist, dy_dx, _N,N, lc,lr, pTT,m,d,nexp in pL_:
         if _N != N and (fall or m>0):
-            if gv_(m*(lc*wN/(lr*cN)) - ave* (r+cN)):
+            if gv_(m*(lc*wN/(lr*cN)) - ave* (_r+cN)):
                 Link = comp_N(_N,N, lr,lc, full=not dF, A=dy_dx, span=dist, rL=root)
                 Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT)  # prediction error
                 L_+=[Link]; N_+=[_N,N]; Link.nexp=nexp
@@ -97,22 +97,23 @@ def cross_comp(root, pL_,r, dF=None, fall=1, iN_=None, _G_=[]):  # recursion roo
                 pL = CL(typ=-1, N_=[_N,N], dTT=pTT,m=m,d=d,c=lc,r=lr,span=dist,box=box,nexp=nexp,angl=[dy_dx,1], yx=np.add(_N.yx,N.yx)/2)
                 L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.N_
     if L_:
-        if dF: add2F(dF, sum2F(L_,nF='Lt'), merge=1); return  # comp_F: no agg+, dF out
-        tt,c,R = sum_vt(L_); m = val_(tt)
-        sum2F(L_+root.L_ if iN_ else L_, root, nF='Lt')  # -> root.Lt + rng links
+        Lt = sum2F(L_,root=None if (dF or iN_) else root, nF='Lt'); tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r
+        if dF: add2F(dF,Lt, merge=1); return  # comp_F: no agg+, dF out
+        if iN_: add2F(root.Lt, Lt, merge=1)  # rng+
         for N in (N_:= list(set(N_))): sum2F(N.rim, N, nF='Rt')  # -> N.Rt
-        if gv_(m * (c*wcN/(R*ccN)) * ((len(L_)-1)*wL) - ave):
-            if iN_ is None: iN_ = N_  # base call
-            Ct = root.Ct; root.Ct = CF(root=root)  # current band
-            if not (G_:= cluster_N(root, exemplar_(iN_,r+1), r+1,c)): root.Ct = Ct  # same Ns, updated rims -> provisional G_,CC
-        FV_(CoF.get(),tt,c,R)  # this band only
-    if G_ or _G_:
-        if G_ and (rng_:= expand_(iN_, root,r)) and (pL_:= proj_L_(combinations(rng_,2),root,r,nexp=nexp+1)):
-            _G_ = G_  # rng+/ Lt.m + root_.M
-        else:  # agg+ / rng term
-            sum2F(G_:= G_ or _G_, root, nF='Nt')  # last G_ -> root.N_, prior Nt -> H
-            pL_ = proj_L_(combinations(G_,2), root, r:=r+1); iN_ = None; _G_ = []  # new level at base range
-        G_ = cross_comp(root, pL_, r, iN_=iN_, _G_=_G_) or G_
+        if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
+            Ct=root.Ct; root.Ct=CF(root=root); iN_= iN_ or N_  # current rng
+            if not (G_:= cluster_N(root, exemplar_(iN_,r+1), r+1,c)):
+                root.Ct = Ct  # same Ns with updated rims form tentative G_,CC
+        FV_(CoF.get(),tt,c,r)  # current rng
+        if G_:
+            if (rng_:= expand_(iN_,root,r)) and (pL_:= proj_L_(combinations(rng_,2),root,_r,nexp=nexp+1) and gv_(sum(n.w for n in rng_) * (wX/cX) - ave)
+                and (_G_ := cross_comp(root, pL_, _r, iN_=iN_))):
+                    G_ = _G_  # installed below
+            else:  # install, agg+
+                Nt = sum2F(G_, root,nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r  # final G_-> root.N_, prior Nt,Ct -> H
+                if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+
+                    G_ = cross_comp(root, proj_L_(combinations(G_,2),root,_r+1),_r+1) or G_
     return G_
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
@@ -255,7 +256,7 @@ def exemplar_(N_,_r):  # multi-layer non-maximum suppression -> sparse clusterin
 def expand_(N_, root, _r):  # rng+ eval
 
     for n in N_:  # if N.root.Lt.m, add decay/L? + sum N.root_, suppressed by better medoids
-        n.w = (sum(m for C, m,_ in n.root_ if C in root.C_) + root.Lt.m) * n.c
+        n.w = (sum(m for C, m,_ in n.root_ if C in root.C_) + root.Lt.m) * n.c  # why root.Lt.m? They all have the same root.Lt.m anyway
     N_ = sorted(N_, key=lambda n: n.w, reverse=True); rng_,Inh_ = [], set()
     for rdn, N in enumerate(N_, start=1):  # strong-first
         oM = sum(m for C,m,_ in N.root_ if C in Inh_) * N.c  # prior medoids
@@ -464,50 +465,30 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN, eval der+, rng+, sub+
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G
 
-def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
+def sum2F(N_, root=None, m_=None, d_=None, nF=None):  # c|c*m -weighted sum -> CF|CL, bound to root.nF unless fuzzy C
 
-    c_ = np.array([n.c for n in N_], dtype=float); N = N_[0]
-    C = c_.sum(); TT,R = np.zeros((2,9)),0; fC = any(m_)
-    w_ = c_ * np.array(m_) if fC else c_.copy()
-    w_ /= w_.sum()
-    typ = 0 if nF=='Nt' else 2 if fC else N.typ  # Nt: summary only
-    cls_ = [CF,CL,CL,CN]  # typ=2 CCs
-    for i, (n,w) in enumerate(zip(N_,w_)):
-        if i:
-            TT += n.dTT*w; R+=n.r*w; n_ += (n.N_ if merge else [n])
-            if hasattr(n,'yx'):  kern+=n.kern*w; span+=n.span*w; yx+=n.yx*w  # links and higher
-            if hasattr(n,'box'): box=extend_box(box,n.box)
-        else:  # init
-            TT = n.dTT*w; R=n.r*w; n_ = copy(n.N_ if merge else [n])
-            if hasattr(n,'yx'):  kern=n.kern*w; span=n.span*w; yx=n.yx*w
-            if hasattr(n,'box'): box=copy(n.box)
-    F = (cls_[typ])(dTT=TT, c=C, r=R, nF=nF,typ=typ); F.N_ = n_
-    if fC: F.m_,F.d_ = m_,d_; F.m,F.d = sum(m*c for m,c in zip(m_,c_))/C, sum(d*c for d,c in zip(d_,c_))/C; F.w=F.m
-    else:  F.m, F.d = val_(TT,fd=1)
-    if nF=='Lt' and root:
-        angl = np.sum([L.angl[0] for L in N_],axis=0)
-        root.mang = np.mean([comp_A(angl,L.angl[0])[0] for L in N_])
-        root.angl = [angl,np.sign(root.dTT[1] @ ttcN[1])]
-    if nF=='Nt':
-        for N in N_: add_H(F.H, N.H, F)  # concat lower levs
-    if 'yx' in locals():  F.kern=kern; F.span=span; F.yx=yx
-    if 'box' in locals(): F.box = box
-    if root is not None:
-        if nF=='Nt':
-            if root.Nt: F.H = copy(root.H) + [Copy_(root.Nt, root=root)]  # previous top level
-            root.Nt = F; F.root = root; root.dTT=copy(F.dTT); root.m,root.d,root.c,root.r = F.m,F.d,F.c,F.r
-        else:
-            if nF and not fC: setattr(root,nF,F); F.root = root  # root.Lt|Rt|Ct
-            if nF not in ('Ct','Rt','tF'): add2F(root,F,2)  # tF's params will be summed separately
-        w = F.c/root.c
-        if 'yx' in locals(): root.kern+=kern*w; root.span+=span*w; root.yx+=yx*w
-        if 'box' in locals(): root.box = copy(box)
-        F.wTT = root.wTT
-    if froot == 1:
-        for n in N_: n.root = root or F
-    elif froot == 2: F.root = root
+    N = N_[0]; c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); fC = m_ is not None
+    w_ = c_ * np.maximum(m_,0) if fC else c_.copy(); w_ /= w_.sum() or eps  # -m: no repulsion
+    TT = np.tensordot(w_, [n.dTT for n in N_], 1); R = w_ @ [n.r for n in N_]
+    F = (CL if (geo:= hasattr(N,'yx')) else CF)(N_=list(N_), dTT=TT,c=C,r=R, nF=nF, root=root, typ=2 if fC else 0 if nF=='Nt' else N.typ)
+    if geo:  # links and higher
+        F.yx,F.kern = [w_ @ np.array([getattr(n,a) for n in N_]) for a in ('yx','kern')]; F.span = w_ @ [n.span for n in N_]
+        F.box = reduce(extend_box, [n.box for n in N_ if hasattr(n,'box')], np.array([np.inf,np.inf,-np.inf,-np.inf]))
     if fC:
-        for N, m, d in zip(N_, m_, d_): N.root_ += [[F,m,d]]
+        F.m,F.d = c_@m_ /C, c_@d_ /C; F.w = F.m
+        for n,m,d in zip(N_,m_,d_): n.root_ += [[F,m,d]]
+    else: F.m,F.d = val_(TT,fd=1)
+    if root is None: return F
+    F.wTT = root.wTT
+    if nF=='Nt':  # root = its Nt; lower levs = prior root.Nt (install) | members' H (new G)
+        if root.Nt: F.H = copy(root.H) + [Copy_(root.Nt, root=root)]
+        else: [add_H(F.H, n.H, F) for n in N_]
+        root.dTT,root.c,root.r,root.m,root.d = copy(TT),C,R,F.m,F.d
+        root.yx,root.kern,root.box = F.yx,F.kern,F.box; root.span = np.hypot(*(F.box[2:]-F.box[:2]))/2  # extent, as in PP2N
+    elif nF=='Lt':  # oriented, as in base_comp
+        A_ = [L.angl[0]*L.angl[1] for L in N_]; A = np.sum(A_,axis=0)
+        root.angl = [A,1]; root.mang = np.mean([comp_A(A,a)[0] for a in A_])
+    if not fC and nF and hasattr(root,nF): setattr(root,nF,F)  # Nt|Lt|Bt|Rt|Ct, not L.tF
     return F
 
 def add2F(F, n, merge=0, fH=1):  # unpack for batching in sum2F
