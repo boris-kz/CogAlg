@@ -157,19 +157,19 @@ def cross_comp(root, pL_,r, dF=None, fall=1):  # recursion root
         FV_(CoF.get(),tt,c,r)
     return G_
 
-def expand_(N_, C_, _r, nexp):  # not reviewed
-    # eval rng+ by combined membership value in n.root_, suppressed by stronger Ns
-    C_ = set(C_)  # current batch only: root_ also holds nested batches' memberships
-    for n in N_: n.w = sum(m * C.m for C, m, _ in n.root_ if C in C_) * n.c  # typicality * class coherence, summed over classes
-    N_ = sorted(N_, key=lambda n: n.w, reverse=True); M_, Inh_ = [], set()
+def expand_(N_, root, _r):  # rng+ eval
+
+    for n in N_:  # combine medoid vals
+        n.w = sum(m * C.c for C,m,_ in n.root_)
+    N_ = sorted(N_, key=lambda n: n.w, reverse=True); rng_,Inh_ = [], set()
     for rdn, N in enumerate(N_, start=1):  # strong-first
-        oM = sum(m for C,m,_ in N.root_ if C in Inh_) * N.c  # value in classes already probed
+        oM = sum(m for C,m,_ in N.root_ if C in Inh_) * N.c  # prior medoids
         oV = oM / (N.w or eps)  # relative overlap, 0:1
-        if N.w * wX > ave * (_r + nexp + rdn + cX + oV):
-            M_ += [N]; Inh_.update(C for C,_,_ in N.root_ if C in C_)  # its classes are covered
-        elif N.w * wX <= ave * (_r+nexp+rdn+cX):
-            break  # the rest is weaker w/o olp
-    return M_
+        if N.w * wX > ave * (_r+rdn+cX+oV):
+            rng_ += [N]; Inh_.update(C for C,_,_ in N.root_ if C in root.C_)
+        elif N.w * wX <= ave * (_r+rdn+cX):
+            break  # weak w/o overlap
+    return rng_  # Ns for rng+ comp
 
 def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
 
