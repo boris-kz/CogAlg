@@ -101,19 +101,20 @@ def cross_comp(root, pL_,_r, dF=None, fall=1, iN_=None):  # recursion root, iN_:
             n.w = sum(m * C.c / (1 + sum(_m>m for _m in C.m_)) for C,m,_ in n.root_)
         return [n for n in n_ if (n.m+n.w) * (n.c*wX / (n.r+cX)) > ave]   # additive n.m?
     if L_:
-        Lt = sum2F(L_,root=None if (dF or iN_) else root, nF='Lt'); tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r
+        N_ = list(set(N_)); Lt = sum2F(L_,root=None if (dF or iN_) else root, nF='Lt'); tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r
         if dF: add2F(dF,Lt, merge=1); return  # comp_F: no agg+, dF out
         if iN_: add2F(root.Lt, Lt, merge=1)
         else: iN_=N_
-        for N in (N_:= list(set(N_))): sum2F(N.rim, N, nF='Rt')  # -> N.Rt
+        for N in N_: sum2F(N.rim, N, nF='Rt')  # -> N.Rt
         if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
-            iN_= iN_ or N_  # current rng
-            G_= cluster_N(root, exemplar_(iN_,r+1), r+1,c)  # same Ns with extended rim-> root_ for rng+ eval
-        FV_(CoF.get(), tt,c,r); nexp=1  # current rng
+            G_= cluster_N(root, exemplar_(iN_ or N_,r+1), r+1,c)  # same Ns with extended rim-> root_ for rng+ eval
+            if (C_:=root.Ct.N_): iN_ = list({C.N_[int(np.argmax(C.m_))] for C in C_})  # replaces iN_ with medoid
+        FV_(CoF.get(), tt,c,r); nexp=1  # current rng (why nexp = 1 here?)
         if G_:
             if (rng_n_:= rng_(iN_)) and (pL_:= proj_L_(combinations(rng_n_,2), root,_r,nexp=nexp+1)):  # rng+
                 if gv_(sum(n.w for n in rng_n_) * (wX/cX) - ave) and (_G_ := cross_comp(root, pL_,_r, iN_=iN_)):
                     return _G_  # add below?
+            root.Ct = CF(root=root, nF='Ct', H=root.Ct.H + [Copy_(root.Ct, root=root) if root.Ct else []])  # same mapping with Nt.H
             Nt = sum2F(G_, root,nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r  # Ct: replaced above or return separately?
             if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+
                 G_ = cross_comp(root, proj_L_(combinations(G_,2),root,_r+1),_r+1) or G_
@@ -440,7 +441,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN, eval der+, rng+, sub+
     for N in N_:
         if N.rim: N.Rt = sum2F(N.rim,root=N,nF='Rt')
     [sum2F(F_,G,nF=nF) for F_,nF in zip((N_,B_,L_),('Nt','Bt','Lt')) if F_]
-    G.m,G.d = val_(G.dTT,wTT,1)
+    G.m,G.d,G.r = *val_(G.dTT,wTT,1), G.Nt.r
     if Bt:= G.Bt:  # der+
         bd,bc,br = Bt.d,Bt.c,Bt.r+_r+1
         if N_[0].typ!=1 and gv_(bd*bc*wX - ave*(br+cX)):  # no ddfork, eval len B_?
@@ -465,19 +466,19 @@ def sum2F(N_, root=None, m_=None, d_=None, nF=None):  # c|c*m -weighted sum -> C
         F.yx,F.kern = [w_ @ np.array([getattr(n,a) for n in N_]) for a in ('yx','kern')]; F.span = w_ @ [n.span for n in N_]
         F.box = reduce(extend_box, [n.box for n in N_ if hasattr(n,'box')], np.array([np.inf,np.inf,-np.inf,-np.inf]))
     if fC:
-        F.m,F.d = c_@m_ /C, c_@d_ /C; F.w = F.m
+        F.m,F.d = c_@m_ /C, c_@d_ /C; F.w = F.m; F.m_,F.d_ = m_,d_
         for n,m,d in zip(N_,m_,d_): n.root_ += [[F,m,d]]
     else: F.m,F.d = val_(TT,fd=1)
     if root is None: return F
     F.wTT = root.wTT
-    if nF!='Ct': root.dTT+=TT; root.c+=C  # root r is not affected?
+    if nF in ('Nt','Lt','Bt'): root.dTT+=TT; root.c+=C  # root r is not affected?  (skip Rt and tF)
     if nF=='Lt':  # oriented, as in base_comp
         A_ = [L.angl[0]*L.angl[1] for L in N_]; A = np.sum(A_,axis=0)
         root.angl = [A,1]; root.mang = np.mean([comp_A(A,a)[0] for a in A_]); F.angl = [A,1]  # Lt.angl for proj_V
     elif nF=='Nt':
         root.yx,root.kern,root.box = F.yx,F.kern,F.box; root.span = np.hypot(*(F.box[2:]-F.box[:2]))/2  # extent, as in PP2N
         if root.Nt: F.H = copy(root.H) + [Copy_(root.Nt, root=root)]
-        else: [add_H(F.H, n.H, F) for n in N_]
+        else: [(add_H(F.H, n.H, F),add_H(root.Ct.H, n.Ct.H, root.Ct)) for n in N_]
     if not fC and nF and hasattr(root,nF): setattr(root,nF,F)  # Nt|Lt|Bt|Rt|Ct, not L.tF
     return F
 
@@ -493,7 +494,7 @@ def add2F(F, n, merge=0, fH=1):  # unpack for batching in sum2F
     F.m, F.d = val_(F.dTT,fd=1)
     if merge <2:
         F.N_ += (n.N_ if merge else [n])
-    if n.L_:  # add to F?
+    if n.nF=='Lt' and F.nF=='Lt':  # add to F?  (exclusive for Lt only?)
         A = np.sum(A_ := [L.angl[0] * L.angl[1] for L in n.L_], axis=0); n.angl = [A, 1]; n.mang = np.mean([comp_A(A, a)[0] for a in A_])
     if fH and hasattr(F,'H') and getattr(n,'H',None): add_H(F.H, n.H, F)  # redundant to add_Nt?
     if hasattr(n,'C_'): F.C_ = getattr(F,'C_',[]) + n.C_  # same for L_?
@@ -538,9 +539,8 @@ def Copy_(N, root=None, r=1, cls=None, init=0, typ=None, froot=0):
             C.L_=[l for l in N.rim if l.m>ave]; N.root=C; C.N_=[N]
         else:
             for f in ('Nt','Lt','Bt','Ct','Xt','Rt'): setattr(C, f, Copy_(getattr(N,f), root=C))
-            C.H = [Copy_(lev, root=C) for lev in N.H]
+            C.H = [Copy_(lev, root=C) for lev in N.H]; C.Ct.H = [Copy_(lev, root=C) if lev else [] for lev in N.Ct.H]     
             C.angl=deepcopy(N.angl); C.yx=copy(N.yx); C.box=copy(N.box); C.mang=N.mang; C.exe=N.exe; C.root_=list(N.root_)
-    if N.Ct and isinstance(N, CF): C.Ct = Copy_(N.Ct)  # per level Ct
     if froot:
         for n in C.N_+C.L_: n.root = C  # reassign for feedback, or root_+= if multiple roots?
     return C
