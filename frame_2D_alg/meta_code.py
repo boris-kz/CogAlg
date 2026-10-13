@@ -460,7 +460,7 @@ costs = {  # types
 }
 _names = ['frame_H','cross_comp','trace_edge',  # root_, oF_[0] = frame_H, adds level per call
           'comp_N','comp_F',          # comp_: incrementally distant, nested
-          'get_exemplars','cluster_N','cluster_C','cluster_P','sum2G', # clus_: incrementally fuzzy, parallel
+          'exemplar_','cluster_N','cluster_C','cluster_P','sum2G', # clus_: incrementally fuzzy, parallel
           'ffeedback','proj_N',                                        # fbac_: update filters) coords) funcs
           'vect_edge']                                                 # prep_
 typ_= ['root_','root_','root_','comp_','comp_','clus_','clus_','clus_','clus_','clus_','fbac_','fbac_','prep_']

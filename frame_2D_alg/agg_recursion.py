@@ -102,18 +102,19 @@ def cross_comp(root, pL_,_r, dF=None, fall=1, iN_=None):  # recursion root, iN_:
         return [n for n in n_ if (n.m+n.w) * (n.c*wX / (n.r+cX)) > ave]  # or w - ave: w overlaps m?
     if L_:
         Lt = sum2F(L_,root=None if (dF or iN_) else root, nF='Lt'); tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r
-        for N in N_:=list(set(N_)): sum2F(N.rim, N, nF='Rt')  # -> N.Rt
+        for N in (N_:=list(set(N_))): sum2F(N.rim, N, nF='Rt')  # -> N.Rt
         if dF: add2F(dF,Lt, merge=1); return  # comp_F: no agg+, dF out
         if iN_: add2F(root.Lt, Lt, merge=1)
         else: iN_ = N_
         if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
-            G_,C_ = cluster_N(root, exemplar_(iN_ or N_,r+1), r+1,c)  # extended N.rim -> tentative G_,C_,root_ for rng+:
+            G_,C_ = cluster_N(root, exemplar_(iN_ or N_,r+1), r+1,c) or ([],[])   # extended N.rim -> tentative G_,C_,root_ for rng+:
         FV_(CoF.get(), tt,c,r)  # current rng xcomp
         if G_:
             if (rng_:= Rng_(iN_)) and (pL_:= proj_L_(combinations(rng_,2), root,_r,nexp=nexp+1)):  # rng+, w/o C_
                 if gv_(sum(n.w for n in rng_) * (wX/cX) - ave) and (_G_:= cross_comp(root, pL_,_r, iN_=iN_)):
                     return _G_  # -> G_:
             if C_: sum2F(C_,root,nF='Ct')  # full rng
+            elif root.Ct: root.Ct.H += [Copy_(root.Ct)]; root.Ct.N_ = []
             Nt = sum2F(G_, root,nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r
             if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+
                 G_ = cross_comp(root, proj_L_(combinations(G_,2),root,_r+1),_r+1) or G_
@@ -365,7 +366,7 @@ def cluster_C(root, G_,_r):  # sub-G seeds expand through their members' rims
                 _C_ = C_  # for next loop
         else: break
     if oC_:
-        sum2F(oC_,root=root,nF='Ct')  # agg+ root.N_ after higher CC selects them as medoids?
+        # sum2F(oC_,root=root,nF='Ct')  # agg+ root.N_ after higher CC selects them as medoids? This will be done in cross_comp now?
         FV_(CoF.get(), *sum_vt(oC_))
         return oC_
 
@@ -473,8 +474,8 @@ def sum2F(N_, root=None, m_=None, d_=None, nF=None):  # c|c*m -weighted sum -> C
     if nF in ('Nt','Lt','Bt'): root.dTT+=TT; root.c+=C  # root r is not affected?  (skip Rt and tF)
     if nF=='Lt':  # oriented, as in base_comp
         root.angl = F.angl = (A:= [np.sum(A_:= [L.angl[0] * L.angl[1] for L in F.N_], axis=0), 1])  # Lt.angl for proj_V
-        root.mang = F.mang = np.mean([comp_A(A, a)[0] for a in A_])
-    elif nF in ('Nt','Ct'):
+        root.mang = F.mang = np.mean([comp_A(A[0], a)[0] for a in A_])
+    elif nF in ['Nt'] + (['Ct'] if m_ is None else []):  # skip root's N_ replacement when forming new C
         root.yx,root.kern,root.box = F.yx,F.kern,F.box; root.span = np.hypot(*(F.box[2:]-F.box[:2]))/2  # extent, as in PP2N
         if root.Nt: F.H = copy(root.H) + [Copy_(root.Nt, root=root)]
         else:      [add_H(F.H, n.H, F) for n in N_]
@@ -493,8 +494,9 @@ def add2F(F, n, merge=0, fH=1):  # unpack for batching in sum2F
     F.m, F.d = val_(F.dTT,fd=1)
     if merge <2:
         F.N_ += (n.N_ if merge else [n])
-    if n.L_:  # add to F?
-        A = np.sum(A_ := [L.angl[0] * L.angl[1] for L in n.L_], axis=0); n.angl = [A, 1]; n.mang = np.mean([comp_A(A, a)[0] for a in A_])
+    if n.nF=='Lt' and n.N_:  # add to F?  (if n is Lt, Lt.L_ is empty, we need to check N_)
+        F.root.angl = F.angl = [A:= np.sum(A_:= [L.angl[0] * L.angl[1] for L in F.N_], axis=0), 1]
+        F.root.mang = F.mang = np.mean([comp_A(A, a)[0] for a in A_])
     if fH and hasattr(F,'H') and getattr(n,'H',None): add_H(F.H, n.H, F)  # redundant to add_Nt?
     if hasattr(n,'C_'): F.C_ = getattr(F,'C_',[]) + n.C_  # same for L_?
     return F
@@ -539,7 +541,7 @@ def Copy_(N, root=None, r=1, cls=None, init=0, typ=None, froot=0):
         else:
             for f in ('Nt','Lt','Bt','Ct','Xt','Rt'):
                 setattr(C, f, Copy_(getattr(N,f), root=C))
-                if f in ('Nt','Ct'): getattr(C,f.nF).H = [Copy_(lev, root=C) for lev in N.H]
+                if f in ('Nt','Ct'): getattr(C,f).H = [Copy_(lev, root=C) for lev in N.H]
             C.angl=deepcopy(N.angl); C.yx=copy(N.yx); C.box=copy(N.box); C.mang=N.mang; C.exe=N.exe; C.root_=list(N.root_)
     if froot:
         for n in C.N_+C.L_: n.root = C  # reassign for feedback, or root_+= if multiple roots?
