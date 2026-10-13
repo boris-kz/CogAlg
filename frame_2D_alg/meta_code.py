@@ -18,7 +18,7 @@ def val_(TT, wTT=wTT, fd=0):  # multi-variate rel match for membership, rel diff
     m_,d_ = TT; ad_ = np.abs(d_)
     vm = (m_/ eps_(m_+ad_)) @ wTT[0]  # /= total | max = rdn
     if fd:
-        vd = (ad_@ wTT[1] / avd) * (vm/2)  # rat_dev_vd- proportional borrow from (vm + neutral trans-vm)/2?
+        vd = ad_@ wTT[1]  # brrw if different m_i and d_i: Lt and Bt, or in directional projection, else redundant?
         return vm, vd
     else: return vm
 
