@@ -18,7 +18,7 @@ def val_(TT, wTT=wTT, fd=0):  # multi-variate rel match for membership, rel diff
     m_,d_ = TT; ad_ = np.abs(d_)
     vm = (m_/ eps_(m_+ad_)) @ wTT[0]  # /= total | max = rdn
     if fd:
-        vd = ad_@ wTT[1]  # brrw if different m_i and d_i: Lt and Bt, or in directional projection, else redundant?
+        vd = ad_@ wTT[1]  # brrw only from different-base m: Lt vs Bt, for directional projection
         return vm, vd
     else: return vm
 
@@ -460,9 +460,9 @@ costs = {  # types
 }
 _names = ['frame_H','cross_comp','trace_edge',  # root_, oF_[0] = frame_H, adds level per call
           'comp_N','comp_F',          # comp_: incrementally distant, nested
-          'get_exemplars','cluster_N','cluster_C','cluster_P','sum2G', # clus_: incrementally fuzzy, parallel
-          'ffeedback','proj_N',                                        # fbac_: update filters) coords) funcs
-          'vect_edge']                                                 # prep_
+          'exemplar_','cluster_N','cluster_C','cluster_P','sum2G', # clus_: incrementally fuzzy, parallel
+          'ffeedback','proj_N',                                    # fbac_: update filters) coords) funcs
+          'vect_edge']                                             # prep_
 typ_= ['root_','root_','root_','comp_','comp_','clus_','clus_','clus_','clus_','clus_','fbac_','fbac_','prep_']
 nF_ = [None]*len(_names)  # FunctionDefs
 iF_ = {n: i for i,n in enumerate(_names)}  # indices name → nF, static

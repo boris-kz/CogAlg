@@ -218,3 +218,86 @@ def sum2F(N_, root=None, m_=[],d_=[], merge=0, froot=0, nF=None):  # -> CF/CL/CN
         for N, m, d in zip(N_, m_, d_): N.root_ += [[F,m,d]]
     return F
 
+def cross_comp1(root, pL_,_r, dF=None, fall=1, iN_=None):  # recursion root, iN_: recluster/rng+
+
+    L_,N_,G_, Nexp = [],[],[],0
+    for dist, dy_dx, _N,N, lc,lr, pTT,m,d,nexp in pL_:
+        if _N != N and (fall or m>0):
+            if gv_(m*(lc*wN/(lr*cN)) - ave* (_r+cN)):
+                Link = comp_N(_N,N, lr,lc, full=not dF, A=dy_dx, span=dist, rL=root)
+                Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT)  # prediction error
+                L_+=[Link]; N_+=[_N,N]; Link.nexp=nexp
+            elif not dF:  # pack as prelink
+                _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
+                pL = CL(typ=-1, N_=[_N,N], dTT=pTT,m=m,d=d,c=lc,r=lr,span=dist,box=box,nexp=nexp,angl=[dy_dx,1], yx=np.add(_N.yx,N.yx)/2)
+                L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.N_
+
+    def Rng_(n_):  # w: combined membership weight / rdn: 1 + stronger members per C:
+        for n in n_: n.w = sum(m * C.c / (1 + sum(_m>m for _m in C.m_)) for C,m,_ in n.root_)
+        return [n for n in n_ if (n.m+n.w) * (n.c*wX / (n.r+cX)) > ave]  # or w - ave: w overlaps m?
+    if L_:
+        Lt = sum2F(L_,root=None if (dF or iN_) else root, nF='Lt'); tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r
+        if dF: add2F(dF,Lt, merge=1); return  # comp_F: no agg+, dF out
+        for N in (N_:=list(set(N_))): sum2F(N.rim, N, nF='Rt')  # -> N.Rt
+        if iN_: add2F(root.Lt, Lt, merge=1)
+        else:   iN_ = N_
+        if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
+            G_,C_ = cluster_N(root, exemplar_(iN_ or N_,r+1), r+1,c) or ([],[])   # extended N.rim -> tentative G_,C_,root_ for rng+:
+        FV_(CoF.get(), tt,c,r)  # current rng xcomp
+        if G_:
+            if (rng_:= Rng_(iN_)) and (pL_:= proj_L_(combinations(rng_,2), root,_r,nexp=nexp+1)):  # rng+, w/o C_
+                if gv_(sum(n.w for n in rng_) * (wX/cX) - ave) and (_G_:= cross_comp(root, pL_,_r, iN_=iN_)):
+                    return _G_  # -> G_:
+            if C_: sum2F(C_,root,nF='Ct')  # full rng
+            elif root.Ct: root.Ct.H += [Copy_(root.Ct)]; root.Ct.N_ = []
+            Nt = sum2F(G_, root,nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r
+            if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+
+                G_ = cross_comp(root, proj_L_(combinations(G_,2),root,_r+1),_r+1) or G_
+    return G_
+
+def cluster_C(root, G_,_r):  # sub-G seeds expand through their members' rims
+
+    N_,_C_,tC_ = set(),G_,[]
+    for C in _C_: N_.update(C.N_)
+    for n in N_: n.root_,n._root_ = [],[]
+    while True:  # reform C_, update,test C rims
+        C_,cnt,rdn,Up,lc = [],0,0,0,0
+        for _C in _C_:
+            in_ = set(_C.N_); _N_ = _C.N_
+            n_,m_,d_,M,T,R,up,c = [],[],[],0,0,0,0,0
+            for exp in (0,1):  # prune members, then expand across their rims
+                for n in _N_:
+                    if n not in N_: N_.add(n); n.root_,n._root_ = [],[]
+                    dtt,_ = base_comp(_C,n)
+                    m,d = val_(dtt,ttcC,1); c+=n.c; _C.m += n.c * m  # mass-weighted?
+                    _m,_d = next(((rt[1],rt[2]) for rt in n._root_ if rt[0] is _C), (0,0))  # prior membership, 0 if new
+                    if m * n.c > ave* n.r:  # inclusion
+                        up += abs(_m-m)+abs(_d-d); n_+=[n]; m_+=[m]; d_+=[d]; T+=n.c; M+=m*n.c; R+=n.r*n.c # separate c?
+                    else: up += _m + abs(_d)  # exclusion
+                if not exp:
+                    _N_ = list({_n for n in n_ for L in n.rim for _n in L.N_} - in_)  # frontier: rims of kept members, excl. old members
+            if not n_: continue
+            r = _r + R/T
+            if M * _C.m * (wcC*c / (r*_C.r*ccC)) * (((L:=len(n_))-1)*wL) > ave:
+                C = sum2F(n_,root,m_,d_,nF='Ct'); C.typ=2  # -> n.root_
+                if up * (c*wcC / (r*ccC)) * ((L-1)*wL)  > avd:  # len?
+                    C_+=[C]; Up+=up; lc+=c  # active Cs' change and estimated next-loop work
+                else: tC_+=[C]  # terminated if low membership change
+                cnt+=T; rdn+=R  # process costs
+        r = _r + rdn/(cnt or eps)
+        oC_ = tC_ + C_  # output includes terminated C_
+        if C_ and Up * (lc*wcC / (r*ccC)) > avd:
+            N__ = [n for C in oC_ for n in C.N_]
+            posL = sum(rt[1]>ave for n in N__ for rt in n.root_)
+            totL = len(N__) * len(oC_)
+            if gv_(posL/totL * (lc*wcP / (r*ccP)) * ((len(oC_)-1)*wL) - ave):
+                oC_ = cluster_P(oC_,root); break
+            else:
+                for n in N_: n._root_ = n.root_; n.root_ = [rt for rt in n.root_ if rt[0] in tC_]
+                _C_ = C_  # for next loop
+        else: break
+    if oC_:
+        # sum2F(oC_,root=root,nF='Ct')  # agg+ root.N_ after higher CC selects them as medoids? This will be done in cross_comp now?
+        FV_(CoF.get(), *sum_vt(oC_))
+        return oC_
+
