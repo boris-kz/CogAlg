@@ -107,21 +107,19 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None):  # recursion root, iN_
         if iN_: add2F(root.Lt, Lt, merge=1)
         else:   iN_ = N_
         if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
-            sC_,C_ = cluster_N(root, exemplar_(iN_ or N_,r+1), r+1,c) or ([],[])  # tentative G_|C_|P_ for rng+
-            G_ = C_ or sC_
+            G_ = cluster_N(root, exemplar_(iN_ or N_,r+1), r+1,c) or []  # tentative G_|C_|P_ for rng+
         FV_(CoF.get(), tt,c,r)  # current rng xcomp
         if G_:
             if (rng_:= Rng_(iN_)) and (pL_:= proj_L_(combinations(rng_,2), root,_r,nexp=nexp+1)):  # rng+
                 if gv_(sum(n.w for n in rng_) * (wX/cX) - ave) and (_G_:= cross_comp(root, pL_,_r, iN_=iN_)):
                     return _G_  # -> G_
-            reN_ = set(iN_) - {n for C in G_ for n in C.N_}  # all rejected Ns
-            G_ = [sum2G(g, ttcN, root, _r, reN_) for g in G_]  # finalize full-rng Gs
+            G_ = [sum2G(g, ttcN, root, _r) for g in G_]  # finalize full-rng Gs
             Nt = sum2F(G_, root, nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r
             if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+
                 G_ = cross_comp(root, proj_L_(combinations(G_,2),root,_r+1),_r+1) or G_
     return G_
 
-def sum2G(F_, wTT, root=None, _r=0, reN_=[]):  # finalize CN from C or (N_,L_,B_), eval trans_cluster, der+, sub+
+def sum2G(F_, wTT, root=None, _r=0):  # finalize CN from C or (N_,L_,B_), eval trans_cluster, der+, sub+
 
     def trans_cluster(G):
         for L in G.L_:
@@ -137,16 +135,16 @@ def sum2G(F_, wTT, root=None, _r=0, reN_=[]):  # finalize CN from C or (N_,L_,B_
                 else:  # 0 top lev: no deeper N_ xcomp
                     break
     G = CN(root=root,wTT=wTT)
-    L_,pL_,rN_ = [],[],[]
-    if isinstance(F_,tuple): N_,_L_,B_ = F_  # from trace_edge, vect_edge, frame_H
+    L_,pL_ = [],[]
+    if isinstance(F_,tuple):
+        N_,_L_,B_ = F_  # from trace_edge, vect_edge, frame_H
     else:  # C from CN,CC: extract internal _L_ and perimeter B_ from N_ rims
         N_ = F_.N_; n_set = set(N_); _L_,B_ = [],[]
         for L in {l for n in N_ for l in n.rim}:
             if (L.N_[0] in n_set) and (L.N_[1] in n_set):
                 if L.m > 0: _L_ += [L]
-            else:
-                if reN_: rN_ += [n for n in L.N_ if n in reN_]   # pack rejected Ns if it's in the global rejected pool?
-                if L.nexp == 1 and L.d > avd * (_r-1): B_ += [L]
+            elif L.nexp == 1 and L.d > avd * (_r-1):
+                B_ += [L]
     for L in _L_:
         if L.typ==1: L_ += [L]
         else:       pL_ += [L]
@@ -167,11 +165,8 @@ def sum2G(F_, wTT, root=None, _r=0, reN_=[]):  # finalize CN from C or (N_,L_,B_
     if Lt:= G.Lt:  # sub+
         m,c,r = Lt.m,Lt.c, Lt.r+_r
         if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):  # higher filter: r+1 -> sub_Gs, CC
-            if (sub:= cluster_N(G, exemplar_(N_,r), r+1,c)):
-                rsC_, rspC_ = cluster_N(G, rN_, r+1,c) or ([],[]) if rN_ else ([],[])  # recluster and merge rejected Ns here?
-                sC_, spC_ = sub; sC_ += rsC_; spC_ += rspC_
-                if spC_: sum2F(spC_, G, nF='Ct')  # if Ct is removed, we don't even need this sC_ and C_ now
-                if sC_:  sum2F([sum2G(c, ttcN, G, r+1) for c in sC_], G, nF='Nt')  # pushes prior G.Nt into G.Nt.H
+            if (g_:= cluster_N(G, exemplar_(N_,r), r+1,c)):
+                sum2F(g_, G,nF='Nt')  # G._Nt-> G.Nt.H[-1]
     if G.Lt or G.Bt:
         G.dTT,G.c,G.r = sum_vt([f for f in (G.Nt,G.Lt,G.Bt) if f]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)
     FV_(CoF.get(), G.dTT, G.c, G.r)
@@ -351,7 +346,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
             (nt,nc,nr),(lt,lc,lr),(bt,bc,br) = ft_
             c = nc+lc+bc; r = (nr*nc +lr*lc +br*bc) /c;  tt = (nt*nc +lt*lc +bt*bc) /c  # br includes overlap?
             if gv_(val_(tt*root.wTT*ttcN) * (c*wcN/(r*ccN)) * ((len(N_)-1)*wL) - ave):
-                C = sum2F(N_, root, m_=[n.m for n in N_], d_=[n.d for n in N_], nF='C'); C.typ = 3  # initial connectivity G
+                C = sum2F(N_, root,nF='C'); C.typ=3  # initial connectivity G
                 Gt_ += [(C, tt,c,r)]
             else:
                 for n in N_: fin_.remove(n)
@@ -363,13 +358,12 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
         for tt,c,r in zip(tt_,c_,r_): w=c/C; TT+=tt*w; R+=r*w
         M,D = val_(TT*root.wTT*ttcN, fd=1)
         FV_(CoF.get(), *sum_vt(C_)[:-1], R)
-        if gv_(M * (C*wcC /((_r+R)*ccC)) * ((len(C_)-1)*wL) - ave): 
-            return C_, cluster_C(root, C_, _r+R) or []
-        return C_, []
+        if gv_(M * (C*wcC /((_r+R)*ccC)) * ((len(C_)-1)*wL) - ave):
+            return cluster_C(root, C_, _r+R) or C_
 
 def cluster_C(root, _C_, _r):  # refine C seeds and expand through their members' rims
 
-    N_, tC_, oC_ = {n for C in _C_ for n in C.N_}, [], []
+    N_, tC_ = {n for C in _C_ for n in C.N_}, []
     for n in N_: n._root_ = n.root_; n.root_ = []  # preserve initial cluster_N memberships in _root_
     while True:  # reform C_, update and test C rims
         C_, cnt,rdn,Up,lc = [],0,0,0,0
@@ -387,8 +381,8 @@ def cluster_C(root, _C_, _r):  # refine C seeds and expand through their members
             if not n_: continue
             r = _r + R / T
             if M * _C.m * (wcC * c / (r * _C.r * ccC)) * (((L := len(n_)) - 1) * wL) > ave:
-                C = sum2F(n_, root, m_, d_, nF='C'); C.typ = 2  # -> n.root_
-                if up * (c * wcC / (r * ccC)) * ((L - 1) * wL) > avd:
+                C = sum2F(n_, root, m_,d_, nF='C'); C.typ = 2  # -> n.root_
+                if up * (c*wcC / (r*ccC)) * ((L-1)*wL) > avd:
                     C_ += [C]; Up += up; lc += c  # active Cs' change and estimated next-loop work
                 else: tC_ += [C]  # converged if low membership change
                 cnt += T; rdn += R  # process costs
@@ -421,7 +415,7 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
         md__ = np.zeros((Ln,Lc,2))
         for j,N in enumerate(N_):
             for i,C in enumerate(_C_): md__[j,i] = val_(base_comp(C,N)[0], ttcP,fd=1)
-        C_ = [sum2F(N_, root, md__[:,i,0], md__[:,i,1],nF='C') for i in range(Lc)]  # mean shift, aligned to md__
+        C_ = [sum2F(N_, root, md__[:,i,0], md__[:,i,1],nF='C') for i in range(Lc)]  # mean shift, aligned to md__, add typ?
         removed = []
         posL = (md__[:,:,0] > ave).sum()
         if gv_(posL*wcP - ave*(root.r+ccP*totL)):  # merge redundant Cs
@@ -457,44 +451,12 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
             for N, m,d in zip(C.N_, _md__[:,i,0], _md__[:,i,1]):
                 if m*N.c > ave*N.r: N_+=[N]; m_+=[m]; d_+=[d]
             if N_:
-                oC = sum2F(N_,root, m_,d_,nF='C')
+                oC = sum2F(N_,root, m_,d_,nF='Ct')
                 out_ += [oC]
     if out_:
         iTT, iC, iR = sum_vt(iC_); oTT,oC,oR = sum_vt(out_)
         FV_(CoF.get(), iTT-oTT, iC-oC, iR-oR)
     return out_
-
-'''
-def sum2G(F_, wTT, root=None, _r=0):  # finalize CN, eval der+, rng+, sub+
-
-    G = CN(root=root,wTT=wTT)
-    L_,pL_ = [],[]  # sub_Gs for CC, L_ can't be empty?
-    N_,_L_,B_ = F_  # C_ is C.L_: single N in L.N_, no redundant vals and separate H?
-    for L in _L_:
-        if L.typ==1: L_+=[L]
-        else: pL_ += [L]
-    if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0]*wN > ave*(cN*np.mean([L.r for L in pL_])):
-        for pL in pL_:
-            L_ += [L:= comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span)]; L.nexp=pL.nexp
-            for N in pL.N_: N.rim.remove(pL)
-    for N in N_:
-        if N.rim: N.Rt = sum2F(N.rim,root=N,nF='Rt')
-    [sum2F(F_,G,nF=nF) for F_,nF in zip((N_,B_,L_),('Nt','Bt','Lt')) if F_]
-    G.m,G.d,G.r = *val_(G.dTT,wTT,1), G.Nt.r
-    if Bt:= G.Bt:  # der+
-        bd,bc,br = Bt.d,Bt.c,Bt.r+_r+1
-        if N_[0].typ!=1 and gv_(bd*bc*wX - ave*(br+cX)):  # no ddfork, eval len B_?
-            cross_comp(F2N(G.Bt), proj_L_(combinations([F2N(L) for L in Bt.N_],2),G,br),br)
-        if RR:= root.root: Bt.brrw = Bt.m* (RR.m* (decay* (RR.span/G.span)))  # root - external lend?
-    if Lt:= G.Lt:  # sub+
-        m,c,r = Lt.m,Lt.c, Lt.r+_r
-        if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):  # higher filter: r+1-> sub_Gs, CC
-            cluster_N(G, exemplar_(N_,r), r+1,c)  # recursive sub+ w|o rng+
-    # or pack in CN sum2F, with G.N_,G.H?:
-    if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)
-    FV_(CoF.get(), G.dTT, G.c, G.r)
-    return G
-'''
 
 def sum2F(N_, root=None, m_=None, d_=None, nF=None):  # c|c*m -weighted sum -> CF|CL, bound to root.nF unless fuzzy C
 

@@ -53,34 +53,35 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
     # or merge N -> _N?
     return L
 
-def sum2G(F_, wTT, root=None, _r=0):  # finalize cluster
+def sum2G(F_, wTT, root=None, _r=0):  # finalize CN, eval der+, rng+, sub+
 
     G = CN(root=root,wTT=wTT)
-    G_, L_,pL_= [],[],[]  # sub_Gs for CC, L_ can't be empty?
-    N_,_L_,B_ = F_
+    L_,pL_ = [],[]  # sub_Gs for CC, L_ can't be empty?
+    N_,_L_,B_ = F_  # C_ is C.L_: single N in L.N_, no redundant vals and separate H?
     for L in _L_:
         if L.typ==1: L_+=[L]
-        else: pL_ += [L]  # projected
+        else: pL_ += [L]
     if pL_ and sum_vt(pL_,fm=1,wTT=wTT)[0]*wN > ave*(cN*np.mean([L.r for L in pL_])):
-        L_ += [comp_N(*L.N_,L.r,L.c,1,L.angl[0],L.span) for L in pL_]
+        for pL in pL_:
+            L_ += [L:= comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span)]; L.nexp=pL.nexp
+            for N in pL.N_: N.rim.remove(pL)
+    for N in N_:
+        if N.rim: N.Rt = sum2F(N.rim,root=N,nF='Rt')
     [sum2F(F_,G,nF=nF) for F_,nF in zip((N_,B_,L_),('Nt','Bt','Lt')) if F_]
-    G.m,G.d = val_(G.dTT,wTT,1)
-    if Bt := G.Bt:  # der+'sub+
+    G.m,G.d,G.r = *val_(G.dTT,wTT,1), G.Nt.r
+    if Bt:= G.Bt:  # der+
         bd,bc,br = Bt.d,Bt.c,Bt.r+_r+1
         if N_[0].typ!=1 and gv_(bd*bc*wX - ave*(br+cX)):  # no ddfork, eval len B_?
             cross_comp(F2N(G.Bt), proj_L_(combinations([F2N(L) for L in Bt.N_],2),G,br),br)
         if RR:= root.root: Bt.brrw = Bt.m* (RR.m* (decay* (RR.span/G.span)))  # root - external lend?
-    if Lt := G.Lt:  # rng+,sub+
+    if Lt:= G.Lt:  # sub+
         m,c,r = Lt.m,Lt.c, Lt.r+_r
-        if gv_(m* (c*wX / (r*cX)) - ave):  # rng+
-            if g_ := cross_comp(G, proj_L_(combinations(N_,2), G,r,nexp=L_[0].nexp+1), r,fagg=0):
-                G.H+=[sum2F(G.N_)]; N_= G.N_= g_
-        if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):
-            if G_ := cluster_N(G, get_exemplars(N_,r), r+1,c):  # higher filter: r+1,-> sub_Gs for CC
-                sum2F(G_,G, nF='Nt' if G_[0].typ==3 else 'Ct')  # unpack tentative G.N_?
-    if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)  # recompute after deeper sub
+        if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):  # higher filter: r+1-> sub_Gs, CC
+            cluster_N(G, exemplar_(N_,r), r+1,c)  # recursive sub+ w|o rng+
+    # or pack in CN sum2F, with G.N_,G.H?:
+    if G.Lt or G.Bt: G.dTT,G.c,G.r = sum_vt([G.Nt,G.Lt,G.Bt]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)
     FV_(CoF.get(), G.dTT, G.c, G.r)
-    return G, G_
+    return G
 
 # med_= list({C.N_[int(np.argmax(C.m_))] for C in C_})  # medoids, shouldn't be C-specific
 
