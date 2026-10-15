@@ -135,7 +135,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN from C or (N_,L_,B_), eval t
                 else:  # 0 top lev: no deeper N_ xcomp
                     break
     G = CN(root=root,wTT=wTT)
-    L_,pL_ = [],[]
+    L_,pL_,rN_ = [],[],[]
     if isinstance(F_,tuple):
         N_,_L_,B_ = F_  # from trace_edge, vect_edge, frame_H
     else:  # C from CN,CC: extract internal _L_ and perimeter B_ from N_ rims
@@ -143,6 +143,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN from C or (N_,L_,B_), eval t
         for L in {l for n in N_ for l in n.rim}:
             if (L.N_[0] in n_set) and (L.N_[1] in n_set):
                 if L.m > 0: _L_ += [L]
+                else:       rN_ += L.N_  # rejected N_ from neg L
             elif L.nexp == 1 and L.d > avd * (_r-1):
                 B_ += [L]
     for L in _L_:
@@ -166,6 +167,9 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN from C or (N_,L_,B_), eval t
         m,c,r = Lt.m,Lt.c, Lt.r+_r
         if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):  # higher filter: r+1 -> sub_Gs, CC
             if (g_:= cluster_N(G, exemplar_(N_,r), r+1,c)):
+                mN_ = {n for g in g_ for n in g.N_}
+                if rN_:= [n for n in N_ if n in rN_ and n not in mN_]:  # make sure rejected not in sub+, they may extend beyond root during the clustering
+                    g_ += cluster_N(G, exemplar_(rN_,r), r+1,c) or []
                 sum2F(g_, G,nF='Nt')  # G._Nt-> G.Nt.H[-1]
     if G.Lt or G.Bt:
         G.dTT,G.c,G.r = sum_vt([f for f in (G.Nt,G.Lt,G.Bt) if f]); G.m,G.d = val_(G.dTT,G.wTT,fd=1)
@@ -207,7 +211,7 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
     if N.typ:  # converted Ls, skip PPs, Fts?
         dn_=[]
         if N.typ==3 and gv_(m* (c*wN /(r*cN)) - ave):  # CN
-            for i,(_Ft,Ft) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct))):
+            for i,(_Ft,Ft) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt),(N.Nt,N.Lt,N.Bt))):
                 if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1
         elif gv_(m* (c*wF /(r*cF)) - ave):  # L or B
             for _n,n in product(_N.N_,N.N_):
@@ -230,7 +234,7 @@ def comp_F(_F, F, ir=0, rL=None):
         Np_ = list(product(_N_,N_))  # pairs; Lt,Bt: links, Ct: centroids
         tt = (rL.dTT*rL.c + ddTT*dF.c) / (rL.c+dF.c)
         if gv_(val_(tt,ttX) * (c*wX / (r*cX)) - ave):  # any sub-comp?
-            if F.nF!='Nt': [F2N(n) for n in set(_N_+N_) if not isinstance(n,CN)]  # Rt,Nt,Bt
+            [F2N(n) for n in set(_N_+N_) if not isinstance(n,CN)]  # Rt,Nt,Bt (Nt.N_ may pack non-converted Cs now)
             cross_comp(rL, proj_L_(Np_,2,r), r,dF)
     FV_(CoF.get(), dF.dTT, dF.c, dF.r)
     return dF  # no cross-fork N_, no L ext updates?
@@ -294,7 +298,7 @@ def comp_A(_A,A):
 
 def exemplar_(N_,_r):  # multi-layer non-maximum suppression -> sparse clustering seeds = rim-medoids
 
-    for n in N_: n.w = (n.Rt.m + n.Ct.m) * n.c  # lateral + internal representativeness, Ct.m=0 if no Ct
+    for n in N_: n.w = n.Rt.m * n.c  # lateral + internal representativeness, Ct.m=0 if no Ct
     N_= sorted(N_, key=lambda n: n.w, reverse=True); E_,Inh_ = [],set()
     for rdn, N in enumerate(N_, start=1):  # strong-first
         inh_ = list(Inh_ & set(N.rim))  # stronger Es in N.rim
@@ -346,7 +350,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
             (nt,nc,nr),(lt,lc,lr),(bt,bc,br) = ft_
             c = nc+lc+bc; r = (nr*nc +lr*lc +br*bc) /c;  tt = (nt*nc +lt*lc +bt*bc) /c  # br includes overlap?
             if gv_(val_(tt*root.wTT*ttcN) * (c*wcN/(r*ccN)) * ((len(N_)-1)*wL) - ave):
-                C = sum2F(N_, root,nF='C'); C.typ=3  # initial connectivity G
+                C = sum2F(N_, root,nF='C',typ=1)  # initial connectivity G (typ =2 if from CC)
                 Gt_ += [(C, tt,c,r)]
             else:
                 for n in N_: fin_.remove(n)
@@ -451,19 +455,19 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
             for N, m,d in zip(C.N_, _md__[:,i,0], _md__[:,i,1]):
                 if m*N.c > ave*N.r: N_+=[N]; m_+=[m]; d_+=[d]
             if N_:
-                oC = sum2F(N_,root, m_,d_,nF='Ct')
+                oC = sum2F(N_,root, m_,d_,nF='C')
                 out_ += [oC]
     if out_:
         iTT, iC, iR = sum_vt(iC_); oTT,oC,oR = sum_vt(out_)
         FV_(CoF.get(), iTT-oTT, iC-oC, iR-oR)
     return out_
 
-def sum2F(N_, root=None, m_=None, d_=None, nF=None):  # c|c*m -weighted sum -> CF|CL, bound to root.nF unless fuzzy C
+def sum2F(N_, root=None, m_=None, d_=None, nF=None,typ=None ):  # c|c*m -weighted sum -> CF|CL, bound to root.nF unless fuzzy C
 
     N = N_[0]; c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); fC = m_ is not None
     w_ = c_ * np.maximum(m_,0) if fC else c_.copy(); w_ /= w_.sum() or eps  # -m: no repulsion
     TT = np.tensordot(w_, [n.dTT for n in N_], 1); R = w_ @ [n.r for n in N_]
-    F = (CL if (geo:= hasattr(N,'yx')) else CF)(N_=list(N_), dTT=TT,c=C,r=R, nF=nF, root=root, typ=2 if fC else 0 if nF=='Nt' else N.typ)
+    F = (CL if (geo:= hasattr(N,'yx')) else CF)(N_=list(N_), dTT=TT,c=C,r=R, nF=nF, root=root, typ=typ or (2 if fC else 0 if nF=='Nt' else N.typ))
     if geo:  # links and higher
         F.yx,F.kern = [w_ @ np.array([getattr(n,a) for n in N_]) for a in ('yx','kern')]; F.span = w_ @ [n.span for n in N_]
         F.box = reduce(extend_box, [n.box for n in N_ if hasattr(n,'box')], np.array([np.inf,np.inf,-np.inf,-np.inf]))
@@ -477,8 +481,8 @@ def sum2F(N_, root=None, m_=None, d_=None, nF=None):  # c|c*m -weighted sum -> C
     if nF=='Lt':  # oriented, as in base_comp
         root.angl = F.angl = (A:= [np.sum(A_:= [L.angl[0] * L.angl[1] for L in F.N_], axis=0), 1])  # Lt.angl for proj_V
         root.mang = F.mang = np.mean([comp_A(A[0], a)[0] for a in A_])
-    elif nF in ('Nt','Ct'):
-        if nF=='Nt': root.yx,root.kern,root.box = F.yx,F.kern,F.box; root.span = np.hypot(*(F.box[2:]-F.box[:2]))/2  # extent, as in PP2N
+    elif nF == 'Nt':
+        root.yx,root.kern,root.box = F.yx,F.kern,F.box; root.span = np.hypot(*(F.box[2:]-F.box[:2]))/2  # extent, as in PP2N
         if root.Nt: F.H = copy(root.H) + [Copy_(root.Nt, root=root)]
         else:       [add_H(F.H, n.H, F) for n in N_]
     if not fC and nF and hasattr(root,nF): setattr(root,nF,F)  # Nt|Lt|Bt|Rt|Ct, not L.tF
@@ -501,7 +505,6 @@ def add2F(F,f, merge=0, fH=1):  # unpack for batching in sum2F
         R.angl = F.angl = [A:= np.sum(A_:= [L.angl[0] * L.angl[1] for L in F.N_], axis=0), 1]
         R.mang = F.mang = np.mean([comp_A(A, a)[0] for a in A_])
     if fH and hasattr(F,'H') and getattr(f,'H',None): add_H(F.H, f.H, F)  # redundant to add_Nt?
-    if hasattr(f,'C_'): F.C_ = getattr(F,'C_',[]) + f.C_  # same for L_?
     return F
 
 def add_H(H,h, root, fN=0):
@@ -524,7 +527,7 @@ def F2N(F):  # convert for cross_comp
     if F.typ==0 and not hasattr(F, 'kern'):  # CF | PP, no overlap for Cs (only CF)
         Na_.update(kern=np.zeros(4), span=1, angl=None, yx=np.zeros(2))
     for k,v in Na_.items(): setattr(F, k, copy(v))
-    [setattr(F, ft, CF(root=F)) for ft in ('Lt','Ct','Bt','Xt','Rt') if not getattr(F, ft, None)]
+    [setattr(F, ft, CF(root=F)) for ft in ('Lt','Bt','Xt','Rt') if not getattr(F, ft, None)]
     if L_: F.H += [sum2F(L_, F)]
     return F
 
@@ -542,9 +545,9 @@ def Copy_(N, root=None, r=1, cls=None, init=0, typ=None, froot=0):
             C.yx=[N.yx]; C.angl=[copy(N.angl[0]), N.angl[1]] if N.angl is not None else None
             C.L_=[l for l in N.rim if l.m>ave]; N.root=C; C.N_=[N]
         else:
-            for f in ('Nt','Lt','Bt','Ct','Xt','Rt'):
+            for f in ('Nt','Lt','Bt','Xt','Rt'):
                 setattr(C, f, Copy_(getattr(N,f), root=C))
-                if f in ('Nt','Ct'): getattr(C,f).H = [Copy_(lev, root=C) for lev in N.H]
+                if f == 'Nt': getattr(C,'Nt').H = [Copy_(lev, root=C) for lev in N.H]
             C.angl=deepcopy(N.angl); C.yx=copy(N.yx); C.box=copy(N.box); C.mang=N.mang; C.exe=N.exe; C.root_=list(N.root_)
     if froot:
         for n in C.N_+C.L_: n.root = C  # reassign for feedback, or root_+= if multiple roots?

@@ -94,10 +94,10 @@ def prop_F_(F, attr='N_'):  # factory function to get and update top-composition
 
 class CN(CL):  # full node|graph for xcomp, adding fork set
     name = "node"
-    N_,L_,B_,C_,X_,rim,H = prop_F_('Nt'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Ct'),prop_F_('Xt'),prop_F_('Rt'),prop_F_('Nt','H')
+    N_,L_,B_,X_,rim,H = prop_F_('Nt'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Xt'),prop_F_('Rt'),prop_F_('Nt','H')
     # ext|int - defined Ns|Ls, Ct is internally defined, N_,H mirror those of Nt
     def __init__(n, **kw):
-        n.Nt,n.Bt,n.Lt,n.Ct,n.Xt,n.Rt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Lt','Ct','Xt','Rt')))  # CN if nest
+        n.Nt,n.Bt,n.Lt,n.Xt,n.Rt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Lt','Xt','Rt')))  # CN if nest
         super().__init__(**kw)
         n.exe = kw.get('exe',0)  # exemplar, temporary
         n.typ = kw.get('typ',3)  # full comp, =2 for Cs?
