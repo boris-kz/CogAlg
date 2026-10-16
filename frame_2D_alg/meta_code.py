@@ -13,27 +13,6 @@ wTT = np.array([wT,wT*avd])
 '''
 code modification: compare aligned ops between oF_ AST sequences, cluster/split/merge matches into higher oF typs
 '''
-def val_(TT, wTT=wTT, fd=0):  # multi-variate rel match for membership, rel diff for boundary
-
-    m_,d_ = TT; ad_ = np.abs(d_)
-    vm = (m_/ eps_(m_+ad_)) @ wTT[0]  # /= total | max = rdn
-    if fd:
-        vd = ad_@ wTT[1]  # brrw only from different-base m: Lt vs Bt, for directional projection
-        return vm, vd
-    else: return vm
-
-def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
-
-    C = sum(n.c for n in N_); R = 0; TT = np.zeros((2,9))
-    for n in N_:
-        w = n.c/C; TT += (n.rTT if fr else n.dTT)*w; R += n.r*w
-    if fm:
-        m,d = val_(TT, wTT,1)
-        if fdiv: m/= ave*R; d/= avd*R  # in 0-inf for summation
-        else:    m-= ave*R; d-= avd*R  # in -1:1 without r
-        return   m,d,TT,C,R
-    else: return TT,C,R
-
 class CBase:
     refs = []
     def __init__(obj):
@@ -95,7 +74,7 @@ def prop_F_(F, attr='N_'):  # factory function to get and update top-composition
 class CN(CL):  # full node|graph for xcomp, adding fork set
     name = "node"
     N_,L_,B_,X_,rim,H = prop_F_('Nt'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Xt'),prop_F_('Rt'),prop_F_('Nt','H')
-    # ext|int - defined Ns|Ls, Ct is internally defined, N_,H mirror those of Nt
+    # Ns may be in centroids of N.N_, Lt,Bt: int|ext Ls
     def __init__(n, **kw):
         n.Nt,n.Bt,n.Lt,n.Xt,n.Rt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Lt','Xt','Rt')))  # CN if nest
         super().__init__(**kw)
@@ -178,7 +157,8 @@ def parse_funcs(paths):
 
 def clust_oF_():  # simplified oF rim-mediated centroid clustering
 
-    global oF_;  F_ = [F for F in oF_ if F or F.typ==0]  # uncalled Fs, don't cluster, pack in _F_ if the loop is not representative? (F.typ==0 to include the prior split new oFs)
+    global oF_  # uncalled Fs, don't cluster, pack in _F_ if the loop is not representative:
+    F_ = [F for F in oF_ if F or F.typ==0]  # F.typ==0 to include the prior split new oFs
     for F in F_: F.rim = []; F.w = 0; F.root_ = []
     for _F, F in combinations(F_,2):  # w = relative compression: shared / min cost, ave-commensurate
         if (w := comp_body(_F.body, F.body)) > ave * min(_F.fc, F.fc):
@@ -202,12 +182,12 @@ def clust_oF_():  # simplified oF rim-mediated centroid clustering
             N_,w_ = [],w__[i]
             for j,F in enumerate(C.N_):  # rim-local candidates: members prune, never join
                 w = w_[j]
-                if F.root_:
-                    r = sum([w__[FC_.index(r)][r.N_.index(F)] for r in F.root_ if r in FC_ and r is not C and r.w >w])/(w or eps)  # sum of stronger roots' w/w
+                if F.root_:  # rdn: sum of stronger roots w/w:
+                    r = sum([w__[FC_.index(r)][r.N_.index(F)] for r in F.root_ if r in FC_ and r is not C and r.w >w])/(w or eps)
                     F.r += r; C.r += r
                     Dv += abs(w -_w__[i][j]) - (ave+r) * F.fc
-                if w>(ave+r)*F.fc: N_ += [F]  # pending review: w > (ave +redundancy) * func cost?
-                else:              F.root_.remove(C)
+                if w > (ave+r)*F.fc: N_ += [F]  # pending review: w > (ave +redundancy) * func cost?
+                else: F.root_.remove(C)
             C.N_ = N_; C.L_ = w_
             if w_: C.w = np.mean(w_)
             if sum(w_) > (ave+C.r)*C.fc: form_body(C)  # rebuild from remaining members, refine
