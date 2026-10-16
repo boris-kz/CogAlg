@@ -302,3 +302,23 @@ def cluster_C(root, G_,_r):  # sub-G seeds expand through their members' rims
         FV_(CoF.get(), *sum_vt(oC_))
         return oC_
 
+def val_(TT, wTT=wTT, fd=0):  # multi-variate rel match for membership, rel diff for boundary
+
+    m_,d_ = TT; ad_ = np.abs(d_)
+    vm = (m_/ eps_(m_+ad_)) @ wTT[0]  # /= total | max = rdn
+    if fd:
+        vd = ad_@ wTT[1]  # brrw only from different-base m: Lt vs Bt, for directional projection
+        return vm, vd
+    else: return vm
+
+def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
+
+    C = sum(n.c for n in N_); R = 0; TT = np.zeros((2,9))
+    for n in N_:
+        w = n.c/C; TT += (n.rTT if fr else n.dTT)*w; R += n.r*w
+    if fm:
+        m,d = val_(TT, wTT,1)
+        if fdiv: m/= ave*R; d/= avd*R  # in 0-inf for summation
+        else:    m-= ave*R; d-= avd*R  # in -1:1 without r
+        return   m,d,TT,C,R
+    else: return TT,C,R
