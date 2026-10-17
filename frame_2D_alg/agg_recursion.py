@@ -163,7 +163,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN from C or (N_,L_,B_), eval t
     for L in _L_:
         if L.typ==1: L_ += [L]
         else:       pL_ += [L]
-    pm = sum_vt(pL_,fm=1,wTT=wTT)[0]; pc = sum([L.c for L in pL_]); pr = np.mean([L.r for L in pL_])
+    pm,pc,pr = (sum_vt(pL_,fm=1,wTT=wTT)[0],sum([L.c for L in pL_]),np.mean([L.r for L in pL_])) if pL_ else (0,0,1)
     if pL_ and (pm * (wN*pc / (cN*pr)) > ave):
         for pL in pL_:
             L_ += [L:= comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span)]; L.nexp=pL.nexp
@@ -380,25 +380,25 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
 
 def cluster_C(root, _C_, _r):  # refine C seeds and expand through their members' rims
 
-    N_, tC_ = {n for C in _C_ for n in C.N_}, []
+    N_, cN_,tC_ = {n for C in _C_ for n in C.N_},set(),[] # cN_ = out of root's Ns
     for n in N_: n._root_ = n.root_; n.root_ = []  # preserve initial cluster_N memberships in _root_
     while True:  # reform C_, update and test C rims
         C_, cnt,rdn,Up,lc = [],0,0,0,0
         for _C in _C_:
-            _N_ = set(_C.N_) | {_n for n in _C.N_ for L in n.rim for _n in L.N_}  # current members + rim frontier
-            n_, m_, M, T, R, up, c = [], [], 0, 0, 0, 0, 0
+            _N_ = set(_C.N_+getattr(_C,'n_',[])) | {_n for n in _C.N_ for L in n.rim for _n in L.N_}  # current members + rim frontier
+            cn_,n_, m_, M, T, R, up, c = [], [], [], 0, 0, 0, 0, 0
             for n in _N_:
-                if n not in N_: N_.add(n); n.root_, n._root_ = [], []
+                if n not in N_|cN_: cN_.add(n); n.root_, n._root_ = [], []  # add n_ here instead?
                 dtt, _ = base_comp(_C, n)
                 m = val_(dtt, ttcC); c += n.c
                 _m = next(((rt[1]) for rt in n._root_ if rt[0] is _C), 0)  # prior membership, 0 if new
                 if m * n.c > ave * n.r:  # += new nodes and candidate nodes
-                    up += abs(_m - m); n_ += [n]; m_ += [m]; T += n.c; M += m * n.c; R += n.r * n.c
+                    up += abs(_m - m); (n_ if n in N_ else cn_).append(n); m_ += [m]; T += n.c; M += m * n.c; R += n.r * n.c
                 else: up += _m  # exclusion
             if not n_: continue
             r = _r + R / T
             if M * _C.m * (wcC * c / (r * _C.r * ccC)) * (((L := len(n_)) - 1) * wL) > ave:
-                C = sum2F(n_, root, m_, nF='C', typ=2)  # -> n.root_
+                C = sum2F(n_, root, m_, nF='C', typ=2,cN_=cn_)  # -> n.root_
                 if up * (c*wcC / (r*ccC)) * ((L-1)*wL) > avd:
                     C_ += [C]; Up += up; lc += c  # active Cs' change and estimated next-loop work
                 else: tC_ += [C]  # converged if low membership change
@@ -406,7 +406,7 @@ def cluster_C(root, _C_, _r):  # refine C seeds and expand through their members
         r = _r + rdn / (cnt or eps)
         oC_ = tC_ + C_
         if C_ and Up * (lc * wcC / (r * ccC)) > avd:
-            uN_ = {n for C in oC_ for n in C.N_}
+            uN_ = {n for C in oC_ for n in C.N_+C.n_}
             posL = sum(rt[1] > ave for n in uN_ for rt in n.root_)
             totL = len(uN_) * len(oC_)
             if gv_(posL / (totL or eps) * (lc * wcP / (r * ccP)) * ((len(oC_) - 1) * wL) - ave):
@@ -421,7 +421,7 @@ def cluster_C(root, _C_, _r):  # refine C seeds and expand through their members
 
 def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
 
-    iC_ = _C_; cnt = 0; Ln = len(N_:= list(set([N for C in _C_ for N in C.N_])))  # all Ns are in all Cs
+    iC_ = _C_; cnt = 0; Ln = len(N_:= list(set([N for C in _C_ for N in C.N_+C.n_])))  # all Ns are in all Cs
     _m__ = np.zeros((Ln, len(_C_)))  # NxC, cols aligned to _C_
     for i, N in enumerate(N_):
         for c,m in N.root_:
@@ -443,7 +443,7 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
                     m = val_(base_comp(C,_C)[0],ttcP); r = (C.r+_C.r)
                     if m*wF > ave*(r+cF):
                         add2F(_C,C,2); removed += [C]; _C.m = val_(_C.dTT,ttcP)  # for next-loop base comp
-                        for N in C.N_:
+                        for N in C.N_+C.n_:
                             for rt in N.root_:
                                 if rt[0] is C: rt[0] = _C  # update root from C to _C, for olp computation below
         cnt += 1
@@ -452,7 +452,7 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
             _C_ = []; i_ = []
             for i, _C in enumerate(C_):
                 if _C in removed: continue
-                _C.olp = sum(rt[1] for n in _C.N_ for rt in n.root_ if rt[0] is not _C and rt[1] > _C.m)
+                _C.olp = sum(rt[1] for n in _C.N_+_C.n_ for rt in n.root_ if rt[0] is not _C and rt[1] > _C.m)
                 if _C.m * wcP > ave * (_C.r + _C.olp + ccP):  # prune
                     _C_ += [_C]; i_ += [i]  # also after merge and converge
             _m__ = m__[:,i_]
@@ -475,18 +475,19 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
         FV_(CoF.get(), iTT-oTT, iC-oC, iR-oR)
     return out_
 
-def sum2F(N_, root=None, m_=None, nF=None, typ=0):  # c|c*m -weighted sum -> CF|CL, bound to root.nF unless fuzzy C
+def sum2F(N_, root=None, m_=None, nF=None, typ=0, cN_=None):  # c|c*m -weighted sum -> CF|CL, bound to root.nF unless fuzzy C
 
-    N = N_[0]; c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); fC = nF=='C'
+    iN_=N_; N_=iN_+(cN_ if cN_ is not None else []); N = N_[0]; c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); fC = m_ is not None
     w_ = c_ * np.array(m_) if fC else c_.copy()
     w_ /= w_.sum()
     TT = np.tensordot(w_, [n.dTT for n in N_], 1); R = w_ @ [n.r for n in N_]
-    F = (CL if (geo:= hasattr(N,'yx')) else CF)(N_=list(N_), dTT=TT,c=C,r=R, nF=nF, root=root,typ=typ)
+    F = (CL if (geo:= hasattr(N,'yx')) else CF)(N_=list(iN_), dTT=TT,c=C,r=R, nF=nF, root=root,typ=typ)
     if geo:  # links and higher
         F.yx,F.kern = [w_ @ np.array([getattr(n,a) for n in N_]) for a in ('yx','kern')]; F.span = w_ @ [n.span for n in N_]
         F.box = reduce(extend_box, [n.box for n in N_ if hasattr(n,'box')], np.array([np.inf,np.inf,-np.inf,-np.inf]))
-    if fC:  # not revised
-        F.m = c_@m_ /C; F.w = F.m; F.m_ = m_; F.n_ = N_  # pass separate F.N_ as arg, F.m += sum(m_)?
+    if fC:
+        F.m = c_@m_ /C; F.w = F.m; F.m_ = m_  # pass separate F.N_ as arg, F.m += sum(m_)?
+        if cN_ is not None: F.n_ = cN_
         for n,m in zip(N_,m_): n.root_ += [[F,m]]
     else: F.m = val_(TT)
     if root is None: return F
@@ -496,7 +497,7 @@ def sum2F(N_, root=None, m_=None, nF=None, typ=0):  # c|c*m -weighted sum -> CF|
         root.angl = F.angl = (A:= [np.sum(A_:= [L.angl[0] * L.angl[1] for L in F.N_], axis=0), 1])  # Lt.angl for proj_V
         root.mang = F.mang = np.mean([comp_A(A[0], a)[0] for a in A_])
     elif nF=='Nt':
-        root.yx,root.kern,root.box = F.yx,F.kern,F.box; root.span = np.hypot(*(F.box[2:]-F.box[:2]))/2  # extent, as in PP2N
+        root.yx,root.kern,root.box = F.yx,F.kern,F.box; root.span = np.hypot(*(F.box[2:]+1-F.box[:2]))/2  # extent, as in PP2N  (xn and yn is inclusive, need to +1, as in PP2N)
         if root.Nt: F.H = copy(root.H) + [Copy_(root.Nt, root=root)]
         else:       [add_H(F.H, n.H, F) for n in N_]
     if not fC and nF and hasattr(root,nF): setattr(root,nF,F)  # Nt|Lt|Bt|Rt|C, not L.tF
@@ -659,7 +660,7 @@ def proj_focus(PV__, y,x, tile, elev):  # radial accum of projected focus value 
     n = 1  # n rim layers
     while y-n>=0 and x-n>=0 and y+n<H and x+n<W:  # rim is within frame
         dec = Dec ** (n * rim_dist_)  # diag dist is 1.4 * axial
-        pD = sum(tile.dTT[1] * mA_)  # D contribution = signed mag?
+        pD = sum(tile.dTT[1]) * mA_  # D contribution = signed mag?
         pV__ = Vm*dec + pD*dec
         if np.max(pV__) < ave: break  # < min adjustment
         rim_coords = np.array([
@@ -805,7 +806,7 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
                 if gv_(val_(_T.dTT*_T.wTT*ttFrm) * ((_T.c+wFrm)/(_T.r+cFrm)) - ave):
                     T_ += [_T]; dy,dx = _T.box[2:] -_T.box[:2]
                     pTT, pc = proj_N(_T, np.hypot(dy,dx), np.array([dy,dx]), elev,_T.c)  # no proj r?
-                    if gv_(val_(pTT*T.wTT*ttFrm) * ((pc+wFrm)/(_T.r+elev+cFrm)) - ave):  # +ve, no uncertainty projection yet
+                    if gv_(val_(pTT*_T.wTT*ttFrm) * ((pc+wFrm)/(_T.r+elev+cFrm)) - ave):  # +ve, no uncertainty projection yet
                         proj_focus(PV__,y,x,_T,elev)  # -> projected value map
                         for _y,_x in ((y-1,x), (y+1,x), (y,x-1), (y,x+1)):  # fill 4 adjacent cells
                             if not (0<=_y<Ly and 0<=_x<Lx) or frame[_y,_x] is not None: continue  # outside frame or checked
