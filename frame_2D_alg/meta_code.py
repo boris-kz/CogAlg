@@ -73,10 +73,10 @@ def prop_F_(F, attr='N_'):  # factory function to get and update top-composition
 
 class CN(CL):  # full node|graph for xcomp, adding fork set
     name = "node"
-    N_,L_,B_,X_,rim,H = prop_F_('Nt'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Xt'),prop_F_('Rt'),prop_F_('Nt','H')
-    # Ns may be in centroids of N.N_, Lt,Bt: int|ext Ls
+    N_,L_,B_,C_,X_,rim,H = prop_F_('Nt'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Ct'),prop_F_('Xt'),prop_F_('Rt'),prop_F_('Nt','H')
+    # C,N: int|ext-defined nodes, L,B: int|ext links
     def __init__(n, **kw):
-        n.Nt,n.Bt,n.Lt,n.Xt,n.Rt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Lt','Xt','Rt')))  # CN if nest
+        n.Nt,n.Bt,n.Lt,n.Ct,n.Xt,n.Rt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Lt','Ct','Xt','Rt')))  # CN if nest
         super().__init__(**kw)
         n.exe = kw.get('exe',0)  # exemplar, temporary
         n.typ = kw.get('typ',3)  # full comp, =2 for Cs?
@@ -394,8 +394,7 @@ def sum2O(F_, root=None, w_=None, fcall_=0):  # for fw,fc,fr only (dTT,r,w are f
     if fcall_:
         c_ = np.array([n.c for n in F_], dtype=float); C = c_.sum(); w_ = c_/C; F.call_ = F_
     else:
-        F.body = copy(F_[0].body)  # shallow copy
-        # for f in F_[1:]: merge_oF(F, f) use comp_body?
+        F.body = copy(F_[0].body)  # for f in F_[1:]: merge_oF(F, f) use comp_body?
     if hasattr(F_[0],'caller_'): F.caller_ = set([caller for N in F_ for caller in N.caller_])  # for comp_caller between centroids
     return F   # fw = Fw
 

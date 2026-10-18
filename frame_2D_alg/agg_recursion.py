@@ -56,8 +56,10 @@ ttFrm,ttX,ttTrc,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj,ttVct = [F.wTT for
 
 def val_(TT, wTT=wTT):  # multi-variate rel match for membership, rel diff for boundary
 
-    m_,d_ = TT; ad_ = np.abs(d_)
-    return (m_/ eps_(m_+ad_)) @ wTT[0]  # brrw from different-base m: Lt vs Bt, for directional projection
+    m_, d_ = TT
+    ad_ = np.abs(d_)  # ms should be commeasurable, all in 0:1:
+    # replace massless m with avd in comp_derT, then immediately relative: avd / (avd+ad):
+    return (m_ / eps_(m_+ad_)) @ wTT[0]  # brrw from different-base m: Lt vs Bt, for directional projection
 
 def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
 
@@ -117,11 +119,11 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None):  # recursion root, iN_
         return [n for n in n_ if (n.m+n.w) * (n.c*wX / (n.r+cX)) > ave]
     if L_:
         Lt = sum2F(L_,root=None if (dF or iN_) else root, nF='Lt'); tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r
-        if dF: add2F(dF,Lt, merge=1); return  # comp_F: no agg+, dF out
-        for N in (N_:=list(set(N_))): sum2F(N.rim, N, nF='Rt')  #-> N.Rt
+        if dF: add2F(dF, Lt, merge=1); return  # comp_F: no agg+, dF out
+        for N in (N_:= list(set(N_))): sum2F(N.rim, N, nF='Rt')  #->N.Rt
         if iN_: add2F(root.Lt, Lt, merge=1)
         else:   iN_ = N_
-        if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
+        if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):  # len coef tentative
             G_ = cluster_N(root, exemplar_(iN_ or N_,r+1), r+1,c) or []  # tentative G_|C_|P_ for rng+
         FV_(CoF.get(), tt,c,r)  # current rng xcomp
         if G_:
@@ -129,7 +131,7 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None):  # recursion root, iN_
                 if gv_(sum(n.w for n in rng_) * (wX/cX) - ave) and (_G_:= cross_comp(root, pL_,_r, iN_=iN_)):
                     return _G_  # -> G_
             G_ = [sum2G(g, ttcN, root, _r) for g in G_]  # finalize full-rng Gs
-            Nt = sum2F(G_, root, nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r
+            Nt = sum2F(G_, root, nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r  # Ct formed in sum2G?
             if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+
                 G_ = cross_comp(root, proj_L_(combinations(G_,2),root,_r+1),_r+1) or G_
     return G_
@@ -152,9 +154,9 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN from C or (N_,L_,B_), eval t
     G = CN(root=root,wTT=wTT)
     L_, pL_ = [],[]
     if isinstance(F_,tuple):
-        N_,_L_,B_ = F_  # from trace_edge, vect_edge, frame_H
+        N_,_L_,B_,C_ = F_  # from trace_edge, vect_edge, frame_H
     else:  # C from CN,CC: extract internal _L_ and perimeter B_ from N_ rims
-        N_ = F_.N_; n_set = set(N_); _L_,B_ = [],[]
+        N_ = F_.N_; n_set = set(N_); _L_,B_,C_ = [],[],[]
         for L in {l for n in N_ for l in n.rim}:
             if (L.N_[0] in n_set) and (L.N_[1] in n_set):
                 if L.m > 0: _L_ += [L]
@@ -163,14 +165,15 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN from C or (N_,L_,B_), eval t
     for L in _L_:
         if L.typ==1: L_ += [L]
         else:       pL_ += [L]
-    pm = sum_vt(pL_,fm=1,wTT=wTT)[0]; pc = sum([L.c for L in pL_]); pr = np.mean([L.r for L in pL_])
-    if pL_ and (pm * (wN*pc / (cN*pr)) > ave):
-        for pL in pL_:
-            L_ += [L:= comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span)]; L.nexp=pL.nexp
-            for N in pL.N_: N.rim.remove(pL)
+    if pL_:
+        pm, pc, pr = sum_vt(pL_, fm=1, wTT=wTT)[0], sum([L.c for L in pL_]), np.mean([L.r for L in pL_])
+        if pm * (wN * pc / (cN * pr)) > ave:
+            for pL in pL_:
+                L_ += [L:= comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span)]; L.nexp=pL.nexp
+                for N in pL.N_: N.rim.remove(pL)
     for N in N_:
         if N.rim: N.Rt = sum2F(N.rim,root=N,nF='Rt')
-    [sum2F(f_,G,nF=nF) for f_,nF in zip((N_,B_,L_),('Nt','Bt','Lt')) if f_]
+    [sum2F(f_,G,nF=nF) for f_,nF in zip((N_,B_,L_,C_),('Nt','Bt','Lt','Ct')) if f_]
     G.m = val_(G.dTT,wTT); G.r = G.Nt.r
     if G.L_: trans_cluster(G)  # splice trans_links, merge L.N_.roots
     if Bt:= G.Bt:  # der+
@@ -223,7 +226,7 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
     if N.typ:  # converted Ls, skip PPs, Fts?
         dn_=[]
         if N.typ==3 and gv_(m* (c*wN /(r*cN)) - ave):  # CN
-            for i,(_Ft,Ft) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt),(N.Nt,N.Lt,N.Bt))):
+            for i,(_Ft,Ft) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct))):
                 if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1
         elif gv_(m* (c*wF /(r*cF)) - ave):  # L or B
             for _n,n in product(_N.N_,N.N_):
@@ -253,7 +256,7 @@ def comp_F(_F, F, ir=0, rL=None):
 
 def base_comp(_N,N):  # comp Et, kern, extT, dTT
 
-    M, D = N.dTT.sum(axis=1);  C= N.c;  I, G, Dy, Dx = N.kern;  L = len(N.N_)  # 0-der params? or N.m, xsign sum d_?
+    M, D = N.dTT.sum(axis=1);  C= N.c;  I, G, Dy, Dx = N.kern;  L = len(N.N_)  # M,D, 0-der params? or N.m, xsign sum d_?
     _M,_D=_N.dTT.sum(axis=1); _C=_N.c; _I,_G,_Dy,_Dx =_N.kern; _L = len(_N.N_)  # N_: density in span
     rn = C/_C; mA=dA=0
     _pars = np.array([_M*rn,_D*rn,_C,_I*rn,_G*rn, [_Dy,_Dx],_L*rn,_N.span], dtype=object)  # Et, kern, extT
@@ -496,7 +499,7 @@ def sum2F(N_, root=None, m_=None, nF=None, typ=0):  # c|c*m -weighted sum -> CF|
         root.angl = F.angl = (A:= [np.sum(A_:= [L.angl[0] * L.angl[1] for L in F.N_], axis=0), 1])  # Lt.angl for proj_V
         root.mang = F.mang = np.mean([comp_A(A[0], a)[0] for a in A_])
     elif nF=='Nt':
-        root.yx,root.kern,root.box = F.yx,F.kern,F.box; root.span = np.hypot(*(F.box[2:]-F.box[:2]))/2  # extent, as in PP2N
+        root.yx,root.kern,root.box = F.yx,F.kern,F.box; root.span = np.hypot(*(F.box[2:]+1 -F.box[:2]))/2  # extent, as in PP2N
         if root.Nt: F.H = copy(root.H) + [Copy_(root.Nt, root=root)]
         else:       [add_H(F.H, n.H, F) for n in N_]
     if not fC and nF and hasattr(root,nF): setattr(root,nF,F)  # Nt|Lt|Bt|Rt|C, not L.tF
@@ -805,7 +808,7 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
                 if gv_(val_(_T.dTT*_T.wTT*ttFrm) * ((_T.c+wFrm)/(_T.r+cFrm)) - ave):
                     T_ += [_T]; dy,dx = _T.box[2:] -_T.box[:2]
                     pTT, pc = proj_N(_T, np.hypot(dy,dx), np.array([dy,dx]), elev,_T.c)  # no proj r?
-                    if gv_(val_(pTT*T.wTT*ttFrm) * ((pc+wFrm)/(_T.r+elev+cFrm)) - ave):  # +ve, no uncertainty projection yet
+                    if gv_(val_(pTT*_T.wTT*ttFrm) * ((pc+wFrm)/(_T.r+elev+cFrm)) - ave):  # +ve, no uncertainty projection yet
                         proj_focus(PV__,y,x,_T,elev)  # -> projected value map
                         for _y,_x in ((y-1,x), (y+1,x), (y,x-1), (y,x+1)):  # fill 4 adjacent cells
                             if not (0<=_y<Ly and 0<=_x<Lx) or frame[_y,_x] is not None: continue  # outside frame or checked
