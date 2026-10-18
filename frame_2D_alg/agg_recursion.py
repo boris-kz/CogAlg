@@ -56,8 +56,10 @@ ttFrm,ttX,ttTrc,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj,ttVct = [F.wTT for
 
 def val_(TT, wTT=wTT):  # multi-variate rel match for membership, rel diff for boundary
 
-    m_,d_ = TT; ad_ = np.abs(d_)
-    return (m_/ eps_(m_+ad_)) @ wTT[0]  # brrw from different-base m: Lt vs Bt, for directional projection
+    m_, d_ = TT
+    ad_ = np.abs(d_)  # ms should be commeasurable, all in 0:1:
+    # replace massless m with avd in comp_derT, then immediately relative: avd / (avd+ad):
+    return (m_ / eps_(m_+ad_)) @ wTT[0]  # brrw from different-base m: Lt vs Bt, for directional projection
 
 def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
 
@@ -117,11 +119,11 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None):  # recursion root, iN_
         return [n for n in n_ if (n.m+n.w) * (n.c*wX / (n.r+cX)) > ave]
     if L_:
         Lt = sum2F(L_,root=None if (dF or iN_) else root, nF='Lt'); tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r
-        if dF: add2F(dF,Lt, merge=1); return  # comp_F: no agg+, dF out
-        for N in (N_:=list(set(N_))): sum2F(N.rim, N, nF='Rt')  #-> N.Rt
+        if dF: add2F(dF, Lt, merge=1); return  # comp_F: no agg+, dF out
+        for N in (N_:= list(set(N_))): sum2F(N.rim, N, nF='Rt')  #->N.Rt
         if iN_: add2F(root.Lt, Lt, merge=1)
         else:   iN_ = N_
-        if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):
+        if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):  # len coef tentative
             G_ = cluster_N(root, exemplar_(iN_ or N_,r+1), r+1,c) or []  # tentative G_|C_|P_ for rng+
         FV_(CoF.get(), tt,c,r)  # current rng xcomp
         if G_:
@@ -129,7 +131,7 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None):  # recursion root, iN_
                 if gv_(sum(n.w for n in rng_) * (wX/cX) - ave) and (_G_:= cross_comp(root, pL_,_r, iN_=iN_)):
                     return _G_  # -> G_
             G_ = [sum2G(g, ttcN, root, _r) for g in G_]  # finalize full-rng Gs
-            Nt = sum2F(G_, root, nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r
+            Nt = sum2F(G_, root, nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r  # Ct formed in sum2G?
             if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+
                 G_ = cross_comp(root, proj_L_(combinations(G_,2),root,_r+1),_r+1) or G_
     return G_
@@ -152,9 +154,9 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN from C or (N_,L_,B_), eval t
     G = CN(root=root,wTT=wTT)
     L_, pL_ = [],[]
     if isinstance(F_,tuple):
-        N_,_L_,B_ = F_  # from trace_edge, vect_edge, frame_H
+        N_,_L_,B_,C_ = F_  # from trace_edge, vect_edge, frame_H
     else:  # C from CN,CC: extract internal _L_ and perimeter B_ from N_ rims
-        N_ = F_.N_; n_set = set(N_); _L_,B_ = [],[]
+        N_ = F_.N_; n_set = set(N_); _L_,B_,C_ = [],[],[]
         for L in {l for n in N_ for l in n.rim}:
             if (L.N_[0] in n_set) and (L.N_[1] in n_set):
                 if L.m > 0: _L_ += [L]
@@ -163,14 +165,15 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN from C or (N_,L_,B_), eval t
     for L in _L_:
         if L.typ==1: L_ += [L]
         else:       pL_ += [L]
-    pm,pc,pr = (sum_vt(pL_,fm=1,wTT=wTT)[0],sum([L.c for L in pL_]),np.mean([L.r for L in pL_])) if pL_ else (0,0,1)
-    if pL_ and (pm * (wN*pc / (cN*pr)) > ave):
-        for pL in pL_:
-            L_ += [L:= comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span)]; L.nexp=pL.nexp
-            for N in pL.N_: N.rim.remove(pL)
+    if pL_:
+        pm, pc, pr = sum_vt(pL_, fm=1, wTT=wTT)[0], sum([L.c for L in pL_]), np.mean([L.r for L in pL_])
+        if pm * (wN * pc / (cN * pr)) > ave:
+            for pL in pL_:
+                L_ += [L:= comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span)]; L.nexp=pL.nexp
+                for N in pL.N_: N.rim.remove(pL)
     for N in N_:
         if N.rim: N.Rt = sum2F(N.rim,root=N,nF='Rt')
-    [sum2F(f_,G,nF=nF) for f_,nF in zip((N_,B_,L_),('Nt','Bt','Lt')) if f_]
+    [sum2F(f_,G,nF=nF) for f_,nF in zip((N_,B_,L_,C_),('Nt','Bt','Lt','Ct')) if f_]
     G.m = val_(G.dTT,wTT); G.r = G.Nt.r
     if G.L_: trans_cluster(G)  # splice trans_links, merge L.N_.roots
     if Bt:= G.Bt:  # der+
@@ -223,7 +226,7 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
     if N.typ:  # converted Ls, skip PPs, Fts?
         dn_=[]
         if N.typ==3 and gv_(m* (c*wN /(r*cN)) - ave):  # CN
-            for i,(_Ft,Ft) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt),(N.Nt,N.Lt,N.Bt))):
+            for i,(_Ft,Ft) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct))):
                 if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1
         elif gv_(m* (c*wF /(r*cF)) - ave):  # L or B
             for _n,n in product(_N.N_,N.N_):
@@ -253,7 +256,7 @@ def comp_F(_F, F, ir=0, rL=None):
 
 def base_comp(_N,N):  # comp Et, kern, extT, dTT
 
-    M, D = N.dTT.sum(axis=1);  C= N.c;  I, G, Dy, Dx = N.kern;  L = len(N.N_)  # 0-der params? or N.m, xsign sum d_?
+    M, D = N.dTT.sum(axis=1);  C= N.c;  I, G, Dy, Dx = N.kern;  L = len(N.N_)  # M,D, 0-der params? or N.m, xsign sum d_?
     _M,_D=_N.dTT.sum(axis=1); _C=_N.c; _I,_G,_Dy,_Dx =_N.kern; _L = len(_N.N_)  # N_: density in span
     rn = C/_C; mA=dA=0
     _pars = np.array([_M*rn,_D*rn,_C,_I*rn,_G*rn, [_Dy,_Dx],_L*rn,_N.span], dtype=object)  # Et, kern, extT
@@ -380,25 +383,25 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
 
 def cluster_C(root, _C_, _r):  # refine C seeds and expand through their members' rims
 
-    N_, cN_,tC_ = {n for C in _C_ for n in C.N_},set(),[] # cN_ = out of root's Ns
+    N_, tC_ = {n for C in _C_ for n in C.N_}, []
     for n in N_: n._root_ = n.root_; n.root_ = []  # preserve initial cluster_N memberships in _root_
     while True:  # reform C_, update and test C rims
         C_, cnt,rdn,Up,lc = [],0,0,0,0
         for _C in _C_:
-            _N_ = set(_C.N_+getattr(_C,'n_',[])) | {_n for n in _C.N_ for L in n.rim for _n in L.N_}  # current members + rim frontier
-            cn_,n_, m_, M, T, R, up, c = [], [], [], 0, 0, 0, 0, 0
+            _N_ = set(_C.N_) | {_n for n in _C.N_ for L in n.rim for _n in L.N_}  # current members + rim frontier
+            n_, m_, M, T, R, up, c = [], [], 0, 0, 0, 0, 0
             for n in _N_:
-                if n not in N_|cN_: cN_.add(n); n.root_, n._root_ = [], []  # add n_ here instead?
+                if n not in N_: N_.add(n); n.root_, n._root_ = [], []
                 dtt, _ = base_comp(_C, n)
                 m = val_(dtt, ttcC); c += n.c
                 _m = next(((rt[1]) for rt in n._root_ if rt[0] is _C), 0)  # prior membership, 0 if new
                 if m * n.c > ave * n.r:  # += new nodes and candidate nodes
-                    up += abs(_m - m); (n_ if n in N_ else cn_).append(n); m_ += [m]; T += n.c; M += m * n.c; R += n.r * n.c
+                    up += abs(_m - m); n_ += [n]; m_ += [m]; T += n.c; M += m * n.c; R += n.r * n.c
                 else: up += _m  # exclusion
             if not n_: continue
             r = _r + R / T
             if M * _C.m * (wcC * c / (r * _C.r * ccC)) * (((L := len(n_)) - 1) * wL) > ave:
-                C = sum2F(n_, root, m_, nF='C', typ=2,cN_=cn_)  # -> n.root_
+                C = sum2F(n_, root, m_, nF='C', typ=2)  # -> n.root_
                 if up * (c*wcC / (r*ccC)) * ((L-1)*wL) > avd:
                     C_ += [C]; Up += up; lc += c  # active Cs' change and estimated next-loop work
                 else: tC_ += [C]  # converged if low membership change
@@ -406,7 +409,7 @@ def cluster_C(root, _C_, _r):  # refine C seeds and expand through their members
         r = _r + rdn / (cnt or eps)
         oC_ = tC_ + C_
         if C_ and Up * (lc * wcC / (r * ccC)) > avd:
-            uN_ = {n for C in oC_ for n in C.N_+C.n_}
+            uN_ = {n for C in oC_ for n in C.N_}
             posL = sum(rt[1] > ave for n in uN_ for rt in n.root_)
             totL = len(uN_) * len(oC_)
             if gv_(posL / (totL or eps) * (lc * wcP / (r * ccP)) * ((len(oC_) - 1) * wL) - ave):
@@ -421,7 +424,7 @@ def cluster_C(root, _C_, _r):  # refine C seeds and expand through their members
 
 def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
 
-    iC_ = _C_; cnt = 0; Ln = len(N_:= list(set([N for C in _C_ for N in C.N_+C.n_])))  # all Ns are in all Cs
+    iC_ = _C_; cnt = 0; Ln = len(N_:= list(set([N for C in _C_ for N in C.N_])))  # all Ns are in all Cs
     _m__ = np.zeros((Ln, len(_C_)))  # NxC, cols aligned to _C_
     for i, N in enumerate(N_):
         for c,m in N.root_:
@@ -443,7 +446,7 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
                     m = val_(base_comp(C,_C)[0],ttcP); r = (C.r+_C.r)
                     if m*wF > ave*(r+cF):
                         add2F(_C,C,2); removed += [C]; _C.m = val_(_C.dTT,ttcP)  # for next-loop base comp
-                        for N in C.N_+C.n_:
+                        for N in C.N_:
                             for rt in N.root_:
                                 if rt[0] is C: rt[0] = _C  # update root from C to _C, for olp computation below
         cnt += 1
@@ -452,7 +455,7 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
             _C_ = []; i_ = []
             for i, _C in enumerate(C_):
                 if _C in removed: continue
-                _C.olp = sum(rt[1] for n in _C.N_+_C.n_ for rt in n.root_ if rt[0] is not _C and rt[1] > _C.m)
+                _C.olp = sum(rt[1] for n in _C.N_ for rt in n.root_ if rt[0] is not _C and rt[1] > _C.m)
                 if _C.m * wcP > ave * (_C.r + _C.olp + ccP):  # prune
                     _C_ += [_C]; i_ += [i]  # also after merge and converge
             _m__ = m__[:,i_]
@@ -475,19 +478,18 @@ def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C
         FV_(CoF.get(), iTT-oTT, iC-oC, iR-oR)
     return out_
 
-def sum2F(N_, root=None, m_=None, nF=None, typ=0, cN_=None):  # c|c*m -weighted sum -> CF|CL, bound to root.nF unless fuzzy C
+def sum2F(N_, root=None, m_=None, nF=None, typ=0):  # c|c*m -weighted sum -> CF|CL, bound to root.nF unless fuzzy C
 
-    iN_=N_; N_=iN_+(cN_ if cN_ is not None else []); N = N_[0]; c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); fC = m_ is not None
+    N = N_[0]; c_ = np.array([n.c for n in N_], dtype=float); C = c_.sum(); fC = nF=='C'
     w_ = c_ * np.array(m_) if fC else c_.copy()
     w_ /= w_.sum()
     TT = np.tensordot(w_, [n.dTT for n in N_], 1); R = w_ @ [n.r for n in N_]
-    F = (CL if (geo:= hasattr(N,'yx')) else CF)(N_=list(iN_), dTT=TT,c=C,r=R, nF=nF, root=root,typ=typ)
+    F = (CL if (geo:= hasattr(N,'yx')) else CF)(N_=list(N_), dTT=TT,c=C,r=R, nF=nF, root=root,typ=typ)
     if geo:  # links and higher
         F.yx,F.kern = [w_ @ np.array([getattr(n,a) for n in N_]) for a in ('yx','kern')]; F.span = w_ @ [n.span for n in N_]
         F.box = reduce(extend_box, [n.box for n in N_ if hasattr(n,'box')], np.array([np.inf,np.inf,-np.inf,-np.inf]))
-    if fC:
-        F.m = c_@m_ /C; F.w = F.m; F.m_ = m_  # pass separate F.N_ as arg, F.m += sum(m_)?
-        if cN_ is not None: F.n_ = cN_
+    if fC:  # not revised
+        F.m = c_@m_ /C; F.w = F.m; F.m_ = m_; F.n_ = N_  # pass separate F.N_ as arg, F.m += sum(m_)?
         for n,m in zip(N_,m_): n.root_ += [[F,m]]
     else: F.m = val_(TT)
     if root is None: return F
@@ -497,7 +499,7 @@ def sum2F(N_, root=None, m_=None, nF=None, typ=0, cN_=None):  # c|c*m -weighted 
         root.angl = F.angl = (A:= [np.sum(A_:= [L.angl[0] * L.angl[1] for L in F.N_], axis=0), 1])  # Lt.angl for proj_V
         root.mang = F.mang = np.mean([comp_A(A[0], a)[0] for a in A_])
     elif nF=='Nt':
-        root.yx,root.kern,root.box = F.yx,F.kern,F.box; root.span = np.hypot(*(F.box[2:]+1-F.box[:2]))/2  # extent, as in PP2N  (xn and yn is inclusive, need to +1, as in PP2N)
+        root.yx,root.kern,root.box = F.yx,F.kern,F.box; root.span = np.hypot(*(F.box[2:]+1 -F.box[:2]))/2  # extent, as in PP2N
         if root.Nt: F.H = copy(root.H) + [Copy_(root.Nt, root=root)]
         else:       [add_H(F.H, n.H, F) for n in N_]
     if not fC and nF and hasattr(root,nF): setattr(root,nF,F)  # Nt|Lt|Bt|Rt|C, not L.tF
@@ -660,7 +662,7 @@ def proj_focus(PV__, y,x, tile, elev):  # radial accum of projected focus value 
     n = 1  # n rim layers
     while y-n>=0 and x-n>=0 and y+n<H and x+n<W:  # rim is within frame
         dec = Dec ** (n * rim_dist_)  # diag dist is 1.4 * axial
-        pD = sum(tile.dTT[1]) * mA_  # D contribution = signed mag?
+        pD = sum(tile.dTT[1] * mA_)  # D contribution = signed mag?
         pV__ = Vm*dec + pD*dec
         if np.max(pV__) < ave: break  # < min adjustment
         rim_coords = np.array([
