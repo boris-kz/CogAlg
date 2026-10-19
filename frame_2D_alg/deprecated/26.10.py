@@ -322,3 +322,31 @@ def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
         else:    m-= ave*R; d-= avd*R  # in -1:1 without r
         return   m,d,TT,C,R
     else: return TT,C,R
+
+def comp_derT(_i_,i_):
+
+    d_ = _i_ - i_  # both arrays, no angles or massless params
+    m_ = np.minimum( np.abs(_i_), np.abs(i_))
+    m_[(_i_<0) != (i_<0)] *= -1  # negate opposite signs in-place
+    return np.array([m_,d_])
+
+def comp(_pars, pars, meA,deA):  # compute m_,d_ from inputs or derivatives
+
+    m_,d_ = [],[]
+    for _p, p in zip(_pars, pars):
+        if isinstance(_p, list):  # vector angle
+            mA, dA = comp_A(_p, p)
+            m_ += [mA]; d_ += [dA]
+        elif isinstance(p, tuple):  # massless: I|S avd in p only
+            p, avd = p
+            d = _p - p
+            m_ += [avd - abs(d)]  # + complement max(avd,ad)?
+            d_ += [d]
+        else:  # massive, but this is a wrong default for most ders
+            _a,a = abs(_p), abs(p)
+            m_ += [min(_a,a) if (_p<0)==(p<0) else -min(_a,a)]  # + complement max(_a,a) for +ves?
+            d_ += [_p - p]
+    ''' for mass in 0:1:
+        m = dir_m * mass + inv_m * (1-mass), | mass* max(abs(_p),abs(p)) + (1-mass)* avd - ad
+    '''
+    return np.array(m_+[meA]), np.array(d_+[deA])
