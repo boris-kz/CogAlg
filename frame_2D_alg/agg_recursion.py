@@ -54,6 +54,7 @@ cFrm,cX,cTrc,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (  # function complexi
 wFrm,wX,wTrc,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init=cost
 ttFrm,ttX,ttTrc,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj,ttVct = [F.wTT for F in oF_]  # attr weight tuples added per function
 avd_ = wTT[1] * avd  # d mass = borrow?
+mass_ = np.ones(9)  # temporary init
 
 def val_(TT, wTT=wTT):  # multi-variate rel match for membership, rel diff for boundary
 
@@ -127,9 +128,10 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None):  # recursion root, iN_
             G_,C_ = cluster_N(root, exemplar_(iN_ or N_,r+1), r+1,c)  # tentative G_|C_|P_-> rng+
         FV_(CoF.get(), tt,c,r)  # current rng xcomp
         if G_:
+            if C_: iN_ = [C.N_[int(np.argmax(C.m_))] for C in C_]  # medoid selection, on top of Rng_?
             if (rng_:= Rng_(iN_)) and (pL_:= proj_L_(combinations(rng_,2), root,_r,nexp=nexp+1)):  # rng+ xcomp:
                 if gv_(sum(n.w for n in rng_) * (wX/cX) - ave):
-                    return _G_:= cross_comp(root, pL_,_r, iN_=iN_)  #-> G_
+                    return cross_comp(root, pL_,_r, iN_=iN_)  #-> G_
             if C_: sum2F(C_,root,nF='Ct')  # prune by olp to G_?
             G_ = [sum2G(g,ttcN,root,_r) for g in G_]  # finalize full-rng Gs: primary for xcomp?
             Nt = sum2F(G_, root, nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r
@@ -278,7 +280,7 @@ def comp_derT(_i_,i_):
 
     d_ = _i_ - i_  # both arrays, no angles or massless params
     m_ = np.minimum( np.abs(_i_), np.abs(i_))
-    m_[(_i_<0) != (i_<0)] *= -1  # negate opposite signs in-place
+    m_[(_i_<0) != (i_<0)] *= 0  # negate opposite signs in-place  (always positive now?)
     return np.array([m_*mass_ + avd_*(1-mass_), d_])  # m_ combined in proportion to mass?
 
 def comp_derT_re(_TT, TT):  # compare +ve originals reconstructed from m=min and signed d
@@ -292,12 +294,12 @@ def comp_derT_re(_TT, TT):  # compare +ve originals reconstructed from m=min and
 def comp(_pars, pars, meA,deA):  # compute m_,d_ from inputs or derivatives
 
     m_,d_ = [],[]
-    for _p, p, av in zip(_pars, pars, avd_):
+    for _p, p, av, ms in zip(_pars, pars, avd_, mass_):
         if isinstance(_p, list):  # vector angle
             mA, dA = comp_A(_p, p); m_ += [mA]; d_ += [dA]
         else:  # massless: m from avd_
             _a,a = abs(_p), abs(p)
-            m_ += [av or (min(_a,a) if (_p<0)==(p<0) else -min(_a,a))]
+            m_ += [(min(_a,a) if (_p<0)==(p<0) else 0)*ms + av*(1-ms)]  # same as comp_derT, combine both? 
             d_ += [_p - p]
     ''' for mass in 0:1:
         m = dir_m * mass + inv_m * (1-mass), | mass* max(abs(_p),abs(p)) + (1-mass)* avd - ad
@@ -390,14 +392,20 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
                 for n in N_: fin_.remove(n)
                 for l in L_: in_.remove(l)
     if Gt_:
-        C, tt_,c_,r_ = [],0,[],[]; _r+=1
+        C, tt_,c_,r_ = 0,[],[],[]; _r+=1
         for G,tt,c,r in Gt_: G_+=[G]; C+=c; tt_+=[tt]; c_+=[c]; r_+=[r]
         TT = np.zeros((2,9)); R = 0
         for tt,c,r in zip(tt_,c_,r_): w=c/C; TT+=tt*w; R+=r*w
         M = val_(TT*root.wTT*ttcN)
-        FV_(CoF.get(), *sum_vt(C_)[:-1], R)
+        FV_(CoF.get(), *sum_vt(G_)[:-1], R)
         if gv_(M * (C*wcC / ((_r+R)*ccC)) * ((len(C_)-1)*wL) - ave):
-            C_ = cluster_C(root, C_,_r+R)
+            if (C_ := cluster_C(root, G_,_r+R) or []):
+                for G in G_:  # prune by olp to G_
+                    for C in C_:
+                        if (olp:= sum(N.c*m for N,m in zip(C.N_,C.m_) if N in G.N_)):  # or just m without N.c?
+                            if C.m*C.c > G.m*G.c: G.r += olp/G.c
+                            else:                 C.r += olp/C.c
+                G_ = [G for G in G_ if G.m*G.c > ave*G.r]; C_ = [_C for _C in C_ if _C.m*_C.c > ave*_C.r]  # or prune G_ or C_ only?   
     return G_,C_
 
 def cluster_C(root, _C_, _r):  # refine C seeds and expand through their members' rims
