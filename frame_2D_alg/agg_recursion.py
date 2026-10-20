@@ -268,7 +268,7 @@ def base_comp(_N,N):  # comp Et, kern, extT, dTT
     if hasattr(_N,'angl') and _N.angl and N.angl:  # mostly Ls, some Gs
         mA,dA = comp_A(_N.angl[0]*_N.angl[1], N.angl[0]*N.angl[1])
     m_,d_ = comp(_pars,pars, mA,dA)  # new dT: M,D,n, I,G,a, L,S,A
-    dm_,dd_ = comp_derT(_N.dTT[1], N.dTT[1])  # higher-derivation than M,D
+    dm_,dd_ = comp_derT(_N.dTT[1], N.dTT[1], d_[3:5])  # higher-derivation than M,D
 
     return np.array([m_+dm_,d_+dd_]), rn  # rn is not relevant, rm, rv?
 '''
@@ -276,8 +276,10 @@ def base_comp(_N,N):  # comp Et, kern, extT, dTT
     mang = (rn*_N.mang + N.mang) / (1+rn)  # ave, weight each side by rn
     align = 1 - mang* (1-mA)  # in 0:1, weigh mA 
 '''
-def comp_derT(_i_,i_):
+def comp_derT(_i_,i_,kd_=None):  # k is (I, G)
 
+    if kd_ is not None:  #compare I,G first, then dI,dG should be added to their diffs in dTT before comparison
+        _i_,i_ = _i_.copy(), i_.copy(); _i_[3:5] += kd_; i_[3:5] += kd_
     d_ = _i_ - i_  # both arrays, no angles or massless params
     m_ = np.minimum( np.abs(_i_), np.abs(i_))
     m_[(_i_<0) != (i_<0)] *= -1  # negate opposite signs in-place
@@ -398,7 +400,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
         for tt,c,r in zip(tt_,c_,r_): w=c/C; TT+=tt*w; R+=r*w
         M = val_(TT*root.wTT*ttcN)
         FV_(CoF.get(), *sum_vt(G_)[:-1], R)
-        if gv_(M * (C*wcC / ((_r+R)*ccC)) * ((len(C_)-1)*wL) - ave):
+        if gv_(M * (C*wcC / ((_r+R)*ccC)) * ((len(G_)-1)*wL) - ave):
             C_ = cluster_C(root, G_,_r+R)
     return G_,C_
 
@@ -442,10 +444,10 @@ def cluster_C(root, _C_, _r):  # refine/expand a fixed set of C seeds through th
     if oC_:
         for C in oC_:
             for N, m in zip(C.N_, C.m_):
-                if N.m > m: C.xr += 1  # xr: cross-fork redundancy
-                else: N.xr += 1
-        root.N_ = [N for N in root.N_ if N.m < ave * (N.r + N.xr/len(root.C_))]  # or prune C_ only?
-        root.C_ = [C for C in root.C_ if C.m < ave * (C.r + C.xr/len(root.N_))]  # not sure about len
+                if N.m > m: C.r += 1/len(N_)  # xr: cross-fork redundancy
+                else: N.r += 1/len(oC_)
+        root.N_ = [N for N in root.N_ if N.m > ave * N.r]  # or prune C_ only? How about pruned's Ns' G?
+        oC_ = [C for C in oC_ if C.m > ave * C.r]
         FV_(CoF.get(), *sum_vt(oC_))
         return oC_
 
@@ -686,21 +688,21 @@ def proj_focus(PV__, y,x, tile, elev):  # radial accum of projected focus value 
     ], dtype=float)  # rim dirs, same order as rim_coords, n-invariant
     n = 1  # n rim layers
     while y-n>=0 and x-n>=0 and y+n<H and x+n<W:  # rim is within frame
-        dec = Dec ** n; _A = tile.angl[0]
+        dec = Dec ** n; _A = tile.angl[0]; pV__ = []
         # diag dist = 1.4 * axial? draft:
         for A in rim_A_:
-            mA = comp_A(_A,A) * tile.mang if np.hypot(*A) else 1  # axis alignment, scale-free: |A| cancels in w_, signed
+            mA = comp_A(_A,A)[0] * tile.mang if np.hypot(*A) else 1  # axis alignment, scale-free: |A| cancels in w_, signed
             pD = sum(tile.dTT[1] * mA)  # D contribution = signed mag?   rim_dist_= np.hypot(rim_A_[:,0], rim_A_[:,1])?
-            pV__ = Vm*dec + pD*dec
-            if np.max(pV__) < ave: break  # < min adjustment
-            rim_coords = np.array([
-            (y-n,x-n), (y-n,x), (y-n,x+n),
-            (y, x-n),           (y, x+n),
-            (y+n,x-n), (y+n,x), (y+n,x+n)
-            ], dtype=int)
-            row,col = rim_coords[:,0], rim_coords[:,1]
-            PV__[row,col] += pV__  # in-place accum pV to rim
-            n += 1
+            pV__ += [Vm*dec + pD*dec]
+        if all(pV < ave for pV in pV__): break  # break when all direciton < min adjustment
+        rim_coords = np.array([
+        (y-n,x-n), (y-n,x), (y-n,x+n),
+        (y, x-n),           (y, x+n),
+        (y+n,x-n), (y+n,x), (y+n,x+n)
+        ], dtype=int)
+        row,col = rim_coords[:,0], rim_coords[:,1]
+        PV__[row,col] += pV__  # in-place accum pV to rim
+        n += 1
 
 def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N projection val, add pN if comp_pN?
 
