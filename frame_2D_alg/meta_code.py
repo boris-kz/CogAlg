@@ -7,7 +7,7 @@ eps = 1e-7
 def eps_(a): return np.where(a==0, eps, a)
 ave = decay = .3
 avd = 20  # mean sum( abs(dTT[1]) * wTT[1]), the borrower
-wM,wD,wi, wI,wG,wa, wL,wS,wA = 10, 10, 20, 20, 5, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
+wM,wD,wi, wI,wG,wa, wL,wS,wA = 10, 10, 20, 5, 20, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
 wT = np.array([wM,wD,wi, wI,wG,wa, wL,wS,wA])
 wTT = np.array([wT,wT*avd])
 '''
