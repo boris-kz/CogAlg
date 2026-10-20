@@ -54,6 +54,7 @@ cFrm,cX,cTrc,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (  # function complexi
 wFrm,wX,wTrc,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init=cost
 ttFrm,ttX,ttTrc,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj,ttVct = [F.wTT for F in oF_]  # attr weight tuples added per function
 avd_ = wTT[1] * avd  # d mass = borrow?
+mass_ = np.ones(9)  # temporary init
 
 def val_(TT, wTT=wTT):  # multi-variate rel match for membership, rel diff for boundary
 
@@ -124,12 +125,12 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None):  # recursion root, iN_
         if iN_: add2F(root.Lt, Lt, merge=1)
         else:   iN_ = N_
         if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):  # len coef is tentative
-            G_,C_ = cluster_N(root, exemplar_(iN_ or N_,r+1), r+1,c)  # tentative G_|C_|P_-> rng+
+            G_,C_ = cluster_N(root, exemplar_(iN_ or N_,r+1), r+1,c)  # tentative G_|C_|P_/ rng+
         FV_(CoF.get(), tt,c,r)  # current rng xcomp
         if G_:
-            if (rng_:= Rng_(iN_)) and (pL_:= proj_L_(combinations(rng_,2), root,_r,nexp=nexp+1)):  # rng+ xcomp:
+            if (rng_:= Rng_(iN_)) and (pL_:= proj_L_(combinations(rng_,2), root,_r,nexp=nexp+1)):  # rng+
                 if gv_(sum(n.w for n in rng_) * (wX/cX) - ave):
-                    return _G_:= cross_comp(root, pL_,_r, iN_=iN_)  #-> G_
+                    return cross_comp(root, pL_,_r, iN_=iN_)  #-> G_
             if C_: sum2F(C_,root,nF='Ct')  # prune by olp to G_?
             G_ = [sum2G(g,ttcN,root,_r) for g in G_]  # finalize full-rng Gs: primary for xcomp?
             Nt = sum2F(G_, root, nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r
@@ -258,6 +259,7 @@ def comp_F(_F, F, ir=0, rL=None):
 
 def base_comp(_N,N):  # comp Et, kern, extT, dTT
 
+    # for +ve m: compare 0der kern first, add dI to
     M, D = N.dTT.sum(axis=1);  C= N.c;  I, G, Dy, Dx = N.kern;  L = len(N.N_)  # M,D, 0-der params? or N.m, xsign sum d_?
     _M,_D=_N.dTT.sum(axis=1); _C=_N.c; _I,_G,_Dy,_Dx =_N.kern; _L = len(_N.N_)  # N_: density in span
     rn = C/_C; mA=dA=0
@@ -265,7 +267,7 @@ def base_comp(_N,N):  # comp Et, kern, extT, dTT
     pars  = np.array([M,D,C,I,G, [Dy,Dx], L,N.span], dtype=object)
     if hasattr(_N,'angl') and _N.angl and N.angl:  # mostly Ls, some Gs
         mA,dA = comp_A(_N.angl[0]*_N.angl[1], N.angl[0]*N.angl[1])
-    m_,d_ = comp(_pars,pars, mA,dA)  # M,D,n, I,G,a, L,S,A
+    m_,d_ = comp(_pars,pars, mA,dA)  # new dT: M,D,n, I,G,a, L,S,A
     dm_,dd_ = comp_derT(_N.dTT[1], N.dTT[1])  # higher-derivation than M,D
 
     return np.array([m_+dm_,d_+dd_]), rn  # rn is not relevant, rm, rv?
@@ -281,27 +283,27 @@ def comp_derT(_i_,i_):
     m_[(_i_<0) != (i_<0)] *= -1  # negate opposite signs in-place
     return np.array([m_*mass_ + avd_*(1-mass_), d_])  # m_ combined in proportion to mass?
 
-def comp_derT_re(_TT, TT):  # compare +ve originals reconstructed from m=min and signed d
-    (_m_,_d_),(m_,d_) = _TT[:2], TT[:2]
+def comp_derT_re(_TT, TT):
+
+    (_m_,_d_),(m_,d_) = _TT[:2], TT[:2]  # compare +ve originals reconstructed from m=min and signed d
     _f_,_s_ = _m_+np.maximum(_d_,0), _m_+np.maximum(-_d_,0)
     f_, s_ =  m_+np.maximum( d_,0),  m_+np.maximum(-d_,0)
     m = np.minimum(_f_,f_) + np.minimum(_s_,s_)  # >=0, no sign rule
     return np.array([m*mass_ + avd_*(1-mass_), _d_-d_])
     # (_f_-f_)-(_s_-s_) = _d_-d_: dd unchanged
 
-def comp(_pars, pars, meA,deA):  # compute m_,d_ from inputs or derivatives
-
+def comp(_pars, pars, meA,deA):  # compute m_,d_ from inputs or derivatives, for mass in 0:1
+    # m = dir_m * mass + inv_m * (1-mass), or
+    # mass* max(abs(_p),abs(p)) + (1-mass)* avd - ad?
+    # not revised:
     m_,d_ = [],[]
-    for _p, p, av in zip(_pars, pars, avd_):
+    for _p, p, av, ms in zip(_pars, pars, avd_, mass_):
         if isinstance(_p, list):  # vector angle
             mA, dA = comp_A(_p, p); m_ += [mA]; d_ += [dA]
         else:  # massless: m from avd_
             _a,a = abs(_p), abs(p)
-            m_ += [av or (min(_a,a) if (_p<0)==(p<0) else -min(_a,a))]
+            m_ += [(min(_a,a) if (_p<0)==(p<0) else 0)*ms + av*(1-ms)]  # same as comp_derT, combine both?
             d_ += [_p - p]
-    ''' for mass in 0:1:
-        m = dir_m * mass + inv_m * (1-mass), | mass* max(abs(_p),abs(p)) + (1-mass)* avd - ad
-    '''
     return np.array(m_+[meA]), np.array(d_+[deA])
 
 # not reviewed:
@@ -390,17 +392,17 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
                 for n in N_: fin_.remove(n)
                 for l in L_: in_.remove(l)
     if Gt_:
-        C, tt_,c_,r_ = [],0,[],[]; _r+=1
+        C, tt_,c_,r_ = 0,[],[],[]; _r+=1
         for G,tt,c,r in Gt_: G_+=[G]; C+=c; tt_+=[tt]; c_+=[c]; r_+=[r]
         TT = np.zeros((2,9)); R = 0
         for tt,c,r in zip(tt_,c_,r_): w=c/C; TT+=tt*w; R+=r*w
         M = val_(TT*root.wTT*ttcN)
-        FV_(CoF.get(), *sum_vt(C_)[:-1], R)
+        FV_(CoF.get(), *sum_vt(G_)[:-1], R)
         if gv_(M * (C*wcC / ((_r+R)*ccC)) * ((len(C_)-1)*wL) - ave):
-            C_ = cluster_C(root, C_,_r+R)
+            C_ = cluster_C(root, G_,_r+R)
     return G_,C_
 
-def cluster_C(root, _C_, _r):  # refine C seeds and expand through their members' rims
+def cluster_C(root, _C_, _r):  # refine/expand a fixed set of C seeds through their members' rims, add re-seeding by rejected Ns?
 
     N_, tC_ = {n for C in _C_ for n in C.N_}, []
     for n in N_: n._root_ = n.root_; n.root_ = []  # preserve initial cluster_N memberships in _root_
@@ -438,6 +440,12 @@ def cluster_C(root, _C_, _r):  # refine C seeds and expand through their members
                 _C_ = C_  # for next loop
         else: break
     if oC_:
+        for C in oC_:
+            for N, m in zip(C.N_, C.m_):
+                if N.m > m: C.xr += 1  # xr: cross-fork redundancy
+                else: N.xr += 1
+        root.N_ = [N for N in root.N_ if N.m < ave * (N.r + N.xr/len(root.C_))]  # or prune C_ only?
+        root.C_ = [C for C in root.C_ if C.m < ave * (C.r + C.xr/len(root.N_))]  # not sure about len
         FV_(CoF.get(), *sum_vt(oC_))
         return oC_
 
@@ -676,36 +684,23 @@ def proj_focus(PV__, y,x, tile, elev):  # radial accum of projected focus value 
     ( 0,-1),         ( 0,1),
     ( 1,-1), ( 1,0), ( 1,1)
     ], dtype=float)  # rim dirs, same order as rim_coords, n-invariant
-    A = tile.angl[0]
-    if np.hypot(*A): mA_ = np.abs(rim_A_ @ A) * tile.mang  # axial alignment, scale-free: |A| cancels in w_, signed
-    else:            mA_ = np.ones(8)  # if A==(0,0), no links at all, all singleton
-    rim_dist_ = np.hypot(rim_A_[:,0], rim_A_[:,1])
-    pD = sum(tile.dTT[1])  # D contribution = signed mag?
-    for (dy,dx), mA, rdist in zip(rim_A_.astype(int), mA_, rim_dist_):  # loop per direction
-        n = 1  # n steps in this direction
-        while 0 <= y+dy*n < H and 0 <= x+dx*n < W:  # rim is within frame
-            dec = Dec ** (n * rdist)  # diag dist is 1.4 * axial
-            pV = Vm*dec + pD*mA*dec
-            if pV < ave: break  # < min adjustment (per direction)
-            PV__[y+dy*n, x+dx*n] += pV  # in-place accum pV to rim
-            n += 1
-
-    '''
     n = 1  # n rim layers
     while y-n>=0 and x-n>=0 and y+n<H and x+n<W:  # rim is within frame
-        dec = Dec ** (n * rim_dist_)  # diag dist is 1.4 * axial
-        pD = sum(tile.dTT[1] * mA_)  # D contribution = signed mag?
-        pV__ = Vm*dec + pD*dec
-        if np.max(pV__) < ave: break  # < min adjustment
-        rim_coords = np.array([
-        (y-n,x-n), (y-n,x), (y-n,x+n),
-        (y, x-n),           (y, x+n),
-        (y+n,x-n), (y+n,x), (y+n,x+n)
-        ], dtype=int)
-        row,col = rim_coords[:,0], rim_coords[:,1]
-        PV__[row,col] += pV__  # in-place accum pV to rim
-        n += 1
-    '''
+        dec = Dec ** n; _A = tile.angl[0]
+        # diag dist = 1.4 * axial? draft:
+        for A in rim_A_:
+            mA = comp_A(_A,A) * tile.mang if np.hypot(*A) else 1  # axis alignment, scale-free: |A| cancels in w_, signed
+            pD = sum(tile.dTT[1] * mA)  # D contribution = signed mag?   rim_dist_= np.hypot(rim_A_[:,0], rim_A_[:,1])?
+            pV__ = Vm*dec + pD*dec
+            if np.max(pV__) < ave: break  # < min adjustment
+            rim_coords = np.array([
+            (y-n,x-n), (y-n,x), (y-n,x+n),
+            (y, x-n),           (y, x+n),
+            (y+n,x-n), (y+n,x), (y+n,x+n)
+            ], dtype=int)
+            row,col = rim_coords[:,0], rim_coords[:,1]
+            PV__[row,col] += pV__  # in-place accum pV to rim
+            n += 1
 
 def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N projection val, add pN if comp_pN?
 
