@@ -54,12 +54,12 @@ cFrm,cX,cTrc,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (  # function complexi
 wFrm,wX,wTrc,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init=cost
 ttFrm,ttX,ttTrc,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj,ttVct = [F.wTT for F in oF_]  # attr weight tuples added per function
 avd_ = wTT[1] * avd  # d mass = borrow?
-mass_ = np.ones(9)  # temporary init
+mass_ = np.ones(0)  # += borrow feedback?
 
 def val_(TT, wTT=wTT):  # multi-variate rel match for membership, rel diff for boundary
 
-    m_, d_ = TT  # m_ should be in 0:1, brrw from different-base m: directional Lt | Bt
-    rel_m_ = m_ / eps_(m_+ np.abs(d_))  # massless m = avd, rel = avd/ (avd+ad)
+    m_, d_ = TT  # dval = brrw from different-base m: directional Lt|Bt; m_ is already rational?
+    rel_m_ = m_ / eps_(m_+ np.abs(d_))  # massless m = avd, rel = avd/ (avd+ad) in −1:1
     return rel_m_ @ wTT[0]
 
 def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
@@ -70,7 +70,7 @@ def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
         if fm:
             m = val_(TT, wTT)
             M += (m/ ave*R) if fdiv else (m- ave*R)  # in 0:inf or -1:1?
-    return (M,TT,C,R) if fm else (TT,C,R)  # sum dTT as comparands, not value terms?
+    return (M,TT,C,R) if fm else (TT,C,R)  # sum dTT for comp, not eval?
 
 def FV_(F, tt,c,r):  # combine m,d per oF
     tF = oF_[F.nF]; tF.c += c
@@ -186,7 +186,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN from C or (N_,L_,B_), eval t
     if Lt:= G.Lt:  # sub+
         m,c,r = Lt.m,Lt.c, Lt.r+_r
         if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):  #-> sub_Gs @ higher filter: r+1
-            g_,c_= cluster_N(G, exemplar_(N_,r), r+1,c)  # either can be empty if olp?
+            g_,c_= cluster_N(G, exemplar_(N_,r), r+1,c)  # either can be empty due to olp
             if g_: sum2F([sum2G(g, ttcN, G, r+1) for g in g_], G,nF='Nt')  # G._Nt-> G.Nt.H[-1]
             if c_: sum2F(c_,G, nF='Ct')
     if G.Lt or G.Bt:
@@ -257,18 +257,17 @@ def comp_F(_F, F, ir=0, rL=None):
     FV_(CoF.get(), dF.dTT, dF.c, dF.r)
     return dF  # no cross-fork N_, no L ext updates?
 
-def base_comp(_N,N):  # comp Et, kern, extT, dTT
+def base_comp(_N,N):  # comp Et, kern, extT, dTT; rational M?
 
-    # for +ve m: compare 0der kern first, add dI to
     M, D = N.dTT.sum(axis=1);  C= N.c;  I, G, Dy, Dx = N.kern;  L = len(N.N_)  # M,D, 0-der params? or N.m, xsign sum d_?
-    _M,_D=_N.dTT.sum(axis=1); _C=_N.c; _I,_G,_Dy,_Dx =_N.kern; _L = len(_N.N_)  # N_: density in span
+    _M,_D =_N.dTT.sum(axis=1); _C=_N.c; _I,_G,_Dy,_Dx =_N.kern; _L = len(_N.N_)  # N_: density in span
     rn = C/_C; mA=dA=0
     _pars = np.array([_M*rn,_D*rn,_C,_I*rn,_G*rn, [_Dy,_Dx],_L*rn,_N.span], dtype=object)  # Et, kern, extT
     pars  = np.array([M,D,C,I,G, [Dy,Dx], L,N.span], dtype=object)
     if hasattr(_N,'angl') and _N.angl and N.angl:  # mostly Ls, some Gs
         mA,dA = comp_A(_N.angl[0]*_N.angl[1], N.angl[0]*N.angl[1])
     m_,d_ = comp(_pars,pars, mA,dA)  # new dT: M,D,n, I,G,a, L,S,A
-    dm_,dd_ = comp_derT(_N.dTT[1], N.dTT[1], d_[3:5])  # higher-derivation than M,D
+    dm_,dd_ = comp_derT(_N.dTT[1], N.dTT[1])  # higher-derivation than M,D
 
     return np.array([m_+dm_,d_+dd_]), rn  # rn is not relevant, rm, rv?
 '''
@@ -276,51 +275,25 @@ def base_comp(_N,N):  # comp Et, kern, extT, dTT
     mang = (rn*_N.mang + N.mang) / (1+rn)  # ave, weight each side by rn
     align = 1 - mang* (1-mA)  # in 0:1, weigh mA 
 '''
-def comp_derT(_i_,i_,kd_=None):  # k is (I, G)
+def comp_derT(_i_,i_):
 
-    if kd_ is not None:  #compare I,G first, then dI,dG should be added to their diffs in dTT before comparison
-        _i_,i_ = _i_.copy(), i_.copy(); _i_[3:5] += kd_; i_[3:5] += kd_
-    d_ = _i_ - i_  # both arrays, no angles or massless params
+    d_ = _i_ - i_  # both arrays
     m_ = np.minimum( np.abs(_i_), np.abs(i_))
     m_[(_i_<0) != (i_<0)] *= -1  # negate opposite signs in-place
     return np.array([m_*mass_ + avd_*(1-mass_), d_])  # m_ combined in proportion to mass?
 
-def comp_derT_re(_TT, TT):
+def comp(_pars, pars, meA,deA):  # compute m_,d_ from inputs or derivatives
 
-    (_m_,_d_),(m_,d_) = _TT[:2], TT[:2]  # compare +ve originals reconstructed from m=min and signed d
-    _f_,_s_ = _m_+np.maximum(_d_,0), _m_+np.maximum(-_d_,0)
-    f_, s_ =  m_+np.maximum( d_,0),  m_+np.maximum(-d_,0)
-    m = np.minimum(_f_,f_) + np.minimum(_s_,s_)  # >=0, no sign rule
-    return np.array([m*mass_ + avd_*(1-mass_), _d_-d_])
-    # (_f_-f_)-(_s_-s_) = _d_-d_: dd unchanged
-
-def comp(_pars, pars, meA,deA):  # compute m_,d_ from inputs or derivatives, for mass in 0:1
-    # m = dir_m * mass + inv_m * (1-mass), or
-    # mass* max(abs(_p),abs(p)) + (1-mass)* avd - ad?
-    # not revised:
     m_,d_ = [],[]
-    for _p, p, av, ms in zip(_pars, pars, avd_, mass_):
+    for _p, p, av, mass in zip(_pars, pars, avd_, mass_):  # mass in 0:1
         if isinstance(_p, list):  # vector angle
             mA, dA = comp_A(_p, p); m_ += [mA]; d_ += [dA]
-        else:  # massless: m from avd_
-            _a,a = abs(_p), abs(p)
-            m_ += [(min(_a,a) if (_p<0)==(p<0) else 0)*ms + av*(1-ms)]  # same as comp_derT, combine both?
+        else:
+            m = min(abs(_p), abs(p))
+            if (_p<0) != (p<0): m =- m  # gap between comparands
+            m_ += [m*mass + av*(1-mass)]
             d_ += [_p - p]
     return np.array(m_+[meA]), np.array(d_+[deA])
-
-# not reviewed:
-def comp_re(_pars, pars, meA,deA):  # compute m_,d_ from +ve inputs, converted ds via reconstructed +ve comparands
-
-    m_,d_ = [],[]
-    for _p, p, av in zip(_pars, pars, avd_):
-        if isinstance(_p, list):  # vector angle
-            mA, dA = comp_A(_p, p); m_ += [mA]; d_ += [dA]
-        elif isinstance(_p, tuple):  # converted d: (d, m base, unsigned ad) -> ordered comparands, f-s = d
-            (_d,_m,_ad),(d,m,ad) = _p,p
-            _f,_s, f,s = _m+(_ad+_d)/2, _m+(_ad-_d)/2, m+(ad+d)/2, m+(ad-d)/2
-            m_ += [min(_f,f) + min(_s,s)]; d_ += [_d-d]  # = (_f-f)-(_s-s)
-        else:  # original input is +ve: min, avd if massless
-            m_ += [av or min(_p,p)]; d_ += [_p-p]
 
 def comp_A(_A,A):
 
@@ -446,8 +419,8 @@ def cluster_C(root, _C_, _r):  # refine/expand a fixed set of C seeds through th
             for N, m in zip(C.N_, C.m_):
                 if N.m > m: C.r += 1/len(N_)  # xr: cross-fork redundancy
                 else: N.r += 1/len(oC_)
-        root.N_ = [N for N in root.N_ if N.m > ave * N.r]  # or prune C_ only? How about pruned's Ns' G?
-        oC_ = [C for C in oC_ if C.m > ave * C.r]
+        root.N_ = [N for N in root.N_ if N.m > ave * N.r]  # or prune C_ only?
+        oC_ = [C for C in oC_ if C.m > ave * C.r]  #-> xcomp(med_N_): alt composition
         FV_(CoF.get(), *sum_vt(oC_))
         return oC_
 
@@ -688,20 +661,20 @@ def proj_focus(PV__, y,x, tile, elev):  # radial accum of projected focus value 
     ], dtype=float)  # rim dirs, same order as rim_coords, n-invariant
     n = 1  # n rim layers
     while y-n>=0 and x-n>=0 and y+n<H and x+n<W:  # rim is within frame
-        dec = Dec ** n; _A = tile.angl[0]; pV__ = []
-        # diag dist = 1.4 * axial? draft:
+        dec = Dec ** n; _A = tile.angl[0]  # diag dist = 1.4 * axial?
+        pV__ = [] # not needed?
         for A in rim_A_:
             mA = comp_A(_A,A)[0] * tile.mang if np.hypot(*A) else 1  # axis alignment, scale-free: |A| cancels in w_, signed
             pD = sum(tile.dTT[1] * mA)  # D contribution = signed mag?   rim_dist_= np.hypot(rim_A_[:,0], rim_A_[:,1])?
-            pV__ += [Vm*dec + pD*dec]
-        if all(pV < ave for pV in pV__): break  # break when all direciton < min adjustment
+            PV__[tile.yx + A] = Vm * dec + pD * dec
+        if np.max(PV__) < ave: break  # < min adjustment
         rim_coords = np.array([
         (y-n,x-n), (y-n,x), (y-n,x+n),
         (y, x-n),           (y, x+n),
         (y+n,x-n), (y+n,x), (y+n,x+n)
         ], dtype=int)
         row,col = rim_coords[:,0], rim_coords[:,1]
-        PV__[row,col] += pV__  # in-place accum pV to rim
+        PV__[row,col] += pV__  # in-place accum pV to rim, not needed?
         n += 1
 
 def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N projection val, add pN if comp_pN?
