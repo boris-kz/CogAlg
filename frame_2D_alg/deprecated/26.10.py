@@ -350,3 +350,31 @@ def comp(_pars, pars, meA,deA):  # compute m_,d_ from inputs or derivatives
         m = dir_m * mass + inv_m * (1-mass), | mass* max(abs(_p),abs(p)) + (1-mass)* avd - ad
     '''
     return np.array(m_+[meA]), np.array(d_+[deA])
+
+def proj_focus(PV__, y,x, tile, elev):  # radial accum of projected focus value in PV__
+
+    m = val_(tile.dTT, tile.wTT*ttFrm); c = tile.c  # m,d,n = tile.m, tile.d, tile.c  # add r?
+    Vm = (m-ave)*c
+    H,W = PV__.shape  # = win__
+    Dec = decay ** (np.hypot(H**elev,W**elev) / (np.hypot(*(tile.box[2:]-tile.box[:2])) +eps))  # per-step decay, in units of tile span
+    rim_A_ = np.array([
+    (-1,-1), (-1,0), (-1,1),
+    ( 0,-1),         ( 0,1),
+    ( 1,-1), ( 1,0), ( 1,1)
+    ], dtype=float)  # rim dirs, same order as rim_coords, n-invariant
+    n = 1  # n rim layers
+    while y-n>=0 and x-n>=0 and y+n<H and x+n<W:  # rim is within frame
+        dec = Dec ** n; _A = tile.angl[0]  # diag dist = 1.4 * axial?
+        for A in rim_A_:
+            mA = comp_A(_A,A) * tile.mang if np.hypot(*A) else 1  # axis alignment, scale-free: |A| cancels in w_, signed
+            pD = sum(tile.dTT[1] * mA)  # D contribution = signed mag?   rim_dist_= np.hypot(rim_A_[:,0], rim_A_[:,1])?
+            pV__ = Vm*dec + pD*dec
+            if np.max(pV__) < ave: break  # < min adjustment
+            rim_coords = np.array([
+            (y-n,x-n), (y-n,x), (y-n,x+n),
+            (y, x-n),           (y, x+n),
+            (y+n,x-n), (y+n,x), (y+n,x+n)
+            ], dtype=int)
+            row,col = rim_coords[:,0], rim_coords[:,1]
+            PV__[row,col] += pV__  # in-place accum pV to rim
+            n += 1
