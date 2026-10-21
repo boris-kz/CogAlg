@@ -54,7 +54,7 @@ cFrm,cX,cTrc,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (  # function complexi
 wFrm,wX,wTrc,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init=cost
 ttFrm,ttX,ttTrc,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj,ttVct = [F.wTT for F in oF_]  # attr weight tuples added per function
 avd_ = wTT[1] * avd  # d mass = borrow?
-mass_ = np.ones(0)  # += borrow feedback?
+mass_ = np.ones(9)  # += borrow feedback?
 
 def val_(TT, wTT=wTT):  # multi-variate rel match for membership, rel diff for boundary
 
@@ -379,7 +379,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
 
 def cluster_C(root, _C_, _r):  # refine/expand a fixed set of C seeds through their members' rims, add re-seeding by rejected Ns?
 
-    N_, tC_ = {n for C in _C_ for n in C.N_}, []
+    N_, tC_,G_ = {n for C in _C_ for n in C.N_}, [],_C_
     for n in N_: n._root_ = n.root_; n.root_ = []  # preserve initial cluster_N memberships in _root_
     while True:  # reform C_, update and test C rims
         C_, cnt,rdn,Up,lc = [],0,0,0,0
@@ -419,7 +419,7 @@ def cluster_C(root, _C_, _r):  # refine/expand a fixed set of C seeds through th
             for N, m in zip(C.N_, C.m_):
                 if N.m > m: C.r += 1/len(N_)  # xr: cross-fork redundancy
                 else: N.r += 1/len(oC_)
-        root.N_ = [N for N in root.N_ if N.m > ave * N.r]  # or prune C_ only?
+        G_[:] = [G for G in G_ if G.m > ave * sum(N.r*N.c for N in G.N_) / G.c]  # or prune C_ only?
         oC_ = [C for C in oC_ if C.m > ave * C.r]  #-> xcomp(med_N_): alt composition
         FV_(CoF.get(), *sum_vt(oC_))
         return oC_
@@ -661,20 +661,12 @@ def proj_focus(PV__, y,x, tile, elev):  # radial accum of projected focus value 
     ], dtype=float)  # rim dirs, same order as rim_coords, n-invariant
     n = 1  # n rim layers
     while y-n>=0 and x-n>=0 and y+n<H and x+n<W:  # rim is within frame
-        dec = Dec ** n; _A = tile.angl[0]  # diag dist = 1.4 * axial?
-        pV__ = [] # not needed?
+        dec = Dec ** n; _A = tile.angl[0]; maxV=-ave  # diag dist = 1.4 * axial?
         for A in rim_A_:
             mA = comp_A(_A,A)[0] * tile.mang if np.hypot(*A) else 1  # axis alignment, scale-free: |A| cancels in w_, signed
             pD = sum(tile.dTT[1] * mA)  # D contribution = signed mag?   rim_dist_= np.hypot(rim_A_[:,0], rim_A_[:,1])?
-            PV__[tile.yx + A] = Vm * dec + pD * dec
-        if np.max(PV__) < ave: break  # < min adjustment
-        rim_coords = np.array([
-        (y-n,x-n), (y-n,x), (y-n,x+n),
-        (y, x-n),           (y, x+n),
-        (y+n,x-n), (y+n,x), (y+n,x+n)
-        ], dtype=int)
-        row,col = rim_coords[:,0], rim_coords[:,1]
-        PV__[row,col] += pV__  # in-place accum pV to rim, not needed?
+            PV__[y+n*A[0], x+n*A[1]] += (pV:=Vm * dec + pD * dec); maxV = max(maxV, pV)
+        if maxV < ave: break  # < min adjustment
         n += 1
 
 def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N projection val, add pN if comp_pN?
