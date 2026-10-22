@@ -53,7 +53,7 @@ wM,wD, wi, wG,wI,wa, wL,wS,wA = wT; Ly = Lx = 64  # fractal tile dims
 cFrm,cX,cTrc,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (  # function complexity
 wFrm,wX,wTrc,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init=cost
 ttFrm,ttX,ttTrc,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj,ttVct = [F.wTT for F in oF_]  # attr weight tuples added per function
-avd_ = wTT[1] * avd  # d mass = borrow?
+avd_ = wTT[1].copy()  # d mass = borrow? avd is already applied when we init
 mass_ = np.zeros(9)  # += borrow / feedback?
 
 def val_(TT, wTT=wTT):  # multi-variate rel match for membership, rel diff for boundary
@@ -67,9 +67,9 @@ def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
     C = sum(n.c for n in N_); M=R=0; TT = np.zeros((2,9))
     for n in N_:
         w = n.c/C; TT += (n.rTT if fr else n.dTT) * w; R += n.r * w
-        if fm:
-            m = val_(TT, wTT)  # in -1:1
-            M += (m / ave*R) if fdiv else (m - ave*R)
+    if fm:  # this should be outside N_ loop
+        m = val_(TT, wTT)  # in -1:1
+        M += (m / ave*R) if fdiv else (m - ave*R)
     return (M,TT,C,R) if fm else (TT,C,R)  # sum dTT for comp, not eval?
 
 def FV_(F, tt,c,r):  # combine m,d per oF
@@ -151,6 +151,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN from C or (N_,L_,B_), eval t
                                 if rt0 and rt1 and rt0 != rt1:
                                     if rt1.H: add_H(rt0.H, rt1.H, rt0, fN=1)
                                     add2F(rt0,rt1, merge=1,fH=0)  # recompute Nt attrs / G
+                                    for N in rt1.N_: N.root = rt0
                 else:  # 0 top lev: no deeper N_ xcomp
                     break
     G = CN(root=root,wTT=wTT)
@@ -228,9 +229,10 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
     m = val_(dTT,ttN); L.dTT,L.m = dTT,m
     if N.typ:  # converted Ls, skip PPs, Fts?
         dn_=[]
-        if N.typ==3 and gv_(m* (c*wN /(r*cN)) - ave):  # CN
-            for i,(_Ft,Ft) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct))):
-                if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1
+        if N.typ==3:  # CN
+            if gv_(m* (c*wN /(r*cN)) - ave): 
+                for i,(_Ft,Ft) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct),(N.Nt,N.Lt,N.Bt,N.Ct))):
+                    if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1
         elif gv_(m* (c*wF /(r*cF)) - ave):  # L or B
             for _n,n in product(_N.N_,N.N_):
                 if _n is not n: dn_ += [comp_N(_n,n, r,min(_n.c,n.c),rL=L,full=0)]  # CC: medoid Ns may overlap?
@@ -308,7 +310,7 @@ def comp_A(_A,A):
 
 def exemplar_(N_,_r):  # multi-layer non-maximum suppression -> sparse clustering seeds = rim-medoids
 
-    for n in N_: n.w = n.Rt.m * n.c  # rep value
+    for n in N_: n.w = n.Rt.m * n.c; n.exe=0  # rep value (reset exe for sub+)
     N_= sorted(N_, key=lambda n: n.w, reverse=True); E_,Inh_ = [],set()
     for rdn, N in enumerate(N_, start=1):  # strong-first
         inh_ = list(Inh_ & set(N.rim))  # stronger Es in N.rim
@@ -350,7 +352,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
                             if iM / (span*decay) < ave * (_r-1): continue  # normalized N-to-N_ match, sum for sum2G?
                         L_ += [L]; N_ += [_N]; fin_ += [_N]
                         _L_+= [l for l in _N.rim if l not in in_ and ((l.N_[0] in fin_) ^ (l.N_[1] in fin_))]   # new frontier links, +|-?
-                    elif L.nexp==1 and nm > ave *_r:
+                    elif L.nexp==1 and -nm > ave *_r:  # nm is negative, so we need -nm?
                         B_ += [L]  # contrast
             __L_ = list(set(_L_))
         if N_:
@@ -496,7 +498,7 @@ def sum2F(N_, root=None, m_=None, nF=None, typ=0):  # c|c*m -weighted sum -> CF|
     else: F.m = val_(TT)
     if root is None: return F
     F.wTT = root.wTT
-    if nF in ('Nt','Lt','Bt'): root.dTT+=TT; root.c+=C  # root r is not affected?
+    if nF in ('Nt','Lt','Bt'): root.dTT = (root.dTT*root.c + TT*C) / (root.c+C); root.c+=C  # root r is not affected?
     if nF=='Lt':  # oriented, as in base_comp
         root.angl = F.angl = (A:= [np.sum(A_:= [L.angl[0] * L.angl[1] for L in F.N_], axis=0), 1])  # Lt.angl for proj_V
         root.mang = F.mang = np.mean([comp_A(A[0], a)[0] for a in A_])
@@ -520,12 +522,10 @@ def add2F(F,f, merge=0, fH=1):  # unpack for batching in sum2F
     if merge <2:
         F.N_ += (f.N_ if merge else [f])
     if F.nF=='Lt' and (R:= F.root) is not None:  # rng+ merge into root.Lt, skip dF: no root, full=0 links have no angl
-        R.dTT += f.dTT; R.c += f.c  # complete root binding, as in sum2F
+        R.dTT = (R.dTT*R.c + f.dTT*f.c) / (R.c+f.c); R.c += f.c  # complete root binding, as in sum2F
         R.angl = F.angl = [A:= np.sum(A_:= [L.angl[0] * L.angl[1] for L in F.N_], axis=0), 1]
         R.mang = F.mang = np.mean([comp_A(A, a)[0] for a in A_])
     if fH and hasattr(F,'H') and getattr(f,'H',None): add_H(F.H, f.H, F)  # redundant to add_Nt?
-    # if hasattr(f,'C_'): F.C_ = getattr(F,'C_',[]) + f.C_  # same for L_?
-    # or use add2F from f.Ct to F,Ct?
     if getattr(f,'Ct',None) and hasattr(F,'Ct'): add2F(F.Ct, f.Ct, merge=1)
     return F
 
@@ -678,7 +678,7 @@ def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N
         ddec_ = (ad_/ eps_(m_+ad_) - (1-decay)) * cos_d * rdist  # projected local loss deviation
         dm_ = m_ * (1-Dec+ddec_)  # average loss + local deviation, in match units
         TT = np.array([m_ - dm_, d_ + np.where(d_ < 0, -dm_, dm_)])  # transfer lost match to signed difference
-        cert = abs(val_(TT* wTT*ttPrj) * ((L.c+wPrj)/(r+cPrj)) - ave)  # approximation
+        cert = abs(val_(TT* wTT) * ((L.c+wPrj)/(r+cPrj)) - ave)  # approximation (wTT already applied with ttPrj)
         if cert > (ave + avd) * (r + cPrj):  # certainty margin
             pTT += TT
 
@@ -783,9 +783,10 @@ def vect_edge(T, iY,iX,Ly,Lx, rV=1):  # T=tile, PP_ cross_comp and floodfill to 
                         if N.B_:
                             PPd_ = list({B.root for B in N.B_}); N.Bt = sum2F(PPd_, nF='Bt')
                             N.Bt.N_ = PPd_; [setattr(B,'root',N.Bt) for B in PPd_]
-                    tt,c,r = sum_vt(N_); C += c
+                    tt,c,r = sum_vt(N_)
                     if gv_(val_(tt*ttVct) * ((c+wVct)/ (3+cVct)) * ((len(PPm_)-1)*wL) - ave):
-                        G_,TT,c,R = trace_edge([F2N(N) for N in N_], G_,TT,c,3,T); C += c  # flatten B_-mediated Gs
+                        G_,TT,c,R = trace_edge([F2N(N) for N in N_], G_,TT,c,3,T)  # flatten B_-mediated Gs
+                    C += c  # after c adds new value from trace_edge
     if G_:
         FV_(CoF.get(), TT, C,1)
         return sum2G((G_,[],[],[]), ttVct, T,R)  # return sub-PPs?
@@ -804,8 +805,8 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
                 if gv_(val_(_T.dTT*_T.wTT*ttFrm) * ((_T.c+wFrm)/(_T.r+cFrm)) - ave):
                     T_ += [_T]; dy,dx = _T.box[2:] -_T.box[:2]
                     pTT, pc = proj_N(_T, np.hypot(dy,dx), np.array([dy,dx]), elev,_T.c)  # no proj r?
-                    if gv_(val_(pTT*_T.wTT*ttFrm) * ((pc+wFrm)/(_T.r+elev+cFrm)) - ave):  # +ve, no uncertainty projection yet
-                        proj_focus(PV__,y,x,_T,elev)  # -> projected value map
+                    if gv_(val_(pTT*_T.wTT*ttFrm) * ((pc+wFrm)/(_T.r+elev+cFrm)) - ave):  # +ve, no uncertainty projection yet   
+                        proj_focus(PV__,frame==None,y,x,_T,elev)  # -> projected value map
                         for _y,_x in ((y-1,x), (y+1,x), (y,x-1), (y,x+1)):  # fill 4 adjacent cells
                             if not (0<=_y<Ly and 0<=_x<Lx) or frame[_y,_x] is not None: continue  # outside frame or checked
                             if gv_(PV__[_y,_x] - ave):  # accumulated from all adjacent tiles
