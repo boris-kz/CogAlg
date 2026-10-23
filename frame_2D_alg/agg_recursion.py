@@ -6,7 +6,7 @@ from itertools import zip_longest, combinations, product  # from multiprocessing
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
-from meta_code import oF_,iF_,nF_,CF,CL,CN,CoF,wT,wTT, eps,eps_,ave,avd,decay, trace_func,parse_funcs, call_sites, split_oF,clust_oF_,inject_oF_,gv_
+from meta_code import oF_,iF_,nF_,CF,CL,CN,CoF,wT,wTT,aTT, eps,eps_,ave,avd,decay, trace_func,parse_funcs, call_sites, split_oF,clust_oF_,inject_oF_,gv_
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns/clusters of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), forming PPs: segments of matching Ps.
@@ -59,7 +59,7 @@ def val_(TT, wTT=wTT):  # multi-variate rel match for membership, rel diff for b
 
     m_, d_ = TT  # dval = brrw from different-base m: directional Lt|Bt; m_ is already rational?
     rel_m_ = m_ / eps_(m_+ np.abs(d_))  # massless m = avd, rel = avd/ (avd+ad) in −1:1
-    return rel_m_ @ wTT[0]
+    return rel_m_ @ wTT[0]/aTT[0]
 
 def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
 
@@ -128,8 +128,9 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None):  # recursion root, iN_
         FV_(CoF.get(), tt,c,r)  # current rng xcomp
         if G_:
             if (rng_:= Rng_(iN_)) and (pL_:= proj_L_(combinations(rng_,2), root,_r,nexp=nexp+1)):  # rng+
-                if gv_(sum(n.w for n in rng_) * (wX/cX) - ave):
-                    return cross_comp(root, pL_,_r, iN_=iN_)  #-> G_
+                if gv_(sum(n.w for n in rng_) * (wX/cX) - ave) and (_G_:= cross_comp(root, pL_,_r, iN_=iN_)):
+                    return _G_
+                    # return cross_comp(root, pL_,_r, iN_=iN_)  #-> G_  the returned cross_comp might get empty rng's G_?
             if C_: sum2F(C_,root,nF='Ct')  # prune by olp to G_?
             G_ = [sum2G(g,ttcN,root,_r) for g in G_]  # finalize full-rng Gs: primary for xcomp?
             Nt = sum2F(G_, root, nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r
@@ -170,7 +171,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN from C or (N_,L_,B_), eval t
         pm, pc, pr = sum_vt(pL_, fm=1, wTT=wTT)[0], sum([L.c for L in pL_]), np.mean([L.r for L in pL_])
         if pm * (wN * pc / (cN * pr)) > ave:
             for pL in pL_:
-                L_ += [L:= comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span)]; L.nexp=pL.nexp
+                L_ += [L:= comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span,root)]; L.nexp=pL.nexp
                 for N in pL.N_: N.rim.remove(pL)
     for N in N_:
         if N.rim: N.Rt = sum2F(N.rim,root=N,nF='Rt')
@@ -183,7 +184,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN from C or (N_,L_,B_), eval t
             cross_comp(F2N(G.Bt), proj_L_(combinations([F2N(L) for L in Bt.N_],2),G,br),br)
         if RR:= root.root if root else None: Bt.brrw = Bt.m* (RR.m* (decay* (RR.span/G.span)))
     if Lt:= G.Lt:  # sub+ CN, no rng+, agg+?
-        m,c,r = Lt.m,Lt.c, Lt.r+_r
+        m,c,r = Lt.m,Lt.c, Lt.r+_ra
         if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):  #-> sub_Gs @ higher filter: r+1
             g_,c_= cluster_N(G, exemplar_(N_,r), r+1,c)  # either can be empty due to olp
             if g_: sum2F([sum2G(g, ttcN, G, r+1) for g in g_], G,nF='Nt')  # G._Nt-> G.Nt.H[-1]
@@ -365,7 +366,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
                 Gt_ += [(C, tt,c,r)]
             else:
                 for n in N_: fin_.remove(n)
-                for l in L_: in_.remove(l)
+                for l in L_+B_: in_.remove(l)
     if Gt_:
         C, tt_,c_,r_ = 0,[],[],[]; _r+=1
         for G,tt,c,r in Gt_: G_+=[G]; C+=c; tt_+=[tt]; c_+=[c]; r_+=[r]
@@ -420,9 +421,10 @@ def cluster_C(root, _C_, _r):  # refine/expand a fixed set of C seeds through th
                 if N.m > m: C.r += 1/len(N_)  # xr: cross-fork redundancy
                 else: N.r += 1/len(oC_)
         G_[:] = [G for G in G_ if G.m > ave * sum(N.r*N.c for N in G.N_) / G.c]  # or prune C_ only?
-        oC_ = [C for C in oC_ if C.m > ave * C.r]  # -> xcomp med_N_ or G_
-        FV_(CoF.get(), *sum_vt(oC_))
-        return oC_
+        if (oC_ := [C for C in oC_ if C.m > ave * C.r]):  # -> xcomp med_N_ or G_
+            for n in N_: n.root_ = [rt for rt in n.root_ if rt[0] in oC_]
+            FV_(CoF.get(), *sum_vt(oC_))
+            return oC_
 
 def cluster_P(_C_, root):  # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
 
