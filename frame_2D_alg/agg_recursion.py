@@ -64,7 +64,7 @@ def val_(TT, wTT=wTT):  # multi-variate rel match for membership, rel diff for b
 
     m_, d_ = TT  # dval = brrw from different-base m: directional Lt|Bt; m_ is already rational?
     rel_m_ = m_ / eps_(m_+ np.abs(d_))  # massless m = avd, rel = avd/ (avd+ad) in −1:1
-    return rel_m_ @ wTT[0]/aTT[0]
+    return rel_m_ @ (wTT[0]/aTT[0])
 
 def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
 
@@ -342,11 +342,11 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
     for N in _N_:  # form G per remaining N
         if N in fin_ or (root.root and not N.exe): continue  # no exemplars in Fg
         N_ = [N]; L_,B_ = [],[]; fin_ += [N]  # init G
-        __L_= N.rim  # spliced rim
+        _in_ = set(); __L_= N.rim  # spliced rim
         while __L_:
             _L_ = []
-            for L in set(__L_) - in_:  # flood-fill via frontier links
-                _N = L.N_[0] if L.N_[1] in fin_ else L.N_[1]; in_.add(L)
+            for L in set(__L_) - (in_|_in_):  # flood-fill via frontier links
+                _N = L.N_[0] if L.N_[1] in fin_ else L.N_[1]; _in_.add(L)
                 if _N not in fin_:
                     pm,nm = nt_vt(*L.N_)  # +ve,-ve m
                     if pm > ave *_r:  # additional filter, cluster nt, L,C_ by combined rim density, add gv_?
@@ -355,7 +355,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
                             iM = sum([L.m for L in _N.rim if (L.N_[0] if L.N_[1] is _N else L.N_[1]) in N_])
                             if iM / (span*decay) < ave * (_r-1): continue  # normalized N-to-N_ match, sum for sum2G?
                         L_ += [L]; N_ += [_N]; fin_ += [_N]
-                        _L_+= [l for l in _N.rim if l not in in_ and ((l.N_[0] in fin_) ^ (l.N_[1] in fin_))]   # new frontier links, +|-?
+                        _L_+= [l for l in _N.rim if l not in (in_|_in_) and ((l.N_[0] in fin_) ^ (l.N_[1] in fin_))]   # new frontier links, +|-?
                     elif L.nexp==1 and ave-nm > ave * _r:  # nm maybe negative
                         B_ += [L]  # contrast
             __L_ = list(set(_L_))
@@ -368,10 +368,9 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
             c = nc+lc+bc; r = (nr*nc +lr*lc +br*bc) /c;  tt = (nt*nc +lt*lc +bt*bc) /c  # br includes overlap?
             if gv_(val_(tt*root.wTT*ttcN) * (c*wcN/(r*ccN)) * ((len(N_)-1)*wL) - ave):
                 C = sum2F(N_,root,nF='C',typ=1)  # initial connectivity G
-                Gt_ += [(C, tt,c,r)]
+                Gt_ += [(C, tt,c,r)]; in_ |= _in_
             else:
                 for n in N_: fin_.remove(n)
-                for l in L_+B_: in_.remove(l)
     if Gt_:
         C, tt_,c_,r_ = 0,[],[],[]; _r+=1
         for G,tt,c,r in Gt_: G_+=[G]; C+=c; tt_+=[tt]; c_+=[c]; r_+=[r]
@@ -508,7 +507,9 @@ def sum2F(N_, root=None, m_=None, nF=None, typ=0):  # c|c*m -weighted sum -> CF|
         root.angl = F.angl = (A:= [np.sum(A_:= [L.angl[0] * L.angl[1] for L in F.N_], axis=0), 1])  # Lt.angl for proj_V
         root.mang = F.mang = np.mean([comp_A(A[0], a)[0] for a in A_])
     elif nF in ('Nt','Ct'):
-        if nF=='Nt': root.yx,root.kern,root.box = F.yx,F.kern,F.box; root.span = np.hypot(*(F.box[2:]+1-F.box[:2]))/2  # extent, as in PP2N
+        if nF=='Nt': 
+            root.yx,root.kern,root.box = F.yx,F.kern,F.box; root.span = np.hypot(*(F.box[2:]+1-F.box[:2]))/2  # extent, as in PP2N
+            for n in N_: n.root = root
         if Ft:=getattr(root,nF,[]): F.H = copy(Ft.H) + [Copy_(Ft, root=root)]
         else:                       [add_H(F.H, n.H, F) for n in N_]
     if not fC and nF and hasattr(root,nF): setattr(root,nF,F)  # Nt|Lt|Bt|Rt|C, not L.tF
