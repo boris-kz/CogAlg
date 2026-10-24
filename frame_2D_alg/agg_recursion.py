@@ -54,7 +54,12 @@ wM,wD, wi, wG,wI,wa, wL,wS,wA = wT; Ly = Lx = 64  # fractal tile dims
 cFrm,cX,cTrc,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (  # function complexity
 wFrm,wX,wTrc,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init=cost
 ttFrm,ttX,ttTrc,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj,ttVct = [F.wTT for F in oF_]  # attr weight tuples added per function
-
+mass_ = np.zeros(9)
+'''
+at cross_comp entry before proj_L_, I_: node I per pixel, aD_: mean |dI| per pixel over N's internal links
+r = np.corrcoef(I_, aD_)[0,1]
+I_mass = max(0, -r)  # larger I, less internal variation: massive
+'''
 def val_(TT, wTT=wTT):  # multi-variate rel match for membership, rel diff for boundary
 
     m_, d_ = TT  # dval = brrw from different-base m: directional Lt|Bt; m_ is already rational?
@@ -100,8 +105,11 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
 - forward: selective extend cross-comp, clustering across tiles, re-order centroids by eigenvalues
 - feedback filter updates 
 '''
-def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None):  # recursion root, iN_: recluster/rng+
+def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1):  # recursion root, iN_: recluster/rng+
 
+    def Rng_(n_):  # w: combined membership weight / rdn: 1 + stronger members per C:
+        for n in n_: n.w = sum(m * C.c / (1 + sum(_m>m for _m in C.m_)) for C,m in n.root_)
+        return [n for n in n_ if (n.m+n.w) * (n.c*wX / (n.r+cX)) > ave]
     L_, N_,G_,C_ = [],[],[],[]
     for dist, dy_dx, _N,N, lc,lr, pTT,m,nexp in pL_:
         if _N != N and (fall or m>0):
@@ -113,10 +121,6 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None):  # recursion root, iN_
                 _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
                 pL = CL(typ=-1, N_=[_N,N], dTT=pTT,m=m,c=lc,r=lr,span=dist,box=box,nexp=nexp,angl=[dy_dx,1], yx=np.add(_N.yx,N.yx)/2)
                 L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.N_
-
-    def Rng_(n_):  # w: combined membership weight / rdn: 1 + stronger members per C:
-        for n in n_: n.w = sum(m * C.c / (1 + sum(_m>m for _m in C.m_)) for C,m in n.root_)
-        return [n for n in n_ if (n.m+n.w) * (n.c*wX / (n.r+cX)) > ave]
     if L_:
         Lt = sum2F(L_,root=None if (dF or iN_) else root, nF='Lt'); tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r
         if dF: add2F(dF, Lt, merge=1); return  # comp_F: no agg+, dF out
@@ -125,16 +129,17 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None):  # recursion root, iN_
         else:   iN_ = N_
         if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):  # len coef is tentative
             G_,C_ = cluster_N(root, exemplar_(iN_ or N_,r+1), r+1,c)  # tentative G_|C_|P_/ rng+
-        FV_(CoF.get(), tt,c,r)  # current rng xcomp
+        FV_(CoF.get(), tt,c,r)  # current-rng xcomp
         if G_:
-            if (rng_:= Rng_(iN_)) and (pL_:= proj_L_(combinations(rng_,2), root,_r,nexp=nexp+1)):  # rng+
-                if gv_(sum(n.w for n in rng_) * (wX/cX) - ave) and (_G_:= cross_comp(root, pL_,_r, iN_=iN_)):
-                    return _G_
-                    # return cross_comp(root, pL_,_r, iN_=iN_)  #-> G_  the returned cross_comp might get empty rng's G_?
-            if C_: sum2F(C_,root,nF='Ct')  # prune by olp to G_?
-            G_ = [sum2G(g,ttcN,root,_r) for g in G_]  # finalize full-rng Gs: primary for xcomp?
-            Nt = sum2F(G_, root, nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r
-            if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+/ G_ only?
+            if not frng: return G_,C_  # tentative, in rng+ loop only
+            while (rng_:= Rng_(iN_)) and gv_(sum(n.w for n in rng_)* (wX/cX) -ave) and (pL_:= proj_L_(combinations(rng_,2),root,_r,nexp=(nexp:=nexp+1))):
+                _G_,_C_ = cross_comp(root, pL_,_r,iN_=iN_,frng=0) or ([],[])
+                if not _G_: break  # max rng
+                G_,C_= _G_,_C_
+            if C_: sum2F(C_,root,nF='Ct')  # agg+ / max-rng Gs
+            G_ = [sum2G(g,ttcN,root,_r) for g in G_]
+            Nt = sum2F(G_,root,nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r
+            if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+
                 G_ = cross_comp(root, proj_L_(combinations(G_,2),root,_r+1),_r+1) or G_
     return G_
 
@@ -184,7 +189,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN from C or (N_,L_,B_), eval t
             cross_comp(F2N(G.Bt), proj_L_(combinations([F2N(L) for L in Bt.N_],2),G,br),br)
         if RR:= root.root if root else None: Bt.brrw = Bt.m* (RR.m* (decay* (RR.span/G.span)))
     if Lt:= G.Lt:  # sub+ CN, no rng+, agg+?
-        m,c,r = Lt.m,Lt.c, Lt.r+_ra
+        m,c,r = Lt.m,Lt.c, Lt.r+_r
         if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):  #-> sub_Gs @ higher filter: r+1
             g_,c_= cluster_N(G, exemplar_(N_,r), r+1,c)  # either can be empty due to olp
             if g_: sum2F([sum2G(g, ttcN, G, r+1) for g in g_], G,nF='Nt')  # G._Nt-> G.Nt.H[-1]
@@ -280,19 +285,19 @@ def comp_derT(_i_,i_):
     d_ = _i_ - i_  # both arrays
     m_ = np.minimum( np.abs(_i_), np.abs(i_))
     m_[(_i_<0) != (i_<0)] *= -1  # negate opposite signs in-place
-    m_ = m_ * wTT[0] + wTT[1] * (1-wTT[0])  # m_,d_ combined in proportion to mass?
+    m_ = m_ * mass_ + wTT[1] * (1-mass_)  # m_,d_ combined in proportion to mass?
     return np.array([m_, d_])
 
 def comp(_pars, pars, meA,deA):  # compute m_,d_ from inputs or derivatives
 
     m_,d_ = [],[]
-    for _p, p, am, ad in zip(_pars, pars, *wTT):  # am,ad in 0:1?
+    for _p, p, mass, ad in zip(_pars, pars, mass_,aTT[1]):  # am,ad in 0:1?
         if isinstance(_p, list):  # vector angle
             mA, dA = comp_A(_p, p); m_ += [mA]; d_ += [dA]
         else:
             m = min(abs(_p), abs(p))
             if (_p<0) != (p<0): m =- m  # gap between comparands
-            m_ += [m* am + ad* (1-am)]
+            m_ += [m* mass + ad* (1-mass)]
             d_ += [_p - p]
     return np.array(m_+[meA]), np.array(d_+[deA])
 
@@ -678,8 +683,9 @@ def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N
         Dec = dist if fdec else decay ** (1+ rdist*dec)
         ddec_ = (ad_/ eps_(m_+ad_) - (1-decay)) * cos_d * rdist  # projected local loss deviation
         dm_ = m_ * (1-Dec+ddec_)  # average loss + local deviation, in match units
-        TT = np.array([m_ - dm_, d_ + np.where(d_ < 0, -dm_, dm_)])  # transfer lost match to signed difference
-        cert = abs(val_(TT, wTT) * (L.c+wPrj)/(r+cPrj) - ave)  # approximation (wTT already applied with ttPrj)
+        TT = np.array([m_-dm_, d_+ np.where(d_<0, -dm_,dm_)])  # transfer lost match to signed difference
+        # or rTT: cert should be a ratio?
+        cert = abs(val_(TT, wTT) * (L.c+wPrj)/(r+cPrj) - ave)  # approximation
         if cert > ave * (r+cPrj):  # certainty margin
             pTT += TT
 
