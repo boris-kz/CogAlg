@@ -55,15 +55,15 @@ cFrm,cX,cTrc,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (  # function complexi
 wFrm,wX,wTrc,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init=cost
 ttFrm,ttX,ttTrc,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj,ttVct = [F.wTT for F in oF_]  # attr weight tuples added per function
 mass_ = np.zeros(9)
-'''
-at cross_comp entry before proj_L_, I_: node I per pixel, aD_: mean |dI| per pixel over N's internal links
-r = np.corrcoef(I_, aD_)[0,1]
-I_mass = max(0, -r)  # larger I, less internal variation: massive
-'''
+
+def Mass_(dTT):  # dTT: m_,d_,var_,cov_,ard_: abs_rel_d_
+    elasticity_ = dTT[3] / eps_(dTT[4])  # variation d_rate per param d_rate
+    return np.minimum(1, np.abs(elasticity_))  # 0: variation independent of param (brightness); 1: proportional
+
 def val_(TT, wTT=wTT):  # multi-variate rel match for membership, rel diff for boundary
 
-    m_, d_ = TT  # dval = brrw from different-base m: directional Lt|Bt; m_ is already rational?
-    rel_m_ = m_ / eps_(m_+ np.abs(d_))  # massless m = avd, rel = avd/ (avd+ad) in −1:1
+    m_, d_ = TT  # dval = brrw from different-base m: directional Lt|Bt
+    rel_m_ = m_ / eps_(m_+ np.abs(d_))  # massless m = avd
     return rel_m_ @ (wTT[0]/aTT[0])
 
 def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
@@ -280,13 +280,20 @@ def base_comp(_N,N):  # comp Et, kern, extT, dTT; rational M?
     mang = (rn*_N.mang + N.mang) / (1+rn)  # ave, weight each side by rn
     align = 1 - mang* (1-mA)  # in 0:1, weigh mA 
 '''
-def comp_derT(_i_,i_):
+def comp_derT(_i_,i_, mass_, _var_=None,var_=None):  # scalar params; var_: node's internal mean |d|, pars only
 
-    d_ = _i_ - i_  # both arrays
-    m_ = np.minimum( np.abs(_i_), np.abs(i_))
+    d_ = _i_- i_; ad_ = np.abs(d_)  # miss magnitude, mean over links = node variation
+    a_, _a_ = np.abs(_i_), np.abs(i_)  # intensity
+    m_ = np.minimum(_a_,a_)
     m_[(_i_<0) != (i_<0)] *= -1  # negate opposite signs in-place
-    m_ = m_ * mass_ + wTT[1] * (1-mass_)  # m_,d_ combined in proportion to mass?
-    return np.array([m_, d_])
+    m_ = m_ * mass_ + aTT[2] * (1-mass_)  # aTT[2] is avad_
+    covar_, rda_ = np.zeros((2,len(d_)))
+    if var_ is not None:  # pars only, ds inherit input mass?
+        da_ = _a_ - a_  # change of intensity
+        rda_ = da_ / eps_((_a_+a_)/2)  # in -2:2
+        rvar_ = (_var_-var_) / eps_((_var_+var_)/2)  # relative change of variation
+        covar_ = rvar_ * np.sign(da_)  # covariance
+    return np.array([m_,d_, ad_, covar_, np.abs(rda_)])  # dTT
 
 def comp(_pars, pars, meA,deA):  # compute m_,d_ from inputs or derivatives
 
@@ -338,15 +345,15 @@ def nt_vt(n,_n):
 
 def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, replace iL_ with E_?
 
-    Gt_,in_,fin_,G_,C_ = [],set(),[],[],[]  # root attrs, add prelink pL_,pN_? fin_ should be tile-wide?
+    Gt_,in__,fin_,G_,C_ = [],set(),[],[],[]  # root attrs, add prelink pL_,pN_? fin_ should be tile-wide?
     for N in _N_:  # form G per remaining N
         if N in fin_ or (root.root and not N.exe): continue  # no exemplars in Fg
         N_ = [N]; L_,B_ = [],[]; fin_ += [N]  # init G
-        _in_ = set(); __L_= N.rim  # spliced rim
+        in_ = set(); __L_= N.rim  # spliced rim
         while __L_:
             _L_ = []
-            for L in set(__L_) - (in_|_in_):  # flood-fill via frontier links
-                _N = L.N_[0] if L.N_[1] in fin_ else L.N_[1]; _in_.add(L)
+            for L in set(__L_) - (in__|in_):  # flood-fill via frontier links
+                _N = L.N_[0] if L.N_[1] in fin_ else L.N_[1]; in_.add(L)
                 if _N not in fin_:
                     pm,nm = nt_vt(*L.N_)  # +ve,-ve m
                     if pm > ave *_r:  # additional filter, cluster nt, L,C_ by combined rim density, add gv_?
@@ -355,7 +362,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
                             iM = sum([L.m for L in _N.rim if (L.N_[0] if L.N_[1] is _N else L.N_[1]) in N_])
                             if iM / (span*decay) < ave * (_r-1): continue  # normalized N-to-N_ match, sum for sum2G?
                         L_ += [L]; N_ += [_N]; fin_ += [_N]
-                        _L_+= [l for l in _N.rim if l not in (in_|_in_) and ((l.N_[0] in fin_) ^ (l.N_[1] in fin_))]   # new frontier links, +|-?
+                        _L_+= [l for l in _N.rim if l not in (in_|in__) and ((l.N_[0] in fin_) ^ (l.N_[1] in fin_))]   # new frontier links, +|-?
                     elif L.nexp==1 and ave-nm > ave * _r:  # nm maybe negative
                         B_ += [L]  # contrast
             __L_ = list(set(_L_))
@@ -368,16 +375,16 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
             c = nc+lc+bc; r = (nr*nc +lr*lc +br*bc) /c;  tt = (nt*nc +lt*lc +bt*bc) /c  # br includes overlap?
             if gv_(val_(tt*root.wTT*ttcN) * (c*wcN/(r*ccN)) * ((len(N_)-1)*wL) - ave):
                 C = sum2F(N_,root,nF='C',typ=1)  # initial connectivity G
-                Gt_ += [(C, tt,c,r)]; in_ |= _in_
+                Gt_ += [(C,tt,c,r)]; in__|=in_
             else:
                 for n in N_: fin_.remove(n)
     if Gt_:
-        C, tt_,c_,r_ = 0,[],[],[]; _r+=1
+        C,tt_,c_,r_ = 0,[],[],[]; _r+=1
         for G,tt,c,r in Gt_: G_+=[G]; C+=c; tt_+=[tt]; c_+=[c]; r_+=[r]
         TT = np.zeros((2,9)); R = 0
         for tt,c,r in zip(tt_,c_,r_): w=c/C; TT+=tt*w; R+=r*w
         M = val_(TT*root.wTT*ttcN)
-        FV_(CoF.get(), *sum_vt(G_)[:-1], R)
+        FV_(CoF.get(), *sum_vt(G_)[:-1],R)
         if gv_(M * (C*wcC / ((_r+R)*ccC)) * ((len(G_)-1)*wL) - ave):
             C_ = cluster_C(root, G_,_r+R)
     return G_,C_
@@ -507,11 +514,11 @@ def sum2F(N_, root=None, m_=None, nF=None, typ=0):  # c|c*m -weighted sum -> CF|
         root.angl = F.angl = (A:= [np.sum(A_:= [L.angl[0] * L.angl[1] for L in F.N_], axis=0), 1])  # Lt.angl for proj_V
         root.mang = F.mang = np.mean([comp_A(A[0], a)[0] for a in A_])
     elif nF in ('Nt','Ct'):
-        if nF=='Nt': 
-            root.yx,root.kern,root.box = F.yx,F.kern,F.box; root.span = np.hypot(*(F.box[2:]+1-F.box[:2]))/2  # extent, as in PP2N
+        if nF=='Nt':
+            root.yx,root.kern,root.box = F.yx,F.kern,F.box; root.span=np.hypot(*(F.box[2:]+1 -F.box[:2])) / 2  # extent, as in PP2N
             for n in N_: n.root = root
         if Ft:=getattr(root,nF,[]): F.H = copy(Ft.H) + [Copy_(Ft, root=root)]
-        else:                       [add_H(F.H, n.H, F) for n in N_]
+        else: [add_H(F.H, n.H, F) for n in N_]
     if not fC and nF and hasattr(root,nF): setattr(root,nF,F)  # Nt|Lt|Bt|Rt|C, not L.tF
     return F
 

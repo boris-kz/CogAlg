@@ -382,3 +382,19 @@ def proj_focus(PV__, new__, y,x, tile, elev):  # radial accum of projected focus
             ], dtype=int)
             n += 1
         else: break
+
+def comp_derT1(_i_,i_,_var_,var_):  # per scalar par
+
+    d_ = _i_ - i_  # both arrays
+    a_, _a_ = np.abs(i_), np.abs(_i_)
+    m_ = np.minimum(a_,_a_)
+    m_[(_i_<0) != (i_<0)] *= -1  # negate opposite signs in-place
+    m_ = m_ * mass_ + wTT[1] * (1-mass_)  # m_,avd_ combined in proportion to mass
+
+    var_ = _a_ - a_  # variance / change of intensity: mean |d|, sign is direction
+    ard_ = var_ / eps_((_a_+a_) / 2)  # abs_rel_d_? in -2:2
+    # or ard = (_var_ - var_) / eps_((_var_ + var_) / 2)  # relative difference of variation?
+    cov_ = ard_ * np.sign(var_)  # covariance > 0: variation rises with param, < 0: falls
+
+    return np.array([m_,d_, var_,cov_,ard_])  # dTT
+
