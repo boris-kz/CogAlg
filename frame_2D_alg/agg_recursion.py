@@ -56,8 +56,8 @@ wFrm,wX,wTrc,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_] 
 ttFrm,ttX,ttTrc,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj,ttVct = [F.wTT for F in oF_]  # attr weight tuples added per function
 mass_ = np.zeros(9)
 
-def Mass_(dTT):  # dTT: m_,d_,var_,cov_,ard_: abs_rel_d_
-    elasticity_ = dTT[3] / eps_(dTT[4])  # variation d_rate per param d_rate
+def Mass_(iTT):  # dTT: m_,d_,var_,cov_,ard_: abs_rel_d_
+    elasticity_ = iTT[1] / eps_(iTT[2])  # variation d_rate per param d_rate
     return np.minimum(1, np.abs(elasticity_))  # 0: variation independent of param (brightness); 1: proportional
 
 def val_(TT, wTT=wTT):  # multi-variate rel match for membership, rel diff for boundary
@@ -210,7 +210,7 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
         dH,TT,C,R = [],np.zeros((2,9)),0,0
         for _lev,lev in zip(_N.H,N.H):  # current dTT already compared
             if not (_lev and lev): continue
-            tt = comp_derT(_lev.dTT[1],lev.dTT[1])
+            tt = comp_derT(_lev.dTT[1],lev.dTT[1],mass_)
             lc = min(_lev.c,lev.c); lr = (_lev.r+lev.r)/2
             C += lc; R += lr*lc; TT += tt*lc; m = val_(tt,ttN)
             dH += [CF(dTT=tt,m=m,c=lc,r=lr,root=L)]
@@ -223,13 +223,13 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
 
     L = CL(N_=[_N,N], c=c,r=r,root=rL)
     if full:
-        dTT = base_comp(_N,N)[0]  # use rn?
+        dTT,L.iTT = base_comp(_N,N)  # use rn?
         if span is None: span = np.hypot(*_N.yx-N.yx)
         yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
         box = np.array([min(_y,y),min(_x,x), max(_y,y),max(_x,x)])
         angl = [np.zeros(2) if A is None else A, np.sign(dTT[1] @ ttN[1])]
         L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2
-    else: dTT = comp_derT(_N.dTT[1],N.dTT[1])
+    else: dTT = comp_derT(_N.dTT[1],N.dTT[1],mass_)
     m = val_(dTT,ttN); L.dTT,L.m = dTT,m
     if N.typ:  # converted Ls, skip PPs, Fts?
         dn_=[]
@@ -250,7 +250,7 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
 
 def comp_F(_F, F, ir=0, rL=None):
 
-    ddTT = comp_derT(_F.dTT[1],F.dTT[1])
+    ddTT = comp_derT(_F.dTT[1],F.dTT[1],mass_)
     m = val_(ddTT,ttF);  c= min(_F.c,F.c); r = (_F.r+F.r)/2 + ir
     dF = CF(dTT=ddTT, m=m,r=r,c=c, nF=F.nF)
     if (_N_:=_F.N_) and (N_:=F.N_):
@@ -271,42 +271,41 @@ def base_comp(_N,N):  # comp Et, kern, extT, dTT; rational M?
     pars  = np.array([M,D,C,I,G, [Dy,Dx], L,N.span], dtype=object)
     if hasattr(_N,'angl') and _N.angl and N.angl:  # mostly Ls, some Gs
         mA,dA = comp_A(_N.angl[0]*_N.angl[1], N.angl[0]*N.angl[1])
-    m_,d_ = comp(_pars,pars, mA,dA)  # new dT: M,D,n, I,G,a, L,S,A
-    dm_,dd_ = comp_derT(_N.dTT[1], N.dTT[1])  # higher-derivation than M,D
+    mass = Mass_(_N.iTT+N.iTT)
+    m_,d_,iTT = comp(_pars,pars, mA,dA, mass, _N.iTT[0],N.iTT[0])  # new dT: M,D,n, I,G,a, L,S,A
+    dm_,dd_ = comp_derT(_N.dTT[1], N.dTT[1],mass)  # higher-derivation than M,D
 
-    return np.array([m_+dm_,d_+dd_]), rn  # rn is not relevant, rm, rv?
+    return np.array([m_+dm_,d_+dd_]), iTT  # rn is not relevant, rm, rv?
 '''
     if np.hypot(*_N.angl[0])*_N.mang + np.hypot(*N.angl[0])*N.mang > ave*wA:  # aligned L_'As, mang *= (len_H)+fi+1
     mang = (rn*_N.mang + N.mang) / (1+rn)  # ave, weight each side by rn
     align = 1 - mang* (1-mA)  # in 0:1, weigh mA 
 '''
-def comp_derT(_i_,i_, mass_, _var_=None,var_=None):  # scalar params; var_: node's internal mean |d|, pars only
+def comp_derT(_i_,i_, mass_):  # scalar params; var_: node's internal mean |d|, pars only
 
-    d_ = _i_- i_; ad_ = np.abs(d_)  # miss magnitude, mean over links = node variation
-    a_, _a_ = np.abs(_i_), np.abs(i_)  # intensity
+    d_ = _i_- i_  # miss magnitude, mean over links = node variation
+    _a_, a_ = np.abs(_i_), np.abs(i_)  # intensity
     m_ = np.minimum(_a_,a_)
     m_[(_i_<0) != (i_<0)] *= -1  # negate opposite signs in-place
     m_ = m_ * mass_ + aTT[2] * (1-mass_)  # aTT[2] is avad_
-    covar_, rda_ = np.zeros((2,len(d_)))
-    if var_ is not None:  # pars only, ds inherit input mass?
-        da_ = _a_ - a_  # change of intensity
-        rda_ = da_ / eps_((_a_+a_)/2)  # in -2:2
-        rvar_ = (_var_-var_) / eps_((_var_+var_)/2)  # relative change of variation
-        covar_ = rvar_ * np.sign(da_)  # covariance
-    return np.array([m_,d_, ad_, covar_, np.abs(rda_)])  # dTT
+    return np.array([m_,d_])
 
-def comp(_pars, pars, meA,deA):  # compute m_,d_ from inputs or derivatives
 
-    m_,d_ = [],[]
-    for _p, p, mass, ad in zip(_pars, pars, mass_,aTT[1]):  # am,ad in 0:1?
+def comp(_pars, pars, meA,deA, mass_, _ad_, ad_):  # compute m_,d_ from inputs or derivatives
+
+    m_,d_,cv_,rd_ = [],[],[],[]
+    for _p, p, mass, av, _ad,ad in zip(_pars, pars, mass_,aTT[1], _ad_,ad_):  # am,ad in 0:1?
         if isinstance(_p, list):  # vector angle
-            mA, dA = comp_A(_p, p); m_ += [mA]; d_ += [dA]
+            mA, dA = comp_A(_p, p); m_ += [mA]; d_ += [dA]; cv_ += [0]; rd_ += [0]  # angle excluded from mass
         else:
             m = min(abs(_p), abs(p))
             if (_p<0) != (p<0): m =- m  # gap between comparands
-            m_ += [m* mass + ad* (1-mass)]
+            m_ += [m* mass + av* (1-mass)]
             d_ += [_p - p]
-    return np.array(m_+[meA]), np.array(d_+[deA])
+            rd = (abs(_p)-abs(p)) / ((abs(_p)+abs(p))/2)
+            cv_ += [(_ad-ad) / ((_ad+ad)/2) * np.sign(rd)]; rd_ += [abs(rd)]
+    d_ += [deA]
+    return np.array(m_+[meA]), np.array(d_), np.array([np.abs(d_), cv_+[0], rd_+[0]])  # m_,d_, iTT
 
 def comp_A(_A,A):
 
