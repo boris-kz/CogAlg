@@ -6,7 +6,7 @@ from itertools import zip_longest, combinations, product  # from multiprocessing
 from frame_blobs import frame_blobs_root, imread, comp_pixel, CBase
 from slice_edge import slice_edge
 from comp_slice import comp_slice, w_t
-from meta_code import oF_,iF_,nF_,CF,CL,CN,CoF,wT,wTT,aTT, eps,eps_,ave,avd,decay, trace_func,parse_funcs, call_sites, split_oF,clust_oF_,inject_oF_,gv_
+from meta_code import oF_,iF_,nF_,CF,CL,CN,CoF,wT,wTT, eps,eps_,ave,avd,decay, trace_func,parse_funcs, call_sites, split_oF,clust_oF_,inject_oF_,gv_
 '''
 This is a main module of open-ended clustering algorithm, designed to discover empirical patterns/clusters of indefinite complexity. 
 Lower modules cross-comp and cluster image pixels and blob slices(Ps), forming PPs: segments of matching Ps.
@@ -55,10 +55,8 @@ cFrm,cX,cTrc,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (  # function complexi
 wFrm,wX,wTrc,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init=cost
 ttFrm,ttX,ttTrc,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj,ttVct = [F.wTT for F in oF_]  # attr weight tuples added per function
 mass_ = np.zeros(9)
-
-def Mass_(dTT):  # dTT: m_,d_,var_,cov_,ard_: abs_rel_d_
-    elasticity_ = dTT[3] / eps_(dTT[4])  # variation d_rate per param d_rate
-    return np.minimum(1, np.abs(elasticity_))  # 0: variation independent of param (brightness); 1: proportional
+_aTT, aTT = np.zeros((3,9)), np.zeros((3,9))  # prior regime means | new sums of ai_, ad_, ai_*ad_
+c_ = []
 
 def val_(TT, wTT=wTT):  # multi-variate rel match for membership, rel diff for boundary
 
@@ -72,7 +70,7 @@ def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
     for n in N_:
         w = n.c/C; tt = (n.rTT if fr else n.dTT) * w; TT += tt; R += n.r * w
         if fm:
-            m = val_(tt, wTT)  # in -1:1
+            m = val_(tt,wTT)  # in -1:1
             M += (m / ave*R) if fdiv else (m - ave*R)
     return (M,TT,C,R) if fm else (TT,C,R)  # sum dTT for comp, not eval?
 
@@ -210,7 +208,7 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
         dH,TT,C,R = [],np.zeros((2,9)),0,0
         for _lev,lev in zip(_N.H,N.H):  # current dTT already compared
             if not (_lev and lev): continue
-            tt = comp_derT(_lev.dTT[1],lev.dTT[1])
+            tt = comp_derT(_lev.dTT[1],lev.dTT[1],mass_)
             lc = min(_lev.c,lev.c); lr = (_lev.r+lev.r)/2
             C += lc; R += lr*lc; TT += tt*lc; m = val_(tt,ttN)
             dH += [CF(dTT=tt,m=m,c=lc,r=lr,root=L)]
@@ -223,13 +221,13 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
 
     L = CL(N_=[_N,N], c=c,r=r,root=rL)
     if full:
-        dTT = base_comp(_N,N)[0]  # use rn?
+        dTT,L.iTT = base_comp(_N,N)  # use rn?
         if span is None: span = np.hypot(*_N.yx-N.yx)
         yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
         box = np.array([min(_y,y),min(_x,x), max(_y,y),max(_x,x)])
         angl = [np.zeros(2) if A is None else A, np.sign(dTT[1] @ ttN[1])]
         L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2
-    else: dTT = comp_derT(_N.dTT[1],N.dTT[1])
+    else: dTT = comp_derT(_N.dTT[1],N.dTT[1],mass_)
     m = val_(dTT,ttN); L.dTT,L.m = dTT,m
     if N.typ:  # converted Ls, skip PPs, Fts?
         dn_=[]
@@ -274,27 +272,42 @@ def base_comp(_N,N):  # comp Et, kern, extT, dTT; rational M?
     m_,d_ = comp(_pars,pars, mA,dA)  # new dT: M,D,n, I,G,a, L,S,A
     dm_,dd_ = comp_derT(_N.dTT[1], N.dTT[1])  # higher-derivation than M,D
 
-    return np.array([m_+dm_,d_+dd_]), rn  # rn is not relevant, rm, rv?
+    return np.array([m_+dm_,d_+dd_])  # rn is not relevant, rm, rv?
 '''
     if np.hypot(*_N.angl[0])*_N.mang + np.hypot(*N.angl[0])*N.mang > ave*wA:  # aligned L_'As, mang *= (len_H)+fi+1
     mang = (rn*_N.mang + N.mang) / (1+rn)  # ave, weight each side by rn
     align = 1 - mang* (1-mA)  # in 0:1, weigh mA 
 '''
-def comp_derT(_i_,i_, mass_, _var_=None,var_=None):  # scalar params; var_: node's internal mean |d|, pars only
 
-    d_ = _i_- i_; ad_ = np.abs(d_)  # miss magnitude, mean over links = node variation
-    a_, _a_ = np.abs(_i_), np.abs(i_)  # intensity
-    m_ = np.minimum(_a_,a_)
-    m_[(_i_<0) != (i_<0)] *= -1  # negate opposite signs in-place
-    m_ = m_ * mass_ + aTT[2] * (1-mass_)  # aTT[2] is avad_
-    covar_, rda_ = np.zeros((2,len(d_)))
-    if var_ is not None:  # pars only, ds inherit input mass?
-        da_ = _a_ - a_  # change of intensity
-        rda_ = da_ / eps_((_a_+a_)/2)  # in -2:2
-        rvar_ = (_var_-var_) / eps_((_var_+var_)/2)  # relative change of variation
-        covar_ = rvar_ * np.sign(da_)  # covariance
-    return np.array([m_,d_, ad_, covar_, np.abs(rda_)])  # dTT
+def comp_derT(_i_,i_, c=1):  # scalar params
+    global c_, aTT
 
+    d_ = _i_- i_; ad_ = np.abs(d_)
+    _a_, a_ = np.abs(_i_), np.abs(i_)
+    m_ = np.minimum(_a_,a_); m_[(_i_<0) != (i_<0)] *= -1
+    m_ = m_ * mass_ + _aTT[1] * (1-mass_)  # _aTT[1] = avad_
+    ai_ = (_a_+a_)/2  # pair magnitude
+    aTT += np.array([ai_, ad_, ai_*ad_]) * c
+    c_ += [c]  # cross term carries the joint
+    return np.array([m_,d_])
+
+def Mass_():  # regime sums of ai_, ad_, ai_*ad_ -> per-slot mass and comparison power, global _aTT was normalized by global c_
+    ai_,ad_,aid_ = _aTT
+    rcov_ = aid_ / eps_(ai_*ad_) - 1  # rational covariance: 0:independent, -1: inverse, inf: proportional
+    return np.minimum(1, np.abs(rcov_)), np.sign(rcov_)  # mass_ in 0:1, +1 -> DIV, -1 -> inertial min
+
+''' draft ffeedback, per regime:
+    ai_, ad_, aid_ = aTT / aC
+    rcov_ = aid_ / eps_(ai_*ad_) - 1  # rational covariance: mean product / product of means, 0 under independence, -1:inf
+    mass_ = np.minimum(1, np.abs(rcov_)); pow_ = np.sign(rcov_)  # +: proportional -> DIV; -: inertial
+    _aTT = aTT / aC; aTT[:] = 0; aC = 0
+
+    c is min(N.c, N.c) from the caller; all three sums take the same weight, so the means are c-weighted and aC cancels in rcov.
+    The product here is a population statistic across comparisons, not a similarity between comparands, so it doesn’t conflict with min as match. 
+    The no-product alternative is the pairwise signed min, but that needs each node’s internal variation, the ad_ row this signature dropped.
+    _aTT[1] must init nonzero, avd per slot, or massless m is 0 for the whole first regime; _aTT[0] and _aTT[2] are only read in ffeedback.
+'''
+# not updated
 def comp(_pars, pars, meA,deA):  # compute m_,d_ from inputs or derivatives
 
     m_,d_ = [],[]
