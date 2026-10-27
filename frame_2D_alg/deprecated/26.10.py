@@ -393,3 +393,42 @@ def comp_derT(_i_,i_):  # scalar params; var_: node's internal mean |d|, pars on
     aTT[0] += a_
     aTT[1] += np.abs(d_)  # weigh both by c_ += [min(_N.c,N.c)]?
     return np.array([m_,d_])
+
+def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
+
+    global ave, avd, oF_, nF_, iF_
+    for oF in oF_:
+        if oF.V_: oF.w += sum(oF.V_) + sum(oF.gV_)  # all extensive
+    dTT = dc = dr = 0
+    _ac,_ar = (aL.c,aL.r) if aL else (0,0); _oc,_or = (oL.c,oL.r) if oL else (0,0)
+    # H init @ 1st term:
+    if aL := pack_seg(frame,'aH',wBac, cBac, aTT):  # L: new level
+        dTT = aL.dTT-aTT; aTT=aL.dTT; dc= aL.c-_ac; dr= aL.r-_ar
+        ave = val_(aTT)  # filters *= ave
+        if oL := pack_seg(frame,'oH', wBac, cBac**2, oTT):
+            dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
+            for _oF in copy(oF_): _oF.body = [split_oF(t,_oF) for t in _oF.body]
+            oF_ = clust_oF_()
+            map_ = {}
+            for T in oF_:
+                if T.N_:  # new clustered T
+                    T.caller_ = set().union(*[F.caller_ for F in T.N_]); T.c = sum(F.c for F in T.N_)
+                    for F in T.N_:
+                        if nF_[F.nF] is not None: map_[nF_[F.nF].name] = T.fdef.name  # map oFs to oF clusters
+            nF_ = [oF.fdef for oF in oF_]
+            iF_.clear(); iF_.update({fd.name: i for i,fd in enumerate(nF_)})
+            for oF in oF_:
+                for n in call_sites(oF.fdef):  # callees may be replaced
+                    if n.func.id in map_: n.func.id = map_[n.func.id]
+            inject_oF_(oF_, globals())
+    '''
+    ai_, ad_, aid_ = aTT / aC
+    rcov_ = aid_ / eps_(ai_*ad_) - 1  # rational covariance: mean product / product of means, 0 under independence, -1:inf
+    mass_ = np.minimum(1, np.abs(rcov_)); pow_ = np.sign(rcov_)  # +: proportional -> DIV; -: inertial
+    _aTT = aTT / aC; aTT[:] = 0; aC = 0
+    '''
+    FV_(CoF.get(),dTT,dc,dr)
+    return frame, aTT, oTT, aL, oL
+def Mass_():  # _aTT = prior aTT/C
+    r_ = _aTT[2] / eps_(_aTT[3])  # -1:1, 0 is independence
+    return np.abs(r_), np.sign(r_)

@@ -54,15 +54,15 @@ wM,wD, wi, wG,wI,wa, wL,wS,wA = wT; Ly = Lx = 64  # fractal tile dims
 cFrm,cX,cTrc,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (  # function complexity
 wFrm,wX,wTrc,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init=cost
 ttFrm,ttX,ttTrc,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj,ttVct = [F.wTT for F in oF_]  # attr weight tuples added per function
-mass_ = np.zeros(9)
-_aTT, aTT = np.zeros((3,9)), np.zeros((3,9))  # prior regime means | new sums of ai_, ad_, ai_*ad_
-c_ = []
+mass_ = np.zeros(9); aC = 0
+avd_ = np.zeros(9)  # the only active row of _aTT?
+aTT = np.zeros((5,9))  # prior regime means
 
 def val_(TT, wTT=wTT):  # multi-variate rel match for membership, rel diff for boundary
 
     m_, d_ = TT  # dval = brrw from different-base m: directional Lt|Bt
     rel_m_ = m_ / eps_(m_+ np.abs(d_))  # massless m = avd
-    return rel_m_ @ (wTT[0]/_aTT[0])
+    return rel_m_ @ wTT[0]  # unitless
 
 def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
 
@@ -261,60 +261,41 @@ def comp_F(_F, F, ir=0, rL=None):
     return dF  # no cross-fork N_, no L ext updates?
 
 def base_comp(_N,N):  # comp Et, kern, extT, dTT; rational M?
-    global c_
 
-    M, D = N.dTT.sum(axis=1);  C= N.c;  I, G, Dy, Dx = N.kern;  L = len(N.N_)  # M,D, 0-der params? or N.m, xsign sum d_?
+    M, D = N.dTT.sum(axis=1);  C= N.c;  I, G, Dy, Dx = N.kern;  L = len(N.N_)  # M,D, 0-der params? or N.m, xsign sum d_: directional or abs?
     _M,_D =_N.dTT.sum(axis=1); _C=_N.c; _I,_G,_Dy,_Dx =_N.kern; _L = len(_N.N_)  # N_: density in span
-    rn = C/_C; mA=dA=0; c = min(_C,C)
+    rn = C/_C; mA=dA=0
     _pars = np.array([_M*rn,_D*rn,_C,_I*rn,_G*rn, [_Dy,_Dx],_L*rn,_N.span], dtype=object)  # Et, kern, extT
     pars  = np.array([M,D,C,I,G, [Dy,Dx], L,N.span], dtype=object)
     if hasattr(_N,'angl') and _N.angl and N.angl:  # mostly Ls, some Gs
         mA,dA = comp_A(_N.angl[0]*_N.angl[1], N.angl[0]*N.angl[1])
-    m_,d_ = comp(_pars,pars, mA,dA,c)  # new dT: M,D,n, I,G,a, L,S,A
+    # new dT: M,D,n, I,G,a, L,S,A:
+    m_,d_ = comp(_pars,pars, mA,dA, c:=min(_N.c.N.c))
     dm_,dd_ = comp_derT(_N.dTT[1], N.dTT[1], c)  # higher-derivation than M,D
-    # cross term carries the joint
-    c_ += [c,c]  # c_ is once per comp above? Or per param?
-
-    return np.array([m_+dm_,d_+dd_])  # rn is not relevant, rm, rv?
+    return np.array([m_+dm_,d_+dd_])
 '''
     if np.hypot(*_N.angl[0])*_N.mang + np.hypot(*N.angl[0])*N.mang > ave*wA:  # aligned L_'As, mang *= (len_H)+fi+1
     mang = (rn*_N.mang + N.mang) / (1+rn)  # ave, weight each side by rn
     align = 1 - mang* (1-mA)  # in 0:1, weigh mA 
 '''
-
 def comp_derT(_i_,i_, c=1):  # scalar params
-    global aTT
-
+    global aC
     d_ = _i_- i_; ad_ = np.abs(d_)
     _a_, a_ = np.abs(_i_), np.abs(i_)
     m_ = np.minimum(_a_,a_); m_[(_i_<0) != (i_<0)] *= -1
-    m_ = m_ * mass_ + _aTT[1] * (1-mass_)  # _aTT[1] = avad_
-    ai_ = (_a_+a_)/2  # pair magnitude
-    aTT += np.array([ai_, ad_, ai_*ad_]) * c  
+    m_ = m_ * mass_ + avd_ * (1-mass_)  # avd_: prior regime mean |d| = massless m
+    ai_, amd_ = (_a_+a_)/2, np.abs(_a_-a_)  # pair magnitude, magnitude miss
+    aC += c
+    dai_ = ai_ - aTT[0]/(aC-c) if aC > c else 0  # vs running mean before this sample
+    aTT[:3] += np.array([ai_,ad_,amd_]) * c
+    cov_ = dai_ * (amd_ - aTT[2]/aC) * c  # vs running mean after: exact co-moment
+    aTT[3:] += cov_, np.abs(cov_)
     return np.array([m_,d_])
 
-def Mass_():  # regime sums of ai_, ad_, ai_*ad_ -> per-slot mass and comparison power, global _aTT was normalized by global c_
-    global aTT, _aTT, c_
-    _aTT[:] = aTT / sum(c_); aTT = np.zeros((3,9)); c_ = []
-    ai_,ad_,aid_ = _aTT
-    rcov_ = aid_ / eps_(ai_*ad_) - 1  # rational covariance: 0:independent, -1: inverse, inf: proportional
-    return np.minimum(1, np.abs(rcov_)), np.sign(rcov_)  # mass_ in 0:1, +1 -> DIV, -1 -> inertial min
-
-''' draft ffeedback, per regime:
-    ai_, ad_, aid_ = aTT / aC
-    rcov_ = aid_ / eps_(ai_*ad_) - 1  # rational covariance: mean product / product of means, 0 under independence, -1:inf
-    mass_ = np.minimum(1, np.abs(rcov_)); pow_ = np.sign(rcov_)  # +: proportional -> DIV; -: inertial
-    _aTT = aTT / aC; aTT[:] = 0; aC = 0
-
-    c is min(N.c, N.c) from the caller; all three sums take the same weight, so the means are c-weighted and aC cancels in rcov.
-    The product here is a population statistic across comparisons, not a similarity between comparands, so it doesn’t conflict with min as match. 
-    The no-product alternative is the pairwise signed min, but that needs each node’s internal variation, the ad_ row this signature dropped.
-    _aTT[1] must init nonzero, avd per slot, or massless m is 0 for the whole first regime; _aTT[0] and _aTT[2] are only read in ffeedback.
-'''
-
 def comp(_pars, pars, meA,deA,c):  # compute m_,d_ from inputs or derivatives
-    m_,d_ = [],[]
-    for i, (_p, p, mass, ad) in enumerate(zip(_pars, pars, mass_,aTT[1])):  # am,ad in 0:1?
+    global aC
+    m_,d_ = [],[]; aC += c
+    for i, (_p, p, mass, ad) in enumerate(zip(_pars, pars, mass_,avd_)):  # ad: prior regime mean |d| = massless m
         if isinstance(_p, list):  # vector angle
             mA, dA = comp_A(_p, p); m_ += [mA]; d_ += [dA]
         else:
@@ -322,8 +303,11 @@ def comp(_pars, pars, meA,deA,c):  # compute m_,d_ from inputs or derivatives
             if (_p<0) != (p<0): m =- m  # gap between comparands
             m_ += [m* mass + ad* (1-mass)]
             d_ += [_p - p]
-            ai, _ad = (abs(_p)+abs(p))/2, abs(_p-p)
-            aTT[:,i] += np.array([ai, _ad, ai*_ad]) * c
+            ai, _ad, amd = (abs(_p)+abs(p))/2, abs(_p-p), abs(abs(_p)-abs(p))  # pair magnitude, miss, magnitude miss
+            dai = ai - aTT[0,i]/(aC-c) if aC > c else 0  # vs running mean before this sample
+            aTT[:3,i] += np.array([ai,_ad, amd]) * c
+            cov = dai * (amd - aTT[2,i]/aC) * c  # vs running mean after: exact co-moment
+            aTT[3:,i] += cov, abs(cov)
     return np.array(m_+[meA]), np.array(d_+[deA])
 
 def comp_A(_A,A):
@@ -874,8 +858,24 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
 
 def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
 
+    def Mass_():  # abs rational cov correlation
+        global aC,aTT, mass_
+        rcov_ = aTT[3] / eps_(aTT[4])  # in -1:1
+        mass_[:] = np.abs(rcov_)  # +1 proportional -> DIV, -1 inertial, sign_[:] = np.sign(rcov_): for div comp?
+        if aC: avd_[:] = aTT[1]/aC
+        aC = 0; aTT[:] = 0  # np.zeros(5,9):
+        ''' draft, probably wrong:
+        ai = (|_p|+|p|)/2, pair magnitude. Its running mean centers ai in row 3.
+        ad = |_p−p|, actual miss, sign reversals included. Its mean becomes avd_, the massless m in the next regime’s comp and comp_derT.
+        ada = ||_p|−|p||, magnitude miss, reversals don’t reduce mass? Its running mean centers amd in row 3
+        cov = (ai− _mean) · (ada− mean) · c. Summed-> co-moment of pair mag and magn miss to regime means.
+        |cov|; rcov = cov/|cov|, in −1:1, and mass_ = |rcov|.
+        
+        mass_: correlarion between magnitude and inv_match:
+        sum (comp(di_,dm_) for L in L_): per frame?
+        '''
     global ave, avd, oF_, nF_, iF_
-    for oF in oF_:
+    for oF in oF_:  # not needed?
         if oF.V_: oF.w += sum(oF.V_) + sum(oF.gV_)  # all extensive
     dTT = dc = dr = 0
     _ac,_ar = (aL.c,aL.r) if aL else (0,0); _oc,_or = (oL.c,oL.r) if oL else (0,0)
@@ -883,6 +883,7 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
     if aL := pack_seg(frame,'aH',wBac, cBac, aTT):  # L: new level
         dTT = aL.dTT-aTT; aTT=aL.dTT; dc= aL.c-_ac; dr= aL.r-_ar
         ave = val_(aTT)  # filters *= ave
+        Mass_()  # terminated regime: mass_, pow_, _aTT from its comparisons, reset sums
         if oL := pack_seg(frame,'oH', wBac, cBac**2, oTT):
             dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
             for _oF in copy(oF_): _oF.body = [split_oF(t,_oF) for t in _oF.body]
@@ -899,7 +900,6 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
                 for n in call_sites(oF.fdef):  # callees may be replaced
                     if n.func.id in map_: n.func.id = map_[n.func.id]
             inject_oF_(oF_, globals())
-
     FV_(CoF.get(),dTT,dc,dr)
     return frame, aTT, oTT, aL, oL
 
