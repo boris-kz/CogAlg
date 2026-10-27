@@ -54,7 +54,7 @@ wM,wD, wi, wG,wI,wa, wL,wS,wA = wT; Ly = Lx = 64  # fractal tile dims
 cFrm,cX,cTrc,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (  # function complexity
 wFrm,wX,wTrc,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init=cost
 ttFrm,ttX,ttTrc,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj,ttVct = [F.wTT for F in oF_]  # attr weight tuples added per function
-mass_ = np.zeros(9); aC = 0
+mass_ = np.zeros(9); aC = np.zeros(9)
 avd_ = np.zeros(9)  # the only active row of _aTT?
 aTT = np.zeros((5,9))  # prior regime means
 
@@ -68,12 +68,20 @@ def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
 
     C = sum(n.c for n in N_); M=R=0; TT = np.zeros((2,9))
     for n in N_:
-        w = n.c/C; tt = (n.rTT if fr else n.dTT) * w; TT += tt; R += n.r * w
+        w = n.c/C; tt = (n.rTT if fr else n.dTT) * w; TT += tt; r = n.r * w; R += r
         if fm:
             m = val_(tt,wTT)  # in -1:1
-            M += (m / ave*R) if fdiv else (m - ave*R)
+            M += (m / ave*r) if fdiv else (m - ave*r)  # should be per N's r here?
     return (M,TT,C,R) if fm else (TT,C,R)  # sum dTT for comp, not eval?
 
+def accum_aTT(_p,p, c, i=slice(None)):
+    _a,a = np.abs(_p),np.abs(p)
+    ai, ad, amd = (_a+a)/2, np.abs(_p-p), np.abs(_a-a)  # pair magnitude, miss, magnitude miss
+    dai = ai - aTT[0,i]/eps_(aC[i])  
+    aC[i] += c; aTT[:3,i] += np.array([ai,ad,amd]) * c
+    cov = dai * (amd - aTT[2,i]/eps_(aC[i])) * c  
+    aTT[3:,i] += cov, np.abs(cov)
+    
 def FV_(F, tt,c,r):  # combine m,d per oF
     tF = oF_[F.nF]; tF.c += c
     V = val_(tt*tF.wTT) * (c/r); tF.V_ += [V]; return V
@@ -270,7 +278,7 @@ def base_comp(_N,N):  # comp Et, kern, extT, dTT; rational M?
     if hasattr(_N,'angl') and _N.angl and N.angl:  # mostly Ls, some Gs
         mA,dA = comp_A(_N.angl[0]*_N.angl[1], N.angl[0]*N.angl[1])
     # new dT: M,D,n, I,G,a, L,S,A:
-    m_,d_ = comp(_pars,pars, mA,dA, c:=min(_N.c.N.c))
+    m_,d_ = comp(_pars,pars, mA,dA, c:=min(_N.c,N.c))
     dm_,dd_ = comp_derT(_N.dTT[1], N.dTT[1], c)  # higher-derivation than M,D
     return np.array([m_+dm_,d_+dd_])
 '''
@@ -279,35 +287,25 @@ def base_comp(_N,N):  # comp Et, kern, extT, dTT; rational M?
     align = 1 - mang* (1-mA)  # in 0:1, weigh mA 
 '''
 def comp_derT(_i_,i_, c=1):  # scalar params
-    global aC
-    d_ = _i_- i_; ad_ = np.abs(d_)
-    _a_, a_ = np.abs(_i_), np.abs(i_)
+    
+    d_ = _i_- i_; _a_, a_ = np.abs(_i_), np.abs(i_)
     m_ = np.minimum(_a_,a_); m_[(_i_<0) != (i_<0)] *= -1
     m_ = m_ * mass_ + avd_ * (1-mass_)  # avd_: prior regime mean |d| = massless m
-    ai_, amd_ = (_a_+a_)/2, np.abs(_a_-a_)  # pair magnitude, magnitude miss
-    aC += c
-    dai_ = ai_ - aTT[0]/(aC-c) if aC > c else 0  # vs running mean before this sample
-    aTT[:3] += np.array([ai_,ad_,amd_]) * c
-    cov_ = dai_ * (amd_ - aTT[2]/aC) * c  # vs running mean after: exact co-moment
-    aTT[3:] += cov_, np.abs(cov_)
+    accum_aTT(_i_,i_,c)
     return np.array([m_,d_])
 
 def comp(_pars, pars, meA,deA,c):  # compute m_,d_ from inputs or derivatives
-    global aC
-    m_,d_ = [],[]; aC += c
+
+    m_,d_ = [],[]
     for i, (_p, p, mass, ad) in enumerate(zip(_pars, pars, mass_,avd_)):  # ad: prior regime mean |d| = massless m
         if isinstance(_p, list):  # vector angle
-            mA, dA = comp_A(_p, p); m_ += [mA]; d_ += [dA]
+            mA, dA = comp_A(_p, p); m_ += [mA]; d_ += [dA]  # skip c here because no accum_aTT from vector?
         else:
             m = min(abs(_p), abs(p))
             if (_p<0) != (p<0): m =- m  # gap between comparands
             m_ += [m* mass + ad* (1-mass)]
             d_ += [_p - p]
-            ai, _ad, amd = (abs(_p)+abs(p))/2, abs(_p-p), abs(abs(_p)-abs(p))  # pair magnitude, miss, magnitude miss
-            dai = ai - aTT[0,i]/(aC-c) if aC > c else 0  # vs running mean before this sample
-            aTT[:3,i] += np.array([ai,_ad, amd]) * c
-            cov = dai * (amd - aTT[2,i]/aC) * c  # vs running mean after: exact co-moment
-            aTT[3:,i] += cov, abs(cov)
+            accum_aTT(_p,p,c,i)
     return np.array(m_+[meA]), np.array(d_+[deA])
 
 def comp_A(_A,A):
@@ -880,12 +878,12 @@ def ffeedback(frame, aTT,oTT, aL,oL):  # recompute filters from regime drift; fo
     dTT = dc = dr = 0
     _ac,_ar = (aL.c,aL.r) if aL else (0,0); _oc,_or = (oL.c,oL.r) if oL else (0,0)
     # H init @ 1st term:
-    if aL := pack_seg(frame,'aH',wBac, cBac, aTT):  # L: new level
-        dTT = aL.dTT-aTT; aTT=aL.dTT; dc= aL.c-_ac; dr= aL.r-_ar
+    if seg := pack_seg(frame,'aH',wBac, cBac, aTT):  # L: new level
+        aL = seg; dTT = aL.dTT-aTT; aTT=aL.dTT; dc= aL.c-_ac; dr= aL.r-_ar
         ave = val_(aTT)  # filters *= ave
         Mass_()  # terminated regime: mass_, pow_, _aTT from its comparisons, reset sums
-        if oL := pack_seg(frame,'oH', wBac, cBac**2, oTT):
-            dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
+        if seg := pack_seg(frame,'oH', wBac, cBac**2, oTT):
+            oL = seg; dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
             for _oF in copy(oF_): _oF.body = [split_oF(t,_oF) for t in _oF.body]
             oF_ = clust_oF_()
             map_ = {}
