@@ -54,9 +54,8 @@ wM,wD, wi, wG,wI,wa, wL,wS,wA = wT; Ly = Lx = 64  # fractal tile dims
 cFrm,cX,cTrc,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (  # function complexity
 wFrm,wX,wTrc,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init=cost
 ttFrm,ttX,ttTrc,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj,ttVct = [F.wTT for F in oF_]  # attr weight tuples added per function
-mass_, avad_ = np.ones(9),np.zeros(9)  # alt to min
-i__, d__, c_ = [],[],[]  # frame vals
-idc_ = []  # or just use a single idc_ to skip global declaration?
+mass_, avad_ = np.zeros(9), copy(wT)  # alt to min, wT~avad?
+i__,d__,c_ = np.array,np.array,np.array  # / frame
 
 def val_(TT, wTT=wTT):  # multi-variate rel match for membership, rel diff for boundary
 
@@ -271,7 +270,7 @@ def base_comp(_N,N):  # comp Et, kern, extT, dTT; rational M?
         mA,dA = comp_A(_N.angl[0]*_N.angl[1], N.angl[0]*N.angl[1])
     # new dT: M,D,n, I,G,a, L,S,A:
     m_,d_ = comp(_pars,pars, mA,dA, c:=min(_N.c,N.c))
-    # global i__,d__; i__+=[pars]; d__+=[np.abs(d_)]  # separate?  Do we still need this? It's already in comp_dT?
+    global i__,d__; i__+=[(pars+_pars)/2]; d__+=[np.abs(d_)]  # in addition to dTT:
     dm_,dd_ = comp_dT(_N.dTT[1], N.dTT[1], c)  # higher-derivation than M,D
     return np.array([m_+dm_,d_+dd_])
 '''
@@ -283,9 +282,9 @@ def comp_dT(_i_,i_, c=1):  # scalar params
 
     d_ = _i_- i_; _a_, a_ = np.abs(_i_), np.abs(i_)
     m_ = np.minimum(_a_,a_); m_[(_i_<0) != (i_<0)] *= -1
-    m_ = m_* mass_ + avad_* (1-mass_)  # avad_: prior regime mean |d| = massless m (mass and avad can't be init 0s together? else always 0 here)
-    # global i__,d__,c_; i__+=[i_]; d__+=[np.abs(d_)]; c_ += [c]  # why i_ here instead of their average?
-    idc_.append((i_, np.abs(d_), [c]))
+    m_ = m_* mass_ + avad_* (1-mass_)  # avad_: prior regime mean |d| = massless m
+    global i__,d__,c_
+    i__+= [(_a_+a_)/2]; d__+= [np.abs(d_)]; c_ += [c]
     return np.array([m_,d_])
 
 def comp(_pars, pars, meA,deA,c):  # compute m_,d_ from inputs or derivatives
@@ -400,7 +399,7 @@ def cluster_C(root, _C_, _r):  # refine/expand a fixed set of C seeds through th
                     up += abs(_m - m); n_ += [n]; m_ += [m]; T += n.c; M += m * n.c; R += n.r * n.c
                 else: up += _m  # exclusion
             if not n_: continue
-            r = _r + R / T
+            r = _r + R/T
             if M * _C.m * (wcC * c / (r * _C.r * ccC)) * (((L := len(n_)) - 1) * wL) > ave:
                 C = sum2F(n_, root, m_, nF='C', typ=2)  # -> n.root_
                 if up * (c*wcC / (r*ccC)) * ((L-1)*wL) > avd:
@@ -425,7 +424,7 @@ def cluster_C(root, _C_, _r):  # refine/expand a fixed set of C seeds through th
                 if N.m > m: C.r += 1/len(C.N_)  # xr: cross-fork redundancy
                 else: N.r += 1/len(oC_)
         G_[:] = [G for G in G_ if G.m > ave * sum(N.r*N.c for N in G.N_) / G.c]  # or prune C_ only?
-        if (oC_ := [C for C in oC_ if C.m > ave * C.r]):  # -> xcomp med_N_ or G_
+        if oC_ := [C for C in oC_ if C.m > ave * C.r]:  # -> xcomp med_N_ or G_
             for n in N_: n.root_ = [rt for rt in n.root_ if rt[0] in oC_]
             FV_(CoF.get(), *sum_vt(oC_))
             return oC_
@@ -850,13 +849,14 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
 def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
 
     def Mass_():  # mass/par: correlation between |i| and inv_m, c-weighted
-        i__, d__, c__ = map(np.asarray, zip(*idc_)); C = c__.sum(); idc_[:] = []  # reset idc_ after unpack
-        avi_ = (i__* c__).sum(0) / C  # weighted mean inp / par
-        avd_ = (d__* c__).sum(0) / C  # weighted mean |d| / par
+        c__ = np.array(c_)[:,None]; C = c__.sum()
+        avi_ = (i__ * c__).sum(0) / C  # weighted mean inp / par
+        avd_ = (d__ * c__).sum(0) / C  # weighted mean |d| / par
         devI__ = i__ - avi_  # input dev / comp
         devM__ = avd_ - d__  # inv_m: inverse |d| dev / comp
-        covI__ = devI__ * devM__ * c__  # weighted co-dev per comp
-        mass_[:] = covI__.sum(0) / eps_(np.abs(covI__).sum(0))  # -1:1: slope of match on magnitude around avd
+        cov__ = devI__ * devM__ * c__  # weighted co-dev / comp
+        rcov_ = cov__.sum(0) / eps_(np.abs(cov__).sum(0))  # -1:1
+        mass_[:] = (rcov_+1) / 2  # 0:1: share of co-dev that agrees in sign, .5 if unrelated
         avad_[:] = avd_  # ave abs d_
 
     global ave, avd, oF_, nF_, iF_
@@ -865,11 +865,12 @@ def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fo
     dTT = dc = dr = 0
     _ac,_ar = (aL.c,aL.r) if aL else (0,0); _oc,_or = (oL.c,oL.r) if oL else (0,0)
     # H init @ 1st term:
-    if aLev := upFilt(frame,'aH',wBac, cBac,_TT):  # update filters per n levs
+    if aLev := dFilt(frame,'aH',wBac, cBac,_TT):  # update filters per Lev: lev_
         aL= aLev; dTT = aL.dTT-_TT; _TT=aL.dTT; dc= aL.c-_ac; dr= aL.r-_ar  # draft
         ave = val_(_TT)  # filters *= ave
         Mass_()  # defines mass_, avad_
-        if oLev := upFilt(frame,'oH', wBac, cBac**2, oTT):
+        global i__,d__,c_; i__,d__,c_ = [],[],[]
+        if oLev := dFilt(frame,'oH', wBac, cBac**2, oTT):
             oL= oLev; dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
             for _oF in copy(oF_): _oF.body = [split_oF(t,_oF) for t in _oF.body]
             oF_ = clust_oF_()
@@ -888,7 +889,7 @@ def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fo
     FV_(CoF.get(),dTT,dc,dr)
     return frame, _TT, oTT, aL, oL
 
-def upFilt(frame, nF, w, c, _dTT):  # drift-gated regime termination for aH and oH
+def dFilt(frame, nF, w, c, _dTT):  # drift-gated regime termination for aH and oH
 
     H = frame.H
     n = ('aH','oH') if nF=='aH' else ('oH',)
