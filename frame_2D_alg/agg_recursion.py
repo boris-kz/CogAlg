@@ -55,7 +55,7 @@ cFrm,cX,cTrc,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (  # function complexi
 wFrm,wX,wTrc,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init=cost
 ttFrm,ttX,ttTrc,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj,ttVct = [F.wTT for F in oF_]  # attr weight tuples added per function
 mass_, avad_ = np.zeros(9), copy(wT)  # alt to min, wT~avad?
-i__,d__,c_ = np.array,np.array,np.array  # / frame
+i___,d___,c__ = [],[],[]  # wT ) hLev ) frame
 
 def val_(TT, wTT=wTT):  # multi-variate rel match for membership, rel diff for boundary
 
@@ -220,19 +220,21 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
 
     L = CL(N_=[_N,N], c=c,r=r,root=rL)
     if full:
-        dTT = base_comp(_N,N)  # use rn?
+        dTT,ddTT = base_comp(_N,N)  # use rn?
         if span is None: span = np.hypot(*_N.yx-N.yx)
         yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
         box = np.array([min(_y,y),min(_x,x), max(_y,y),max(_x,x)])
         angl = [np.zeros(2) if A is None else A, np.sign(dTT[1] @ ttN[1])]
         L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2
-    else: dTT = comp_dT(_N.dTT[1],N.dTT[1],c)
+    else:
+        dTT = comp_dT(_N.dTT[1],N.dTT[1],c)  # no M,D,ext,kern?
     m = val_(dTT,ttN); L.dTT,L.m = dTT,m
+    if ddTT: L.H = [CF(N_=[_N,N], dTT=ddTT, m=val_(ddTT,ttN))]  # init
     if N.typ:  # converted Ls, skip PPs, Fts?
         dn_=[]
         if N.typ==3 and gv_(m* (c*wN /(r*cN)) - ave):
             for i,(_Ft,Ft) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct), (N.Nt,N.Lt,N.Bt,N.Ct))):
-                if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1
+                if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1  # L.H = dNt.H + dLt.H, no Bt.H,Ct.H?
         elif gv_(m* (c*wF /(r*cF)) - ave):  # L or B
             for _n,n in product(_N.N_,N.N_):
                 if _n is not n: dn_ += [comp_N(_n,n, r,min(_n.c,n.c),rL=L,full=0)]  # CC: medoid Ns may overlap?
@@ -256,6 +258,7 @@ def comp_F(_F, F, ir=0, rL=None):
         if gv_(val_(tt,ttX) * (c*wX / (r*cX)) - ave):  # any sub-comp?
             if F.nF!='Nt': [F2N(n) for n in set(_N_+N_) if not isinstance(n,CN)]  # Rt,Nt,Bt
             cross_comp(rL, proj_L_(Np_,2,r), r,dF)
+    # add comp_H?
     FV_(CoF.get(), dF.dTT, dF.c, dF.r)
     return dF  # no cross-fork N_, no L ext updates?
 
@@ -269,25 +272,16 @@ def base_comp(_N,N):  # comp Et, kern, extT, dTT; rational M?
     if hasattr(_N,'angl') and _N.angl and N.angl:  # mostly Ls, some Gs
         mA,dA = comp_A(_N.angl[0]*_N.angl[1], N.angl[0]*N.angl[1])
     # new dT: M,D,n, I,G,a, L,S,A:
-    m_,d_ = comp(_pars,pars, mA,dA, c:=min(_N.c,N.c))
-    global i__,d__; i__+=[(pars+_pars)/2]; d__+=[np.abs(d_)]  # in addition to dTT:
-    dm_,dd_ = comp_dT(_N.dTT[1], N.dTT[1], c)  # higher-derivation than M,D
-    return np.array([m_+dm_,d_+dd_])
+    m_,d_ = comp(_pars,pars, mA,dA, c:= min(_N.c,N.c))
+    dm_,dd_ = comp_dT(__d_:=_N.dTT[1], _d_:= N.dTT[1], c)
+    # higher-der than M,D, same c?
+    return np.array([m_,d_]), np.array([dd_,dm_])
 '''
     if np.hypot(*_N.angl[0])*_N.mang + np.hypot(*N.angl[0])*N.mang > ave*wA:  # aligned L_'As, mang *= (len_H)+fi+1
     mang = (rn*_N.mang + N.mang) / (1+rn)  # ave, weight each side by rn
     align = 1 - mang* (1-mA)  # in 0:1, weigh mA 
 '''
-def comp_dT(_i_,i_, c=1):  # scalar params
-
-    d_ = _i_- i_; _a_, a_ = np.abs(_i_), np.abs(i_)
-    m_ = np.minimum(_a_,a_); m_[(_i_<0) != (i_<0)] *= -1
-    m_ = m_* mass_ + avad_* (1-mass_)  # avad_: prior regime mean |d| = massless m
-    global i__,d__,c_
-    i__+= [(_a_+a_)/2]; d__+= [np.abs(d_)]; c_ += [c]
-    return np.array([m_,d_])
-
-def comp(_pars, pars, meA,deA,c):  # compute m_,d_ from inputs or derivatives
+def comp(_pars, pars, meA,deA):  # compute m_,d_ from inputs or derivatives
 
     m_,d_ = [],[]
     for i, (_p, p, mass, avad) in enumerate(zip(_pars, pars, mass_,avad_)):  # ad: prior regime mean |d| = massless m
@@ -298,7 +292,18 @@ def comp(_pars, pars, meA,deA,c):  # compute m_,d_ from inputs or derivatives
             if (_p<0) != (p<0): m =- m  # gap between comparands
             m_ += [m* mass + avad* (1-mass)]
             d_ += [_p - p]
+    global i___,d___; i___+= [[(pars +_pars)/2]]; d___+= [[np.abs(d_)]]  # init dH=[lev]
     return np.array(m_+[meA]), np.array(d_+[deA])
+
+def comp_dT(_i_,i_, c=1):  # scalar params
+
+    d_ = _i_- i_; _a_, a_ = np.abs(_i_), np.abs(i_)
+    m_ = np.minimum(_a_,a_); m_[(_i_<0) != (i_<0)] *= -1
+    m_ = m_* mass_ + avad_* (1-mass_)  # avad_: prior regime mean |d| = massless m
+    global i___,d___,c_  # or c_ per level?
+    i___[-1] += [(_a_+a_)/2]; d___[-1] += [np.abs(d_)]; c_ += [c]  # append dH
+    # then i___[-1], d___[-1] += aviH, adH?
+    return np.array([m_,d_])
 
 def comp_A(_A,A):
 
@@ -848,12 +853,14 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
 
 def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
 
+    # need to make level-wise:
     def Mass_():  # mass/par: correlation between |i| and inv_m, c-weighted
         c__ = np.array(c_)[:,None]; C = c__.sum()
-        avi_ = (i__ * c__).sum(0) / C  # weighted mean inp / par
-        avd_ = (d__ * c__).sum(0) / C  # weighted mean |d| / par
-        devI__ = i__ - avi_  # input dev / comp
-        devM__ = avd_ - d__  # inv_m: inverse |d| dev / comp
+        # not fully updated:
+        avi_ = (i___ * c__).sum(0) / C  # weighted mean inp / par
+        avd_ = (d___ * c__).sum(0) / C  # weighted mean |d| / par
+        devI__ = i___ - avi_  # input dev / comp
+        devM__ = avd_ - d___  # inv_m: inverse |d| dev / comp
         cov__ = devI__ * devM__ * c__  # weighted co-dev / comp
         rcov_ = cov__.sum(0) / eps_(np.abs(cov__).sum(0))  # -1:1
         mass_[:] = (rcov_+1) / 2  # 0:1: share of co-dev that agrees in sign, .5 if unrelated
@@ -869,7 +876,7 @@ def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fo
         aL= aLev; dTT = aL.dTT-_TT; _TT=aL.dTT; dc= aL.c-_ac; dr= aL.r-_ar  # draft
         ave = val_(_TT)  # filters *= ave
         Mass_()  # defines mass_, avad_
-        global i__,d__,c_; i__,d__,c_ = [],[],[]
+        global i___,d___,c_; i___,d___,c_ = [],[],[]
         if oLev := dFilt(frame,'oH', wBac, cBac**2, oTT):
             oL= oLev; dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
             for _oF in copy(oF_): _oF.body = [split_oF(t,_oF) for t in _oF.body]
