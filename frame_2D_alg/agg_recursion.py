@@ -54,8 +54,14 @@ wM,wD, wi, wG,wI,wa, wL,wS,wA = wT; Ly = Lx = 64  # fractal tile dims
 cFrm,cX,cTrc,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (  # function complexity
 wFrm,wX,wTrc,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init=cost
 ttFrm,ttX,ttTrc,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj,ttVct = [F.wTT for F in oF_]  # attr weight tuples added per function
-mass_, avad_ = np.zeros(9), copy(wT)  # alt to min, wT~avad?
-i___,d___,c__ = [],[],[]  # wT ) hLev ) frame
+
+i___,d___,c__, mass__,avad__ = [],[],[], [],[]  # dT ) comp_ ) dLev
+# __main__, before frame_H:
+# add_dLev(); add_dLev()  # dLev 0,1: every base_comp writes both
+def add_dLev():  # new empty dLev, before its first comp
+    i___.append([]); d___.append([]); c__.append([])
+    mass__.append(copy(mass__[-1]) if mass__ else np.zeros(9))  # init from j-1: d of massive is massive
+    avad__.append(copy(avad__[-1]) if avad__ else copy(wT))
 
 def val_(TT, wTT=wTT):  # multi-variate rel match for membership, rel diff for boundary
 
@@ -207,7 +213,7 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
         dH,TT,C,R = [],np.zeros((2,9)),0,0
         for _lev,lev in zip(_N.H,N.H):  # current dTT already compared
             if not (_lev and lev): continue
-            tt = comp_dT(_lev.dTT[1],lev.dTT[1],min(_lev.c,lev.c))
+            tt = comp_dT(_lev.dTT[1], lev.dTT[1], min(_lev.c,lev.c))
             lc = min(_lev.c,lev.c); lr = (_lev.r+lev.r)/2
             C += lc; R += lr*lc; TT += tt*lc; m = val_(tt,ttN)
             dH += [CF(dTT=tt,m=m,c=lc,r=lr,root=L)]
@@ -227,9 +233,10 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
         angl = [np.zeros(2) if A is None else A, np.sign(dTT[1] @ ttN[1])]
         L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2
     else:
-        dTT = comp_dT(_N.dTT[1],N.dTT[1],c)  # no M,D,ext,kern?
-    m = val_(dTT,ttN); L.dTT,L.m = dTT,m
-    if ddTT: L.H = [CF(N_=[_N,N], dTT=ddTT, m=val_(ddTT,ttN))]  # init
+        dTT = comp_dT(_N.dTT[1],N.dTT[1], c)  # no M,D,ext,kern?
+    m = val_(dTT,ttN); L.dTT,L.m = dTT,m  # exclude ddTT in m computation?
+    if "ddTT" in locals():
+        m+=dm:=val_(ddTT,ttN); L.H=[CF(N_=[_N,N],dTT=ddTT,m=dm,c=min(_N.H[-1].c,N.H[-1].c))]  # H=[lev]
     if N.typ:  # converted Ls, skip PPs, Fts?
         dn_=[]
         if N.typ==3 and gv_(m* (c*wN /(r*cN)) - ave):
@@ -249,7 +256,7 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
 
 def comp_F(_F, F, ir=0, rL=None):
 
-    c= min(_F.c,F.c); ddTT = comp_dT(_F.dTT[1],F.dTT[1],c)  # no kern and positionals?
+    c = min(_F.c,F.c); ddTT = comp_dT(_F.dTT[1],F.dTT[1],c)  # no M,D,ext,kern?
     m = val_(ddTT,ttF); r = (_F.r+F.r)/2 + ir
     dF = CF(dTT=ddTT, m=m,r=r,c=c, nF=F.nF)
     if (_N_:=_F.N_) and (N_:=F.N_):
@@ -272,37 +279,38 @@ def base_comp(_N,N):  # comp Et, kern, extT, dTT; rational M?
     if hasattr(_N,'angl') and _N.angl and N.angl:  # mostly Ls, some Gs
         mA,dA = comp_A(_N.angl[0]*_N.angl[1], N.angl[0]*N.angl[1])
     # new dT: M,D,n, I,G,a, L,S,A:
-    m_,d_ = comp(_pars,pars, mA,dA, c:= min(_N.c,N.c))
-    dm_,dd_ = comp_dT(__d_:=_N.dTT[1], _d_:= N.dTT[1], c)
-    # higher-der than M,D, same c?
+    m_,d_ = comp(_pars,pars, mA,dA, min(_N.c,N.c))
+    dm_,dd_ = comp_dT(_N.dTT[1],N.dTT[1], min(_N.H[-1].c,N.H[-1].c))  # higher-der than M,D
     return np.array([m_,d_]), np.array([dd_,dm_])
 '''
     if np.hypot(*_N.angl[0])*_N.mang + np.hypot(*N.angl[0])*N.mang > ave*wA:  # aligned L_'As, mang *= (len_H)+fi+1
     mang = (rn*_N.mang + N.mang) / (1+rn)  # ave, weight each side by rn
     align = 1 - mang* (1-mA)  # in 0:1, weigh mA 
 '''
-def comp(_pars, pars, meA,deA):  # compute m_,d_ from inputs or derivatives
+def comp(_pars, pars, meA,deA, c=1):  # compute m_,d_ from inputs or derivatives
 
-    m_,d_ = [],[]
-    for i, (_p, p, mass, avad) in enumerate(zip(_pars, pars, mass_,avad_)):  # ad: prior regime mean |d| = massless m
+    m_,d_ = [],[]; _i_, i_ = [],[]
+    for i, (_p,p, mass,avad) in enumerate(zip(_pars,pars, mass__[0],avad__[0])):  # prior-frame mean |d| = massless m
         if isinstance(_p, list):  # vector angle
-            mA, dA = comp_A(_p, p); m_ += [mA]; d_ += [dA]
+            mA, dA = comp_A(_p, p); m_ += [mA]; d_ += [dA]; _i_+=[0]; i_ += [0]
         else:
             m = min(abs(_p), abs(p))
             if (_p<0) != (p<0): m =- m  # gap between comparands
             m_ += [m* mass + avad* (1-mass)]
             d_ += [_p - p]
-    global i___,d___; i___+= [[(pars +_pars)/2]]; d___+= [[np.abs(d_)]]  # init dH=[lev]
+            _i_+=[_p]; i_ += [p]
+    global i___,d___,c__  # init dH=[lev0], mA mass=0:
+    i___[0] += [(np.abs(_i_+[0]) + np.abs(i_+[0])) / 2]; d___+= [np.abs(d_+[deA])[:,None]]; c__[0]+=[c]
     return np.array(m_+[meA]), np.array(d_+[deA])
 
-def comp_dT(_i_,i_, c=1):  # scalar params
+def comp_dT(_i_,i_, c, j=1):  # scalars, j: dLev index, >1 in comp_H only
 
+    mass_,avad_ = mass__[j]; avad__[j]
     d_ = _i_- i_; _a_, a_ = np.abs(_i_), np.abs(i_)
-    m_ = np.minimum(_a_,a_); m_[(_i_<0) != (i_<0)] *= -1
-    m_ = m_* mass_ + avad_* (1-mass_)  # avad_: prior regime mean |d| = massless m
-    global i___,d___,c_  # or c_ per level?
-    i___[-1] += [(_a_+a_)/2]; d___[-1] += [np.abs(d_)]; c_ += [c]  # append dH
-    # then i___[-1], d___[-1] += aviH, adH?
+    mm_ = np.minimum(_a_,a_); mm_[(_i_<0) != (i_<0)] *= -1
+    m_ = mm_* mass_ + avad_* (1-mass_)  # avad_: prior regime mean |d| = massless m
+    global i___,d___,c__
+    i___[j] += [(_a_+a_)/2]; d___[j] += d_; c__[j] += [c]  # append to dLev
     return np.array([m_,d_])
 
 def comp_A(_A,A):
@@ -397,7 +405,7 @@ def cluster_C(root, _C_, _r):  # refine/expand a fixed set of C seeds through th
             n_, m_, M, T, R, up, c = [], [], 0, 0, 0, 0, 0
             for n in _N_:
                 if n not in N_: N_.add(n); n.root_, n._root_ = [], []
-                dtt = base_comp(_C, n)
+                dtt = base_comp(_C, n)[0]
                 m = val_(dtt, ttcC); c += n.c
                 _m = next(((rt[1]) for rt in n._root_ if rt[0] is _C), 0)  # prior membership, 0 if new
                 if m * n.c > ave * n.r:  # += new nodes and candidate nodes
@@ -853,20 +861,20 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
 
 def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
 
-    # need to make level-wise:
-    def Mass_():  # mass/par: correlation between |i| and inv_m, c-weighted
-        c__ = np.array(c_)[:,None]; C = c__.sum()
-        # not fully updated:
-        avi_ = (i___ * c__).sum(0) / C  # weighted mean inp / par
-        avd_ = (d___ * c__).sum(0) / C  # weighted mean |d| / par
-        devI__ = i___ - avi_  # input dev / comp
-        devM__ = avd_ - d___  # inv_m: inverse |d| dev / comp
-        cov__ = devI__ * devM__ * c__  # weighted co-dev / comp
-        rcov_ = cov__.sum(0) / eps_(np.abs(cov__).sum(0))  # -1:1
-        mass_[:] = (rcov_+1) / 2  # 0:1: share of co-dev that agrees in sign, .5 if unrelated
-        avad_[:] = avd_  # ave abs d_
-
-    global ave, avd, oF_, nF_, iF_
+    global  ave, avd, oF_, nF_, iF_, i___,d___,c__
+    def Mass_():
+        # define mass/par: correlation between |i| and inv_m, c-weighted
+        for i__,d__,c_, mass_, avad_ in zip(i___, d___, c__, mass__, avad__):
+            if not c_: continue  # no new comps in dLev
+            c_ = np.array(c_)[:,None]; C = c_.sum()
+            avi_ = (i__ * c_).sum(0) / C  # weighted mean inp / par
+            avd_ = (d__ * c_).sum(0) / C  # weighted mean |d| / par
+            devI__ = i__ - avi_  # input dev / comp
+            devM__ = avd_ - d__  # inv_m: inverse |d| dev / comp
+            cov__ = devI__ * devM__ * c_  # weighted co-dev / comp
+            rcov_ = cov__.sum(0) / eps_(np.abs(cov__).sum(0))  # -1:1
+            mass_[:] = (rcov_+1) / 2  # 0:1: share of co-dev that agrees in sign, .5 if unrelated
+            avad_[:] = avd_  # ave abs d_
     for oF in oF_:
         if oF.V_: oF.w += sum(oF.V_) + sum(oF.gV_)  # all extensive
     dTT = dc = dr = 0
@@ -875,8 +883,7 @@ def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fo
     if aLev := dFilt(frame,'aH',wBac, cBac,_TT):  # update filters per Lev: lev_
         aL= aLev; dTT = aL.dTT-_TT; _TT=aL.dTT; dc= aL.c-_ac; dr= aL.r-_ar  # draft
         ave = val_(_TT)  # filters *= ave
-        Mass_()  # defines mass_, avad_
-        global i___,d___,c_; i___,d___,c_ = [],[],[]
+        Mass_(); i___,d___,c_ = [],[],[]  # set mass__,avad__
         if oLev := dFilt(frame,'oH', wBac, cBac**2, oTT):
             oL= oLev; dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
             for _oF in copy(oF_): _oF.body = [split_oF(t,_oF) for t in _oF.body]
