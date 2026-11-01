@@ -54,12 +54,7 @@ wM,wD, wi, wG,wI,wa, wL,wS,wA = wT; Ly = Lx = 64  # fractal tile dims
 cFrm,cX,cTrc,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (  # function complexity
 wFrm,wX,wTrc,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init=cost
 ttFrm,ttX,ttTrc,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj,ttVct = [F.wTT for F in oF_]  # attr weight tuples added per function
-
-i___,d___,c__, mass__,avad__ = [],[],[], [],[]  # dT ) comp_ ) dLev
-def add_dLev():  # new empty dLev, before its first comp
-    i___.append([]); d___.append([]); c__.append([])
-    mass__.append(copy(mass__[-1]) if mass__ else np.zeros(9))  # init from j-1: d of massive is massive
-    avad__.append(copy(avad__[-1]) if avad__ else copy(wT))
+i___,d___,c__, mass__,avad__ = [],[],[], [],[]  # dT ) comp_ ) dLev_
 
 def val_(TT, wTT=wTT):  # multi-variate rel match for membership, rel diff for boundary
 
@@ -157,8 +152,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN from C or (N_,L_,B_), eval t
                                 if rt0 and rt1 and rt0 != rt1:
                                     if rt1.H: add_H(rt0.H, rt1.H, rt0, fN=1)
                                     add2F(rt0,rt1, merge=1,fH=0)  # recompute Nt attrs / G
-                else:  # 0 top lev: no deeper N_ xcomp
-                    break
+                else: break  # no top lev
     G = CN(root=root,wTT=wTT)
     L_, pL_ = [],[]
     if isinstance(F_,tuple):
@@ -200,7 +194,7 @@ def sum2G(F_, wTT, root=None, _r=0):  # finalize CN from C or (N_,L_,B_), eval t
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G
 
-def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
+def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0):  # inherit dLev
 
     def sum_dn_(dn_, L):
         L.H += [lev:= sum2F(dn_,nF='tF',root=L)]  # dN_ maybe dFt, works the same
@@ -209,10 +203,10 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
         L.dTT = (L.dTT+ TT*w) / (1+w); L.m = val_(L.dTT,ttN); L.r = (L.r+R*w)/(1+w); L.c+=C
     def comp_H(_N, N, L):
         dH,TT,C,R = [],np.zeros((2,9)),0,0
-        for j,(_lev,lev) in enumerate(zip(_N.H,N.H),start=2):  # current dTT already compared (lev 0 from comp, 1 from comp_dT, 2+ from comp_H)
+        for j, (_lev,lev) in enumerate(zip(_N.H,N.H),start=2):  # current dTT already compared, levs 2+ from comp_H
             if not (_lev and lev): continue
             lc = min(_lev.c,lev.c); lr = (_lev.r+lev.r)/2
-            tt = comp_dT(_lev.dTT[1], lev.dTT[1], lc,j)
+            tt = comp_dT(_lev.dTT[1], lev.dTT[1], lc,_j+j)  # inherit _j
             C += lc; R += lr*lc; TT += tt*lc; m = val_(tt,ttN)
             dH += [CF(dTT=tt,m=m,c=lc,r=lr,root=L)]
         if not C: return
@@ -220,21 +214,21 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
         w = C/L.c * (L.r/R)
         L.dTT = (L.dTT+ TT*w) / (1+w); L.m= val_(L.dTT,ttN)
         L.r = (L.r+R*w) / (1+w); L.c += C
-        L.H += dH  # add to 1st lev from comp N.N_
-
+        L.H += dH  # lev1 from comp N.N_
     L = CL(N_=[_N,N], c=c,r=r,root=rL)
+    if _j==len(i___[2]): add_dLev()  # to store,eval der+ results
     if full:
-        dTT,ddTT = base_comp(_N,N)  # use rn?
+        dTT,ddTT = base_comp(_N,N,_j)  # !rn?
         if span is None: span = np.hypot(*_N.yx-N.yx)
         yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
         box = np.array([min(_y,y),min(_x,x), max(_y,y),max(_x,x)])
         angl = [np.zeros(2) if A is None else A, np.sign(dTT[1] @ ttN[1])]
         L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2
     else:
-        dTT = comp_dT(_N.dTT[1],N.dTT[1], c)  # no M,D,ext,kern?
+        dTT = comp_dT(_N.dTT[1],N.dTT[1], c,_j)  # no M,D,ext,kern?
     m = val_(dTT,ttN); L.dTT,L.m = dTT,m  # exclude ddTT in m computation?
     if "ddTT" in locals():
-        m+=(dm:=val_(ddTT,ttN)); L.H=[CF(N_=[_N,N],dTT=ddTT,m=dm,c=min(_N.H[-1].c,N.H[-1].c) if (_N.H and N.H) else min(_N.c,N.c))]  # H=[lev]
+        m+=(dm:= val_(ddTT,ttN)); L.H=[CF(N_=[_N,N],dTT=ddTT,m=dm,c=c)]  # H=[lev], same c?
     if N.typ:  # converted Ls, skip PPs, Fts?
         dn_=[]
         if N.typ==3 and gv_(m* (c*wN /(r*cN)) - ave):
@@ -242,7 +236,7 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None):
                 if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L)]; r+=(i or 1)-1  # L.H = dNt.H + dLt.H, no Bt.H,Ct.H?
         elif gv_(m* (c*wF /(r*cF)) - ave):  # L or B
             for _n,n in product(_N.N_,N.N_):
-                if _n is not n: dn_ += [comp_N(_n,n, r,min(_n.c,n.c),rL=L,full=0)]  # CC: medoid Ns may overlap?
+                if _n is not n: dn_+= [comp_N(_n,n, r,min(_n.c,n.c),rL=L,full=0, _j=_j+1)]  # der/decomposition, CC: medoid Ns may overlap?
         if dn_: sum_dn_(dn_,L)  # tFt if CN else dN_
         else:
             L.H += [[]]  # placeholder for skipped diff(N.N_)
@@ -267,7 +261,7 @@ def comp_F(_F, F, ir=0, rL=None):
     FV_(CoF.get(), dF.dTT, dF.c, dF.r)
     return dF  # no cross-fork N_, no L ext updates?
 
-def base_comp(_N,N):  # comp Et, kern, extT, dTT; rational M?
+def base_comp(_N,N, _j):  # comp Et, kern, extT, dTT; rational M?
 
     M, D = N.dTT.sum(axis=1);  C= N.c;  I, G, Dy, Dx = N.kern;  L = len(N.N_)  # M,D, 0-der params? or N.m, xsign sum d_: directional or abs?
     _M,_D =_N.dTT.sum(axis=1); _C=_N.c; _I,_G,_Dy,_Dx =_N.kern; _L = len(_N.N_)  # N_: density in span
@@ -277,8 +271,8 @@ def base_comp(_N,N):  # comp Et, kern, extT, dTT; rational M?
     if hasattr(_N,'angl') and _N.angl and N.angl:  # mostly Ls, some Gs
         mA,dA = comp_A(_N.angl[0]*_N.angl[1], N.angl[0]*N.angl[1])
     # new dT: M,D,n, I,G,a, L,S,A:
-    m_,d_ = comp(_pars,pars, mA,dA, min(_N.c,N.c))
-    dm_,dd_ = comp_dT(_N.dTT[1],N.dTT[1], min(_N.H[-1].c,N.H[-1].c) if (_N.H and N.H) else min(_N.c,N.c))  # higher-der than M,D
+    m_,d_ = comp(_pars,pars, mA,dA, c:= min(_N.c,N.c))  # also pass _j?
+    dm_,dd_ = comp_dT(_N.dTT[1],N.dTT[1], c,_j)  # higher-der than M,D, same c / comb-F dTT?
     return np.array([m_,d_]), np.array([dd_,dm_])
 '''
     if np.hypot(*_N.angl[0])*_N.mang + np.hypot(*N.angl[0])*N.mang > ave*wA:  # aligned L_'As, mang *= (len_H)+fi+1
@@ -308,11 +302,15 @@ def comp_dT(_i_,i_, c, j=1):  # scalars, j: dLev index, >1 in comp_H only
     mm_ = np.minimum(_a_,a_); mm_[(_i_<0) != (i_<0)] *= -1
     m_ = mm_* mass_ + avad_* (1-mass_)  # avad_: prior regime mean |d| = massless m
     global i___,d___,c__
-    i___[j] += [(_a_+a_)/2]; d___[j] += [np.abs(d_)]; c__[j] += [c]  # append to dLev  (abs(d)?)
+    i___[j] += [(_a_+a_)/2]; d___[j] += [np.abs(d_)]; c__[j]+=[c]  # dLev += [comp]
     return np.array([m_,d_])
 
-def comp_A(_A,A):
+def add_dLev():  # add empty dLev before comp
+    i___.append([]); d___.append([]); c__.append([])
+    mass__.append(copy(mass__[-1]) if mass__ else np.zeros(9))  # init from j-1: d of massive is massive
+    avad__.append(copy(avad__[-1]) if avad__ else copy(wT))
 
+def comp_A(_A,A):
     dA = atan2(*_A)- atan2(*A)  # * direction
     if   dA > pi: dA -= 2 * pi  # rotate CW
     elif dA <-pi: dA += 2 * pi  # rotate CCW
@@ -870,7 +868,7 @@ def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fo
             avd_ = (d__ * c_).sum(0) / C  # weighted mean |d| / par
             devI__ = i__ - avi_  # input dev / comp
             devM__ = avd_ - d__  # inv_m: inverse |d| dev / comp
-            cov__ = devI__ * devM__ * c_  # weighted co-dev / comp
+            cov__ = devI__ * devM__ * c_  # weighted co-dev / comp, or by div_comp?
             rcov_ = cov__.sum(0) / eps_(np.abs(cov__).sum(0))  # -1:1
             mass_[:] = (rcov_+1) / 2  # 0:1: share of co-dev that agrees in sign, .5 if unrelated
             avad_[:] = avd_  # ave abs d_
@@ -882,8 +880,7 @@ def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fo
     if aLev := dFilt(frame,'aH',wBac, cBac,_TT):  # update filters per Lev: lev_
         aL= aLev; dTT = aL.dTT-_TT; _TT=aL.dTT; dc= aL.c-_ac; dr= aL.r-_ar  # draft
         ave = val_(_TT)  # filters *= ave
-        Mass_()
-        for v__ in (i___,d___,c__): [v_.clear() for v_ in v__]  # preserve level?   set mass__,avad__
+        Mass_(); i___,d___,c_ = [],[],[]  # set mass__,avad__
         if oLev := dFilt(frame,'oH', wBac, cBac**2, oTT):
             oL= oLev; dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
             for _oF in copy(oF_): _oF.body = [split_oF(t,_oF) for t in _oF.body]
