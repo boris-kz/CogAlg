@@ -110,7 +110,7 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1, _j=0):  # recur
     for dist, dy_dx, _N,N, lc,lr, pTT,m,nexp in pL_:
         if _N != N and (fall or m>0):
             if gv_(m*(lc*wN/(lr*cN)) - ave* (_r+cN)):
-                Link = comp_N(_N,N, lr,lc, full=not dF, A=dy_dx, span=dist, rL=root, _j=_j)
+                Link = comp_N(_N,N, lr,lc, full=not dF, A=dy_dx, span=dist, rL=root,_j=_j)
                 Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT) # prediction error
                 L_+=[Link]; N_+=[_N,N]; Link.nexp=nexp
             elif not dF:  # pack as prelink
@@ -136,63 +136,9 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1, _j=0):  # recur
             G_ = [sum2G(g,ttcN,root,_r,_j) for g in G_]
             Nt = sum2F(G_,root,nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r
             if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+
-                G_ = cross_comp(root, proj_L_(combinations(G_,2),root,_r+1),_r+1,_j=_j) or G_
+                add_fH(2+ max((len(g.H) for g in G_)))  # add,eval der+ results:
+                G_ = cross_comp(root, proj_L_(combinations(G_,2),root,_r+1),_r+1) or G_
     return G_
-
-def sum2G(F_, wTT, root=None, _r=0, _j=0):  # finalize CN from C or (N_,L_,B_), eval trans_cluster, der+, sub+
-
-    def trans_cluster(G):
-        for L in G.L_:
-            for lev in L.H:  # tFt/Nt | tN_/Bt, not Lt|Ct
-                if lev:
-                    for tF in lev.N_ if not isinstance(lev.N_[0],CL) else [lev]:  # CF or CL: Nt|Bt
-                        for tL in tF.N_:
-                            if tL.m * (tL.c*wcN / (tL.r*ccN)) > ave:  # merge trans_link.N_.roots:
-                                rt0 = getattr(tL.N_[0].root,'root',None); rt1 = getattr(tL.N_[1].root,'root',None)
-                                if rt0 and rt1 and rt0 != rt1:
-                                    if rt1.H: add_H(rt0.H, rt1.H, rt0, fN=1)
-                                    add2F(rt0,rt1, merge=1,fH=0)  # recompute Nt attrs / G
-                else: break  # no top lev
-    G = CN(root=root,wTT=wTT)
-    L_, pL_ = [],[]
-    if isinstance(F_,tuple):
-        N_,_L_,B_,C_ = F_  # from trace_edge, vect_edge, frame_H
-    else:  # C from CN,CC: extract internal _L_ and perimeter B_ from N_ rims
-        N_ = F_.N_; n_set = set(N_); _L_,B_,C_ = [],[],[]
-        for L in {l for n in N_ for l in n.rim}:
-            if (L.N_[0] in n_set) and (L.N_[1] in n_set):
-                if L.m > ave: _L_ += [L]
-            elif L.nexp == 1:  # rng+ only
-                if ave - L.m > ave: B_ += [L]  # -ve deviation should borrow
-    for L in _L_:
-        if L.typ==1: L_ += [L]
-        else:       pL_ += [L]
-    if pL_:
-        pm, pc, pr = sum_vt(pL_, fm=1, wTT=wTT)[0], sum([L.c for L in pL_]), np.mean([L.r for L in pL_])
-        if pm * (wN * pc / (cN * pr)) > ave:
-            for pL in pL_:
-                L_ += [L:= comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span,root,_j)]; L.nexp=pL.nexp
-                for N in pL.N_: N.rim.remove(pL)
-    for N in N_:
-        if N.rim: N.Rt = sum2F(N.rim,root=N,nF='Rt')
-    [sum2F(f_,G,nF=nF) for f_,nF in zip((N_,B_,L_,C_),('Nt','Bt','Lt','Ct')) if f_]
-    G.m = val_(G.dTT,wTT); G.r = G.Nt.r
-    if G.L_: trans_cluster(G)  # splice trans_links, merge L.N_.roots
-    if Bt:= G.Bt:  # der+
-        bm,bc,br = Bt.m,Bt.c,Bt.r+_r+1
-        if N_[0].typ!=1 and gv_(bm * (bc*wX / (br*cX)) - ave):
-            cross_comp(F2N(G.Bt), proj_L_(combinations([F2N(L) for L in Bt.N_],2),G,br),br,_j=_j)  # _j stays the same here?
-        if RR:= root.root if root else None: Bt.brrw = Bt.m* (RR.m* (decay* (RR.span/G.span)))
-    if Lt:= G.Lt:  # sub+ CN, no rng+, agg+?
-        m,c,r = Lt.m,Lt.c, Lt.r+_r
-        if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):  #-> sub_Gs @ higher filter: r+1
-            g_,c_= cluster_N(G, exemplar_(N_,r), r+1,c,_j)  # either can be empty due to olp
-            if g_: sum2F([sum2G(g, ttcN, G, r+1,_j=_j) for g in g_], G,nF='Nt')  # G._Nt-> G.Nt.H[-1]
-            if c_: sum2F(c_,G, nF='Ct')
-    if G.Lt or G.Bt:
-        G.m,G.dTT,G.c,G.r = sum_vt([f for f in (G.Nt,G.Lt,G.Bt) if f], fm=1,wTT=wTT)
-    FV_(CoF.get(), G.dTT, G.c, G.r)
-    return G
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0):  # inherit dLev
 
@@ -206,7 +152,6 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0):  # inherit dLev
         for j, (_lev,lev) in enumerate(zip(_N.H,N.H),start=2):  # current dTT already compared, levs 2+ from comp_H
             if not (_lev and lev): continue
             lc = min(_lev.c,lev.c); lr = (_lev.r+lev.r)/2
-            add_dLev(_j+j+1)
             tt = comp_dT(_lev.dTT[1], lev.dTT[1], lc,_j+j)  # inherit _j
             C += lc; R += lr*lc; TT += tt*lc; m = val_(tt,ttN)
             dH += [CF(dTT=tt,m=m,c=lc,r=lr,root=L)]
@@ -217,7 +162,6 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0):  # inherit dLev
         L.r = (L.r+R*w) / (1+w); L.c += C
         L.H += dH  # lev1 from comp N.N_
     L = CL(N_=[_N,N], c=c,r=r,root=rL)
-    add_dLev(_j+1)  # to store,eval der+ results (add up to comp_dT level)
     if full:
         dTT,ddTT = base_comp(_N,N,_j)  # !rn?
         if span is None: span = np.hypot(*_N.yx-N.yx)
@@ -233,9 +177,10 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0):  # inherit dLev
     if N.typ:  # converted Ls, skip PPs, Fts?
         dn_=[]
         if N.typ==3 and gv_(m* (c*wN /(r*cN)) - ave):
-            for i,(_Ft,Ft) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct), (N.Nt,N.Lt,N.Bt,N.Ct))): 
-                if _Ft and Ft: dn_ += [comp_F(_Ft,Ft,r,L,_j+1)]; r+=(i or 1)-1  # L.H = dNt.H + dLt.H, no Bt.H,Ct.H? (should add der level here too?)
-        elif gv_(m* (c*wF /(r*cF)) - ave):  # L or B
+            for i,(_Ft,Ft) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct), (N.Nt,N.Lt,N.Bt,N.Ct))):
+                if _Ft and Ft: dn_ += [comp_F(_Ft,Ft, r,L,_j)]; r+=(i or 1)-1
+                # L.H = dNt.H+ [sum2F(dLt.H)], no Bt.H,Ct.H?
+        elif gv_(m* (c*wF /(r*cF)) - ave):  # L|B
             for _n,n in product(_N.N_,N.N_):
                 if _n is not n: dn_+= [comp_N(_n,n, r,min(_n.c,n.c),rL=L,full=0, _j=_j+1)]  # der/decomposition, CC: medoid Ns may overlap?
         if dn_: sum_dn_(dn_,L)  # tFt if CN else dN_
@@ -272,7 +217,7 @@ def base_comp(_N,N,_j=0):  # comp Et, kern, extT, dTT; rational M?
     if hasattr(_N,'angl') and _N.angl and N.angl:  # mostly Ls, some Gs
         mA,dA = comp_A(_N.angl[0]*_N.angl[1], N.angl[0]*N.angl[1])
     # new dT: M,D,n, I,G,a, L,S,A:
-    m_,d_ = comp(_pars,pars, mA,dA, c:= min(_N.c,N.c),_j)  # also pass _j?
+    m_,d_ = comp(_pars,pars, mA,dA, c:= min(_N.c,N.c), _j)
     dm_,dd_ = comp_dT(_N.dTT[1],N.dTT[1], c,_j+1)  # higher-der than M,D, same c / comb-F dTT?
     return np.array([m_,d_]), np.array([dd_,dm_])
 '''
@@ -305,12 +250,6 @@ def comp_dT(_i_,i_, c, j=1):  # scalars, j: dLev index, >1 in comp_H only
     global i___,d___,c__
     i___[j] += [(_a_+a_)/2]; d___[j] += [np.abs(d_)]; c__[j]+=[c]  # dLev += [comp]
     return np.array([m_,d_])
-
-def add_dLev(nlev):  # add empty dLev before comp
-    while len(i___)<nlev: i___.append([]); d___.append([]); c__.append([])
-    while len(mass__)<nlev: 
-        mass__.append(copy(mass__[-1]) if mass__ else np.zeros(9))  # init from j-1: d of massive is massive
-        avad__.append(copy(avad__[-1]) if avad__ else copy(wT))
 
 def comp_A(_A,A):
     dA = atan2(*_A)- atan2(*A)  # * direction
@@ -495,6 +434,61 @@ def cluster_P(_C_, root, _j=0): # multi-seed mean shift: parallel centroid refin
         iTT, iC, iR = sum_vt(iC_); oTT,oC,oR = sum_vt(out_)
         FV_(CoF.get(), iTT-oTT, iC-oC, iR-oR)
     return out_
+
+def sum2G(F_, wTT, root=None, _r=0, _j=0):  # finalize CN from C or (N_,L_,B_), eval trans_cluster, der+, sub+
+
+    def trans_cluster(G):
+        for L in G.L_:
+            for lev in L.H:  # tFt/Nt | tN_/Bt, not Lt|Ct
+                if lev:
+                    for tF in lev.N_ if not isinstance(lev.N_[0],CL) else [lev]:  # CF or CL: Nt|Bt
+                        for tL in tF.N_:
+                            if tL.m * (tL.c*wcN / (tL.r*ccN)) > ave:  # merge trans_link.N_.roots:
+                                rt0 = getattr(tL.N_[0].root,'root',None); rt1 = getattr(tL.N_[1].root,'root',None)
+                                if rt0 and rt1 and rt0 != rt1:
+                                    if rt1.H: add_H(rt0.H, rt1.H, rt0, fN=1)
+                                    add2F(rt0,rt1, merge=1,fH=0)  # recompute Nt attrs / G
+                else: break  # !top lev
+    G = CN(root=root,wTT=wTT)
+    L_, pL_ = [],[]
+    if isinstance(F_,tuple):
+        N_,_L_,B_,C_ = F_  # from trace_edge, vect_edge, frame_H
+    else:  # C from CN,CC: extract internal _L_ and perimeter B_ from N_ rims
+        N_ = F_.N_; n_set = set(N_); _L_,B_,C_ = [],[],[]
+        for L in {l for n in N_ for l in n.rim}:
+            if (L.N_[0] in n_set) and (L.N_[1] in n_set):
+                if L.m > ave: _L_ += [L]
+            elif L.nexp == 1:  # rng+ only
+                if ave - L.m > ave: B_ += [L]  # -ve deviation should borrow
+    for L in _L_:
+        if L.typ==1: L_ += [L]
+        else:       pL_ += [L]
+    if pL_:
+        pm, pc, pr = sum_vt(pL_, fm=1, wTT=wTT)[0], sum([L.c for L in pL_]), np.mean([L.r for L in pL_])
+        if pm * (wN * pc / (cN * pr)) > ave:
+            for pL in pL_:
+                L_ += [L:= comp_N(*pL.N_,pL.r,pL.c,1,pL.angl[0],pL.span,root,_j)]; L.nexp=pL.nexp
+                for N in pL.N_: N.rim.remove(pL)
+    for N in N_:
+        if N.rim: N.Rt = sum2F(N.rim,root=N,nF='Rt')
+    [sum2F(f_,G,nF=nF) for f_,nF in zip((N_,B_,L_,C_),('Nt','Bt','Lt','Ct')) if f_]
+    G.m = val_(G.dTT,wTT); G.r = G.Nt.r
+    if G.L_: trans_cluster(G)  # splice trans_links, merge L.N_.roots
+    if Bt:= G.Bt:  # der+
+        bm,bc,br = Bt.m,Bt.c,Bt.r+_r+1
+        if N_[0].typ!=1 and gv_(bm * (bc*wX / (br*cX)) - ave):
+            cross_comp(F2N(G.Bt), proj_L_(combinations([F2N(L) for L in Bt.N_],2),G,br),br)
+        if RR:= root.root if root else None: Bt.brrw = Bt.m* (RR.m* (decay* (RR.span/G.span)))
+    if Lt:= G.Lt:  # sub+ CN, no rng+, agg+?
+        m,c,r = Lt.m,Lt.c, Lt.r+_r
+        if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):  #-> sub_Gs @ higher filter: r+1
+            g_,c_= cluster_N(G, exemplar_(N_,r), r+1,c,_j)  # either can be empty due to olp
+            if g_: sum2F([sum2G(g, ttcN, G, r+1,_j=_j) for g in g_], G,nF='Nt')  # G._Nt-> G.Nt.H[-1]
+            if c_: sum2F(c_,G, nF='Ct')
+    if G.Lt or G.Bt:
+        G.m,G.dTT,G.c,G.r = sum_vt([f for f in (G.Nt,G.Lt,G.Bt) if f], fm=1,wTT=wTT)
+    FV_(CoF.get(), G.dTT, G.c, G.r)
+    return G
 
 def sum2F(N_, root=None, m_=None, nF=None, typ=0):  # c|c*m -weighted sum -> CF|CL, bound to root.nF unless fuzzy C
 
@@ -845,7 +839,7 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
         if tile_:
             N_ = [g for t in tile_ for g in t.N_]; m,_,c,r = sum_vt(N_,fm=1)  # concat edge Gs
             Fr = sum2G((N_,[],[],[]),ttFrm)  # use sum2G to get angl and l_, for the next loop's T (T = Fr)
-            Fr.H += [sum2F(tile_)]  # minimally processed level
+            Fr.Nt.H += [sum2F(tile_)]  # minimally processed level
             if gv_(m * c * wX - ave * (r+1+cX)):
                 cross_comp(Fr, proj_L_(combinations(N_,2),Fr, r),r)  # agg+
                 if elev and ffb:  # ffb=1 in main, no ffeedback in side tiles
@@ -881,7 +875,7 @@ def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fo
     if aLev := dFilt(frame,'aH',wBac, cBac,_TT):  # update filters per Lev: lev_
         aL= aLev; dTT = aL.dTT-_TT; _TT=aL.dTT; dc= aL.c-_ac; dr= aL.r-_ar  # draft
         ave = val_(_TT)  # filters *= ave
-        Mass_(); i___,d___,c__ = [],[],[]; add_dLev(2)  # set mass__,avad__
+        Mass_(); i___,d___,c__ = [],[],[]; add_fH(2)  # set mass__,avad__
         if oLev := dFilt(frame,'oH', wBac, cBac**2, oTT):
             oL= oLev; dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
             for _oF in copy(oF_): _oF.body = [split_oF(t,_oF) for t in _oF.body]
@@ -903,16 +897,23 @@ def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fo
 
 def dFilt(frame, nF, w, c, _dTT):  # drift-gated regime termination for aH and oH
 
-    H = frame.H
+    H = frame.Nt.H
     n = ('aH','oH') if nF=='aH' else ('oH',)
     i = next((j+1 for j in reversed(range(len(H))) if H[j].nF in n), 0)  # packed levs
     if tail := H[i:] if nF=='aH' else [l for l in H[i:] if l.nF=='aH']:  # lev_| aH_
         D = sum(np.sum(np.abs(t.dTT-_dTT) * wTT) for t in tail)  # drift
         if (vD := D*w - ave*c) > 0:  # update value
             seg = CN(nF=nF, root=frame); seg.H=tail; seg.dTT = tail[-1].dTT; seg.c = sum(l.c for l in tail)  # default regime summary
-            if vD > ave: seg.dTT,seg.c,seg.r = sum_vt(tail); seg.m = val_(seg.dTT)  # deep summary
-            frame.H = H[:i]+[seg]  # append
+            if vD > ave:
+                seg.dTT,seg.c,seg.r = sum_vt(tail); seg.m = val_(seg.dTT)  # deep summary
+            H = frame.Nt.H; frame.Nt.H = H[:i]+[seg]; seg.Nt.H = tail
             return seg
+
+def add_fH(nlev):  # add empty Levs before cross_comp
+    while len(i___)<nlev: i___.append([]); d___.append([]); c__.append([])
+    while len(mass__)<nlev:
+        mass__.append(copy(mass__[-1]) if mass__ else np.zeros(9))  # init from j-1: d of massive is massive
+        avad__.append(copy(avad__[-1]) if avad__ else copy(wT))
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
     trace_func(vars()); g = vars()
@@ -920,6 +921,6 @@ if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.
     for oF in oF_: oF.fdef = nF_[oF.nF]  # update fdef with ast node
     inject_oF_(oF_,g)
     Y, X = imread('./images/toucan.jpg').shape
-    add_dLev(2)  # dLev 0,1: every base_comp writes both
+    add_fH(2)  # filters for 2 dLevs for base_comp
     frame = frame_H(image=imread('./images/toucan.jpg'), iY=Y//2 -31, iX=X//2 -31, Y=Y, X=X, rV=1, ffb=1)
     # search frames ( tiles inside image, at this size it should be 4K, or 256K panorama, won't actually work on toucan

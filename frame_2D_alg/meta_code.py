@@ -73,8 +73,8 @@ def prop_F_(F, attr='N_'):  # factory function to get and update top-composition
 
 class CN(CL):  # full node|graph for xcomp, adding fork set
     name = "node"
-    N_,L_,B_,C_,X_,rim,H = prop_F_('Nt'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Ct'),prop_F_('Xt'),prop_F_('Rt'),prop_F_('Nt','H')
-    # C,N: int|ext-defined nodes, L,B: int|ext links
+    N_,L_,B_,C_,X_,rim = prop_F_('Nt'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Ct'),prop_F_('Xt'),prop_F_('Rt')  # C,N: int|ext-defined nodes, L,B: int|ext links
+    H = prop_F_('Lt','H')  # derivation levs, vs composition levs in Nt.H
     def __init__(n, **kw):
         n.Nt,n.Bt,n.Lt,n.Ct,n.Xt,n.Rt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Lt','Ct','Xt','Rt')))  # CN if nest
         super().__init__(**kw)
