@@ -66,7 +66,7 @@ def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
 
     C = sum(n.c for n in N_); M=R=0; TT = np.zeros((2,9))
     for n in N_:
-        w = n.c/C; tt = (n.rTT if fr else n.dTT) * w; TT += tt; r = n.r * w; R += r
+        w = n.c/C; tt = (n.rTT if fr else n.dTT) * w; TT+=tt; r= n.r * w; R += r
         if fm:
             m = val_(tt,wTT)  # in -1:1
             M += (m / (ave*r)) if fdiv else (m - ave*r)
@@ -142,39 +142,27 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1):  # recursion r
                 G_ = cross_comp(root, proj_L_(combinations(G_,2),root,_r+1),_r+1) or G_
     return G_
 
-def comp_H(_N, N, L):  # nested H version, draft
-
-    dH = []; TT,C,R = np.zeros((2,9)),0,0
-    for _lev,lev in zip(_N.H,N.H):  # comp levs, same bottom
-        if _lev and lev:  # comp higher dLevs if lower only
-            ddH,tt_,c_ = [[]],np.zeros((2,9)),0  # d=0: filled by spec only?
-            for _dl,dl in zip(_lev.H,lev.H):  # incremental der
-                lc = min(_dl.c,dl.c); lr = (_dl.r+dl.r)/2
-                tt = comp_dT(_dl.dTT[1], dl.dTT[1], lc, 2)  # same j on all comp levs
-                ddH += [CF(dTT=tt, m=val_(tt,ttN), c=lc, r=lr, root=L)]
-                tt_ += tt*lc; c_+=lc; C+=lc; R+= lr*lc; TT+= tt*lc
-            dH += [CF( H=ddH, dTT=tt_/c_, c=c_, root=L) if c_ else []]
-
-def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0):  # _j: index in dH / spec
+def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0):  # _j: index in dH if spec
 
     def comp_H(_N, N, L):
-        dH,TT,C,R = [],np.zeros((2,9)),0,0
-        for j, (_lev,lev) in enumerate( zip(_N.H,N.H)):  # current dTT already compared, levs 2+ from comp_H
-            if not (_lev and lev): dH += [[]]; continue  # preserve levels
-            lc = min(_lev.c,lev.c); lr = (_lev.r+lev.r)/2
-            tt = comp_dT(_lev.dTT[1], lev.dTT[1], lc, j)  # up to _j?
-            C += lc; R += lr*lc; TT += tt*lc; m = val_(tt,ttN)
-            dH += [CF(dTT=tt,m=m,c=lc,r=lr,root=L)]
-        if not C: return
-        TT/=C; R/=C
-        w = C/L.c * (L.r/R)
-        L.dTT = (L.dTT+ TT*w) / (1+w); L.m= val_(L.dTT,ttN)
-        L.r = (L.r+R*w) / (1+w); L.c += C
-        L.H += dH  # lev1 from comp N.N_
-    def sum_dn_(dn_, L, _lev):
+        dH = []
+        for _lev, lev in zip(reversed(_N.H), reversed(N.H)):  # top-down in composition
+            if _lev and lev:  # no break
+                ddH = []
+                for j, (_l, l) in enumerate(zip(_lev.H, lev.H)):  # bottom-up in derivation
+                    if _l and l:
+                        lc = min(_l.c,l.c); lr = (_l.r+l.r)/2
+                        ltt = comp_dT(_l.dTT[1], l.dTT[1], lc, j+1)  # as in base_comp
+                        ddH += [CF(dTT=ltt, m=val_(ltt, ttN), c=lc, r=lr, root=L)]  # bottom-up
+                if ddH:
+                    tt, c, r = sum_vt(ddH)
+                    dH += [CF(H=ddH, dTT=tt, m=val_(tt, ttN), c=c, r=r, root=L)]  # lev.H: ders, lev.N_: dN_?
+        # revert to bottom-up, on completion: L.dTT,L.c,L.r = sum_vt(L.H); L.m = val_(L.dTT,ttN)?
+        L.H += dH[::-1]
+    def sum_dn_(dn_,L):
         lev = sum2F(dn_,nF='tF',root=L); TT,C,R = lev.dTT,lev.c,lev.r  # dN_ maybe dFt, works the same
         for dn in dn_: add_H(L.H, dn.H, L)  # lower der level, if hasattr H?
-        L.H += [add2F(_lev,lev,merge=2) if _lev else lev]  # merge top and new der level?
+        L.H += [CF(H=[lev],dTT=TT,m=lev.m,c=C,r=R,root=L)]  # new top level?
         w = C/L.c * (L.r/R)
         L.dTT = (L.dTT+ TT*w) / (1+w); L.m = val_(L.dTT,ttN); L.r = (L.r+R*w)/(1+w); L.c+=C
     L = CL(N_=[_N,N], c=c,r=r,root=rL)
@@ -188,25 +176,24 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0):  # _j: index in 
     else:
         dTT = comp_dT(_N.dTT[1],N.dTT[1], c, _j+1)  # no M,D,ext,kern?
     m = val_(dTT,ttN); L.dTT,L.m = dTT,m  # exclude ddTT from m?
-    lev = None
+    H = [CF(N_=[_N,N],dTT=dTT,m=m,c=c,r=r,root=L)]  # new top H
     if "ddTT" in locals():
-        m+=(dm:= val_(ddTT,ttN)); lev = CF(N_=[_N,N],dTT=ddTT,m=dm,c=c)  # H=[lev], same c?
+        m+=(dm:= val_(ddTT,ttN)); H += [CF(N_=[_N,N],dTT=ddTT,m=dm,c=c,r=r,root=L)]  # H=[lev], same c?
     if N.typ:  # converted Ls, skip PPs, Fts?
         dn_=[]
         if N.typ==3:
             if gv_(m* (c*wN /(r*cN)) - ave):
                 for i,(_Ft,Ft) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct), (N.Nt,N.Lt,N.Bt,N.Ct))):
                     if _Ft and Ft:
-                        dn_ += dF:= [comp_F(_Ft,Ft, r,L,_j)]; r+= (i or 1)-1
-                        if not i: L.H = dF.H  # or dNt.H + [dLt.H]?
+                        dn_ += [dF:= comp_F(_Ft,Ft, r,L,_j)]; r+= (i or 1)-1
+                        if i==0: L.H = dF.H  # or dNt.H + [dLt.H]?
+                        elif i==2: add2F(L.H[-1], dF, merge=2, fH=2)  # dBt is next dLev?
         elif gv_(m* (c*wF /(r*cF)) - ave):  # L|B, forms trans-Ls?
             for _n,n in product(_N.N_,N.N_):
-                if _n is not n: dn_+= [comp_N(_n,n, r,min(_n.c,n.c,_j=_j),rL=L,full=0,_j=_j)]  # CC: medoid Ns may overlap?
-        if dn_: sum_dn_(dn_,L, lev)  # tFt if CN else dN_
-        else:
-            L.H += [[]]  # placeholder for skipped diff(N.N_)
-            if _N.H and N.H: comp_H(_N,N,L)
-            if lev: L.H +=[lev]
+                if _n is not n: dn_+= [comp_N(_n,n, r,min(_n.c,n.c),rL=L,full=0,_j=_j)]  # CC: medoid Ns may overlap?
+        if dn_: sum_dn_(dn_,L)  # tFt if CN else dN_
+        elif _N.H and N.H:  # summary only
+            comp_H(_N,N,L)
     if full:
         for n,_n in (_N,N),(N,_N): n.rim += [L]
     FV_(CoF.get(),L.dTT,L.c,L.r)
@@ -556,7 +543,8 @@ def add2F(F,f, merge=0, fH=1):  # unpack for batching in sum2F
         R.angl = F.angl = [A:= np.sum(A_:= [L.angl[0] * L.angl[1] for L in F.N_], axis=0), 1]
         R.mang = F.mang = np.mean([comp_A(A, a)[0] for a in A_])
         for N in f.N_: N.root = F
-    if fH and hasattr(F,'H') and getattr(f,'H',None): add_H(F.H, f.H, F)  # redundant to add_Nt?
+    if fH==2: F.H += [f]  # f is F's next level
+    elif fH and hasattr(F,'H') and getattr(f,'H',None): add_H(F.H, f.H, F)  # redundant to add_Nt?
     if getattr(f,'Ct',None) and hasattr(F,'Ct'): add2F(F.Ct, f.Ct, merge=1)
     return F
 
