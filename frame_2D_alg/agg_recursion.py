@@ -161,10 +161,13 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0):  # _j: index in 
         L.H += dH[::-1]
     def sum_dn_(dn_,L):
         lev = sum2F(dn_,nF='tF',root=L); TT,C,R = lev.dTT,lev.c,lev.r  # dN_ maybe dFt, works the same
-        for dn in dn_: add_H(L.H, dn.H, L)  # lower der level, if hasattr H?
-        L.H += [CF(H=[lev],dTT=TT,m=lev.m,c=C,r=R,root=L)]  # new top level?
+        for dn in dn_: add_H(L.H, dn.H, L)  # lower der level, if hasattr H?        
+        if (dBt:= next((dn for dn in dn_ if dn.nF=='Bt'), None)):
+            if L.H and L.H[-1]: L.H[-1].H += [dBt]
+            else: L.H += [CF(H=[dBt],dTT=copy(dBt.dTT),m=dBt.m,c=dBt.c,r=dBt.r,root=L)]  # dBt as top der lev
         w = C/L.c * (L.r/R)
         L.dTT = (L.dTT+ TT*w) / (1+w); L.m = val_(L.dTT,ttN); L.r = (L.r+R*w)/(1+w); L.c+=C
+        return lev
     L = CL(N_=[_N,N], c=c,r=r,root=rL)
     if full:
         dTT,ddTT = base_comp(_N,N,_j)  # !rn?
@@ -176,24 +179,26 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0):  # _j: index in 
     else:
         dTT = comp_dT(_N.dTT[1],N.dTT[1], c, _j+1)  # no M,D,ext,kern?
     m = val_(dTT,ttN); L.dTT,L.m = dTT,m  # exclude ddTT from m?
-    H = [CF(N_=[_N,N],dTT=dTT,m=m,c=c,r=r,root=L)]  # new top H
+    dn_=[]; H = [CF(N_=[_N,N],dTT=dTT,m=m,c=c,r=r,root=L)]  # new top H
     if "ddTT" in locals():
         m+=(dm:= val_(ddTT,ttN)); H += [CF(N_=[_N,N],dTT=ddTT,m=dm,c=c,r=r,root=L)]  # H=[lev], same c?
     if N.typ:  # converted Ls, skip PPs, Fts?
-        dn_=[]
         if N.typ==3:
             if gv_(m* (c*wN /(r*cN)) - ave):
                 for i,(_Ft,Ft) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct), (N.Nt,N.Lt,N.Bt,N.Ct))):
-                    if _Ft and Ft:
+                    if _Ft and Ft: 
                         dn_ += [dF:= comp_F(_Ft,Ft, r,L,_j)]; r+= (i or 1)-1
-                        if i==0: L.H = dF.H  # or dNt.H + [dLt.H]?
-                        elif i==2: add2F(L.H[-1], dF, merge=2, fH=2)  # dBt is next dLev?
+                        # this should be already done in sum_dn_?
+                        # if i==0: L.H = dF.H  # or dNt.H + [dLt.H]?
+                        # elif i==2 and L.H and L.H[-1]: add2F(L.H[-1], dF, merge=2, fH=2)  # dBt is next dLev?
         elif gv_(m* (c*wF /(r*cF)) - ave):  # L|B, forms trans-Ls?
             for _n,n in product(_N.N_,N.N_):
                 if _n is not n: dn_+= [comp_N(_n,n, r,min(_n.c,n.c),rL=L,full=0,_j=_j)]  # CC: medoid Ns may overlap?
-        if dn_: sum_dn_(dn_,L)  # tFt if CN else dN_
+        if dn_: H += [sum_dn_(dn_,L)]  # tFt if CN else dN_
         elif _N.H and N.H:  # summary only
             comp_H(_N,N,L)
+    TT,C,R = sum_vt(H); L.H += [CF(N_=dn_,H=H,dTT=TT,m=val_(TT,ttN),c=C,r=R,root=L)]
+    w = C/L.c * (L.r/R); L.dTT = (L.dTT+ TT*w) / (1+w); L.m = val_(L.dTT,ttN); L.r = (L.r+R*w)/(1+w); L.c+=C  # or can just recompute everything from L.H? There's overlapping params here
     if full:
         for n,_n in (_N,N),(N,_N): n.rim += [L]
     FV_(CoF.get(),L.dTT,L.c,L.r)
