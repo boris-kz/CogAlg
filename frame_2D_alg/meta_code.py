@@ -52,36 +52,36 @@ class CF(CBase):  # clustering fork: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, 
         f.root_ = kw.get('root_', [])  # [[C,m,d]...] per root centroid, add in cluster_C only?
     def __bool__(f): return bool(f.c)  # N_ may be empty?
 
-class CL(CF):  # typ=1, add kern+positionals for base comp, Rt,Nt,Bt,Ct from comp_sub F2N
-    name = "link"
-    def __init__(l, **kw):
-        super().__init__(**kw)
-        l.kern = kw.get('kern',np.zeros(4))  # I,G,A diffs in links
-        l.span = kw.get('span',1)  # distance in nodet or aRad, comp with kern or len(N_)
-        l.angl = kw.get('angl',None)  # (dy,dx),dir, sum from L_, rarely?
-        l.mang = kw.get('mang',1) # ave match of angles in L_, =1 in links
-        l.box  = kw.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
-        l.typ  = kw.get('typ',1)
-        l.rim  = kw.get('rim',[])  # comp PPs and Ls
-        l.yx   = kw.get('yx', np.zeros(2))  # mean nodet? comp box is not meaningful?
-        l.nexp = kw.get('nexp',1)
-
 def prop_F_(F, attr='N_'):  # factory function to get and update top-composition fork.N_|H
     def get(N): return getattr(getattr(N,F), attr)
     def set(N, new_val): setattr(getattr(N,F), attr, new_val)
     return property(get,set)
 
-class CN(CL):  # full node|graph for xcomp, adding fork set
+class CN(CF):  # full node|graph for xcomp, adding fork set, kern+positionals for base comp
     name = "node"
     N_,L_,B_,C_,X_,rim = prop_F_('Nt'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Ct'),prop_F_('Xt'),prop_F_('Rt')  # C,N: int|ext-defined nodes, L,B: int|ext links
-    H = prop_F_('Lt','H')  # derivation levs, vs composition levs in Nt.H
+    H = prop_F_('Nt','H')  # composition ( derivation levs, or Nt.H[-1] + sum Lt.H: Xt?
     def __init__(n, **kw):
         n.Nt,n.Bt,n.Lt,n.Ct,n.Xt,n.Rt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Lt','Ct','Xt','Rt')))  # CN if nest
         super().__init__(**kw)
+        n.kern = kw.get('kern',np.zeros(4))  # I,G,A diffs in links
+        n.span = kw.get('span',1)  # distance in nodet or aRad, comp with kern or len(N_)
+        n.angl = kw.get('angl',None)  # (dy,dx),dir, sum from L_, rarely?
+        n.mang = kw.get('mang',1) # ave match of angles in L_, =1 in links
+        n.box  = kw.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
+        n.rim  = kw.get('rim',[])  # comp PPs and Ls
+        n.yx   = kw.get('yx', np.zeros(2))  # mean nodet? comp box is not meaningful?
+        n.nexp = kw.get('nexp',1)
         n.exe = kw.get('exe',0)  # exemplar, temporary
         n.typ = kw.get('typ',3)  # full comp, =2 for Cs?
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.c)
+
+class CL(CN):  # attrs = CN d_attrs
+    name = "link"
+    def __init__(l, **kw):
+        super().__init__(**kw)
+        l.nt = kw.get('nt', [])
 
 class CoF(CF):
     name = "func"
