@@ -69,3 +69,10 @@ def comp_F(_F, F, ir=0, rL=None,_j=0):
     # add comp_H?
     FV_(CoF.get(), dF.dTT, dF.c, dF.r)
     return dF  # no cross-fork N_, no L ext updates?
+
+def sum_dn_(dn_,L):
+        lev = sum2F(dn_,nF='tF',root=L); TT,C,R = lev.dTT,lev.c,lev.r  # dN_ maybe dFt, works the same
+        for dn in dn_: add_H(L.H, dn.H, L)  # lower der level, if hasattr H?
+        L.H += [CF(H=[lev],dTT=TT,m=lev.m,c=C,r=R,root=L)]  # new top level?
+        w = C/L.c * (L.r/R)
+        L.dTT = (L.dTT+ TT*w) / (1+w); L.m = val_(L.dTT,ttN); L.r = (L.r+R*w)/(1+w); L.c+=C

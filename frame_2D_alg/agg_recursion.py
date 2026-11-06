@@ -142,76 +142,70 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1):  # recursion r
                 G_ = cross_comp(root, proj_L_(combinations(G_,2),root,_r+1),_r+1) or G_
     return G_
 
-def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0):  # _j: index in dH if spec
+def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: index in dH if spec
 
-    def comp_H(_N, N, L):
-        dH = []
-        for _lev, lev in zip(reversed(_N.H), reversed(N.H)):  # top-down in composition
-            if _lev and lev:  # no break
-                ddH = []
-                for j, (_l, l) in enumerate(zip(_lev.H, lev.H)):  # bottom-up in derivation
-                    if _l and l:
-                        lc = min(_l.c,l.c); lr = (_l.r+l.r)/2
-                        ltt = comp_dT(_l.dTT[1], l.dTT[1], lc, j+1)  # as in base_comp
-                        ddH += [CF(dTT=ltt, m=val_(ltt, ttN), c=lc, r=lr, root=L)]  # bottom-up
-                if ddH:
-                    tt, c, r = sum_vt(ddH)
-                    dH += [CF(H=ddH, dTT=tt, m=val_(tt, ttN), c=c, r=r, root=L)]  # lev.H: ders, lev.N_: dN_?
-        # revert to bottom-up, on completion: L.dTT,L.c,L.r = sum_vt(L.H); L.m = val_(L.dTT,ttN)?
-        L.H += dH[::-1]
-    def sum_dn_(dn_,L):
-        lev = sum2F(dn_,nF='tF',root=L); TT,C,R = lev.dTT,lev.c,lev.r  # dN_ maybe dFt, works the same
-        for dn in dn_: add_H(L.H, dn.H, L)  # lower der level, if hasattr H?
-        L.H += [CF(H=[lev],dTT=TT,m=lev.m,c=C,r=R,root=L)]  # new top level?
-        w = C/L.c * (L.r/R)
-        L.dTT = (L.dTT+ TT*w) / (1+w); L.m = val_(L.dTT,ttN); L.r = (L.r+R*w)/(1+w); L.c+=C
-    L = CL(N_=[_N,N], c=c,r=r,root=rL)
+    L = CL(nt=[_N,N], c=c,r=r,root=rL)
     if full:
-        dTT,ddTT = base_comp(_N,N,_j)  # !rn?
+        dTT,ddTT = base_comp(_N,N,_j)  # N.dTT is combined from top-level forks
         if span is None: span = np.hypot(*_N.yx-N.yx)
         yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
         box = np.array([min(_y,y),min(_x,x), max(_y,y),max(_x,x)])
         angl = [np.zeros(2) if A is None else A, np.sign(dTT[1] @ ttN[1])]
         L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2
+        dTT += ddTT  # same c, der?
     else:
-        dTT = comp_dT(_N.dTT[1],N.dTT[1], c, _j+1)  # no M,D,ext,kern?
-    m = val_(dTT,ttN); L.dTT,L.m = dTT,m  # exclude ddTT from m?
-    H = [CF(N_=[_N,N],dTT=dTT,m=m,c=c,r=r,root=L)]  # new top H
-    if "ddTT" in locals():
-        m+=(dm:= val_(ddTT,ttN)); H += [CF(N_=[_N,N],dTT=ddTT,m=dm,c=c,r=r,root=L)]  # H=[lev], same c?
-    if N.typ:  # converted Ls, skip PPs, Fts?
-        dn_=[]
-        if N.typ==3:
-            if gv_(m* (c*wN /(r*cN)) - ave):
-                for i,(_Ft,Ft) in enumerate(zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct), (N.Nt,N.Lt,N.Bt,N.Ct))):
-                    if _Ft and Ft:
-                        dn_ += [dF:= comp_F(_Ft,Ft, r,L,_j)]; r+= (i or 1)-1
-                        if i==0: L.H = dF.H  # or dNt.H + [dLt.H]?
-                        elif i==2: add2F(L.H[-1], dF, merge=2, fH=2)  # dBt is next dLev?
-        elif gv_(m* (c*wF /(r*cF)) - ave):  # L|B, forms trans-Ls?
-            for _n,n in product(_N.N_,N.N_):
-                if _n is not n: dn_+= [comp_N(_n,n, r,min(_n.c,n.c),rL=L,full=0,_j=_j)]  # CC: medoid Ns may overlap?
-        if dn_: sum_dn_(dn_,L)  # tFt if CN else dN_
-        elif _N.H and N.H:  # summary only
-            comp_H(_N,N,L)
+        dTT = comp_dT(_N.dTT[1], N.dTT[1], c, _j+1)  # 1st der only, no M,D,ext,kern
+    m = val_(dTT, ttN)  # 0+1 der/lev, same c
+    if N.typ==2:  # N|L
+        if gv_(m* (c*wF /(r*cF)) - ave):
+                for _Ft,Ft,nF in zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct), (N.Nt,N.Lt,N.Bt,N.Ct), ('Nt','Lt','Bt','Ct')):
+                    if _Ft and Ft:  # assign dFt as L.Ft; dNt.H[-1]+[dLt]?
+                        comp_F(_Ft,Ft, nF, r,L,_j)
+    elif N.typ and gv_(m* (c*wN /(r*cN)) - ave):  # C_ or Ft.N_ from comp_F, forms trans-Ls
+        for _n,n in product(_N.N_,N.N_):  # spec -> L.H
+            if _n is not n:  # CC: medoid Ns may overlap?
+                dN_ = comp_N(_n,n, r,min(_n.c,n.c), rL=L,full=0,_j=_j)  # fork N_
+                setattr(rL,nF, sum2F(dN_,rL))  # rL maybe lev in L.H?
+    elif _N.H and N.H:  # or per Ft?
+        comp_H(_N,N,L)
+    if dF_ := [F for F in (L.Nt,L.Lt,L.Bt,L.Ct) if F]:  # fork-wise | trans 1st der replaces whole-N ddTT
+        ddTT,C,R = sum_vt(dF_); L.r = (L.r*L.c + R*C) / (L.c+C); L.c += C; dTT += ddTT
+    L.dTT = dTT; L.m = val_(dTT,ttN)
     if full:
         for n,_n in (_N,N),(N,_N): n.rim += [L]
     FV_(CoF.get(),L.dTT,L.c,L.r)
     return L
 
-def comp_F(_F, F, ir=0, rL=None, j=None):
+def comp_F(_F, F, nF, ir=0, rL=None, j=None):
+
     c = min(_F.c,F.c)
-    ddTT = comp_dT(_F.dTT[1],F.dTT[1],c, j)  # no M,D,ext,kern?
+    ddTT = comp_dT(_F.dTT[1],F.dTT[1],c, j+1)  # 1st der, same dLev as base_comp ddTT
     m = val_(ddTT,ttF); r = (_F.r+F.r)/2 + ir
-    dF = CF(dTT=ddTT, m=m,r=r,c=c, nF=F.nF)
-    if (_N_:=_F.N_) and (N_:=F.N_):
-        Np_ = list(product(_N_,N_))  # pairs; Lt,Bt: links, Ct: centroids
-        tt = (rL.dTT*rL.c + ddTT*dF.c) / (rL.c+dF.c)
-        if gv_(val_(tt,ttX) * (c*wX /(r*cX)) - ave):  # any sub-comp?
-            if F.nF=='Nt':  # tLs between nodes only, add comp_H?
-                cross_comp(rL, proj_L_(Np_,2,r), r,dF)
+    dF = CF(dTT=ddTT, m=m,r=r,c=c, nF=nF, root=rL)
+    if nF in ('Nt','Bt') and (_N_:=_F.N_) and (N_:=F.N_):
+        tt = (rL.dTT*rL.c + ddTT*c) / (rL.c+c)  # vert comb
+        if gv_(val_(tt,ttX) * (c*wX /(r*cX)) - ave):
+            cross_comp(rL, proj_L_(list(product(_N_,N_)),2,r), r,dF, _j=j+1)  # tL-> dF.N_
+    elif _F.H and F.H:  # CL,CC?
+        comp_H(_F.H,F.H, dF,j+2)  # rL: lev in L.H, no cross-fork N_, no L ext updates?
+    setattr(rL,nF,dF)
     FV_(CoF.get(), dF.dTT, dF.c, dF.r)
-    return dF  # no cross-fork N_, no L ext updates?
+
+def comp_H(_N, N, L):
+    dH = []
+    for _lev, lev in zip(reversed(_N.H), reversed(N.H)):  # top-down in composition
+        if _lev and lev:  # no break
+            ddH = []
+            for j, (_l, l) in enumerate(zip(_lev.H, lev.H)):  # bottom-up in derivation
+                if _l and l:
+                    lc = min(_l.c,l.c); lr = (_l.r+l.r)/2
+                    ltt = comp_dT(_l.dTT[1], l.dTT[1], lc, j+1)  # as in base_comp
+                    ddH += [CF(dTT=ltt, m=val_(ltt, ttN), c=lc, r=lr, root=L)]  # bottom-up
+            if ddH:
+                tt, c, r = sum_vt(ddH)
+                dH += [CF(H=ddH, dTT=tt, m=val_(tt, ttN), c=c, r=r, root=L)]  # lev.H: ders, lev.N_: dN_?
+    # revert to bottom-up, on completion: L.dTT,L.c,L.r = sum_vt(L.H); L.m = val_(L.dTT,ttN)?
+    L.H += dH[::-1]
 
 def base_comp(_N,N, j=0):  # j: root depth, comp Et, kern, extT, dTT; rational M?
 
