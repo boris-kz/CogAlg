@@ -295,7 +295,7 @@ def generate_params_weight(ddX,dL,dM,dDx,dDy,mdX,mL,mM,mDx,mDy,fdx,dDdx,dMdx,mDd
 
         f.close()
 
-    except:
+    except (ZeroDivisionError, OSError):
         pass
 
 # may useful in the future when we need to visualize the param weight
