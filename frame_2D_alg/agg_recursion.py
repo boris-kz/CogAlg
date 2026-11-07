@@ -155,25 +155,23 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: 
         dTT += ddTT  # same c, der?
     else:
         dTT = comp_dT(_N.dTT[1], N.dTT[1], c, _j+1)  # 1st der only, no M,D,ext,kern
-    m = val_(dTT, ttN)  # 0+1 der/lev, same c
-    if N.typ==3:  # N|L
-        if gv_(m* (c*wF /(r*cF)) - ave):
-                for _Ft,Ft,nF in zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct), (N.Nt,N.Lt,N.Bt,N.Ct), ('Nt','Lt','Bt','Ct')):
-                    if _Ft and Ft:  # assign dFt as L.Ft; dNt.H[-1]+[dLt]?
-                        comp_F(_Ft,Ft, nF, r,L,_j)
-    # Ft's typ == 0, we shouldn't check with typ?
-    elif gv_(m* (c*wN /(r*cN)) - ave):  # C_ or Ft.N_ from comp_F, forms trans-Ls
+    m = val_(dTT,ttN)  # 0+1 der/lev, same c
+    if N.typ==2 and gv_(m* (c*wF /(r*cF)) - ave):  # N|L
+            for _Ft,Ft,nF in zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct), (N.Nt,N.Lt,N.Bt,N.Ct), ('Nt','Lt','Bt','Ct')):
+                if _Ft and Ft:  # assign dFt as L.Ft; dNt.H[-1]+[dLt]?
+                    comp_F(_Ft,Ft, nF, r,L,_j)
+    elif N.typ and gv_(m* (c*wN /(r*cN)) - ave):  # C_ or Ft.N_ from comp_F, forms trans-Ls
         dN_ = []
-        for _n,n in product(_N.N_,N.N_):  # spec -> L.H
-            if _n is not n:  # CC: medoid Ns may overlap?
-                dN_ += [comp_N(_n,n, r,min(_n.c,n.c), rL=L,full=0,_j=_j)]  # fork N_
-        if dN_: sum2F(dN_,L, nF=nF)  # per fork   
+        for _n,n in product(_N.N_,N.N_):  # spec
+            if _n is not n:  # if CC: medoid Ns may overlap?
+                dN_+= [comp_N(_n,n, r,min(_n.c,n.c), rL=L,full=0,_j=_j)]
+        if dN_: sum2F(dN_,L, nF=nF)  # per fork
     else:
         for _Ft,Ft,nF in zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct), (N.Nt,N.Lt,N.Bt,N.Ct), ('Nt','Lt','Bt','Ct')):
             if _Ft and Ft:
-                comp_H(_Ft.H,Ft.H,L,nF=nF)  # per Ft
-    if dF_ := [F for F in (L.Nt,L.Lt,L.Bt,L.Ct) if F]:  # fork-wise | trans 1st der replaces whole-N ddTT
-        ddTT,C,R = sum_vt(dF_); L.r = (L.r*L.c + R*C) / (L.c+C); L.c += C; dTT += ddTT   # use dTT+=ddTT to pevent redundancy?
+                comp_H(_Ft.H, Ft.H, L)  # per Ft
+    if dF_:= [F for F in (L.Nt,L.Lt,L.Bt,L.Ct) if F]:  # fork-wise | trans 1st der replaces whole-N ddTT
+        ddTT,C,R = sum_vt(dF_); L.r = (L.r*L.c + R*C) / (L.c+C); L.c+=C; dTT+=ddTT
     L.dTT = dTT; L.m = val_(dTT,ttN)
     if full:
         for n,_n in (_N,N),(N,_N): n.rim += [L]
@@ -213,6 +211,7 @@ def comp_H(_N, N, L):
 
 def base_comp(_N,N, j=0):  # j: root depth, comp Et, kern, extT, dTT; rational M?
 
+    # D is redundant to sum comp_dT?
     M, D = N.dTT.sum(axis=1);  C= N.c;  I, G, Dy, Dx = N.kern;  L = len(N.N_)  # M,D, 0-der params? or N.m, xsign sum d_: directional or abs?
     _M,_D =_N.dTT.sum(axis=1); _C=_N.c; _I,_G,_Dy,_Dx =_N.kern; _L = len(_N.N_)  # N_: density in span
     rn = C/_C; mA=dA=0
@@ -440,16 +439,20 @@ def cluster_P(_C_, root): # multi-seed mean shift: parallel centroid refine, _C_
     return out_
 
 def sum2G(F_, wTT, root=None, _r=0,):  # finalize CN from C or (N_,L_,B_), eval trans_cluster, der+, sub+
-
     def trans_cluster(G):
-        for L in G.L_:
-            for tL in (L.Nt.N_ + L.Bt.N_):  # need L.tFt.H too?
-                if tL.m * (tL.c*wcN / (tL.r*ccN)) > ave:  # merge trans_link.nt.roots:
-                    rt0 = getattr(tL.nt[0].root,'root',None); rt1 = getattr(tL.nt[1].root,'root',None)
-                    if rt0 and rt1 and rt0 != rt1:
-                        if rt1.H: add_H(rt0.H, rt1.H, rt0, fN=1)
-                        add2F(rt0,rt1, merge=1,fH=0)  # recompute Nt attrs / G
-
+        for L in G.L_:  # draft:
+            for tL in (L.Nt.N_ + L.Bt.N_):  # top level
+                if tL.m * (tL.c*wcN / (tL.r*ccN)) > ave: pass  # sum m across levs for merge eval?
+                for lev in L.H:  # tFt/Nt | tN_/Bt, not Lt|Ct  # not revised:
+                    if lev:
+                        for tF in lev.N_ if not isinstance(lev.N_[0],CL) else [lev]:  # CF|CL: Nt|Bt, from spec?
+                            for tL in tF.N_:
+                                if tL.m * (tL.c*wcN / (tL.r*ccN)) > ave:  # merge trans_link.N_.roots:
+                                    rt0 = getattr(tL.N_[0].root,'root',None); rt1 = getattr(tL.N_[1].root,'root',None)
+                                    if rt0 and rt1 and rt0 != rt1:
+                                        if rt1.H: add_H(rt0.H, rt1.H, rt0, fN=1)
+                                        add2F(rt0,rt1, merge=1,fH=0)  # recompute Nt attrs / G
+                    else: break  # !top lev
     G = CN(root=root,wTT=wTT)
     L_, pL_ = [],[]
     if isinstance(F_,tuple):
@@ -462,11 +465,11 @@ def sum2G(F_, wTT, root=None, _r=0,):  # finalize CN from C or (N_,L_,B_), eval 
             elif L.nexp == 1:  # rng+ only
                 if ave - L.m > ave: B_ += [L]  # -ve deviation should borrow
     for L in _L_:
-        if L.typ!=-1: L_ += [L]
-        else:         pL_ += [L]
+        if L.typ==-1: pL_+= [L]
+        else:         L_ += [L]
     if pL_:
         pm, pc, pr = sum_vt(pL_, fm=1, wTT=wTT)[0], sum([L.c for L in pL_]), np.mean([L.r for L in pL_])
-        if pm * (wN * pc / (cN * pr)) > ave:
+        if pm * (wN*pc /(cN*pr)) > ave:
             for pL in pL_:
                 L_ += [L:= comp_N(*pL.nt,pL.r,pL.c,1,pL.angl[0],pL.span,root)]; L.nexp=pL.nexp
                 for N in pL.nt: N.rim.remove(pL)
@@ -697,7 +700,6 @@ def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N
         cert = abs(val_(TT, wTT) * (L.c+wPrj)/(r+cPrj) - ave)  # approximation
         if cert > ave * (r+cPrj):  # certainty margin
             pTT += TT
-
     cos_d = (N.angl[0].dot(A) / ((np.hypot(*N.angl[0]) * dist) or eps)) * N.angl[1] if N.angl else 0  # int x ext angle alignment, mean=0
     iTT, eTT = np.zeros((2,9)),np.zeros((2,9)); c = 0
     wTT = CoF.get().wTT*ttPrj
@@ -860,7 +862,7 @@ def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fo
     global  ave, avd, oF_, nF_, iF_, i___,d___,c__
     def Mass_():
         # define mass/par: correlation between |i| and inv_m, c-weighted
-        for i__,d__,c_, mass_, avad_ in zip(i___, d___, c__, mass__, avad__):
+        for i__,d__,c_, mass_,avad_ in zip(i___,d___,c__,mass__,avad__):
             if not c_: continue  # no new comps in dLev
             c_ = np.array(c_)[:,None]; C = c_.sum()
             avi_ = (i__ * c_).sum(0) / C  # weighted mean inp / par
