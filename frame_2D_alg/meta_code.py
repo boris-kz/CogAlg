@@ -47,7 +47,7 @@ class CF(CBase):  # clustering fork: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, 
         f.nF = kw.get('nF','Nt')
         f.dTT = kw.get('dTT',np.zeros((2,9))); f.m, f.d, f.c, f.r = [kw.get(x,0) for x in ('m','d','c','r')]  # rdpTT in oF?
         f.wTT = kw.get('wTT',copy(wTT))  # mean wTT = 1?
-        f.typ = kw.get('typ',0)  # blocks sub_comp
+        f.typ = kw.get('typ',1)  # blocks sub_comp
         f.root = kw.get('root',None)  # convert to list in typ oFs?
         f.root_ = kw.get('root_', [])  # [[C,m,d]...] per root centroid, add in cluster_C only?
     def __bool__(f): return bool(f.c)  # N_ may be empty?
@@ -73,7 +73,7 @@ class CN(CF):  # full node|graph for xcomp, adding fork set, kern+positionals fo
         n.yx   = kw.get('yx', np.zeros(2))  # mean nodet? comp box is not meaningful?
         n.nexp = kw.get('nexp',1)
         n.exe = kw.get('exe',0)  # exemplar, temporary
-        n.typ = kw.get('typ',3)  # full comp, =2 for Cs?
+        n.typ = kw.get('typ',2)  # full comp, =2 for Cs?
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.c)
 
@@ -158,7 +158,7 @@ def parse_funcs(paths):
 def clust_oF_():  # simplified oF rim-mediated centroid clustering
 
     global oF_  # uncalled Fs, don't cluster, pack in _F_ if the loop is not representative:
-    F_ = [F for F in oF_ if F or F.typ==0]  # F.typ==0 to include the prior split new oFs
+    F_ = [F for F in oF_ if F or F.typ==1]  # F.typ==0 to include the prior split new oFs
     for F in F_: F.rim = []; F.w = 0; F.root_ = []
     for _F, F in combinations(F_,2):  # w = relative compression: shared / min cost, ave-commensurate
         if (w := comp_body(_F.body, F.body)) > ave * min(_F.fc, F.fc):
