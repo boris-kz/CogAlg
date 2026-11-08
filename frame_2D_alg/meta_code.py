@@ -71,17 +71,12 @@ class CN(CF):  # full node|graph for xcomp, adding fork set, kern+positionals fo
         n.box  = kw.get('box',np.array([np.inf, np.inf, -np.inf, -np.inf]))  # y0, x0, yn, xn
         n.rim  = kw.get('rim',[])  # comp PPs and Ls
         n.yx   = kw.get('yx', np.zeros(2))  # mean nodet? comp box is not meaningful?
+        n.nt   = kw.get('nt', [])  # links only: if nt
         n.nexp = kw.get('nexp',1)
         n.exe = kw.get('exe',0)  # exemplar, temporary
         n.typ = kw.get('typ',2)  # full comp, =2 for Cs?
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.c)
-
-class CL(CN):  # attrs = CN d_attrs
-    name = "link"
-    def __init__(l, **kw):
-        super().__init__(**kw)
-        l.nt = kw.get('nt', [])
 
 class CoF(CF):
     name = "func"
