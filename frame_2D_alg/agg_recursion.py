@@ -144,17 +144,17 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1):  # recursion r
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: index in dH if spec
 
-    L = CN(nt=[_N,N], c=c,r=r,root=rL); dTT = []
+    L = CN(nt=[_N,N], c=c,r=r,root=rL)
     if full:
         dTT,ddTT = base_comp(_N,N,_j)  # N.dTT is combined from top-level forks
         if span is None: span = np.hypot(*_N.yx-N.yx)
         yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
         box = np.array([min(_y,y),min(_x,x), max(_y,y),max(_x,x)])
         angl = [np.zeros(2) if A is None else A, np.sign(dTT[1] @ ttN[1])]
-        L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2
+        L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2; L.dTT = dTT+ddTT  # assign L.dTT for comp_F
     else:
-        ddTT = comp_dT(_N.dTT[1], N.dTT[1], c, _j+1)  # 1st der only, no M,D,ext,kern
-    m = val_(ddTT,ttN) + (val_(dTT,ttN) if dTT else 0)
+        L.dTT = ddTT = comp_dT(_N.dTT[1], N.dTT[1], c, _j+1)  # 1st der only, no M,D,ext,kern
+    m = val_(ddTT,ttN) + (val_(dTT,ttN) if full else 0)
     # 2 dO/ composition, same c
     if N.typ==2 and gv_(m* (c*wF /(r*cF)) - ave):  # N|L
         for _Ft,Ft,nF in zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct), (N.Nt,N.Lt,N.Bt,N.Ct), ('Nt','Lt','Bt','Ct')):
@@ -168,7 +168,7 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: 
         if dN_: sum2F(dN_,L, nF=nF)  # per fork
     if dF_ := [F for F in (L.Nt,L.Lt,L.Bt,L.Ct) if F]:  # fork-wise | trans 1st der replaces whole-N ddTT
         ddTT,C,R = sum_vt(dF_); L.r = (L.r*L.c + R*C) / (L.c+C); L.c+=C
-    if dTT: ddTT += dTT
+    if full: ddTT += dTT
     L.dTT = ddTT; L.m = val_(ddTT,ttN)
     if full:
         for n,_n in (_N,N),(N,_N): n.rim += [L]
@@ -232,7 +232,7 @@ def comp(_pars, pars, meA,deA, c=1, j=0):  # compute m_,d_ from inputs or deriva
         if isinstance(_p, list):  # vector angle
             mA, dA = comp_A(_p, p); m_ += [mA]; d_ += [dA]; _i_+=[0]; i_ += [0]
         else:
-            d_ += [d := [_p - p]]
+            d_ += [d := (_p - p)]
             m = min(abs(_p), abs(p))
             if (_p<0) != (p<0): m =- m  # gap between comparands
             m_ += [m * mass + (avad-abs(d)) * (1-mass)]  # massive and massless m, not relative?
@@ -776,7 +776,7 @@ def vect_edge(T, iY,iX,Ly,Lx, rV=1):  # T=tile, PP_ cross_comp and floodfill to 
         y,x,Y,X = box; dy,dx = Y+1-y, X+1-x
         A = [np.array(A), np.sign(dTT[1] @ ttVct[1])]  # append sign
         PP = CN(typ=0, dTT=dTT,m=m,c=c,r=1, kern=kern,yx=yx,angl=A,span=np.hypot(dy/2,dx/2))  # set root in trace_edge
-        m_, d_ = np.zeros(6), np.zeros(6); PP.B_ = B_; PP.box = box
+        m_, d_ = np.zeros(5), np.zeros(5); PP.B_ = B_; PP.box = box
         for B in B_: m_ += B.verT[0]; d_ += B.verT[1];
         ad_ = np.abs(d_); t_ = m_ + ad_  # ~ max comparand
         m = m_/eps_(t_) @ w_t[0] - ave*2  # d = ad_/eps_(t_) @ w_t[1] - avd*2
