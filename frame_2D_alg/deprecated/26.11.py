@@ -76,3 +76,23 @@ def sum_dn_(dn_,L):
         L.H += [CF(H=[lev],dTT=TT,m=lev.m,c=C,r=R,root=L)]  # new top level?
         w = C/L.c * (L.r/R)
         L.dTT = (L.dTT+ TT*w) / (1+w); L.m = val_(L.dTT,ttN); L.r = (L.r+R*w)/(1+w); L.c+=C
+
+def comp(_pars, pars, meA,deA, c=1, j=0):  # compute m_,d_ from inputs or derivatives
+
+    m_,d_ = [],[]; _i_, i_ = [],[]
+    for i, (_p,p, mass,avad,avi,wd) in enumerate(zip(_pars,pars, mass__[j],avad__[j],avi__[j],dcov__[j])):  # prior-frame mean |d| = massless m
+        if isinstance(_p, list):  # vector angle
+            mA, dA = comp_A(_p, p); m_ += [mA]; d_ += [dA]; _i_+=[0]; i_ += [0]
+        else:
+            m = min(abs(_p), abs(p))
+            if (_p<0) != (p<0): m =- m  # gap between comparands
+            ard = avad * (((abs(_p)+abs(p))/2) / avi) ** wd  # massless m
+            m_ += [m* mass + ard* (1-mass)]
+            # nd = avad * ((_ap+ap)/2 / avi) ** wd  # expected |d| at this magnitude: normalizes |d| in val_, outside the mix
+            # m_ += [m* mass + nd* (1-mass)]  # massless m = expected |d|
+            d_ += [_p - p]
+            _i_+=[_p]; i_ += [p]
+    global i___,d___,c__  # init dH=[lev0], mA mass=0:
+    i___[j] += [(np.abs(_i_+[0]) + np.abs(i_+[0])) / 2]; d___[j]+= [np.abs(d_+[deA])]; c__[j]+=[c]
+    return np.array(m_+[meA]), np.array(d_+[deA])
+
