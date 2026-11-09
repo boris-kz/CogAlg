@@ -8,7 +8,7 @@ def eps_(a): return np.where(a==0, eps, a)
 ave = decay = .3
 avd = 20  # mean sum( abs(dTT[1]) * wTT[1]), the borrower
 wM,wD,wi, wI,wG,wa, wL,wS,wA = 10, 10, 20, 5, 20, 20, 2, 1, 1  # dTT weights = reversed relative ave, update from wTT_ after feedback
-wT = np.array([wM,wD,wi, wI,wG,wa, wL,wS,wA])
+wT = np.array([wM,wi, wI,wG,wa, wL,wS,wA])
 wTT = np.array([wT,wT*avd])
 '''
 code modification: compare aligned ops between oF_ AST sequences, cluster/split/merge matches into higher oF typs
@@ -45,7 +45,7 @@ class CF(CBase):  # clustering fork: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, 
         if not hasattr(f,'L_'): f.L_ = kw.get('L_',[])  # +-Ls in levs or cLs in C
         f.H = kw.get('H',[])  # hierarchy = packed N_|L_s: lower CFs/ Nt||Ct, nestable, H[0]= redundant f.N_ if not empty
         f.nF = kw.get('nF','Nt')
-        f.dTT = kw.get('dTT',np.zeros((2,9))); f.m, f.d, f.c, f.r = [kw.get(x,0) for x in ('m','d','c','r')]  # rdpTT in oF?
+        f.dTT = kw.get('dTT',np.zeros((2,8))); f.m, f.d, f.c, f.r = [kw.get(x,0) for x in ('m','d','c','r')]  # rdpTT in oF?
         f.wTT = kw.get('wTT',copy(wTT))  # mean wTT = 1?
         f.typ = kw.get('typ',1)  # blocks sub_comp
         f.root = kw.get('root',None)  # convert to list in typ oFs?
@@ -448,5 +448,5 @@ for func,fdef in zip(oF_,nF_):
         if r := build(func,node): t,fc = r; func.body += [t]; func.fc += fc
 def call_sites(fd):  # FunctionDef
     return [n for n in ast.walk(fd) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id in iF_]
-F_call_T_ = [[np.zeros((2,9)) for _ in call_sites(fd)] for fd in nF_]  # dTT computed per callee
+F_call_T_ = [[np.zeros((2,8)) for _ in call_sites(fd)] for fd in nF_]  # dTT computed per callee
 F_call_i_ = [{n.lineno: j for j,n in enumerate(call_sites(fd))} for fd in nF_]
