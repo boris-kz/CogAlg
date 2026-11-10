@@ -63,8 +63,13 @@ def val_(TT, wTT=wTT):  # multi-variate rel match for membership, rel diff for b
     rm_ = m_ / eps_(m_+ ad_)  # massless m = avd
     # revised for symmetric inv_m in -1:1:
     rm_ = np.abs(ad_- m_) / eps_(ad_+ m_)  # massless m = avd
-    v_ = rm_ * (c/r) - avm_  # opportunity cost?
+    # v_ = rm_ * (c/r) - avm_  # opportunity cost?
+    # return rm_ @ wTT[0] * v_>0  # skip if v_<0, which is not worth the processing
     return rm_ @ wTT[0]  # unitless
+
+    # if follow s = (m_ / (2-m_)) @ wTT[0]  # signed, core-positive
+    # d_ no longer relevant then
+    return (TT[0] / (2-TT[0])) @ wTT[0]    
 
 def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
 
@@ -236,12 +241,14 @@ def comp(_pars, pars, meA,deA, c=1, j=0):  # compute m_,d_ from inputs or deriva
         if isinstance(_p, list):  # vector angle
             mA, dA = comp_A(_p, p); m_ += [mA]; d_ += [dA]; _i_+=[0]; i_ += [0]
         else:
-            d_ += [d := (_p - p)]; ad = abs(d)
+            d_ += [d := (_p - p)]; ad = abs(d); _i_+=[_p]; i_+=[p]
             m_ += [ad / (ad + avad)]  # ad borrows from avm: 0 @ ad=0, 0.5 @ avad, 1 @ inf
             # or symmetric core|cntr deviation in -1:1:
             m = (avad-ad) / eps_(avad+ad)
+            # m_ += [(avad-ad) / eps_(avad+ad)]
             # in val_: v = abs(m * (c/r)) - avm  # m - opportunity cost?
-    global d___,c__; d___[j]+= [np.abs(d_+[deA])]; c__[j]+=[c]
+    global i___, d___,c__
+    i___[j] += [(np.abs(_i_+[0]) + np.abs(i_+[0])) / 2]; d___[j]+= [np.abs(d_+[deA])]; c__[j]+=[c]
     return np.array(m_+[meA]), np.array(d_+[deA])
 
 def comp_(_pars, pars, meA,deA, c=1, j=0):  # post-mass: m is min for massive core attrs, or combined with inv_m?
@@ -269,6 +276,7 @@ def comp_dT(_i_,i_, c, j):  # scalars, j: dLev index, >1 in comp_H only
     m_ = mm_* mass_ + sd_* (1-mass_)  # avad_: prior regime mean |d| = massless m
     global i___,d___,c__
     i___[j] += [(_a_+a_)/2]; d___[j] += [np.abs(d_)]; c__[j]+=[c]  # dLev += [comp]
+    # ad_ = np.abs(d_); m_ = (sd_-ad_) / eps_(sd_+ad_)
     return np.array([m_,d_])
 
 def comp_A(_A,A):
