@@ -70,7 +70,7 @@ def comp_slice(edge, rV=1, ww_t=None):  # root function
     global ave, avd, wM, wD, wI, wG, wA, wL, ave_L, ave_PPm, ave_PPd, w_t
     ave, avd, ave_L, ave_PPm, ave_PPd = np.array([ave, avd, ave_L, ave_PPm, ave_PPd]) / rV  # projected value change
     if np.any(ww_t):
-        iwM, iwI, iwG, iwL,  iwS, iwa, iwA = ww_t[0]  # skip N
+        iwM, _, iwI, iwG, iwa,  iwL, iwS, iwA = ww_t[0]  # skip N
         w_t[0] = [wM, wI, wG, wA, wL] * np.array([iwM, iwI, iwG, iwA, iwL])
         # der weights
     for P in edge.P_:  # add higher links
@@ -94,9 +94,9 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
     for P in iP_: P.fin = 0
     for P in iP_:  # dP from link_ if fd
         if P.fin: continue
-        _prim_ = P.prim; _lrim_ = P.lrim; B_ = []
+        _prim_ = P.prim; _lrim_ = P.lrim; B_ = []; P.fin = 1
         if fd: m, d, c = P.m, P.d, P.c  # summed verT, min L in dP
-        else:  I,G,Dy,Dx,M,D,L = P.latT; m, d, c = M, G+abs(D), L
+        else:  I,G,Dy,Dx,_M,_D,L = P.latT; m, d, c = _M, G+abs(_D), L
         _P_ = {P}; link_ = set()
         verT = np.full((2,5),eps)
         while _prim_:
@@ -144,12 +144,11 @@ def comp_dP_(edge, M, c):  # node_- mediated: comp node.rim dPs, call from form_
             rc = c/_c; minn = min(_c,c)
             for dP in P.rim:  # higher links
                 if dP not in edge.dP_: continue  # skip removed node links
-                verT, m, d, c = comp_vert(_dP.verT[1], dP.verT[1]*rc, minn)
+                verT, m, d, dc = comp_vert(_dP.verT[1], dP.verT[1]*rc, minn)
                 angle = np.subtract(dP.yx,_dP.yx)  # dy,dx of node centers
                 distance = np.hypot(*angle)  # between node centers
                 # up only:
-                _dP.lrim += [convert_to_dP(_dP,dP, verT, angle, distance, m, d, c)]
-                _dP.prim += [dP]
+                convert_to_dP(_dP,dP, verT, angle, distance, m, d, dc)
 
 def convert_to_dP(_P,P, verT, angle, distance, m, d, c):
 
