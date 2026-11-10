@@ -59,8 +59,12 @@ i___,d___,c__, mass__,avad__,avi__,dcov__ = [],[],[], [],[],[],[]  # dT ) comp_ 
 def val_(TT, wTT=wTT):  # multi-variate rel match for membership, rel diff for boundary
 
     m_, d_ = TT  # dval = brrw from different-base m: directional Lt|Bt
-    rel_m_ = m_ / eps_(m_+ np.abs(d_))  # massless m = avd
-    return rel_m_ @ wTT[0]  # unitless
+    ad_ = np.abs(d_)
+    rm_ = m_ / eps_(m_+ ad_)  # massless m = avd
+    # revised for symmetric inv_m in -1:1:
+    rm_ = np.abs(ad_- m_) / eps_(ad_+ m_)  # massless m = avd
+    v_ = rm_ * (c/r) - avm_  # opportunity cost?
+    return rm_ @ wTT[0]  # unitless
 
 def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
 
@@ -151,7 +155,7 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: 
         yx = np.add(_N.yx,N.yx) /2; _y,_x = _N.yx; y,x = N.yx
         box = np.array([min(_y,y),min(_x,x), max(_y,y),max(_x,x)])
         angl = [np.zeros(2) if A is None else A, np.sign(dTT[1] @ ttN[1])]
-        L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2; L.dTT = dTT+ddTT  # assign L.dTT for comp_F
+        L.yx=yx; L.box=box; L.span=span; L.angl=angl; L.kern=(_N.kern+N.kern)/2; L.dTT = dTT+ddTT  # for comp_F
     else:
         L.dTT = ddTT = comp_dT(_N.dTT[1], N.dTT[1], c, _j+1)  # 1st der only, no M,D,ext,kern
     m = val_(ddTT,ttN) + (val_(dTT,ttN) if full else 0)
@@ -226,6 +230,21 @@ def base_comp(_N,N, j=0):  # j: root depth, comp Et, kern, extT, dTT; rational M
     align = 1 - mang* (1-mA)  # in 0:1, weigh mA 
 '''
 def comp(_pars, pars, meA,deA, c=1, j=0):  # compute m_,d_ from inputs or derivatives
+
+    m_,d_ = [],[]; _i_, i_ = [],[]
+    for i, (_p,p, avad) in enumerate(zip(_pars,pars, avad__[j])):
+        if isinstance(_p, list):  # vector angle
+            mA, dA = comp_A(_p, p); m_ += [mA]; d_ += [dA]; _i_+=[0]; i_ += [0]
+        else:
+            d_ += [d := (_p - p)]; ad = abs(d)
+            m_ += [ad / (ad + avad)]  # ad borrows from avm: 0 @ ad=0, 0.5 @ avad, 1 @ inf
+            # or symmetric core|cntr deviation in -1:1:
+            m = (avad-ad) / eps_(avad+ad)
+            # in val_: v = abs(m * (c/r)) - avm  # m - opportunity cost?
+    global d___,c__; d___[j]+= [np.abs(d_+[deA])]; c__[j]+=[c]
+    return np.array(m_+[meA]), np.array(d_+[deA])
+
+def comp_(_pars, pars, meA,deA, c=1, j=0):  # post-mass: m is min for massive core attrs, or combined with inv_m?
 
     m_,d_ = [],[]; _i_, i_ = [],[]
     for i, (_p,p, mass,avad,avi,wd) in enumerate(zip(_pars,pars, mass__[j],avad__[j],avi__[j],dcov__[j])):  # prior-frame mean |d| = massless m
@@ -577,7 +596,7 @@ def Copy_(N, root=None, r=1, cls=None, init=0, typ=None, froot=0):
     if getattr(N,'nt',None): a['nt'] = copy(N.nt)
     if isinstance(N, CN): a.update(yx=copy(N.yx), kern=copy(N.kern), span=N.span, angl=[copy(N.angl[0]), N.angl[1]] if N.angl else None)
     if hasattr(N, 'root_'): a.update(root_=copy(N.root_))  # CC
-    if isinstance(N,CoF): a.update(call_=copy(N.call_), typ_=copy(N.typ_) if hasattr(N, 'typ_') else [], fw=N.fw if hasattr(N, 'fw') else 0, fc=N.fc, fr=N.fr)
+    if isinstance(N,CoF): a.update(call_=copy(N.call_), typ_=copy(N.typ_) if hasattr(N,'typ_') else [], fw=N.fw if hasattr(N,'fw') else 0, fc=N.fc,fr=N.fr)
     C = cls(**a)
     if isinstance(N, CN):
         if init:
