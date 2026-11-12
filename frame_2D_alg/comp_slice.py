@@ -199,7 +199,7 @@ def comp_latT(_latT, latT, _n,n):  # 0der params, add align?
     pars[1] = [pars[1],aI]  # no avd*rn: d/=t
     m_,d_ = comp(_pars,pars)
     return (np.array([m_,d_]),  # verT
-            ((1-m_)/(1+m_)) @ w_t[0] / w_t[0].sum(),         # m
+            ((1-m_)/(1+m_)) @ w_t[0] / w_t[0].sum(), # rd
             np.abs(d_)@ w_t[1], # d
             min(L,_L))          # c
 
@@ -208,8 +208,8 @@ def comp_vert(_i_,i_, minn, align=1):  # i_ is ds, ext A align
     m_ = np.abs(_i_-i_) / avd  # rd
     d_ = _i_ - i_  # next comparands, from signed i_
     return (np.array([m_,d_]),  # I, G, A, M, D, L
-            ((1-m_)/(1+m_))* align @ w_t[0] / w_t[0].sum(), # m
-            np.abs(d_) * (2-align) @ w_t[1],   # d
+            ((1-m_)/(1+m_))* align @ w_t[0] / w_t[0].sum(), # rd
+            np.abs(d_) * (2-align) @ w_t[1], # d
             minn)  # c
 
 def comp(_pars, pars):  # raw inputs or derivatives, add meA=0, deA=0?
@@ -219,15 +219,11 @@ def comp(_pars, pars):  # raw inputs or derivatives, add meA=0, deA=0?
         if isinstance(_p, np.ndarray):
             mA, dA = comp_A(_p, p)  # both in -1:1
             m_ += [mA]; d_ += [dA]
-        elif isinstance(p, list):  # massless I|S avd in p only
+        elif isinstance(p, list):  # all massless [ad,avd]
             p, avd = p
             d = _p - p; ad = abs(d)
             m_ += [ad/avd]  # +|- or avd / (avd+ad)?
             d_ += [d]
-        else:  # massive
-            # massive should be massless now? And add avd to pars?
-            m_ += [min(abs(_p),abs(p))]
-            d_ += [_p - p]
     return np.array(m_), np.array(d_)
 
 def comp_A(_A,A):
