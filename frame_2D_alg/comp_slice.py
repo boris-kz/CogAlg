@@ -65,7 +65,7 @@ def comp_slice_root(frame, rV=1, ww_t=None):
             if edge.G * (len(edge.P_) - 1) > ave_PPm:  # eval PP, olp=1
                 comp_slice(edge, rV, ww_t=ww_t)
 
-def comp_slice(edge, rV=1, ww_t=None):  # root function
+def comp_slice(edge, rV=1, ww_t=None, avad_=None):  # root function
 
     global ave, avd, wM, wD, wI, wG, wA, wL, ave_L, ave_PPm, ave_PPd, w_t
     ave, avd, ave_L, ave_PPm, ave_PPd = np.array([ave, avd, ave_L, ave_PPm, ave_PPd]) / rV  # projected value change
@@ -77,11 +77,11 @@ def comp_slice(edge, rV=1, ww_t=None):  # root function
         P.verT = np.full((2,5), eps)
         P.rim = []; P.lrim = []; P.prim = []
     edge.dP_ = []
-    comp_P_(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
+    comp_P_(edge,avad_)  # vertical P cross-comp -> PP clustering, if lateral overlap
     PPt, mverT, mm, md, mc = form_PP_(edge.P_, fd=0)  # all Ps are converted to PPs
     if PPt:
         edge.node_ = PPt
-        comp_dP_(edge, mm, mc)
+        comp_dP_(edge, mm, mc, avad_)
         edge.link_, dverT, dm, dd, dc = form_PP_(edge.dP_, fd=1)  # separate PPd_ per edge
         edge.verT = mverT + dverT
         edge.m, edge.d, edge.c = mm + dm, md + dd, mc + dc
@@ -119,7 +119,7 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
 
     return PPt_, VerT, M, D, C
 
-def comp_P_(edge):  # form links from prelinks
+def comp_P_(edge, avad_=None):  # form links from prelinks
 
     edge.rng = 1
     for _P, pre_ in edge.pre__.items():
@@ -127,13 +127,13 @@ def comp_P_(edge):  # form links from prelinks
             dy,dx = np.subtract(P.yx,_P.yx)  # between node centers
             if abs(dy)+abs(dx) <= edge.rng * 2: # <max Manhattan distance
                 angle=[dy,dx]; distance=np.hypot(dy,dx)
-                verT, m, d, c = comp_latT(_P.latT, P.latT, len(_P.dert_), len(P.dert_))
+                verT, m, d, c = comp_latT(_P.latT, P.latT, len(_P.dert_), len(P.dert_), avad_)
                 dP = convert_to_dP(_P,P, verT, angle,distance, m, d, c)
                 _P.rim += [dP]  # up only
                 edge.dP_ += [dP]  # to form PPd_ by dval, separate from PPm_
     del edge.pre__
 
-def comp_dP_(edge, M, c):  # node_- mediated: comp node.rim dPs, call from form_PP_
+def comp_dP_(edge, M, c, ava_d):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
     rM = M/c / ave  # dP D borrows from normalized PP M
     for _dP in edge.dP_: _dP.prim = []; _dP.lrim = []
@@ -189,38 +189,36 @@ def sum2PP(P_, dP_, B_, m, d, c):  # sum links in Ps and Ps in PP
     for P in P_: P.root = PPt
     return PPt
 
-def comp_latT(_latT, latT, _n,n):  # 0der params, add align?
+def comp_latT(_latT, latT, _n,n, avad_=None):  # 0der params, add align?
 
     _I,_G,_Dy,_Dx,_M,_D,_L = _latT
     I, G, Dy, Dx, M, D, L = latT
     rn = _n / n
     _pars = np.array([_M,_I,_G, np.array([_Dy,_Dx]),_L], dtype=object)
     pars  = np.array([ M, I, G, np.array([ Dy, Dx]), L], dtype=object) * rn
-    pars[1] = [pars[1],aI]  # no avd*rn: d/=t
-    m_,d_ = comp(_pars,pars)
+    m_,d_ = comp(_pars,pars, avad_)
     return (np.array([m_,d_]),  # verT
             ((1-m_)/(1+m_)) @ w_t[0] / w_t[0].sum(), # rd
             np.abs(d_)@ w_t[1], # d
             min(L,_L))          # c
 
-def comp_vert(_i_,i_, minn, align=1):  # i_ is ds, ext A align
+def comp_vert(_i_,i_, minn, align=1, avad_ = np.ones(5)):  # i_ is ds, ext A align
 
-    m_ = np.abs(_i_-i_) / avd  # rd
+    m_ = np.abs(_i_-i_) / avad_  # rd
     d_ = _i_ - i_  # next comparands, from signed i_
     return (np.array([m_,d_]),  # I, G, A, M, D, L
             ((1-m_)/(1+m_))* align @ w_t[0] / w_t[0].sum(), # rd
             np.abs(d_) * (2-align) @ w_t[1], # d
             minn)  # c
 
-def comp(_pars, pars):  # raw inputs or derivatives, add meA=0, deA=0?
+def comp(_pars, pars, avad_=np.ones(5)):  # raw inputs or derivatives, add meA=0, deA=0?
 
     m_,d_ = [],[]
-    for _p, p in zip(_pars, pars):
+    for _p, p, avd in zip(_pars, pars, avad_):
         if isinstance(_p, np.ndarray):
             mA, dA = comp_A(_p, p)  # both in -1:1
             m_ += [mA]; d_ += [dA]
-        elif isinstance(p, list):  # all massless [ad,avd]
-            p, avd = p
+        else:  # all massless [ad,avd]
             d = _p - p; ad = abs(d)
             m_ += [ad/avd]  # +|- or avd / (avd+ad)?
             d_ += [d]

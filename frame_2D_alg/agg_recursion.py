@@ -189,7 +189,7 @@ def comp_F(_F, F, nF, ir=0, rL=None, j=None):
     if nF in ('Nt','Bt'):  # spec
         if (_N_:=_F.N_) and (N_:=F.N_):  # always true?
             tt = (rL.dTT*rL.c + ddTT*c) / (rL.c+c)  # vertical comb?
-            if gv_(val_(tt,tX) * (c*wX /(r*cX)) - ave):
+            if gv_(val_(tt,ttX) * (c*wX /(r*cX)) - ave):
                 cross_comp(rL, proj_L_(list(product(_N_,N_)),2,r), r, dF)  # tL-> dF.N_
             elif _F.H and F.H:  # dF.H[-1]+[dLt]?
                 comp_H(_F,F,dF)  # rL: lev in L.H, no cross-fork N_, no L ext updates?
@@ -510,8 +510,10 @@ def sum2G(F_, wTT, root=None, _r=0,):  # finalize CN from C or (N_,L_,B_), eval 
             g_,c_= cluster_N(G, exemplar_(N_,r), r+1,c)  # either can be empty due to olp
             if g_: sum2F([sum2G(g, ttcN, G, r+1) for g in g_], G,nF='Nt')  # G._Nt-> G.Nt.H[-1]
             if c_: sum2F(c_,G, nF='Ct')
-    if G.Lt or G.Bt:
-        G.m,G.dTT,G.c,G.r = sum_vt([f for f in (G.Nt,G.Lt,G.Bt) if f], fm=1,wTT=wTT)
+        if (eL := [L for N in N_ for L in N.rim if L not in L_]):  # original N_, not from cluster_N above
+            G.Et = sum2F(eL, G, nF='Et') 
+    if G.Lt or G.Et:
+        G.m,G.dTT,G.c,G.r = sum_vt([f for f in (G.Nt,G.Lt,G.Et) if f], fm=1,wTT=wTT)
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G
 
@@ -532,7 +534,7 @@ def sum2F(N_, root=None, m_=None, nF=None, typ=1):  # c|c*m -weighted sum -> CF|
     if nF=='Lt': [add_H(F.H, n.H, F) for n in N_ if n.H]
     if root is None: return F
     F.wTT = root.wTT
-    if nF in ('Nt','Lt','Bt'): root.dTT = (root.dTT*root.c + TT*C) / (root.c+C); root.c+=C  # root r is not affected?
+    if nF in ('Nt','Lt','Et'): root.dTT = (root.dTT*root.c + TT*C) / (root.c+C); root.c+=C  # root r is not affected?
     if nF=='Lt':  # oriented, as in base_comp
         root.angl = F.angl = (A:= [np.sum(A_:= [L.angl[0] * L.angl[1] for L in F.N_], axis=0), 1])  # Lt.angl for proj_V
         root.mang = F.mang = np.mean([comp_A(A[0], a)[0] for a in A_])
@@ -780,7 +782,7 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
                 G_ += [sum2G((n_,l_,b_,[]), ttTrc, root, r)]  # add sub-PPs from sub+?
             else:
                 for N in n_: N.root=root
-    if val_(TT*root.wTT[0]*Trcw_) * ((C+wTrc)/(r+1+cTrc)) * ((len(G_)-1)*wL) > ave:
+    if val_(TT,root.wTT[0]*Trcw_) * ((C+wTrc)/(r+1+cTrc)) * ((len(G_)-1)*wL) > ave:
         _G_+=G_; _TT+=TT; _C+=C  # concat in tile
         FV_(CoF.get(), *sum_vt(_G_))
     return _G_, _TT, _C, r+R/_C
@@ -815,7 +817,7 @@ def vect_edge(T, iY,iX,Ly,Lx, rV=1):  # T=tile, PP_ cross_comp and floodfill to 
             if gv_(blob.G * wVct - ave * cVct):  # proxy for comp_slice and slice_edge
                 edge = slice_edge(blob, rV); L = len(edge.P_)-1
                 if gv_(edge.G * (wVct*L) - sum([P.latT[4] for P in edge.P_]) * (cVct*L)):
-                    PPm_ = comp_slice(edge, rV, ttVct)  # add comp_slice's weights?
+                    PPm_ = comp_slice(edge, rV, ttVct, avad__[0][[0,2,3,4,5]])  # add comp_slice's weights?
                     N_ = [PP2N(PPm) for PPm in PPm_]
                     for PPd in edge.link_: PP2N(PPd)  # we don't form Gds?
                     for N in N_:
@@ -881,7 +883,6 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
 def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
 
     global  ave, avd, oF_, nF_, iF_, i___,d___,c__
-    # this Mass_ should be renamed and we only need it to update avad_ now?
     def Avad_():
         for d__,c_,avad_ in zip(d___,c__,avad__):
             if not c_: continue  # no new comps in dLev
@@ -915,7 +916,7 @@ def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fo
     if aLev := dFilt(frame,'aH',wBac, cBac,_TT):  # update filters per Lev: lev_
         aL= aLev; dTT = aL.dTT-_TT; _TT=aL.dTT; dc= aL.c-_ac; dr= aL.r-_ar  # draft
         ave = val_(_TT)  # filters *= ave
-        Mass_(); i___,d___,c__ = [],[],[]; add_fH(2)  # set mass__,avad__
+        Avad_(); i___,d___,c__ = [],[],[]; add_fH(2)  # set mass__,avad__
         if oLev := dFilt(frame,'oH', wBac, cBac**2, oTT):
             oL= oLev; dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
             for _oF in copy(oF_): _oF.body = [split_oF(t,_oF) for t in _oF.body]
