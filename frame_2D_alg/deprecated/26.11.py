@@ -95,4 +95,31 @@ def comp(_pars, pars, meA,deA, c=1, j=0):  # compute m_,d_ from inputs or deriva
     global i___,d___,c__  # init dH=[lev0], mA mass=0:
     i___[j] += [(np.abs(_i_+[0]) + np.abs(i_+[0])) / 2]; d___[j]+= [np.abs(d_+[deA])]; c__[j]+=[c]
     return np.array(m_+[meA]), np.array(d_+[deA])
-
+'''
+    if Bt:= G.Bt:  # der+
+        bm,bc,br = Bt.m,Bt.c,Bt.r+_r+1
+        if gv_(bm * (bc*wX / (br*cX)) - ave):
+            cross_comp(F2N(G.Bt), proj_L_(combinations(Bt.N_,2),G,br),br)
+        if RR:= root.root if root else None: Bt.brrw = Bt.m* (RR.m* (decay* (RR.span/G.span)))
+'''
+def Mass_():
+    # define mass/par: anti-correlation between |i| and positional change of object, must be temporal?
+    for i__, d__, c_, mass_, avad_, avi_, dcov_ in zip(i___, d___, c__, mass__, avad__, avi__, dcov__):
+        if not c_: continue  # no new comps in dLev
+        c_ = np.array(c_)[:, None];
+        C = c_.sum()
+        avi_[:] = (i__ * c_).sum(0) / C  # weighted mean inp / par
+        avd_ = (d__ * c_).sum(0) / C  # weighted mean |d| / par
+        devI__ = i__ - avi_  # input dev / comp
+        devD__ = avd_ - d__  # inv_m: inverse |d| dev / comp
+        icov__ = devI__ * devD__ * c_  # weighted co-dev / comp, or by div_comp?
+        mcov_ = icov__.sum(0) / eps_(np.abs(icov__).sum(0))  # -1:1
+        dcov_[:] = -mcov_
+        '''
+        dcov_[:] = -rcov_  # 1: |d| grows with |i|, 0: independent, -1: shrinks
+        if e_:  # expected d, base lev only
+            e_ = np.array(e_)[:,None]; devE_ = e_ - (e_*c_).sum() / C
+            mass_[:] = (rcov_+1) / 2  # 0:1: share of |i| co-dev that agrees with ext match, .5 if unrelated
+        elif j: mass_[:] = mass__[j-1]  # d of massive is massive '''
+        mass_[:] = (mcov_ + 1) / 2  # 0:1: share of co-dev that agrees in sign, .5 if unrelated
+        avad_[:] = avd_  # ave abs d_
