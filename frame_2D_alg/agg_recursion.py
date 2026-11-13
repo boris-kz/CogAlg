@@ -54,8 +54,21 @@ wM, wi, wI,wG,wa, wL,wS,wA = wT; Ly=Lx= 64  # fractal tile dims
 cFrm,cX,cTrc,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (  # function complexity
 wFrm,wX,wTrc,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init=cost
 ttFrm,ttX,ttTrc,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj,ttVct = [F.wTT for F in oF_]  # attr weight tuples added per function, [0] only?
-Frmw_,Xw_,Trcw_,Nw_,Fw_,Ew_,cNw_,cCw_,cPw_,sGw_,Bacw_,Prjw_,Vctw_ = ttFrm[0],ttX[0],ttTrc[0],ttN[0],ttF[0], ttE[0],ttcN[0],ttcC[0],ttcP[0],ttsG[0], ttBac[0],ttPrj[0],ttVct[0]
+Frmw_,Xw_,Trcw_,Nw_,Fw_,Ew_,cNw_,cCw_,cPw_,sGw_,Bacw_,Prjw_,Vctw_ = ttFrm[0],ttX[0],ttTrc[0],ttN[0],ttF[0],ttE[0],ttcN[0],ttcC[0],ttcP[0],ttsG[0],ttBac[0],ttPrj[0],ttVct[0]
+
 i___,d___,c__, mass__,avad__,avi__,dcov__ = [],[],[], [],[],[],[]  # dT ) comp_ ) dLev_
+# not reviewed:
+i___,pt___,pc__, d___,c__, mass__,avad__ = [],[],[], [],[], [],[]
+
+def pT___(G, _j):  # per comparand cluster: |params| per dLev vs est. stability = mass * hardness
+    Lt,Bt = getattr(G,'Lt',None), getattr(G,'Bt',None)
+    wm_ = (1 - (rd_:= Lt.dTT[0])) / (1+rd_) * wT  # weighted rm_
+    pt_ = (wm_.sum() - wm_) / (wT.sum() - wT) * Lt.c * -Bt.m  # leave-one-out Lt.m * c * perimeter contrast
+    M,D = G.dTT.sum(axis=1); I,G = G.kern[:2]
+    row_ = [(_j, np.abs([M,D,G.c,I,G,0,len(G.N_),G.span,0])), (_j+1, np.abs(G.dTT[1]))]  # as in base_comp
+    row_+= [(_j+2+k, np.abs(lev.dTT[1])) for k,lev in enumerate(G.H) if lev]  # as in comp_H
+    for j, i_ in row_:
+        add_fH(j+1); i___[j] += [i_]; pt___[j] += [pt_]; pc__[j] += [G.c]
 
 def val_(TT, wT=wT):  # multi-variate rel match for membership, rel diff for boundary
     '''
@@ -105,7 +118,7 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
 - forward: selective extend cross-comp, clustering across tiles, re-order centroids by eigenvalues
 - feedback filter updates 
 '''
-def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1):  # recursion root, iN_: recluster/rng+
+def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1, _j=0):  # recursion root, iN_: recluster/rng+
 
     def Rng_(n_):  # w: combined membership weight / rdn: 1 + stronger members per C:
         for n in n_: n.w = sum(m * C.c / (1 + sum(_m>m for _m in C.m_)) for C,m in n.root_)
@@ -128,9 +141,13 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1):  # recursion r
             add2F(dF,Lt, merge=1); return
         for N in (N_:= list(set(N_))): sum2F(N.rim, N, nF='Rt')  #->N.Rt
         if iN_: add2F(root.Lt, Lt, merge=1)
-        else: iN_ = N_
+        else: iN_= N_
         if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):  # len coef is tentative
             G_,C_ = cluster_N(root, exemplar_(iN_ or N_,r+1), r+1,c)  # tentative G_|C_|P_/ rng+
+        if len(dL_:= [l for l in L_ if l.typ == 1 and l.nrng == 1 and -l.m > ave]) > 1:  # pooled contrast links
+            Dt = sum2F(dL_, root=root, nF='Dt'); Dt.r += _r + 1
+            if gv_(-Dt.m * (Dt.c*wX /(Dt.r*cX)) - ave):  # der+
+                cross_comp(F2N(Dt), proj_L_(combinations([F2N(L) for L in dL_], 2), root, Dt.r), Dt.r)
         FV_(CoF.get(), tt,c,r)  # current-rng xcomp
         if G_:
             if not frng: return G_,C_  # tentative, in rng+ loop only
@@ -139,7 +156,7 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1):  # recursion r
                 if not _G_: break  # max rng
                 G_,C_= _G_,_C_
             if C_: sum2F(C_,root,nF='Ct')  # agg+ / max-rng Gs
-            G_ = [sum2G(g,ttcN,root,_r) for g in G_]
+            G_ = [sum2G(g,ttcN,root,_r,_j) for g in G_]
             Nt = sum2F(G_,root,nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r
             if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+
                 add_fH(2 + max((len(g.H) for g in G_)))  # to add,eval der+ results:
@@ -186,10 +203,10 @@ def comp_F(_F, F, nF, ir=0, rL=None, j=None):
     ddTT = comp_dT(_F.dTT[1],F.dTT[1],c, j+1)  # 1st der, same dLev as base_comp ddTT
     m = val_(ddTT,Fw_); r = (_F.r+F.r)/2 + ir
     dF = CF(dTT=ddTT, m=m,r=r,c=c, nF=nF, root=rL)
-    if nF in ('Nt','Bt'):  # spec
+    if nF in ('Nt','Bt'):  # spec, harden Bt to comp?
         if (_N_:=_F.N_) and (N_:=F.N_):  # always true?
             tt = (rL.dTT*rL.c + ddTT*c) / (rL.c+c)  # vertical comb?
-            if gv_(val_(tt,tX) * (c*wX /(r*cX)) - ave):
+            if gv_(val_(tt,Xw_) * (c*wX /(r*cX)) - ave):
                 cross_comp(rL, proj_L_(list(product(_N_,N_)),2,r), r, dF)  # tL-> dF.N_
             elif _F.H and F.H:  # dF.H[-1]+[dLt]?
                 comp_H(_F,F,dF)  # rL: lev in L.H, no cross-fork N_, no L ext updates?
@@ -328,8 +345,7 @@ def cluster_N(root, _N_, _r,_c):  # flood-fill node | link clusters, flat, repla
                             if iM / (span*decay) < ave * (_r-1): continue  # normalized N-to-N_ match, sum for sum2G?
                         L_ += [L]; N_ += [_N]; fin_ += [_N]
                         _L_+= [l for l in _N.rim if l not in (in_|in__) and ((l.nt[0] in fin_) ^ (l.nt[1] in fin_))]  # new frontier links, +|-?
-                    elif L.nrng==1 and ave-nm > ave * _r:  # nm maybe negative
-                        B_ += [L]  # contrast
+                    elif L.nrng==1: B_ += [L]  # boundary
             __L_ = list(set(_L_))
         if N_:
             ft_ = []
@@ -497,13 +513,7 @@ def sum2G(F_, wTT, root=None, _r=0,):  # finalize CN from C or (N_,L_,B_), eval 
     for N in N_:
         if N.rim: N.Rt = sum2F(N.rim,root=N,nF='Rt')
     [sum2F(f_,G,nF=nF) for f_,nF in zip((N_,B_,L_,C_),('Nt','Bt','Lt','Ct')) if f_]
-    G.m = val_(G.dTT,wT); G.r = G.Nt.r
     if G.L_: trans_cluster(G)  # splice trans_links, merge L.nt.roots
-    if Bt:= G.Bt:  # der+
-        bm,bc,br = Bt.m,Bt.c,Bt.r+_r+1
-        if gv_(bm * (bc*wX / (br*cX)) - ave):
-            cross_comp(F2N(G.Bt), proj_L_(combinations(Bt.N_,2),G,br),br)
-        if RR:= root.root if root else None: Bt.brrw = Bt.m* (RR.m* (decay* (RR.span/G.span)))
     if Lt:= G.Lt:  # sub+ CN, no rng+, agg+?
         m,c,r = Lt.m,Lt.c, Lt.r+_r
         if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):  #-> sub_Gs @ higher filter: r+1
@@ -815,7 +825,7 @@ def vect_edge(T, iY,iX,Ly,Lx, rV=1):  # T=tile, PP_ cross_comp and floodfill to 
             if gv_(blob.G * wVct - ave * cVct):  # proxy for comp_slice and slice_edge
                 edge = slice_edge(blob, rV); L = len(edge.P_)-1
                 if gv_(edge.G * (wVct*L) - sum([P.latT[4] for P in edge.P_]) * (cVct*L)):
-                    PPm_ = comp_slice(edge, rV, ttVct)  # add comp_slice's weights?
+                    PPm_ = comp_slice(edge, rV, ttVct, avad__[0][[0,2,3,4,5]])  # add comp_slice's weights?
                     N_ = [PP2N(PPm) for PPm in PPm_]
                     for PPd in edge.link_: PP2N(PPd)  # we don't form Gds?
                     for N in N_:
@@ -881,13 +891,8 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
 def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
 
     global  ave, avd, oF_, nF_, iF_, i___,d___,c__
-    # this Mass_ should be renamed and we only need it to update avad_ now?
-    def Avad_():
-        for d__,c_,avad_ in zip(d___,c__,avad__):
-            if not c_: continue  # no new comps in dLev
-            c_ = np.array(c_)[:,None]
-            avad_[:] = (np.array(d__) * c_).sum(0) / c_.sum()
     def Mass_():
+        # not revised
         # define mass/par: anti-correlation between |i| and positional change of object, must be temporal?
         for i__,d__,c_, mass_,avad_,avi_,dcov_ in zip(i___,d___,c__, mass__,avad__,avi__,dcov__):
             if not c_: continue  # no new comps in dLev
