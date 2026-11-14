@@ -103,6 +103,7 @@ def comp(_pars, pars, meA,deA, c=1, j=0):  # compute m_,d_ from inputs or deriva
         if RR:= root.root if root else None: Bt.brrw = Bt.m* (RR.m* (decay* (RR.span/G.span)))
 '''
 def Mass_():
+    # not revised
     # define mass/par: anti-correlation between |i| and positional change of object, must be temporal?
     for i__, d__, c_, mass_, avad_, avi_, dcov_ in zip(i___, d___, c__, mass__, avad__, avi__, dcov__):
         if not c_: continue  # no new comps in dLev
@@ -123,3 +124,11 @@ def Mass_():
         elif j: mass_[:] = mass__[j-1]  # d of massive is massive '''
         mass_[:] = (mcov_ + 1) / 2  # 0:1: share of co-dev that agrees in sign, .5 if unrelated
         avad_[:] = avd_  # ave abs d_
+
+def add_fH(nlev):  # add empty Levs before cross_comp
+    while len(i___)<nlev: i___.append([]); d___.append([]); c__.append([])
+    while len(mass__)<nlev:
+        mass__.append(copy(mass__[-1]) if mass__ else np.zeros(8))  # init from j-1: d of massive is massive
+        avad__.append(copy(avad__[-1]) if avad__ else copy(wT))
+        avi__.append(copy(avi__[-1]) if avi__ else np.ones(8))
+        dcov__.append(copy(dcov__[-1]) if dcov__ else np.zeros(8))
