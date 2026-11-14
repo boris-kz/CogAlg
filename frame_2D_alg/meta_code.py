@@ -47,7 +47,7 @@ class CF(CBase):  # clustering fork: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, 
         f.nF = kw.get('nF','Nt')
         f.dTT = kw.get('dTT',np.zeros((2,8))); f.m, f.d, f.c, f.r = [kw.get(x,0) for x in ('m','d','c','r')]  # rdpTT in oF?
         f.wTT = kw.get('wTT',copy(wTT))  # mean wTT = 1?
-        f.typ = kw.get('typ',1)  # blocks sub_comp
+        f.typ = kw.get('typ',3)  # blocks sub_comp
         f.root = kw.get('root',None)  # convert to list in typ oFs?
         f.root_ = kw.get('root_', [])  # [[C,m,d]...] per root centroid, add in cluster_C only?
     def __bool__(f): return bool(f.c)  # N_ may be empty?
