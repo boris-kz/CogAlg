@@ -47,7 +47,7 @@ class CF(CBase):  # clustering fork: rim, Nt,Ct, Bt,Lt: ext|int- defined nodes, 
         f.nF = kw.get('nF','Nt')
         f.dTT = kw.get('dTT',np.zeros((2,8))); f.m, f.d, f.c, f.r = [kw.get(x,0) for x in ('m','d','c','r')]  # rdpTT in oF?
         f.wTT = kw.get('wTT',copy(wTT))  # mean wTT = 1?
-        f.typ = kw.get('typ',1)  # blocks sub_comp
+        f.typ = kw.get('typ',3)  # blocks sub_comp
         f.root = kw.get('root',None)  # convert to list in typ oFs?
         f.root_ = kw.get('root_', [])  # [[C,m,d]...] per root centroid, add in cluster_C only?
     def __bool__(f): return bool(f.c)  # N_ may be empty?
@@ -59,7 +59,8 @@ def prop_F_(F, attr='N_'):  # factory function to get and update top-composition
 
 class CN(CF):  # full node|graph for xcomp, adding fork set, kern+positionals for base comp
     name = "node"
-    N_,L_,B_,D_,C_,X_,rim = prop_F_('Nt'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Dt'), prop_F_('Ct'),prop_F_('Xt'),prop_F_('Rt')  # C,N: int|ext-defined nodes, L,B: int|ext links
+    N_,L_,B_,D_,C_,X_,rim = prop_F_('Nt'),prop_F_('Lt'),prop_F_('Bt'),prop_F_('Dt'), prop_F_('Ct'),prop_F_('Xt'),prop_F_('Rt')
+    # C,N: int|ext-defined nodes, L,B: int|ext links, D: der+/ contrast, X: old cross-fork
     H = prop_F_('Nt','H')  # composition ( derivation levs, or Nt.H[-1] + sum Lt.H: Xt?
     def __init__(n, **kw):
         n.Nt,n.Bt,n.Lt,n.Ct,n.Xt,n.Rt,n.Dt = ((kw.get(f) if f in kw else CF(root=n) for f in ('Nt','Bt','Lt','Ct','Xt','Rt','Dt')))  # CN if nest
