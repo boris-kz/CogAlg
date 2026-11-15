@@ -54,10 +54,11 @@ wM, wi, wI,wG,wa, wL,wS,wA = wT; Ly=Lx= 64  # fractal tile dims
 cFrm,cX,cTrc,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (  # function complexity
 wFrm,wX,wTrc,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init=cost
 ttFrm,ttX,ttTrc,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj,ttVct = [F.wTT for F in oF_]  # attr weight tuples added per function, [0] only?
-Frmw_,Xw_,Trcw_,Nw_,Fw_,Ew_,cNw_,cCw_,cPw_,sGw_,Bacw_,Prjw_,Vctw_ = (
-    ttFrm[0],ttX[0],ttTrc[0],ttN[0],ttF[0],ttE[0],ttcN[0],ttcC[0],ttcP[0],ttsG[0],ttBac[0],ttPrj[0],ttVct[0])
-# pt,m,c /G ) ad,c /comp ) filters /dLev:
-it___,pt___,nc__, dt___,c__, mass__,avad__ = [],[],[], [],[], [],[]
+Frmw_,Xw_,Trcw_,Nw_,Fw_,Ew_,cNw_,cCw_,cPw_,sGw_,Bacw_,Prjw_,Vctw_ = ttFrm[0],ttX[0],ttTrc[0],ttN[0],ttF[0],ttE[0],ttcN[0],ttcC[0],ttcP[0],ttsG[0],ttBac[0],ttPrj[0],ttVct[0]
+# compute mass_:
+p___,m___,gc__ = [],[],[]  # |par|, G.m-par: [der][clus][par], gc__: [der][clus]
+d___,cc__ = [],[]  # |dpar|: [der][comp][par], cc__: [der][comp]
+mass__,avad__ = [],[]  # [der][par]
 
 def pT___(N, _j):  # per comparand: |params| per dLev vs its G.m without that param's column
     if not hasattr(N,'pt_'): return  # no Lt | Bt: no estimate
@@ -65,7 +66,7 @@ def pT___(N, _j):  # per comparand: |params| per dLev vs its G.m without that pa
     row_ = [(_j, np.abs([0,N.c,I,G,0,len(N.N_),N.span,0]), N.c), (_j+1, np.abs(N.dTT[1]), N.c)]  # as in base_comp
     row_+= [(_j+1+d, np.abs(l.dTT[1]), l.c) for lev in N.H if lev for d,l in enumerate(lev.H) if l]  # as in comp_H
     for j, i_, c in row_:
-        add_fH(j+1); it___[j] += [i_]; pt___[j] += [N.pt_]; nc__[j] += [c]
+        add_fH(j+1); p___[j] += [i_]; m___[j] += [N.pt_]; gc__[j] += [c]
 
 def val_(TT, wT=wT):  # multi-variate rel match for membership, rel diff for boundary
     '''
@@ -159,7 +160,7 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1, _j=0):  # recur
             Nt = sum2F(G_,root,nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r
             if Dt:
                 if Nt.H and Nt.H[-1]: Nt.H[-1].H += [Dt]  # der+
-                else: 
+                else:
                     Nt.H += [CF(H=[Dt], dTT=Dt.dTT.copy(),m=Dt.m, c=Dt.c, r=Dt.r,root=Nt, nF='Dt')]  # not possible? We won't get Dt if Nt.H is empty?
 
             if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+
@@ -275,8 +276,7 @@ def comp(_pars, pars, meA,deA, c=1, j=0):  # m is min for massive core attrs, or
             if (_p<0) != (p<0): m =- m  # gap between comparands
             m_ += [m * mass + (avad-abs(d)) * (1-mass)]  # massive and massless m, not relative?
             _i_+= [_p]; i_+= [p]
-    global dt___, c__  # ini dH=[lev0], mA mass=0:
-    dt___[j] += [np.abs(d_+[deA])]; c__[j] += [c]
+    global d___, cc__; d___[j] += [np.abs(d_+[deA])]; cc__[j] += [c]  # ini dH=[lev0], mA mass=0
     return np.array(m_+[meA]), np.array(d_+[deA])
 
 def comp_dT(_i_,i_, c, j):  # scalars, j: dLev index, >1 in comp_H only
@@ -292,7 +292,7 @@ def comp_dT(_i_,i_, c, j):  # scalars, j: dLev index, >1 in comp_H only
     avad_ = avad__[j]  # mass_,avad_,avi_,dcov_ = mass__[j], avad__[j], avi__[j], dcov__[j]
     d_ = _i_ - i_
     rd_ = np.abs(d_) / eps_(avad_)
-    dt___[j] += [np.abs(d_)]; c__[j] += [c]
+    global d___, cc__; d___[j] += [np.abs(d_)]; cc__[j] += [c]
     return np.array([rd_,d_])
 
 def comp_A(_A,A):
@@ -529,8 +529,7 @@ def sum2G(F_, wTT, root=None, _r=0, _j=0):  # finalize CN from C or (N_,L_,B_), 
     coreM = (Nt.m * decay**spanR * Nt.c + Lt.m * Lt.c) / (Nt.c+Lt.c)
     G.m = coreM * (1-Bt.m)  # core mass * contour specificity
     nm_,lm_,bm_ = [(v_.sum()-v_) / (wT.sum()-wT) for TT in (Nt.dTT,Lt.dTT,Bt.dTT) for v_ in [(1-TT[0])/(1+TT[0])*wT]]
-    # follow m, where Nt need decay?
-    G.pt_ = (nm_*decay**spanR*Nt.c + lm_*Lt.c) / (Nt.c+Lt.c) * (1-bm_)  # G.m / param w/o its own column, for Mass_
+    G.m_ = (nm_*decay**spanR*Nt.c + lm_*Lt.c) / (Nt.c+Lt.c) * (1-bm_)  # G.m / param w/o its own column, for Mass_, use decay?
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G
 
@@ -901,18 +900,18 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
 
 def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
 
-    global ave,avd, oF_,nF_,iF_, it___,pt___,nc__,dt___,c__
-    # not reviewed:
+    global ave,avd, oF_,nF_,iF_, p___,m___,gc__, d___,cc__
     def Mass_():  # per dLev: avad from comps, mass from clusters
-        for it__,pt__,nc_, dt__,c_, mass_,avad_ in zip(it___,pt___,nc__, dt___,c__, mass__,avad__):
-            if c_:
-                c_ = np.array(c_)[:,None]; avad_[:] = (dt__*c_).sum(0) / c_.sum()  # mean |d| / param
-            if nc_:
-                nc_ = np.array(nc_)[:,None]; C = nc_.sum()
-                devI__ = it__ - (it__*nc_).sum(0) / C  # |param| dev / G
-                devM__ = pt__ - (pt__*nc_).sum(0) / C  # dev of G.m w/o own column / G
-                cov__ = devI__ * devM__ * nc_; acov_ = np.abs(cov__).sum(0); ev_ = acov_ > 0
-                mass_[ev_] = (cov__.sum(0) / eps_(acov_))[ev_]  # -1:1: share of co-deviation that agrees in sign, else keep init
+        for p__,m__,gc_,d__,cc_, mass_,avad_ in zip(p___,m___,gc__,d___,cc__, mass__,avad__):
+            if cc_:
+                cc_ = np.array(cc_)[:,None]; avad_[:] = (d__*cc_).sum(0) / cc_.sum()  # mean |d| / param
+            if gc_:
+                gc_ = np.array(gc_)[:,None]; C = gc_.sum()
+                devI__ = p__ - (p__*gc_).sum(0) / C  # |param| dev / G
+                devM__ = m__ - (m__*gc_).sum(0) / C  # dev of G.m w/o own column / G
+                covI__ = devI__ * devM__ * gc_
+                covIV_ = (acovI_ := np.abs(covI__).sum(0)) > 0
+                mass_[covIV_] = (covI__.sum(0) / eps_(acovI_))[covIV_]  # -1:1: share of co-deviation that agrees in sign, else keep init?
     for oF in oF_:
         if oF.V_: oF.w += sum(oF.V_) + sum(oF.gV_)  # all extensive
     dTT = dc = dr = 0
@@ -921,7 +920,7 @@ def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fo
     if aLev := dFilt(frame,'aH',wBac, cBac,_TT):  # update filters per Lev: lev_
         aL= aLev; dTT = aL.dTT-_TT; _TT=aL.dTT; dc= aL.c-_ac; dr= aL.r-_ar  # draft
         ave = val_(_TT)  # filters *= ave
-        Mass_(); it___,pt___,nc__, dt___,c__ = [],[],[],[],[]; add_fH(2)
+        Mass_(); p___,m___,gc__, d___,cc__ = [],[],[],[],[]; add_fH(2)
         if oLev := dFilt(frame,'oH', wBac, cBac**2, oTT):
             oL= oLev; dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
             for _oF in copy(oF_): _oF.body = [split_oF(t,_oF) for t in _oF.body]
@@ -956,7 +955,7 @@ def dFilt(frame, nF, w, c, _dTT):  # drift-gated regime termination for aH and o
             return seg
 
 def add_fH(nlev):  # add empty dLevs
-    while len(it___)<nlev: it___.append([]); pt___.append([]); nc__.append([]); dt___.append([]); c__.append([])
+    while len(p___)<nlev: p___.append([]); m___.append([]); gc__.append([]); d___.append([]); cc__.append([])
     while len(mass__)<nlev:
         mass__.append(copy(mass__[-1]) if mass__ else np.zeros(8))  # init from j-1: d of massive is massive
         avad__.append(copy(avad__[-1]) if avad__ else copy(wT))
