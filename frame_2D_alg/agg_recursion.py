@@ -61,16 +61,17 @@ d___,cc__ = [],[]  # |dpar|: [der][comp][par], cc__: [der][comp]
 mass__,avad__ = [],[]  # [der][par]
 
 def pT___(N, _j):  # per comparand: |params| per dLev vs its G.m without that param's column
-    if not hasattr(N,'pt_'): return  # no Lt | Bt: no estimate
+    if not hasattr(N,'mt_'): return  # no Lt | Bt: no estimate
     I, G = N.kern[:2]
+    # why M is 0 here?
     row_ = [(_j, np.abs([0,N.c,I,G,0,len(N.N_),N.span,0]), N.c), (_j+1, np.abs(N.dTT[1]), N.c)]  # as in base_comp
     row_+= [(_j+1+d, np.abs(l.dTT[1]), l.c) for lev in N.H if lev for d,l in enumerate(lev.H) if l]  # as in comp_H
     for j, i_, c in row_:
-        add_fH(j+1); p___[j] += [i_]; m___[j] += [N.pt_]; gc__[j] += [c]
+        add_fH(j+1); p___[j] += [i_]; m___[j] += [N.mt_]; gc__[j] += [c]
 
 def val_(TT, wT=wT):  # multi-variate rel match for membership, rel diff for boundary
     '''
-    restore this
+    restore this (why? This is using d_?)
     m_, d_ = TT; ad_ = np.abs(d_)  # dval = brrw from different-base m: directional Lt|Bt
     rm_ = m_ / eps_(m_+ ad_)  # if may be massive, revised for symmetric inv_m in -1:1:
     rm_ = np.abs(ad_- m_) / eps_(ad_+ m_)  # massless m = avad
@@ -140,7 +141,7 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1, _j=0):  # recur
             add2F(dF,Lt, merge=1); return
         for N in (N_:= list(set(N_))): sum2F(N.rim, N, nF='Rt')  #->N.Rt
         if iN_: add2F(root.Lt, Lt, merge=1)
-        else: iN_ = N_; [pT___(N,_j) for N in N_]  # pT___ is per input N_, and only if L_ is not empty?
+        else: iN_ = N_
         # cluster:
         if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):  # len coef is tentative
             G_, C_ = cluster_N(root, exemplar_(iN_ or N_,r+1), r+1,c,_j)  # tentative G_|C_|P_/ rng+
@@ -261,7 +262,7 @@ def comp_(_pars, pars, reA,deA, c=1, j=0):  # compute m_,d_ from inputs or deriv
         else:
             d_ += [d := (_p - p)]  # ad borrows from avm: 0 @ ad=0, 0.5 @ avad, 1 @ inf:
             rd_+= [abs(d) / avad]  # core|cntr -1:1 vd: (avad-ad)/(avad+ad) = (rd-1)/(rd+1), v = abs(vd* (c/r)) -avad
-    global dt___,c__; dt___[j]+= [np.abs(d_+[deA])]; c__[j]+=[c]
+    global d___,cc__; d___[j]+= [np.abs(d_+[deA])]; cc__[j]+=[c]
     return np.array(rd_+[reA]), np.array(d_+[deA])
 
 def comp(_pars, pars, meA,deA, c=1, j=0):  # m is min for massive core attrs, or combined with inv_m?
@@ -529,7 +530,8 @@ def sum2G(F_, wTT, root=None, _r=0, _j=0):  # finalize CN from C or (N_,L_,B_), 
     coreM = (Nt.m * decay**spanR * Nt.c + Lt.m * Lt.c) / (Nt.c+Lt.c)
     G.m = coreM * (1-Bt.m)  # core mass * contour specificity
     nm_,lm_,bm_ = [(v_.sum()-v_) / (wT.sum()-wT) for TT in (Nt.dTT,Lt.dTT,Bt.dTT) for v_ in [(1-TT[0])/(1+TT[0])*wT]]
-    G.m_ = (nm_*decay**spanR*Nt.c + lm_*Lt.c) / (Nt.c+Lt.c) * (1-bm_)  # G.m / param w/o its own column, for Mass_, use decay?
+    G.mt_ = (nm_*decay**spanR*Nt.c + lm_*Lt.c) / (Nt.c+Lt.c) * (1-bm_)  # G.m / param w/o its own column, for Mass_, use decay?
+    pT___(G, _j)
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G
 
@@ -628,7 +630,7 @@ def Copy_(N, root=None, r=1, cls=None, init=0, typ=None, froot=0):
                 setattr(C, f, Copy_(getattr(N,f), root=C))
                 if f in ('Nt','Lt','Bt','Dt'): getattr(C,f).H = [Copy_(lev, root=C) if lev else [] for lev in getattr(N,f).H]
             C.angl=deepcopy(N.angl); C.yx=copy(N.yx); C.box=copy(N.box); C.mang=N.mang; C.exe=N.exe; C.root_=list(N.root_)
-    if hasattr(N,'pt_'): C.pt_ = np.array(N.pt_, copy=True)
+    if hasattr(N,'mt_'): C.mt_ = np.array(N.mt_, copy=True)
     if hasattr(N,'nrng'): C.nrng = N.nrng
     if froot:
         for n in C.N_+C.L_: n.root = C  # reassign for feedback, or root_+= if multiple roots?
@@ -937,7 +939,7 @@ def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fo
                 for n in call_sites(oF.fdef):  # callees may be replaced
                     if n.func.id in map_: n.func.id = map_[n.func.id]
             inject_oF_(oF_, globals())
-    FV_(CoF.get(),dTT,dc,dr)
+    if dc: FV_(CoF.get(),dTT,dc,dr)
     return frame, _TT, oTT, aL, oL
 
 def dFilt(frame, nF, w, c, _dTT):  # drift-gated regime termination for aH and oH
