@@ -137,7 +137,7 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1, _j=0):  # recur
         if len(dL_:= [l for l in L_ if l.typ == 1 and l.nrng == 1 and -l.m > ave]) > 1:  # pooled contrast links
             Dt = sum2F(dL_, root=root, nF='Dt'); Dt.r += _r + 1
             if gv_(-Dt.m * (Dt.c*wX /(Dt.r*cX)) - ave):  # der+
-                cross_comp(F2N(Dt), proj_L_(combinations([F2N(L) for L in dL_], 2), root,Dt.r,_j=_j), root,Dt.r)
+                cross_comp(F2N(Dt), proj_L_(combinations([F2N(L) for L in dL_], 2), root,Dt.r), root,Dt.r,_j=_j)
         FV_(CoF.get(), tt,c,r)  # current-rng xcomp
         if G_:
             if not frng: return G_,C_  # tentative, in rng+ loop only
@@ -216,7 +216,7 @@ def comp_H(_N, N, L,_j):
             for j, (_l, l) in enumerate(zip(_lev.H, lev.H)):  # bottom-up in derivation
                 if _l and l:
                     lc = min(_l.c,l.c); lr = (_l.r+l.r)/2
-                    ltt = comp_dT(_l.dTT[1], l.dTT[1], lc, j+1)  # as in base_comp
+                    ltt = comp_dT(_l.dTT[1], l.dTT[1], lc, _j+j+1)  # as in base_comp
                     ddH += [CF(dTT=ltt, m=val_(ltt,Nw_), c=lc, r=lr, root=L)]  # bottom-up
             if ddH:
                 tt, c, r = sum_vt(ddH)
@@ -504,6 +504,10 @@ def sum2G(F_, wTT, root=None, _r=0, _j=0):  # finalize CN from C or (N_,L_,B_), 
     coreM = (Nt.m * decay**spanR * Nt.c + Lt.m * Lt.c) / (Nt.c+Lt.c)
     G.m = coreM * (1-Bt.m)  # core mass * contour specificity
     nm_,lm_,bm_ = [tt[0] for tt in (Nt.dTT,Lt.dTT,Bt.dTT)]
+    # apply this similarly here? Where we subtract their own m to exclude their param? 
+    # exclude the param from G.m: # its G.m without that param's column
+    w_ = wT.sum() - wT
+    nm_, lm_, bm_ = ((nm_@wT) - nm_*wT)/w_, ((lm_@wT) - lm_*wT)/w_, ((bm_@wT) - bm_*wT)/w_
     G.mt_ = ((nm_* decay**spanR *Nt.c) + lm_*Lt.c) / (Nt.c+Lt.c) * (1-bm_)  # G.m / param w/o its own column
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G
@@ -661,7 +665,7 @@ def proj_L_(pairs, root, r, max=20, fall=1, nrng=1):
         iTT = (_N.dTT + N.dTT) * Dec
         eTT = (_N.Rt.dTT + N.Rt.dTT) * Dec
         C = min(_N.c,N.c); R = (_N.r+N.r)/2
-        if val_((eTT + iTT) * Prjw_) * (C / (cPrj + r + R)) * wPrj > ave:  # not oF, spec / link:
+        if val_((eTT + iTT), Prjw_) * (C / (cPrj + r + R)) * wPrj > ave:  # not oF, spec / link:
             eTT += proj_N(N, dist, dy_dx, r, N.c, dec)[0]  # pTT/ L_,B_,rim, if pV >0
             eTT += proj_N(_N,dist,-dy_dx, r,_N.c, dec)[0]  # reverse direction
         return iTT + eTT
@@ -707,6 +711,12 @@ def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N
         m_,d_ = L.dTT; ad_ = np.abs(d_); rdist = dist / L.span
         Dec = dist if fdec else decay ** (1+ rdist*dec)
         ddec_ = (ad_/ eps_(m_+ad_) - (1-decay)) * cos_d * rdist  # projected local loss deviation
+        '''
+        proj_TT is different and can keep 1 - m_: per link, d and m carry the same information, and it scales the loss rate of m instead of adding to it.
+        
+        # replaces ad_/ eps_(m_+ad_) with 1-m_? Since they carry the same info now
+        ddec_ = ((1-m_) - (1-decay)) * cos_d * rdist
+        '''
         dm_ = m_ * (1-Dec+ddec_)  # average loss + local deviation, in match units
         TT = np.array([m_-dm_, d_+ np.where(d_<0, -dm_,dm_)])  # transfer lost match to signed difference
         # or rTT: cert should be a ratio?
@@ -772,7 +782,7 @@ def trace_edge(N_,_G_,_TT,_C, r,root):  # cluster contiguous shapes via PPs in e
                 G_ += [sum2G((n_,l_,b_,[]), ttTrc, root, r)]  # add sub-PPs from sub+?
             else:
                 for N in n_: N.root=root
-    if val_(TT*root.wTT[0]*Trcw_) * ((C+wTrc)/(r+1+cTrc)) * ((len(G_)-1)*wL) > ave:
+    if val_(TT,root.wTT[0]*Trcw_) * ((C+wTrc)/(r+1+cTrc)) * ((len(G_)-1)*wL) > ave:
         _G_+=G_; _TT+=TT; _C+=C  # concat in tile
         FV_(CoF.get(), *sum_vt(_G_))
     return _G_, _TT, _C, r+R/_C
@@ -895,8 +905,8 @@ def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fo
         aL= aLev; dTT = aL.dTT-_TT; _TT=aL.dTT; dc= aL.c-_ac; dr= aL.r-_ar  # draft
         ave = val_(_TT)  # filters *= ave
         Dec = (decay ** (frame.span /_span)) if _span else 1  # or actual distance?
-        Mass_(Dec); add_fH(2)
-        _span = _span+frame.span; p___,m___,gc__, d___,cc__ = [],[],[],[],[]
+        Mass_(Dec)
+        _span = _span+frame.span; p___,m___,gc__, d___,cc__ = [],[],[],[],[]; add_fH(2)
         if oLev := dFilt(frame,'oH', wBac, cBac**2, oTT):
             oL= oLev; dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
             for _oF in copy(oF_): _oF.body = [split_oF(t,_oF) for t in _oF.body]

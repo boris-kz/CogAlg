@@ -30,6 +30,7 @@ Connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possib
 len prior root_ sorted by G is root.olp, to eval for inclusion in PP or start new P by ave*olp
 '''
 
+def eps_(a): return np.where(a==0, eps, a)
 eps = 1e-7
 ave, avd, aveB, ave_PPm, ave_PPd, ave_L, aI = 10, 10, 100, 50, 50, 4, 20
 wM, wI, wG, wA, wL = 10, 1, 1, 20, 20  # dert:
@@ -189,39 +190,49 @@ def sum2PP(P_, dP_, B_, m, d, c):  # sum links in Ps and Ps in PP
     for P in P_: P.root = PPt
     return PPt
 
-def comp_latT(_latT, latT, _n,n, avad_=None):  # 0der params, add align?
+def comp_latT(_latT, latT, _n,n, avad_, mass_):  # 0der params, add align?
 
     _I,_G,_Dy,_Dx,_M,_D,_L = _latT
     I, G, Dy, Dx, M, D, L = latT
     rn = _n / n
     _pars = np.array([_M,_I,_G, np.array([_Dy,_Dx]),_L], dtype=object)
     pars  = np.array([ M, I, G, np.array([ Dy, Dx]), L], dtype=object) * rn
-    m_,d_ = comp(_pars,pars, avad_)
+    m_,d_ = comp(_pars,pars, avad_, mass_)
     return (np.array([m_,d_]),  # verT
-            ((1-m_)/(1+m_)) @ w_t[0] / w_t[0].sum(), # rd
+            m_ @ w_t[0] / w_t[0].sum(),  # we only need direct m_@w now?
             np.abs(d_)@ w_t[1], # d
             min(L,_L))          # c
 
-def comp_vert(_i_,i_, minn, align=1, avad_ = np.ones(5)):  # i_ is ds, ext A align
+# similar with comp_dT
+def comp_vert(_i_,i_, minn, align=1, avad_ = np.ones(5), mass_=np.zeros(5)):  # i_ is ds, ext A align
 
-    m_ = np.abs(_i_-i_) / avad_  # rd
-    d_ = _i_ - i_  # next comparands, from signed i_
+    d_ = _i_ - i_; ad_ = np.abs(d_); _a_,a_ = np.abs(_i_), np.abs(i_)
+    rm_ = (avad_-ad_) / eps_(avad_+ad_)  # massless m
+    mm_ = np.minimum(_a_,a_); mm_[(_i_<0) != (i_<0)] *= -1  # gap between comparands
+    M_ = np.maximum(_a_,a_)
+    w_ = mass_ * (mass_>0)  # massive share if +ve
+    m_ = (mm_/eps_(M_)) * w_ + rm_ * (1-w_)
     return (np.array([m_,d_]),  # I, G, A, M, D, L
-            ((1-m_)/(1+m_))* align @ w_t[0] / w_t[0].sum(), # rd
+            (m_ * align) @ w_t[0] / w_t[0].sum(),
             np.abs(d_) * (2-align) @ w_t[1], # d
             minn)  # c
 
-def comp(_pars, pars, avad_=np.ones(5)):  # raw inputs or derivatives, add meA=0, deA=0?
+def comp(_pars, pars, avad_=np.ones(5),mass_=np.zeros(5)):  # raw inputs or derivatives, add meA=0, deA=0?
 
     m_,d_ = [],[]
-    for _p, p, avd in zip(_pars, pars, avad_):
+    for _p, p, avd, mass in zip(_pars, pars, avad_, mass_):
         if isinstance(_p, np.ndarray):
             mA, dA = comp_A(_p, p)  # both in -1:1
             m_ += [mA]; d_ += [dA]
-        else:  # all massless [ad,avd]
-            d = _p - p; ad = abs(d)
-            m_ += [ad/avd]  # +|- or avd / (avd+ad)?
-            d_ += [d]
+        else:
+            d = _p - p; ad = abs(d); d_ += [d]
+            rm = (avd-ad) / ((avd+ad) or eps)  # massless
+            if mass > 0:  # massive
+                _a, a = abs(_p), abs(p)
+                m = min(_a,a) if (_p<0)==(p<0) else -min(_a,a)
+                M = max(_a,a)
+                rm = m/M*mass + rm*(1-mass)
+            m_ += [rm]
     return np.array(m_), np.array(d_)
 
 def comp_A(_A,A):
