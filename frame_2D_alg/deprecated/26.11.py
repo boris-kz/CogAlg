@@ -132,3 +132,63 @@ def add_fH(nlev):  # add empty Levs before cross_comp
         avad__.append(copy(avad__[-1]) if avad__ else copy(wT))
         avi__.append(copy(avi__[-1]) if avi__ else np.ones(8))
         dcov__.append(copy(dcov__[-1]) if dcov__ else np.zeros(8))
+
+def comp_(_pars, pars, reA,deA, c=1, j=0):  # compute m_,d_ from inputs or derivatives
+
+    rd_,d_ = [],[]; _i_, i_ = [],[]
+    for i, (_p,p, avad) in enumerate(zip(_pars,pars, avad__[j])):
+        if isinstance(_p, list):  # vector angle
+            rA,dA = comp_A(_p,p); rd_+= [rA]; d_+= [dA]; _i_+=[0]; i_+= [0]
+        else:
+            d_ += [d := (_p - p)]  # ad borrows from avm: 0 @ ad=0, 0.5 @ avad, 1 @ inf:
+            rd_+= [abs(d) / avad]  # core|cntr -1:1 vd: (avad-ad)/(avad+ad) = (rd-1)/(rd+1), v = abs(vd* (c/r)) -avad
+    global dt___,c__; dt___[j]+= [np.abs(d_+[deA])]; c__[j]+=[c]
+    return np.array(rd_+[reA]), np.array(d_+[deA])
+
+def comp_dT(_i_,i_, c, j):  # scalars, j: dLev index, >1 in comp_H only
+    '''
+    _a_, a_ = np.abs(_i_), np.abs(i_)
+    mm_ = np.minimum(_a_,a_); mm_[(_i_<0) != (i_<0)] *= -1
+    sd_ = scaled_avad_ = avad_ * (eps_((_a_+a_)/2) / eps_(avi_)) ** dcov_
+    m_ = mm_* mass_ + sd_* (1-mass_)  # avad_: prior regime mean |d| = massless m
+    global i___,d___,c__
+    i___[j] += [(_a_+a_)/2]; d___[j] += [np.abs(d_)]; c__[j]+=[c]  # dLev += [comp]
+    return np.array([m_,d_])
+    '''
+    avad_ = avad__[j]  # mass_,avad_,avi_,dcov_ = mass__[j], avad__[j], avi__[j], dcov__[j]
+    d_ = _i_ - i_
+    rd_ = np.abs(d_) / eps_(avad_)
+    global d___, cc__; d___[j] += [np.abs(d_)]; cc__[j] += [c]
+    return np.array([rd_,d_])
+
+def val_(TT, wT=wT):  # multi-variate rel match for membership, rel diff for boundary
+    '''
+    restore this
+    m_, d_ = TT; ad_ = np.abs(d_)  # dval = brrw from different-base m: directional Lt|Bt
+    rm_ = m_ / eps_(m_+ ad_)  # if may be massive, revised for symmetric inv_m in -1:1:
+    rm_ = np.abs(ad_- m_) / eps_(ad_+ m_)  # massless m = avad
+    # L.v = ((rm_:=TT[0]) / (2-rm_)) @ wTT[0] * (c/r) - avm_
+    '''
+    return ((1-(rd_:=TT[0])) / (1+rd_)) @ wT / wT.sum()  # -1:1 for +ve weights
+
+def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
+
+    C = sum(n.c for n in N_); rD=R=0; TT = np.zeros((2,8))
+    for n in N_:
+        w = n.c/C; tt = (n.rTT if fr else n.dTT) * w; TT+=tt; r= n.r * w; R += r
+        if fm:
+            rd = tt[0] @ wTT[0] / 8  # in -1:1?
+            rD += (rd / (ave*r)) if fdiv else (rd - ave*r)
+    return (rD,TT,C,R) if fm else (TT,C,R)  # sum dTT for comp, not eval?
+
+def Mass_1():  # per dLev: avad from comps, mass from clusters
+        for p__,m__,gc_,d__,cc_, mass_,avad_ in zip(p___,m___,gc__,d___,cc__, mass__,avad__):
+            if cc_:
+                cc_ = np.array(cc_)[:,None]; avad_[:] = (d__*cc_).sum(0) / cc_.sum()  # mean |d| / param
+            if gc_:
+                gc_ = np.array(gc_)[:,None]; C = gc_.sum()
+                devI__ = p__ - (p__*gc_).sum(0) / C  # |param| dev / G
+                devM__ = m__ - (m__*gc_).sum(0) / C  # dev of G.m w/o own column / G
+                covI__ = devI__ * devM__ * gc_
+                covIV_ = (acovI_ := np.abs(covI__).sum(0)) > 0
+                mass_[covIV_] = (covI__.sum(0) / eps_(acovI_))[covIV_]  # -1:1: share of co-deviation that agrees in sign, else keep init?

@@ -55,38 +55,28 @@ cFrm,cX,cTrc,cN,cF, cE,ccN,ccC,ccP,csG, cBac,cPrj, cVct = (  # function complexi
 wFrm,wX,wTrc,wN,wF, wE,wcN,wcC,wcP,wsG, wBac,wPrj, wVct ) = [F.fc for F in oF_]  # ave gain/call, init=cost
 ttFrm,ttX,ttTrc,ttN,ttF, ttE,ttcN,ttcC,ttcP,ttsG, ttBac,ttPrj,ttVct = [F.wTT for F in oF_]  # attr weight tuples added per function, [0] only?
 Frmw_,Xw_,Trcw_,Nw_,Fw_,Ew_,cNw_,cCw_,cPw_,sGw_,Bacw_,Prjw_,Vctw_ = ttFrm[0],ttX[0],ttTrc[0],ttN[0],ttF[0],ttE[0],ttcN[0],ttcC[0],ttcP[0],ttsG[0],ttBac[0],ttPrj[0],ttVct[0]
-# compute mass_:
+# compute mass__:
 p___,m___,gc__ = [],[],[]  # |par|, G.m-par: [der][clus][par], gc__: [der][clus]
 d___,cc__ = [],[]  # |dpar|: [der][comp][par], cc__: [der][comp]
-mass__,avad__ = [],[]  # [der][par]
+mass__,avad__,acov__,_span = [],[],[],0  # [der][par], acov__: evidence for mass__ over _span
 
-def pT___(N, _j):  # per comparand: |params| per dLev vs its G.m without that param's column
-    if not hasattr(N,'pt_'): return  # no Lt | Bt: no estimate
+def mT___(N, _j):  # per comparand: |params| per dLev vs its G.m without that param's column
+    if not hasattr(N,'mt_'): return  # no Lt | Bt: no estimate
     I, G = N.kern[:2]
-    row_ = [(_j, np.abs([0,N.c,I,G,0,len(N.N_),N.span,0]), N.c), (_j+1, np.abs(N.dTT[1]), N.c)]  # as in base_comp
-    row_+= [(_j+1+d, np.abs(l.dTT[1]), l.c) for lev in N.H if lev for d,l in enumerate(lev.H) if l]  # as in comp_H
-    for j, i_, c in row_:
-        add_fH(j+1); p___[j] += [i_]; m___[j] += [N.pt_]; gc__[j] += [c]
+    j_it_c_ = [(_j, np.abs([0,N.c,I,G,0,len(N.N_),N.span,0]), N.c), (_j+1, np.abs(N.dTT[1]), N.c)]  # as in base_comp
+    j_it_c_+= [(_j+1+d, np.abs(l.dTT[1]), l.c) for lev in N.H if lev for d,l in enumerate(lev.H) if l]  # as in comp_H
+    for j, it, c in j_it_c_:
+        add_fH(j+1); p___[j] += [it]; m___[j] += [N.mt_]; gc__[j] += [c]
 
-def val_(TT, wT=wT):  # multi-variate rel match for membership, rel diff for boundary
-    '''
-    restore this
-    m_, d_ = TT; ad_ = np.abs(d_)  # dval = brrw from different-base m: directional Lt|Bt
-    rm_ = m_ / eps_(m_+ ad_)  # if may be massive, revised for symmetric inv_m in -1:1:
-    rm_ = np.abs(ad_- m_) / eps_(ad_+ m_)  # massless m = avad
-    # L.v = ((rm_:=TT[0]) / (2-rm_)) @ wTT[0] * (c/r) - avm_
-    '''
-    return ((1-(rd_:=TT[0])) / (1+rd_)) @ wT / wT.sum()  # -1:1 for +ve weights
+def val_(TT, wT=wT): return TT[0] @ wT / wT.sum()  # multi-variate rel match for membership, diff for boundary, in -1:1
 
-def sum_vt(N_, fr=0, fm=0, wTT=wTT, fdiv=1):  # basic weighted sum of CN|CF list
+def sum_vt(N_, fr=0, fm=0, wTT=wTT):  # c-weighted mean dTT,r of CN|CF list, + m if fm
 
-    C = sum(n.c for n in N_); rD=R=0; TT = np.zeros((2,8))
+    C = sum(n.c for n in N_); R = 0; TT = np.zeros((2,8))
     for n in N_:
-        w = n.c/C; tt = (n.rTT if fr else n.dTT) * w; TT+=tt; r= n.r * w; R += r
-        if fm:
-            rd = tt[0] @ wTT[0] / 8  # in -1:1?
-            rD += (rd / (ave*r)) if fdiv else (rd - ave*r)
-    return (rD,TT,C,R) if fm else (TT,C,R)  # sum dTT for comp, not eval?
+        w = n.c/C; TT += (n.rTT if fr else n.dTT) * w; R += n.r * w
+    if fm: return val_(TT,wTT[0]), TT,C,R  # m of the mean: TT[0] is linear in m now
+    return TT,C,R
 
 def FV_(F, tt,c,r):  # combine m,d per oF
     tF = oF_[F.nF]; tF.c += c
@@ -140,7 +130,7 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1, _j=0):  # recur
             add2F(dF,Lt, merge=1); return
         for N in (N_:= list(set(N_))): sum2F(N.rim, N, nF='Rt')  #->N.Rt
         if iN_: add2F(root.Lt, Lt, merge=1)
-        else: iN_ = N_; [pT___(N,_j) for N in N_]  # pT___ is per input N_, and only if L_ is not empty?
+        else: iN_ = N_; [mT___(N,_j) for N in N_]  # add N.mt_
         # cluster:
         if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):  # len coef is tentative
             G_, C_ = cluster_N(root, exemplar_(iN_ or N_,r+1), r+1,c,_j)  # tentative G_|C_|P_/ rng+
@@ -252,48 +242,34 @@ def base_comp(_N,N, j=0):  # j: root depth, comp Et, kern, extT, dTT; rational M
     mang = (rn*_N.mang + N.mang) / (1+rn)  # ave, weight each side by rn
     align = 1 - mang* (1-mA)  # in 0:1, weigh mA 
 '''
-def comp_(_pars, pars, reA,deA, c=1, j=0):  # compute m_,d_ from inputs or derivatives
+def comp_(_pars, pars, meA,deA, c=1, j=0):  # m is min for massive core attrs, or combined with inv_m?
 
-    rd_,d_ = [],[]; _i_, i_ = [],[]
-    for i, (_p,p, avad) in enumerate(zip(_pars,pars, avad__[j])):
-        if isinstance(_p, list):  # vector angle
-            rA,dA = comp_A(_p,p); rd_+= [rA]; d_+= [dA]; _i_+=[0]; i_+= [0]
-        else:
-            d_ += [d := (_p - p)]  # ad borrows from avm: 0 @ ad=0, 0.5 @ avad, 1 @ inf:
-            rd_+= [abs(d) / avad]  # core|cntr -1:1 vd: (avad-ad)/(avad+ad) = (rd-1)/(rd+1), v = abs(vd* (c/r)) -avad
-    global dt___,c__; dt___[j]+= [np.abs(d_+[deA])]; c__[j]+=[c]
-    return np.array(rd_+[reA]), np.array(d_+[deA])
-
-def comp(_pars, pars, meA,deA, c=1, j=0):  # m is min for massive core attrs, or combined with inv_m?
-
-    m_,d_ = [],[]; _i_, i_ = [],[]
+    m_,d_ = [],[]
     for i, (_p,p, mass,avad) in enumerate(zip(_pars,pars, mass__[j],avad__[j])):  # prior-frame mean |d| = massless m
         if isinstance(_p, list):  # vector angle
-            mA, dA = comp_A(_p, p); m_ += [mA]; d_ += [dA]; _i_+=[0]; i_ += [0]
+            mA, dA = comp_A(_p, p); m_+= [2*mA-1]; d_+= [dA]  # cos: 1 aligned, 0 orthogonal, -1 opposite
         else:
             d_ += [d := (_p - p)]
-            m = min(abs(_p), abs(p))
-            if (_p<0) != (p<0): m =- m  # gap between comparands
-            m_ += [m * mass + (avad-abs(d)) * (1-mass)]  # massive and massless m, not relative?
-            _i_+= [_p]; i_+= [p]
+            rm = (avad-abs(d)) / (avad+abs(d))  # massless m
+            if mass > 0:  # cov(mag,stability)
+                m = min(abs(_p),abs(p)); M = max(abs(_p),abs(p))
+                if (_p<0) != (p<0): m =- m  # gap in p vals
+                rm = (m/M) * mass + rm * (1-mass)
+            m_ += [rm]
     global d___, cc__; d___[j] += [np.abs(d_+[deA])]; cc__[j] += [c]  # ini dH=[lev0], mA mass=0
     return np.array(m_+[meA]), np.array(d_+[deA])
 
 def comp_dT(_i_,i_, c, j):  # scalars, j: dLev index, >1 in comp_H only
-    '''
-    _a_, a_ = np.abs(_i_), np.abs(i_)
-    mm_ = np.minimum(_a_,a_); mm_[(_i_<0) != (i_<0)] *= -1
-    sd_ = scaled_avad_ = avad_ * (eps_((_a_+a_)/2) / eps_(avi_)) ** dcov_
-    m_ = mm_* mass_ + sd_* (1-mass_)  # avad_: prior regime mean |d| = massless m
-    global i___,d___,c__
-    i___[j] += [(_a_+a_)/2]; d___[j] += [np.abs(d_)]; c__[j]+=[c]  # dLev += [comp]
-    return np.array([m_,d_])
-    '''
-    avad_ = avad__[j]  # mass_,avad_,avi_,dcov_ = mass__[j], avad__[j], avi__[j], dcov__[j]
-    d_ = _i_ - i_
-    rd_ = np.abs(d_) / eps_(avad_)
-    global d___, cc__; d___[j] += [np.abs(d_)]; cc__[j] += [c]
-    return np.array([rd_,d_])
+
+    mass_,avad_ = mass__[j], avad__[j]
+    d_ = _i_ - i_; ad_ = np.abs(d_); _a_,a_ = np.abs(_i_), np.abs(i_)
+    rm_ = (avad_-ad_) / eps_(avad_+ad_)  # massless m
+    m_ = np.minimum(_a_,a_); m_[(_i_<0) != (i_<0)] *= -1  # gap in p vals
+    M_ = np.maximum(_a_,a_)
+    w_ = mass_ * (mass_ >0)  # massive share: cov(mag,stability) if +ve
+    rm_ = (m_/eps_(M_)) * w_ + rm_ * (1-w_)
+    global d___, cc__; d___[j] += [ad_]; cc__[j] += [c]
+    return np.array([rm_,d_])
 
 def comp_A(_A,A):
     dA = atan2(*_A)- atan2(*A)  # * direction
@@ -301,9 +277,8 @@ def comp_A(_A,A):
     elif dA <-pi: dA += 2 * pi  # rotate CCW
     '''  or 
     den = np.hypot(*_A) * np.hypot(*A) + eps
-    mA = (_A @ A / den +1) / 2  # cos_da in 0:1, no rot = 1 if dy * _dx - dx * _dy >= 0 else -1  # +1 CW, −1 CCW, ((1-cos_da)/2) * rot?
-    '''
-    return (cos(dA)+1) /2, dA/pi  # mA in 0:1, dA in -1:1, or invert dA, may be negative?
+    mA = (_A @ A / den +1) / 2  # cos_da in 0:1, no rot = 1 if dy * _dx - dx * _dy >= 0 else -1  # +1 CW, −1 CCW, ((1-cos_da)/2) * rot? '''
+    return (cos(dA)+1) / 2, dA/pi  # mA in 0:1, dA in -1:1, or invert dA, may be negative?
 
 def exemplar_(N_,_r):  # multi-layer non-maximum suppression -> sparse clustering seeds = rim-medoids
 
@@ -311,8 +286,8 @@ def exemplar_(N_,_r):  # multi-layer non-maximum suppression -> sparse clusterin
     N_= sorted(N_, key=lambda n: n.w, reverse=True); E_,Inh_ = [],set()
     for rdn, N in enumerate(N_, start=1):  # strong-first
         inh_ = list(Inh_ & set(N.rim))  # stronger Es in N.rim
-        oM = sum_vt(inh_,fm=1, wTT=ttE)[0] if inh_ else 0
-        oV = oM / (N.Rt.m or eps)  # relative olp V, lateral only
+        oM,_,oC,_ = sum_vt(inh_,fm=1, wTT=ttE) if inh_ else (0,0,0,0)
+        oV = oM*oC / (N.Rt.m*N.Rt.c or eps)  # relative olp V, lateral only
         if N.w * wE > ave* (_r+rdn+cE+oV):
             E_+=[N]; N.exe = 1  # point cloud of focal nodes
             Inh_.update(set(N.rim))  # rim-based
@@ -528,8 +503,8 @@ def sum2G(F_, wTT, root=None, _r=0, _j=0):  # finalize CN from C or (N_,L_,B_), 
     spanR = np.mean([n.span for n in Nt.N_]) / np.mean([l.span for l in Lt.N_])
     coreM = (Nt.m * decay**spanR * Nt.c + Lt.m * Lt.c) / (Nt.c+Lt.c)
     G.m = coreM * (1-Bt.m)  # core mass * contour specificity
-    nm_,lm_,bm_ = [(v_.sum()-v_) / (wT.sum()-wT) for TT in (Nt.dTT,Lt.dTT,Bt.dTT) for v_ in [(1-TT[0])/(1+TT[0])*wT]]
-    G.m_ = (nm_*decay**spanR*Nt.c + lm_*Lt.c) / (Nt.c+Lt.c) * (1-bm_)  # G.m / param w/o its own column, for Mass_, use decay?
+    nm_,lm_,bm_ = [tt[0] for tt in (Nt.dTT,Lt.dTT,Bt.dTT)]
+    G.mt_ = ((nm_* decay**spanR *Nt.c) + lm_*Lt.c) / (Nt.c+Lt.c) * (1-bm_)  # G.m / param w/o its own column
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G
 
@@ -628,7 +603,7 @@ def Copy_(N, root=None, r=1, cls=None, init=0, typ=None, froot=0):
                 setattr(C, f, Copy_(getattr(N,f), root=C))
                 if f in ('Nt','Lt','Bt','Dt'): getattr(C,f).H = [Copy_(lev, root=C) if lev else [] for lev in getattr(N,f).H]
             C.angl=deepcopy(N.angl); C.yx=copy(N.yx); C.box=copy(N.box); C.mang=N.mang; C.exe=N.exe; C.root_=list(N.root_)
-    if hasattr(N,'pt_'): C.pt_ = np.array(N.pt_, copy=True)
+    if hasattr(N,'mt_'): C.mt_ = np.array(N.mt_, copy=True)
     if hasattr(N,'nrng'): C.nrng = N.nrng
     if froot:
         for n in C.N_+C.L_: n.root = C  # reassign for feedback, or root_+= if multiple roots?
@@ -646,8 +621,7 @@ def sort_H(H, fi):  # lev.rc = complementary to root.rc and priority index in H,
         lay.r += di  # derR - valR
         i_ += [lay.i]
     H.i_ = i_  # H priority indices: node/m | link/d
-    if fi > 1:
-        H.root.node_ = H.node_
+    if fi > 1: H.root.node_ = H.node_
     # more advanced ordering: dH | H as medoid cluster of layers, nested cent_TT across layers?
 
 def eval(V, weights):  # conditional progressive eval, with default ave in weights[0]
@@ -656,15 +630,13 @@ def eval(V, weights):  # conditional progressive eval, with default ave in weigh
         W *= w
         if V < W: return 0
     return 1
-
 def mdecay(L_):  # slope function
     L_ = sorted(L_, key=lambda l: l.span)
     dm_ = np.diff([l.m/l.c for l in L_])
     ddist_ = np.diff([l.span for l in L_])
     return - (dm_/ eps_(ddist_)).mean()  # -dm/ddist
 
-'''
-frame expansion: cross_comp lower-tile N_,C_, forward results to next lev, project feedback to scan new lower windows
+''' frame expansion: cross_comp lower-tile N_,C_, forward results to next lev, project feedback to scan new lower windows
 
 add comp_prj_nt?
 def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
@@ -711,7 +683,7 @@ def proj_focus(PV__, new__, y,x, tile, elev):  # radial accum of projected focus
 
     H,W = PV__.shape  # = win__
     m = val_(tile.dTT, tile.wTT[0]*Frmw_); c = tile.c  # rel match
-    d = val_(np.abs(tile.dTT[::-1]), tile.wTT[0]*Frmw_)  # rel |d| in m weights, sign is in angl
+    d = (np.abs(tile.dTT[1]) / avad__[0]) @ wT / wT.sum()  # rel |d| in m weights, sign in angl
     A = tile.angl[0]*tile.angl[1] if tile.angl else np.zeros(2)  # direction of increase, as in base_comp, angl=None if no Lt
     Vm = (m-ave) * c  # dTT is averaged: *c for both
     Vd = d * tile.mang * c
@@ -726,7 +698,7 @@ def proj_focus(PV__, new__, y,x, tile, elev):  # radial accum of projected focus
         dist_ = np.hypot(dy_,dx_)  # diag = 1.41 axial
         pV_ = (Vm + Vd* (dy_*A[0]+dx_*A[1]) / (dist_*nA)) * Dec**dist_  # layer projection: signed alignment, decay by cell dist
         PV__[y_,x_] += new__[y_,x_] * pV_  # skip processed cells
-        if pV_.max()*Dec < ave:
+        if pV_.max() * Dec < ave:
             break  # projected next-layer max < min adjustment
 
 def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N projection val, add pN if comp_pN?
@@ -900,9 +872,10 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
 
 def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fork: reform oF_ on cross-regime drift
 
-    global ave,avd, oF_,nF_,iF_, p___,m___,gc__, d___,cc__
-    def Mass_():  # per dLev: avad from comps, mass from clusters
-        for p__,m__,gc_,d__,cc_, mass_,avad_ in zip(p___,m___,gc__,d___,cc__, mass__,avad__):
+    global ave,avd, oF_,nF_,iF_, p___,m___,gc__, d___,cc__, acov__,_span
+    def Mass_(Dec):  # per dLev: avad from comps, mass from clusters
+        for p__,m__,gc_,d__,cc_, mass_,avad_,acov_ in zip(p___,m___,gc__,d___,cc__, mass__,avad__,acov__):
+            acov_ *= Dec  # past evidence, decayed by relative span
             if cc_:
                 cc_ = np.array(cc_)[:,None]; avad_[:] = (d__*cc_).sum(0) / cc_.sum()  # mean |d| / param
             if gc_:
@@ -910,8 +883,9 @@ def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fo
                 devI__ = p__ - (p__*gc_).sum(0) / C  # |param| dev / G
                 devM__ = m__ - (m__*gc_).sum(0) / C  # dev of G.m w/o own column / G
                 covI__ = devI__ * devM__ * gc_
-                covIV_ = (acovI_ := np.abs(covI__).sum(0)) > 0
-                mass_[covIV_] = (covI__.sum(0) / eps_(acovI_))[covIV_]  # -1:1: share of co-deviation that agrees in sign, else keep init?
+                acovI_ = np.abs(covI__).sum(0)  # epoch evidence
+                mass_[:] = (mass_*acov_ + covI__.sum(0)) / eps_(acov_+acovI_)  # -1:1: prior * past evidence + epoch share * epoch evidence
+                acov_ += acovI_
     for oF in oF_:
         if oF.V_: oF.w += sum(oF.V_) + sum(oF.gV_)  # all extensive
     dTT = dc = dr = 0
@@ -920,7 +894,9 @@ def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fo
     if aLev := dFilt(frame,'aH',wBac, cBac,_TT):  # update filters per Lev: lev_
         aL= aLev; dTT = aL.dTT-_TT; _TT=aL.dTT; dc= aL.c-_ac; dr= aL.r-_ar  # draft
         ave = val_(_TT)  # filters *= ave
-        Mass_(); p___,m___,gc__, d___,cc__ = [],[],[],[],[]; add_fH(2)
+        Dec = (decay ** (frame.span /_span)) if _span else 1  # or actual distance?
+        Mass_(Dec); add_fH(2)
+        _span = _span+frame.span; p___,m___,gc__, d___,cc__ = [],[],[],[],[]
         if oLev := dFilt(frame,'oH', wBac, cBac**2, oTT):
             oL= oLev; dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
             for _oF in copy(oF_): _oF.body = [split_oF(t,_oF) for t in _oF.body]
@@ -937,7 +913,7 @@ def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fo
                 for n in call_sites(oF.fdef):  # callees may be replaced
                     if n.func.id in map_: n.func.id = map_[n.func.id]
             inject_oF_(oF_, globals())
-    FV_(CoF.get(),dTT,dc,dr)
+    if dc: FV_(CoF.get(),dTT,dc,dr)
     return frame, _TT, oTT, aL, oL
 
 def dFilt(frame, nF, w, c, _dTT):  # drift-gated regime termination for aH and oH
@@ -959,6 +935,7 @@ def add_fH(nlev):  # add empty dLevs
     while len(mass__)<nlev:
         mass__.append(copy(mass__[-1]) if mass__ else np.zeros(8))  # init from j-1: d of massive is massive
         avad__.append(copy(avad__[-1]) if avad__ else copy(wT))
+        acov__.append(copy(acov__[-1]) if acov__ else np.zeros(8))  # inherit evidence with the prior
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
     trace_func(vars()); g = vars()
