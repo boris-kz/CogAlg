@@ -192,3 +192,19 @@ def Mass_1():  # per dLev: avad from comps, mass from clusters
                 covI__ = devI__ * devM__ * gc_
                 covIV_ = (acovI_ := np.abs(covI__).sum(0)) > 0
                 mass_[covIV_] = (covI__.sum(0) / eps_(acovI_))[covIV_]  # -1:1: share of co-deviation that agrees in sign, else keep init?
+
+def comp_F1(_F, F, nF, ir=0, rL=None, j=None):
+
+    c = min(_F.c,F.c)
+    ddTT = comp_dT(_F.dTT[1],F.dTT[1],c, j+1)  # 1st der, same dLev as base_comp ddTT
+    m = val_(ddTT,Fw_); r = (_F.r+F.r)/2 + ir
+    dF = CF(dTT=ddTT, m=m,r=r,c=c, nF=nF, root=rL)
+    if nF in ('Nt','Lt','Dt'):  # spec draft
+        if (_N_:=_F.N_) and (N_:=F.N_):  # always true?
+            tt = (rL.dTT*rL.c + ddTT*c) / (rL.c+c)  # vertical comb?
+            if gv_(val_(tt,Xw_) * (c*wX /(r*cX)) - ave):
+                cross_comp(rL, proj_L_(list(product(_N_,N_)),2,r), r, dF,_j=j)  # tL-> dF.N_
+            elif _F.H and F.H:  # dF.H[-1]+[dLt]?
+                comp_H(_F,F, dF,j)  # rL: lev in L.H, no cross-fork N_, no L ext updates?
+    setattr(rL,nF,dF)
+    FV_(CoF.get(), dF.dTT, dF.c, dF.r)
