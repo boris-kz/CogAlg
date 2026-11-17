@@ -137,7 +137,8 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1, _j=0):  # recur
         if len(dL_:= [l for l in L_ if l.typ == 1 and l.nrng == 1 and -l.m > ave]) > 1:  # pooled contrast links
             Dt = sum2F(dL_, root=root, nF='Dt'); Dt.r += _r + 1
             if gv_(-Dt.m * (Dt.c*wX /(Dt.r*cX)) - ave):  # der+
-                cross_comp(F2N(Dt), proj_L_(combinations([F2N(L) for L in dL_], 2), root,Dt.r), root,Dt.r,_j=_j)
+                cross_comp(F2N(Dt), proj_L_(combinations([F2N(L) for L in dL_],2), root,Dt.r), root,Dt.r,_j=_j)
+            if Dt.Lt: add2F(root, Dt.Lt, merge=2,fH=0)  # der+ only
         FV_(CoF.get(), tt,c,r)  # current-rng xcomp
         if G_:
             if not frng: return G_,C_  # tentative, in rng+ loop only
@@ -148,11 +149,6 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1, _j=0):  # recur
             if C_: sum2F(C_,root,nF='Ct')  # agg+ / max-rng Gs
             G_ = [sum2G(g,ttcN,root,_r,_j) for g in G_]
             Nt = sum2F(G_,root,nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r
-            if Dt:
-                if Nt.H and Nt.H[-1]: Nt.H[-1].H += [Dt]  # der+
-                else:
-                    Nt.H += [CF(H=[Dt], dTT=Dt.dTT.copy(),m=Dt.m, c=Dt.c, r=Dt.r,root=Nt, nF='Dt')]  # not possible? We won't get Dt if Nt.H is empty?
-
             if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+
                 add_fH(2+_j)  # to add,eval der+ results:
                 G_ = cross_comp(root, proj_L_(combinations(G_,2),root,_r+1),_r+1,_j=_j) or G_
@@ -174,7 +170,7 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: 
     if full: m += val_(dTT,Nw_)
     # 2 dO/ composition, same c
     if N.typ in (1,2) and gv_(m* (c*wF /(r*cF)) - ave):  # N|L
-        for _Ft,Ft,nF in zip((_N.Nt,_N.Lt,_N.Bt,_N.Ct,_N.Dt), (N.Nt,N.Lt,N.Bt,N.Ct,N.Dt), ('Nt','Lt','Bt','Ct','Dt')):
+        for _Ft,Ft,nF in zip((_N.Nt,_N.Lt,_N.Bt,_N.Dt,_N.Ct), (N.Nt,N.Lt,N.Bt,N.Ct,N.Dt), ('Nt','Lt','Bt','Dt','Ct')):
             if _Ft and Ft:  # assign dFt as L.Ft
                 comp_F(_Ft,Ft, nF, r,L,_j)
     elif N.typ in (1,2,3) and gv_(m* (c*wN /(r*cN)) - ave):  # C_ or Ft.N_ from comp_F, forms trans-Ls
@@ -183,7 +179,7 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: 
             if _n is not n:  # if CC: medoid Ns may overlap?
                 dN_+= [comp_N(_n,n, r,min(_n.c,n.c), rL=L,full=0,_j=_j)]
         if dN_: sum2F(dN_,L, nF=nF)  # per fork
-    if dF_ := [F for F in (L.Nt,L.Lt,L.Bt,L.Ct,L.Dt) if F]:  # fork-wise | trans 1st der replaces whole-N ddTT
+    if dF_ := [F for F in (L.Nt,L.Lt,L.Bt,L.Dt,L.Ct) if F]:  # fork-wise | trans 1st der replaces whole-N ddTT
         ddTT,C,R = sum_vt(dF_); L.r = (L.r*L.c + R*C) / (L.c+C); L.c+=C
     if full: ddTT += dTT
     L.dTT = ddTT; L.m = val_(ddTT,Nw_)
@@ -205,6 +201,13 @@ def comp_F(_F, F, nF, ir=0, rL=None, j=None):
                 cross_comp(rL, proj_L_(list(product(_N_,N_)),2,r), r, dF,_j=j)  # tL-> dF.N_
             elif _F.H and F.H:  # dF.H[-1]+[dLt]?
                 comp_H(_F,F, dF,j)  # rL: lev in L.H, no cross-fork N_, no L ext updates?
+    # draft:
+    if nF=='Dt' and gv_(m * (c*wF /(r*cF)) - ave):  # descend der+ chain, +1 dLev per step
+        ddF_ = []
+        for _f,f,nf in zip((_F.Lt,_F.Dt), (F.Lt,F.Dt), ('Lt','Dt')):  # der+ links, next der
+            if _f and f:
+                comp_F(_f,f, nf, r,dF, j+1); ddF_ += [getattr(dF,nf)]  # -> dF.Lt | dF.Dt
+        if ddF_: dF.dTT,dF.c,dF.r = sum_vt([dF]+ddF_); dF.m = val_(dF.dTT,Fw_)  # higher ders
     setattr(rL,nF,dF)
     FV_(CoF.get(), dF.dTT, dF.c, dF.r)
 
@@ -453,6 +456,10 @@ def cluster_P(_C_, root,_j): # multi-seed mean shift: parallel centroid refine, 
         FV_(CoF.get(), iTT-oTT, iC-oC, iR-oR)
     return out_
 
+def m_func(m_, wT=wT):  # G.m / param w/o its own column
+    wm_ = m_ * wT
+    return (wm_.sum() - wm_) / (wT.sum() - wT)
+
 def sum2G(F_, wTT, root=None, _r=0, _j=0):  # finalize CN from C or (N_,L_,B_), eval trans_cluster, der+, sub+
     def trans_cluster(G):
         for L in G.L_:  # draft:
@@ -477,8 +484,8 @@ def sum2G(F_, wTT, root=None, _r=0, _j=0):  # finalize CN from C or (N_,L_,B_), 
         N_ = F_.N_; n_set = set(N_); _L_,B_,C_ = [],[],[]
         for L in {l for n in N_ for l in n.rim}:
             if (L.nt[0] in n_set) and (L.nt[1] in n_set):
-                if L.m >ave: _L_+= [L]
-            elif L.nrng ==1: B_ += [L]  # rng+ only
+                if L.m>ave: _L_+= [L]
+            elif L.nrng==1: B_ += [L]  # rng+ only
     for L in _L_:
         if L.typ==-1: pL_+= [L]
         else:         L_ += [L]
@@ -498,17 +505,13 @@ def sum2G(F_, wTT, root=None, _r=0, _j=0):  # finalize CN from C or (N_,L_,B_), 
             g_,c_= cluster_N(G, exemplar_(N_,r), r+1,c,_j)  # either can be empty due to olp
             if g_: sum2F([sum2G(g, ttcN, G, r+1, _j) for g in g_], G,nF='Nt')  # G._Nt-> G.Nt.H[-1]
             if c_: sum2F(c_,G, nF='Ct')
-    Nt, Lt, Bt = G.Nt, G.Lt, G.Bt
-    G.dTT,G.c,G.r = sum_vt([f for f in (Nt,Lt,Bt) if f])  # combined dTT?
+    Nt,Lt,Bt = G.Nt,G.Lt,G.Bt
+    G.dTT,G.c,G.r = sum_vt([f for f in (Nt,Lt,Bt) if f])  # combined dTT? use m_func?
     spanR = np.mean([n.span for n in Nt.N_]) / np.mean([l.span for l in Lt.N_])
     coreM = (Nt.m * decay**spanR * Nt.c + Lt.m * Lt.c) / (Nt.c+Lt.c)
     G.m = coreM * (1-Bt.m)  # core mass * contour specificity
-    nm_,lm_,bm_ = [tt[0] for tt in (Nt.dTT,Lt.dTT,Bt.dTT)]
-    # apply this similarly here? Where we subtract their own m to exclude their param? 
-    # exclude the param from G.m: # its G.m without that param's column
-    w_ = wT.sum() - wT
-    nm_, lm_, bm_ = ((nm_@wT) - nm_*wT)/w_, ((lm_@wT) - lm_*wT)/w_, ((bm_@wT) - bm_*wT)/w_
-    G.mt_ = ((nm_* decay**spanR *Nt.c) + lm_*Lt.c) / (Nt.c+Lt.c) * (1-bm_)  # G.m / param w/o its own column
+    nm_,lm_,bm_ = [m_func(tt[0]) for tt in (Nt.dTT,Lt.dTT,Bt.dTT)]
+    G.mt_ = ((nm_* decay**spanR *Nt.c) + lm_*Lt.c) / (Nt.c+Lt.c) * (1-bm_)
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return G
 
@@ -658,7 +661,7 @@ def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
     link.m += dddH.m; link.d += dddH.d; link.c += dddH.c; link.dTT += dddH.dTT
     add_H(ddH, dddH)    
 '''
-def proj_L_(pairs, root, r, max=20, fall=1, nrng=1):
+def proj_L_(pairs, root, r, max=20, fall=1, nrng=1, j=0):
 
     def proj_V(_N, N, dist, dy_dx, dec, r):  # _N x N induction
         Dec = dec or decay ** ((dist / ((_N.span + N.span) / 2)))
@@ -666,8 +669,8 @@ def proj_L_(pairs, root, r, max=20, fall=1, nrng=1):
         eTT = (_N.Rt.dTT + N.Rt.dTT) * Dec
         C = min(_N.c,N.c); R = (_N.r+N.r)/2
         if val_((eTT + iTT), Prjw_) * (C / (cPrj + r + R)) * wPrj > ave:  # not oF, spec / link:
-            eTT += proj_N(N, dist, dy_dx, r, N.c, dec)[0]  # pTT/ L_,B_,rim, if pV >0
-            eTT += proj_N(_N,dist,-dy_dx, r,_N.c, dec)[0]  # reverse direction
+            eTT += proj_N(N, dist, dy_dx, r, N.c, dec, j)[0]  # pTT/ L_,B_,rim, if pV >0
+            eTT += proj_N(_N,dist,-dy_dx, r,_N.c, dec, j)[0]  # reverse direction
         return iTT + eTT
     pL_, olp_ = [], []  # no olp_?
     for _N, N in pairs:  #-> all-to-all pre-links
@@ -705,22 +708,18 @@ def proj_focus(PV__, new__, y,x, tile, elev):  # radial accum of projected focus
         if pV_.max() * Dec < ave:
             break  # projected next-layer max < min adjustment
 
-def proj_N(N, dist, A,_r,_c, dec=1):  # arg rc += N.rc+Nw, recursively specify N projection val, add pN if comp_pN?
+def proj_N(N, dist, A,_r,_c, dec=1, j=0):  # arg rc += N.rc+Nw, recursively specify N projection val, add pN if comp_pN?
 
     def proj_TT(L, cos_d, dist, r, pTT, wTT, dec=1, fdec=0):  # accumulate L|N' pTT with iTT|eTT internally
         m_,d_ = L.dTT; ad_ = np.abs(d_); rdist = dist / L.span
+        avad_ = avad__[j] + avad__[j+1]  # L.dTT[1] = d + dd: dLevs j and j+1
         Dec = dist if fdec else decay ** (1+ rdist*dec)
-        ddec_ = (ad_/ eps_(m_+ad_) - (1-decay)) * cos_d * rdist  # projected local loss deviation
-        '''
-        proj_TT is different and can keep 1 - m_: per link, d and m carry the same information, and it scales the loss rate of m instead of adding to it.
-        
-        # replaces ad_/ eps_(m_+ad_) with 1-m_? Since they carry the same info now
-        ddec_ = ((1-m_) - (1-decay)) * cos_d * rdist
-        '''
-        dm_ = m_ * (1-Dec+ddec_)  # average loss + local deviation, in match units
-        TT = np.array([m_-dm_, d_+ np.where(d_<0, -dm_,dm_)])  # transfer lost match to signed difference
+        rd_ = ad_ / eps_(avad_+ad_)  # net |d| vs regime mean |d|, in 0:1: avad_ in place of m_
+        ddec_ = rd_ * cos_d * rdist  # directional loss: 0 if no net d
+        dm_ = m_ * (1-Dec+ddec_)  # average loss + directional, in match units
+        TT = np.array([m_-dm_, d_+ np.where(d_<0,-dm_,dm_) * avad_])  # transfer lost match to signed difference, in param units
         # or rTT: cert should be a ratio?
-        cert = abs(val_(TT) * (L.c+wPrj)/(r+cPrj) - ave)  # approximation
+        cert = abs(val_(TT,wTT) * (L.c+wPrj)/(r+cPrj) - ave)  # approximation
         if cert > ave * (r+cPrj):  # certainty margin
             pTT += TT
     cos_d = (N.angl[0].dot(A) / ((np.hypot(*N.angl[0]) * dist) or eps)) * N.angl[1] if N.angl else 0  # int x ext angle alignment, mean=0
@@ -905,8 +904,8 @@ def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fo
         aL= aLev; dTT = aL.dTT-_TT; _TT=aL.dTT; dc= aL.c-_ac; dr= aL.r-_ar  # draft
         ave = val_(_TT)  # filters *= ave
         Dec = (decay ** (frame.span /_span)) if _span else 1  # or actual distance?
-        Mass_(Dec)
-        _span = _span+frame.span; p___,m___,gc__, d___,cc__ = [],[],[],[],[]; add_fH(2)
+        Mass_(Dec); _span = _span+frame.span
+        p___,m___,gc__,d___,cc__ = [],[],[],[],[]; add_fH(2)  # each [] += [[]]
         if oLev := dFilt(frame,'oH', wBac, cBac**2, oTT):
             oL= oLev; dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
             for _oF in copy(oF_): _oF.body = [split_oF(t,_oF) for t in _oF.body]
@@ -940,12 +939,12 @@ def dFilt(frame, nF, w, c, _dTT):  # drift-gated regime termination for aH and o
             H = frame.Nt.H; frame.Nt.H = H[:i]+[seg]; seg.Nt.H = tail
             return seg
 
-def add_fH(nlev):  # add empty dLevs
-    while len(p___)<nlev: p___.append([]); m___.append([]); gc__.append([]); d___.append([]); cc__.append([])
+def add_fH(nlev):  # add dLevs: filters + their empty sample lists
     while len(mass__)<nlev:
         mass__.append(copy(mass__[-1]) if mass__ else np.zeros(8))  # init from j-1: d of massive is massive
         avad__.append(copy(avad__[-1]) if avad__ else copy(wT))
         acov__.append(copy(acov__[-1]) if acov__ else np.zeros(8))  # inherit evidence with the prior
+        p___.append([]); m___.append([]); gc__.append([]); d___.append([]); cc__.append([])
 
 if __name__ == "__main__":  # './images/toucan_small.jpg' './images/raccoon_eye.jpeg', add larger global image
     trace_func(vars()); g = vars()
