@@ -66,7 +66,7 @@ def comp_slice_root(frame, rV=1, ww_t=None):
             if edge.G * (len(edge.P_) - 1) > ave_PPm:  # eval PP, olp=1
                 comp_slice(edge, rV, ww_t=ww_t)
 
-def comp_slice(edge, rV=1, ww_t=None, avad_=None):  # root function
+def comp_slice(edge, rV=1, ww_t=None, avad_=None, mass_=None):  # root function
 
     global ave, avd, wM, wD, wI, wG, wA, wL, ave_L, ave_PPm, ave_PPd, w_t
     ave, avd, ave_L, ave_PPm, ave_PPd = np.array([ave, avd, ave_L, ave_PPm, ave_PPd]) / rV  # projected value change
@@ -78,11 +78,11 @@ def comp_slice(edge, rV=1, ww_t=None, avad_=None):  # root function
         P.verT = np.full((2,5), eps)
         P.rim = []; P.lrim = []; P.prim = []
     edge.dP_ = []
-    comp_P_(edge,avad_)  # vertical P cross-comp -> PP clustering, if lateral overlap
+    comp_P_(edge,avad_,mass_)  # vertical P cross-comp -> PP clustering, if lateral overlap
     PPt, mverT, mm, md, mc = form_PP_(edge.P_, fd=0)  # all Ps are converted to PPs
     if PPt:
         edge.node_ = PPt
-        comp_dP_(edge, mm, mc, avad_)
+        comp_dP_(edge, mm, mc, avad_, mass_)
         edge.link_, dverT, dm, dd, dc = form_PP_(edge.dP_, fd=1)  # separate PPd_ per edge
         edge.verT = mverT + dverT
         edge.m, edge.d, edge.c = mm + dm, md + dd, mc + dc
@@ -120,7 +120,7 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
 
     return PPt_, VerT, M, D, C
 
-def comp_P_(edge, avad_=None):  # form links from prelinks
+def comp_P_(edge, avad_, mass_):  # form links from prelinks
 
     edge.rng = 1
     for _P, pre_ in edge.pre__.items():
@@ -128,13 +128,13 @@ def comp_P_(edge, avad_=None):  # form links from prelinks
             dy,dx = np.subtract(P.yx,_P.yx)  # between node centers
             if abs(dy)+abs(dx) <= edge.rng * 2: # <max Manhattan distance
                 angle=[dy,dx]; distance=np.hypot(dy,dx)
-                verT, m, d, c = comp_latT(_P.latT, P.latT, len(_P.dert_), len(P.dert_), avad_)
+                verT, m, d, c = comp_latT(_P.latT, P.latT, len(_P.dert_), len(P.dert_), avad_, mass_)
                 dP = convert_to_dP(_P,P, verT, angle,distance, m, d, c)
                 _P.rim += [dP]  # up only
                 edge.dP_ += [dP]  # to form PPd_ by dval, separate from PPm_
     del edge.pre__
 
-def comp_dP_(edge, M, c, ava_d):  # node_- mediated: comp node.rim dPs, call from form_PP_
+def comp_dP_(edge, M, c, avad_, mass_):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
     rM = M/c / ave  # dP D borrows from normalized PP M
     for _dP in edge.dP_: _dP.prim = []; _dP.lrim = []
@@ -145,7 +145,7 @@ def comp_dP_(edge, M, c, ava_d):  # node_- mediated: comp node.rim dPs, call fro
             rc = c/_c; minn = min(_c,c)
             for dP in P.rim:  # higher links
                 if dP not in edge.dP_: continue  # skip removed node links
-                verT, m, d, dc = comp_vert(_dP.verT[1], dP.verT[1]*rc, minn)
+                verT, m, d, dc = comp_vert(_dP.verT[1], dP.verT[1]*rc, minn, avad_, mass_)
                 angle = np.subtract(dP.yx,_dP.yx)  # dy,dx of node centers
                 distance = np.hypot(*angle)  # between node centers
                 # up only:

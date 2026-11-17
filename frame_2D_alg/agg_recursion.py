@@ -137,12 +137,12 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1, _j=0):  # recur
         if len(dL_:= [l for l in L_ if l.typ == 1 and l.nrng == 1 and -l.m > ave]) > 1:  # pooled contrast links
             Dt = sum2F(dL_, root=root, nF='Dt'); Dt.r += _r + 1
             if gv_(-Dt.m * (Dt.c*wX /(Dt.r*cX)) - ave):  # der+
-                cross_comp(F2N(Dt), proj_L_(combinations([F2N(L) for L in dL_],2), root,Dt.r), root,Dt.r,_j=_j)
-            if Dt.Lt: add2F(root, Dt.Lt, merge=2,fH=0)  # der+ only
+                cross_comp(F2N(Dt), proj_L_(combinations(dL_,2),Dt.r,_j=_j), root,Dt.r,_j=_j)
+            if Dt.Lt: add2F(root, Dt.Lt, merge=2,fH=0)  # der+ only (Dt.Lt, Dt.Dt.Lt, Dt.Dt.Dt.Lt recursively?)
         FV_(CoF.get(), tt,c,r)  # current-rng xcomp
         if G_:
             if not frng: return G_,C_  # tentative, in rng+ loop only
-            while (rng_:= Rng_(iN_)) and gv_(sum(n.w for n in rng_)* (wX/cX) -ave) and (pL_:= proj_L_(combinations(rng_,2),root,_r,nrng=(nrng:=nrng+1))):
+            while (rng_:= Rng_(iN_)) and gv_(sum(n.w for n in rng_)* (wX/cX) -ave) and (pL_:= proj_L_(combinations(rng_,2),root,_r,nrng=(nrng:=nrng+1),_j=_j)):
                 _G_,_C_ = cross_comp(root, pL_,_r,iN_=iN_,frng=0,_j=_j) or ([],[])
                 if not _G_: break  # max rng
                 G_,C_= _G_,_C_
@@ -150,8 +150,8 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1, _j=0):  # recur
             G_ = [sum2G(g,ttcN,root,_r,_j) for g in G_]
             Nt = sum2F(G_,root,nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r
             if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+
-                add_fH(2+_j)  # to add,eval der+ results:
-                G_ = cross_comp(root, proj_L_(combinations(G_,2),root,_r+1),_r+1,_j=_j) or G_
+                # add_fH(2+_j)  # to add,eval der+ results:  This is not needed now? add_fH only needed when we increment j?
+                G_ = cross_comp(root, proj_L_(combinations(G_,2),root,_r+1,_j=_j),_r+1,_j=_j) or G_
     return G_
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: index in dH if spec
@@ -170,7 +170,7 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: 
     if full: m += val_(dTT,Nw_)
     # 2 dO/ composition, same c
     if N.typ in (1,2) and gv_(m* (c*wF /(r*cF)) - ave):  # N|L
-        for _Ft,Ft,nF in zip((_N.Nt,_N.Lt,_N.Bt,_N.Dt,_N.Ct), (N.Nt,N.Lt,N.Bt,N.Ct,N.Dt), ('Nt','Lt','Bt','Dt','Ct')):
+        for _Ft,Ft,nF in zip((_N.Nt,_N.Lt,_N.Bt,_N.Dt,_N.Ct), (N.Nt,N.Lt,N.Bt,N.Dt,N.Ct), ('Nt','Lt','Bt','Dt','Ct')):
             if _Ft and Ft:  # assign dFt as L.Ft
                 comp_F(_Ft,Ft, nF, r,L,_j)
     elif N.typ in (1,2,3) and gv_(m* (c*wN /(r*cN)) - ave):  # C_ or Ft.N_ from comp_F, forms trans-Ls
@@ -197,16 +197,16 @@ def comp_F(_F, F, nF, ir=0, rL=None, j=None):
     if nF in ('Nt','Dt'):  # spec draft
         if (_N_:=_F.N_) and (N_:=F.N_):  # always true?
             tt = (rL.dTT*rL.c + ddTT*c) / (rL.c+c)  # vertical comb?
-            if gv_(val_(tt,Xw_) * (c*wX /(r*cX)) - ave):
-                cross_comp(rL, proj_L_(list(product(_N_,N_)),2,r), r, dF,_j=j)  # tL-> dF.N_
+            if gv_(val_(tt,Xw_) * ((rL.c+c)*wX /(r*cX)) - ave):
+                cross_comp(rL, proj_L_(list(product(_N_,N_)),2,r,_j=j), r, dF,_j=j)  # tL-> dF.N_
             elif _F.H and F.H:  # dF.H[-1]+[dLt]?
                 comp_H(_F,F, dF,j)  # rL: lev in L.H, no cross-fork N_, no L ext updates?
     # draft:
     if nF=='Dt' and gv_(m * (c*wF /(r*cF)) - ave):  # descend der+ chain, +1 dLev per step
         ddF_ = []
-        for _f,f,nf in zip((_F.Lt,_F.Dt), (F.Lt,F.Dt), ('Lt','Dt')):  # der+ links, next der
-            if _f and f:
-                comp_F(_f,f, nf, r,dF, j+1); ddF_ += [getattr(dF,nf)]  # -> dF.Lt | dF.Dt
+        for nf in ('Lt','Dt'):  # der+ links, next der
+            if (_f:=getattr(_F,nf,None)) and (f:=getattr(F,nf,None)):
+                add_fH(j+1); comp_F(_f,f, nf, r,dF, j+1); ddF_ += [getattr(dF,nf)]  # -> dF.Lt | dF.Dt
         if ddF_: dF.dTT,dF.c,dF.r = sum_vt([dF]+ddF_); dF.m = val_(dF.dTT,Fw_)  # higher ders
     setattr(rL,nF,dF)
     FV_(CoF.get(), dF.dTT, dF.c, dF.r)
@@ -661,7 +661,7 @@ def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
     link.m += dddH.m; link.d += dddH.d; link.c += dddH.c; link.dTT += dddH.dTT
     add_H(ddH, dddH)    
 '''
-def proj_L_(pairs, root, r, max=20, fall=1, nrng=1, j=0):
+def proj_L_(pairs, root, r, max=20, fall=1, nrng=1, _j=0):
 
     def proj_V(_N, N, dist, dy_dx, dec, r):  # _N x N induction
         Dec = dec or decay ** ((dist / ((_N.span + N.span) / 2)))
@@ -669,8 +669,8 @@ def proj_L_(pairs, root, r, max=20, fall=1, nrng=1, j=0):
         eTT = (_N.Rt.dTT + N.Rt.dTT) * Dec
         C = min(_N.c,N.c); R = (_N.r+N.r)/2
         if val_((eTT + iTT), Prjw_) * (C / (cPrj + r + R)) * wPrj > ave:  # not oF, spec / link:
-            eTT += proj_N(N, dist, dy_dx, r, N.c, dec, j)[0]  # pTT/ L_,B_,rim, if pV >0
-            eTT += proj_N(_N,dist,-dy_dx, r,_N.c, dec, j)[0]  # reverse direction
+            eTT += proj_N(N, dist, dy_dx, r, N.c, dec, _j)[0]  # pTT/ L_,B_,rim, if pV >0
+            eTT += proj_N(_N,dist,-dy_dx, r,_N.c, dec, _j)[0]  # reverse direction
         return iTT + eTT
     pL_, olp_ = [], []  # no olp_?
     for _N, N in pairs:  #-> all-to-all pre-links
@@ -719,7 +719,7 @@ def proj_N(N, dist, A,_r,_c, dec=1, j=0):  # arg rc += N.rc+Nw, recursively spec
         dm_ = m_ * (1-Dec+ddec_)  # average loss + directional, in match units
         TT = np.array([m_-dm_, d_+ np.where(d_<0,-dm_,dm_) * avad_])  # transfer lost match to signed difference, in param units
         # or rTT: cert should be a ratio?
-        cert = abs(val_(TT,wTT) * (L.c+wPrj)/(r+cPrj) - ave)  # approximation
+        cert = abs(val_(TT,wTT[0]) * (L.c+wPrj)/(r+cPrj) - ave)  # approximation
         if cert > ave * (r+cPrj):  # certainty margin
             pTT += TT
     cos_d = (N.angl[0].dot(A) / ((np.hypot(*N.angl[0]) * dist) or eps)) * N.angl[1] if N.angl else 0  # int x ext angle alignment, mean=0
@@ -816,7 +816,7 @@ def vect_edge(T, iY,iX,Ly,Lx, rV=1):  # T=tile, PP_ cross_comp and floodfill to 
             if gv_(blob.G * wVct - ave * cVct):  # proxy for comp_slice and slice_edge
                 edge = slice_edge(blob, rV); L = len(edge.P_)-1
                 if gv_(edge.G * (wVct*L) - sum([P.latT[4] for P in edge.P_]) * (cVct*L)):
-                    PPm_ = comp_slice(edge, rV, ttVct, avad__[0][[0,2,3,4,5]])  # add comp_slice's weights?
+                    PPm_ = comp_slice(edge, rV, ttVct, avad__[0][[0,2,3,4,5]],mass__[0][[0,2,3,4,5]])  # add comp_slice's weights?
                     N_ = [PP2N(PPm) for PPm in PPm_]
                     for PPd in edge.link_: PP2N(PPd)  # we don't form Gds?
                     for N in N_:
@@ -905,7 +905,7 @@ def ffeedback(frame, _TT,oTT, aL,oL):  # recompute filters from regime drift; fo
         ave = val_(_TT)  # filters *= ave
         Dec = (decay ** (frame.span /_span)) if _span else 1  # or actual distance?
         Mass_(Dec); _span = _span+frame.span
-        p___,m___,gc__,d___,cc__ = [],[],[],[],[]; add_fH(2)  # each [] += [[]]
+        p___,m___,gc__,d___,cc__ = ([[[] for _ in mass__] for _ in range(5)])  # follow the existing mass__?
         if oLev := dFilt(frame,'oH', wBac, cBac**2, oTT):
             oL= oLev; dTT += oL.dTT- oTT; oTT=oL.dTT; dc+=oL.c-_oc; dr+=oL.r-_or
             for _oF in copy(oF_): _oF.body = [split_oF(t,_oF) for t in _oF.body]
