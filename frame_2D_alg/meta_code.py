@@ -73,7 +73,6 @@ class CN(CF):  # full node|graph for xcomp, adding fork set, kern+positionals fo
         n.rim  = kw.get('rim',[])  # comp PPs and Ls
         n.yx   = kw.get('yx', np.zeros(2))  # mean nodet? comp box is not meaningful?
         n.nt   = kw.get('nt', [])  # links only: if nt
-        n.nrng = kw.get('nrng',1)
         n.exe = kw.get('exe',0)  # exemplar, temporary
         n.typ = kw.get('typ',2)  # full comp, =2 for Cs?
         n.nrng = kw.get('nrng',1) 
