@@ -75,7 +75,6 @@ class CN(CF):  # full node|graph for xcomp, adding fork set, kern+positionals fo
         n.nt   = kw.get('nt', [])  # links only: if nt
         n.exe = kw.get('exe',0)  # exemplar, temporary
         n.typ = kw.get('typ',2)  # full comp, =2 for Cs?
-        n.nrng = kw.get('nrng',1) 
         # ftree: list =z([[]])  # indices in all layers(forks, if no fback merge, G.fback_=[] # node fb buffer, n in fb[-1]
     def __bool__(n): return bool(n.c)
 
