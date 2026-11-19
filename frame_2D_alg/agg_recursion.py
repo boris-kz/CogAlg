@@ -129,22 +129,24 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, fN=1, _j=0):  # recursion root, f
             if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):  # len coef is tentative
                 G_, C_ = cluster_N(root, exemplar_(N_,r+1), r+1,c,_j)  # tentative G_|C_|P_
         elif gv_(m * (c*wcC/(r*ccC)) * ((len(L_)-1)*wL) - ave):
-            C_ = cluster_C(root, exemplar_(N_,r+1), r+1,c,_j)  # still need exemplars?
+            C_ = cluster_C(root, exemplar_(N_,r+1), r+1,_j)  # still need exemplars?
         if len(dL_:= [l for l in L_ if l.typ == 1 and l.nrng == 1 and -l.m > ave]) > 1:  # pooled contrast links
             Dt = sum2F(dL_, root=root, nF='Dt'); Dt.r += _r + 1
             if gv_(-Dt.m * (Dt.c*wX /(Dt.r*cX)) - ave):  # der+
-                cross_comp(F2N(Dt), proj_L_(combinations(dL_,2),Dt.r,_j=_j), root,Dt.r,_j=_j)
+                cross_comp(F2N(Dt), proj_L_(combinations(dL_,2),Dt.r,_j=_j),Dt.r,_j=_j)
+                if (D_ := proj_L_(combinations(dL_,2),(Dt:=F2N(Dt)),Dt.r,_j=_j)): cross_comp(Dt, D_,Dt.r,_j=_j)
             if Dt.Lt: add2F(root.Lt if root.nF=='Dt' else root, Dt.Lt, merge=2,fH=0)  # der+ sum in Dt.Lt
-        FV_(CoF.get(), tt,c,r)  # current-rng xcomp
+        FV_(CoF.get(), tt,c,r)  # current-rng
+        if C_:  # run current  cfork first? Because the subsequent cross_comp may run higher level's C fork?
+            sum2F(C_,root,nF='Ct')
+            # unlimited forking? CC-CC and CN-CC recursively?
+            if gv_(sum(C.m for C in C_)* (wX/cX) -ave) and (pL_:= proj_L_(combinations(C_,2),root,_r,_j=_j)):
+                # No pair filter for Cs. proj_L_ takes pairs within max of mean yx, so overlapping Cs are the nearest and get compared first: the case you ruled out. Cs need disjoint N_, separated boxes and no max.
+                C_ = cross_comp(F2N(root.Ct), pL_,_r,fN=0,_j=_j)  # C_ agg+: skip cluster_N
         if G_:
-            G_ = [sum2G(g, ttcN, root, _r, _j) for g in G_]
+            G_ = [sum2G(g, ttcN, root, _r, _j) for g in G_]; sum2F(G_,root,nF='Nt')
             if gv_(sum(G.m for G in G_)* (wX/cX) -ave) and (pL_:= proj_L_(combinations(G_,2),root,_r,_j=_j)):  # no nrng=(nrng:=nrng+1)?
                 G_ = cross_comp(root, pL_,_r,_j=_j)  # G_ agg+
-            Nt = sum2F(G_,root,nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r
-        if C_:
-            if gv_(sum(C.m for C in C_)* (wX/cX) -ave) and (pL_:= proj_L_(combinations(C_,2),root,_r,_j=_j)):
-                C_ = cross_comp(root, pL_,_r,fN=0,_j=_j)  # C_ agg+: skip cluster_N
-            sum2F(C_,root,nF='Ct')
     return G_
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: index in dH if spec
@@ -335,15 +337,13 @@ def cluster_N(root, _N_, _r,_c,_j):  # flood-fill node | link clusters, flat, re
                 m = coreM * (1-bm)  # core mass * contour specificity
             if gv_(m * (c*wcN/(r*ccN)) * ((len(N_)-1)*wL) - ave):
                 C = sum2F(N_,root,nF='C',typ=3,m=m); C.L_,C.B_ = L_,B_  # initial connectivity G
-                Gt_ += [(C,tt,c,r)]; in__|=in_   # remain tt instead of m?
+                Gt_ += [(C,m,c,r)]; in__|=in_
             else:
                 for n in N_: fin_.remove(n)
     if Gt_:
-        C,tt_,c_,r_ = 0,[],[],[]; _r+=1
-        for G,tt,c,r in Gt_: G_+=[G]; C+=c; tt_+=[tt]; c_+=[c]; r_+=[r]
-        TT = np.zeros((2,8)); R = 0
-        for tt,c,r in zip(tt_,c_,r_): w=c/C; TT+=tt*w; R+=r*w
-        M = val_(TT,root.wTT[0]*cNw_)
+        C,M,R = 0,0,0; _r+=1
+        for G,m,c,r in Gt_: G_+=[G]; C+=c; M+=m*c; R+=r*c
+        M/=C; R/=C
         FV_(CoF.get(), *sum_vt(G_)[:-1],R)
         if gv_(M * (C*wcC / ((_r+R)*ccC)) * ((len(G_)-1)*wL) - ave):
             C_ = cluster_C(root, G_,_r+R,_j)
@@ -409,7 +409,7 @@ def cluster_P(_C_, root,_j): # multi-seed mean shift: parallel centroid refine, 
         Lc = len(_C_); totL = Lc*Ln  # loop Lc,L,m__
         m__ = np.zeros((Ln,Lc))
         for j,N in enumerate(N_):
-            for i,C in enumerate(_C_): m__[j,i] = val_(base_comp(C,N,_j,fdc=0)[0],cPw_)
+            for i,C in enumerate(_C_): m__[j,i] = val_(base_comp(C,N,_j,fder=0)[0],cPw_)
         C_ = [sum2F(N_, root, m__[:,i],nF='C',typ=3) for i in range(Lc)]  # mean shift, aligned to m__, add typ?
         removed = []
         posL = (m__ > ave).sum()
@@ -418,7 +418,7 @@ def cluster_P(_C_, root,_j): # multi-seed mean shift: parallel centroid refine, 
                 if _C in removed: continue
                 for C in C_[i+1:]:
                     if C in removed: continue
-                    m = val_(base_comp(C,_C,_j,fdc=0)[0],cPw_); r = (C.r+_C.r)
+                    m = val_(base_comp(C,_C,_j,fder=0)[0],cPw_); r = (C.r+_C.r)
                     if m*wF > ave*(r+cF):
                         add2F(_C,C,2); removed += [C]; _C.m = val_(_C.dTT,cPw_)  # for next-loop base comp
                         for N in C.N_:
@@ -477,11 +477,7 @@ def sum2G(F_, wTT, root=None, _r=0, _j=0):  # finalize CN from C or (N_,L_,B_), 
     L_, pL_ = [],[]
     if isinstance(F_,tuple): N_,_L_,B_,C_ = F_  # from trace_edge, vect_edge, frame_H
     else:  # C from CN,CC: extract internal _L_ and perimeter B_ from N_ rims
-        N_ = F_.N_; n_set = set(N_); _L_,B_,C_ = [],[],[]
-        for L in {l for n in N_ for l in n.rim}:
-            if (L.nt[0] in n_set) and (L.nt[1] in n_set):
-                if L.m>ave: _L_+= [L]
-            elif L.nrng==1: B_ += [L]  # rng+ only
+        N_,_L_,B_,C_ = F_.N_, F_.L_, F_.B_, F_.C_
     for L in _L_:
         if L.typ==-1: pL_+= [L]
         else:         L_ += [L]
@@ -503,7 +499,7 @@ def sum2G(F_, wTT, root=None, _r=0, _j=0):  # finalize CN from C or (N_,L_,B_), 
             if c_: sum2F(c_,G, nF='Ct')
     Nt,Lt,Bt = G.Nt,G.Lt,G.Bt
     G.dTT,G.c,G.r = sum_vt([f for f in (Nt,Lt) if f])  # combined dTT? use m_func?
-    spanR = np.mean([n.span for n in Nt.N_]) / np.mean([l.span for l in Lt.N_])
+    spanR = np.mean([n.span for n in Nt.N_]) / np.mean([l.span for l in Lt.N_]) if Lt else 0
     coreM = (Nt.m * decay**spanR * Nt.c + Lt.m * Lt.c) / (Nt.c+Lt.c)
     G.m = coreM * (1-Bt.m)  # core mass * contour specificity
     nm_,lm_,bm_ = [m_func(tt[0]) for tt in (Nt.dTT,Lt.dTT,Bt.dTT)]
