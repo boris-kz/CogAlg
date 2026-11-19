@@ -107,11 +107,7 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
 - forward: selective extend cross-comp, clustering across tiles, re-order centroids by eigenvalues
 - feedback filter updates 
 '''
-def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1, _j=0):  # recursion root, iN_: recluster/rng+
-
-    def Rng_(n_):  # w: combined membership weight / rdn: 1 + stronger members per C:
-        for n in n_: n.w = sum(m * C.c / (1 + sum(_m>m for _m in C.m_)) for C,m in n.root_)
-        return [n for n in n_ if (n.m+n.w) * (n.c*wX / (n.r+cX)) > ave]
+def cross_comp(root, pL_, _r, dF=None, fall=1, fN=1, _j=0):  # recursion root, fN CN_ else CC_
 
     L_, N_,G_,C_,Dt = [],[],[],[],[]
     for dist, dy_dx, _N,N, lc,lr, pTT,m,nrng in pL_:
@@ -125,32 +121,30 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1, _j=0):  # recur
                 pL = CN(typ=-1, nt=[_N,N], dTT=pTT,m=m,c=lc,r=lr,span=dist,box=box,angl=[dy_dx,1], yx=np.add(_N.yx,N.yx)/2)
                 pL.nrng=nrng; L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.nt
     if L_:
-        Lt = sum2F(L_,root=None if (dF or iN_) else root, nF='Lt'); tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r
+        Lt = sum2F(L_,root=None if dF else root, nF='Lt'); tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r
         if dF:  # comp_F: adds to dF vals, no agg+
             add2F(dF,Lt, merge=1); return
-        for N in (N_:= list(set(N_))): sum2F(N.rim, N, nF='Rt')  #->N.Rt
-        if iN_: add2F(root.Lt, Lt, merge=1)
-        else: iN_ = N_; [mT___(N,_j) for N in N_]  # add N.mt_
-        # cluster:
-        if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):  # len coef is tentative
-            G_, C_ = cluster_N(root, exemplar_(iN_ or N_,r+1), r+1,c,_j)  # tentative G_|C_|P_/ rng+
+        for N in (N_:= list(set(N_))): mT___(N,_j); sum2F(N.rim, N, nF='Rt')  #->N.Rt
+        if fN:  # cluster_N:
+            if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):  # len coef is tentative
+                G_, C_ = cluster_N(root, exemplar_(N_,r+1), r+1,c,_j)  # tentative G_|C_|P_
+        elif gv_(m * (c*wcC/(r*ccC)) * ((len(L_)-1)*wL) - ave):
+            C_ = cluster_C(root, exemplar_(N_,r+1), r+1,c,_j)  # still need exemplars?
         if len(dL_:= [l for l in L_ if l.typ == 1 and l.nrng == 1 and -l.m > ave]) > 1:  # pooled contrast links
             Dt = sum2F(dL_, root=root, nF='Dt'); Dt.r += _r + 1
             if gv_(-Dt.m * (Dt.c*wX /(Dt.r*cX)) - ave):  # der+
                 cross_comp(F2N(Dt), proj_L_(combinations(dL_,2),Dt.r,_j=_j), root,Dt.r,_j=_j)
-            if Dt.Lt: add2F(root.Lt if root.nF=='Dt' else root, Dt.Lt, merge=2,fH=0)  # der+: Dt.Dt...'s Lt sum into Dt.Lt
+            if Dt.Lt: add2F(root.Lt if root.nF=='Dt' else root, Dt.Lt, merge=2,fH=0)  # der+ sum in Dt.Lt
         FV_(CoF.get(), tt,c,r)  # current-rng xcomp
         if G_:
-            if not frng: return G_,C_  # tentative, in rng+ loop only
-            while (rng_:= Rng_(iN_)) and gv_(sum(n.w for n in rng_)* (wX/cX) -ave) and (pL_:= proj_L_(combinations(rng_,2),root,_r,nrng=(nrng:=nrng+1),_j=_j)):
-                _G_,_C_ = cross_comp(root, pL_,_r,iN_=iN_,frng=0,_j=_j) or ([],[])
-                if not _G_: break  # max rng
-                G_,C_= _G_,_C_
-            if C_: sum2F(C_,root,nF='Ct')  # agg+ / max-rng Gs
-            G_ = [sum2G(g,ttcN,root,_r,_j) for g in G_]
+            G_ = [sum2G(g, ttcN, root, _r, _j) for g in G_]
+            if gv_(sum(G.m for G in G_)* (wX/cX) -ave) and (pL_:= proj_L_(combinations(G_,2),root,_r,_j=_j)):  # no nrng=(nrng:=nrng+1)?
+                G_ = cross_comp(root, pL_,_r,_j=_j)  # G_ agg+
             Nt = sum2F(G_,root,nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r
-            if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+
-                G_ = cross_comp(root, proj_L_(combinations(G_,2),root,_r+1,_j=_j),_r+1,_j=_j) or G_
+        if C_:
+            if gv_(sum(C.m for C in C_)* (wX/cX) -ave) and (pL_:= proj_L_(combinations(C_,2),root,_r,_j=_j)):
+                C_ = cross_comp(root, pL_,_r,fN=0,_j=_j)  # C_ agg+: skip cluster_N
+            sum2F(C_,root,nF='Ct')
     return G_
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: index in dH if spec
@@ -225,7 +219,7 @@ def comp_H(_N, N, L,_j):
     # revert to bottom-up, on completion: L.dTT,L.c,L.r = sum_vt(L.H); L.m = val_(L.dTT,ttN)?
     L.H += dH[::-1]
 
-def base_comp(_N,N, j=0, fdc=1):  # j: root depth, comp Et, kern, extT, dTT; rational M?
+def base_comp(_N,N, j=0, fder=1):  # j: root depth, comp Et, kern, extT, dTT; rational M?
 
     M = N.dTT[0].sum();  C= N.c;  I, G, Dy, Dx = N.kern;  L = len(N.N_)  # M,D, 0-der params? or N.m, xsign sum d_: directional or abs?
     _M=_N.dTT[0].sum(); _C=_N.c; _I,_G,_Dy,_Dx =_N.kern; _L = len(_N.N_)  # N_: density in span
@@ -235,15 +229,15 @@ def base_comp(_N,N, j=0, fdc=1):  # j: root depth, comp Et, kern, extT, dTT; rat
     if hasattr(_N,'angl') and _N.angl and N.angl:  # mostly Ls, some Gs
         mA,dA = comp_A(_N.angl[0]*_N.angl[1], N.angl[0]*N.angl[1])
     # dT: M,n, I,G,a, L,S,A:
-    m_,d_ = comp_(_pars,pars, mA,dA, c:= min(_N.c,N.c), j, fdc)
-    dm_,dd_ = comp_dT(_N.dTT[1],N.dTT[1], c,j+1, fdc)  # ddTT, same c / comb-F dTT?
+    m_,d_ = comp_(_pars,pars, mA,dA, c:= min(_N.c,N.c), j, fder)
+    dm_,dd_ = comp_dT(_N.dTT[1],N.dTT[1], c,j+1, fder)  # ddTT, same c / comb-F dTT?
     return np.array([m_,d_]), np.array([dm_,dd_])
 '''
     if np.hypot(*_N.angl[0])*_N.mang + np.hypot(*N.angl[0])*N.mang > ave*wA:  # aligned L_'As, mang *= (len_H)+fi+1
     mang = (rn*_N.mang + N.mang) / (1+rn)  # ave, weight each side by rn
     align = 1 - mang* (1-mA)  # in 0:1, weigh mA 
 '''
-def comp_(_pars, pars, meA,deA, c=1, j=0, fdc=1):  # m is min for massive core attrs, or combined with inv_m?
+def comp_(_pars, pars, meA,deA, c=1, j=0, fder=1):  # m is min for massive core attrs, or combined with inv_m?
 
     m_,d_ = [],[]
     for i, (_p,p, mass,avad) in enumerate(zip(_pars,pars, mass__[j],avad__[j])):  # prior-frame mean |d| = massless m
@@ -257,10 +251,10 @@ def comp_(_pars, pars, meA,deA, c=1, j=0, fdc=1):  # m is min for massive core a
                 if (_p<0) != (p<0): m =- m  # gap in p vals
                 rm = (m/M) * mass + rm * (1-mass)
             m_ += [rm]
-    if fdc: global d___, cc__; d___[j] += [np.abs(d_+[deA])]; cc__[j] += [c]  # ini dH=[lev0], mA mass=0
+    if fder: global d___, cc__; d___[j] += [np.abs(d_+[deA])]; cc__[j] += [c]  # ini dH=[lev0], mA mass=0
     return np.array(m_+[meA]), np.array(d_+[deA])
 
-def comp_dT(_i_,i_, c, j, fdc=1):  # scalars, j: dLev index, >1 in comp_H only
+def comp_dT(_i_,i_, c, j, fder=1):  # scalars, j: dLev index, >1 in comp_H only
 
     add_fH(j+1); mass_,avad_ = mass__[j], avad__[j]  # der+ / comp_F, comp_H
     d_ = _i_ - i_; ad_ = np.abs(d_); _a_,a_ = np.abs(_i_), np.abs(i_)
@@ -269,7 +263,7 @@ def comp_dT(_i_,i_, c, j, fdc=1):  # scalars, j: dLev index, >1 in comp_H only
     M_ = np.maximum(_a_,a_)
     w_ = mass_ * (mass_ >0)  # massive share: cov(mag,stability) if +ve
     rm_ = (m_/eps_(M_)) * w_ + rm_ * (1-w_)
-    if fdc: global d___, cc__; d___[j] += [ad_]; cc__[j] += [c]
+    if fder: global d___, cc__; d___[j] += [ad_]; cc__[j] += [c]
     return np.array([rm_,d_])
 
 def comp_A(_A,A):
@@ -323,9 +317,6 @@ def cluster_N(root, _N_, _r,_c,_j):  # flood-fill node | link clusters, flat, re
                         if span > 3:  # refine by rim connectivity / norm span
                             iM = sum([L.m for L in _N.rim if (L.nt[0] if L.nt[1] is _N else L.nt[1]) in N_])
                             if iM / (span*decay) < ave * (_r-1): continue  # normalized N-to-N_ match, sum for sum2G?
-                        if L.typ == -1:  # convert pL
-                            pL = L; L = comp_N(*L.nt,L.r,L.c,1,L.angl[0],L.span,root,_j); L.nrng=pL.nrng  
-                            for N in pL.nt: N.rim.remove(pL)
                         L_ += [L]; N_ += [_N]; fin_ += [_N]
                         _L_+= [l for l in _N.rim if l not in (in_|in__) and ((l.nt[0] in fin_) ^ (l.nt[1] in fin_))]  # new frontier links, +|-?
                     elif L.nrng==1: B_ += [L]  # boundary
@@ -483,10 +474,23 @@ def sum2G(F_, wTT, root=None, _r=0, _j=0):  # finalize CN from C or (N_,L_,B_), 
                                         add2F(rt0,rt1, merge=1,fH=0)  # recompute Nt attrs / G
                     else: break  # !top lev
     G = CN(root=root,wTT=wTT)
-    if isinstance(F_,tuple):
-        N_,L_,B_,C_ = F_  # from trace_edge, vect_edge, frame_H
+    L_, pL_ = [],[]
+    if isinstance(F_,tuple): N_,_L_,B_,C_ = F_  # from trace_edge, vect_edge, frame_H
     else:  # C from CN,CC: extract internal _L_ and perimeter B_ from N_ rims
-        N_,L_,B_,C_ = F_.N_,F_.L_,F_.B_,F_.C_
+        N_ = F_.N_; n_set = set(N_); _L_,B_,C_ = [],[],[]
+        for L in {l for n in N_ for l in n.rim}:
+            if (L.nt[0] in n_set) and (L.nt[1] in n_set):
+                if L.m>ave: _L_+= [L]
+            elif L.nrng==1: B_ += [L]  # rng+ only
+    for L in _L_:
+        if L.typ==-1: pL_+= [L]
+        else:         L_ += [L]
+    if pL_:
+        pm, pc, pr = sum_vt(pL_, fm=1, wTT=wTT)[0], sum([L.c for L in pL_]), np.mean([L.r for L in pL_])
+        if pm * (wN*pc /(cN*pr)) > ave:
+            for pL in pL_:
+                L_ += [L:= comp_N(*pL.nt,pL.r,pL.c,1,pL.angl[0],pL.span,root,_j)]; L.nrng=pL.nrng
+                for N in pL.nt: N.rim.remove(pL)
     for N in N_:
         if N.rim: N.Rt = sum2F(N.rim,root=N,nF='Rt')
     [sum2F(f_,G,nF=nF) for f_,nF in zip((N_,B_,L_,C_),('Nt','Bt','Lt','Ct')) if f_]  # no Dt?

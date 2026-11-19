@@ -208,3 +208,49 @@ def comp_F1(_F, F, nF, ir=0, rL=None, j=None):
                 comp_H(_F,F, dF,j)  # rL: lev in L.H, no cross-fork N_, no L ext updates?
     setattr(rL,nF,dF)
     FV_(CoF.get(), dF.dTT, dF.c, dF.r)
+
+def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1, _j=0):  # recursion root, iN_: recluster/rng+
+
+    def Rng_(n_):  # w: combined membership weight / rdn: 1 + stronger members per C:
+        for n in n_: n.w = sum(m * C.c / (1 + sum(_m>m for _m in C.m_)) for C,m in n.root_)
+        return [n for n in n_ if (n.m+n.w) * (n.c*wX / (n.r+cX)) > ave]
+
+    L_, N_,G_,C_,Dt = [],[],[],[],[]
+    for dist, dy_dx, _N,N, lc,lr, pTT,m,nrng in pL_:
+        if _N != N and (fall or m>0):
+            if gv_(m*(lc*wN/(lr*cN)) - ave* (_r+cN)):
+                Link = comp_N(_N,N, lr,lc, full=not dF, A=dy_dx, span=dist, rL=root, _j=_j)  # if H not updated, +rroot.Hs?
+                Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT)  # prediction error
+                L_+=[Link]; N_+=[_N,N]; Link.nrng=nrng
+            elif not dF:  # += prelink
+                _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
+                pL = CN(typ=-1, nt=[_N,N], dTT=pTT,m=m,c=lc,r=lr,span=dist,box=box,angl=[dy_dx,1], yx=np.add(_N.yx,N.yx)/2)
+                pL.nrng=nrng; L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.nt
+    if L_:
+        Lt = sum2F(L_,root=None if (dF or iN_) else root, nF='Lt'); tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r
+        if dF:  # comp_F: adds to dF vals, no agg+
+            add2F(dF,Lt, merge=1); return
+        for N in (N_:= list(set(N_))): sum2F(N.rim, N, nF='Rt')  #->N.Rt
+        if iN_: add2F(root.Lt, Lt, merge=1)
+        else: iN_ = N_; [mT___(N,_j) for N in N_]  # add N.mt_
+        # cluster:
+        if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):  # len coef is tentative
+            G_, C_ = cluster_N(root, exemplar_(iN_ or N_,r+1), r+1,c,_j)  # tentative G_|C_|P_/ rng+
+        if len(dL_:= [l for l in L_ if l.typ == 1 and l.nrng == 1 and -l.m > ave]) > 1:  # pooled contrast links
+            Dt = sum2F(dL_, root=root, nF='Dt'); Dt.r += _r + 1
+            if gv_(-Dt.m * (Dt.c*wX /(Dt.r*cX)) - ave):  # der+
+                cross_comp(F2N(Dt), proj_L_(combinations(dL_,2),Dt.r,_j=_j), root,Dt.r,_j=_j)
+            if Dt.Lt: add2F(root.Lt if root.nF=='Dt' else root, Dt.Lt, merge=2,fH=0)  # der+ sum in Dt.Lt
+        FV_(CoF.get(), tt,c,r)  # current-rng xcomp
+        if G_:
+            if not frng: return G_,C_  # tentative, in rng+ loop only
+            while (rng_:= Rng_(iN_)) and gv_(sum(n.w for n in rng_)* (wX/cX) -ave) and (pL_:= proj_L_(combinations(rng_,2),root,_r,nrng=(nrng:=nrng+1),_j=_j)):
+                _G_,_C_ = cross_comp(root, pL_,_r,iN_=iN_,frng=0,_j=_j) or ([],[])
+                if not _G_: break  # max rng
+                G_,C_= _G_,_C_
+            if C_: sum2F(C_,root,nF='Ct')  # agg+ / max-rng Gs
+            G_ = [sum2G(g,ttcN,root,_r,_j) for g in G_]
+            Nt = sum2F(G_,root,nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r
+            if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+
+                G_ = cross_comp(root, proj_L_(combinations(G_,2),root,_r+1,_j=_j),_r+1,_j=_j) or G_
+    return G_
