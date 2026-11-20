@@ -254,3 +254,89 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, iN_=None, frng=1, _j=0):  # recur
             if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+
                 G_ = cross_comp(root, proj_L_(combinations(G_,2),root,_r+1,_j=_j),_r+1,_j=_j) or G_
     return G_
+def cross_comp1(root, pL_, _r, dF=None, fall=1, fN=1, _j=0):  # recursion root, fN CN_ else CC_
+
+    L_, N_,G_,C_,Dt = [],[],[],[],[]
+    for dist, dy_dx, _N,N, lc,lr, pTT,m,nrng in pL_:
+        if _N != N and (fall or m>0):
+            if gv_(m*(lc*wN/(lr*cN)) - ave* (_r+cN)):
+                Link = comp_N(_N,N, lr,lc, full=not dF, A=dy_dx, span=dist, rL=root, _j=_j)  # if H not updated, +rroot.Hs?
+                Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT)  # prediction error
+                L_+=[Link]; N_+=[_N,N]; Link.nrng=nrng
+            elif not dF:  # += prelink
+                _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
+                pL = CN(typ=-1, nt=[_N,N], dTT=pTT,m=m,c=lc,r=lr,span=dist,box=box,angl=[dy_dx,1], yx=np.add(_N.yx,N.yx)/2)
+                pL.nrng=nrng; L_+= [pL]; N.rim+=[pL]; _N.rim += [pL]; N_+=pL.nt
+    if L_:
+        Lt = sum2F(L_,root=None if dF else root, nF='Lt'); tt,m,c,r = Lt.dTT,Lt.m,Lt.c,Lt.r
+        if dF:  # comp_F: adds to dF vals, no agg+
+            add2F(dF,Lt, merge=1); return
+        for N in (N_:= list(set(N_))): mT___(N,_j); sum2F(N.rim, N, nF='Rt')  #->N.Rt
+        if fN:  # cluster_N:
+            if gv_(m * (c*wcN/(r*ccN)) * ((len(L_)-1)*wL) - ave):  # len coef is tentative
+                G_, C_ = cluster_N(root, exemplar_(N_,r+1), r+1,c,_j)  # tentative G_|C_|P_
+        elif gv_(m * (c*wcC/(r*ccC)) * ((len(L_)-1)*wL) - ave):
+            C_ = cluster_C(root, exemplar_(N_,r+1), r+1,_j)  # still need exemplars?
+        if len(dL_:= [l for l in L_ if l.typ == 1 and l.nrng == 1 and -l.m > ave]) > 1:  # pooled contrast links
+            Dt = sum2F(dL_, root=root, nF='Dt'); Dt.r += _r + 1
+            if gv_(-Dt.m * (Dt.c*wX /(Dt.r*cX)) - ave):  # der+
+                cross_comp(F2N(Dt), proj_L_(combinations(dL_,2),Dt.r,_j=_j),Dt.r,_j=_j)
+            if Dt.Lt: add2F(root.Lt if root.nF=='Dt' else root, Dt.Lt, merge=2,fH=0)  # der+ sum in Dt.Lt
+        FV_(CoF.get(),tt,c,r)  # current composition
+        if C_:  # run current  cfork first? Because the subsequent cross_comp may run higher level's C fork?
+            sum2F(C_,root,nF='Ct')
+            if gv_(sum(C.m for C in C_)* (wX/cX) -ave) and (pL_:= proj_L_(combinations(C_,2),root,_r,_j=_j)):
+                C_ = cross_comp(F2N(root.Ct), pL_,_r,fN=0,_j=_j)  # C_ agg+: skip cluster_N
+        if G_:
+            G_ = [sum2G(g, ttcN, root, _r, _j) for g in G_]; sum2F(G_,root,nF='Nt')
+            if gv_(sum(G.m for G in G_)* (wX/cX) -ave) and (pL_:= proj_L_(combinations(G_,2),root,_r,_j=_j)):  # no nrng=(nrng:=nrng+1)?
+                G_ = cross_comp(root, pL_,_r,_j=_j)  # G_ agg+
+    return G_
+
+def cluster_N(root, _N_, _r,_c,_j):  # flood-fill node | link clusters, flat, replace iL_ with E_?
+
+    Gt_,in__,fin_,G_,C_ = [],set(),[],[],[]  # root attrs, add prelink pL_,pN_? fin_ should be tile-wide?
+    for N in _N_:  # form G per remaining N
+        if N in fin_ or (root.root and not N.exe): continue  # no exemplars in Fg
+        N_ = [N]; L_,B_ = [],[]; fin_ += [N]  # init G
+        in_ = set(); __L_= N.rim  # spliced rim
+        while __L_:
+            _L_ = []
+            for L in set(__L_) - (in__|in_):  # flood-fill via frontier links
+                _N = L.nt[0] if L.nt[1] in fin_ else L.nt[1]; in_.add(L)
+                if _N not in fin_:
+                    pm,nm = nt_vt(*L.nt)  # +ve,-ve m
+                    if pm > ave *_r:  # additional filter, cluster nt, L,C_ by combined rim density, add gv_?
+                        span = np.sqrt(len(N_))  # approx span
+                        if span > 3:  # refine by rim connectivity / norm span
+                            iM = sum([L.m for L in _N.rim if (L.nt[0] if L.nt[1] is _N else L.nt[1]) in N_])
+                            if iM / (span*decay) < ave * (_r-1): continue  # normalized N-to-N_ match, sum for sum2G?
+                        L_ += [L]; N_ += [_N]; fin_ += [_N]
+                        _L_+= [l for l in _N.rim if l not in (in_|in__) and ((l.nt[0] in fin_) ^ (l.nt[1] in fin_))]  # new frontier links, +|-?
+                    elif L.nrng==1: B_ += [L]  # boundary
+            __L_ = list(set(_L_))
+        if N_:
+            ft_ = []
+            for i,(F_,nF) in enumerate(zip((N_,L_,B_),('Nt','Lt','Bt'))):  # no Ct yet, formed below
+                F_ = list(set(F_)) or []; tt,fc,fr = sum_vt(F_,wTT=ttcN) if F_ else (np.zeros((2,8)),0,0)
+                ft_+= [[tt,fc,fr]]
+            (nt,nc,nr),(lt,lc,lr),(bt,bc,br) = ft_
+            c = nc+lc+bc; r = (nr*nc +lr*lc +br*bc) /c; tt = (nt*nc +lt*lc) /nc+lc   # br includes overlap?
+            if L_:
+                nm,lm,bm = [val_(tt, root.wTT[0]*cNw_) for tt in (nt,lt,bt)]
+                spanR = np.mean([n.span for n in N_]) / np.mean([l.span for l in L_])
+                coreM = (nm * decay**spanR * nc + lm * lc) / (nc+lc)
+                m = coreM * (1-bm)  # core mass * contour specificity
+            if gv_(m * (c*wcN/(r*ccN)) * ((len(N_)-1)*wL) - ave):
+                C = sum2F(N_,root,nF='C',typ=3,m=m); C.L_,C.B_ = L_,B_  # initial connectivity G
+                Gt_ += [(C,m,c,r)]; in__|=in_
+            else:
+                for n in N_: fin_.remove(n)
+    if Gt_:
+        C,M,R = 0,0,0; _r+=1
+        for G,m,c,r in Gt_: G_+=[G]; C+=c; M+=m*c; R+=r*c
+        M/=C; R/=C
+        FV_(CoF.get(), *sum_vt(G_)[:-1],R)
+        if gv_(M * (C*wcC / ((_r+R)*ccC)) * ((len(G_)-1)*wL) - ave):
+            C_ = cluster_C(root, G_,_r+R,_j)
+    return G_,C_
