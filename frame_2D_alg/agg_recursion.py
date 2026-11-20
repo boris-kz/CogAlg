@@ -110,7 +110,11 @@ def cent_TT(dTT, r):  # EM-like weight attr matches | diffs by their match to th
 def cross_comp(root, pL_, _r, dF=None, fall=1, _j=0):  # recursion root, forms C_: Cs ( Gs ( N_
 
     L_,N_,C_,Dt = [],[],[],[]
-    for dist, dy_dx, _N,N, lc,lr, pTT,m in pL_:
+    for pL in pL_:
+        if isinstance(pL, list):
+            dist, dy_dx, _N,N, lc,lr, pTT,m = pL
+        else:
+            dist, dy_dx, _N,N, lc,lr, pTT,m = pL.span,pL.angl[0],*pL.nt,pL.c,pL.r,pL.dTT,pL.m
         if _N != N and (fall or m>0):  # CN in frame_H,spec, else CC?
             if gv_(m*(lc*wN/(lr*cN)) - ave):
                 Link = comp_N(_N,N, lr,lc, full=not dF, A=dy_dx, span=dist, rL=root, _j=_j)
@@ -126,17 +130,20 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, _j=0):  # recursion root, forms C
             add2F(dF,Lt, merge=1); return
         for N in (N_:= list(set(N_))): mT___(N,_j); sum2F(N.rim, N, nF='Rt')  # N.Rt
         if gv_(m * (c*wcN /(r*ccN)) * ((len(L_)-1)*wL) - ave):  # tentative len coef
-            C_ = cluster_N(root, exemplar_(N_,r+1), r+1,c,_j)  # -> sum2G, cluster_C
+            G_, C_ = cluster_N(root, exemplar_(N_,r+1), r+1,c,_j)  # -> sum2G, cluster_C
         if len(dL_:= [l for l in L_ if l.typ==1 and -l.m>ave]) > 1:  # tot contrast
             Dt = sum2F(dL_, root=root, nF='Dt'); Dt.r += _r + 1
             if gv_(-Dt.m * (Dt.c*wX /(Dt.r*cX)) - ave):
                 cross_comp(F2N(Dt), combinations(dL_,2), Dt.r,_j=_j)  # der+
             if Dt.Lt: add2F(root.Lt if root.nF=='Dt' else root, Dt.Lt, merge=2,fH=0)  # Dt.Lt += hd Ls
         FV_(CoF.get(), tt,c,r)  # current-rng xcomp
-        if C_:
-            Nt = sum2F(C_,root,nF='Nt'); nm,nc,nr = Nt.m,Nt.c,Nt.r  # install, recurse, prior Nt-> Nt.H
-            if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+
-                C_ = cross_comp(root, proj_L_(combinations(C_,2),root,_r,_j=_j),_r,_j=_j) or C_  # G_?
+        if G_:
+            sum2F(G_,root,nF='Nt'); 
+            if C_:  # C seed agg+
+                Ct = sum2F(C_,root,nF='Ct')
+                nm,nc,nr = Ct.m,Ct.c,Ct.r  # install, recurse, prior Nt-> Nt.H
+                if gv_(nm * (nc*wX/(nr*cX)) - ave):  # agg+
+                    C_ = cross_comp(root, proj_L_(combinations(C_,2),root,_r,_j=_j),_r,_j=_j) or C_  # G_?
     return C_
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: index in dH if spec
@@ -330,7 +337,7 @@ def cluster_N(root, _N_, _r,_c,_j, fsub=0):  # flood-fill ->Gs, sum2G, cluster_C
                 coreM = (nm * decay**spanR * nc + lm * lc) / (nc+lc)
                 m = coreM * (1-bm)  # core mass * contour specificity
             if gv_(m * (c*wcN/(r*ccN)) * ((len(N_)-1)*wL) - ave):
-                G = sum2G((N_,L_,B_,[]), ttcN, root, _r,_j, m)  # final G: forks, prelinks, sub+
+                G = sum2G((N_,L_,B_,[]), ttcN, root, _r,_j)  # final G: forks, prelinks, sub+
                 # G_| C_ if sub+, optional refinement?
                 Gt_ += [(G,m,c,r)]; in__|=in_
             else:
@@ -344,7 +351,8 @@ def cluster_N(root, _N_, _r,_c,_j, fsub=0):  # flood-fill ->Gs, sum2G, cluster_C
             C_ = cluster_C(root, G_,_r+R,_j) or []  # Cs of Gs, filtered there
         for G in G_:
             if not G.root_:  # in no C: singleton C, so C_ is one level
-                sC = sum2F([G],root,[1],nF='C',typ=3); sC.m,sC.mt_ = G.m,G.mt_; C_ += [sC]
+                # sC = sum2F([G],root,[1],nF='C',typ=3); sC.m,sC.mt_ = G.m,G.mt_; C_ += [sC]
+                C_ += [G]  # recycle?
     return G_, C_
 
 def cluster_C(root, _C_, _r,_j):  # refine/expand a fixed set of C seeds through their members' rims, add re-seeding by rejected Ns?
@@ -483,7 +491,7 @@ def sum2G(F_, wTT, root=None, _r=0, _j=0):  # finalize CN from C or (N_,L_,B_), 
         pm, pc, pr = sum_vt(pL_, fm=1, wTT=wTT)[0], sum([L.c for L in pL_]), np.mean([L.r for L in pL_])
         if pm * (wN*pc /(cN*pr)) > ave:
             for pL in pL_:
-                L_ += [L:= comp_N(*pL.nt,pL.r,pL.c,1,pL.angl[0],pL.span,root,_j)]; L.nrng=pL.nrng
+                L_ += [L:= comp_N(*pL.nt,pL.r,pL.c,1,pL.angl[0],pL.span,root,_j)]
                 for N in pL.nt: N.rim.remove(pL)
     for N in N_:
         if N.rim: N.Rt = sum2F(N.rim,root=N,nF='Rt')
@@ -492,9 +500,9 @@ def sum2G(F_, wTT, root=None, _r=0, _j=0):  # finalize CN from C or (N_,L_,B_), 
     if Lt := G.Lt:  # sub+ CN, no rng+, agg+?
         m,c,r = Lt.m,Lt.c, Lt.r+_r
         if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):  #-> sub_Gs @ higher filter: r+1
-            g_,c_= cluster_N(G, exemplar_(N_,r), r+1,c,_j)  # either can be empty due to olp
-            if g_: sum2F([sum2G(g, ttcN, G, r+1, _j) for g in g_], G,nF='Nt')  # G._Nt-> G.Nt.H[-1]
-            if c_: sum2F(c_,G, nF='Ct')
+            g_,c_= cluster_N(G, exemplar_(N_,r), r+1,c,_j,fsub=1)  # either can be empty due to olp
+            if g_: sum2F(g_, G,nF='Nt')  # G._Nt-> G.Nt.H[-1]
+            if c_: sum2F(c_,G, nF='Ct')  # move this to cluster_N?
     Nt,Lt,Bt = G.Nt,G.Lt,G.Bt
     G.dTT,G.c,G.r = sum_vt([f for f in (Nt,Lt) if f])  # combined dTT? use m_func?
     spanR = np.mean([n.span for n in Nt.N_]) / np.mean([l.span for l in Lt.N_]) if Lt else 0
@@ -602,7 +610,6 @@ def Copy_(N, root=None, r=1, cls=None, init=0, typ=None, froot=0):
                 if f in ('Nt','Lt','Bt','Dt'): getattr(C,f).H = [Copy_(lev, root=C) if lev else [] for lev in getattr(N,f).H]
             C.angl=deepcopy(N.angl); C.yx=copy(N.yx); C.box=copy(N.box); C.mang=N.mang; C.exe=N.exe; C.root_=list(N.root_)
     if hasattr(N,'mt_'): C.mt_ = np.array(N.mt_, copy=True)
-    if hasattr(N,'nrng'): C.nrng = N.nrng
     if froot:
         for n in C.N_+C.L_: n.root = C  # reassign for feedback, or root_+= if multiple roots?
     return C
@@ -652,7 +659,7 @@ def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
     link.m += dddH.m; link.d += dddH.d; link.c += dddH.c; link.dTT += dddH.dTT
     add_H(ddH, dddH)    
 '''
-def proj_L_(pairs, root, r, max=20, fall=1, nrng=1, _j=0):
+def proj_L_(pairs, root, r, max=20, fall=1, _j=0):
 
     def proj_V(_N, N, dist, dy_dx, dec, r):  # _N x N induction
         Dec = dec or decay ** ((dist / ((_N.span + N.span) / 2)))
@@ -669,12 +676,12 @@ def proj_L_(pairs, root, r, max=20, fall=1, nrng=1, _j=0):
         if N is _N: olp_ += [N]  # overlap = unit match, no miss
         elif not (set(N.rim) & set(_N.rim)):  # not nrng-1 link
             dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx)  # rim angl is not canonic
-            if dist < max * nrng:
+            if dist < max :
                 pTT = proj_V(_N, N, dist, dy_dx, decay** (dist/ ((_N.span+N.span)/2)) if root==2 else root.m, r)  # based on current rim
                 m = val_(pTT, Nw_)
                 if fall or m > ave:
                     lc = min(_N.c, N.c); lr = r + (N.r + _N.r) / 2  # +|-match certainty
-                    pL_ += [[dist, dy_dx, _N, N, lc, lr, pTT, m, nrng]]
+                    pL_ += [[dist, dy_dx, _N, N, lc, lr, pTT, m]]
     return pL_
 
 def proj_focus(PV__, new__, y,x, tile, elev):  # radial accum of projected focus value in PV__, new__: unprocessed cells
