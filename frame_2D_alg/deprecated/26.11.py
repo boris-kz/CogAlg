@@ -340,3 +340,52 @@ def cluster_N(root, _N_, _r,_c,_j):  # flood-fill node | link clusters, flat, re
         if gv_(M * (C*wcC / ((_r+R)*ccC)) * ((len(G_)-1)*wL) - ave):
             C_ = cluster_C(root, G_,_r+R,_j)
     return G_,C_
+
+def sum2G(F_, wTT, root=None, _r=0, _j=0):  # finalize CN from C or (N_,L_,B_), eval trans_cluster, der+, sub+
+    def trans_cluster(G):
+        for L in G.L_:  # draft:
+            for tL in (L.Nt.N_ + L.Bt.N_):  # top level
+                if tL.m * (tL.c*wcN / (tL.r*ccN)) > ave:
+                    pass  # sum m across levs for merge eval?
+                for lev in L.H:  # tFt/Nt | tN_/Bt, not Lt|Ct  # not revised:
+                    if lev:
+                        for tF in lev.N_ if not lev.N_[0].nt else [lev]:  # CF|CL: Nt|Bt, from spec?
+                            for tL in tF.N_:
+                                if tL.m * (tL.c*wcN / (tL.r*ccN)) > ave:  # merge trans_link.N_.roots:
+                                    rt0 = getattr(tL.N_[0].root,'root',None); rt1 = getattr(tL.N_[1].root,'root',None)
+                                    if rt0 and rt1 and rt0 != rt1:
+                                        if rt1.H: add_H(rt0.H, rt1.H, rt0, fN=1)
+                                        add2F(rt0,rt1, merge=1,fH=0)  # recompute Nt attrs / G
+                    else: break  # !top lev
+    G = CN(root=root,wTT=wTT)
+    sG_, L_, pL_ = [],[],[]
+    if isinstance(F_,tuple): N_,_L_,B_ = F_  # from trace_edge, vect_edge, frame_H
+    else:  # C from CN,CC: extract internal _L_ and perimeter B_ from N_ rims
+        N_,_L_,B_ = F_.N_,F_.L_,F_.B_
+    for L in _L_:
+        if L.typ==-1: pL_+= [L]
+        else:         L_ += [L]
+    if pL_:
+        pm, pc, pr = sum_vt(pL_, fm=1, wTT=wTT)[0], sum([L.c for L in pL_]), np.mean([L.r for L in pL_])
+        if pm * (wN*pc /(cN*pr)) > ave:
+            for pL in pL_:
+                L_ += [comp_N(*pL.nt,pL.r,pL.c,1,pL.angl[0],pL.span,root,_j)]
+                for N in pL.nt: N.rim.remove(pL)
+    for N in N_:
+        if N.rim: N.Rt = sum2F(N.rim,root=N,nF='Rt')
+    [sum2F(f_,G,nF=nF) for f_,nF in zip((N_,B_,L_),('Nt','Bt','Lt')) if f_]  # no Dt?
+    if G.L_: trans_cluster(G)  # splice trans_links, merge L.nt.roots
+    if Lt := G.Lt:  # sub+ CN, no rng+, agg+?
+        m,c,r = Lt.m,Lt.c, Lt.r+_r
+        if gv_(m* (c*wcN / (r*ccN)) * ((len(N_)-1)*wL) - ave):  #-> sub_Gs @ higher filter: r+1
+            sG_ = cluster_N(G, exemplar_(N_,r), r+1,c,_j,fsub=1)  # spliced sub-Cs
+    Nt,Lt,Bt = G.Nt,G.Lt,G.Bt
+    G.dTT,G.c,G.r = sum_vt([f for f in (Nt,Lt) if f])  # combined dTT? use m_func?
+    spanR = np.mean([n.span for n in Nt.N_]) / np.mean([l.span for l in Lt.N_]) if Lt else 0
+    coreM = (Nt.m * decay**spanR * Nt.c + Lt.m * Lt.c) / (Nt.c+Lt.c)
+    G.m = coreM * (1-Bt.m)  # core mass * contour specificity
+    nm_,lm_,bm_ = [m_func(tt[0]) for tt in (Nt.dTT,Lt.dTT,Bt.dTT)]
+    G.mt_ = ((nm_* decay**spanR *Nt.c) + lm_*Lt.c) / (Nt.c+Lt.c) * (1-bm_)
+    FV_(CoF.get(), G.dTT, G.c, G.r)
+    return sG_
+
