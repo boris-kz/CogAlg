@@ -137,18 +137,16 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, fN=1, _j=0):  # recursion root, c
                 G_,C_ = cluster_N(root, exemplar_(N_,r+1), r+1,c,_j)
         elif gv_(m * (c*wcC / (r*ccC)) * ((len(L_)-1)*wL) - ave):  # CC-> hCC
             E_ = [sum2F([E] + [n for l in E.rim if l.typ==1 and l.m>ave for n in l.nt if n is not E], root,nF='C',typ=3) for E in exemplar_(N_,r+1)]
-            for E in E_: E.L_, E.B_ = rim2LB(E.N_)  # we need B_ for frontier periemter
-            C_ = cluster_C(root, E_,r+1,_j) or []  # seed with one-hop exemplar clusters vs CN?
+            C_ = cluster_C(root, E_,r+1,_j) or []  # seed with one-hop exemplar clusters vs CN, add frontier to each E?
         if C_:
             Ct = sum2F(C_,root,nF='Ct')  # types-> cCt, next CN agg+->nCt, cCt-> nCt.H?
             if gv_(Ct.m * (Ct.c*wX /(Ct.r*cX)) * ((len(C_)-1)*wL) - ave):  # agg+ -> CC
-                cross_comp(F2N(Ct), proj_L_(combinations(C_,2),root,_r,_j=_j), _r,fN=0,_j=_j)  # links -> Ct.Lt, higher types -> Ct.Ct
-                if Ct.Lt: add2F(root, Ct.Lt, merge=2,fH=0)
+                C_ = cross_comp(F2N(Ct), proj_L_(combinations(C_,2),root,_r,_j=_j), _r,fN=0,_j=_j)  # higher types -> Ct.Ct
         if G_:
             Nt = sum2F(G_,root,nF='Nt')  # prior Nt -> Nt.H
             if gv_(Nt.m * (Nt.c*wX /(Nt.r*cX)) * ((len(G_)-1)*wL) - ave):  # object agg+:
                 G_ = cross_comp(root, proj_L_(combinations(G_,2), root,_r,_j=_j),_r,_j=_j) or G_
-    return G_
+    return G_,C_
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: index in dH if spec
 
@@ -164,18 +162,20 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: 
         L.dTT = ddTT = comp_dT(_N.dTT[1], N.dTT[1], c, _j+1)  # 1st der only, no M,D,ext,kern
     m = val_(ddTT,Nw_)  # (avad-ad)/(avad+ad) = (rd-1)/(rd+1), in -1:1
     if full: m += val_(dTT,Nw_)  # 2dO /aggO
-    if N.typ in (1,2) and gv_(m* (c*wF /(r*cF)) - ave):  # N|L
-        for _Ft,Ft,nF in zip((_N.Nt,_N.Lt,_N.Bt,_N.Dt,_N.Ct), (N.Nt,N.Lt,N.Bt,N.Dt,N.Ct), ('Nt','Lt','Bt','Dt','Ct')):
-            if _Ft and Ft:  # assign dFt as L.Ft
-                comp_F(_Ft,Ft, nF, r,L,_j)
-    elif N.typ in (1,2,3) and gv_(m* (c*wN /(r*cN)) - ave):  # C_ or Ft.N_ from comp_F, forms trans-Ls
-        dN_ = []
-        for _n,n in product(_N.N_,N.N_):  # spec
-            if _n is not n:  # if CC: medoid Ns may overlap?
-                dN_+= [comp_N(_n,n, r,min(_n.c,n.c), rL=L,full=0,_j=_j)]
-        if dN_: sum2F(dN_,L, nF=nF)  # per fork
+    if N.typ:  # not PP, Lt, C?
+        if hasattr(N,'Nt'):  # base fork,= any fork?
+            if gv_(m* (c*wF /(r*cF)) - ave):
+                for _Ft,Ft,nF in zip((_N.Nt,_N.Lt,_N.Bt,_N.Dt,_N.Ct), (N.Nt,N.Lt,N.Bt,N.Dt,N.Ct), ('Nt','Lt','Bt','Dt','Ct')):
+                    if _Ft and Ft:  # assign dFt as L.Ft
+                        comp_F(_Ft,Ft, nF, r,L,_j)
+        elif gv_(m* (c*wN /(r*cN)) - ave):  # Ft.N_ from comp_F, forms trans-Ls
+            dN_ = []
+            for _n,n in product(_N.N_,N.N_):  # spec
+                if _n is not n:  # if CC: medoid Ns may overlap?
+                    dN_+= [comp_N(_n,n, r,min(_n.c,n.c), rL=L,full=0,_j=_j)]
+            if dN_: sum2F(dN_,L, nF=nF)  # per fork
     if dF_ := [F for F in (L.Nt,L.Lt,L.Bt,L.Dt,L.Ct) if F]:  # fork-wise | trans 1st der replaces whole-N ddTT
-        ddTT,C,R = sum_vt(dF_); L.r = (L.r*L.c + R*C) / (L.c+C); L.c+=C
+        ddTT,C,R = sum_vt(dF_); L.r = (L.r*L.c +R*C) / (L.c+C); L.c+=C
     if full: ddTT += dTT
     L.dTT = ddTT; L.m = val_(ddTT,Nw_)
     if full:
@@ -412,7 +412,7 @@ def cluster_C(root, _C_, _r,_j):  # refine/expand a fixed set of C seeds through
         if oC_ := [C for C in oC_ if C.m > ave * C.r]:  # -> xcomp med_N_ or G_
             for n in N_: n.root_ = [rt for rt in n.root_ if rt[0] in oC_]
             FV_(CoF.get(), *sum_vt(oC_))
-            return oC_
+            return oC_  # no sum2G->sub+, or sub-cluster in param space: spectral?
 
 def cluster_P(_C_, root,_j): # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
 
@@ -480,7 +480,7 @@ def sum2G(Ft, wTT, root=None, _r=0, _j=0):  # Ft2G, sub+: nested sub_Gs and sub_
         m,c,r = Lt.m,Lt.c, Lt.r+_r
         if gv_(m* (c*wcN / (r*ccN)) * ((len(G.N_)-1)*wL) - ave):  #-> sub_Gs @ higher filter: r+1
             sG_,sC_ = cluster_N(G, exemplar_(G.N_,r), r+1,c,_j)  # final sub_Gs, sub_types
-            if sC_: sum2F(sC_,G, nF='Ct')  # not sure on their H here. Existing Ct.H won't be in C? So we need G.Ct.H += [Ct] here?
+            if sC_: sum2F(sC_,G, nF='Ct')
             if sG_: sum2F(sG_,G, nF='Nt')  # nest: prior Nt -> Nt.H
     return G
 
