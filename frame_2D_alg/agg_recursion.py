@@ -112,7 +112,8 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, fN=1, _j=0):  # recursion root, c
     L_,N_,G_,C_,Dt = [],[],[],[],[]
     for pL in pL_:
         dist, dy_dx, _N,N, lc,lr, pTT,m = pL if isinstance(pL,list) else (pL.span,pL.angl[0],*pL.nt,pL.c,pL.r,pL.dTT,pL.m)  # der+
-        if _N != N and (fall or m>0):  # CN in frame_H,spec, else CC?
+        # for dL, their m is negative and m>0 is always false, so der fork should have fall = 1?
+        if _N != N and (fall or m>0):  # CN in frame_H,spec, else CC?  
             if gv_(m*(lc*wN/(lr*cN)) - ave):
                 Link = comp_N(_N,N, lr,lc, full=not dF, A=dy_dx, span=dist, rL=root, _j=_j)
                 Link.rTT = np.abs(pTT-Link.dTT) / eps_(Link.dTT)  # prediction error
@@ -136,17 +137,18 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, fN=1, _j=0):  # recursion root, c
             if gv_(m * (c*wcN /(r*ccN)) * ((len(L_)-1)*wL) - ave):  # CN-> hCN, CC, sum2G
                 G_,C_ = cluster_N(root, exemplar_(N_,r+1), r+1,c,_j)
         elif gv_(m * (c*wcC / (r*ccC)) * ((len(L_)-1)*wL) - ave):  # CC-> hCC
-            E_ = [sum2F([E] + [n for l in E.rim if l.typ==1 and l.m>ave for n in l.nt if n is not E], root,nF='C',typ=3) for E in exemplar_(N_,r+1)]
+            # multiple l's nt may share the same set of ns
+            E_ = [sum2F(list({E} | {n for l in E.rim if l.typ==1 and l.m>ave for n in l.nt if n is not E}), root,nF='C',typ=3) for E in exemplar_(N_,r+1)]
             C_ = cluster_C(root, E_,r+1,_j) or []  # seed with one-hop exemplar clusters vs CN, add frontier to each E?
         if C_:
             Ct = sum2F(C_,root,nF='Ct')  # types-> cCt, next CN agg+->nCt, cCt-> nCt.H?
             if gv_(Ct.m * (Ct.c*wX /(Ct.r*cX)) * ((len(C_)-1)*wL) - ave):  # agg+ -> CC
-                C_ = cross_comp(F2N(Ct), proj_L_(combinations(C_,2),root,_r,_j=_j), _r,fN=0,_j=_j)  # higher types -> Ct.Ct
+                cross_comp(F2N(Ct), proj_L_(combinations(C_,2),root,_r,_j=_j), _r,fN=0,_j=_j)  # higher types -> Ct.Ct
         if G_:
             Nt = sum2F(G_,root,nF='Nt')  # prior Nt -> Nt.H
             if gv_(Nt.m * (Nt.c*wX /(Nt.r*cX)) * ((len(G_)-1)*wL) - ave):  # object agg+:
                 G_ = cross_comp(root, proj_L_(combinations(G_,2), root,_r,_j=_j),_r,_j=_j) or G_
-    return G_,C_
+    return G_  # why we need this C_?
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: index in dH if spec
 
@@ -373,7 +375,9 @@ def cluster_C(root, _C_, _r,_j):  # refine/expand a fixed set of C seeds through
     while True:  # reform C_, update and test C rims
         C_, cnt,rdn,Up,lc = [],0,0,0,0
         for _C in _C_:
-            _N_ = set(_C.N_) | {_n for L in _C.B_ for _n in L.nt}  # current members + perimeter frontier
+            # internal + frontier, but if we need all members, we set(_C.N_) is redundant
+            # _N_ = set(_C.N_) | {n for _n in _C.N_ for L in _n.rim if ((L.nt[0] in _C.N_) != (L.nt[1] in _C.N_) for n in L.nt)}  # current members + perimeter frontier
+            _N_ = {n for _n in _C.N_ for L in _n.rim for n in L.nt}  # current members + perimeter frontier 
             n_, m_, M, T, R, up, c = [], [], 0, 0, 0, 0, 0
             for n in _N_:
                 if n not in N_: N_.add(n); n.root_, n._root_ = [], []
@@ -679,7 +683,7 @@ def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
     link.m += dddH.m; link.d += dddH.d; link.c += dddH.c; link.dTT += dddH.dTT
     add_H(ddH, dddH)    
 '''
-def proj_L_(pairs, root, r, fall=1, _j=0):
+def proj_L_(pairs, root, r, fall=1, _j=0, max_dist=20):
 
     def proj_V(_N, N, dist, dy_dx, dec, r):  # _N x N induction
         Dec = dec or decay ** ((dist / ((_N.span + N.span) / 2)))
@@ -696,7 +700,7 @@ def proj_L_(pairs, root, r, fall=1, _j=0):
         if N is _N: olp_ += [N]  # overlap = unit match, no miss
         elif not (set(N.rim) & set(_N.rim)):  # not nrng-1 link
             dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx)  # rim angl is not canonic
-            if dist < 20:  # max = 20?
+            if dist < max_dist:  # constant for now
                 pTT = proj_V(_N, N, dist, dy_dx, decay** (dist/ ((_N.span+N.span)/2)) if root==2 else root.m, r)  # based on current rim
                 m = val_(pTT, Nw_)
                 if fall or m > ave:
