@@ -137,16 +137,16 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, fN=1, _j=0):  # recursion root, c
                 G_,C_ = cluster_N(root, exemplar_(N_,r+1), r+1,c,_j)
         elif gv_(m * (c*wcC / (r*ccC)) * ((len(L_)-1)*wL) - ave):  # CC-> hCC
             E_ = [sum2F([E] + [n for l in E.rim if l.typ==1 and l.m>ave for n in l.nt if n is not E], root,nF='C',typ=3) for E in exemplar_(N_,r+1)]
-            C_ = cluster_C(root, E_,r+1,_j) or []  # seed with one-hop exemplar clusters vs CN?
+            C_ = cluster_C(root, E_,r+1,_j) or []  # seed with one-hop exemplar clusters vs CN, add frontier to each E?
         if C_:
             Ct = sum2F(C_,root,nF='Ct')  # types-> cCt, next CN agg+->nCt, cCt-> nCt.H?
             if gv_(Ct.m * (Ct.c*wX /(Ct.r*cX)) * ((len(C_)-1)*wL) - ave):  # agg+ -> CC
-                cross_comp(F2N(Ct), proj_L_(combinations(C_,2),root,_r,_j=_j), _r,fN=0,_j=_j)  # links -> Ct.Lt, higher types -> Ct.Ct
+                C_ = cross_comp(F2N(Ct), proj_L_(combinations(C_,2),root,_r,_j=_j), _r,fN=0,_j=_j)  # higher types -> Ct.Ct
         if G_:
             Nt = sum2F(G_,root,nF='Nt')  # prior Nt -> Nt.H
             if gv_(Nt.m * (Nt.c*wX /(Nt.r*cX)) * ((len(G_)-1)*wL) - ave):  # object agg+:
                 G_ = cross_comp(root, proj_L_(combinations(G_,2), root,_r,_j=_j),_r,_j=_j) or G_
-    return G_
+    return G_,C_
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: index in dH if spec
 
@@ -162,18 +162,20 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: 
         L.dTT = ddTT = comp_dT(_N.dTT[1], N.dTT[1], c, _j+1)  # 1st der only, no M,D,ext,kern
     m = val_(ddTT,Nw_)  # (avad-ad)/(avad+ad) = (rd-1)/(rd+1), in -1:1
     if full: m += val_(dTT,Nw_)  # 2dO /aggO
-    if N.typ in (1,2) and gv_(m* (c*wF /(r*cF)) - ave):  # N|L
-        for _Ft,Ft,nF in zip((_N.Nt,_N.Lt,_N.Bt,_N.Dt,_N.Ct), (N.Nt,N.Lt,N.Bt,N.Dt,N.Ct), ('Nt','Lt','Bt','Dt','Ct')):
-            if _Ft and Ft:  # assign dFt as L.Ft
-                comp_F(_Ft,Ft, nF, r,L,_j)
-    elif N.typ in (1,2,3) and gv_(m* (c*wN /(r*cN)) - ave):  # C_ or Ft.N_ from comp_F, forms trans-Ls
-        dN_ = []
-        for _n,n in product(_N.N_,N.N_):  # spec
-            if _n is not n:  # if CC: medoid Ns may overlap?
-                dN_+= [comp_N(_n,n, r,min(_n.c,n.c), rL=L,full=0,_j=_j)]
-        if dN_: sum2F(dN_,L, nF=nF)  # per fork
-    if dF_ := [F for F in (L.Nt,L.Lt,L.Bt,L.Dt) if F]:  # fork-wise | trans 1st der replaces whole-N ddTT
-        ddTT,C,R = sum_vt(dF_); L.r = (L.r*L.c + R*C) / (L.c+C); L.c+=C
+    if N.typ:  # not PP, Lt, C?
+        if hasattr(N,'Nt'):  # base fork,= any fork?
+            if gv_(m* (c*wF /(r*cF)) - ave):
+                for _Ft,Ft,nF in zip((_N.Nt,_N.Lt,_N.Bt,_N.Dt,_N.Ct), (N.Nt,N.Lt,N.Bt,N.Dt,N.Ct), ('Nt','Lt','Bt','Dt','Ct')):
+                    if _Ft and Ft:  # assign dFt as L.Ft
+                        comp_F(_Ft,Ft, nF, r,L,_j)
+        elif gv_(m* (c*wN /(r*cN)) - ave):  # Ft.N_ from comp_F, forms trans-Ls
+            dN_ = []
+            for _n,n in product(_N.N_,N.N_):  # spec
+                if _n is not n:  # if CC: medoid Ns may overlap?
+                    dN_+= [comp_N(_n,n, r,min(_n.c,n.c), rL=L,full=0,_j=_j)]
+            if dN_: sum2F(dN_,L, nF=nF)  # per fork
+    if dF_ := [F for F in (L.Nt,L.Lt,L.Bt,L.Dt,L.Ct) if F]:  # fork-wise | trans 1st der replaces whole-N ddTT
+        ddTT,C,R = sum_vt(dF_); L.r = (L.r*L.c +R*C) / (L.c+C); L.c+=C
     if full: ddTT += dTT
     L.dTT = ddTT; L.m = val_(ddTT,Nw_)
     if full:
@@ -410,7 +412,7 @@ def cluster_C(root, _C_, _r,_j):  # refine/expand a fixed set of C seeds through
         if oC_ := [C for C in oC_ if C.m > ave * C.r]:  # -> xcomp med_N_ or G_
             for n in N_: n.root_ = [rt for rt in n.root_ if rt[0] in oC_]
             FV_(CoF.get(), *sum_vt(oC_))
-            return oC_
+            return oC_  # no sum2G->sub+, or sub-cluster in param space: spectral?
 
 def cluster_P(_C_, root,_j): # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
 
@@ -625,7 +627,7 @@ def Copy_(N, root=None, r=1, cls=None, init=0, typ=None, froot=0):
         else:
             for f in ('Nt','Lt','Bt','Dt','Ct','Xt','Rt'):
                 setattr(C, f, Copy_(getattr(N,f), root=C))
-                if f in ('Nt','Lt','Bt','Dt'): getattr(C,f).H = [Copy_(lev, root=C) if lev else [] for lev in getattr(N,f).H]
+                if f in ('Nt','Lt','Bt','Dt','Ct'): getattr(C,f).H = [Copy_(lev, root=C) if lev else [] for lev in getattr(N,f).H]
             C.angl=deepcopy(N.angl); C.yx=copy(N.yx); C.box=copy(N.box); C.mang=N.mang; C.exe=N.exe; C.root_=list(N.root_)
     if hasattr(N,'mt_'): C.mt_ = np.array(N.mt_, copy=True)
     if froot:
@@ -694,7 +696,7 @@ def proj_L_(pairs, root, r, fall=1, _j=0):
         if N is _N: olp_ += [N]  # overlap = unit match, no miss
         elif not (set(N.rim) & set(_N.rim)):  # not nrng-1 link
             dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx)  # rim angl is not canonic
-            if dist < max :
+            if dist < 20:  # max = 20?
                 pTT = proj_V(_N, N, dist, dy_dx, decay** (dist/ ((_N.span+N.span)/2)) if root==2 else root.m, r)  # based on current rim
                 m = val_(pTT, Nw_)
                 if fall or m > ave:
@@ -882,11 +884,10 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
         tile_,C,R = fill_frame(iY, iX, elev, T)  # seed tile -> sparse higher scope tile( oH( aH
         if tile_:
             N_ = [g for t in tile_ for g in t.N_]; m,_,c,r = sum_vt(N_,fm=1)  # concat edge Gs
-            Fr = sum2G((N_,[],[],[]),ttFrm)  # replacing tile_? angl and l_, for the next loop's T (T=Fr)
+            Fr = sum2G((N_,[],[]),ttFrm)  # replacing tile_? angl and l_, for the next loop's T (T=Fr)
             Fr.Nt.H += [sum2F(tile_)]  # minimally processed level
             if gv_(m * c * wX - ave * (r+1+cX)):
-                cross_comp(Fr, proj_L_(combinations(N_,2),Fr, r),r)  # agg+
-                if elev and ffb:  # ffb=1 in main, no ffeedback in side tiles
+                if cross_comp(Fr, proj_L_(combinations(N_,2),Fr, r),r) and elev and ffb:  # ffb=1 in main, no ffeedback in side tiles
                     Fr,aTT,oTT,aH,oH = ffeedback(Fr,aTT,oTT,aH,oH)  # term,form oH ( aH
                     elev += 1; T=Fr  # next-extension seed
                 else: break
