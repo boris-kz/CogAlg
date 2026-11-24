@@ -138,10 +138,12 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, fN=1, _j=0):  # recursion root, c
         elif gv_(m * (c*wcC / (r*ccC)) * ((len(L_)-1)*wL) - ave):  # CC-> hCC
             E_, fL_ = [],[]  # may compress:
             for E in exemplar_(N_,r+1):
+                N_ = []
                 for L in E.rim:  # form one-hop exemplar clusters:
-                    if L.typ==1 and L.m>ave: E_ += L.nt; fL_+= [L]
-            E_ = [sum2F(list({e for e in E_}), root,nF='C',typ=3)]
-            C_ = cluster_C(root, E_, list(set(fL_)), r+1,_j) or []
+                    if L.typ==1 and L.m>ave: N_ += L.nt; fL_+= [L]
+                E_ += [N_]
+            E_ = [sum2F(list(set(N_)), root,nF='C',typ=3) for N_ in E_]
+            C_ = cluster_C(root, E_, r+1,_j) or []
         if C_:
             Ct = sum2F(C_,root,nF='Ct')  # types-> cCt, next CN agg+->nCt, cCt-> nCt.H?
             if gv_(Ct.m * (Ct.c*wX /(Ct.r*cX)) * ((len(C_)-1)*wL) - ave):  # agg+ -> CC
@@ -354,12 +356,12 @@ def cluster_N(root, _N_, _r,_c,_j):  # flood-fill -> seeds with L_,B_ -> cluster
                 C = sum2F(N_,root,nF='C',typ=3,m=m); C.L_,C.B_ = L_,B_  # seed: raw G with links and perimeter
                 Gt_ += [(C,m,c,r)]; in__|=in_
     if Gt_:
-        g_, front_,R,C = [],[],0,0
+        g_,R,C = [],0,0
         for G, m,c,r in Gt_:  # type seeds
             if gv_(m* (c*wcC /((_r+r+1)*ccC)) * ((len(G.N_)-1)*wL) - ave):
-                g_+=[G]; front_+=G.rim; R+= r*c; C+= c
+                g_+=[G]; R+= r*c; C+= c
         if g_:
-            C_ = cluster_C(root, g_,list(set(front_)),_r+R/C,_j) or []  # types over the same nodes, -> n.root_
+            C_ = cluster_C(root, g_,_r+R/C,_j) or []  # types over the same nodes, -> n.root_
         if C_:
             for G, m,c,r in Gt_:  # type value per seed: its nodes' best membership, before any sub+ resets root_
                 G.m_ = [max((tm for _C,tm in n.root_), default=0) for n in G.N_]
@@ -370,32 +372,33 @@ def cluster_N(root, _N_, _r,_c,_j):  # flood-fill -> seeds with L_,B_ -> cluster
         FV_(CoF.get(), *sum_vt(G_)[:-1],_r)
     return G_,C_
 
-def cluster_C(root, _C_, _front__, _r,_j):  # refine/expand a fixed set of C seeds through their members' rims, add re-seeding by rejected Ns?
+def cluster_C(root, _C_, _r,_j):  # refine/expand a fixed set of C seeds through their members' rims, add re-seeding by rejected Ns?
 
-    N_= {n for C in _C_ for n in C.N_}; tC_= []
+    _front__ = [[list({L for N in G.N_ for L in N.rim})] for G in _C_]; N_= {n for C in _C_ for n in C.N_}; tC_= []
     for n in N_: n._root_ = n.root_; n.root_ = []  # preserve initial cluster_N memberships in _root_
     while True:  # reform C_, update and test C rims
         C_, front__,cnt,rdn,Up,lc = [],[],0,0,0,0
         for _C,_front_ in zip(_C_,_front__):
-            _N_ = _C.N_; front_,n_,m_,M,T,R,up,c = [],[],[],0,0,0,0,0
+            front_,n_,m_,M,T,R,up,c = [],[],[],0,0,0,0,0
             for L in _front_:
-                n = L.nt[0] if L.nt[1] in _N_ else L.nt[1]
-                if n not in N_: N_.add(n); n.root_, n._root_ = [], []
-                dtt = base_comp(_C, n,_j, fder=0)[0]
-                m = val_(dtt,cCw_); c += n.c
-                _m = next(((rt[1]) for rt in n._root_ if rt[0] is _C), 0)  # prior membership, 0 if new
-                if m * n.c > ave * n.r:  # += new nodes and front links
-                    up += abs(_m - m); n_+=[n]; front_+=n.rim; m_ += [m]; T += n.c; M += m * n.c; R += n.r * n.c
-                else: up += _m  # exclusion
+                for n in L.nt:  # we still need to compare existing members?
+                    if n not in N_: N_.add(n); n.root_, n._root_ = [], []
+                    dtt = base_comp(_C, n,_j, fder=0)[0]
+                    m = val_(dtt,cCw_); c += n.c
+                    _m = next(((rt[1]) for rt in n._root_ if rt[0] is _C), 0)  # prior membership, 0 if new
+                    if m * n.c > ave * n.r:  # += new nodes and front links
+                        up += abs(_m - m); n_+=[n]; m_ += [m]; T += n.c; M += m * n.c; R += n.r * n.c
+                        if n not in _C.N_: front_+=list(set(n.rim)-set(front_))  # frontier should be from the new member only? We already check existing member frontiers?
+                    else: up += _m  # exclusion
             if n_:
                 r = _r + R/T
                 if M * _C.m * (wcC*c / (_C.r*ccC*r)) * (((L:=len(n_))-1)*wL) > ave:
                     C = sum2F(n_, root, m_, nF='C', typ=3)  # -> n.root_
                     if up * (c*wcC / (r*ccC)) * ((L-1)*wL) > avd:
                         C_ += [C]; Up += up; lc += c  # active Cs' change and estimated next-loop work
+                        front__ += [list(set(front_))]  # front__ is per C_ for the next loop
                     else: tC_ += [C]  # converged if low membership change
                     cnt += T; rdn += R  # process costs
-                front__ += [list(set(front_))]
         r = _r + rdn / (cnt or eps)
         oC_ = tC_ + C_
         if C_ and Up * (lc * wcC / (r * ccC)) > avd:
