@@ -136,8 +136,12 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, fN=1, _j=0):  # recursion root, c
             if gv_(m * (c*wcN /(r*ccN)) * ((len(L_)-1)*wL) - ave):  # CN-> hCN, CC, sum2G
                 G_,C_ = cluster_N(root, exemplar_(N_,r+1), r+1,c,_j)
         elif gv_(m * (c*wcC / (r*ccC)) * ((len(L_)-1)*wL) - ave):  # CC-> hCC
-            E_ = [sum2F([E] + [n for l in E.rim if l.typ==1 and l.m>ave for n in l.nt if n is not E], root,nF='C',typ=3) for E in exemplar_(N_,r+1)]
-            C_ = cluster_C(root, E_,r+1,_j) or []  # seed with one-hop exemplar clusters vs CN, add frontier to each E?
+            E_, fL_ = [],[]  # may compress:
+            for E in exemplar_(N_,r+1):
+                for L in E.rim:  # form one-hop exemplar clusters:
+                    if L.typ==1 and L.m>ave: E_ += L.nt; fL_+= [L]
+            E_ = [sum2F(list({e for e in E_}), root,nF='C',typ=3)]
+            C_ = cluster_C(root, E_, list(set(fL_)), r+1,_j) or []
         if C_:
             Ct = sum2F(C_,root,nF='Ct')  # types-> cCt, next CN agg+->nCt, cCt-> nCt.H?
             if gv_(Ct.m * (Ct.c*wX /(Ct.r*cX)) * ((len(C_)-1)*wL) - ave):  # agg+ -> CC
@@ -146,7 +150,7 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, fN=1, _j=0):  # recursion root, c
             Nt = sum2F(G_,root,nF='Nt')  # prior Nt -> Nt.H
             if gv_(Nt.m * (Nt.c*wX /(Nt.r*cX)) * ((len(G_)-1)*wL) - ave):  # object agg+:
                 G_ = cross_comp(root, proj_L_(combinations(G_,2), root,_r,_j=_j),_r,_j=_j) or G_
-    return G_,C_
+    return G_ + C_ # not-empty flag
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: index in dH if spec
 
@@ -300,8 +304,8 @@ def nt_vt(n,_n):
         if (m:= l.m) > ave: pM += m
         elif ave - m > ave: nM += m  # contrast: the opposite side of marginal predictability?
     return pM,nM
-def rim2LB(N_):  # internal match links, perimeter, use in cluster_N, Ft2G?
-    n_set = set(N_); L_,B_ = [],[]
+def rim2LB(N_):
+    n_set = set(N_); L_,B_ = [],[]  # internal match links, perimeter, use in cluster_N, Ft2G?
     for L in {l for n in N_ for l in n.rim}:
         if (L.nt[0] in n_set) and (L.nt[1] in n_set):
             if L.m > ave: L_ += [L]
@@ -349,13 +353,13 @@ def cluster_N(root, _N_, _r,_c,_j):  # flood-fill -> seeds with L_,B_ -> cluster
             if gv_(m * (c*wcN/(r*ccN)) * ((len(N_)-1)*wL) - ave):
                 C = sum2F(N_,root,nF='C',typ=3,m=m); C.L_,C.B_ = L_,B_  # seed: raw G with links and perimeter
                 Gt_ += [(C,m,c,r)]; in__|=in_
-    if Gt_:  # not revised:
-        seed_, R,C = [],0,0
+    if Gt_:
+        g_, front_,R,C = [],[],0,0
         for G, m,c,r in Gt_:  # type seeds
             if gv_(m* (c*wcC /((_r+r+1)*ccC)) * ((len(G.N_)-1)*wL) - ave):
-                seed_+= [G]; R+= r*c; C+= c
-        if seed_:
-            C_ = cluster_C(root, seed_,_r+R/C,_j) or []  # types over the same nodes, -> n.root_
+                g_+=[G]; front_+=G.rim; R+= r*c; C+= c
+        if g_:
+            C_ = cluster_C(root, g_,list(set(front_)),_r+R/C,_j) or []  # types over the same nodes, -> n.root_
         if C_:
             for G, m,c,r in Gt_:  # type value per seed: its nodes' best membership, before any sub+ resets root_
                 G.m_ = [max((tm for _C,tm in n.root_), default=0) for n in G.N_]
@@ -366,31 +370,32 @@ def cluster_N(root, _N_, _r,_c,_j):  # flood-fill -> seeds with L_,B_ -> cluster
         FV_(CoF.get(), *sum_vt(G_)[:-1],_r)
     return G_,C_
 
-def cluster_C(root, _C_, _r,_j):  # refine/expand a fixed set of C seeds through their members' rims, add re-seeding by rejected Ns?
+def cluster_C(root, _C_, _front__, _r,_j):  # refine/expand a fixed set of C seeds through their members' rims, add re-seeding by rejected Ns?
 
     N_= {n for C in _C_ for n in C.N_}; tC_= []
     for n in N_: n._root_ = n.root_; n.root_ = []  # preserve initial cluster_N memberships in _root_
     while True:  # reform C_, update and test C rims
-        C_, cnt,rdn,Up,lc = [],0,0,0,0
-        for _C in _C_:
-            _N_ = set(_C.N_) | {_n for L in _C.B_ for _n in L.nt}  # current members + perimeter frontier
-            n_, m_, M, T, R, up, c = [], [], 0, 0, 0, 0, 0
-            for n in _N_:
+        C_, front__,cnt,rdn,Up,lc = [],[],0,0,0,0
+        for _C,_front_ in zip(_C_,_front__):
+            _N_ = _C.N_; front_,n_,m_,M,T,R,up,c = [],[],[],0,0,0,0,0
+            for L in _front_:
+                n = L.nt[0] if L.nt[1] in _N_ else L.nt[1]
                 if n not in N_: N_.add(n); n.root_, n._root_ = [], []
                 dtt = base_comp(_C, n,_j, fder=0)[0]
                 m = val_(dtt,cCw_); c += n.c
                 _m = next(((rt[1]) for rt in n._root_ if rt[0] is _C), 0)  # prior membership, 0 if new
-                if m * n.c > ave * n.r:  # += new nodes and candidate nodes
-                    up += abs(_m - m); n_ += [n]; m_ += [m]; T += n.c; M += m * n.c; R += n.r * n.c
+                if m * n.c > ave * n.r:  # += new nodes and front links
+                    up += abs(_m - m); n_+=[n]; front_+=n.rim; m_ += [m]; T += n.c; M += m * n.c; R += n.r * n.c
                 else: up += _m  # exclusion
-            if not n_: continue
-            r = _r + R/T
-            if M * _C.m * (wcC*c / (_C.r*ccC*r)) * (((L:=len(n_))-1)*wL) > ave:
-                C = sum2F(n_, root, m_, nF='C', typ=3)  # -> n.root_
-                if up * (c*wcC / (r*ccC)) * ((L-1)*wL) > avd:
-                    C_ += [C]; Up += up; lc += c  # active Cs' change and estimated next-loop work
-                else: tC_ += [C]  # converged if low membership change
-                cnt += T; rdn += R  # process costs
+            if n_:
+                r = _r + R/T
+                if M * _C.m * (wcC*c / (_C.r*ccC*r)) * (((L:=len(n_))-1)*wL) > ave:
+                    C = sum2F(n_, root, m_, nF='C', typ=3)  # -> n.root_
+                    if up * (c*wcC / (r*ccC)) * ((L-1)*wL) > avd:
+                        C_ += [C]; Up += up; lc += c  # active Cs' change and estimated next-loop work
+                    else: tC_ += [C]  # converged if low membership change
+                    cnt += T; rdn += R  # process costs
+                front__ += [list(set(front_))]
         r = _r + rdn / (cnt or eps)
         oC_ = tC_ + C_
         if C_ and Up * (lc * wcC / (r * ccC)) > avd:
@@ -402,7 +407,7 @@ def cluster_C(root, _C_, _r,_j):  # refine/expand a fixed set of C seeds through
                 break
             else:
                 for n in N_: n._root_ = n.root_; n.root_ = [rt for rt in n.root_ if rt[0] in tC_]
-                _C_ = C_  # for next loop
+                _C_ = C_; _front__ = front__  # for next loop
         else: break
     if oC_:
         for C in oC_:
@@ -679,7 +684,7 @@ def comp_prj_dH(_N, N, ddH, rn, link, angl, span, dec):
     link.m += dddH.m; link.d += dddH.d; link.c += dddH.c; link.dTT += dddH.dTT
     add_H(ddH, dddH)    
 '''
-def proj_L_(pairs, root, r, fall=1, _j=0):
+def proj_L_(pairs, root, r, fall=1, _j=0, max_dist=20):
 
     def proj_V(_N, N, dist, dy_dx, dec, r):  # _N x N induction
         Dec = dec or decay ** ((dist / ((_N.span + N.span) / 2)))
@@ -696,7 +701,7 @@ def proj_L_(pairs, root, r, fall=1, _j=0):
         if N is _N: olp_ += [N]  # overlap = unit match, no miss
         elif not (set(N.rim) & set(_N.rim)):  # not nrng-1 link
             dy_dx = _N.yx - N.yx; dist = np.hypot(*dy_dx)  # rim angl is not canonic
-            if dist < 20:  # max = 20?
+            if dist < max_dist:  # constant for now
                 pTT = proj_V(_N, N, dist, dy_dx, decay** (dist/ ((_N.span+N.span)/2)) if root==2 else root.m, r)  # based on current rim
                 m = val_(pTT, Nw_)
                 if fall or m > ave:
