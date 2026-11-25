@@ -126,7 +126,7 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, fN=1, _j=0):  # recursion root, c
         if dF:  # comp_F: adds to dF vals, no agg+
             add2F(dF,Lt, merge=1); return
         if fN and (dL_:= [l for l in L_ if l.typ==1 and -l.m>ave]):  # internal contrast links
-            Dt = sum2F(dL_, root=root, nF='Dt'); Dt.r += _r+1
+            Dt = sum2F(dL_, root=root, nF='Dt'); Dt.r+= _r+1
             if gv_(-Dt.m * (Dt.c*wX /(Dt.r*cX)) * ((len(dL_)-1)*wL) - ave):  # der+
                 cross_comp(F2N(Dt), combinations(dL_,2), Dt.r,_j=_j)
             if Dt.Lt: add2F(root.Lt if root.nF=='Dt' else root, Dt.Lt, merge=2,fH=0)  # Dt.Lt+=dLs
@@ -136,21 +136,18 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, fN=1, _j=0):  # recursion root, c
             if gv_(m * (c*wcN /(r*ccN)) * ((len(L_)-1)*wL) - ave):  # CN-> hCN, CC, sum2G
                 G_,C_ = cluster_N(root, exemplar_(N_,r+1), r+1,c,_j)
         elif gv_(m * (c*wcC / (r*ccC)) * ((len(L_)-1)*wL) - ave):  # CC-> hCC
-            E_, fL_ = [],[]  # may compress:
-            for E in exemplar_(N_,r+1):
-                for L in E.rim:  # form one-hop exemplar clusters:
-                    if L.typ==1 and L.m>ave: E_ += L.nt; fL_+= [L]
-            E_ = [sum2F(list({e for e in E_}), root,nF='C',typ=3)]
-            C_ = cluster_C(root, E_, list(set(fL_)), r+1,_j) or []
+            L__= [[L for L in E.rim if L.typ==1 and L.m > ave] for E in exemplar_(N_,r+1)]
+            E_ = [[n for L in fL_ for n in L.nt] for fL_ in L__]  # one-hop exemplar clusters
+            C_ = cluster_C(root, [sum2F(list(set(N_)), root,nF='C',typ=3) for N_ in E_], r+1,_j) or []
         if C_:
-            Ct = sum2F(C_,root,nF='Ct')  # types-> cCt, next CN agg+->nCt, cCt-> nCt.H?
-            if gv_(Ct.m * (Ct.c*wX /(Ct.r*cX)) * ((len(C_)-1)*wL) - ave):  # agg+ -> CC
-                C_ = cross_comp(F2N(Ct), proj_L_(combinations(C_,2),root,_r,_j=_j), _r,fN=0,_j=_j)  # higher types -> Ct.Ct
+            Ct = sum2F(C_,root,nF='Ct', typ=(typ:=C_[0].typ))  # sub+ in param space: spectral?
+            if typ==3 and gv_(Ct.m * (Ct.c*wX /(Ct.r*cX)) * ((len(C_)-1)*wL) - ave):  # if spatially isolated Cs
+                C_ = cross_comp(F2N(Ct), proj_L_(combinations(C_,2),root,_r,_j=_j), _r,fN=0,_j=_j)  #-> higher types, Ct.Ct
         if G_:
             Nt = sum2F(G_,root,nF='Nt')  # prior Nt -> Nt.H
             if gv_(Nt.m * (Nt.c*wX /(Nt.r*cX)) * ((len(G_)-1)*wL) - ave):  # object agg+:
-                G_ = cross_comp(root, proj_L_(combinations(G_,2), root,_r,_j=_j),_r,_j=_j) or G_
-    return G_ + C_ # not-empty flag
+                G_ = cross_comp(root, proj_L_(combinations(G_,2), root,_r,_j=_j),_r,_j=_j) or G_  # Ct.N_-> Ct.H, C_-> Ct.N_
+    return G_ + C_ # composition flag
 
 def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: index in dH if spec
 
@@ -172,8 +169,8 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: 
                 for _Ft,Ft,nF in zip((_N.Nt,_N.Lt,_N.Bt,_N.Dt,_N.Ct), (N.Nt,N.Lt,N.Bt,N.Dt,N.Ct), ('Nt','Lt','Bt','Dt','Ct')):
                     if _Ft and Ft:  # assign dFt as L.Ft
                         comp_F(_Ft,Ft, nF, r,L,_j)
-        elif gv_(m* (c*wN /(r*cN)) - ave):  # Ft.N_ from comp_F, forms trans-Ls
-            dN_ = []
+        elif gv_(m* (c*wN /(r*cN)) - ave):
+            dN_ = []  # comp_F' Ft.N_ forms trans-Ls
             for _n,n in product(_N.N_,N.N_):  # spec
                 if _n is not n:  # if CC: medoid Ns may overlap?
                     dN_+= [comp_N(_n,n, r,min(_n.c,n.c), rL=L,full=0,_j=_j)]
@@ -193,7 +190,7 @@ def comp_F(_F, F, nF, ir=0, rL=None, j=None):
     ddTT = comp_dT(_F.dTT[1],F.dTT[1],c, j+1)  # 1st der, same dLev as base_comp ddTT
     m = val_(ddTT,Fw_); r = (_F.r+F.r)/2 + ir
     dF = CF(dTT=ddTT, m=m,r=r,c=c, nF=nF, root=rL)
-    if nF in ('Nt','Dt'):  # spec draft
+    if nF in ('Nt','Dt'):  # spec, !Ct?
         if (_N_:=_F.N_) and (N_:=F.N_):  # always true?
             tt = (rL.dTT*rL.c + ddTT*c) / (rL.c+c)  # vertical comb?
             if gv_(val_(tt,Xw_) * ((rL.c+c)*wX /(r*cX)) - ave):
@@ -354,12 +351,10 @@ def cluster_N(root, _N_, _r,_c,_j):  # flood-fill -> seeds with L_,B_ -> cluster
                 C = sum2F(N_,root,nF='C',typ=3,m=m); C.L_,C.B_ = L_,B_  # seed: raw G with links and perimeter
                 Gt_ += [(C,m,c,r)]; in__|=in_
     if Gt_:
-        g_, front_,R,C = [],[],0,0
+        g_,R,C = [],0,0
         for G, m,c,r in Gt_:  # type seeds
-            if gv_(m* (c*wcC /((_r+r+1)*ccC)) * ((len(G.N_)-1)*wL) - ave):
-                g_+=[G]; front_+=G.rim; R+= r*c; C+= c
-        if g_:
-            C_ = cluster_C(root, g_,list(set(front_)),_r+R/C,_j) or []  # types over the same nodes, -> n.root_
+            if gv_(m* (c*wcC /((_r+r+1)*ccC)) * ((len(G.N_)-1)*wL) - ave): g_+=[G]; R+= r*c; C+= c
+        if g_: C_= cluster_C(root, g_,_r+R/C,_j) or []  # types -> n.root_
         if C_:
             for G, m,c,r in Gt_:  # type value per seed: its nodes' best membership, before any sub+ resets root_
                 G.m_ = [max((tm for _C,tm in n.root_), default=0) for n in G.N_]
@@ -370,44 +365,42 @@ def cluster_N(root, _N_, _r,_c,_j):  # flood-fill -> seeds with L_,B_ -> cluster
         FV_(CoF.get(), *sum_vt(G_)[:-1],_r)
     return G_,C_
 
-def cluster_C(root, _C_, _front__, _r,_j):  # refine/expand a fixed set of C seeds through their members' rims, add re-seeding by rejected Ns?
+def cluster_C(root, _C_, _r,_j):  # refine/expand C seeds through their N_ rims, add re-seeding by rejected Ns?
 
-    N_= {n for C in _C_ for n in C.N_}; tC_= []
-    for n in N_: n._root_ = n.root_; n.root_ = []  # preserve initial cluster_N memberships in _root_
-    while True:  # reform C_, update and test C rims
-        C_, front__,cnt,rdn,Up,lc = [],[],0,0,0,0
-        for _C,_front_ in zip(_C_,_front__):
-            _N_ = _C.N_; front_,n_,m_,M,T,R,up,c = [],[],[],0,0,0,0,0
-            for L in _front_:
-                n = L.nt[0] if L.nt[1] in _N_ else L.nt[1]
-                if n not in N_: N_.add(n); n.root_, n._root_ = [], []
-                dtt = base_comp(_C, n,_j, fder=0)[0]
-                m = val_(dtt,cCw_); c += n.c
-                _m = next(((rt[1]) for rt in n._root_ if rt[0] is _C), 0)  # prior membership, 0 if new
-                if m * n.c > ave * n.r:  # += new nodes and front links
-                    up += abs(_m - m); n_+=[n]; front_+=n.rim; m_ += [m]; T += n.c; M += m * n.c; R += n.r * n.c
+    N_ = {n for C in _C_ for n in C.N_}; term_C_ = []
+    for n in N_: n._root_ = n.root_; n.root_ = []  # prior Cs in _root_
+    while True:
+        C_,cnt,rdn,Up,lc = [],0,0,0,0  # reform C_, update, test C rims
+        for _C in _C_:
+            n_,m_,M,T,R,up,c = [],[],0,0,0,0,0
+            fN_ = {n for L in _C.F_ for n in L.nt if n not in _C.N_}  # F_ nodes, rebuilt in sum2F
+            for n in set(_C.N_) | fN_:  # re-test members, test frontier
+                if n not in N_: N_.add(n); n.root_, n._root_ = [],[]
+                tt = base_comp(_C, n,_j, fder=0)[0]
+                m = val_(tt,cCw_); c += n.c
+                _m = next(((rt[1]) for rt in n._root_ if rt[0] is _C), 0)  # prior membership
+                if m * n.c > ave * n.r:  # += new nodes
+                    up += abs(_m - m); n_+=[n]; m_ += [m]; T += n.c; M += m * n.c; R += n.r * n.c
                 else: up += _m  # exclusion
             if n_:
                 r = _r + R/T
                 if M * _C.m * (wcC*c / (_C.r*ccC*r)) * (((L:=len(n_))-1)*wL) > ave:
-                    C = sum2F(n_, root, m_, nF='C', typ=3)  # -> n.root_
+                    C = sum2F(n_, root, m_, nF='C', typ=3)  #-> n.root_, C.F_: next frontier
                     if up * (c*wcC / (r*ccC)) * ((L-1)*wL) > avd:
-                        C_ += [C]; Up += up; lc += c  # active Cs' change and estimated next-loop work
-                    else: tC_ += [C]  # converged if low membership change
-                    cnt += T; rdn += R  # process costs
-                front__ += [list(set(front_))]
+                        C_ += [C]; Up += up; lc += c  # active Cs change
+                    else: term_C_ += [C]  # converged C
+                    cnt += T; rdn += R  # loop cost
         r = _r + rdn / (cnt or eps)
-        oC_ = tC_ + C_
-        if C_ and Up * (lc * wcC / (r * ccC)) > avd:
+        oC_ = term_C_+ C_
+        if C_ and Up * (lc*wcC / (r*ccC)) > avd:
             uN_ = {n for C in oC_ for n in C.N_}
-            posL = sum(rt[1] > ave for n in uN_ for rt in n.root_)
-            totL = len(uN_) * len(oC_)
-            if gv_(posL / (totL or eps) * (lc*wcP /(r*ccP)) * ((len(oC_)-1)*wL) - ave):
-                oC_ = cluster_P(oC_, root, _j)
-                break
+            totL= len(uN_) * len(oC_); mL = sum(rt[1] > ave for n in uN_ for rt in n.root_)
+            olp = (mL - len(uN_))/ ((totL-len(uN_)) or eps)  # 0 if disjoint, 1 if all Ns in all Cs
+            if gv_(olp * (lc*wcP / (r*ccP)) * ((len(oC_)-1)*wL) - ave):
+                oC_ = cluster_P(oC_,root,_j); break
             else:
-                for n in N_: n._root_ = n.root_; n.root_ = [rt for rt in n.root_ if rt[0] in tC_]
-                _C_ = C_; _front__ = front__  # for next loop
+                for n in N_: n._root_ = n.root_; n.root_ = [rt for rt in n.root_ if rt[0] in term_C_]
+                _C_ = C_  # for next loop
         else: break
     if oC_:
         for C in oC_:
@@ -417,63 +410,45 @@ def cluster_C(root, _C_, _front__, _r,_j):  # refine/expand a fixed set of C see
         if oC_ := [C for C in oC_ if C.m > ave * C.r]:  # -> xcomp med_N_ or G_
             for n in N_: n.root_ = [rt for rt in n.root_ if rt[0] in oC_]
             FV_(CoF.get(), *sum_vt(oC_))
-            return oC_  # no sum2G->sub+, or sub-cluster in param space: spectral?
+            return oC_
 
-def cluster_P(_C_, root,_j): # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
+def cluster_P(_C_, root,_j):  # multi-seed mean shift over pooled nodes: parallel centroid refine, _C_ varies via merge / prune
 
-    iC_ = _C_; cnt = 0; Ln = len(N_:= list(set([N for C in _C_ for N in C.N_])))  # all Ns are in all Cs
-    _m__ = np.zeros((Ln, len(_C_)))  # NxC, cols aligned to _C_
-    for i, N in enumerate(N_):
-        for c,m in N.root_:
-            if c in _C_: _m__[i,_C_.index(c)] = m
+    iC_ = _C_; cnt = 0; N_ = list({N for C in _C_ for N in C.N_})  # pool: all Ns are candidates for all Cs
     while True:
-        for N in N_: N.root_ = []  # reset, append in sum2F
-        Lc = len(_C_); totL = Lc*Ln  # loop Lc,L,m__
-        m__ = np.zeros((Ln,Lc))
-        for j,N in enumerate(N_):
-            for i,C in enumerate(_C_): m__[j,i] = val_(base_comp(C,N,_j,fder=0)[0],cPw_)
-        C_ = [sum2F(N_, root, m__[:,i],nF='C',typ=3) for i in range(Lc)]  # mean shift, aligned to m__, add typ?
-        removed = []
-        posL = (m__ > ave).sum()
+        for N in N_: N._root_ = N.root_; N.root_ = []  # prior Cs in _root_, new appended in sum2F
+        m__ = np.array([[val_(base_comp(C,N,_j,fder=0)[0],cPw_) for C in _C_] for N in N_])  # NxC
+        C_,Up = [],0
+        for i,_C in enumerate(_C_):  # reform each C from the pool, same member test as in cluster_C
+            n_,m_ = [],[]
+            for N,m in zip(N_, m__[:,i]):
+                _m = next((rt[1] for rt in N._root_ if rt[0] is _C), 0)  # prior membership, 0 if new
+                if m*N.c > ave*N.r: n_+=[N]; m_+=[m]; Up += abs(_m - m)
+                else: Up += _m  # exclusion
+            if n_: C_ += [sum2F(n_,root,m_,nF='C',typ=4)]  # -> N.root_
+        posL = sum(len(C.N_) for C in C_); totL = len(_C_)*len(N_)
         if gv_(posL*wcP - ave*(root.r+ccP*totL)):  # merge redundant Cs
+            removed = []
             for i,_C in enumerate(C_):
                 if _C in removed: continue
                 for C in C_[i+1:]:
                     if C in removed: continue
-                    m = val_(base_comp(C,_C,_j,fder=0)[0],cPw_); r = (C.r+_C.r)
-                    if m*wF > ave*(r+cF):
-                        add2F(_C,C,2); removed += [C]; _C.m = val_(_C.dTT,cPw_)  # for next-loop base comp
-                        for N in C.N_:
-                            for rt in N.root_:
-                                if rt[0] is C: rt[0] = _C  # update root from C to _C, for olp computation below
+                    m = val_(base_comp(C,_C,_j,fder=0)[0],cPw_)
+                    if m*wF > ave*(C.r+_C.r+cF):
+                        mN = {**dict(zip(C.N_,C.m_)), **dict(zip(_C.N_,_C.m_))}  # both member sets, _C m if shared
+                        removed += [C]; C_[i] = _C = sum2F(list(mN),root,list(mN.values()),nF='C',typ=4)
+            C_ = [C for C in C_ if C not in removed]
+        for C in C_:  # olp: c-weighted count of stronger roots per member
+            C.olp = sum(n.c for n,m in zip(C.N_,C.m_) for rt in n.root_ if rt[0] in C_ and rt[0] is not C and rt[1] > m) / C.c
+        C_ = [C for C in C_ if C.m*wcP > ave*(C.r+C.olp+ccP)]  # prune
+        for N in N_: N.root_ = [rt for rt in N.root_ if rt[0] in C_]
         cnt += 1
-        dM = (m__-_m__).mean() if m__.shape==_m__.shape else 0  # convergence, may be negative
-        if C_ and dM * (wcP / (cnt+root.r+ccP)) > ave:  # next loop, tentative
-            _C_ = []; i_ = []
-            for i, _C in enumerate(C_):
-                if _C in removed: continue
-                _C.olp = sum(rt[1] for n in _C.N_ for rt in n.root_ if rt[0] is not _C and rt[1] > _C.m)
-                if _C.m * wcP > ave * (_C.r + _C.olp + ccP):  # prune
-                    _C_ += [_C]; i_ += [i]  # also after merge and converge
-            _m__ = m__[:,i_]
-        else:
-            if dM<0: C_ = _C_  # revert to better prior
-            else: i_ = [i for i,C in enumerate(C_) if C not in removed]; _m__ = m__[:,i_]; C_ = [C_[i] for i in i_]
-            break
-    out_ = []
-    for N in N_: N.root_ = []  # replace with out_ Cs:
-    for i, C in enumerate(C_):
-        if C.m > ave * C.r:  # prune, add olp as stronger ms?
-            N_,m_ = [],[]
-            for N, m in zip(C.N_, _m__[:,i]):
-                if m*N.c > ave*N.r: N_+=[N]; m_+=[m]
-            if N_:
-                oC = sum2F(N_,root, m_,nF='C', typ=3)
-                out_ += [oC]
-    if out_:
-        iTT, iC, iR = sum_vt(iC_); oTT,oC,oR = sum_vt(out_)
-        FV_(CoF.get(), iTT-oTT, iC-oC, iR-oR)
-    return out_
+        if C_ and Up * (wcP / (cnt+root.r+ccP)) > avd: _C_ = C_  # next loop
+        else: break
+    if C_:
+        iTT,iC,iR = sum_vt(iC_); oTT,oC,oR = sum_vt(C_)
+        FV_(CoF.get(), oTT-iTT, oC, oR)
+    return C_
 
 def m_func(m_, wT=wT):  # G.m / param w/o its own column
     wm_ = m_ * wT
@@ -549,11 +524,11 @@ def sum2F(N_, root=None, m_=None, nF=None, typ=3, m=None):  # c|c*m -weighted su
     if geo:  # links and higher
         F.yx,F.kern = [w_ @ np.array([getattr(n,a) for n in N_]) for a in ('yx','kern')]; F.span = w_ @ [n.span for n in N_]
         F.box = reduce(extend_box, [n.box for n in N_ if hasattr(n,'box')], np.array([np.inf,np.inf,-np.inf,-np.inf]))
-    if fC:  # not revised
-        F.m = c_@m_ /C; F.w = F.m; F.m_ = m_; F.c_ = c_  # m: c-weighted mean membership
+    if fC:  # centroid
+        F.m = F.w = c_@m_ /C; F.m_ = m_; F.c_ = c_  # m: c-weighted mean membership
         for n,m in zip(N_,m_): n.root_ += [[F,m]]
-        F.L_,F.B_ = rim2LB(N_)
-    else: F.m = val_(TT) if m is None else m
+    else:
+        F.m = val_(TT) if m is None else m; F.L_,F.B_ = rim2LB(N_)  # ?
     if nF=='Lt': [add_H(F.H, n.H, F) for n in N_ if n.H]
     if root is None: return F
     F.wTT = root.wTT
