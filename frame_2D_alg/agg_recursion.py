@@ -136,8 +136,7 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, fN=1, _j=0):  # recursion root, c
             if gv_(m * (c*wcN /(r*ccN)) * ((len(L_)-1)*wL) - ave):  # CN-> hCN, CC, sum2G
                 G_,C_ = cluster_N(root, exemplar_(N_,r+1), r+1,c,_j)
         elif gv_(m * (c*wcC / (r*ccC)) * ((len(L_)-1)*wL) - ave):  # CC-> hCC
-            L__= [[L for L in E.rim if L.typ==1 and L.m > ave] for E in exemplar_(N_,r+1)]
-            E_ = [[n for L in fL_ for n in L.nt] for fL_ in L__]  # one-hop exemplar clusters
+            E_ = [[n for L in E.rim if L.typ==1 and L.m>ave for n in L.nt] for E in exemplar_(N_,r+1)]  # one-hop exemplar clusters
             C_ = cluster_C(root, [sum2F(list(set(N_)), root,nF='C',typ=3) for N_ in E_], r+1,_j) or []
         if C_:
             Ct = sum2F(C_,root,nF='Ct', typ=(typ:=C_[0].typ))  # sub+ in param space: spectral?
@@ -373,8 +372,7 @@ def cluster_C(root, _C_, _r,_j):  # refine/expand C seeds through their N_ rims,
         C_,cnt,rdn,Up,lc = [],0,0,0,0  # reform C_, update, test C rims
         for _C in _C_:
             n_,m_,M,T,R,up,c = [],[],0,0,0,0,0
-            fN_ = {n for L in _C.F_ for n in L.nt if n not in _C.N_}  # F_ nodes, rebuilt in sum2F
-            for n in set(_C.N_) | fN_:  # re-test members, test frontier
+            for n in set(_C.N_) | set(_C.F_) :  # re-test members, test frontier
                 if n not in N_: N_.add(n); n.root_, n._root_ = [],[]
                 tt = base_comp(_C, n,_j, fder=0)[0]
                 m = val_(tt,cCw_); c += n.c
@@ -426,9 +424,10 @@ def cluster_P(_C_, root,_j):  # multi-seed mean shift over pooled nodes: paralle
                 if m*N.c > ave*N.r: n_+=[N]; m_+=[m]; Up += abs(_m - m)
                 else: Up += _m  # exclusion
             if n_: C_ += [sum2F(n_,root,m_,nF='C',typ=4)]  # -> N.root_
-        posL = sum(len(C.N_) for C in C_); totL = len(_C_)*len(N_)
-        if gv_(posL*wcP - ave*(root.r+ccP*totL)):  # merge redundant Cs
-            removed = []
+        posL = sum(len(C.N_) for C in C_); totL = len(C_)*len(N_)  # totL should be from C_?
+        # merge and prune could be a single process? Or we only need prune for redundant Cs?
+        removed = []
+        if gv_(posL*wcP - ave*(root.r+ccP*totL)):  # merge redundant Cs      
             for i,_C in enumerate(C_):
                 if _C in removed: continue
                 for C in C_[i+1:]:
@@ -443,9 +442,10 @@ def cluster_P(_C_, root,_j):  # multi-seed mean shift over pooled nodes: paralle
         C_ = [C for C in C_ if C.m*wcP > ave*(C.r+C.olp+ccP)]  # prune
         for N in N_: N.root_ = [rt for rt in N.root_ if rt[0] in C_]
         cnt += 1
-        if C_ and Up * (wcP / (cnt+root.r+ccP)) > avd: _C_ = C_  # next loop
+        if C_ and (removed or Up * (wcP / (cnt+root.r+ccP)) > avd): _C_ = C_  # next loop (if there's removed C, continue to refine)
         else: break
     if C_:
+        for C in C_: C.r += C.olp  # add olp to r? To be eval with cross fork later?
         iTT,iC,iR = sum_vt(iC_); oTT,oC,oR = sum_vt(C_)
         FV_(CoF.get(), oTT-iTT, oC, oR)
     return C_
@@ -533,6 +533,7 @@ def sum2F(N_, root=None, m_=None, nF=None, typ=3, m=None):  # c|c*m -weighted su
     if root is None: return F
     F.wTT = root.wTT
     if nF in ('Nt','Lt'): root.dTT = (root.dTT*root.c + TT*C) / (root.c+C); root.c+=C  # root r is not affected?
+    if nF=='C' and typ == 3: F.F_ = list({_n for n in N_ for L in n.rim for _n in L.nt} - set(N_))  # boundary or frontier
     if nF=='Lt':  # oriented, as in base_comp
         root.angl = F.angl = (A:= [np.sum(A_:= [L.angl[0] * L.angl[1] for L in F.N_], axis=0), 1])  # Lt.angl for proj_V
         root.mang = F.mang = np.mean([comp_A(A[0], a)[0] for a in A_])
