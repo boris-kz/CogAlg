@@ -389,3 +389,59 @@ def sum2G(F_, wTT, root=None, _r=0, _j=0):  # finalize CN from C or (N_,L_,B_), 
     FV_(CoF.get(), G.dTT, G.c, G.r)
     return sG_
 
+def cluster_P(_C_, root,_j): # multi-seed mean shift: parallel centroid refine, _C_ varies via split/merge
+
+    iC_ = _C_; cnt = 0; Ln = len(N_:= list(set([N for C in _C_ for N in C.N_])))  # all Ns are in all Cs
+    _m__ = np.zeros((Ln, len(_C_)))  # NxC, cols aligned to _C_
+    for i, N in enumerate(N_):
+        for c,m in N.root_:
+            if c in _C_: _m__[i,_C_.index(c)] = m
+    while True:
+        for N in N_: N.root_ = []  # reset, append in sum2F
+        Lc = len(_C_); totL = Lc*Ln  # loop Lc,L,m__
+        m__ = np.zeros((Ln,Lc))
+        for j,N in enumerate(N_):
+            for i,C in enumerate(_C_): m__[j,i] = val_(base_comp(C,N,_j,fder=0)[0],cPw_)
+        C_ = [sum2F(N_, root, m__[:,i],nF='C',typ=3) for i in range(Lc)]  # mean shift, aligned to m__, add typ?
+        removed = []
+        posL = (m__ > ave).sum()
+        if gv_(posL*wcP - ave*(root.r+ccP*totL)):  # merge redundant Cs
+            for i,_C in enumerate(C_):
+                if _C in removed: continue
+                for C in C_[i+1:]:
+                    if C in removed: continue
+                    m = val_(base_comp(C,_C,_j,fder=0)[0],cPw_); r = (C.r+_C.r)
+                    if m*wF > ave*(r+cF):
+                        add2F(_C,C,2); removed += [C]; _C.m = val_(_C.dTT,cPw_)  # for next-loop base comp
+                        for N in C.N_:
+                            for rt in N.root_:
+                                if rt[0] is C: rt[0] = _C  # update root from C to _C, for olp computation below
+        cnt += 1
+        dM = (m__-_m__).mean() if m__.shape==_m__.shape else 0  # convergence, may be negative
+        if C_ and dM * (wcP / (cnt+root.r+ccP)) > ave:  # next loop, tentative
+            _C_ = []; i_ = []
+            for i, _C in enumerate(C_):
+                if _C in removed: continue
+                _C.olp = sum(rt[1] for n in _C.N_ for rt in n.root_ if rt[0] is not _C and rt[1] > _C.m)
+                if _C.m * wcP > ave * (_C.r + _C.olp + ccP):  # prune
+                    _C_ += [_C]; i_ += [i]  # also after merge and converge
+            _m__ = m__[:,i_]
+        else:
+            if dM<0: C_ = _C_  # revert to better prior
+            else: i_ = [i for i,C in enumerate(C_) if C not in removed]; _m__ = m__[:,i_]; C_ = [C_[i] for i in i_]
+            break
+    out_ = []
+    for N in N_: N.root_ = []  # replace with out_ Cs:
+    for i, C in enumerate(C_):
+        if C.m > ave * C.r:  # prune, add olp as stronger ms?
+            N_,m_ = [],[]
+            for N, m in zip(C.N_, _m__[:,i]):
+                if m*N.c > ave*N.r: N_+=[N]; m_+=[m]
+            if N_:
+                oC = sum2F(N_,root, m_,nF='C', typ=4)
+                out_ += [oC]
+    if out_:
+        iTT, iC, iR = sum_vt(iC_); oTT,oC,oR = sum_vt(out_)
+        FV_(CoF.get(), iTT-oTT, iC-oC, iR-oR)
+    return out_
+
