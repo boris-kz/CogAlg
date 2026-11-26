@@ -372,7 +372,7 @@ def cluster_C(root, _C_, _r,_j):  # refine/expand C seeds through their N_ rims,
         C_,cnt,rdn,Up,lc = [],0,0,0,0  # reform C_, update, test C rims
         for _C in _C_:
             n_,m_,M,T,R,up,c = [],[],0,0,0,0,0
-            for n in set(_C.N_) | set(_C.F_) :  # re-test members, test frontier
+            for n in set(_C.N_) | {n for L in _C.B_ for n in L.nt} :  # re-test members, test frontier
                 if n not in N_: N_.add(n); n.root_, n._root_ = [],[]
                 tt = base_comp(_C, n,_j, fder=0)[0]
                 m = val_(tt,cCw_); c += n.c
@@ -426,10 +426,14 @@ def cluster_P(_C_, root,_j):  # multi-seed mean shift over pooled nodes: paralle
             if n_: C_ += [sum2F(n_,root,m_,nF='C',typ=4)]  # -> N.root_
         for N in N_: N.root_.sort(key=lambda rt: rt[1], reverse=True)  # rank roots by m: C index = rdn
         # draft:
+        for N in N_:  # olp: per C,m in ranked N.root_, not ranked C
+            N.root_.sort(key=lambda rt: rt[1], reverse=True)
+            for i, (C,m) in enumerate(N.root_[1:],start=1):
+                C.olp += (i+m)*N.c  # include i as ranked olp? lower m = higher olp
         for C in C_:
             rdn_ = np.array([[rt[0] for rt in N.root_].index(C) for N in C.N_])  # C order in each N.root_
-            C.m_ = np.array(C.m_) - rdn_*ave; C.m = C.c_ @ C.m_ / C.c
-        C_ = [C for C in C_ if C.m * (1-C.olp) * (C.c*wcP/ (C.r*ccP)) > ave]
+            C.m_ = np.array(C.m_) - rdn_*ave; C.m = C.c_ @ C.m_ / C.c; C.olp /= (C.m*C.c)
+        C_ = [C for C in C_ if C.m * (1-C.olp) * (C.c*wcP/ (C.r*ccP)) > ave]  # olp must be 0:1?
         for N in N_: N.root_ = [rt for rt in N.root_ if rt[0] in C_]
         cnt += 1
         if C_ and Up * (wcP/ccP) > ave: _C_ = C_  # next loop
@@ -523,7 +527,9 @@ def sum2F(N_, root=None, m_=None, nF=None, typ=3, m=None):  # c|c*m -weighted su
     if root is None: return F
     F.wTT = root.wTT
     if nF in ('Nt','Lt'): root.dTT = (root.dTT*root.c + TT*C) / (root.c+C); root.c+=C  # root r is not affected?
-    if nF=='C' and typ == 3: F.F_ = list({_n for n in N_ for L in n.rim for _n in L.nt} - set(N_))  # boundary or frontier
+    if nF=='C': 
+        F.olp = 0
+        if typ == 3: F.L_,F.B_ = rim2LB(N_)
     if nF=='Lt':  # oriented, as in base_comp
         root.angl = F.angl = (A:= [np.sum(A_:= [L.angl[0] * L.angl[1] for L in F.N_], axis=0), 1])  # Lt.angl for proj_V
         root.mang = F.mang = np.mean([comp_A(A[0], a)[0] for a in A_])
