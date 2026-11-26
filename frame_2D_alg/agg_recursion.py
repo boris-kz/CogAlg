@@ -137,7 +137,7 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, fN=1, _j=0):  # recursion root, c
                 G_,C_ = cluster_N(root, exemplar_(N_,r+1), r+1,c,_j)
         elif gv_(m * (c*wcC / (r*ccC)) * ((len(L_)-1)*wL) - ave):  # CC-> hCC
             E_ = [[n for L in E.rim if L.typ==1 and L.m>ave for n in L.nt] for E in exemplar_(N_,r+1)]  # one-hop exemplar clusters
-            C_ = cluster_C(root, [sum2F(list(set(N_)), root,nF='C',typ=3) for N_ in E_], r+1,_j) or []
+            C_ = cluster_C(root, [sum2F(list(set(N_)), root,nF='C',typ=3) for N_ in E_], r+1,_j) or []  # seed eC_ eval?
         if C_:
             Ct = sum2F(C_,root,nF='Ct', typ=(typ:=C_[0].typ))  # sub+ in param space: spectral?
             if typ==3 and gv_(Ct.m * (Ct.c*wX /(Ct.r*cX)) * ((len(C_)-1)*wL) - ave):  # if spatially isolated Cs
@@ -169,7 +169,7 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: 
                     if _Ft and Ft:  # assign dFt as L.Ft
                         comp_F(_Ft,Ft, nF, r,L,_j)
         elif gv_(m* (c*wN /(r*cN)) - ave):
-            dN_ = []  # comp_F' Ft.N_ forms trans-Ls
+            dN_ = []  # comp_F' Ft.N_ forms trans-Ls; + merge option if CCs?
             for _n,n in product(_N.N_,N.N_):  # spec
                 if _n is not n:  # if CC: medoid Ns may overlap?
                     dN_+= [comp_N(_n,n, r,min(_n.c,n.c), rL=L,full=0,_j=_j)]
@@ -213,7 +213,7 @@ def comp_H(_N, N, L,_j):
             for j, (_l, l) in enumerate(zip(_lev.H, lev.H)):  # bottom-up in derivation
                 if _l and l:
                     lc = min(_l.c,l.c); lr = (_l.r+l.r)/2
-                    ltt = comp_dT(_l.dTT[1], l.dTT[1], lc, _j+j+1)  # as in base_comp
+                    ltt = comp_dT(_l.dTT[1], l.dTT[1], lc, _j+j+1)
                     ddH += [CF(dTT=ltt, m=val_(ltt,Nw_), c=lc, r=lr, root=L)]  # bottom-up
             if ddH:
                 tt, c, r = sum_vt(ddH)
@@ -350,12 +350,12 @@ def cluster_N(root, _N_, _r,_c,_j):  # flood-fill -> seeds with L_,B_ -> cluster
                 C = sum2F(N_,root,nF='C',typ=3,m=m); C.L_,C.B_ = L_,B_  # seed: raw G with links and perimeter
                 Gt_ += [(C,m,c,r)]; in__|=in_
     if Gt_:
-        g_,R,C = [],0,0
+        g_, R,C = [],0,0
         for G, m,c,r in Gt_:  # type seeds
             if gv_(m* (c*wcC /((_r+r+1)*ccC)) * ((len(G.N_)-1)*wL) - ave): g_+=[G]; R+= r*c; C+= c
         if g_: C_= cluster_C(root, g_,_r+R/C,_j) or []  # types -> n.root_
         if C_:
-            for G, m,c,r in Gt_:  # type value per seed: its nodes' best membership, before any sub+ resets root_
+            for G, m,c,r in Gt_:  # types, before sub+ resets root_?
                 G.m_ = [max((tm for _C,tm in n.root_), default=0) for n in G.N_]
                 G.c_ = [n.c if n.root_ else 0 for n in G.N_]  # untyped nodes have no weight
         for G, m,c,r in Gt_:  # objects
@@ -424,25 +424,15 @@ def cluster_P(_C_, root,_j):  # multi-seed mean shift over pooled nodes: paralle
                 if m*N.c > ave*N.r: n_+=[N]; m_+=[m]; Up += abs(_m - m)
                 else: Up += _m  # exclusion
             if n_: C_ += [sum2F(n_,root,m_,nF='C',typ=4)]  # -> N.root_
-        posL = sum(len(C.N_) for C in C_); totL = len(C_)*len(N_)  # totL should be from C_?
-        # merge and prune could be a single process? Or we only need prune for redundant Cs?
-        removed = []
-        if gv_(posL*wcP - ave*(root.r+ccP*totL)):  # merge redundant Cs      
-            for i,_C in enumerate(C_):
-                if _C in removed: continue
-                for C in C_[i+1:]:
-                    if C in removed: continue
-                    m = val_(base_comp(C,_C,_j,fder=0)[0],cPw_)
-                    if m*wF > ave*(C.r+_C.r+cF):
-                        mN = {**dict(zip(C.N_,C.m_)), **dict(zip(_C.N_,_C.m_))}  # both member sets, _C m if shared
-                        removed += [C]; C_[i] = _C = sum2F(list(mN),root,list(mN.values()),nF='C',typ=4)
-            C_ = [C for C in C_ if C not in removed]
-        for C in C_:  # olp: c-weighted count of stronger roots per member
-            C.olp = sum(n.c for n,m in zip(C.N_,C.m_) for rt in n.root_ if rt[0] in C_ and rt[0] is not C and rt[1] > m) / C.c
-        C_ = [C for C in C_ if C.m*wcP > ave*(C.r+C.olp+ccP)]  # prune
+        for N in N_: N.root_.sort(key=lambda rt: rt[1], reverse=True)  # rank roots by m: C index = rdn
+        # draft:
+        for C in C_:
+            rdn_ = np.array([[rt[0] for rt in N.root_].index(C) for N in C.N_])  # C order in each N.root_
+            C.m_ = np.array(C.m_) - rdn_*ave; C.m = C.c_ @ C.m_ / C.c
+        C_ = [C for C in C_ if C.m * (1-C.olp) * (C.c*wcP/ (C.r*ccP)) > ave]
         for N in N_: N.root_ = [rt for rt in N.root_ if rt[0] in C_]
         cnt += 1
-        if C_ and (removed or Up * (wcP / (cnt+root.r+ccP)) > avd): _C_ = C_  # next loop (if there's removed C, continue to refine)
+        if C_ and Up * (wcP/ccP) > ave: _C_ = C_  # next loop
         else: break
     if C_:
         for C in C_: C.r += C.olp  # add olp to r? To be eval with cross fork later?
