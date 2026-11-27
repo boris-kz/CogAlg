@@ -168,7 +168,7 @@ def comp_N(_N,N, r,c, full=1, A=None,span=None, rL=None, _j=0, nF='Nt'):  # _j: 
                 for _Ft,Ft,nF in zip((_N.Nt,_N.Lt,_N.Bt,_N.Dt,_N.Ct), (N.Nt,N.Lt,N.Bt,N.Dt,N.Ct), ('Nt','Lt','Bt','Dt','Ct')):
                     if _Ft and Ft:  # assign dFt as L.Ft
                         comp_F(_Ft,Ft, nF, r,L,_j)
-        elif gv_(m* (c*wN /(r*cN)) - ave):
+        elif gv_(m* (c*wN /(r*cN)) - ave):  # this section is no longer relevant? Ft is comp via comp_F
             dN_ = []  # comp_F' Ft.N_ forms trans-Ls; + merge option if CCs?
             for _n,n in product(_N.N_,N.N_):  # spec
                 if _n is not n:  # if CC: medoid Ns may overlap?
@@ -193,9 +193,11 @@ def comp_F(_F, F, nF, ir=0, rL=None, j=None):
         if (_N_:=_F.N_) and (N_:=F.N_):  # always true?
             tt = (rL.dTT*rL.c + ddTT*c) / (rL.c+c)  # vertical comb?
             if gv_(val_(tt,Xw_) * ((rL.c+c)*wX /(r*cX)) - ave):
+                # dF is filled with links only, but no further clustering
                 cross_comp(rL, proj_L_(list(product(_N_,N_)),2,r,_j=j), r, dF,_j=j)  # tL-> dF.N_
             elif _F.H and F.H:  # dF.H[-1]+[dLt]?
                 comp_H(_F,F, dF,j)  # rL: lev in L.H, no cross-fork N_, no L ext updates?
+                dF.dTT,dF.c,dF.r = sum_vt([dF]+dF.H); dF.m = val_(dF.dTT,ttN)
     if nF=='Dt' and gv_(m * (c*wF /(r*cF)) - ave):
         ddF_ = []  # der+
         for nf in ('Lt','Dt'):  # current ders
