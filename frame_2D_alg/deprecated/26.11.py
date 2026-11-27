@@ -445,3 +445,19 @@ def cluster_P(_C_, root,_j): # multi-seed mean shift: parallel centroid refine, 
         FV_(CoF.get(), iTT-oTT, iC-oC, iR-oR)
     return out_
 
+def trans_cluster(G):
+        for L in G.L_:  # draft:
+            for tL in (L.Nt.N_ + L.Bt.N_):  # top level
+                if tL.m * (tL.c*wcN / (tL.r*ccN)) > ave:
+                    pass  # sum m across levs for merge eval?
+                for lev in L.H:  # tFt/Nt | tN_/Bt, not Lt  # not revised:
+                    if lev:
+                        for tF in lev.N_ if not lev.N_[0].nt else [lev]:  # CF|CL: Nt|Bt, from spec?
+                            for tL in tF.N_:
+                                if tL.m * (tL.c*wcN / (tL.r*ccN)) > ave:  # merge trans_link.N_.roots:
+                                    rt0 = getattr(tL.N_[0].root,'root',None); rt1 = getattr(tL.N_[1].root,'root',None)
+                                    if rt0 and rt1 and rt0 != rt1:
+                                        if rt1.H: add_H(rt0.H, rt1.H, rt0, fN=1)
+                                        add2F(rt0,rt1, merge=1,fH=0)  # recompute Nt attrs / G
+                    else: break  # !top lev
+
