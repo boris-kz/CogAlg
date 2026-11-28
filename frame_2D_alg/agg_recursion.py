@@ -74,7 +74,10 @@ def sum_vt(N_, fr=0, fm=0, wTT=wTT):  # c-weighted mean dTT,r of CN|CF list, + m
 
     C = sum(n.c for n in N_); R = 0; TT = np.zeros((2,8))
     for n in N_:
-        w = n.c/C; TT += (n.rTT if fr else n.dTT) * w; R += n.r * w
+        w = n.c/C; 
+        if fr: TT[0] += n.rT * w
+        else:  TT += n.dTT * w
+        R += n.r * w
     if fm: return val_(TT,wTT[0]), TT,C,R  # m of the mean: TT[0] is linear in m now
     return TT,C,R
 
@@ -111,11 +114,12 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, fN=1, _j=0):  # recursion root, c
 
     L_,N_,G_,C_,Dt = [],[],[],[],[]
     for pL in pL_:
-        dist, dy_dx, _N,N, lc,lr, pT,m = pL if isinstance(pL,list) else (pL.span,pL.angl[0],*pL.nt,pL.c,pL.r,pL.dTT,pL.m)  # der+
+        dist, dy_dx, _N,N, lc,lr, pTT,m = pL if isinstance(pL,list) else (pL.span,pL.angl[0],*pL.nt,pL.c,pL.r,pL.dTT,pL.m)  # der+
         if _N != N and (fall or m>0):  # CN in frame_H,spec, else CC?
-            if gv_((ave-abs(m)) * (lc*wN / (lr*cN)) - ave):  # marginal certainty V, draft
+            w = lc*wN / (lr*cN); v = m*w - ave; cert = abs(v)
+            if gv_(ave*w - cert):  # marginal certainty (uncertainty from -ave to ave, >ave = certainty?)
                 Link = comp_N(_N,N, lr,lc, full=not dF, A=dy_dx, span=dist, rL=root, _j=_j); mT = Link.dTT[0]
-                Link.rT = np.abs(pT-mT) / eps_(pT+mT)  # prediction error, min m only?
+                Link.rT = np.abs((pT:=pTT[0])-mT) / eps_(pT+mT)  # prediction error, min m only?
                 L_+=[Link]; N_+=[_N,N]
             elif not dF:  # += prelink
                 _y,_x = _N.yx; y,x = N.yx; box = np.array([min(_y,y),min(_x,x),max(_y,y),max(_x,x)])
@@ -128,7 +132,7 @@ def cross_comp(root, pL_, _r, dF=None, fall=1, fN=1, _j=0):  # recursion root, c
         if fN and (dL_:= [l for l in L_ if l.typ==1 and -l.m>ave]):  # internal contrast links
             Dt = sum2F(dL_, root=root, nF='Dt'); Dt.r+= _r+1
             if gv_(-Dt.m * (Dt.c*wX /(Dt.r*cX)) * ((len(dL_)-1)*wL) - ave):  # der+
-                cross_comp(F2N(Dt), combinations(dL_,2), Dt.r,_j=_j)
+                cross_comp(F2N(Dt), combinations(dL_,2), Dt.r,_j=_j)  # should be comparing dLs, rather than dL's nt?
             if Dt.Lt: add2F(root.Lt if root.nF=='Dt' else root, Dt.Lt, merge=2,fH=0)  # Dt.Lt+=dLs
         for N in (N_:= list(set(N_))): mT___(N,_j); sum2F(N.rim, N, nF='Rt')  # N.Rt
         FV_(CoF.get(), tt,c,r)  # lev
@@ -210,8 +214,8 @@ def comp_H(_N, N, L,_j):
             if ddH:
                 tt, c, r = sum_vt(ddH)
                 dH += [CF(H=ddH, dTT=tt, m=val_(tt,Nw_), c=c, r=r, root=L)]  # lev.H: ders, lev.N_: dN_?
-    L.dTT, L.c,L.r = sum_vt([L]+L.H); L.m = val_(L.dTT,ttN)
     L.H += dH[::-1]  # revert to bottom-up
+    L.dTT, L.c,L.r = sum_vt([L]+L.H); L.m = val_(L.dTT,ttN)  # after added dH?
 
 def base_comp(_N,N, j=0, fder=1):  # j: root depth, comp Et, kern, extT, dTT; rational M?
 
@@ -629,6 +633,7 @@ def proj_L_(pairs, root, r, fall=1, _j=0, max_dist=20):
         iTT = (_N.dTT + N.dTT) * Dec
         eTT = (_N.Rt.dTT + N.Rt.dTT) * Dec
         C = min(_N.c,N.c); R = (_N.r+N.r)/2
+        # include uncertainty eval here?
         if val_((eTT + iTT), Prjw_) * (C / (cPrj + r + R)) * wPrj > ave:  # not oF, spec / link:
             eTT += proj_N(N, dist, dy_dx, r, N.c, dec, _j)[0]  # pTT/ L_,B_,rim, if pV >0
             eTT += proj_N(_N,dist,-dy_dx, r,_N.c, dec, _j)[0]  # reverse direction
@@ -806,6 +811,7 @@ def frame_H(image, iY,iX, Y,X, rV, elev=1, max_elev=4, ffb=0):
                 if gv_(val_(_T.dTT,_T.wTT[0]*Frmw_) * ((_T.c+wFrm)/(_T.r+cFrm)) - ave):
                     T_ += [_T]; dy,dx = _T.box[2:] -_T.box[:2]
                     pTT, pc = proj_N(_T, np.hypot(dy,dx), np.array([dy,dx]), elev,_T.c)  # no proj r?
+                    # include uncertainty eval here?
                     if gv_(val_(pTT,_T.wTT[0]*Frmw_) * ((pc+wFrm)/(_T.r+elev+cFrm)) - ave):  # +ve, no uncertainty projection yet
                         proj_focus(PV__,frame==None,y,x,_T,elev)  # -> projected value map
                         for _y,_x in ((y-1,x), (y+1,x), (y,x-1), (y,x+1)):  # fill 4 adjacent cells
